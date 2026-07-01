@@ -1,4 +1,5 @@
 import { normalize, scale } from '../math/vec3';
+import { getFootSurfaceSampleLevel } from './foot_surface_level';
 import { sampleSurfaceClimate } from './climate';
 import { sampleSurfaceHeight } from './elevation';
 import { sampleVisibleSurfaceFrame } from './renderable_surface';
@@ -24,6 +25,19 @@ export function sampleAnalyticPlanetSurface(
 ): PlanetSurfaceSample {
   const heightMeters = sampleSurfaceHeight(planet, seed, position);
   return sampleSurfaceClimate(planet, seed, position, heightMeters);
+}
+
+export function sampleFootPlanetSurface(
+  planet: Planet,
+  seed: number,
+  position: Vec3,
+): PlanetSurfaceSample {
+  const level = getFootSurfaceSampleLevel();
+  const frame = sampleVisibleSurfaceFrame(planet, seed, position, level);
+  return {
+    ...sampleSurfaceClimate(planet, seed, position, frame.heightMeters),
+    normal: frame.normal,
+  };
 }
 
 export function sampleVisiblePlanetSurface(

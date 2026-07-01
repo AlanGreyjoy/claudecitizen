@@ -1,6 +1,6 @@
 import { add, cross, dot, length, lerp, normalize, rotateAroundAxis, scale, sub, vec3 } from '../math/vec3';
 import { eastVector, radialUp, surfacePointFromPosition } from '../world/coordinates';
-import { sampleRenderablePlanetSurface } from '../world/planet_surface';
+import { sampleFootPlanetSurface } from '../world/planet_surface';
 import type { CharacterInput, CharacterState, JumpPhase, Planet, Vec3 } from '../types';
 
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
@@ -199,7 +199,7 @@ export function updateCharacterState(
   if (grounded) {
     const step = scale(desiredDirection, moveSpeed * dt);
     position = add(position, step);
-    const nextSurface = sampleRenderablePlanetSurface(planet, seed, position);
+      const nextSurface = sampleFootPlanetSurface(planet, seed, position);
     position = clampToGround(position, nextSurface.surfaceRadiusMeters);
     up = radialUp(position);
     velocity = dt > 0 ? scale(sub(position, state.position), 1 / dt) : vec3(0, 0, 0);
@@ -222,7 +222,7 @@ export function updateCharacterState(
     const verticalVelocity = dot(velocity, up) - planet.gravityMetersPerSecond2! * dt;
     velocity = add(blendedTangent, scale(up, verticalVelocity));
     position = add(position, scale(velocity, dt));
-    const nextSurface = sampleRenderablePlanetSurface(planet, seed, position);
+      const nextSurface = sampleFootPlanetSurface(planet, seed, position);
     const landingRadius = nextSurface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
     const radialDistance = length(position);
     if (radialDistance <= landingRadius) {

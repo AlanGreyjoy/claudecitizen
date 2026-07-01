@@ -11,7 +11,7 @@ import {
   surfacePointFromPosition,
 } from '../world/coordinates';
 import { resolveLandingSite } from '../world/landing_sites';
-import { sampleRenderablePlanetSurface } from '../world/planet_surface';
+import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from '../world/planet_surface';
 import type { CharacterState, FlightBody, Planet, Vec3 } from '../types';
 
 const SHIP_SPAWN_ALTITUDE_METERS = 1;
@@ -49,7 +49,7 @@ export function createSpawnCharacter(
   const shipUp = radialUp(ship.position);
   const shipRight = normalize(cross(ship.forward, shipUp));
   const probe = sub(ship.position, scale(shipRight, CHARACTER_SPAWN_SIDE_METERS));
-  const surface = sampleRenderablePlanetSurface(planet, seed, probe);
+  const surface = sampleFootPlanetSurface(planet, seed, probe);
   const position = surfacePointFromPosition(
     probe,
     surface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS,

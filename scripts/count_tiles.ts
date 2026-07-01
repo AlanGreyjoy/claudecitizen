@@ -1,5 +1,5 @@
 // Fast standalone reimplementation of the tile selection logic in
-// src/render/planet_tile_manager.ts. Counts selected tiles per level WITHOUT
+// src/render/planet_tiles/manager.ts. Counts selected tiles per level WITHOUT
 // building geometry, so we can test LOD fixes quickly.
 import { dot, distance, normalize, scale } from '../src/math/vec3';
 import { CUBE_FACES, directionFromCubeFace, faceUvFromDirection } from '../src/world/cube_sphere';

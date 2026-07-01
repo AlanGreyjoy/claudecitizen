@@ -22,6 +22,8 @@ export interface TileCacheStats {
   builtThisFrame: number;
   cacheLimit: number;
   cachedTiles: number;
+  diskHits: number;
+  diskMisses: number;
   evictedThisFrame: number;
   peakCachedTiles: number;
   pendingTiles: number;
@@ -35,6 +37,8 @@ export interface VegetationCacheStats {
   builtThisFrame: number;
   cacheLimit: number;
   cachedTiles: number;
+  diskHits: number;
+  diskMisses: number;
   evictedThisFrame: number;
   peakCachedTiles: number;
   totalBuilds: number;

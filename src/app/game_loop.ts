@@ -22,8 +22,8 @@ import {
 } from '../player/transitions';
 import { createWorldState, type WorldState } from '../player/world_state';
 import { sampleRenderablePlanetSurface } from '../world/planet_surface';
-import type { HudUpdateParams } from '../render/hud';
-import type { SpikeRenderer } from '../render/spike_renderer';
+import type { HudUpdateParams } from '../render/effects';
+import type { SpikeRenderer } from '../render/main';
 import type { Planet } from '../types';
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
@@ -49,6 +49,7 @@ export function createGameLoop({
 }: GameLoopOptions) {
   let world: WorldState = createWorldState(planet, seed);
   let lastMs = performance.now();
+  let frameRendererError: unknown = rendererError;
 
   const transitionContext = {
     planet,
@@ -138,24 +139,33 @@ export function createGameLoop({
       world.mode === MODE_IN_SHIP ? world.ship.velocity : world.character.velocity;
     const focusSurface = sampleRenderablePlanetSurface(planet, seed, focusPosition);
 
-    const renderStats = renderer?.render({
-      cameraOrbit: world.cameraOrbit,
-      shipCameraZoom: world.shipCameraZoom,
-      character:
-        world.mode === MODE_IN_SHIP
-          ? null
-          : {
-              animation: world.character.animation,
-              forward: world.character.forward,
-              position: world.character.position,
-              up: world.character.up,
-            },
-      mode: world.mode,
-      prompt: world.prompt,
-      ship: world.ship,
-      timeSeconds: nowMs / 1000,
-    });
-    window.__claudecitizenRenderStats = renderStats ?? null;
+    let renderStats = null;
+    try {
+      renderStats = renderer?.render({
+        cameraOrbit: world.cameraOrbit,
+        shipCameraZoom: world.shipCameraZoom,
+        character:
+          world.mode === MODE_IN_SHIP
+            ? null
+            : {
+                animation: world.character.animation,
+                forward: world.character.forward,
+                position: world.character.position,
+                up: world.character.up,
+              },
+        mode: world.mode,
+        prompt: world.prompt,
+        ship: world.ship,
+        timeSeconds: nowMs / 1000,
+      }) ?? null;
+    } catch (error) {
+      console.error('ClaudeCitizen render frame failed.', error);
+      frameRendererError = error;
+    }
+    window.__claudecitizenRenderStats = renderStats;
+
+    const focusForward =
+      world.mode === MODE_IN_SHIP ? world.ship.forward : world.character.forward;
 
     onHudUpdate({
       world,
@@ -163,10 +173,17 @@ export function createGameLoop({
       focusVelocity,
       shipSurface,
       renderStats: renderStats ?? null,
-      rendererError,
+      rendererError: frameRendererError,
       rendererMode: renderer?.rendererMode,
       planet,
       isPointerLocked: controls.isPointerLocked(),
+      seed,
+      focusPosition,
+      focusForward,
+      shipPosition: world.ship.position,
+      shipForward: world.ship.forward,
+      characterPosition: world.character.position,
+      nowMs,
     });
 
     requestAnimationFrame(frame);

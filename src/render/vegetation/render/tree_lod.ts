@@ -1,0 +1,36 @@
+import * as THREE from 'three';
+import type { InstancedAsset } from './instanced_assets';
+
+const CONE_RADIUS = 0.55;
+const CONE_HEIGHT = 2.2;
+const CONE_SEGMENTS = 6;
+
+export function createTreeLodAsset(): InstancedAsset {
+  const geometry = new THREE.ConeGeometry(
+    CONE_RADIUS,
+    CONE_HEIGHT,
+    CONE_SEGMENTS,
+  );
+  geometry.translate(0, CONE_HEIGHT * 0.5, 0);
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x4a7a3a,
+    flatShading: true,
+  });
+
+  return {
+    baseOffsetY: 0,
+    parts: [{ geometry, material }],
+  };
+}
+
+export function disposeTreeLodAsset(asset: InstancedAsset): void {
+  for (const part of asset.parts) {
+    part.geometry.dispose();
+    if (Array.isArray(part.material)) {
+      part.material.forEach((material) => material.dispose());
+    } else {
+      part.material.dispose();
+    }
+  }
+}

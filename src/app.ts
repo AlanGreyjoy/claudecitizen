@@ -1,8 +1,8 @@
 import { createPlayerControls } from './flight/player_controls';
 import { createGameLoop } from './app/game_loop';
-import { createHud } from './render/hud';
-import { createSpikeRenderer, type SpikeRenderer } from './render/spike_renderer';
-import { createVegetationControls } from './render/vegetation_controls';
+import { createHud } from './render/effects';
+import { createSpikeRenderer, type SpikeRenderer } from './render/main';
+import { createVegetationControls } from './render/vegetation';
 import { CLAUDECITIZEN_PLANET } from './world/planet';
 
 function requireElement<T extends HTMLElement>(id: string): T {
@@ -14,11 +14,20 @@ function requireElement<T extends HTMLElement>(id: string): T {
 }
 
 const canvas = requireElement<HTMLCanvasElement>('view');
+const fpsEl = requireElement<HTMLElement>('hud-fps-value');
+const minimapCanvas = requireElement<HTMLCanvasElement>('hud-minimap-canvas');
+const chatMessagesEl = requireElement<HTMLElement>('hud-chat-messages');
+const chatInputEl = requireElement<HTMLInputElement>('hud-chat-input');
+const debugBtnEl = requireElement<HTMLButtonElement>('hud-debug-btn');
+const debugMenuEl = requireElement<HTMLElement>('hud-debug-menu');
+const statsPanelEl = requireElement<HTMLElement>('hud-stats');
+const vegetationMenuEl = requireElement<HTMLElement>('vegetation-menu');
+const vegetationResetEl = requireElement<HTMLElement>('vegetation-reset');
+const tutorialBannerEl = document.getElementById('hud-tutorial-banner');
 const promptEl = requireElement<HTMLElement>('prompt');
 const readoutsEl = requireElement<HTMLElement>('readouts');
 const statusEl = requireElement<HTMLElement>('status');
-const vegetationMenuEl = requireElement<HTMLElement>('vegetation-menu');
-const vegetationResetEl = requireElement<HTMLElement>('vegetation-reset');
+const controlsEl = requireElement<HTMLElement>('hud-controls');
 
 const seed = 20061;
 const planet = CLAUDECITIZEN_PLANET;
@@ -34,7 +43,25 @@ try {
 
 createVegetationControls(vegetationMenuEl, vegetationResetEl, renderer);
 
-const hud = createHud({ promptEl, readoutsEl, statusEl });
+const hud = createHud(
+  {
+    fpsEl,
+    minimapCanvas,
+    chatMessagesEl,
+    chatInputEl,
+    debugBtnEl,
+    debugMenuEl,
+    statsPanelEl,
+    vegetationMenuEl,
+    tutorialBannerEl,
+    promptEl,
+    readoutsEl,
+    statusEl,
+    controlsEl,
+  },
+  planet,
+  seed,
+);
 
 let gameLoop: ReturnType<typeof createGameLoop>;
 

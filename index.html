@@ -7,17 +7,26 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>ClaudeCitizen Spike</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
         color-scheme: dark;
         --bg: #050814;
-        --panel: rgba(7, 13, 31, 0.78);
-        --line: rgba(171, 201, 255, 0.18);
+        --panel: rgba(6, 12, 26, 0.78);
+        --line: rgba(90, 190, 255, 0.35);
         --text: #e8efff;
-        --muted: #97a7cf;
+        --muted: #8fa3c9;
         --accent: #8bd8ff;
         --accent-2: #ffce6f;
         --surface: #5f7d52;
+        --sc-glow: rgba(80, 200, 255, 0.12);
+        --sc-font: 'Rajdhani', ui-sans-serif, system-ui, sans-serif;
+        --sc-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       }
 
       * {
@@ -31,7 +40,255 @@
           radial-gradient(circle at top, rgba(39, 69, 132, 0.4), transparent 42%),
           linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
         color: var(--text);
-        font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font: 14px/1.4 var(--sc-mono);
+      }
+
+      .sc-panel {
+        position: fixed;
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
+          var(--panel);
+        backdrop-filter: blur(10px);
+        box-shadow:
+          0 0 24px var(--sc-glow),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        clip-path: polygon(
+          10px 0,
+          calc(100% - 10px) 0,
+          100% 10px,
+          100% calc(100% - 10px),
+          calc(100% - 10px) 100%,
+          10px 100%,
+          0 calc(100% - 10px),
+          0 10px
+        );
+        pointer-events: none;
+      }
+
+      .sc-label {
+        font: 600 11px/1 var(--sc-font);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .sc-debug-panel {
+        display: none;
+      }
+
+      .sc-debug-panel.is-visible {
+        display: block;
+      }
+
+      .sc-hud-fps {
+        top: 18px;
+        left: 18px;
+        min-width: 96px;
+        padding: 10px 14px;
+      }
+
+      .sc-hud-fps-value {
+        margin-top: 4px;
+        font: 700 28px/1 var(--sc-font);
+        color: var(--accent);
+        letter-spacing: 0.04em;
+      }
+
+      .sc-hud-fps-unit {
+        margin-left: 4px;
+        font: 600 14px/1 var(--sc-font);
+        color: var(--muted);
+      }
+
+      .sc-hud-minimap {
+        top: 18px;
+        right: 18px;
+        width: 196px;
+        height: 196px;
+        padding: 0;
+        overflow: hidden;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        clip-path: none;
+      }
+
+      .sc-hud-minimap canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .sc-hud-chat {
+        left: 18px;
+        bottom: 18px;
+        width: min(360px, calc(100vw - 36px));
+        pointer-events: auto;
+      }
+
+      .sc-hud-chat-header {
+        padding: 10px 14px 8px;
+        border-bottom: 1px solid rgba(90, 190, 255, 0.18);
+      }
+
+      .sc-hud-chat-messages {
+        max-height: 132px;
+        overflow-y: auto;
+        padding: 8px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 100%);
+      }
+
+      .sc-chat-line {
+        font: 500 13px/1.35 var(--sc-font);
+        color: var(--text);
+      }
+
+      .sc-chat-author {
+        color: var(--accent);
+        margin-right: 8px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .sc-chat-text {
+        color: rgba(232, 239, 255, 0.88);
+      }
+
+      .sc-hud-chat-input-wrap {
+        padding: 8px 10px 10px;
+        border-top: 1px solid rgba(90, 190, 255, 0.18);
+      }
+
+      .sc-hud-chat-input {
+        width: 100%;
+        border: 1px solid rgba(90, 190, 255, 0.28);
+        border-radius: 0;
+        background: rgba(0, 0, 0, 0.28);
+        color: var(--text);
+        font: 500 14px/1.2 var(--sc-font);
+        padding: 8px 10px;
+        outline: none;
+        clip-path: polygon(
+          6px 0,
+          calc(100% - 6px) 0,
+          100% 6px,
+          100% calc(100% - 6px),
+          calc(100% - 6px) 100%,
+          6px 100%,
+          0 calc(100% - 6px),
+          0 6px
+        );
+      }
+
+      .sc-hud-chat-input:focus {
+        border-color: rgba(139, 216, 255, 0.55);
+        box-shadow: 0 0 12px rgba(80, 200, 255, 0.15);
+      }
+
+      .sc-hud-debug-wrap {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        pointer-events: auto;
+        z-index: 20;
+      }
+
+      .sc-hud-debug-btn {
+        width: 44px;
+        height: 44px;
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%),
+          rgba(6, 12, 26, 0.88);
+        color: var(--accent);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        clip-path: polygon(
+          8px 0,
+          calc(100% - 8px) 0,
+          100% 8px,
+          100% calc(100% - 8px),
+          calc(100% - 8px) 100%,
+          8px 100%,
+          0 calc(100% - 8px),
+          0 8px
+        );
+        box-shadow: 0 0 18px var(--sc-glow);
+      }
+
+      .sc-hud-debug-btn:hover {
+        border-color: rgba(139, 216, 255, 0.55);
+        background: rgba(139, 216, 255, 0.08);
+      }
+
+      .sc-hud-debug-btn svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      .sc-hud-debug-menu {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 10px);
+        min-width: 220px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        background: rgba(6, 12, 26, 0.94);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 0 24px var(--sc-glow);
+        clip-path: polygon(
+          10px 0,
+          calc(100% - 10px) 0,
+          100% 10px,
+          100% calc(100% - 10px),
+          calc(100% - 10px) 100%,
+          10px 100%,
+          0 calc(100% - 10px),
+          0 10px
+        );
+        display: none;
+      }
+
+      .sc-hud-debug-menu.is-open {
+        display: block;
+      }
+
+      .sc-hud-debug-menu-title {
+        margin: 0 0 8px;
+        font: 700 12px/1 var(--sc-font);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      .sc-hud-debug-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
+        font: 500 14px/1.2 var(--sc-font);
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .sc-hud-debug-option input {
+        accent-color: var(--accent);
+      }
+
+      .sc-hud-tutorial {
+        left: 18px;
+        bottom: 210px;
+        max-width: min(360px, calc(100vw - 36px));
+        padding: 10px 12px;
+        color: var(--muted);
+        font: 500 13px/1.4 var(--sc-font);
       }
 
       #app {
@@ -51,11 +308,11 @@
         left: 18px;
         width: min(340px, calc(100vw - 36px));
         border: 1px solid var(--line);
-        border-radius: 16px;
         background: var(--panel);
         backdrop-filter: blur(12px);
         overflow: hidden;
         pointer-events: auto;
+        z-index: 15;
       }
 
       .vegetation-menu summary {
@@ -159,20 +416,36 @@
         cursor: pointer;
       }
 
-      .vegetation-actions button:hover {
-        background: rgba(139, 216, 255, 0.12);
+      .vegetation-menu.sc-debug-panel.is-visible {
+        top: 92px;
       }
 
       .hud {
         position: fixed;
-        inset: 18px 18px auto auto;
+        top: 230px;
+        right: 18px;
+        bottom: auto;
+        left: auto;
         width: min(360px, calc(100vw - 36px));
+        max-height: calc(100vh - 248px);
+        overflow: auto;
         padding: 14px 16px;
         border: 1px solid var(--line);
-        border-radius: 16px;
         background: var(--panel);
         backdrop-filter: blur(12px);
         pointer-events: none;
+        z-index: 12;
+        clip-path: polygon(
+          12px 0,
+          calc(100% - 12px) 0,
+          100% 12px,
+          100% calc(100% - 12px),
+          calc(100% - 12px) 100%,
+          12px 100%,
+          0 calc(100% - 12px),
+          0 12px
+        );
+        box-shadow: 0 0 24px var(--sc-glow);
       }
 
       .hud h1,
@@ -216,9 +489,13 @@
 
       .controls {
         margin-top: 14px;
-        display: grid;
+        display: none;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 4px 12px;
+      }
+
+      .controls.is-visible {
+        display: grid;
       }
 
       .controls div {
@@ -236,22 +513,8 @@
         margin-top: 12px;
         padding: 8px 10px;
         border: 1px solid rgba(255, 206, 111, 0.24);
-        border-radius: 10px;
         color: var(--accent-2);
         min-height: 20px;
-      }
-
-      .banner {
-        position: fixed;
-        left: 18px;
-        bottom: 18px;
-        padding: 10px 12px;
-        max-width: min(440px, calc(100vw - 36px));
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: rgba(5, 9, 20, 0.7);
-        color: var(--muted);
-        pointer-events: none;
       }
 
       kbd {
@@ -267,7 +530,86 @@
   <body>
     <div id="app">
       <canvas id="view" aria-label="ClaudeCitizen spike flight view"></canvas>
-      <details class="vegetation-menu" id="vegetation-menu">
+
+      <div class="sc-panel sc-hud-fps" aria-live="polite">
+        <div class="sc-label">Frame Rate</div>
+        <div>
+          <span class="sc-hud-fps-value" id="hud-fps-value">0</span><span class="sc-hud-fps-unit">FPS</span>
+        </div>
+      </div>
+
+      <div class="sc-panel sc-hud-minimap">
+        <canvas id="hud-minimap-canvas" aria-label="Tactical minimap"></canvas>
+      </div>
+
+      <div class="sc-panel sc-hud-chat">
+        <div class="sc-hud-chat-header">
+          <div class="sc-label">Comms</div>
+        </div>
+        <div class="sc-hud-chat-messages" id="hud-chat-messages"></div>
+        <div class="sc-hud-chat-input-wrap">
+          <input
+            class="sc-hud-chat-input"
+            id="hud-chat-input"
+            type="text"
+            maxlength="240"
+            placeholder="Transmit message..."
+            autocomplete="off"
+          />
+        </div>
+      </div>
+
+      <div class="sc-hud-debug-wrap">
+        <button
+          class="sc-hud-debug-btn"
+          id="hud-debug-btn"
+          type="button"
+          aria-label="Open debug menu"
+          aria-expanded="false"
+          aria-controls="hud-debug-menu"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M12 3l1.2 4.2L17 8l-3.8 1.2L12 13.5 10.8 9.2 7 8l3.8-0.8L12 3z"
+              stroke="currentColor"
+              stroke-width="1.2"
+            />
+            <path
+              d="M5 16h14M8 20h8M10 12h4"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <div class="sc-hud-debug-menu" id="hud-debug-menu" role="menu">
+          <p class="sc-hud-debug-menu-title">Debug Overlays</p>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="showStatsPanel" />
+            Performance stats
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="showVegetationPanel" />
+            Vegetation tuning
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="showControlsReference" />
+            Control reference
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="showTutorialBanner" />
+            Tutorial banner
+          </label>
+        </div>
+      </div>
+
+      <div class="sc-panel sc-hud-tutorial sc-debug-panel" id="hud-tutorial-banner">
+        Walk the landing site in third person, board the ship with <kbd>F</kbd>,
+        then lift off and climb until the local cloud field gives way to the
+        planet-wide shell and a darker orbit sky.
+      </div>
+
+      <details class="vegetation-menu sc-debug-panel" id="vegetation-menu">
         <summary>
           <div>
             <h2 class="vegetation-menu-title">Terrain Vegetation</h2>
@@ -456,11 +798,11 @@
           </div>
         </div>
       </details>
-      <section class="hud" aria-live="polite">
+      <section class="hud sc-debug-panel" id="hud-stats" aria-live="polite">
         <h1>ClaudeCitizen Spike</h1>
         <p class="muted">World-scale procedural planet, one ship, surface to orbit.</p>
         <div class="readout-grid" id="readouts"></div>
-        <div class="controls">
+        <div class="controls" id="hud-controls">
           <div><kbd>Click</kbd> lock mouse</div>
           <div>Mouse look / steer</div>
           <div><kbd>W</kbd>/<kbd>S</kbd> move or throttle</div>
@@ -477,11 +819,6 @@
         <div class="prompt" id="prompt"></div>
         <div class="status" id="status"></div>
       </section>
-      <div class="banner">
-        Walk the landing site in third person, board the ship with <kbd>F</kbd>,
-        then lift off and climb until the local cloud field gives way to the
-        planet-wide shell and a darker orbit sky.
-      </div>
     </div>
     <script type="module" src="./src/app.ts"></script>
   </body>

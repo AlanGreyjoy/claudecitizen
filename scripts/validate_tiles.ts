@@ -3,7 +3,7 @@
 import {
   createPlanetTileManager,
   type TileManagerUpdateResult,
-} from '../src/render/planet_tile_manager';
+} from '../src/render/planet_tiles';
 import { CLAUDECITIZEN_PLANET as planet } from '../src/world/planet';
 import { sampleRenderablePlanetSurface } from '../src/world/planet_surface';
 import { cartesianFromLatLonAlt } from '../src/world/coordinates';
