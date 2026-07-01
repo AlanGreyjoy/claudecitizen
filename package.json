@@ -1,0 +1,28 @@
+{
+  "name": "claudecitizen",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite --host 0.0.0.0 --port 4173",
+    "demo": "tsx scripts/spike-demo.ts",
+    "serve": "vite --host 0.0.0.0 --port 4173",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/three": "^0.180.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@takram/three-atmosphere": "^0.19.1",
+    "@takram/three-clouds": "^0.7.6",
+    "@takram/three-geospatial": "^0.9.1",
+    "postprocessing": "^6.39.2",
+    "simplex-noise": "^4.0.3",
+    "three": "^0.180.0",
+    "vite": "^8.1.2"
+  }
+}

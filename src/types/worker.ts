@@ -1,0 +1,26 @@
+import type { Planet } from './planet';
+import type { TileInfo } from './terrain';
+
+export interface TileWorkerInMessage {
+  buildId: number;
+  key: string;
+  info: TileInfo;
+  planet: Planet;
+  seed: number;
+}
+
+export interface TileWorkerSuccessMessage {
+  buildId: number;
+  key: string;
+  positions: Float32Array;
+  colors: Float32Array;
+  normals: Float32Array;
+}
+
+export interface TileWorkerErrorMessage {
+  buildId: number;
+  key: string;
+  error: string;
+}
+
+export type TileWorkerOutMessage = TileWorkerSuccessMessage | TileWorkerErrorMessage;

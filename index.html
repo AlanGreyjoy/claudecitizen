@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>ClaudeCitizen Spike</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #050814;
+        --panel: rgba(7, 13, 31, 0.78);
+        --line: rgba(171, 201, 255, 0.18);
+        --text: #e8efff;
+        --muted: #97a7cf;
+        --accent: #8bd8ff;
+        --accent-2: #ffce6f;
+        --surface: #5f7d52;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at top, rgba(39, 69, 132, 0.4), transparent 42%),
+          linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
+        color: var(--text);
+        font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .vegetation-menu {
+        position: fixed;
+        top: 18px;
+        left: 18px;
+        width: min(340px, calc(100vw - 36px));
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        overflow: hidden;
+        pointer-events: auto;
+      }
+
+      .vegetation-menu summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        cursor: pointer;
+        list-style: none;
+        user-select: none;
+      }
+
+      .vegetation-menu summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .vegetation-menu summary::after {
+        content: '▾';
+        color: var(--accent);
+        transition: transform 160ms ease;
+      }
+
+      .vegetation-menu[open] summary::after {
+        transform: rotate(180deg);
+      }
+
+      .vegetation-menu-title {
+        margin: 0;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .vegetation-menu-body {
+        padding: 0 14px 14px;
+        border-top: 1px solid var(--line);
+        max-height: min(72vh, 560px);
+        overflow: auto;
+      }
+
+      .vegetation-menu-body p {
+        margin: 10px 0 0;
+      }
+
+      .vegetation-section {
+        margin-top: 12px;
+        border: 1px solid rgba(171, 201, 255, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .vegetation-section summary {
+        padding: 10px 12px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .vegetation-section-body {
+        padding: 0 12px 12px;
+      }
+
+      .vegetation-control {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 10px;
+        margin-top: 10px;
+      }
+
+      .vegetation-control-label {
+        font-size: 12px;
+        color: var(--text);
+      }
+
+      .vegetation-control-value {
+        color: var(--accent);
+        font-size: 12px;
+      }
+
+      .vegetation-control input[type='range'] {
+        grid-column: 1 / -1;
+        width: 100%;
+        margin: 0;
+        accent-color: var(--accent);
+      }
+
+      .vegetation-actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .vegetation-actions button {
+        border: 1px solid rgba(171, 201, 255, 0.22);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text);
+        font: inherit;
+        padding: 7px 12px;
+        cursor: pointer;
+      }
+
+      .vegetation-actions button:hover {
+        background: rgba(139, 216, 255, 0.12);
+      }
+
+      .hud {
+        position: fixed;
+        inset: 18px 18px auto auto;
+        width: min(360px, calc(100vw - 36px));
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        pointer-events: none;
+      }
+
+      .hud h1,
+      .hud p {
+        margin: 0;
+      }
+
+      .hud h1 {
+        font-size: 16px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .readout-grid {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 12px;
+      }
+
+      .readout {
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+      }
+
+      .readout-label {
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .readout-value {
+        margin-top: 3px;
+        font-size: 18px;
+      }
+
+      .controls {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px 12px;
+      }
+
+      .controls div {
+        color: var(--muted);
+      }
+
+      .status {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+        color: var(--accent);
+      }
+
+      .prompt {
+        margin-top: 12px;
+        padding: 8px 10px;
+        border: 1px solid rgba(255, 206, 111, 0.24);
+        border-radius: 10px;
+        color: var(--accent-2);
+        min-height: 20px;
+      }
+
+      .banner {
+        position: fixed;
+        left: 18px;
+        bottom: 18px;
+        padding: 10px 12px;
+        max-width: min(440px, calc(100vw - 36px));
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(5, 9, 20, 0.7);
+        color: var(--muted);
+        pointer-events: none;
+      }
+
+      kbd {
+        padding: 1px 5px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-bottom-width: 2px;
+        border-radius: 6px;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.06);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="view" aria-label="ClaudeCitizen spike flight view"></canvas>
+      <details class="vegetation-menu" id="vegetation-menu">
+        <summary>
+          <div>
+            <h2 class="vegetation-menu-title">Terrain Vegetation</h2>
+            <div class="muted">Tune live grass and tree spawning</div>
+          </div>
+        </summary>
+        <div class="vegetation-menu-body">
+          <p class="muted">Unlock the mouse with <kbd>Esc</kbd>, then adjust density, gaps, and size ranges.</p>
+
+          <details class="vegetation-section" open>
+            <summary>Grass</summary>
+            <div class="vegetation-section-body">
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Density</span>
+                <span class="vegetation-control-value" data-output="grass.density"></span>
+                <input
+                  type="range"
+                  min="0"
+                  max="2.5"
+                  step="0.05"
+                  value="1"
+                  data-group="grass"
+                  data-key="density"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Gap</span>
+                <span class="vegetation-control-value" data-output="grass.gapMeters"></span>
+                <input
+                  type="range"
+                  min="0"
+                  max="8"
+                  step="0.25"
+                  value="0"
+                  data-group="grass"
+                  data-key="gapMeters"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Min Size</span>
+                <span class="vegetation-control-value" data-output="grass.minScale"></span>
+                <input
+                  type="range"
+                  min="0.25"
+                  max="3"
+                  step="0.05"
+                  value="0.8"
+                  data-group="grass"
+                  data-key="minScale"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Max Size</span>
+                <span class="vegetation-control-value" data-output="grass.maxScale"></span>
+                <input
+                  type="range"
+                  min="0.25"
+                  max="3"
+                  step="0.05"
+                  value="1.9"
+                  data-group="grass"
+                  data-key="maxScale"
+                />
+              </label>
+            </div>
+          </details>
+
+          <details class="vegetation-section" open>
+            <summary>Trees</summary>
+            <div class="vegetation-section-body">
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Density</span>
+                <span class="vegetation-control-value" data-output="tree.density"></span>
+                <input
+                  type="range"
+                  min="0"
+                  max="2.5"
+                  step="0.05"
+                  value="1"
+                  data-group="tree"
+                  data-key="density"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Gap</span>
+                <span class="vegetation-control-value" data-output="tree.gapMeters"></span>
+                <input
+                  type="range"
+                  min="0"
+                  max="28"
+                  step="0.5"
+                  value="0"
+                  data-group="tree"
+                  data-key="gapMeters"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Min Size</span>
+                <span class="vegetation-control-value" data-output="tree.minScale"></span>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="5"
+                  step="0.05"
+                  value="1.1"
+                  data-group="tree"
+                  data-key="minScale"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Max Size</span>
+                <span class="vegetation-control-value" data-output="tree.maxScale"></span>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="5"
+                  step="0.05"
+                  value="3.5"
+                  data-group="tree"
+                  data-key="maxScale"
+                />
+              </label>
+            </div>
+          </details>
+
+          <details class="vegetation-section" open>
+            <summary>Volumetric Fog</summary>
+            <div class="vegetation-section-body">
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Density</span>
+                <span class="vegetation-control-value" data-output="fog.density"></span>
+                <input
+                  type="range"
+                  min="0.001"
+                  max="0.05"
+                  step="0.001"
+                  value="0.008"
+                  data-group="fog"
+                  data-key="density"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Height Limit</span>
+                <span class="vegetation-control-value" data-output="fog.maxHeight"></span>
+                <input
+                  type="range"
+                  min="1000"
+                  max="15000"
+                  step="250"
+                  value="4000"
+                  data-group="fog"
+                  data-key="maxHeight"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Falloff Height</span>
+                <span class="vegetation-control-value" data-output="fog.heightFalloff"></span>
+                <input
+                  type="range"
+                  min="50"
+                  max="2000"
+                  step="25"
+                  value="350"
+                  data-group="fog"
+                  data-key="heightFalloff"
+                />
+              </label>
+              <label class="vegetation-control">
+                <span class="vegetation-control-label">Noise Detail</span>
+                <span class="vegetation-control-value" data-output="fog.noiseStrength"></span>
+                <input
+                  type="range"
+                  min="0.0"
+                  max="1.0"
+                  step="0.05"
+                  value="0.4"
+                  data-group="fog"
+                  data-key="noiseStrength"
+                />
+              </label>
+            </div>
+          </details>
+
+          <div class="vegetation-actions">
+            <button type="button" id="vegetation-reset">Reset Defaults</button>
+          </div>
+        </div>
+      </details>
+      <section class="hud" aria-live="polite">
+        <h1>ClaudeCitizen Spike</h1>
+        <p class="muted">World-scale procedural planet, one ship, surface to orbit.</p>
+        <div class="readout-grid" id="readouts"></div>
+        <div class="controls">
+          <div><kbd>Click</kbd> lock mouse</div>
+          <div>Mouse look / steer</div>
+          <div><kbd>W</kbd>/<kbd>S</kbd> move or throttle</div>
+          <div><kbd>Shift</kbd> boost</div>
+          <div><kbd>A</kbd>/<kbd>D</kbd> strafe / ground steer</div>
+          <div><kbd>Q</kbd>/<kbd>E</kbd> roll</div>
+          <div><kbd>←</kbd>/<kbd>→</kbd> yaw</div>
+          <div><kbd>↑</kbd>/<kbd>↓</kbd> pitch</div>
+          <div><kbd>Space</kbd>/<kbd>C</kbd> jump or lift</div>
+          <div><kbd>B</kbd> brake</div>
+          <div><kbd>F</kbd> enter / exit ship</div>
+          <div><kbd>R</kbd> reset</div>
+        </div>
+        <div class="prompt" id="prompt"></div>
+        <div class="status" id="status"></div>
+      </section>
+      <div class="banner">
+        Walk the landing site in third person, board the ship with <kbd>F</kbd>,
+        then lift off and climb until the local cloud field gives way to the
+        planet-wide shell and a darker orbit sky.
+      </div>
+    </div>
+    <script type="module" src="./src/app.ts"></script>
+  </body>
+</html>
