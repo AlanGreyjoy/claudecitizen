@@ -112,17 +112,84 @@ Nothing here requires a PhD — but there is real geometry and signal processing
 
 **Cube-sphere projection.** A world position becomes a unit direction, then the dominant axis (`|x|`, `|y|`, or `|z|`) picks a cube face. The other two components, scaled by that axis, give `(u, v)` coordinates on the face. Map back with a face-specific formula and normalize — you get a point on the sphere without polar singularities.
 
+```mermaid
+flowchart LR
+  P["World position"] --> N[Normalize]
+  N --> D["Dominant axis → face"]
+  D --> UV["(u, v) on face"]
+  UV --> Q["Quadtree tile (level, x, y)"]
+```
+
 **Horizon culling.** From altitude we compute how much of the sphere is visible (a cone angle). Each tile has an angular width from its chord span. Tiles whose nearest edge falls below the horizon are skipped — no mesh budget wasted on the back side of the planet.
+
+```mermaid
+flowchart LR
+  A[Altitude] --> H["Horizon angle φₕ"]
+  T["Tile center + span"] --> E["Nearest edge angle"]
+  H --> C{Below horizon?}
+  E --> C
+  C -->|yes| Skip[Skip tile]
+  C -->|no| Keep[Render tile]
+```
 
 **LOD error metric.** Whether a tile splits comes down to projected screen error: `tileSpan / cameraDistance` compared to a threshold that loosens as you climb. Near the ground we force max detail in a radius around the player so the mesh under your feet is always the finest LOD.
 
+```mermaid
+flowchart LR
+  S[tileSpan] --> E["error = span / distance"]
+  D[cameraDistance] --> E
+  E --> T{error > threshold?}
+  T -->|yes| Split[Split → 4 children]
+  T -->|no| Keep[Keep tile]
+  G["Near ground + facing"] --> Max[Force max LOD]
+```
+
 **Dual height sampling.** Terrain noise is continuous — sample anywhere and you get a height. But the mesh only knows about a fixed grid of corner heights. At runtime we locate your `(u, v)` in that grid, bilinearly interpolate between four cached corner points on the sphere (split into two triangles), then project back onto the radial direction for height and surface normal. The mesh and foot controller must use this _same_ grid at the _same_ LOD — not the raw noise function.
+
+```mermaid
+flowchart TB
+  subgraph continuous ["Continuous (analytic)"]
+    N[3D noise] --> H1["Height at any point"]
+  end
+  subgraph discrete ["Discrete (renderable)"]
+    G["Grid corner heights"] --> B["Bilinear + 2 triangles"]
+    B --> H2["Height + normal"]
+  end
+  H2 --> M[Mesh vertices]
+  H2 --> F[Foot placement]
+  N -.->|"feeds corners once"| G
+```
 
 **Layered noise (FBM + ridged).** Height stacks several octaves of 3D simplex noise at different scales: broad continents, sharp ridged mountains, regional hills, fine detail. Ridged noise (`1 − |n|`, squared) gives crisp peaks instead of smooth blobs. A separate noise field carves lake basins into the result.
 
+```mermaid
+flowchart TB
+  C[Continent FBM] --> S[Weighted sum]
+  R["Ridged mountains"] --> S
+  H["Hills + detail FBM"] --> S
+  L[Lake carve mask] --> S
+  S --> E[Final elevation]
+```
+
 **Tangent frames on a sphere.** "Up" is always radial from planet center. East is `worldNorth × radialUp`. Trees, grass, and the ship build local `(tangent, bitangent, normal)` frames so objects stand upright on curved ground instead of embedding in a flat plane.
 
+```mermaid
+flowchart LR
+  R[radialUp] --> N[Normal]
+  W[worldNorth] --> E["east = W × radialUp"]
+  R --> E
+  E --> F["tangent · bitangent · normal"]
+  F --> O["Trees · grass · ship"]
+```
+
 **Floating origin.** Render coordinates are `(worldPos − playerPos) × 1/500`. Simulation stays in full-precision meters; WebGL works near zero. The planet slides around you every frame.
+
+```mermaid
+flowchart LR
+  W["World pos (~6.37M m)"] --> Sub["− playerPos"]
+  Sub --> Scale["× 1/500"]
+  Scale --> G[WebGL near origin]
+```
 
 See `.agents/AGENTS.md` for architecture conventions; `src/world/` and `src/render/planet_tiles/` for the implementation.
 
