@@ -1,5 +1,7 @@
 # ClaudeCitizen
 
+![ClaudeCitizen gameplay screenshot](docs/screenshot.png)
+
 A browser-based space sandbox inspired by Star Citizen — procedural planets, ship flight, on-foot exploration, and seamless surface-to-orbit transitions. Built with TypeScript, Vite, and Three.js.
 
 The homeworld is **Asteron**: Earth-scale radius, deterministic terrain, lakes, vegetation, volumetric clouds, and a full atmospheric shell.
