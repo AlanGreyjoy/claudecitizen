@@ -6,6 +6,8 @@ A browser-based space sandbox inspired by Star Citizen — procedural planets, s
 
 The homeworld is **Asteron**: Earth-scale radius, deterministic terrain, lakes, vegetation, volumetric clouds, and a full atmospheric shell.
 
+This project is **100% vibe coded** — built iteratively with AI-assisted development rather than a formal spec or roadmap. I'm a Staff Software Engineer and Solutions Architect with 17+ years of experience; this is a passion sandbox, not a production product.
+
 ## Quick start
 
 ```bash
