@@ -8,7 +8,7 @@ The homeworld is **Asteron**: Earth-scale radius, deterministic terrain, lakes, 
 
 This project is **100% vibe coded** — built iteratively with AI-assisted development rather than a formal spec or roadmap. I'm a Staff Software Engineer and Solutions Architect with 17+ years of experience; this is a passion sandbox, not a production product.
 
-## Quick start
+**Work in progress.** More Star Citizen–style features are on the way — better ships (not just a pirate ship LOL!), deeper flight and exploration, and whatever else the vibe demands.
 
 ```bash
 npm install
@@ -19,31 +19,31 @@ Open [http://localhost:4173](http://localhost:4173). Click the canvas to lock th
 
 ## Commands
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Dev server with hot reload (port 4173) |
-| `npm run serve` | Same as `dev` |
-| `npm run build` | Typecheck + production build to `dist/` |
-| `npm run typecheck` | Run TypeScript without emitting |
-| `npm run demo` | Headless scripted takeoff / orbit / landing demo |
+| Script              | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| `npm run dev`       | Dev server with hot reload (port 4173)           |
+| `npm run serve`     | Same as `dev`                                    |
+| `npm run build`     | Typecheck + production build to `dist/`          |
+| `npm run typecheck` | Run TypeScript without emitting                  |
+| `npm run demo`      | Headless scripted takeoff / orbit / landing demo |
 
 ## Controls
 
-| Input | On foot / ship deck | In ship |
-|-------|---------------------|---------|
-| Click canvas | Lock mouse | Lock mouse |
-| Mouse | Orbit camera | Pitch / yaw |
-| Scroll | Zoom camera | Zoom camera |
-| `W` / `S` | Move forward / back | Throttle |
-| `A` / `D` | Strafe | Strafe |
-| `Shift` | Sprint | Boost |
-| `Q` / `E` | — | Roll |
-| `←` / `→` | — | Yaw |
-| `↑` / `↓` | — | Pitch |
-| `Space` / `C` | Jump | Lift / descend |
-| `B` | — | Brake |
-| `F` | Enter / exit ship, leave / return to pilot seat | Same |
-| `R` | Reset to landing site | Reset to landing site |
+| Input         | On foot / ship deck                             | In ship               |
+| ------------- | ----------------------------------------------- | --------------------- |
+| Click canvas  | Lock mouse                                      | Lock mouse            |
+| Mouse         | Orbit camera                                    | Pitch / yaw           |
+| Scroll        | Zoom camera                                     | Zoom camera           |
+| `W` / `S`     | Move forward / back                             | Throttle              |
+| `A` / `D`     | Strafe                                          | Strafe                |
+| `Shift`       | Sprint                                          | Boost                 |
+| `Q` / `E`     | —                                               | Roll                  |
+| `←` / `→`     | —                                               | Yaw                   |
+| `↑` / `↓`     | —                                               | Pitch                 |
+| `Space` / `C` | Jump                                            | Lift / descend        |
+| `B`           | —                                               | Brake                 |
+| `F`           | Enter / exit ship, leave / return to pilot seat | Same                  |
+| `R`           | Reset to landing site                           | Reset to landing site |
 
 Use the **Vegetation** panel (top-left) to tune grass, trees, and fog at runtime.
 
