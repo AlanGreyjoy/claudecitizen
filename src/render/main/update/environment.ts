@@ -19,6 +19,11 @@ import type { SunSystemState } from './sun_system';
 const backgroundColor = new THREE.Color();
 const fogColor = new THREE.Color();
 
+const AMBIENT_SKY_DAY = new THREE.Color(0xc4e2ff);
+const AMBIENT_SKY_NIGHT = new THREE.Color(0x6e86bd);
+const AMBIENT_GROUND_DAY = new THREE.Color(0x473b28);
+const AMBIENT_GROUND_NIGHT = new THREE.Color(0x1f2740);
+
 export interface EnvironmentUpdateInput {
   scene: THREE.Scene;
   defaultFog: THREE.Fog;
@@ -64,7 +69,7 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
   const { ambient, sun } = lighting;
   const { normalPass, atmospherePass, volumetricFogPass, volumetricFogEffect, volumetricClouds, starField } =
     composerStack;
-  const { sunDir, daylightFactor, planetCenter } = sunState;
+  const { sunDir, daylightFactor, rawDaylight, planetCenter } = sunState;
 
   volumetricClouds.update(dt, altitudeMeters, volumetricEnabled);
   const volumetricSkyActive = volumetricClouds.isActive(altitudeMeters, volumetricEnabled);
@@ -93,12 +98,24 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
   atmospherePass.setEnabled(volumetricSkyActive);
   volumetricFogPass.setEnabled(planetFogActive);
 
-  ambient.intensity = (1.3 - spaceFactor * 0.62) * (0.3 + daylightFactor * 0.7);
+  // The moon sits opposite the sun, so its elevation is the negated raw
+  // daylight; a moonlit night gets a cool ambient lift so it isn't pitch black.
+  const moonElevation = Math.max(0, -rawDaylight);
+  // Night ambient stays low so moon shadows read; the moon directional light
+  // (which is shadowed) does the work of shaping the terrain.
+  const moonAmbient = Math.pow(moonElevation, 0.6) * (1 - daylightFactor) * 0.15;
+  ambient.intensity =
+    (1.3 - spaceFactor * 0.62) * (0.27 + daylightFactor * 0.73 + moonAmbient);
+  // Shift the ambient fill toward moonlight blue at night so the scene stays
+  // readable but clearly reads as night instead of a dim day.
+  ambient.color.copy(AMBIENT_SKY_NIGHT).lerp(AMBIENT_SKY_DAY, daylightFactor);
+  ambient.groundColor.copy(AMBIENT_GROUND_NIGHT).lerp(AMBIENT_GROUND_DAY, daylightFactor);
 
   starField.update({
     camera,
     daylightFactor,
     spaceFactor,
+    nowSeconds,
   });
 
   atmosphereMesh.position.copy(planetCenter);

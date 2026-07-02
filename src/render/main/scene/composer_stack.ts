@@ -70,9 +70,12 @@ export function createComposerStack(
   const volumetricFogPass = new EffectPass(camera, volumetricFogEffect);
   composer.addPass(volumetricFogPass);
 
+  // Lower threshold + gentler intensity gives a soft glow on bright surfaces
+  // instead of only blooming near-white highlights.
   const bloomEffect = new BloomEffect({
-    intensity: 1.2,
-    luminanceThreshold: 0.85,
+    intensity: 0.75,
+    luminanceThreshold: 0.7,
+    luminanceSmoothing: 0.3,
     mipmapBlur: renderQuality.bloomMipmapBlur,
   });
   const bloomPass = new EffectPass(camera, bloomEffect);
@@ -82,12 +85,15 @@ export function createComposerStack(
   const speedBlurPass = new EffectPass(camera, speedBlurEffect);
   composer.addPass(speedBlurPass);
 
+  // AgX has a much softer shoulder than ACES: shadows keep detail instead of
+  // crushing to black and highlights desaturate gently. Exposure compensation
+  // lives on renderer.toneMappingExposure (see webgl_renderer.ts).
   const toneMappingEffect = new ToneMappingEffect({
-    mode: ToneMappingMode.ACES_FILMIC,
+    mode: ToneMappingMode.AGX,
   });
   const vignetteEffect = new VignetteEffect({
-    darkness: 0.45,
-    offset: 0.25,
+    darkness: 0.28,
+    offset: 0.3,
   });
   const lensPass = new EffectPass(camera, toneMappingEffect, vignetteEffect);
   composer.addPass(lensPass);

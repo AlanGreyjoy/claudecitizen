@@ -268,6 +268,12 @@
         color: var(--accent);
       }
 
+      .sc-hud-debug-menu-subtitle {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(90, 190, 255, 0.18);
+      }
+
       .sc-hud-debug-option {
         display: flex;
         align-items: center;
@@ -599,6 +605,19 @@
           <label class="sc-hud-debug-option">
             <input type="checkbox" data-debug-key="showTutorialBanner" />
             Tutorial banner
+          </label>
+          <p class="sc-hud-debug-menu-title sc-hud-debug-menu-subtitle">Time of Day</p>
+          <label class="sc-hud-debug-option">
+            <input type="radio" name="hud-time-override" value="auto" data-time-override />
+            Auto cycle
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="radio" name="hud-time-override" value="day" data-time-override />
+            Force day
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="radio" name="hud-time-override" value="night" data-time-override />
+            Force night
           </label>
         </div>
       </div>

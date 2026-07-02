@@ -160,7 +160,7 @@ export class VolumetricFogEffect extends Effect {
         ['uRenderScale', new THREE.Uniform(0.001)],
         ['uSunDirection', new THREE.Uniform(new THREE.Vector3(0, 1, 0))],
         ['uFogColorDay', new THREE.Uniform(new THREE.Color(0xb8daf2))],
-        ['uFogColorNight', new THREE.Uniform(new THREE.Color(0x030610))],
+        ['uFogColorNight', new THREE.Uniform(new THREE.Color(0x0b1526))],
         ['uSunColor', new THREE.Uniform(new THREE.Color(0xfff1d2))],
         ['uTime', new THREE.Uniform(0)],
         ['uCameraNear', new THREE.Uniform(0.0001)],

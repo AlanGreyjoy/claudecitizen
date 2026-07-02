@@ -16,6 +16,31 @@ export interface SunSystemState {
 const sunDirScratch = new THREE.Vector3();
 const moonDirScratch = new THREE.Vector3();
 
+function configureShadowCamera(
+  light: THREE.DirectionalLight,
+  renderMode: RenderMode,
+  renderScale: number,
+): void {
+  if (renderMode === 'on-foot' || renderMode === 'on-ship-deck') {
+    const shadowSize = 35 * renderScale;
+    light.shadow.camera.left = -shadowSize;
+    light.shadow.camera.right = shadowSize;
+    light.shadow.camera.top = shadowSize;
+    light.shadow.camera.bottom = -shadowSize;
+    light.shadow.camera.near = 0.1;
+    light.shadow.camera.far = 1000 * renderScale;
+  } else {
+    const shadowSize = 500 * renderScale;
+    light.shadow.camera.left = -shadowSize;
+    light.shadow.camera.right = shadowSize;
+    light.shadow.camera.top = shadowSize;
+    light.shadow.camera.bottom = -shadowSize;
+    light.shadow.camera.near = 0.1;
+    light.shadow.camera.far = 3000 * renderScale;
+  }
+  light.shadow.camera.updateProjectionMatrix();
+}
+
 export function updateSunSystem(
   nowSeconds: number,
   focusPosition: Vec3,
@@ -48,28 +73,12 @@ export function updateSunSystem(
   const shadowDist = (renderMode === 'on-foot' || renderMode === 'on-ship-deck' ? 200 : 1500) * renderScale;
   sun.position.copy(sunDirScratch).multiplyScalar(shadowDist);
   sun.target.position.set(0, 0, 0);
-
-  if (renderMode === 'on-foot' || renderMode === 'on-ship-deck') {
-    const shadowSize = 35 * renderScale;
-    sun.shadow.camera.left = -shadowSize;
-    sun.shadow.camera.right = shadowSize;
-    sun.shadow.camera.top = shadowSize;
-    sun.shadow.camera.bottom = -shadowSize;
-    sun.shadow.camera.near = 0.1;
-    sun.shadow.camera.far = 1000 * renderScale;
-  } else {
-    const shadowSize = 500 * renderScale;
-    sun.shadow.camera.left = -shadowSize;
-    sun.shadow.camera.right = shadowSize;
-    sun.shadow.camera.top = shadowSize;
-    sun.shadow.camera.bottom = -shadowSize;
-    sun.shadow.camera.near = 0.1;
-    sun.shadow.camera.far = 3000 * renderScale;
-  }
-  sun.shadow.camera.updateProjectionMatrix();
+  configureShadowCamera(sun, renderMode, renderScale);
 
   const rawDaylight = sunDirScratch.dot(v3(up));
   const daylightFactor = Math.max(0, Math.min(1, rawDaylight + 0.2));
+
+  const shadowsEnabled = sun.userData.shadowsEnabled === true;
 
   if (moonMesh && moonLight) {
     // Full-moon model: the moon sits opposite the sun, so it is up at night.
@@ -80,7 +89,17 @@ export function updateSunSystem(
     moonMesh.visible = moonElevation > 0.01;
     moonLight.position.copy(moonDirScratch).multiplyScalar(shadowDist);
     moonLight.target.position.set(0, 0, 0);
-    moonLight.intensity = 0.35 * moonElevation * nightFactor;
+    // Soft curve so moonlight ramps up quickly once the moon clears the horizon.
+    // Kept well below sun intensity (~1.65) so night reads as night.
+    moonLight.intensity = 0.7 * Math.pow(moonElevation, 0.6) * nightFactor;
+    configureShadowCamera(moonLight, renderMode, renderScale);
+
+    // Only one shadow map per frame: whichever body is meaningfully lighting
+    // the scene. Without this, the moonlit side of terrain is uniformly flat.
+    moonLight.castShadow = shadowsEnabled && moonLight.intensity > 0.05;
+    sun.castShadow = shadowsEnabled && rawDaylight > -0.1;
+  } else {
+    sun.castShadow = shadowsEnabled;
   }
 
   return {

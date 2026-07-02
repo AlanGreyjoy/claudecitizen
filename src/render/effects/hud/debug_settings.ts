@@ -1,9 +1,12 @@
+export type TimeOverride = 'auto' | 'day' | 'night';
+
 export interface DebugSettings {
   debugEnabled: boolean;
   showStatsPanel: boolean;
   showVegetationPanel: boolean;
   showControlsReference: boolean;
   showTutorialBanner: boolean;
+  timeOverride: TimeOverride;
 }
 
 const STORAGE_KEY = 'claudecitizen-debug-settings';
@@ -14,6 +17,7 @@ const DEFAULT_SETTINGS: DebugSettings = {
   showVegetationPanel: false,
   showControlsReference: false,
   showTutorialBanner: false,
+  timeOverride: 'auto',
 };
 
 const DEBUG_BOOT_SETTINGS: DebugSettings = {
@@ -22,6 +26,7 @@ const DEBUG_BOOT_SETTINGS: DebugSettings = {
   showVegetationPanel: true,
   showControlsReference: true,
   showTutorialBanner: false,
+  timeOverride: 'auto',
 };
 
 function parseUrlDebug(): boolean {

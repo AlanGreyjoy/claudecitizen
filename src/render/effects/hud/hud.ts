@@ -43,7 +43,16 @@ export interface HudUpdateParams {
   nowMs: number;
 }
 
-export function createHud(elements: HudElements, planet: Planet, seed: number) {
+export interface HudCallbacks {
+  onTimeOverrideChange?: (mode: 'auto' | 'day' | 'night') => void;
+}
+
+export function createHud(
+  elements: HudElements,
+  planet: Planet,
+  seed: number,
+  callbacks: HudCallbacks = {},
+) {
   const debugSettings = createDebugSettings();
   const fpsCounter = createFpsCounter(elements.fpsEl);
   const minimap = createMinimap(elements.minimapCanvas, planet, seed);
@@ -59,13 +68,14 @@ export function createHud(elements: HudElements, planet: Planet, seed: number) {
     statusEl: elements.statusEl,
   });
 
-  debugSettings.subscribe(() => {
+  debugSettings.subscribe((settings) => {
     debugSettings.applyVisibility({
       statsPanelEl: elements.statsPanelEl,
       vegetationMenuEl: elements.vegetationMenuEl,
       controlsEl: elements.controlsEl,
       tutorialBannerEl: elements.tutorialBannerEl,
     });
+    callbacks.onTimeOverrideChange?.(settings.timeOverride);
   });
 
   window.addEventListener('resize', () => minimap.resize());

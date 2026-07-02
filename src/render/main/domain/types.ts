@@ -4,11 +4,14 @@ export type RendererMode = 'log-depth' | 'default-depth' | 'compatibility';
 
 export type RenderMode = SpikeRenderWorld['mode'] | 'on-ship-deck';
 
+export type TimeOverride = 'auto' | 'day' | 'night';
+
 export interface SpikeRenderer {
   rendererMode: RendererMode;
   render: (world: SpikeRenderWorld) => RenderStats;
   resize: (width: number, height: number) => void;
   setVegetationSettings: (nextSettings: Partial<VegetationSettings>) => void;
   setFogSettings: (settings: FogSettings) => void;
+  setTimeOverride: (mode: TimeOverride) => void;
   dispose: () => void;
 }

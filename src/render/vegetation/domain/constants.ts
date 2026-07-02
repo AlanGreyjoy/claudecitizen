@@ -1,4 +1,4 @@
-import type { CubeFace } from '../../../types';
+import type { CubeFace } from "../../../types";
 
 export const FACE_INDEX: Record<CubeFace, number> = {
   nx: 1,

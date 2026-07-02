@@ -14,6 +14,7 @@ uniform vec3 cameraPos;
 uniform float cameraFar;
 uniform float pointSize;
 uniform float intensity;
+uniform float time;
 uniform vec2 magnitudeRange;
 
 varying vec3 vColor;
@@ -23,14 +24,21 @@ void main() {
   vec3 direction = normalize(position);
   float m = mix(magnitudeRange.x, magnitudeRange.y, magnitude);
   float rel = clamp((magnitudeRange.y - m) / (magnitudeRange.y - magnitudeRange.x), 0.0, 1.0);
-  float brightness = pow(rel, 0.55);
-  vColor = color * intensity;
-  vAlpha = mix(0.35, 1.0, brightness);
+  // Steep falloff: most stars stay faint pinpricks, only a handful stand out.
+  float brightness = pow(rel, 1.4);
+
+  // Slow per-star twinkle; faint stars shimmer more than bright ones.
+  float phase = fract(sin(dot(position, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.28318;
+  float amplitude = mix(0.28, 0.08, brightness);
+  float twinkle = 1.0 - amplitude * (0.5 + 0.5 * sin(time * (0.7 + phase * 0.3) + phase));
+
+  vColor = color * intensity * twinkle;
+  vAlpha = mix(0.08, 1.0, brightness);
 
   vec3 worldPos = cameraPos + direction * cameraFar * 0.999;
   vec4 viewPos = viewMatrix * vec4(worldPos, 1.0);
   gl_Position = projectionMatrix * viewPos;
-  gl_PointSize = pointSize * mix(0.85, 2.4, brightness);
+  gl_PointSize = pointSize * mix(0.7, 2.1, brightness);
 }
 `;
 
@@ -44,10 +52,10 @@ void main() {
   if (dist > 1.0) {
     discard;
   }
-  float core = exp(-dist * 3.6);
-  float halo = exp(-dist * 1.1) * 0.35;
+  float core = exp(-dist * 5.0);
+  float halo = exp(-dist * 1.8) * 0.15;
   float alpha = (core + halo) * vAlpha;
-  vec3 rgb = vColor * (core + halo * 0.8);
+  vec3 rgb = vColor * (core + halo);
   gl_FragColor = vec4(rgb, alpha);
 }
 `;
@@ -62,6 +70,7 @@ export interface StarFieldUpdateParams {
   camera: THREE.Camera;
   daylightFactor?: number;
   spaceFactor?: number;
+  nowSeconds?: number;
 }
 
 export interface StarField {
@@ -102,8 +111,10 @@ function resolveStarState(daylightFactor: number, spaceFactor: number): StarFiel
   const orbit = spaceFactor;
   const strength = clamp01(Math.max(nightSurface, orbit * 0.85)) * daylightSuppression;
   const visible = strength > 0.04;
-  const intensity = visible ? 1.4 + strength * 1.8 + orbit * 0.8 : 0;
-  const pointSize = 2.2 + strength * 1.6 + orbit * 0.8;
+  // Kept deliberately restrained: stars should read as delicate pinpricks
+  // from the surface, only gaining presence out in orbit.
+  const intensity = visible ? 0.55 + strength * 0.65 + orbit * 0.9 : 0;
+  const pointSize = 1.5 + strength * 0.7 + orbit * 0.9;
   return { intensity, pointSize, visible };
 }
 
@@ -121,7 +132,8 @@ export function createStarField(scene: THREE.Scene): StarField {
       cameraPos: { value: new THREE.Vector3() },
       intensity: { value: 0 },
       magnitudeRange: { value: new THREE.Vector2(-1.5, 6.5) },
-      pointSize: { value: 2.2 },
+      pointSize: { value: 1.5 },
+      time: { value: 0 },
     },
     vertexShader: STAR_VERTEX_SHADER,
   });
@@ -146,7 +158,12 @@ export function createStarField(scene: THREE.Scene): StarField {
       console.error('ClaudeCitizen star field init failed.', error);
     });
 
-  function update({ camera, daylightFactor = 1, spaceFactor = 0 }: StarFieldUpdateParams): void {
+  function update({
+    camera,
+    daylightFactor = 1,
+    spaceFactor = 0,
+    nowSeconds = 0,
+  }: StarFieldUpdateParams): void {
     if (!ready || failed || !camera) {
       points.visible = false;
       return;
@@ -163,6 +180,7 @@ export function createStarField(scene: THREE.Scene): StarField {
     material.uniforms.cameraFar.value = (camera as THREE.PerspectiveCamera).far;
     material.uniforms.intensity.value = intensity;
     material.uniforms.pointSize.value = pointSize * pixelRatio;
+    material.uniforms.time.value = nowSeconds;
   }
 
   function dispose(): void {

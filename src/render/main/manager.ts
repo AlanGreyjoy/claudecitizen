@@ -12,7 +12,8 @@ import {
 } from '../../world/planet_surface';
 import { clamp01 } from './domain/math';
 import { applyRenderQualitySettings } from './domain/apply_render_quality';
-import type { RenderMode, SpikeRenderer } from './domain/types';
+import { DAY_LENGTH_SECONDS } from './domain/constants';
+import type { RenderMode, SpikeRenderer, TimeOverride } from './domain/types';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
 import { createComposerStack } from './scene/composer_stack';
 import { createShipModel } from './scene/ship_model';
@@ -67,6 +68,18 @@ export function createSpikeRenderer(
   const avatar = createCharacterAvatar(scene, tileManager.renderScale);
 
   let lastTime = 0;
+  let timeOverride: TimeOverride = 'auto';
+
+  // Sun direction is a function of time: dir(theta) ~ (cos(theta), sin(theta) * 0.364,
+  // sin(theta) * 0.939). To force day/night we solve for the theta that points the
+  // sun (or moon) straight at the player's local up, so the override works
+  // anywhere on the planet.
+  function resolveSunTimeSeconds(nowSeconds: number, up: { x: number; y: number; z: number }): number {
+    if (timeOverride === 'auto') return nowSeconds;
+    let theta = Math.atan2(up.y * 0.364 + up.z * 0.939, up.x);
+    if (timeOverride === 'night') theta += Math.PI;
+    return (theta / (Math.PI * 2)) * DAY_LENGTH_SECONDS;
+  }
 
   function resize(width: number, height: number): void {
     renderer.setSize(width, height, false);
@@ -100,7 +113,7 @@ export function createSpikeRenderer(
     const renderScale = tileManager.renderScale;
 
     const sunState = updateSunSystem(
-      nowSeconds,
+      resolveSunTimeSeconds(nowSeconds, up),
       focusBody.position,
       renderScale,
       renderMode,
@@ -174,6 +187,9 @@ export function createSpikeRenderer(
     },
     setFogSettings(settings) {
       applyFogSettings(composerStack.volumetricFogEffect, settings);
+    },
+    setTimeOverride(mode) {
+      timeOverride = mode;
     },
     dispose() {
       cloudShell.dispose();

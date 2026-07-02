@@ -61,6 +61,9 @@ const hud = createHud(
   },
   planet,
   seed,
+  {
+    onTimeOverrideChange: (mode) => renderer?.setTimeOverride(mode),
+  },
 );
 
 let gameLoop: ReturnType<typeof createGameLoop>;

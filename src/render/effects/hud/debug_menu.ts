@@ -12,13 +12,21 @@ export function createDebugMenu(
   const toggles = Array.from(
     elements.debugMenuEl.querySelectorAll<HTMLInputElement>('input[data-debug-key]'),
   );
+  const timeRadios = Array.from(
+    elements.debugMenuEl.querySelectorAll<HTMLInputElement>('input[data-time-override]'),
+  );
 
   function syncToggles(settings: ReturnType<DebugSettingsController['getSettings']>): void {
     for (const input of toggles) {
       const key = input.dataset.debugKey as keyof typeof settings | undefined;
-      if (key && key in settings) {
-        input.checked = settings[key];
+      if (!key || !(key in settings)) continue;
+      const value = settings[key];
+      if (typeof value === 'boolean') {
+        input.checked = value;
       }
+    }
+    for (const input of timeRadios) {
+      input.checked = input.value === settings.timeOverride;
     }
   }
 
@@ -36,6 +44,16 @@ export function createDebugMenu(
         | undefined;
       if (!key) return;
       debugSettings.setSetting(key, input.checked);
+    });
+  }
+
+  for (const input of timeRadios) {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      const value = input.value;
+      if (value === 'auto' || value === 'day' || value === 'night') {
+        debugSettings.setSetting('timeOverride', value);
+      }
     });
   }
 
