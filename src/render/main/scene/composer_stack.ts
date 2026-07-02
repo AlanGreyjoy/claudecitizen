@@ -48,7 +48,9 @@ export function createComposerStack(
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  const normalPass = new NormalPass(scene, camera);
+  // Normals only feed the aerial-perspective effect; half resolution halves the
+  // cost of what is otherwise a full second render of the entire scene.
+  const normalPass = new NormalPass(scene, camera, { resolutionScale: 0.5 });
   composer.addPass(normalPass);
 
   const volumetricClouds = createVolumetricCloudManager(renderer, scene, camera, planet, sun, normalPass);

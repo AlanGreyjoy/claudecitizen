@@ -11,6 +11,7 @@ import {
   MAX_CACHED_VEGETATION_TILES,
   TREE_LOD_DISTANCE_METERS,
   TREE_LOD_UPDATE_MIN_MOVE_METERS,
+  VEGETATION_BUILD_BUDGET_PER_FRAME,
   VEGETATION_CACHE_STALE_FRAMES,
 } from './domain/constants';
 import { tileKey } from './domain/hash';
@@ -30,6 +31,7 @@ import {
   createTreeLodAsset,
   disposeTreeLodAsset,
 } from './render/tree_lod';
+import { updateVegetationWind } from './render/wind';
 import {
   createEmptyVegetationRenderGroup,
   createVegetationGroupFromStored,
@@ -45,7 +47,12 @@ interface VegetationTileEntry {
   group: THREE.Group;
   renderGroup: VegetationRenderGroup;
   lastUsedFrame: number;
-  status: 'loading-disk' | 'ready';
+  status: 'loading-disk' | 'pending-build' | 'ready';
+}
+
+interface VegetationBuildJob {
+  key: string;
+  tileInfo: TileInfo;
 }
 
 interface VegetationCacheStatsAccumulator {
@@ -63,6 +70,7 @@ export interface PlanetVegetationManager {
     bodyPosition: Vec3,
     selectedTiles: TileInfo[],
     altitudeMeters: number,
+    timeSeconds: number,
   ) => VegetationCacheStats;
 }
 
@@ -92,6 +100,7 @@ export function createPlanetVegetationManager(
     totalEvictions: 0,
   };
   const diskLoadsInFlight = new Set<string>();
+  const pendingBuildQueue: VegetationBuildJob[] = [];
   let builtThisFrame = 0;
   let evictedThisFrame = 0;
   let frameNumber = 0;
@@ -119,6 +128,12 @@ export function createPlanetVegetationManager(
     );
   }
 
+  function discardPendingBuild(key: string): void {
+    for (let i = pendingBuildQueue.length - 1; i >= 0; i -= 1) {
+      if (pendingBuildQueue[i].key === key) pendingBuildQueue.splice(i, 1);
+    }
+  }
+
   function releaseTileEntry(
     key: string,
     entry: VegetationTileEntry,
@@ -126,6 +141,7 @@ export function createPlanetVegetationManager(
   ): void {
     releaseVegetationGroup(vegetationGroup, entry.group);
     tileCache.delete(key);
+    discardPendingBuild(key);
     if (!countEviction) return;
     cacheStats.totalEvictions += 1;
     evictedThisFrame += 1;
@@ -155,6 +171,9 @@ export function createPlanetVegetationManager(
     key: string,
     visible: boolean,
   ): VegetationRenderGroup {
+    const previous = tileCache.get(key);
+    if (previous) releaseVegetationGroup(vegetationGroup, previous.group);
+
     const data = collectTileVegetationData(
       tileInfo,
       planet,
@@ -207,12 +226,29 @@ export function createPlanetVegetationManager(
       entry.status = 'ready';
       cacheStats.diskHits += 1;
       updateCachePeak();
+      // Freshly restored tiles start with all trees as low-poly imposters and
+      // would stay that way until the player moves; refresh against the last
+      // known focus so nearby trees pop in at full detail immediately.
+      if (
+        lastTreeLodFocus &&
+        shouldUpdateRenderGroupLod(renderGroup, lastTreeLodFocus)
+      ) {
+        renderGroup.updateTreeLod(lastTreeLodFocus);
+      }
       return;
     }
 
     cacheStats.diskMisses += 1;
-    tileCache.delete(key);
-    buildAndCacheVegetation(tileInfo, key, wasVisible);
+    // Rebuilds are expensive main-thread work (hundreds of surface samples per
+    // tile); queue them against a per-frame budget instead of building inline,
+    // which caused frame spikes whenever several tiles missed the disk cache.
+    const placeholder = createEmptyVegetationRenderGroup();
+    placeholder.group.visible = wasVisible;
+    vegetationGroup.add(placeholder.group);
+    entry.group = placeholder.group;
+    entry.renderGroup = placeholder;
+    entry.status = 'pending-build';
+    pendingBuildQueue.push({ key, tileInfo });
   }
 
   function startVegetationDiskLoad(tileInfo: TileInfo): void {
@@ -267,6 +303,7 @@ export function createPlanetVegetationManager(
       releaseTileEntry(key, entry, false);
     }
     diskLoadsInFlight.clear();
+    pendingBuildQueue.length = 0;
     activeKeys.clear();
   }
 
@@ -283,7 +320,7 @@ export function createPlanetVegetationManager(
       return { renderGroup: entry.renderGroup, key };
     }
 
-    if (entry?.status === 'loading-disk') {
+    if (entry?.status === 'loading-disk' || entry?.status === 'pending-build') {
       entry.lastUsedFrame = frameNumber;
       return { renderGroup: entry.renderGroup, key };
     }
@@ -373,14 +410,35 @@ export function createPlanetVegetationManager(
     }
   }
 
+  function drainBuildQueue(bodyPosition: Vec3): void {
+    let budget = VEGETATION_BUILD_BUDGET_PER_FRAME;
+    while (budget > 0 && pendingBuildQueue.length > 0) {
+      const job = pendingBuildQueue.shift()!;
+      const entry = tileCache.get(job.key);
+      if (!entry || entry.status !== 'pending-build') continue;
+      const wasVisible = entry.group.visible;
+      const renderGroup = buildAndCacheVegetation(job.tileInfo, job.key, wasVisible);
+      // Queued builds finish after the tile's "newly visible" frame, so refresh
+      // tree LOD here or nearby trees stay as low-poly imposters until the
+      // player moves again.
+      if (shouldUpdateRenderGroupLod(renderGroup, bodyPosition)) {
+        renderGroup.updateTreeLod(bodyPosition);
+      }
+      budget -= 1;
+    }
+  }
+
   function update(
     bodyPosition: Vec3,
     selectedTiles: TileInfo[],
     altitudeMeters: number,
+    timeSeconds: number,
   ): VegetationCacheStats {
     frameNumber += 1;
+    updateVegetationWind(timeSeconds);
     builtThisFrame = 0;
     evictedThisFrame = 0;
+    drainBuildQueue(bodyPosition);
     const selectedKeys = new Set<string>();
     const vegetationVisible =
       isVegetationVisibleAtAltitude(altitudeMeters) && assetsReady;

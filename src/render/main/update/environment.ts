@@ -103,9 +103,13 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
 
   atmosphereMesh.position.copy(planetCenter);
   const atmosphereMaterial = atmosphereMesh.material as THREE.MeshBasicMaterial;
-  atmosphereMaterial.opacity = volumetricSkyActive
-    ? 0.04 * (1 - spaceFactor * 0.8)
-    : 0.22 * (1 - spaceFactor * 0.86);
+  // Additive atmosphere haze must fade out at night or it washes the whole
+  // sky bright blue and drowns out the stars.
+  const atmosphereDaylight = 0.03 + 0.97 * daylightFactor;
+  atmosphereMaterial.opacity =
+    (volumetricSkyActive
+      ? 0.04 * (1 - spaceFactor * 0.8)
+      : 0.22 * (1 - spaceFactor * 0.86)) * atmosphereDaylight;
 
   if (planetFogActive) {
     volumetricFogEffect.uniforms.get('uProjectionMatrixInverse')!.value.copy(camera.projectionMatrixInverse);

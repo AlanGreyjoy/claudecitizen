@@ -59,11 +59,13 @@ export function sampleSurfaceClimate(
   else if (biome === 'beach' || biome === 'tundra' || biome === 'desert') fertility = 0.1;
 
   const grassDensity = clamp01(fertility);
+  // Plains fertility lands around 0.5-0.65, so the old `(fertility - 0.5) * 0.5`
+  // produced near-zero tree density and visibly barren grasslands.
   const treeDensity =
     biome === 'forest'
       ? clamp01(fertility)
       : biome === 'plains'
-        ? clamp01(fertility - 0.5) * 0.5
+        ? clamp01(fertility - 0.4) * 0.9
         : 0;
 
   return {

@@ -56,8 +56,8 @@ export const DEFAULT_VEGETATION_SETTINGS: VegetationSettings = Object.freeze({
   grass: Object.freeze({
     density: 1,
     gapMeters: 0,
-    minScale: 0.1,
-    maxScale: 0.5,
+    minScale: 0.35,
+    maxScale: 1.0,
   }),
   tree: Object.freeze({
     density: 1,

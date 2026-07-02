@@ -19,7 +19,9 @@ export function createReadyMesh(
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(createTileGeometry(buffers), material);
   mesh.position.set(info.centerPosition.x, info.centerPosition.y, info.centerPosition.z);
-  mesh.frustumCulled = false;
+  // Vertex positions are tile-center relative, so the geometry bounding sphere
+  // is tight and frustum culling is safe (and skips most of the planet).
+  mesh.geometry.computeBoundingSphere();
   mesh.visible = false;
   mesh.receiveShadow = true;
   tileGroup.add(mesh);

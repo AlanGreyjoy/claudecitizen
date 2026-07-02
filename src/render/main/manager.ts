@@ -115,6 +115,7 @@ export function createSpikeRenderer(
       focusBody.position,
       tileState.selectedTiles,
       surface.altitudeMeters,
+      nowSeconds,
     );
     cloudShell.update(focusBody.position, nowSeconds, spaceFactor, surface.altitudeMeters);
 

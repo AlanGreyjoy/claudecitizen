@@ -1,6 +1,19 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { VegetationAssetCatalog } from '../domain/asset_catalog';
+import { applyWindToMaterial } from './wind';
+
+export type VegetationWindProfile = 'grass' | 'tree';
+
+// Sway amplitude as a fraction of the asset's own height, and how fast it
+// oscillates. Grass whips around; trees only lean near the canopy.
+const WIND_PROFILES: Record<
+  VegetationWindProfile,
+  { strengthPerHeight: number; speed: number }
+> = {
+  grass: { strengthPerHeight: 0.12, speed: 1.6 },
+  tree: { strengthPerHeight: 0.035, speed: 0.7 },
+};
 
 export interface InstancedAssetPart {
   geometry: THREE.BufferGeometry;
@@ -36,7 +49,10 @@ function configureMaterial(
   return meshMaterial;
 }
 
-export function extractInstancedAsset(gltf: GLTF): InstancedAsset {
+export function extractInstancedAsset(
+  gltf: GLTF,
+  windProfile?: VegetationWindProfile,
+): InstancedAsset {
   gltf.scene.updateMatrixWorld(true);
   const parts: InstancedAssetPart[] = [];
   const bounds = new THREE.Box3();
@@ -54,6 +70,23 @@ export function extractInstancedAsset(gltf: GLTF): InstancedAsset {
       : configureMaterial(child.material);
     parts.push({ geometry, material });
   });
+
+  if (windProfile && !bounds.isEmpty()) {
+    const profile = WIND_PROFILES[windProfile];
+    const height = Math.max(bounds.max.y - bounds.min.y, 1e-3);
+    for (const part of parts) {
+      const materials = Array.isArray(part.material)
+        ? part.material
+        : [part.material];
+      for (const material of materials) {
+        applyWindToMaterial(material, {
+          referenceHeight: height,
+          speed: profile.speed,
+          strength: height * profile.strengthPerHeight,
+        });
+      }
+    }
+  }
 
   return {
     baseOffsetY: bounds.isEmpty() ? 0 : -bounds.min.y,
@@ -118,12 +151,17 @@ export function loadInstancedAssetCatalog(
     if (loadedAssetCount === totalAssetLoads) onComplete(catalog);
   }
 
-  function load(path: string, target: InstancedAsset[], label: string): void {
+  function load(
+    path: string,
+    target: InstancedAsset[],
+    label: string,
+    windProfile: VegetationWindProfile,
+  ): void {
     const url = new URL(path, import.meta.url).href;
     loader.load(
       url,
       (gltf) => {
-        const asset = extractInstancedAsset(gltf);
+        const asset = extractInstancedAsset(gltf, windProfile);
         if (asset.parts.length > 0) target.push(asset);
         markAssetLoaded();
       },
@@ -136,9 +174,9 @@ export function loadInstancedAssetCatalog(
   }
 
   grassPaths.forEach((path) => {
-    load(path, catalog.grass, 'grass');
+    load(path, catalog.grass, 'grass', 'grass');
   });
   pinePaths.forEach((path) => {
-    load(path, catalog.trees, 'pine');
+    load(path, catalog.trees, 'pine', 'tree');
   });
 }

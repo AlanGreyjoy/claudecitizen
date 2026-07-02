@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { InstancedAsset } from './instanced_assets';
+import { applyWindToMaterial } from './wind';
 
 const CONE_RADIUS = 0.55;
 const CONE_HEIGHT = 2.2;
@@ -16,6 +17,13 @@ export function createTreeLodAsset(): InstancedAsset {
   const material = new THREE.MeshStandardMaterial({
     color: 0x4a7a3a,
     flatShading: true,
+  });
+  // Match the high-LOD pine sway so trees don't visibly "freeze" when they
+  // swap to the imposter cone at distance.
+  applyWindToMaterial(material, {
+    referenceHeight: CONE_HEIGHT,
+    speed: 0.7,
+    strength: CONE_HEIGHT * 0.035,
   });
 
   return {

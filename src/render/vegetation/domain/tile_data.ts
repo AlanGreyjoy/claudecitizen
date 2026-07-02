@@ -2,14 +2,14 @@ import type { VegetationAssetCatalog } from './asset_catalog';
 import type { Planet, TileInfo, VegetationSettings, Vec3 } from '../../../types';
 import { scale, sub } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
-import {
-  renderableSurfacePointFromDirection,
-  sampleRenderablePlanetSurface,
-} from '../../../world/planet_surface';
+import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
+import { sampleVisibleSurfaceFrame } from '../../../world/renderable_surface';
 import {
   FACE_INDEX,
   getGrassSampleCount,
   getTreeSampleCount,
+  grassSampleMultiplier,
+  treeSampleMultiplier,
 } from './constants';
 import { clamp01, hash01, lerp, scaledSampleCount } from './hash';
 import { composeInstanceMatrix } from './instance_matrix';
@@ -38,6 +38,63 @@ type MakeVariantIndexFn = (
   i: number,
 ) => number;
 
+type PlanetSurfaceSample = import('../../../types').PlanetSurfaceSample;
+
+// Full climate sampling (temperature/moisture/lake noise) per placed instance
+// dominates tile build cost at lush densities. Climate varies slowly across a
+// tile, so sample it on a coarse grid and only resolve exact height + normal
+// per instance from the (cached) renderable surface grid.
+const CLIMATE_GRID_CELLS = 6;
+
+function createTileSurfaceSampler(
+  tileInfo: TileInfo,
+  planet: Planet,
+  seed: number,
+): (u: number, v: number, direction: Vec3) => PlanetSurfaceSample {
+  const climateCells: (PlanetSurfaceSample | null)[] = new Array(
+    CLIMATE_GRID_CELLS * CLIMATE_GRID_CELLS,
+  ).fill(null);
+  const { u0, u1, v0, v1 } = tileInfo.bounds;
+
+  return (u, v, direction) => {
+    const gridU = Math.min(
+      CLIMATE_GRID_CELLS - 1,
+      Math.max(0, Math.floor(((u - u0) / (u1 - u0)) * CLIMATE_GRID_CELLS)),
+    );
+    const gridV = Math.min(
+      CLIMATE_GRID_CELLS - 1,
+      Math.max(0, Math.floor(((v - v0) / (v1 - v0)) * CLIMATE_GRID_CELLS)),
+    );
+    const cellIndex = gridV * CLIMATE_GRID_CELLS + gridU;
+
+    let climate = climateCells[cellIndex];
+    if (!climate) {
+      const cellU = u0 + ((gridU + 0.5) / CLIMATE_GRID_CELLS) * (u1 - u0);
+      const cellV = v0 + ((gridV + 0.5) / CLIMATE_GRID_CELLS) * (v1 - v0);
+      const cellDirection = directionFromCubeFace(tileInfo.face, cellU, cellV);
+      climate = sampleRenderablePlanetSurface(
+        planet,
+        seed,
+        scale(cellDirection, planet.radiusMeters),
+      );
+      climateCells[cellIndex] = climate;
+    }
+
+    const frame = sampleVisibleSurfaceFrame(
+      planet,
+      seed,
+      scale(direction, planet.radiusMeters),
+    );
+    return {
+      ...climate,
+      heightMeters: frame.heightMeters,
+      normal: frame.normal,
+      normalizedHeight: frame.heightMeters / planet.terrainAmplitudeMeters,
+      surfaceRadiusMeters: planet.radiusMeters + frame.heightMeters,
+    };
+  };
+}
+
 function buildInstanceEntries(
   anchor: SurfaceAnchor,
   tileInfo: TileInfo,
@@ -54,6 +111,7 @@ function buildInstanceEntries(
   const entries: StoredVegetationInstance[] = [];
   const faceIndex = FACE_INDEX[tileInfo.face] ?? 0;
   const placementGrid = createPlacementGrid(minimumGapMeters);
+  const sampleSurface = createTileSurfaceSampler(tileInfo, planet, seed);
 
   for (let i = 0; i < sampleCount; i += 1) {
     const uJitter = hash01(
@@ -79,21 +137,17 @@ function buildInstanceEntries(
     const v =
       tileInfo.bounds.v0 + (tileInfo.bounds.v1 - tileInfo.bounds.v0) * vJitter;
     const direction = directionFromCubeFace(tileInfo.face, u, v);
-    const surface = sampleRenderablePlanetSurface(
-      planet,
-      seed,
-      scale(direction, planet.radiusMeters),
-    );
+    const surface = sampleSurface(u, v, direction);
 
     if (!allowPlacement(surface, i)) continue;
 
-    const point = renderableSurfacePointFromDirection(
-      direction,
-      planet,
-      seed,
-      0,
-    );
-    const worldPosition: Vec3 = { x: point.x, y: point.y, z: point.z };
+    // Reuse the surface sample above instead of re-sampling the planet: the
+    // second full sample (noise + climate + lakes) doubled tile build cost.
+    const worldPosition: Vec3 = {
+      x: direction.x * surface.surfaceRadiusMeters,
+      y: direction.y * surface.surfaceRadiusMeters,
+      z: direction.z * surface.surfaceRadiusMeters,
+    };
     const basisNormal =
       makeBasisNormal?.(surface, direction, i) ?? surface.normal ?? direction;
     const normal = normalizeVec3(basisNormal.x, basisNormal.y, basisNormal.z);
@@ -142,11 +196,11 @@ export function collectTileVegetationData(
   const grassSettings = vegetationSettings.grass;
   const treeSettings = vegetationSettings.tree;
   const grassSampleCount = scaledSampleCount(
-    getGrassSampleCount(),
+    getGrassSampleCount() * grassSampleMultiplier(tileInfo.level),
     grassSettings.density,
   );
   const treeSampleCount = scaledSampleCount(
-    getTreeSampleCount(),
+    getTreeSampleCount() * treeSampleMultiplier(tileInfo.level),
     treeSettings.density,
   );
 

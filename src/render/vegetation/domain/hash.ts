@@ -11,6 +11,14 @@ export function hash01(seed: number, ...values: number[]): number {
     state = Math.imul(state ^ (state >>> 16), 0x45d9f3b);
     state >>>= 0;
   }
+  // murmur3 fmix32 finalizer: without full avalanche, calls that differ only
+  // in the final salt (e.g. u vs v jitter) produce correlated outputs, which
+  // made vegetation line up in visible diagonal rows.
+  state ^= state >>> 16;
+  state = Math.imul(state, 0x85ebca6b) >>> 0;
+  state ^= state >>> 13;
+  state = Math.imul(state, 0xc2b2ae35) >>> 0;
+  state ^= state >>> 16;
   return state / 0xffffffff;
 }
 

@@ -30,13 +30,37 @@ function addInstancedAsset(
       part.material,
       matrices.length,
     );
-    mesh.frustumCulled = false;
-    mesh.castShadow = true;
+    // Only grass flows through this path; at lush densities thousands of tiny
+    // shadow casters per tile bloat the shadow pass with no visible payoff.
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
     mesh.instanceMatrix.needsUpdate = true;
+    // Instance-aware bounds so frustum culling can drop off-screen tiles.
+    mesh.computeBoundingSphere();
     group.add(mesh);
   }
+}
+
+// LOD meshes swap instances (and counts) every update, so instead of
+// recomputing per-frame bounds we give every LOD mesh one fixed sphere that
+// covers all tree positions in the tile. Culling stays valid no matter which
+// instances are currently high or low detail.
+const TREE_BOUNDS_MARGIN_METERS = 40;
+
+function computeInstanceBoundingSphere(
+  instances: StoredVegetationInstance[],
+): THREE.Sphere {
+  const box = new THREE.Box3();
+  const point = new THREE.Vector3();
+  for (const instance of instances) {
+    point.set(instance.matrix[12], instance.matrix[13], instance.matrix[14]);
+    box.expandByPoint(point);
+  }
+  const sphere = new THREE.Sphere();
+  box.getBoundingSphere(sphere);
+  sphere.radius += TREE_BOUNDS_MARGIN_METERS;
+  return sphere;
 }
 
 function createEmptyInstancedMeshes(
@@ -44,6 +68,7 @@ function createEmptyInstancedMeshes(
   asset: InstancedAsset | null | undefined,
   capacity: number,
   options: { castShadow: boolean; receiveShadow: boolean },
+  boundingSphere: THREE.Sphere | null = null,
 ): THREE.InstancedMesh[] {
   if (!asset?.parts?.length || capacity === 0) return [];
 
@@ -54,7 +79,11 @@ function createEmptyInstancedMeshes(
       part.material,
       capacity,
     );
-    mesh.frustumCulled = false;
+    if (boundingSphere) {
+      mesh.boundingSphere = boundingSphere.clone();
+    } else {
+      mesh.frustumCulled = false;
+    }
     mesh.castShadow = options.castShadow;
     mesh.receiveShadow = options.receiveShadow;
     mesh.count = 0;
@@ -108,15 +137,22 @@ function buildTreeLodMeshes(
   }
 
   const counts = countInstancesPerVariant(instances, treeAssets.length);
+  const tileBounds = computeInstanceBoundingSphere(instances);
   const highMeshes: THREE.InstancedMesh[][] = [];
 
   treeAssets.forEach((asset, variantIndex) => {
     const capacity = counts[variantIndex] ?? 0;
     highMeshes.push(
-      createEmptyInstancedMeshes(group, asset, capacity, {
-        castShadow: true,
-        receiveShadow: true,
-      }),
+      createEmptyInstancedMeshes(
+        group,
+        asset,
+        capacity,
+        {
+          castShadow: true,
+          receiveShadow: true,
+        },
+        tileBounds,
+      ),
     );
   });
 
@@ -128,6 +164,7 @@ function buildTreeLodMeshes(
       castShadow: false,
       receiveShadow: true,
     },
+    tileBounds,
   );
 
   const lod = createTreeLodState(

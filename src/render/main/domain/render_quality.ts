@@ -20,10 +20,13 @@ export interface RenderQualitySettings {
 }
 
 const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
+  // Note: `antialias` requests MSAA on the canvas context, which has no effect
+  // when rendering goes through the EffectComposer's offscreen buffers — SMAA
+  // is the AA path that actually shows up on screen.
   performance: {
     preset: 'performance',
     maxPixelRatio: 1,
-    antialias: true,
+    antialias: false,
     useSmaa: false,
     shadowMapSize: 512,
     minProjectedError: 1.8,
@@ -41,8 +44,8 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
   balanced: {
     preset: 'balanced',
     maxPixelRatio: 1.25,
-    antialias: true,
-    useSmaa: false,
+    antialias: false,
+    useSmaa: true,
     shadowMapSize: 1024,
     minProjectedError: 1.35,
     fogRaySteps: 12,
@@ -51,7 +54,7 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     cloudShadowCascades: 1,
     cloudShadowMapSize: 384,
     aerialPerspectiveShadowSamples: 8,
-    bloomMipmapBlur: false,
+    bloomMipmapBlur: true,
     grassSampleCount: 220,
     treeSampleCount: 120,
     vegetationTileDistanceMeters: 48_000,
@@ -59,7 +62,7 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
   high: {
     preset: 'high',
     maxPixelRatio: 2,
-    antialias: true,
+    antialias: false,
     useSmaa: true,
     shadowMapSize: 2048,
     minProjectedError: 0.9,

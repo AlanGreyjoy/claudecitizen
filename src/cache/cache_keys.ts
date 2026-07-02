@@ -1,10 +1,15 @@
+import { terrainFingerprint } from '../world/terrain_fingerprint';
 import type { CubeFace, Planet, VegetationSettings } from '../types';
 
 export const TERRAIN_CACHE_VERSION = 'v3';
-export const VEGETATION_CACHE_VERSION = 'v1';
+// v3: hash01 gained a proper finalizer, changing all vegetation placement.
+export const VEGETATION_CACHE_VERSION = 'v3';
 
-export function planetCacheId(planet: Planet): string {
-  return `${planet.radiusMeters}|${planet.terrainAmplitudeMeters}`;
+// Includes a fingerprint of the terrain generation itself so that editing the
+// noise stack invalidates previously cached tiles: stale meshes are the classic
+// cause of the character walking above/through the visible ground.
+export function planetCacheId(planet: Planet, seed: number): string {
+  return `${planet.radiusMeters}|${planet.terrainAmplitudeMeters}|${terrainFingerprint(planet, seed)}`;
 }
 
 export function terrainStorageKey(
@@ -18,7 +23,7 @@ export function terrainStorageKey(
   return [
     'terrain',
     TERRAIN_CACHE_VERSION,
-    planetCacheId(planet),
+    planetCacheId(planet, seed),
     seed,
     face,
     level,
@@ -55,7 +60,7 @@ export function vegetationStorageKey(
   return [
     'veg',
     VEGETATION_CACHE_VERSION,
-    planetCacheId(planet),
+    planetCacheId(planet, seed),
     seed,
     settingsHash,
     face,

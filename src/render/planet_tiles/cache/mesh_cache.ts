@@ -238,19 +238,6 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     return entry;
   }
 
-  function reuseAnyReadyMesh(fallbackInfo: TileInfo, fallbackKey: string): ResolvedTile | null {
-    for (const entry of meshCache.values()) {
-      if (!entry.mesh) continue;
-      entry.lastUsedFrame = frameNumber;
-      return {
-        info: fallbackInfo,
-        key: fallbackKey,
-        mesh: entry.mesh,
-      };
-    }
-    return null;
-  }
-
   function requestBestAvailableTile(info: TileInfo, buildBudget: BuildBudget): ResolvedTile {
     const searchChain: TileInfo[] = [];
     let current: TileInfo | null = info;
@@ -346,10 +333,10 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       };
     }
 
+    // No mesh available and no budget left: report a hole for this frame rather
+    // than reusing an unrelated mesh, which leaves ghost terrain visible with no
+    // owner in the active-key bookkeeping.
     startTerrainDiskLoad(fallbackInfo);
-    const reused = reuseAnyReadyMesh(fallbackInfo, fallbackKey);
-    if (reused) return reused;
-
     return {
       info: fallbackInfo,
       key: fallbackKey,
