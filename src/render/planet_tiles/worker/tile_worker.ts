@@ -1,6 +1,13 @@
 import { buildTerrainTileBuffers } from '../build/terrain_buffers';
 import type { TileWorkerInMessage, TileWorkerOutMessage } from '../../../types';
 
+// Announce liveness as soon as the module executes. Some embedded browsers
+// (e.g. the Cursor in-IDE tab) construct workers that never run and never
+// fire an error event; the main thread uses this handshake to detect that
+// and fall back to synchronous builds.
+const readyMessage: TileWorkerOutMessage = { ready: true };
+globalThis.postMessage(readyMessage);
+
 globalThis.onmessage = (event: MessageEvent<TileWorkerInMessage>) => {
   const { buildId, info, key, planet, seed } = event.data;
 

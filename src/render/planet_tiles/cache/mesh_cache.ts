@@ -44,6 +44,12 @@ interface TileMeshCacheOptions {
   tileGroup: THREE.Group;
 }
 
+// How long the freshly constructed worker gets to post its ready handshake
+// before we give up on it. Generous enough for dev-server module compilation
+// on a slow machine, short enough that a dead worker doesn't starve tile
+// builds for long.
+const WORKER_LIVENESS_TIMEOUT_MS = 5_000;
+
 export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCache {
   const { material, planet, seed, tileGroup } = options;
 
@@ -60,6 +66,8 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
   const pendingBuildQueue: PendingBuildJob[] = [];
   let tileBuildWorker = createTileBuildWorker();
   let workerBusy = false;
+  let workerAlive = false;
+  let workerLivenessTimer: ReturnType<typeof setTimeout> | null = null;
   let frameNumber = 0;
   let nextBuildId = 1;
   let builtThisFrame = 0;
@@ -112,6 +120,34 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     const entry = meshCache.get(key);
     if (!entry || entry.buildId !== buildId || entry.status !== 'pending') return;
     meshCache.delete(key);
+  }
+
+  function clearWorkerLivenessTimer(): void {
+    if (workerLivenessTimer == null) return;
+    clearTimeout(workerLivenessTimer);
+    workerLivenessTimer = null;
+  }
+
+  function markWorkerAlive(): void {
+    workerAlive = true;
+    clearWorkerLivenessTimer();
+  }
+
+  // Drop the worker and forget every pending entry so the next request for
+  // those tiles goes through the synchronous build path instead.
+  function abandonWorkerBuilds(reason: string): void {
+    cacheStats.workerErrors += 1;
+    console.error(`ClaudeCitizen terrain worker ${reason}, reverting future builds to sync.`);
+    clearWorkerLivenessTimer();
+    if (tileBuildWorker) {
+      tileBuildWorker.terminate();
+      tileBuildWorker = null;
+    }
+    workerBusy = false;
+    pendingBuildQueue.length = 0;
+    for (const [key, entry] of meshCache) {
+      if (entry.status === 'pending') meshCache.delete(key);
+    }
   }
 
   function pumpWorkerQueue(): void {
@@ -380,7 +416,18 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
   }
 
   if (tileBuildWorker) {
+    // Constructing a Worker can "succeed" in environments where the script
+    // never actually executes and no error event ever fires (seen in embedded
+    // browser tabs). Without this handshake timeout the build queue would
+    // starve forever while everything waits on a dead worker.
+    workerLivenessTimer = setTimeout(() => {
+      if (!workerAlive) abandonWorkerBuilds('never responded to startup handshake');
+    }, WORKER_LIVENESS_TIMEOUT_MS);
+
     tileBuildWorker.onmessage = (event: MessageEvent<TileWorkerOutMessage>) => {
+      markWorkerAlive();
+      if ('ready' in event.data) return;
+
       workerBusy = false;
       const { buildId, key } = event.data;
 
@@ -405,21 +452,14 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     };
 
     tileBuildWorker.onerror = (event: ErrorEvent) => {
-      workerBusy = false;
-      cacheStats.workerErrors += 1;
-      console.error('ClaudeCitizen terrain worker crashed, reverting future builds to sync.', event);
-      tileBuildWorker!.terminate();
-      tileBuildWorker = null;
-      pendingBuildQueue.length = 0;
-      for (const [key, entry] of meshCache) {
-        if (entry.status === 'pending') meshCache.delete(key);
-      }
+      abandonWorkerBuilds(`crashed (${event.message || 'unknown error'})`);
     };
   }
 
   return {
     countEntries,
     dispose() {
+      clearWorkerLivenessTimer();
       if (tileBuildWorker) {
         tileBuildWorker.terminate();
         tileBuildWorker = null;

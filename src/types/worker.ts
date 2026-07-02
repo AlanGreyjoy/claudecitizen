@@ -26,4 +26,12 @@ export interface TileWorkerErrorMessage {
   error: string;
 }
 
-export type TileWorkerOutMessage = TileWorkerSuccessMessage | TileWorkerErrorMessage;
+/** Startup handshake proving the worker script actually executes. */
+export interface TileWorkerReadyMessage {
+  ready: true;
+}
+
+export type TileWorkerOutMessage =
+  | TileWorkerReadyMessage
+  | TileWorkerSuccessMessage
+  | TileWorkerErrorMessage;
