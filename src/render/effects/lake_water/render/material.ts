@@ -25,6 +25,8 @@ const fragmentShader = /* glsl */ `
 
 uniform float time;
 uniform sampler2D normalMap;
+uniform sampler2D waterMap;
+uniform float waterMapStrength;
 uniform vec3 sunDirection;
 uniform vec3 sunColor;
 uniform vec3 waterColor;
@@ -54,8 +56,12 @@ void main() {
   float facing = max(dot(viewDir, normal), 0.0);
   float fresnel = pow(1.0 - facing, 3.0);
 
+  vec2 mapUv = vUv * 7.0 + vec2(time * 0.02, -time * 0.015);
+  vec3 mapColor = texture2D(waterMap, mapUv).rgb;
+  vec3 baseWaterColor = mix(waterColor, mapColor, waterMapStrength);
+
   float diffuse = max(dot(sunDirection, normal), 0.0);
-  vec3 scatter = waterColor * (0.5 + diffuse * 0.5);
+  vec3 scatter = baseWaterColor * (0.5 + diffuse * 0.5);
 
   vec3 halfDir = normalize(sunDirection + viewDir);
   float spec = pow(max(dot(normal, halfDir), 0.0), 96.0);
@@ -101,7 +107,7 @@ export function createWaterNormalTexture(): THREE.DataTexture {
   return texture;
 }
 
-export function createLakeWaterMaterial(normalMap: THREE.DataTexture): THREE.ShaderMaterial {
+export function createLakeWaterMaterial(normalMap: THREE.Texture): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     depthWrite: false,
     fog: true,
@@ -115,7 +121,62 @@ export function createLakeWaterMaterial(normalMap: THREE.DataTexture): THREE.Sha
       sunDirection: { value: new THREE.Vector3(0.4, 0.85, 0.2).normalize() },
       time: { value: 0 },
       waterColor: { value: new THREE.Color(0x1a5578) },
+      waterMap: { value: normalMap },
+      waterMapStrength: { value: 0 },
     },
     vertexShader,
   });
+}
+
+const WATER_NORMAL_URL = new URL(
+  '../../../../assets/textures/Water/1/1+_normal.bmp',
+  import.meta.url,
+).href;
+const WATER_DIFFUSE_URL = new URL(
+  '../../../../assets/textures/Water/1/1+_diffuseOriginal.bmp',
+  import.meta.url,
+).href;
+
+export interface LakeWaterTextureHandle {
+  dispose: () => void;
+}
+
+// Swaps the procedural placeholder maps for the authored Water textures once
+// they finish loading; until then the material keeps its fallback look.
+export function loadLakeWaterTextures(material: THREE.ShaderMaterial): LakeWaterTextureHandle {
+  const loader = new THREE.TextureLoader();
+  const textures: THREE.Texture[] = [];
+  let disposed = false;
+
+  loader.load(WATER_NORMAL_URL, (texture) => {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    if (disposed) {
+      texture.dispose();
+      return;
+    }
+    textures.push(texture);
+    material.uniforms.normalMap.value = texture;
+  });
+
+  loader.load(WATER_DIFFUSE_URL, (texture) => {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    if (disposed) {
+      texture.dispose();
+      return;
+    }
+    textures.push(texture);
+    material.uniforms.waterMap.value = texture;
+    material.uniforms.waterMapStrength.value = 0.45;
+  });
+
+  return {
+    dispose() {
+      disposed = true;
+      for (const texture of textures) texture.dispose();
+      textures.length = 0;
+    },
+  };
 }

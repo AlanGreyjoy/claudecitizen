@@ -3,9 +3,16 @@ import { scale } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
 import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
 import { TILE_SEGMENTS } from '../domain/constants';
+import {
+  TERRAIN_TEXTURE_LAYER_COUNT,
+  TERRAIN_TEXTURE_REPEAT_METERS,
+  TerrainTextureLayer,
+  terrainTextureLayerForBiome,
+} from '../domain/texture_layers';
 const OCEAN_DEEP_COLOR = hexToRgb(0x0e2542);
 const OCEAN_SHALLOW_COLOR = hexToRgb(0x28639e);
 const LAKE_BED_COLOR = hexToRgb(0x5f6f52);
+const RIVER_BED_COLOR = hexToRgb(0x6b6f54);
 const BEACH_COLOR = hexToRgb(0xd6c697);
 const DESERT_COLOR = hexToRgb(0xc2b280);
 const PLAINS_COLOR = hexToRgb(0x608038);
@@ -54,6 +61,8 @@ function writeSurfaceColor(surface: PlanetSurfaceSample, colors: Float32Array, o
     lerpColor(scratchColor, OCEAN_DEEP_COLOR, OCEAN_SHALLOW_COLOR, depth);
   } else if (surface.biome === 'lake') {
     copyColor(scratchColor, LAKE_BED_COLOR);
+  } else if (surface.biome === 'river') {
+    copyColor(scratchColor, RIVER_BED_COLOR);
   } else if (surface.biome === 'beach') {
     copyColor(scratchColor, BEACH_COLOR);
   } else if (surface.biome === 'forest') {
@@ -72,7 +81,9 @@ function writeSurfaceColor(surface: PlanetSurfaceSample, colors: Float32Array, o
     copyColor(scratchColor, ROCK_COLOR);
   }
 
-  if (surface.biome !== 'ocean' && surface.biome !== 'lake') {
+  // Only mountain biomes fade toward rock/snow with height; plains and
+  // forests keep their colors even at moderate elevation.
+  if (surface.biome === 'highlands' || surface.biome === 'peak') {
     if (surface.normalizedHeight > 0.6) {
       blendColor(scratchColor, PEAK_COLOR, clamp01((surface.normalizedHeight - 0.6) / 0.4));
     } else if (surface.normalizedHeight > 0.4) {
@@ -87,6 +98,48 @@ function writeSurfaceColor(surface: PlanetSurfaceSample, colors: Float32Array, o
   colors[offset] = scratchColor[0];
   colors[offset + 1] = scratchColor[1];
   colors[offset + 2] = scratchColor[2];
+}
+
+const scratchWeights = new Float32Array(TERRAIN_TEXTURE_LAYER_COUNT);
+
+function writeSurfaceWeights(
+  surface: PlanetSurfaceSample,
+  weights0: Float32Array,
+  weights1: Float32Array,
+  vertexIndex: number,
+): void {
+  scratchWeights.fill(0);
+  scratchWeights[terrainTextureLayerForBiome(surface.biome)] = 1;
+
+  // Mirror the height-based color blending so texture layers transition to
+  // rock and snow toward highlands and peaks.
+  if (surface.biome === 'highlands' || surface.biome === 'peak') {
+    let blendLayer: TerrainTextureLayer | null = null;
+    let blend = 0;
+    if (surface.normalizedHeight > 0.6) {
+      blendLayer = TerrainTextureLayer.Snow;
+      blend = clamp01((surface.normalizedHeight - 0.6) / 0.4);
+    } else if (surface.normalizedHeight > 0.4) {
+      blendLayer = TerrainTextureLayer.Rock;
+      blend = clamp01((surface.normalizedHeight - 0.4) / 0.2);
+    }
+    if (blendLayer != null && blend > 0) {
+      for (let i = 0; i < TERRAIN_TEXTURE_LAYER_COUNT; i += 1) {
+        scratchWeights[i] *= 1 - blend;
+      }
+      scratchWeights[blendLayer] += blend;
+    }
+  }
+
+  const offset = vertexIndex * 4;
+  weights0[offset] = scratchWeights[0];
+  weights0[offset + 1] = scratchWeights[1];
+  weights0[offset + 2] = scratchWeights[2];
+  weights0[offset + 3] = scratchWeights[3];
+  weights1[offset] = scratchWeights[4];
+  weights1[offset + 1] = scratchWeights[5];
+  weights1[offset + 2] = scratchWeights[6];
+  weights1[offset + 3] = scratchWeights[7];
 }
 
 function accumulateTriangleNormal(
@@ -157,6 +210,15 @@ export function buildTerrainTileBuffers(
   const vertexCount = (TILE_SEGMENTS + 1) * (TILE_SEGMENTS + 1);
   const positions = new Float32Array(vertexCount * 3);
   const colors = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const weights0 = new Float32Array(vertexCount * 4);
+  const weights1 = new Float32Array(vertexCount * 4);
+  // Face-uv units to texture repeats. Rebasing on the tile origin (in whole
+  // repeats) keeps the values small enough for Float32 while staying
+  // continuous with neighbouring tiles.
+  const repeatsPerFaceUnit = planet.radiusMeters / TERRAIN_TEXTURE_REPEAT_METERS;
+  const uRepeatBase = Math.floor(u0 * repeatsPerFaceUnit);
+  const vRepeatBase = Math.floor(v0 * repeatsPerFaceUnit);
   let ptr = 0;
 
   for (let iy = 0; iy <= TILE_SEGMENTS; iy += 1) {
@@ -170,13 +232,19 @@ export function buildTerrainTileBuffers(
       const renderSurface: PlanetSurfaceSample =
         surface.lakeWaterLevelMeters != null &&
         surface.heightMeters < surface.lakeWaterLevelMeters - 0.5
-          ? { ...surface, biome: 'lake' as Biome }
+          ? {
+              ...surface,
+              biome: (surface.riverWaterLevelMeters != null ? 'river' : 'lake') as Biome,
+            }
           : surface;
 
       positions[ptr * 3] = direction.x * radius - info.centerPosition.x;
       positions[ptr * 3 + 1] = direction.y * radius - info.centerPosition.y;
       positions[ptr * 3 + 2] = direction.z * radius - info.centerPosition.z;
       writeSurfaceColor(renderSurface, colors, ptr * 3);
+      writeSurfaceWeights(renderSurface, weights0, weights1, ptr);
+      uvs[ptr * 2] = u * repeatsPerFaceUnit - uRepeatBase;
+      uvs[ptr * 2 + 1] = v * repeatsPerFaceUnit - vRepeatBase;
       ptr += 1;
     }
   }
@@ -185,6 +253,9 @@ export function buildTerrainTileBuffers(
     colors,
     normals: buildVertexNormals(positions),
     positions,
+    uvs,
+    weights0,
+    weights1,
   };
 }
 

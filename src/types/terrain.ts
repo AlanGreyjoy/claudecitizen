@@ -24,6 +24,12 @@ export interface TerrainTileBuffers {
   positions: Float32Array;
   colors: Float32Array;
   normals: Float32Array;
+  // Tile-local texture coordinates (2 floats per vertex), continuous across
+  // tile borders modulo whole texture repeats.
+  uvs: Float32Array;
+  // Splat weights for texture layers 0-3 and 4-7 (4 floats per vertex each).
+  weights0: Float32Array;
+  weights1: Float32Array;
 }
 
 export interface LakeWaterBuffers {

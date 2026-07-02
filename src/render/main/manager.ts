@@ -107,6 +107,8 @@ export function createSpikeRenderer(
       up,
       lighting.sun,
       lighting.sunMesh,
+      lighting.moonMesh,
+      lighting.moonLight,
     );
     updateSunIntensity(lighting.sun, sunState.rawDaylight, spaceFactor);
 

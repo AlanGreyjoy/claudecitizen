@@ -15,6 +15,9 @@ export interface TileWorkerSuccessMessage {
   positions: Float32Array;
   colors: Float32Array;
   normals: Float32Array;
+  uvs: Float32Array;
+  weights0: Float32Array;
+  weights1: Float32Array;
 }
 
 export interface TileWorkerErrorMessage {

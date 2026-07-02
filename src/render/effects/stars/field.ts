@@ -4,13 +4,12 @@ import { ArrayBufferLoader } from '@takram/three-geospatial';
 
 const STARS_LOCAL_URL = new URL('../../../assets/stars.bin', import.meta.url).href;
 
+// NOTE: ShaderMaterial auto-injects declarations for position, projectionMatrix
+// and viewMatrix; redeclaring them here breaks shader compilation.
 const STAR_VERTEX_SHADER = /* glsl */ `
-attribute vec3 position;
 attribute float magnitude;
 attribute vec3 color;
 
-uniform mat4 projectionMatrix;
-uniform mat4 viewMatrix;
 uniform vec3 cameraPos;
 uniform float cameraFar;
 uniform float pointSize;
@@ -111,7 +110,8 @@ function resolveStarState(daylightFactor: number, spaceFactor: number): StarFiel
 export function createStarField(scene: THREE.Scene): StarField {
   const material = new THREE.ShaderMaterial({
     blending: THREE.AdditiveBlending,
-    depthTest: false,
+    // Stars sit just inside the far plane; depth testing lets terrain occlude them.
+    depthTest: true,
     depthWrite: false,
     fragmentShader: STAR_FRAGMENT_SHADER,
     transparent: true,

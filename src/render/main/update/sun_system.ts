@@ -14,6 +14,7 @@ export interface SunSystemState {
 }
 
 const sunDirScratch = new THREE.Vector3();
+const moonDirScratch = new THREE.Vector3();
 
 export function updateSunSystem(
   nowSeconds: number,
@@ -23,9 +24,10 @@ export function updateSunSystem(
   up: Vec3,
   sun: THREE.DirectionalLight,
   sunMesh: THREE.Mesh,
+  moonMesh?: THREE.Mesh,
+  moonLight?: THREE.DirectionalLight,
 ): SunSystemState {
   const theta = (nowSeconds / DAY_LENGTH_SECONDS) * Math.PI * 2;
-  const sunDist = 120_000 * renderScale;
   sunDirScratch.set(
     Math.cos(theta),
     Math.sin(theta) * 0.364,
@@ -37,7 +39,11 @@ export function updateSunSystem(
     -focusPosition.y * renderScale,
     -focusPosition.z * renderScale,
   );
-  sunMesh.position.copy(planetCenter).add(sunDirScratch.clone().multiplyScalar(sunDist));
+  // Sky bodies are anchored to the camera (focus is at the origin) at a fixed
+  // distance inside the far plane; positioning them relative to the planet
+  // center at sunDist put them inside the planet, never visible.
+  const skyBodyDist = 200_000;
+  sunMesh.position.copy(sunDirScratch).multiplyScalar(skyBodyDist);
 
   const shadowDist = (renderMode === 'on-foot' || renderMode === 'on-ship-deck' ? 200 : 1500) * renderScale;
   sun.position.copy(sunDirScratch).multiplyScalar(shadowDist);
@@ -64,6 +70,18 @@ export function updateSunSystem(
 
   const rawDaylight = sunDirScratch.dot(v3(up));
   const daylightFactor = Math.max(0, Math.min(1, rawDaylight + 0.2));
+
+  if (moonMesh && moonLight) {
+    // Full-moon model: the moon sits opposite the sun, so it is up at night.
+    moonDirScratch.copy(sunDirScratch).negate();
+    moonMesh.position.copy(moonDirScratch).multiplyScalar(skyBodyDist * 0.92);
+    const moonElevation = Math.max(0, moonDirScratch.dot(v3(up)));
+    const nightFactor = 1 - daylightFactor;
+    moonMesh.visible = moonElevation > 0.01;
+    moonLight.position.copy(moonDirScratch).multiplyScalar(shadowDist);
+    moonLight.target.position.set(0, 0, 0);
+    moonLight.intensity = 0.35 * moonElevation * nightFactor;
+  }
 
   return {
     sunDir: sunDirScratch.clone(),

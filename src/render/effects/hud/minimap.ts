@@ -33,6 +33,8 @@ function biomeColor(biome: Biome): string {
       return '#4a7044';
     case 'lake':
       return '#2a5a7a';
+    case 'river':
+      return '#33688a';
     case 'ocean':
       return '#1a3a5a';
     case 'beach':

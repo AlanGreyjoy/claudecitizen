@@ -7,6 +7,9 @@ export function createTileGeometry(buffers: TerrainTileBuffers): THREE.BufferGeo
   geometry.setAttribute('position', new THREE.BufferAttribute(buffers.positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(buffers.normals, 3));
+  geometry.setAttribute('terrainUv', new THREE.BufferAttribute(buffers.uvs, 2));
+  geometry.setAttribute('terrainWeights0', new THREE.BufferAttribute(buffers.weights0, 4));
+  geometry.setAttribute('terrainWeights1', new THREE.BufferAttribute(buffers.weights1, 4));
   geometry.setIndex(new THREE.BufferAttribute(TILE_GRID_INDICES, 1));
   return geometry;
 }

@@ -11,6 +11,8 @@ export interface SceneLighting {
   ambient: THREE.HemisphereLight;
   sun: THREE.DirectionalLight;
   sunMesh: THREE.Mesh;
+  moonMesh: THREE.Mesh;
+  moonLight: THREE.DirectionalLight;
 }
 
 export function createSceneLighting(scene: THREE.Scene): SceneLighting {
@@ -32,7 +34,17 @@ export function createSceneLighting(scene: THREE.Scene): SceneLighting {
   );
   scene.add(sunMesh);
 
-  return { ambient, sun, sunMesh };
+  const moonMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(7000, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0xdfe6f2, fog: false, toneMapped: false }),
+  );
+  scene.add(moonMesh);
+
+  const moonLight = new THREE.DirectionalLight(0x93a7cc, 0);
+  scene.add(moonLight);
+  scene.add(moonLight.target);
+
+  return { ambient, sun, sunMesh, moonMesh, moonLight };
 }
 
 export function createMainScene(): THREE.Scene {

@@ -390,10 +390,10 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
         return;
       }
 
-      const { colors, normals, positions } = event.data;
+      const { colors, normals, positions, uvs, weights0, weights1 } = event.data;
       const entry = meshCache.get(key);
       if (entry && entry.buildId === buildId && entry.status === 'pending') {
-        const buffers = { colors, normals, positions };
+        const buffers = { colors, normals, positions, uvs, weights0, weights1 };
         entry.mesh = createReadyMesh(entry.info, buffers, material, tileGroup);
         entry.status = 'ready';
         cacheStats.totalBuilds += 1;

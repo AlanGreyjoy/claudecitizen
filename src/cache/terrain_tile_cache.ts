@@ -7,6 +7,9 @@ export interface StoredTerrainTile {
   colors: Float32Array;
   normals: Float32Array;
   positions: Float32Array;
+  uvs: Float32Array;
+  weights0: Float32Array;
+  weights1: Float32Array;
 }
 
 export function toStoredTerrainTile(buffers: TerrainTileBuffers): StoredTerrainTile {
@@ -14,6 +17,9 @@ export function toStoredTerrainTile(buffers: TerrainTileBuffers): StoredTerrainT
     colors: buffers.colors,
     normals: buffers.normals,
     positions: buffers.positions,
+    uvs: buffers.uvs,
+    weights0: buffers.weights0,
+    weights1: buffers.weights1,
   };
 }
 
@@ -22,6 +28,9 @@ export function fromStoredTerrainTile(stored: StoredTerrainTile): TerrainTileBuf
     colors: stored.colors,
     normals: stored.normals,
     positions: stored.positions,
+    uvs: stored.uvs,
+    weights0: stored.weights0,
+    weights1: stored.weights1,
   };
 }
 

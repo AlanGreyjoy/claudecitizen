@@ -5,15 +5,29 @@ globalThis.onmessage = (event: MessageEvent<TileWorkerInMessage>) => {
   const { buildId, info, key, planet, seed } = event.data;
 
   try {
-    const { colors, normals, positions } = buildTerrainTileBuffers(info, planet, seed);
+    const { colors, normals, positions, uvs, weights0, weights1 } = buildTerrainTileBuffers(
+      info,
+      planet,
+      seed,
+    );
     const message: TileWorkerOutMessage = {
       buildId,
       colors,
       key,
       normals,
       positions,
+      uvs,
+      weights0,
+      weights1,
     };
-    globalThis.postMessage(message, [positions.buffer, colors.buffer, normals.buffer]);
+    globalThis.postMessage(message, [
+      positions.buffer,
+      colors.buffer,
+      normals.buffer,
+      uvs.buffer,
+      weights0.buffer,
+      weights1.buffer,
+    ]);
   } catch (error) {
     const message: TileWorkerOutMessage = {
       buildId,

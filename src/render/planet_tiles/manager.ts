@@ -4,6 +4,8 @@ import {
   sampleRenderablePlanetSurface,
 } from '../../world/planet_surface';
 import { createTileMeshCache } from './cache/mesh_cache';
+import { createTerrainMaterial } from './render/terrain_material';
+import { createTerrainTextureArray } from './render/terrain_texture_array';
 import {
   MAX_CACHED_TILES,
   PLANET_RENDER_SCALE,
@@ -29,13 +31,8 @@ export function createPlanetTileManager(
   tileGroup.scale.setScalar(PLANET_RENDER_SCALE);
   scene.add(tileGroup);
 
-  const material = new THREE.MeshStandardMaterial({
-    flatShading: false,
-    metalness: 0,
-    roughness: 1,
-    side: THREE.DoubleSide,
-    vertexColors: true,
-  });
+  const terrainTextures = createTerrainTextureArray();
+  const material = createTerrainMaterial(terrainTextures);
 
   const meshCache = createTileMeshCache({
     material,
@@ -112,6 +109,7 @@ export function createPlanetTileManager(
   function dispose(): void {
     meshCache.dispose();
     material.dispose();
+    terrainTextures.dispose();
     scene.remove(tileGroup);
   }
 

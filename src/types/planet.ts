@@ -12,6 +12,7 @@ export interface Planet {
 export type Biome =
   | 'ocean'
   | 'lake'
+  | 'river'
   | 'beach'
   | 'forest'
   | 'plains'
@@ -31,7 +32,9 @@ export interface PlanetSurfaceSample {
   lakeStrength: number;
   lakeWaterLevelMeters: number | null;
   moisture: number;
+  mountainRegion: number;
   normalizedHeight: number;
+  riverWaterLevelMeters: number | null;
   surfaceRadiusMeters: number;
   temperature: number;
   treeDensity: number;

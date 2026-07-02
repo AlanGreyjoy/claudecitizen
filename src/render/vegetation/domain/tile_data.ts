@@ -2,6 +2,7 @@ import type { VegetationAssetCatalog } from './asset_catalog';
 import type { Planet, TileInfo, VegetationSettings, Vec3 } from '../../../types';
 import { scale, sub } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
+import { classifyBiome, vegetationDensitiesForBiome } from '../../../world/climate';
 import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
 import { sampleVisibleSurfaceFrame } from '../../../world/renderable_surface';
 import {
@@ -85,12 +86,32 @@ function createTileSurfaceSampler(
       seed,
       scale(direction, planet.radiusMeters),
     );
+    const normalizedHeight = frame.heightMeters / planet.terrainAmplitudeMeters;
+    // The coarse cell's biome can differ from the instance's real biome near
+    // shorelines, lakes, and peaks (a cell centered on plains extends into
+    // ocean). Re-classify with the exact per-instance height so vegetation
+    // never lands on beaches or under water; temperature/moisture/lake level
+    // still come from the cheap coarse sample.
+    const biome = classifyBiome({
+      heightMeters: frame.heightMeters,
+      lakeWaterLevelMeters: climate.lakeWaterLevelMeters,
+      moisture: climate.moisture,
+      mountainRegion: climate.mountainRegion,
+      normalizedHeight,
+      riverWaterLevelMeters: climate.riverWaterLevelMeters,
+      temperature: climate.temperature,
+    });
+    const densities = vegetationDensitiesForBiome(biome, climate.moisture);
     return {
       ...climate,
+      biome,
+      fertility: densities.fertility,
+      grassDensity: densities.grassDensity,
       heightMeters: frame.heightMeters,
       normal: frame.normal,
-      normalizedHeight: frame.heightMeters / planet.terrainAmplitudeMeters,
+      normalizedHeight,
       surfaceRadiusMeters: planet.radiusMeters + frame.heightMeters,
+      treeDensity: densities.treeDensity,
     };
   };
 }

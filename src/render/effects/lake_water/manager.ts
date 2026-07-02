@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import type { LakeWaterBuffers, Planet, TileInfo, Vec3 } from '../../../types';
-import { createLakeWaterMaterial, createWaterNormalTexture } from './render/material';
+import {
+  createLakeWaterMaterial,
+  createWaterNormalTexture,
+  loadLakeWaterTextures,
+} from './render/material';
 import {
   buildLakeWaterGeometry,
   expandLakeWaterTiles,
@@ -50,6 +54,7 @@ export function createPlanetLakeWaterManager(
 
   const waterNormals = createWaterNormalTexture();
   const sharedMaterial = createLakeWaterMaterial(waterNormals);
+  const waterTextures = loadLakeWaterTextures(sharedMaterial);
 
   const cache = new Map<string, WaterCacheEntry>();
   const activeKeys = new Set<string>();
@@ -218,6 +223,7 @@ export function createPlanetLakeWaterManager(
     }
     sharedMaterial.dispose();
     waterNormals.dispose();
+    waterTextures.dispose();
     scene.remove(waterGroup);
   }
 
