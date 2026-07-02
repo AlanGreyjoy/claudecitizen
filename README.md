@@ -1,6 +1,10 @@
 # ClaudeCitizen
 
+![ClaudeCitizen banner](src/assets/images/banner-with-logo.png)
+
 ![ClaudeCitizen gameplay screenshot](docs/screenshot.png)
+
+<a href="https://www.buymeacoffee.com/alangreyjoy"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=alangreyjoy&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
 
 A browser-based space sandbox inspired by Star Citizen — procedural planets, ship flight, on-foot exploration, and seamless surface-to-orbit transitions. Built with TypeScript, Vite, and Three.js.
 
