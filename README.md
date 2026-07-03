@@ -24,7 +24,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173). In dev you get a title screen with **Play** and **Editor**; production builds boot straight into the game. Click the canvas to lock the mouse.
+Open [http://localhost:4173](http://localhost:4173). You get a title screen with **Play**; dev builds also show **Editor**. Click the canvas to lock the mouse.
 
 ## Game editor (dev only)
 
