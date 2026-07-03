@@ -1,49 +1,18 @@
 import { add, cross, dot, length, lerp, normalize, scale, sub, vec3 } from '../math/vec3';
-import { getShipRight, PILOT_SEAT_LOCAL, SEAT_STAND_LOCAL } from './ship_interaction';
+import { getShipLayout, type ShipWalkZone } from './ship_layout';
+import { getShipRight } from './ship_interaction';
 import type { CharacterInput, CharacterState, FlightBody, Pose, Vec3 } from '../types';
 
 /**
- * Walkable Phobos Starhopper interior, measured from the model rig:
- * a main cabin, the cockpit behind sliding doors at forward ~2.7 (with a
- * raised floor), and the rear boarding ramp that slopes from the cabin floor
- * down to the ground plane at the tail. Coordinates are ship-local
- * right/forward meters; floor height is ship-local up.
+ * Walkable ship interior driven by the active ship layout (ship_layout.ts):
+ * axis-aligned zones in ship-local right/forward meters with per-zone floor
+ * heights, optional slopes (ramps, doorway steps), and gates (boarding ramp,
+ * doors). The default layout is the Phobos Starhopper measured from its rig.
  */
 
-export const SHIP_FLOOR_UP = -1.42;
-export const SHIP_COCKPIT_FLOOR_UP = -0.97;
+export type ShipZoneId = string;
 
-export type ShipZoneId = 'cabin' | 'cockpit' | 'cockpit-door' | 'ramp';
-
-export interface ShipWalkZone {
-  id: ShipZoneId;
-  minRight: number;
-  maxRight: number;
-  minForward: number;
-  maxForward: number;
-}
-
-export const SHIP_WALK_ZONES: ShipWalkZone[] = [
-  { id: 'cabin', minRight: -2.35, maxRight: 2.35, minForward: -6.6, maxForward: 2.62 },
-  { id: 'cockpit', minRight: -1.65, maxRight: 1.65, minForward: 2.83, maxForward: 7.1 },
-  { id: 'cockpit-door', minRight: -0.85, maxRight: 0.85, minForward: 2.42, maxForward: 3.03 },
-  { id: 'ramp', minRight: -1.05, maxRight: 1.05, minForward: -8.55, maxForward: -6.4 },
-];
-
-/** Interior ceiling above the cabin/cockpit floor, for camera containment. */
-export const SHIP_INTERIOR_CEILING_UP = 1.66;
-
-/** Ramp slope: cabin floor at its top, ground plane at its tail end. */
-const RAMP_TOP_FORWARD = -6.4;
-const RAMP_TIP_FORWARD = -8.55;
-const RAMP_TIP_UP = -3.14;
-
-/** Step up through the cockpit doorway onto the raised cockpit floor. */
-const COCKPIT_STEP_START_FORWARD = 2.42;
-const COCKPIT_STEP_END_FORWARD = 3.03;
-
-/** Walking past this ship-local forward on the ramp steps off onto the ground. */
-export const RAMP_DISMOUNT_FORWARD = -8.5;
+export type { ShipWalkZone } from './ship_layout';
 
 export interface DeckLocal {
   right: number;
@@ -67,29 +36,60 @@ function tangentize(vector: Vec3, up: Vec3): Vec3 {
   return sub(vector, scale(up, dot(vector, up)));
 }
 
-export function shipFloorUpAt(forward: number): number {
-  if (forward >= COCKPIT_STEP_END_FORWARD) return SHIP_COCKPIT_FLOOR_UP;
-  if (forward >= COCKPIT_STEP_START_FORWARD) {
-    const t =
-      (forward - COCKPIT_STEP_START_FORWARD) /
-      (COCKPIT_STEP_END_FORWARD - COCKPIT_STEP_START_FORWARD);
-    return SHIP_FLOOR_UP + (SHIP_COCKPIT_FLOOR_UP - SHIP_FLOOR_UP) * t;
+export function getShipWalkZones(): ShipWalkZone[] {
+  return getShipLayout().walkZones;
+}
+
+export function getShipWalkZone(zoneId: string): ShipWalkZone | null {
+  return getShipLayout().walkZones.find((zone) => zone.id === zoneId) ?? null;
+}
+
+/** Floor height within a zone; slopes interpolate along forward. */
+function zoneFloorUpAt(zone: ShipWalkZone, forward: number): number {
+  if (zone.slopeMinUp === undefined) return zone.floorUp;
+  const span = zone.maxForward - zone.minForward;
+  if (span <= 1e-6) return zone.floorUp;
+  const t = clamp((forward - zone.minForward) / span, 0, 1);
+  return zone.slopeMinUp + (zone.floorUp - zone.slopeMinUp) * t;
+}
+
+/**
+ * Floor height at a deck point. Sloped zones (ramps, doorway steps) win over
+ * flat rooms where they overlap so the character glides along the slope.
+ */
+export function shipFloorUpAt(local: DeckLocal): number {
+  const zones = getShipLayout().walkZones;
+  let flat: ShipWalkZone | null = null;
+  for (const zone of zones) {
+    if (!zoneContains(zone, local)) continue;
+    if (zone.slopeMinUp !== undefined) return zoneFloorUpAt(zone, local.forward);
+    flat ??= zone;
   }
-  if (forward >= RAMP_TOP_FORWARD) return SHIP_FLOOR_UP;
-  const t = clamp((forward - RAMP_TOP_FORWARD) / (RAMP_TIP_FORWARD - RAMP_TOP_FORWARD), 0, 1);
-  return SHIP_FLOOR_UP + (RAMP_TIP_UP - SHIP_FLOOR_UP) * t;
+  if (flat) return flat.floorUp;
+  // Off every zone (transitions, dismounts): nearest zone's edge height.
+  let best: { distance: number; up: number } | null = null;
+  for (const zone of zones) {
+    const right = clamp(local.right, zone.minRight, zone.maxRight);
+    const forward = clamp(local.forward, zone.minForward, zone.maxForward);
+    const distance = Math.hypot(right - local.right, forward - local.forward);
+    if (!best || distance < best.distance) {
+      best = { distance, up: zoneFloorUpAt(zone, forward) };
+    }
+  }
+  return best?.up ?? 0;
 }
 
 export interface ShipWalkGates {
   /** Ramp lowered and the ship parked, so the ramp is a walkable surface. */
   rampWalkable: boolean;
-  cockpitOpen: boolean;
+  /** Whether the given prefab door is open enough to pass through. */
+  isDoorOpen: (doorId: string) => boolean;
 }
 
 function zoneActive(zone: ShipWalkZone, gates: ShipWalkGates): boolean {
-  if (zone.id === 'ramp') return gates.rampWalkable;
-  if (zone.id === 'cockpit-door') return gates.cockpitOpen;
-  return true;
+  if (zone.gate === undefined) return true;
+  if (zone.gate === 'ramp') return gates.rampWalkable;
+  return gates.isDoorOpen(zone.gate.doorId);
 }
 
 function zoneContains(zone: ShipWalkZone, local: DeckLocal): boolean {
@@ -101,14 +101,14 @@ function zoneContains(zone: ShipWalkZone, local: DeckLocal): boolean {
   );
 }
 
-/** Real rooms win over the door passage so deckZone tracks a camera-safe box. */
+/** Real rooms win over passages so deckZone tracks a camera-safe box. */
 function findZone(local: DeckLocal, gates: ShipWalkGates): ShipWalkZone | null {
   let passage: ShipWalkZone | null = null;
-  for (const zone of SHIP_WALK_ZONES) {
+  for (const zone of getShipLayout().walkZones) {
     if (!zoneActive(zone, gates)) continue;
     if (!zoneContains(zone, local)) continue;
-    if (zone.id === 'cockpit-door') {
-      passage = zone;
+    if (zone.passage) {
+      passage ??= zone;
       continue;
     }
     return zone;
@@ -137,7 +137,7 @@ function resolveDeckStep(
     if (zone) {
       return {
         local: candidate,
-        zone: zone.id === 'cockpit-door' ? state.deckZone : zone.id,
+        zone: zone.passage ? state.deckZone : zone.id,
       };
     }
   }
@@ -187,7 +187,7 @@ function localDistance(a: DeckLocal, b: { right: number; forward: number }): num
 
 export function getDeckWorldPose(ship: FlightBody, local: DeckLocal): Pose {
   const right = getShipRight(ship);
-  const floorUp = shipFloorUpAt(local.forward) + 0.02;
+  const floorUp = shipFloorUpAt(local) + 0.02;
   const position = add(
     add(ship.position, scale(right, local.right)),
     add(scale(ship.up, floorUp), scale(ship.forward, local.forward)),
@@ -201,14 +201,16 @@ export function getDeckWorldPose(ship: FlightBody, local: DeckLocal): Pose {
 
 export function createDeckCharacterState(
   ship: FlightBody,
-  local: DeckLocal = SEAT_STAND_LOCAL,
-  zone: ShipZoneId = 'cockpit',
+  local?: DeckLocal,
+  zone?: ShipZoneId,
 ): DeckCharacterState {
-  const pose = getDeckWorldPose(ship, local);
+  const layout = getShipLayout();
+  const spot = local ?? layout.seatStand;
+  const pose = getDeckWorldPose(ship, spot);
   return {
     animation: 'Idle_Loop',
-    deckLocal: { ...local },
-    deckZone: zone,
+    deckLocal: { ...spot },
+    deckZone: zone ?? findZoneIdAt(spot),
     forward: pose.forward,
     grounded: true,
     jumpPhase: 'grounded',
@@ -219,36 +221,71 @@ export function createDeckCharacterState(
   };
 }
 
+/** Non-gated zone lookup for spawn placement (ignores ramp/door state). */
+function findZoneIdAt(local: DeckLocal): ShipZoneId {
+  const zones = getShipLayout().walkZones;
+  const hit = zones.find((zone) => !zone.passage && zoneContains(zone, local));
+  return (hit ?? zones[0])?.id ?? 'cabin';
+}
+
+/**
+ * Safe initial deck spawn: the seat-stand spot when it lies inside an
+ * always-walkable zone, otherwise the center of the first ungated zone —
+ * a spawn outside every zone would freeze the character (steps only resolve
+ * into containing zones).
+ */
+export function getDefaultDeckSpawnLocal(): DeckLocal {
+  const layout = getShipLayout();
+  const stand = layout.seatStand;
+  const zones = layout.walkZones;
+  const standWalkable = zones.some(
+    (zone) => !zone.gate && !zone.passage && zoneContains(zone, stand),
+  );
+  if (standWalkable) return { ...stand };
+  const home = zones.find((zone) => !zone.gate && !zone.passage) ?? zones[0];
+  if (!home) return { ...stand };
+  return {
+    right: (home.minRight + home.maxRight) / 2,
+    forward: (home.minForward + home.maxForward) / 2,
+  };
+}
+
 export function getLeavePilotStandPose(ship: FlightBody): Pose {
-  const pose = getDeckWorldPose(ship, SEAT_STAND_LOCAL);
+  const pose = getDeckWorldPose(ship, getShipLayout().seatStand);
   // Standing up out of the chair, you face back into the cabin.
   return { ...pose, forward: normalize(tangentize(scale(ship.forward, -1), ship.up)) };
 }
 
-/** Interaction spots inside the ship. */
-export const CHAIR_INTERACT_LOCAL = { right: 0, forward: 5.55 };
-export const CHAIR_INTERACT_DISTANCE_METERS = 1.45;
-export const COCKPIT_DOOR_INTERACT_LOCAL = { right: 0, forward: 2.72 };
-export const COCKPIT_DOOR_INTERACT_DISTANCE_METERS = 1.55;
-export const RAMP_PANEL_INTERACT_LOCAL = { right: 0, forward: -5.7 };
-export const RAMP_PANEL_INTERACT_DISTANCE_METERS = 1.7;
-
 export function nearChair(deckLocal: DeckLocal): boolean {
-  return localDistance(deckLocal, CHAIR_INTERACT_LOCAL) <= CHAIR_INTERACT_DISTANCE_METERS;
+  const chair = getShipLayout().chairInteract;
+  return localDistance(deckLocal, chair) <= chair.radius;
 }
 
-export function nearCockpitDoor(deckLocal: DeckLocal): boolean {
-  return (
-    localDistance(deckLocal, COCKPIT_DOOR_INTERACT_LOCAL) <= COCKPIT_DOOR_INTERACT_DISTANCE_METERS
-  );
+/** Nearest door whose interact anchor is within reach, or null. */
+export function nearestDoor(deckLocal: DeckLocal): { doorId: string } | null {
+  let best: { doorId: string; distance: number } | null = null;
+  for (const door of getShipLayout().doors) {
+    const distance = localDistance(deckLocal, {
+      right: door.interact.right,
+      forward: door.interact.forward,
+    });
+    if (distance > door.radius) continue;
+    if (!best || distance < best.distance) best = { doorId: door.id, distance };
+  }
+  return best ? { doorId: best.doorId } : null;
 }
 
 export function nearRampPanel(deckLocal: DeckLocal): boolean {
-  return localDistance(deckLocal, RAMP_PANEL_INTERACT_LOCAL) <= RAMP_PANEL_INTERACT_DISTANCE_METERS;
+  return getShipLayout().rampInteracts.some(
+    (panel) =>
+      panel.placement === 'deck' &&
+      localDistance(deckLocal, panel) <= panel.radius,
+  );
 }
 
 export function canReturnToPilot(deckLocal: DeckLocal): boolean {
-  return nearChair(deckLocal) && deckLocal.forward > PILOT_SEAT_LOCAL.forward - 2.4;
+  const layout = getShipLayout();
+  return nearChair(deckLocal) && deckLocal.forward > layout.pilotSeat.forward - 2.4;
 }
 
 export interface DeckUpdateResult {
@@ -290,8 +327,10 @@ export function updateCharacterOnDeck(
     );
   }
 
+  const layout = getShipLayout();
+  const resolvedZone = getShipWalkZone(resolved.zone);
   const dismounted =
-    resolved.zone === 'ramp' && resolved.local.forward <= RAMP_DISMOUNT_FORWARD;
+    resolvedZone?.gate === 'ramp' && resolved.local.forward <= layout.rampDismountForward;
 
   const pose = getDeckWorldPose(ship, resolved.local);
   const velocity = dt > 0 ? scale(sub(pose.position, state.position), 1 / dt) : vec3(0, 0, 0);

@@ -10,7 +10,7 @@ import {
   STAND_TRANSITION_SECONDS,
 } from './modes';
 import { createDeckCharacterState, getLeavePilotStandPose } from './ship_deck';
-import { createTransitionPose, getPilotSeatAnchor, SEAT_STAND_LOCAL } from './ship_interaction';
+import { createTransitionPose, getPilotSeatAnchor } from './ship_interaction';
 import type { GameMode, Planet, Pose } from '../types';
 import type { TransitionType, WorldState } from './world_state';
 
@@ -108,7 +108,7 @@ export function updateTransition(world: WorldState, dt: number, ctx: TransitionC
     return;
   }
 
-  world.character = createDeckCharacterState(world.ship, SEAT_STAND_LOCAL, 'cockpit');
+  world.character = createDeckCharacterState(world.ship);
   world.mode = MODE_ON_SHIP_DECK;
   world.transition = null;
   ctx.setControlsMode(MODE_ON_FOOT);

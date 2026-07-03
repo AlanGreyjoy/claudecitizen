@@ -18,6 +18,7 @@ import {
   type StationElevatorMarker,
   type StationFrame,
 } from '../world/station';
+import { getShipRestHeightMeters } from './ship_layout';
 import { characterAtElevatorDestination, type StationCharacterState } from './station_walk';
 import type { Planet } from '../types';
 import type { WorldState } from './world_state';
@@ -223,10 +224,14 @@ export function callShipToHangar(
   if (hangars.length === 0) return null;
   const hangar = hangars[Math.abs(seed) % hangars.length];
   const frame = getStationFrame(planet);
+  const restLocal = {
+    ...hangar.padSurfaceLocal,
+    up: hangar.padSurfaceLocal.up + getShipRestHeightMeters(),
+  };
   world.ship = {
     forward: frame.forward,
     grounded: true,
-    position: stationLocalToWorld(frame, hangar.padLocal),
+    position: stationLocalToWorld(frame, restLocal),
     up: frame.up,
     velocity: vec3(0, 0, 0),
   };

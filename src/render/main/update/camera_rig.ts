@@ -12,12 +12,8 @@ import {
   MODE_ON_SHIP_DECK,
   MODE_RIDING_ELEVATOR,
 } from '../../../player/modes';
-import {
-  SHIP_FLOOR_UP,
-  SHIP_INTERIOR_CEILING_UP,
-  SHIP_WALK_ZONES,
-} from '../../../player/ship_deck';
-import { PILOT_EYE_LOCAL } from '../../../player/ship_interaction';
+import { getShipWalkZone } from '../../../player/ship_deck';
+import { getPilotEyeLocal } from '../../../player/ship_interaction';
 import {
   getStationRoom,
   worldToStationLocal,
@@ -111,8 +107,9 @@ function clampOffsetToShipZone(
   shipUp: Vec3,
   shipForward: Vec3,
 ): Vec3 {
-  const zone = SHIP_WALK_ZONES.find((entry) => entry.id === world.shipZoneId);
-  if (!zone || zone.id === 'ramp') return offset;
+  const zone = world.shipZoneId ? getShipWalkZone(world.shipZoneId) : null;
+  // Ramp-gated zones are open to the outside and skip clamping.
+  if (!zone || zone.gate === 'ramp') return offset;
   const up = normalize(shipUp);
   const planarForward = normalize(sub(shipForward, scale(up, dot(shipForward, up))));
   const right = normalize(cross(planarForward, up));
@@ -123,6 +120,7 @@ function clampOffsetToShipZone(
     forward: dot(delta, planarForward),
   };
   const inset = 0.25;
+  const floorUp = Math.min(zone.floorUp, zone.slopeMinUp ?? zone.floorUp);
   const camRight = clampValue(
     charLocal.right + dot(offset, right),
     zone.minRight + inset,
@@ -130,8 +128,8 @@ function clampOffsetToShipZone(
   );
   const camUp = clampValue(
     charLocal.up + dot(offset, up),
-    SHIP_FLOOR_UP + 0.3,
-    SHIP_INTERIOR_CEILING_UP - 0.15,
+    floorUp + 0.3,
+    zone.ceilingUp - 0.15,
   );
   const camForward = clampValue(
     charLocal.forward + dot(offset, planarForward),
@@ -170,9 +168,10 @@ export function updateCameraRig(
       // every frame — smoothing here would drag the eye through the canopy
       // whenever the ship rotates. The ship (render focus) sits at the origin.
       const shipRight = normalize(cross(shipForward, shipUp));
+      const pilotEye = getPilotEyeLocal();
       const eye = add(
-        add(scale(shipRight, PILOT_EYE_LOCAL.right), scale(shipUp, PILOT_EYE_LOCAL.up)),
-        scale(shipForward, PILOT_EYE_LOCAL.forward),
+        add(scale(shipRight, pilotEye.right), scale(shipUp, pilotEye.up)),
+        scale(shipForward, pilotEye.forward),
       );
       const lookMeters = 60;
       camera.position.set(eye.x * renderScale, eye.y * renderScale, eye.z * renderScale);

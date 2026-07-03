@@ -16,9 +16,9 @@ import type { StationFloorId, StationSide } from '../station';
  * station-local gameplay axes as: right = -x, up = y, forward = z.
  */
 
-export type PrefabKind = 'station' | 'ship-interior' | 'site';
+export type PrefabKind = 'station' | 'ship' | 'site';
 
-export const PREFAB_KINDS: PrefabKind[] = ['station', 'ship-interior', 'site'];
+export const PREFAB_KINDS: PrefabKind[] = ['station', 'ship', 'site'];
 
 /** Horizontal (XZ plane) extent used by walk volumes, in prefab/scene axes. */
 export interface PrefabVec2 {
@@ -45,6 +45,9 @@ export interface PrefabPrimitive {
   color?: string;
 }
 
+/** Which gate controls a ship walk zone's walkability. */
+export type ShipZoneGate = 'ramp' | { doorId: string };
+
 export type PrefabComponent =
   | { type: 'station-frame' }
   | { type: 'spawn-point'; floorId: StationFloorId }
@@ -62,7 +65,65 @@ export type PrefabComponent =
       /** Sides without walls (hangar mouths); station-local side names. */
       open?: StationSide[];
     }
-  | { type: 'collider'; shape: 'box'; size: Vec3; offset?: Vec3 };
+  | { type: 'collider'; shape: 'box'; size: Vec3; offset?: Vec3 }
+  // --- ship components -------------------------------------------------------
+  | { type: 'ship-frame' }
+  /** Marks the entity whose GLB asset is the flyable hull. */
+  | {
+      type: 'ship-hull';
+      /**
+       * Ship origin height above the ground when parked on gear, in meters.
+       * Unset: previews rest the hull's lowest point on the pad automatically.
+       */
+      restHeight?: number;
+    }
+  | {
+      type: 'ship-walk-zone';
+      zoneId: string;
+      /** Local XZ offsets from the entity origin; entity Y is the floor height. */
+      min: PrefabVec2;
+      max: PrefabVec2;
+      /** Interior height above the floor for camera containment (default 3.1). */
+      height?: number;
+      /** Floor delta at the min-Z edge — slopes for ramps/steps (default flat). */
+      slopeMinUp?: number;
+      /** Walkable only while the gate is open (boarding ramp or a ship-door id). */
+      gate?: ShipZoneGate;
+      /** Passage zones connect rooms; real rooms win for camera framing. */
+      passage?: boolean;
+    }
+  | {
+      type: 'ship-door';
+      /** Unique within the prefab; walk zones gate on it. */
+      id: string;
+      /** Display name for prompts ("Press F — open {label}"). */
+      label: string;
+      motion: 'slide' | 'hinge';
+      /** Node-local axis the motion happens on. */
+      axis: 'x' | 'y' | 'z';
+      /** GLB node names + signed open delta (slide: meters, hinge: radians). */
+      nodes: { name: string; delta: number }[];
+      /** Interact distance from the entity position (default 1.6). */
+      radius?: number;
+      defaultOpen?: boolean;
+    }
+  | {
+      type: 'pilot-seat';
+      /** Eye offset from the seat in scene axes (default {0, 0.87, 0.25}). */
+      eye?: Vec3;
+      /** Stand-up spot offset from the seat in scene XZ (default {0, -1.55}). */
+      stand?: PrefabVec2;
+      /** Interact distance around the chair (default 1.45). */
+      interactRadius?: number;
+    }
+  | {
+      type: 'ramp-interact';
+      /** outside: ground-level ramp toggle; deck: interior ramp panel. */
+      placement: 'outside' | 'deck';
+      radius?: number;
+    }
+  /** Tail strip (local XZ box) where a grounded character steps onto the ramp. */
+  | { type: 'ramp-mount'; min: PrefabVec2; max: PrefabVec2 };
 
 export type PrefabComponentType = PrefabComponent['type'];
 
@@ -209,11 +270,116 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         size: parseVec3(value.size, `${path}.size`),
         offset: value.offset === undefined ? undefined : parseVec3(value.offset, `${path}.offset`),
       };
+    case 'ship-frame':
+      return { type };
+    case 'ship-hull':
+      return {
+        type,
+        restHeight:
+          value.restHeight === undefined
+            ? undefined
+            : Math.min(50, Math.max(0.2, parseFiniteNumber(value.restHeight, `${path}.restHeight`))),
+      };
+    case 'ship-walk-zone':
+      return {
+        type,
+        zoneId: parseString(value.zoneId, `${path}.zoneId`, 64),
+        min: parseVec2(value.min, `${path}.min`),
+        max: parseVec2(value.max, `${path}.max`),
+        height:
+          value.height === undefined
+            ? undefined
+            : Math.min(100, Math.max(0.5, parseFiniteNumber(value.height, `${path}.height`))),
+        slopeMinUp:
+          value.slopeMinUp === undefined
+            ? undefined
+            : Math.min(20, Math.max(-20, parseFiniteNumber(value.slopeMinUp, `${path}.slopeMinUp`))),
+        gate: parseShipZoneGate(value.gate, `${path}.gate`),
+        passage: value.passage === undefined ? undefined : Boolean(value.passage),
+      };
+    case 'ship-door': {
+      if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
+        fail(`${path}.nodes`, 'expected non-empty array of {name, delta}');
+      }
+      if (value.nodes.length > 8) fail(`${path}.nodes`, 'too many door nodes (max 8)');
+      const motion = value.motion;
+      if (motion !== 'slide' && motion !== 'hinge') {
+        fail(`${path}.motion`, 'expected "slide" or "hinge"');
+      }
+      const axis = value.axis;
+      if (axis !== 'x' && axis !== 'y' && axis !== 'z') {
+        fail(`${path}.axis`, 'expected "x", "y", or "z"');
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        label: parseString(value.label, `${path}.label`, 64),
+        motion,
+        axis,
+        nodes: value.nodes.map((node, index) => {
+          if (!isRecord(node)) fail(`${path}.nodes[${index}]`, 'expected {name, delta}');
+          return {
+            name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
+            delta: Math.min(
+              20,
+              Math.max(-20, parseFiniteNumber(node.delta, `${path}.nodes[${index}].delta`)),
+            ),
+          };
+        }),
+        radius:
+          value.radius === undefined
+            ? undefined
+            : Math.min(20, Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`))),
+        defaultOpen: value.defaultOpen === undefined ? undefined : Boolean(value.defaultOpen),
+      };
+    }
+    case 'pilot-seat':
+      return {
+        type,
+        eye: value.eye === undefined ? undefined : parseVec3(value.eye, `${path}.eye`),
+        stand: value.stand === undefined ? undefined : parseVec2(value.stand, `${path}.stand`),
+        interactRadius:
+          value.interactRadius === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(0.5, parseFiniteNumber(value.interactRadius, `${path}.interactRadius`)),
+              ),
+      };
+    case 'ramp-interact': {
+      const placement = value.placement;
+      if (placement !== 'outside' && placement !== 'deck') {
+        fail(`${path}.placement`, 'expected "outside" or "deck"');
+      }
+      return {
+        type,
+        placement,
+        radius:
+          value.radius === undefined
+            ? undefined
+            : Math.min(20, Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`))),
+      };
+    }
+    case 'ramp-mount':
+      return {
+        type,
+        min: parseVec2(value.min, `${path}.min`),
+        max: parseVec2(value.max, `${path}.max`),
+      };
     default:
       // Unknown component types are dropped for forward compatibility.
       console.warn(`Prefab component of unknown type "${String(type)}" at ${path} was ignored.`);
       return null;
   }
+}
+
+function parseShipZoneGate(value: unknown, path: string): ShipZoneGate | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'ramp') return 'ramp';
+  if (isRecord(value) && typeof value.doorId === 'string') {
+    return { doorId: parseString(value.doorId, `${path}.doorId`, 64) };
+  }
+  fail(path, 'expected "ramp" or {doorId}');
 }
 
 function parseEntity(value: unknown, path: string, depth: number): PrefabEntity {

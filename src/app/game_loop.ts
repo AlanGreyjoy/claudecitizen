@@ -11,20 +11,23 @@ import { placeCharacterOnSurface, updateCharacterState } from '../player/charact
 import {
   canReturnToPilot,
   createDeckCharacterState,
-  nearCockpitDoor,
+  getShipWalkZone,
+  getShipWalkZones,
+  nearestDoor,
   nearRampPanel,
-  SHIP_WALK_ZONES,
   updateCharacterOnDeck,
   type DeckCharacterState,
+  type DeckLocal,
 } from '../player/ship_deck';
+import { getShipLayout, getShipRestHeightMeters } from '../player/ship_layout';
 import {
+  getRampDismountGroundLocal,
   isShipParked,
   localOffsetToWorld,
   nearShipRampOutside,
-  RAMP_DISMOUNT_GROUND_LOCAL,
   sampleRampMount,
 } from '../player/ship_interaction';
-import { isCockpitPassable, isRampUsable, updateShipRig } from '../player/ship_rig';
+import { doorBlends, isDoorPassable, isRampUsable, updateShipRig } from '../player/ship_rig';
 import {
   beginElevatorRide,
   callShipToHangar,
@@ -159,7 +162,7 @@ export function createGameLoop({
     if (!isShipParked(world.ship) || !isRampUsable(world.shipRig)) return false;
     const mount = sampleRampMount(world.character, world.ship);
     if (!mount) return false;
-    world.character = createDeckCharacterState(world.ship, mount, 'ramp');
+    world.character = createDeckCharacterState(world.ship, mount);
     world.mode = MODE_ON_SHIP_DECK;
     world.prompt = '';
     return true;
@@ -168,10 +171,14 @@ export function createGameLoop({
   /** Steps off the ramp tip onto whatever the ship is parked on. */
   function dismountToGround(): void {
     const groundPosition: Vec3 = localOffsetToWorld(world.ship, {
-      ...RAMP_DISMOUNT_GROUND_LOCAL,
+      ...getRampDismountGroundLocal(),
       up: 0,
     });
-    const hangarRest = sampleHangarRest(stationFrame, world.ship.position);
+    const hangarRest = sampleHangarRest(
+      stationFrame,
+      world.ship.position,
+      getShipRestHeightMeters(),
+    );
     const facing = {
       x: -world.ship.forward.x,
       y: -world.ship.forward.y,
@@ -238,6 +245,19 @@ export function createGameLoop({
     }
   }
 
+  /** Standing inside any zone this door gates — closing it would trap the player. */
+  function standingInDoorway(doorId: string, deckLocal: DeckLocal): boolean {
+    return getShipWalkZones().some(
+      (zone) =>
+        typeof zone.gate === 'object' &&
+        zone.gate.doorId === doorId &&
+        deckLocal.right >= zone.minRight &&
+        deckLocal.right <= zone.maxRight &&
+        deckLocal.forward >= zone.minForward &&
+        deckLocal.forward <= zone.maxForward,
+    );
+  }
+
   function updateDeckMode(
     characterInput: ReturnType<PlayerControls['sampleCharacterInput']>,
     actions: ReturnType<PlayerControls['consumeActions']>,
@@ -248,7 +268,7 @@ export function createGameLoop({
     const parked = isShipParked(world.ship);
     const gates = {
       rampWalkable: parked && isRampUsable(rig),
-      cockpitOpen: isCockpitPassable(rig),
+      isDoorOpen: (doorId: string) => isDoorPassable(rig, doorId),
     };
     const result = updateCharacterOnDeck(
       world.character as DeckCharacterState,
@@ -265,29 +285,33 @@ export function createGameLoop({
     }
 
     const deckLocal = result.state.deckLocal;
-    const inCockpit = result.state.deckZone === 'cockpit';
 
-    if (inCockpit && canReturnToPilot(deckLocal)) {
+    if (canReturnToPilot(deckLocal)) {
       world.prompt = 'Press F — take the seat';
       if (actions.interactPressed) beginSitTransition(world);
       return;
     }
 
-    if (nearCockpitDoor(deckLocal)) {
-      const doorZone = SHIP_WALK_ZONES.find((zone) => zone.id === 'cockpit-door')!;
-      const standingInDoorway =
-        deckLocal.right >= doorZone.minRight &&
-        deckLocal.right <= doorZone.maxRight &&
-        deckLocal.forward >= doorZone.minForward &&
-        deckLocal.forward <= doorZone.maxForward;
-      world.prompt = rig.cockpitOpen ? 'Press F — close cockpit' : 'Press F — open cockpit';
-      if (actions.interactPressed && !(rig.cockpitOpen && standingInDoorway)) {
-        rig.cockpitOpen = !rig.cockpitOpen;
+    const doorNearby = nearestDoor(deckLocal);
+    if (doorNearby) {
+      const door = getShipLayout().doors.find((entry) => entry.id === doorNearby.doorId);
+      const doorRig = rig.doors[doorNearby.doorId];
+      if (door && doorRig) {
+        world.prompt = doorRig.isOpen
+          ? `Press F — close ${door.label}`
+          : `Press F — open ${door.label}`;
+        if (
+          actions.interactPressed &&
+          !(doorRig.isOpen && standingInDoorway(door.id, deckLocal))
+        ) {
+          doorRig.isOpen = !doorRig.isOpen;
+        }
+        return;
       }
-      return;
     }
 
-    if (parked && nearRampPanel(deckLocal) && result.state.deckZone !== 'ramp') {
+    const standingOnRamp = getShipWalkZone(result.state.deckZone)?.gate === 'ramp';
+    if (parked && nearRampPanel(deckLocal) && !standingOnRamp) {
       world.prompt = rig.rampDown ? 'Press F — raise ramp' : 'Press F — lower ramp';
       if (actions.interactPressed) rig.rampDown = !rig.rampDown;
       return;
@@ -385,7 +409,7 @@ export function createGameLoop({
         shipRig: {
           gear01: world.shipRig.gear01,
           ramp01: world.shipRig.ramp01,
-          cockpit01: world.shipRig.cockpit01,
+          doors: doorBlends(world.shipRig),
         },
         shipZoneId: world.character.deckZone ?? null,
         stationRoomId: world.character.stationRoomId ?? null,

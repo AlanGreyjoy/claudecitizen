@@ -92,6 +92,59 @@ export function startEditorSession(): void {
     entity.asset = { url };
     entity.position = position;
     store.addEntity(entity);
+    void maybeOfferShipPrefab(entity.id, url);
+  }
+
+  /** Dropping a GLB from a ships folder offers to switch into Ship Editor mode. */
+  async function maybeOfferShipPrefab(entityId: string, url: string): Promise<void> {
+    if (!/\/ships\//i.test(url)) return;
+    const state = store.getState();
+    if (state.kind === 'ship') {
+      markAsHullIfFirst(entityId);
+      return;
+    }
+    const modelName = entityNameFromUrl(url);
+    const create = await showConfirmDialog({
+      title: 'Ship model detected',
+      message: `Create "${modelName}" as a ship prefab? This switches the prefab kind to ship and marks this model as the hull.`,
+      confirmLabel: 'Create ship prefab',
+      cancelLabel: 'Keep as scenery',
+    });
+    if (!create) return;
+    const meta: Parameters<typeof store.setPrefabMeta>[0] = { kind: 'ship' };
+    if (!state.prefabId && state.prefabName === 'Untitled Prefab') {
+      meta.prefabName = modelName;
+      meta.prefabId = slugifyPrefabName(modelName);
+    }
+    store.setPrefabMeta(meta);
+    markAsHullIfFirst(entityId);
+    showToast('Ship Editor mode — add walk zones, doors, and a pilot seat, then Preview Ship.');
+  }
+
+  /** Tags the entity with ship-hull when no other entity claims it yet. */
+  function markAsHullIfFirst(entityId: string): void {
+    let hullExists = false;
+    const visit = (list: ReturnType<typeof store.getState>['roots']): void => {
+      for (const entity of list) {
+        if (entity.components.some((component) => component.type === 'ship-hull')) {
+          hullExists = true;
+          return;
+        }
+        visit(entity.children);
+      }
+    };
+    visit(store.getState().roots);
+    if (hullExists) return;
+    const entity = store.locate(entityId)?.entity;
+    if (!entity) return;
+    // The game recenters the hull model on the ship origin, so the hull
+    // entity must sit at 0,0,0 for the editor to match the game.
+    store.setTransform(entityId, {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { ...entity.rotation },
+      scale: { ...entity.scale },
+    });
+    store.setComponents(entityId, [...entity.components, { type: 'ship-hull' }]);
   }
 
   function addBox(): void {
@@ -167,13 +220,15 @@ export function startEditorSession(): void {
   }
 
   async function previewInPlay(): Promise<void> {
-    if (store.getState().kind !== 'station') {
-      showToast('Preview in Play currently supports station prefabs.', true);
+    const kind = store.getState().kind;
+    if (kind !== 'station' && kind !== 'ship') {
+      showToast('Preview in Play supports station and ship prefabs.', true);
       return;
     }
     const id = await saveCurrent();
     if (!id) return;
-    window.location.href = `/?stationPrefab=${encodeURIComponent(id)}`;
+    const param = kind === 'ship' ? 'shipPrefab' : 'stationPrefab';
+    window.location.href = `/?${param}=${encodeURIComponent(id)}`;
   }
 
   let allowUnload = false;
@@ -196,6 +251,7 @@ export function startEditorSession(): void {
     onLoad: (id) => void loadById(id),
     onPreview: () => void previewInPlay(),
     onExit: () => void exitToTitle(),
+    onShipPreviewChange: (state) => viewport.setShipPreview(state),
   });
 
   createHierarchyPanel(hierarchyEl, store);

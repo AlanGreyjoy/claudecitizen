@@ -66,7 +66,7 @@ export function createWorldState(planet: Planet, seed: number): WorldState {
     mode: MODE_IN_STATION,
     prompt: '',
     ship,
-    shipRig: createShipRigState({ gearDown: true, rampDown: false, cockpitOpen: false }),
+    shipRig: createShipRigState({ gearDown: true, rampDown: false }),
     transition: null,
     assignedHangar: null,
     stationElevator: null,

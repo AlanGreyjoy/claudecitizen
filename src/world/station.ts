@@ -100,8 +100,11 @@ export interface HangarSpec {
   centerRight: number;
   /** Forward coordinate of this hangar's elevator door on the lobby wall. */
   lobbyDoorForward: number;
-  /** Ship parking pose (FlightBody origin) in station-local coordinates. */
-  padLocal: StationLocalPoint;
+  /**
+   * Pad surface point in station-local coordinates. A parked ship's origin
+   * rests one gear-rest height above it (the active ship layout's value).
+   */
+  padSurfaceLocal: StationLocalPoint;
 }
 
 export const HAB_FLOOR_UP = 14;
@@ -110,11 +113,6 @@ export const HANGAR_FLOOR_UP = -22;
 export const HANGAR_PAD_HEIGHT = 0.12;
 export const HANGAR_PAD_HALF_METERS = 8;
 
-/**
- * Ship origin height above the surface it rests on when parked on deployed
- * landing gear (measured from the Phobos Starhopper rig).
- */
-export const SHIP_GEAR_REST_HEIGHT_METERS = 3.16;
 
 export const STATION_ROOMS: StationRoom[] = [
   {
@@ -226,7 +224,7 @@ export const STATION_WINDOWS: StationWindow[] = [
   { roomId: 'lobby', side: 'maxForward', alongCenter: 8, width: 3.2, bottom: 1.1, top: 3.6 },
 ];
 
-const PAD_REST_UP = HANGAR_FLOOR_UP + HANGAR_PAD_HEIGHT + SHIP_GEAR_REST_HEIGHT_METERS;
+const PAD_SURFACE_UP = HANGAR_FLOOR_UP + HANGAR_PAD_HEIGHT;
 
 export const HANGARS: HangarSpec[] = [
   {
@@ -234,21 +232,21 @@ export const HANGARS: HangarSpec[] = [
     roomId: 'hangar-1',
     centerRight: -38,
     lobbyDoorForward: -6,
-    padLocal: { right: -38, up: PAD_REST_UP, forward: 1.0 },
+    padSurfaceLocal: { right: -38, up: PAD_SURFACE_UP, forward: 1.0 },
   },
   {
     index: 2,
     roomId: 'hangar-2',
     centerRight: 0,
     lobbyDoorForward: 0,
-    padLocal: { right: 0, up: PAD_REST_UP, forward: 1.0 },
+    padSurfaceLocal: { right: 0, up: PAD_SURFACE_UP, forward: 1.0 },
   },
   {
     index: 3,
     roomId: 'hangar-3',
     centerRight: 38,
     lobbyDoorForward: 6,
-    padLocal: { right: 38, up: PAD_REST_UP, forward: 1.0 },
+    padSurfaceLocal: { right: 38, up: PAD_SURFACE_UP, forward: 1.0 },
   },
 ];
 
@@ -430,9 +428,14 @@ export interface HangarRestSample {
 /**
  * Returns the parking surface under a world position when it is inside a
  * hangar volume (with a little vertical slack below the floor so a settling
- * ship never tunnels through), or null in open space.
+ * ship never tunnels through), or null in open space. The caller supplies
+ * the active ship's gear-rest height (world/ does not know the ship layout).
  */
-export function sampleHangarRest(frame: StationFrame, position: Vec3): HangarRestSample | null {
+export function sampleHangarRest(
+  frame: StationFrame,
+  position: Vec3,
+  shipRestHeightMeters: number,
+): HangarRestSample | null {
   const local = worldToStationLocal(frame, position);
   for (const hangar of getStationHangars()) {
     const room = getStationRoom(hangar.roomId);
@@ -441,16 +444,13 @@ export function sampleHangarRest(frame: StationFrame, position: Vec3): HangarRes
     if (local.forward < room.minForward || local.forward > room.maxForward) continue;
     if (local.up < room.floorUp - 4 || local.up > room.floorUp + room.height) continue;
     const onPad =
-      Math.abs(local.right - hangar.padLocal.right) <= HANGAR_PAD_HALF_METERS &&
-      Math.abs(local.forward - hangar.padLocal.forward) <= HANGAR_PAD_HALF_METERS;
-    // padLocal.up is the ship rest pose, so the pad surface sits one
-    // gear-rest height below it (default layout: floor + pad plate height).
-    const padSurfaceUp = hangar.padLocal.up - SHIP_GEAR_REST_HEIGHT_METERS;
-    const surfaceUp = onPad ? padSurfaceUp : room.floorUp;
+      Math.abs(local.right - hangar.padSurfaceLocal.right) <= HANGAR_PAD_HALF_METERS &&
+      Math.abs(local.forward - hangar.padSurfaceLocal.forward) <= HANGAR_PAD_HALF_METERS;
+    const surfaceUp = onPad ? hangar.padSurfaceLocal.up : room.floorUp;
     return {
       hangar,
       surfaceUp,
-      restUp: surfaceUp + SHIP_GEAR_REST_HEIGHT_METERS,
+      restUp: surfaceUp + shipRestHeightMeters,
     };
   }
   return null;

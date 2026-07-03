@@ -47,9 +47,15 @@ function entityToPrefab(entity: EditorEntity): PrefabEntity {
   return prefabEntity;
 }
 
-/** Serializes the editor document; station prefabs get a station-frame root. */
+/** Serializes the editor document; station/ship prefabs get a frame marker on the root. */
 export function toPrefabDocument(state: EditorDocumentState): PrefabDocument {
   const id = state.prefabId || slugifyPrefabName(state.prefabName) || 'untitled';
+  const frameComponents =
+    state.kind === 'station'
+      ? { components: [{ type: 'station-frame' as const }] }
+      : state.kind === 'ship'
+        ? { components: [{ type: 'ship-frame' as const }] }
+        : {};
   return {
     id,
     name: state.prefabName,
@@ -63,7 +69,7 @@ export function toPrefabDocument(state: EditorDocumentState): PrefabDocument {
         rotation: { x: 0, y: 0, z: 0, w: 1 },
         scale: { x: 1, y: 1, z: 1 },
       },
-      ...(state.kind === 'station' ? { components: [{ type: 'station-frame' as const }] } : {}),
+      ...frameComponents,
       children: state.roots.map(entityToPrefab),
     },
   };

@@ -72,8 +72,23 @@ export interface ShipArticulation {
   gear01: number;
   /** 0 raised .. 1 lowered. */
   ramp01: number;
-  /** 0 closed .. 1 open. */
-  cockpit01: number;
+  /** 0 closed .. 1 open per layout door id. */
+  doors: Record<string, number>;
+}
+
+/** Render-side door binding: which GLB nodes move, how, and by how much. */
+export interface ShipDoorBinding {
+  id: string;
+  motion: 'slide' | 'hinge';
+  axis: 'x' | 'y' | 'z';
+  nodes: { name: string; delta: number }[];
+}
+
+export interface ShipModelOptions {
+  /** Prefab hull GLB url; defaults to the built-in Phobos Starhopper. */
+  hullUrl?: string | null;
+  /** Prefab-authored doors; defaults to the Starhopper cockpit slide pair. */
+  doors?: ShipDoorBinding[];
 }
 
 export interface ShipModelHandle {
@@ -84,6 +99,8 @@ export interface ShipModelHandle {
    * (right/up/forward) for tuning gameplay anchors against the rig.
    */
   measure: () => Record<string, unknown> | null;
+  /** Dev helper: lists articulable node names for authoring ship-door components. */
+  listNodeNames: () => string[];
 }
 
 interface ArticulatedNode {
@@ -92,15 +109,45 @@ interface ArticulatedNode {
   baseQuaternion: THREE.Quaternion;
 }
 
+interface BoundDoorNode extends ArticulatedNode {
+  delta: number;
+}
+
+interface BoundDoor {
+  binding: ShipDoorBinding;
+  nodes: BoundDoorNode[];
+}
+
 /**
- * Swing angles/slides measured against the Phobos Starhopper rig so that all
- * three gear feet rest on one plane ~3.16 m below the ship origin and the
- * lowered ramp tip meets that same ground plane at the tail.
+ * Swing angles measured against the Phobos Starhopper rig so that all three
+ * gear feet rest on one plane ~3.16 m below the ship origin and the lowered
+ * ramp tip meets that same ground plane at the tail.
  */
 const GEAR_BACK_DEPLOY_RADIANS = -0.55;
 const GEAR_FRONT_DEPLOY_RADIANS = 1.4;
 const RAMP_LOWER_RADIANS = -0.62;
-const COCKPIT_DOOR_SLIDE_METERS = 1.0;
+
+/** Built-in gear/ramp hinges (Starhopper rig) shared with the editor preview. */
+export const BUILTIN_GEAR_HINGES: { name: string; deployRadians: number }[] = [
+  { name: 'LandingGear_BackLeft', deployRadians: GEAR_BACK_DEPLOY_RADIANS },
+  { name: 'LandingGear_BackRight', deployRadians: GEAR_BACK_DEPLOY_RADIANS },
+  { name: 'LandingLeg_Front', deployRadians: GEAR_FRONT_DEPLOY_RADIANS },
+];
+
+export const BUILTIN_RAMP_HINGE = { name: 'RampParent', lowerRadians: RAMP_LOWER_RADIANS };
+
+/** Starhopper cockpit doors — used when no prefab doors are provided. */
+export const DEFAULT_SHIP_DOOR_BINDINGS: ShipDoorBinding[] = [
+  {
+    id: 'cockpit',
+    motion: 'slide',
+    axis: 'x',
+    nodes: [
+      { name: 'CockpitDoor_L', delta: -1 },
+      { name: 'CockpitDoor_R', delta: 1 },
+    ],
+  },
+];
 
 function captureNode(root: THREE.Object3D, name: string): ArticulatedNode | null {
   const object = root.getObjectByName(name);
@@ -116,45 +163,75 @@ function captureNode(root: THREE.Object3D, name: string): ArticulatedNode | null
 }
 
 const rotationScratch = new THREE.Quaternion();
-const X_AXIS = new THREE.Vector3(1, 0, 0);
+const axisScratch = new THREE.Vector3();
+const AXIS_VECTORS = {
+  x: new THREE.Vector3(1, 0, 0),
+  y: new THREE.Vector3(0, 1, 0),
+  z: new THREE.Vector3(0, 0, 1),
+} as const;
 
-function applyHingeRotation(node: ArticulatedNode | null, radians: number): void {
+function applyHingeRotation(
+  node: ArticulatedNode | null,
+  radians: number,
+  axis: 'x' | 'y' | 'z' = 'x',
+): void {
   if (!node) return;
-  rotationScratch.setFromAxisAngle(X_AXIS, radians);
+  rotationScratch.setFromAxisAngle(AXIS_VECTORS[axis], radians);
   node.object.quaternion.copy(node.baseQuaternion).multiply(rotationScratch);
 }
 
-function applySlide(node: ArticulatedNode | null, offsetX: number): void {
+function applySlide(node: ArticulatedNode | null, offset: number, axis: 'x' | 'y' | 'z'): void {
   if (!node) return;
-  node.object.position.set(
-    node.basePosition.x + offsetX,
-    node.basePosition.y,
-    node.basePosition.z,
-  );
+  axisScratch.copy(AXIS_VECTORS[axis]).multiplyScalar(offset);
+  node.object.position.copy(node.basePosition).add(axisScratch);
 }
 
-export function createShipModel(renderScale: number): ShipModelHandle {
+export function createShipModel(
+  renderScale: number,
+  options?: ShipModelOptions,
+): ShipModelHandle {
   const group = new THREE.Group();
 
   const loader = new GLTFLoader();
   const bbox = new THREE.Box3();
   const center = new THREE.Vector3();
 
+  const doorBindings = options?.doors ?? DEFAULT_SHIP_DOOR_BINDINGS;
+
   let gearBackLeft: ArticulatedNode | null = null;
   let gearBackRight: ArticulatedNode | null = null;
   let gearFront: ArticulatedNode | null = null;
   let ramp: ArticulatedNode | null = null;
-  let doorLeft: ArticulatedNode | null = null;
-  let doorRight: ArticulatedNode | null = null;
-  let pending: ShipArticulation = { gear01: 1, ramp01: 0, cockpit01: 0 };
+  let boundDoors: BoundDoor[] = [];
+  let pending: ShipArticulation = { gear01: 1, ramp01: 0, doors: {} };
 
   function applyArticulation(articulation: ShipArticulation): void {
     applyHingeRotation(gearBackLeft, GEAR_BACK_DEPLOY_RADIANS * articulation.gear01);
     applyHingeRotation(gearBackRight, GEAR_BACK_DEPLOY_RADIANS * articulation.gear01);
     applyHingeRotation(gearFront, GEAR_FRONT_DEPLOY_RADIANS * articulation.gear01);
     applyHingeRotation(ramp, RAMP_LOWER_RADIANS * articulation.ramp01);
-    applySlide(doorLeft, -COCKPIT_DOOR_SLIDE_METERS * articulation.cockpit01);
-    applySlide(doorRight, COCKPIT_DOOR_SLIDE_METERS * articulation.cockpit01);
+    for (const door of boundDoors) {
+      const open01 = articulation.doors[door.binding.id] ?? 0;
+      for (const node of door.nodes) {
+        if (door.binding.motion === 'slide') {
+          applySlide(node, node.delta * open01, door.binding.axis);
+        } else {
+          applyHingeRotation(node, node.delta * open01, door.binding.axis);
+        }
+      }
+    }
+  }
+
+  function bindDoors(sceneRoot: THREE.Object3D): void {
+    boundDoors = doorBindings.map((binding) => ({
+      binding,
+      nodes: binding.nodes
+        .map((node) => {
+          const captured = captureNode(sceneRoot, node.name);
+          return captured ? { ...captured, delta: node.delta } : null;
+        })
+        .filter((node): node is BoundDoorNode => node !== null),
+    }));
   }
 
   function loadShip(url: string, allowFallback: boolean): void {
@@ -181,8 +258,7 @@ export function createShipModel(renderScale: number): ShipModelHandle {
         gearBackRight = captureNode(sceneRoot, 'LandingGear_BackRight');
         gearFront = captureNode(sceneRoot, 'LandingLeg_Front');
         ramp = captureNode(sceneRoot, 'RampParent');
-        doorLeft = captureNode(sceneRoot, 'CockpitDoor_L');
-        doorRight = captureNode(sceneRoot, 'CockpitDoor_R');
+        bindDoors(sceneRoot);
         applyArticulation(pending);
       },
       undefined,
@@ -197,7 +273,7 @@ export function createShipModel(renderScale: number): ShipModelHandle {
     );
   }
 
-  loadShip(PROTECTED_SHIP_URL, true);
+  loadShip(options?.hullUrl ?? PROTECTED_SHIP_URL, true);
 
   function measure(): Record<string, unknown> | null {
     const sceneRoot = group.children[0];
@@ -265,6 +341,14 @@ export function createShipModel(renderScale: number): ShipModelHandle {
     };
   }
 
+  function listNodeNames(): string[] {
+    const names: string[] = [];
+    group.traverse((object) => {
+      if (object.name) names.push(object.name);
+    });
+    return names.sort();
+  }
+
   return {
     group,
     setArticulation(articulation: ShipArticulation) {
@@ -272,5 +356,6 @@ export function createShipModel(renderScale: number): ShipModelHandle {
       applyArticulation(articulation);
     },
     measure,
+    listNodeNames,
   };
 }

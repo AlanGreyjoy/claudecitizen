@@ -1,8 +1,14 @@
 import { clearChildren, el } from '../dom';
 import { slugifyPrefabName, PREFAB_KINDS, type PrefabKind } from '../../world/prefabs/schema';
-import type { EditorStore } from '../document';
+import type { EditorEntity, EditorStore } from '../document';
 
 export type ToolbarGizmoMode = 'translate' | 'rotate' | 'scale';
+
+export interface ShipPreviewToggles {
+  gearDown: boolean;
+  rampDown: boolean;
+  doorsOpen: Record<string, boolean>;
+}
 
 export interface ToolbarActions {
   onGizmoMode: (mode: ToolbarGizmoMode) => void;
@@ -15,6 +21,8 @@ export interface ToolbarActions {
   onLoad: (id: string) => void;
   onPreview: () => void;
   onExit: () => void;
+  /** Ship kind: editor-viewport articulation preview (gear / ramp / doors). */
+  onShipPreviewChange: (state: ShipPreviewToggles) => void;
 }
 
 export interface ToolbarHandle {
@@ -269,6 +277,94 @@ export function createToolbar(
   }
   refreshHistoryButtons();
 
+  // -- ship preview group (ship kind only) --
+  const shipPreviewState: ShipPreviewToggles = { gearDown: true, rampDown: false, doorsOpen: {} };
+
+  function emitShipPreview(): void {
+    actions.onShipPreviewChange({
+      gearDown: shipPreviewState.gearDown,
+      rampDown: shipPreviewState.rampDown,
+      doorsOpen: { ...shipPreviewState.doorsOpen },
+    });
+  }
+
+  const gearBtn = el('button', {
+    className: 'ed-btn is-active',
+    text: 'Gear',
+    title: 'Preview landing gear deployed / retracted',
+    on: {
+      click: () => {
+        shipPreviewState.gearDown = !shipPreviewState.gearDown;
+        gearBtn.classList.toggle('is-active', shipPreviewState.gearDown);
+        emitShipPreview();
+      },
+    },
+  });
+  const rampBtn = el('button', {
+    className: 'ed-btn',
+    text: 'Ramp',
+    title: 'Preview boarding ramp lowered / raised',
+    on: {
+      click: () => {
+        shipPreviewState.rampDown = !shipPreviewState.rampDown;
+        rampBtn.classList.toggle('is-active', shipPreviewState.rampDown);
+        emitShipPreview();
+      },
+    },
+  });
+  const doorButtonsWrap = el('span', { className: 'ed-ship-doors' });
+  const shipGroup = el('div', { className: 'ed-toolbar-group is-hidden' }, [
+    el('span', { className: 'ed-label', text: 'Ship' }),
+    gearBtn,
+    rampBtn,
+    doorButtonsWrap,
+  ]);
+
+  function collectShipDoors(): { id: string; label: string; defaultOpen: boolean }[] {
+    const doors: { id: string; label: string; defaultOpen: boolean }[] = [];
+    const visit = (entities: EditorEntity[]): void => {
+      for (const entity of entities) {
+        for (const component of entity.components) {
+          if (component.type === 'ship-door' && !doors.some((door) => door.id === component.id)) {
+            doors.push({
+              id: component.id,
+              label: component.label || component.id,
+              defaultOpen: component.defaultOpen ?? false,
+            });
+          }
+        }
+        visit(entity.children);
+      }
+    };
+    visit(store.getState().roots);
+    return doors;
+  }
+
+  function refreshShipPreviewGroup(): void {
+    const isShip = store.getState().kind === 'ship';
+    shipGroup.classList.toggle('is-hidden', !isShip);
+    if (!isShip) return;
+    clearChildren(doorButtonsWrap);
+    for (const door of collectShipDoors()) {
+      const isOpen = shipPreviewState.doorsOpen[door.id] ?? door.defaultOpen;
+      doorButtonsWrap.append(
+        el('button', {
+          className: `ed-btn${isOpen ? ' is-active' : ''}`,
+          text: door.label,
+          title: `Preview door "${door.id}" open / closed`,
+          on: {
+            click: () => {
+              shipPreviewState.doorsOpen[door.id] = !isOpen;
+              refreshShipPreviewGroup();
+              emitShipPreview();
+            },
+          },
+        }),
+      );
+    }
+  }
+  refreshShipPreviewGroup();
+
   // -- document menubar --
   let prefabIds: string[] = [];
 
@@ -294,6 +390,16 @@ export function createToolbar(
   });
   for (const kind of PREFAB_KINDS) {
     kindSelect.append(el('option', { text: kind, attrs: { value: kind } }));
+  }
+
+  const modeChip = el('span', {
+    className: 'ed-mode-chip is-hidden',
+    text: 'Ship Editor',
+    title: 'Ship prefab: authoring the flyable ship (hull, walk zones, doors, pilot seat)',
+  });
+
+  function refreshModeChip(): void {
+    modeChip.classList.toggle('is-hidden', store.getState().kind !== 'ship');
   }
 
   let menubar: HTMLElement;
@@ -359,9 +465,14 @@ export function createToolbar(
       },
       {
         label: 'Game',
-        entries: [
+        entries: () => [
           {
-            label: 'Preview in Play',
+            label:
+              store.getState().kind === 'ship'
+                ? 'Preview Ship'
+                : store.getState().kind === 'station'
+                  ? 'Preview Station'
+                  : 'Preview in Play',
             accent: true,
             action: () => actions.onPreview(),
           },
@@ -395,7 +506,9 @@ export function createToolbar(
     el('span', { className: 'ed-label', text: 'Prefab' }),
     nameInput,
     kindSelect,
+    modeChip,
   ]);
+  refreshModeChip();
 
   const docBar = el('div', { className: 'ed-docbar' }, [menubar, docStrip]);
 
@@ -404,6 +517,7 @@ export function createToolbar(
     snapGroup,
     addGroup,
     historyGroup,
+    shipGroup,
   ]);
 
   let collapsed = false;
@@ -430,10 +544,16 @@ export function createToolbar(
       refreshMenuState();
     }
     if (event.type === 'selection') refreshMenuState();
+    if (event.type === 'structure' || event.type === 'entity') {
+      refreshShipPreviewGroup();
+    }
     if (event.type === 'document') {
       const state = store.getState();
       if (document.activeElement !== nameInput) nameInput.value = state.prefabName;
       kindSelect.value = state.kind;
+      refreshModeChip();
+      refreshShipPreviewGroup();
+      rerenderMenus(menubar);
     }
   });
 

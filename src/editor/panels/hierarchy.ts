@@ -1,5 +1,5 @@
-import { clearChildren, el } from '../dom';
-import type { EditorEntity, EditorStore } from '../document';
+import { clearChildren, el, showContextMenu, type ContextMenuEntry } from '../dom';
+import { createEmptyEntity, type EditorEntity, type EditorStore } from '../document';
 
 const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
 
@@ -20,6 +20,38 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
   );
 
   let renaming: string | null = null;
+
+  function beginRename(entityId: string): void {
+    renaming = entityId;
+    render();
+    (body.querySelector('.ed-tree-rename') as HTMLInputElement | null)?.select();
+  }
+
+  function addEmptyTo(parentId: string | null): void {
+    const entity = createEmptyEntity('Empty');
+    store.addEntity(entity, parentId);
+    beginRename(entity.id);
+  }
+
+  function addBoxTo(parentId: string | null): void {
+    const entity = createEmptyEntity('Box');
+    entity.primitive = { shape: 'box', size: { x: 2, y: 2, z: 2 }, color: '#4c5663' };
+    if (parentId === null) entity.position = { x: 0, y: 1, z: 0 };
+    store.addEntity(entity, parentId);
+  }
+
+  function entityMenuEntries(entity: EditorEntity): ContextMenuEntry[] {
+    return [
+      { label: 'Add Child Empty', action: () => addEmptyTo(entity.id) },
+      { label: 'Add Child Box', action: () => addBoxTo(entity.id) },
+      'sep',
+      { label: 'Rename', action: () => beginRename(entity.id) },
+      { label: 'Duplicate', action: () => store.duplicateEntity(entity.id) },
+      { label: entity.visible ? 'Hide' : 'Show', action: () => store.setVisible(entity.id, !entity.visible) },
+      'sep',
+      { label: 'Delete', action: () => store.deleteEntity(entity.id) },
+    ];
+  }
 
   function renderRow(entity: EditorEntity, depth: number, rows: HTMLElement[]): void {
     const selected = store.getSelection() === entity.id;
@@ -59,10 +91,13 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
         attrs: { draggable: 'true', 'data-entity-id': entity.id },
         on: {
           click: () => store.setSelection(entity.id),
-          dblclick: () => {
-            renaming = entity.id;
-            render();
-            (body.querySelector('.ed-tree-rename') as HTMLInputElement | null)?.select();
+          dblclick: () => beginRename(entity.id),
+          contextmenu: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            store.setSelection(entity.id);
+            const mouse = event as MouseEvent;
+            showContextMenu(mouse.clientX, mouse.clientY, entityMenuEntries(entity));
           },
           dragstart: (event) => {
             (event as DragEvent).dataTransfer?.setData(ENTITY_DND_TYPE, entity.id);
@@ -107,6 +142,15 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
     for (const child of entity.children) renderRow(child, depth + 1, rows);
   }
 
+  // Right-click on blank panel space adds at the root level.
+  body.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    showContextMenu(event.clientX, event.clientY, [
+      { label: 'Add Empty', action: () => addEmptyTo(null) },
+      { label: 'Add Box', action: () => addBoxTo(null) },
+    ]);
+  });
+
   function render(): void {
     clearChildren(body);
     const roots = store.getState().roots;
@@ -114,7 +158,7 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
       body.append(
         el('div', {
           className: 'ed-empty-note',
-          text: 'Empty scene. Drop assets from the Project panel or add a Box / Empty from the toolbar.',
+          text: 'Empty scene. Right-click or use the toolbar to add a Box / Empty, or drop assets from the Project panel.',
         }),
       );
       return;

@@ -15,6 +15,7 @@ import { applyRenderQualitySettings } from './domain/apply_render_quality';
 import { DAY_LENGTH_SECONDS } from './domain/constants';
 import type { RenderMode, SpikeRenderer, TimeOverride } from './domain/types';
 import { getStationFrame } from '../../world/station';
+import { getShipLayout } from '../../player/ship_layout';
 import { createPrefabStationGroup } from '../prefabs/prefab_renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
@@ -71,7 +72,16 @@ export function createSpikeRenderer(
   const atmosphereMesh = buildAtmosphereMesh(planet, tileManager.renderScale);
   scene.add(atmosphereMesh);
 
-  const shipModel = createShipModel(tileManager.renderScale);
+  const shipLayout = getShipLayout();
+  const shipModel = createShipModel(tileManager.renderScale, {
+    hullUrl: shipLayout.hullUrl,
+    doors: shipLayout.doors.map((door) => ({
+      id: door.id,
+      motion: door.motion,
+      axis: door.axis,
+      nodes: door.nodes,
+    })),
+  });
   const shipMesh = shipModel.group;
   shipMesh.frustumCulled = false;
   scene.add(shipMesh);

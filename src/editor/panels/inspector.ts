@@ -1,36 +1,15 @@
-import { clearChildren, el } from '../dom';
-import type { EditorEntity, EditorStore } from '../document';
-import type { PrefabComponent, PrefabComponentType } from '../../world/prefabs/schema';
+import { clearChildren, el, showToast } from '../dom';
+import { createEmptyEntity, type EditorEntity, type EditorStore } from '../document';
+import {
+  getComponentDef,
+  searchComponents,
+  type ComponentDef,
+} from '../../world/prefabs/component_registry';
+import type { PrefabComponent, ShipZoneGate } from '../../world/prefabs/schema';
 import type { StationFloorId, StationSide } from '../../world/station';
 
 const FLOOR_OPTIONS: StationFloorId[] = ['hab', 'lobby', 'hangar'];
 const SIDE_OPTIONS: StationSide[] = ['minRight', 'maxRight', 'minForward', 'maxForward'];
-
-const COMPONENT_DEFAULTS: Record<PrefabComponentType, () => PrefabComponent> = {
-  'station-frame': () => ({ type: 'station-frame' }),
-  'spawn-point': () => ({ type: 'spawn-point', floorId: 'lobby' }),
-  elevator: () => ({ type: 'elevator', id: 'lift-1', targetFloor: 'lobby' }),
-  'hangar-pad': () => ({ type: 'hangar-pad', hangarId: 'bay-1', padIndex: 1 }),
-  interaction: () => ({ type: 'interaction', id: 'info-1', prompt: 'Press F — inspect', radius: 2.5 }),
-  'walk-volume': () => ({
-    type: 'walk-volume',
-    floorId: 'lobby',
-    min: { x: -5, z: -5 },
-    max: { x: 5, z: 5 },
-    height: 4,
-  }),
-  collider: () => ({ type: 'collider', shape: 'box', size: { x: 1, y: 1, z: 1 } }),
-};
-
-const COMPONENT_HINTS: Partial<Record<PrefabComponentType, string>> = {
-  'station-frame': 'Marks the prefab origin used for orbital placement.',
-  'spawn-point': 'Player spawn. Entity forward (+Z) sets the facing direction.',
-  elevator: 'Pair two markers with the same id on different floors to ride between them.',
-  'hangar-pad': 'Ship parking spot. Place inside a hangar walk volume, at pad surface height.',
-  interaction: 'Shows a prompt when the player is within the radius.',
-  'walk-volume': 'Walkable floor area (local XZ box). The player collides with its edges.',
-  collider: 'Reserved for future physics; not used by gameplay yet.',
-};
 
 export function createInspectorPanel(container: HTMLElement, store: EditorStore): void {
   const body = el('div', { className: 'ed-panel-body' });
@@ -363,7 +342,381 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
             ),
           ]),
         ];
+      case 'ship-frame':
+        return [];
+      case 'ship-hull':
+        return [
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Rest ht' }),
+            numberInput(component.restHeight ?? 0, (next) =>
+              update({
+                ...component,
+                restHeight: next <= 0 ? undefined : Math.min(50, Math.max(0.2, next)),
+              }),
+            ),
+          ]),
+          el('div', {
+            className: 'ed-empty-note',
+            text: 'Ship origin height above ground when parked (m). 0 = auto: previews rest the hull on the pad.',
+          }),
+        ];
+      case 'ship-walk-zone': {
+        const gateValue =
+          component.gate === undefined ? 'none' : component.gate === 'ramp' ? 'ramp' : 'door';
+        const rows: HTMLElement[] = [
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Zone id' }),
+            textInput(component.zoneId, (zoneId) => update({ ...component, zoneId })),
+          ]),
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Min XZ' }),
+            numberInput(component.min.x, (x) => update({ ...component, min: { ...component.min, x } })),
+            numberInput(component.min.z, (z) => update({ ...component, min: { ...component.min, z } })),
+            el('span', {}),
+          ]),
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Max XZ' }),
+            numberInput(component.max.x, (x) => update({ ...component, max: { ...component.max, x } })),
+            numberInput(component.max.z, (z) => update({ ...component, max: { ...component.max, z } })),
+            el('span', {}),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Height' }),
+            numberInput(component.height ?? 3.1, (height) =>
+              update({ ...component, height: Math.max(0.5, height) }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Slope Δ' }),
+            numberInput(component.slopeMinUp ?? 0, (slope) =>
+              update({ ...component, slopeMinUp: slope === 0 ? undefined : slope }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Gate' }),
+            selectInput(['none', 'ramp', 'door'], gateValue, (next) => {
+              const gate: ShipZoneGate | undefined =
+                next === 'none' ? undefined : next === 'ramp' ? 'ramp' : { doorId: 'door-1' };
+              update({ ...component, gate });
+            }),
+          ]),
+        ];
+        if (typeof component.gate === 'object') {
+          rows.push(
+            el('div', { className: 'ed-field-row-wide' }, [
+              el('span', { className: 'ed-field-label', text: 'Door id' }),
+              textInput(component.gate.doorId, (doorId) =>
+                update({ ...component, gate: { doorId } }),
+              ),
+            ]),
+          );
+        }
+        rows.push(
+          el('label', { className: 'ed-checkbox-row' }, [
+            (() => {
+              const checkbox = el('input', {
+                attrs: { type: 'checkbox' },
+                on: {
+                  change: (event) =>
+                    update({
+                      ...component,
+                      passage: (event.target as HTMLInputElement).checked || undefined,
+                    }),
+                },
+              });
+              checkbox.checked = component.passage ?? false;
+              return checkbox;
+            })(),
+            el('span', { text: 'Passage (connects rooms)' }),
+          ]),
+        );
+        return rows;
+      }
+      case 'ship-door': {
+        const rows: HTMLElement[] = [
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Id' }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Label' }),
+            textInput(component.label, (label) => update({ ...component, label })),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Motion' }),
+            selectInput(['slide', 'hinge'], component.motion, (motion) =>
+              update({ ...component, motion: motion as 'slide' | 'hinge' }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Axis' }),
+            selectInput(['x', 'y', 'z'], component.axis, (axis) =>
+              update({ ...component, axis: axis as 'x' | 'y' | 'z' }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Radius' }),
+            numberInput(component.radius ?? 1.6, (radius) =>
+              update({ ...component, radius: Math.max(0.5, radius) }),
+            ),
+          ]),
+          el('label', { className: 'ed-checkbox-row' }, [
+            (() => {
+              const checkbox = el('input', {
+                attrs: { type: 'checkbox' },
+                on: {
+                  change: (event) =>
+                    update({
+                      ...component,
+                      defaultOpen: (event.target as HTMLInputElement).checked || undefined,
+                    }),
+                },
+              });
+              checkbox.checked = component.defaultOpen ?? false;
+              return checkbox;
+            })(),
+            el('span', { text: 'Open on spawn' }),
+          ]),
+        ];
+        component.nodes.forEach((node, nodeIndex) => {
+          rows.push(
+            el('div', { className: 'ed-field-row-wide' }, [
+              el('span', { className: 'ed-field-label', text: `Node ${nodeIndex + 1}` }),
+              el('div', { className: 'ed-door-node-row' }, [
+                textInput(node.name, (name) => {
+                  const nodes = component.nodes.map((entry, index) =>
+                    index === nodeIndex ? { ...entry, name } : entry,
+                  );
+                  update({ ...component, nodes });
+                }),
+                numberInput(node.delta, (delta) => {
+                  const nodes = component.nodes.map((entry, index) =>
+                    index === nodeIndex ? { ...entry, delta } : entry,
+                  );
+                  update({ ...component, nodes });
+                }),
+                el('button', {
+                  className: 'ed-remove-btn',
+                  text: '✕',
+                  title: 'Remove node',
+                  on: {
+                    click: () => {
+                      if (component.nodes.length <= 1) return;
+                      const nodes = component.nodes.filter((_, index) => index !== nodeIndex);
+                      update({ ...component, nodes });
+                    },
+                  },
+                }),
+              ]),
+            ]),
+          );
+        });
+        rows.push(
+          el('button', {
+            className: 'ed-btn',
+            text: '+ Node',
+            title: 'Add another GLB node moved by this door',
+            on: {
+              click: () =>
+                update({
+                  ...component,
+                  nodes: [...component.nodes, { name: 'Door_R', delta: 1 }],
+                }),
+            },
+          }),
+        );
+        return rows;
+      }
+      case 'pilot-seat': {
+        const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
+        const stand = component.stand ?? { x: 0, z: -1.55 };
+        return [
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Eye' }),
+            ...(['x', 'y', 'z'] as const).map((axis) =>
+              numberInput(eye[axis], (next) =>
+                update({ ...component, eye: { ...eye, [axis]: next } }),
+              ),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Stand XZ' }),
+            numberInput(stand.x, (x) => update({ ...component, stand: { ...stand, x } })),
+            numberInput(stand.z, (z) => update({ ...component, stand: { ...stand, z } })),
+            el('span', {}),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Radius' }),
+            numberInput(component.interactRadius ?? 1.45, (radius) =>
+              update({ ...component, interactRadius: Math.max(0.5, radius) }),
+            ),
+          ]),
+        ];
+      }
+      case 'ramp-interact':
+        return [
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Place' }),
+            selectInput(['outside', 'deck'], component.placement, (placement) =>
+              update({ ...component, placement: placement as 'outside' | 'deck' }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Radius' }),
+            numberInput(component.radius ?? (component.placement === 'outside' ? 3 : 1.7), (radius) =>
+              update({ ...component, radius: Math.max(0.5, radius) }),
+            ),
+          ]),
+        ];
+      case 'ramp-mount':
+        return [
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Min XZ' }),
+            numberInput(component.min.x, (x) => update({ ...component, min: { ...component.min, x } })),
+            numberInput(component.min.z, (z) => update({ ...component, min: { ...component.min, z } })),
+            el('span', {}),
+          ]),
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Max XZ' }),
+            numberInput(component.max.x, (x) => update({ ...component, max: { ...component.max, x } })),
+            numberInput(component.max.z, (z) => update({ ...component, max: { ...component.max, z } })),
+            el('span', {}),
+          ]),
+        ];
     }
+  }
+
+  function addComponentCombobox(entity: EditorEntity): HTMLElement {
+    const wrap = el('div', { className: 'ed-combobox' });
+    const input = el('input', {
+      className: 'ed-input',
+      attrs: { type: 'text', placeholder: 'Add component…', autocomplete: 'off' },
+    });
+    // preventDefault keeps the input focused for ANY press inside the list
+    // (items, padding, empty note) so blur cannot close it mid-click.
+    const list = el('div', {
+      className: 'ed-combobox-list',
+      on: { mousedown: (event) => event.preventDefault() },
+    });
+    wrap.append(input, list);
+
+    let results: ComponentDef[] = [];
+    let highlighted = 0;
+    let open = false;
+
+    /** Singletons are unique per document, not per entity. */
+    function existingTypes(): PrefabComponent['type'][] {
+      const types: PrefabComponent['type'][] = [];
+      const visit = (entities: EditorEntity[]): void => {
+        for (const current of entities) {
+          for (const component of current.components) types.push(component.type);
+          visit(current.children);
+        }
+      };
+      visit(store.getState().roots);
+      return types;
+    }
+
+    function addComponent(def: ComponentDef): void {
+      // Unity-style: spatial components live on their own empty marker
+      // entities. Adding one to a model entity spawns a child marker (and
+      // selects it) so the gizmo positions the component independently.
+      const hasVisual = Boolean(entity.asset || entity.primitive);
+      if (def.marker && hasVisual) {
+        const marker = createEmptyEntity(def.label);
+        marker.components = [def.createDefault()];
+        store.addEntity(marker, entity.id);
+        showToast(`Added "${def.label}" as a child marker — position it with the gizmo.`);
+        return;
+      }
+      const components = structuredClone(entity.components);
+      components.push(def.createDefault());
+      store.setComponents(entity.id, components);
+      // The store event re-renders the inspector, discarding this combobox.
+    }
+
+    /** Moves the highlight without rebuilding the list (rebuilding under the
+     * pointer re-fires mouseenter on the fresh node and eats clicks). */
+    function refreshHighlight(): void {
+      list.querySelectorAll('.ed-combobox-item').forEach((item, index) => {
+        item.classList.toggle('is-highlighted', index === highlighted);
+      });
+    }
+
+    function renderList(): void {
+      clearChildren(list);
+      if (!open) {
+        list.classList.remove('is-open');
+        return;
+      }
+      results = searchComponents(input.value, store.getState().kind, existingTypes());
+      highlighted = Math.min(highlighted, Math.max(0, results.length - 1));
+      if (results.length === 0) {
+        list.append(el('div', { className: 'ed-combobox-empty', text: 'No matching components' }));
+      }
+      results.forEach((def, index) => {
+        const item = el(
+          'div',
+          {
+            className: `ed-combobox-item${index === highlighted ? ' is-highlighted' : ''}`,
+            on: {
+              // mousedown (not click) so the add happens while the input still
+              // has focus; the list's own mousedown handler prevents the blur.
+              mousedown: () => addComponent(def),
+              mouseenter: () => {
+                highlighted = index;
+                refreshHighlight();
+              },
+            },
+          },
+          [
+            el('span', { className: 'ed-combobox-item-label', text: def.label }),
+            el('span', { className: 'ed-combobox-item-type', text: def.type }),
+          ],
+        );
+        list.append(item);
+      });
+      list.classList.toggle('is-open', true);
+    }
+
+    function setOpen(next: boolean): void {
+      open = next;
+      if (open) highlighted = 0;
+      renderList();
+    }
+
+    input.addEventListener('focus', () => setOpen(true));
+    input.addEventListener('blur', () => setOpen(false));
+    input.addEventListener('input', () => {
+      highlighted = 0;
+      renderList();
+    });
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!open) setOpen(true);
+        else if (results.length > 0) {
+          highlighted = (highlighted + 1) % results.length;
+          refreshHighlight();
+        }
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (results.length > 0) {
+          highlighted = (highlighted - 1 + results.length) % results.length;
+          refreshHighlight();
+        }
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        const def = results[highlighted];
+        if (open && def) addComponent(def);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        input.blur();
+      }
+    });
+
+    return wrap;
   }
 
   function componentsSection(entity: EditorEntity): HTMLElement {
@@ -378,7 +731,7 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
         store.setComponents(entity.id, components);
       };
       const bodyEl = el('div', { className: 'ed-component-body' }, componentFields(component, update));
-      const hint = COMPONENT_HINTS[component.type];
+      const hint = getComponentDef(component.type)?.hint;
       if (hint) bodyEl.append(el('div', { className: 'ed-empty-note', text: hint }));
       section.append(
         el('div', { className: 'ed-component' }, [
@@ -402,24 +755,7 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
       );
     });
 
-    const typeSelect = selectInput(Object.keys(COMPONENT_DEFAULTS), 'walk-volume', () => {});
-    section.append(
-      el('div', { className: 'ed-add-component' }, [
-        typeSelect,
-        el('button', {
-          className: 'ed-btn',
-          text: '+ Add',
-          on: {
-            click: () => {
-              const type = typeSelect.value as PrefabComponentType;
-              const components = structuredClone(entity.components);
-              components.push(COMPONENT_DEFAULTS[type]());
-              store.setComponents(entity.id, components);
-            },
-          },
-        }),
-      ]),
-    );
+    section.append(el('div', { className: 'ed-add-component' }, [addComponentCombobox(entity)]));
     return section;
   }
 

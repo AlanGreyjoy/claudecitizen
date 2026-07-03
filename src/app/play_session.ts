@@ -7,6 +7,7 @@ import { createVegetationControls } from '../render/vegetation';
 import { CLAUDECITIZEN_PLANET } from '../world/planet';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
+import { applyDefaultShipPrefab } from '../world/ships';
 import { setStationLayoutOverride } from '../world/station';
 import type { PrefabDocument } from '../world/prefabs/schema';
 
@@ -77,6 +78,9 @@ export async function startPlaySession(loading?: LoadingScreenHandle): Promise<v
   if (started) return;
   started = true;
 
+  // The ship layout must be active before the renderer (hull, doors) and the
+  // world state (rig doors) are created.
+  await applyDefaultShipPrefab();
   const stationPrefab = await resolveStationPrefabPreview();
   loading?.setProgress(0.15);
 

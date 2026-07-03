@@ -18,6 +18,7 @@ import {
 } from '../world/coordinates';
 import { sampleRenderablePlanetSurface } from '../world/planet_surface';
 import { getStationFrame, sampleHangarRest, worldToStationLocal } from '../world/station';
+import { getShipRestHeightMeters } from '../player/ship_layout';
 import type { FlightBody, FlightInput, Planet, Vec3 } from '../types';
 import { FLIGHT_CONFIG } from './flight_config';
 
@@ -191,7 +192,7 @@ export function integrateFlightBody(
   // Station hangar decks act as landing surfaces: settle onto the pad at
   // gear-rest height instead of falling through toward the planet.
   const stationFrame = getStationFrame(planet);
-  const hangarRest = sampleHangarRest(stationFrame, position);
+  const hangarRest = sampleHangarRest(stationFrame, position, getShipRestHeightMeters());
   if (hangarRest) {
     const localUp = worldToStationLocal(stationFrame, position).up;
     if (localUp <= hangarRest.restUp) {

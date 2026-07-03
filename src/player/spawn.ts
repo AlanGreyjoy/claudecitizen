@@ -14,10 +14,8 @@ import { resolveLandingSite } from '../world/landing_sites';
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from '../world/planet_surface';
 import type { CharacterState, FlightBody, Planet, Vec3 } from '../types';
 
-import { SHIP_GEAR_REST_HEIGHT_METERS } from '../world/station';
+import { getShipRestHeightMeters } from './ship_layout';
 
-/** Parked ships rest on deployed landing gear. */
-const SHIP_SPAWN_ALTITUDE_METERS = SHIP_GEAR_REST_HEIGHT_METERS;
 const CHARACTER_SPAWN_SIDE_METERS = 12;
 
 function tangentize(vector: Vec3, up: Vec3): Vec3 {
@@ -35,10 +33,11 @@ export function createSpawnShip(planet: Planet, seed: number): FlightBody {
   const { latRadians, lonRadians } = resolveLandingSite(planet, seed);
   const probe = cartesianFromLatLonAlt(latRadians, lonRadians, 0, planet.radiusMeters);
   const surface = sampleRenderablePlanetSurface(planet, seed, probe);
+  // Parked ships rest on deployed landing gear (prefab-authored when set).
   const position = cartesianFromLatLonAlt(
     latRadians,
     lonRadians,
-    surface.heightMeters + SHIP_SPAWN_ALTITUDE_METERS,
+    surface.heightMeters + getShipRestHeightMeters(),
     planet.radiusMeters,
   );
   return createFlightBody(position, eastVector(position), surface.normal ?? radialUp(position));

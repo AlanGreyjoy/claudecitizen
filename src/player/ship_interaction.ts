@@ -1,4 +1,5 @@
 import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
+import { getShipLayout } from './ship_layout';
 import type {
   CharacterState,
   FlightBody,
@@ -8,30 +9,10 @@ import type {
 } from '../types';
 
 /**
- * Phobos Starhopper gameplay anchors, measured from the model rig:
- * nose is +forward, the pilot seat sits in the cockpit at forward ~6.4 behind
- * sliding doors at ~2.7, and the boarding ramp drops from the tail at ~-8.4.
+ * Ship gameplay anchors (pilot seat, ramp interacts, ramp mount strip) read
+ * from the active ship layout. Values are ship-local right/up/forward meters;
+ * the default layout is the Phobos Starhopper measured from its model rig.
  */
-
-/** Ship-local offset from ship origin to the seated pilot pose. */
-export const PILOT_SEAT_LOCAL: LocalOffset = { right: 0, up: -0.62, forward: 6.05 };
-
-/** Ship-local offset to the seated pilot's eye point (cockpit camera). */
-export const PILOT_EYE_LOCAL: LocalOffset = { right: 0, up: 0.25, forward: 6.3 };
-
-/** Standing spot just behind the chair after getting up. */
-export const SEAT_STAND_LOCAL = { right: 0, forward: 4.5 };
-
-/** Outside interaction point at the foot of the (lowered) ramp. */
-export const RAMP_OUTSIDE_LOCAL = { right: 0, forward: -9.7 };
-export const RAMP_OUTSIDE_INTERACT_DISTANCE_METERS = 3.0;
-
-/** Walking into this tail strip (parked, ramp down) steps onto the ramp. */
-const MOUNT_MIN_FORWARD = -8.8;
-const MOUNT_MAX_FORWARD = -8.0;
-const MOUNT_MAX_RIGHT = 1.05;
-/** Above the dismount line so mounting does not immediately step back off. */
-const MOUNT_CLAMP_FORWARD = -8.2;
 
 export const PARKED_MAX_SPEED_METERS_PER_SECOND = 1.0;
 
@@ -73,10 +54,14 @@ export function worldToShipLocal(ship: FlightBody, position: Vec3): ShipLocalPoi
 export function getPilotSeatAnchor(ship: FlightBody): ShipAnchor {
   return {
     forward: normalize(tangentize(ship.forward, ship.up)),
-    position: localOffsetToWorld(ship, PILOT_SEAT_LOCAL),
+    position: localOffsetToWorld(ship, getShipLayout().pilotSeat),
     right: getShipRight(ship),
     up: ship.up,
   };
+}
+
+export function getPilotEyeLocal(): LocalOffset {
+  return getShipLayout().pilotEye;
 }
 
 export function isShipParked(ship: FlightBody): boolean {
@@ -88,16 +73,17 @@ function atShipGroundLevel(localUp: number): boolean {
   return Math.abs(localUp + 3.2) <= 2.4;
 }
 
-/** Near the tail ramp button while standing on the ground outside. */
+/** Near an outside ramp button while standing on the ground. */
 export function nearShipRampOutside(
   character: Pick<CharacterState, 'position'>,
   ship: FlightBody,
 ): boolean {
   const local = worldToShipLocal(ship, character.position);
   if (!atShipGroundLevel(local.up)) return false;
-  return (
-    Math.hypot(local.right - RAMP_OUTSIDE_LOCAL.right, local.forward - RAMP_OUTSIDE_LOCAL.forward) <=
-    RAMP_OUTSIDE_INTERACT_DISTANCE_METERS
+  return getShipLayout().rampInteracts.some(
+    (panel) =>
+      panel.placement === 'outside' &&
+      Math.hypot(local.right - panel.right, local.forward - panel.forward) <= panel.radius,
   );
 }
 
@@ -109,15 +95,19 @@ export function sampleRampMount(
   character: Pick<CharacterState, 'position'>,
   ship: FlightBody,
 ): { right: number; forward: number } | null {
+  const mount = getShipLayout().rampMount;
+  if (!mount) return null;
   const local = worldToShipLocal(ship, character.position);
   if (!atShipGroundLevel(local.up)) return null;
-  if (Math.abs(local.right) > MOUNT_MAX_RIGHT) return null;
-  if (local.forward < MOUNT_MIN_FORWARD || local.forward > MOUNT_MAX_FORWARD) return null;
-  return { right: local.right, forward: Math.max(local.forward, MOUNT_CLAMP_FORWARD) };
+  if (local.right < mount.minRight || local.right > mount.maxRight) return null;
+  if (local.forward < mount.minForward || local.forward > mount.maxForward) return null;
+  return { right: local.right, forward: Math.max(local.forward, mount.clampForward) };
 }
 
 /** Ground spot just past the ramp tip for a character stepping off. */
-export const RAMP_DISMOUNT_GROUND_LOCAL = { right: 0, forward: -9.6 };
+export function getRampDismountGroundLocal(): { right: number; forward: number } {
+  return getShipLayout().rampDismountGround;
+}
 
 export function createTransitionPose(start: Pose, end: Pose, t: number): Pose {
   const clamped = Math.max(0, Math.min(1, t));

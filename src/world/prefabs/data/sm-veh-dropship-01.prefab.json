@@ -1,0 +1,250 @@
+{
+  "id": "sm-veh-dropship-01",
+  "name": "SM_Veh_DropShip_01",
+  "version": 1,
+  "kind": "ship",
+  "root": {
+    "id": "root",
+    "name": "SM_Veh_DropShip_01",
+    "transform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "components": [
+      {
+        "type": "ship-frame"
+      }
+    ],
+    "children": [
+      {
+        "id": "e-24a3d250",
+        "name": "SM_Veh_DropShip_01",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/ships/SM_Veh_DropShip_01.glb"
+        },
+        "components": [
+          {
+            "type": "ship-hull"
+          }
+        ]
+      },
+      {
+        "id": "e-a301224b",
+        "name": "Walk_Zone",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -6.75,
+            "z": 1.25
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 2.2,
+            "y": 1.6,
+            "z": 1.8
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cabin",
+            "min": {
+              "x": -2,
+              "z": -3
+            },
+            "max": {
+              "x": 2,
+              "z": 3
+            },
+            "height": 3.1
+          }
+        ]
+      },
+      {
+        "id": "e-6560ffa2",
+        "name": "Pilot_Chair",
+        "transform": {
+          "position": {
+            "x": 0.5,
+            "y": -3,
+            "z": 15
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "pilot-seat",
+            "eye": {
+              "x": 0,
+              "y": 0.87,
+              "z": 0.25
+            },
+            "stand": {
+              "x": 0,
+              "z": -1.55
+            },
+            "interactRadius": 1.45
+          }
+        ]
+      },
+      {
+        "id": "e-b4b29ff0",
+        "name": "Co_Pilot_Chair",
+        "transform": {
+          "position": {
+            "x": -0.5,
+            "y": -3,
+            "z": 15
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "pilot-seat",
+            "eye": {
+              "x": 0,
+              "y": 0.87,
+              "z": 0.25
+            },
+            "stand": {
+              "x": 0,
+              "z": -1.55
+            },
+            "interactRadius": 1.45
+          }
+        ]
+      },
+      {
+        "id": "e-45918812",
+        "name": "Back_Seat_01",
+        "transform": {
+          "position": {
+            "x": 0.5,
+            "y": -2.25,
+            "z": 12.75
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "pilot-seat",
+            "eye": {
+              "x": 0,
+              "y": 0.87,
+              "z": 0.25
+            },
+            "stand": {
+              "x": 0,
+              "z": -1.55
+            },
+            "interactRadius": 1.45
+          }
+        ]
+      },
+      {
+        "id": "e-3b1ed92a",
+        "name": "Back_Seat_02",
+        "transform": {
+          "position": {
+            "x": -0.5,
+            "y": -2.25,
+            "z": 12.75
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "pilot-seat",
+            "eye": {
+              "x": 0,
+              "y": 0.87,
+              "z": 0.25
+            },
+            "stand": {
+              "x": 0,
+              "z": -1.55
+            },
+            "interactRadius": 1.45
+          }
+        ]
+      }
+    ]
+  }
+}

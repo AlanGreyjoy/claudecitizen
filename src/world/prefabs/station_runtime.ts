@@ -1,7 +1,6 @@
 import { mulQuat, quatIdentity, rotateVec3ByQuat, type Quat } from '../../math/quat';
 import { vec3 } from '../../math/vec3';
 import {
-  SHIP_GEAR_REST_HEIGHT_METERS,
   type HangarSpec,
   type StationDir2,
   type StationElevatorMarker,
@@ -262,14 +261,16 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
       );
       continue;
     }
+    // hangar-pad markers are placed at pad surface height; the parked ship's
+    // rest offset above it comes from the active ship layout at call time.
     hangars.push({
       index: seed.padIndex,
       roomId: room.id,
       centerRight: seed.right,
       lobbyDoorForward: 0,
-      padLocal: {
+      padSurfaceLocal: {
         right: seed.right,
-        up: seed.up + SHIP_GEAR_REST_HEIGHT_METERS,
+        up: seed.up,
         forward: seed.forward,
       },
     });

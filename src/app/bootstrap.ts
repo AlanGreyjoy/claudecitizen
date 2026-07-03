@@ -12,6 +12,7 @@ import { startPlaySession } from './play_session';
  *   ?boot=play              — jump into the game
  *   ?boot=editor            — jump into the editor (dev only)
  *   ?stationPrefab=<id>     — jump into the game previewing a station prefab
+ *   ?shipPrefab=<id>        — jump into the ship sandbox for a ship prefab (dev only)
  */
 function startPlayWithLoading(): void {
   const loading = showLoadingScreen();
@@ -31,6 +32,13 @@ export function bootstrap(): void {
 
   if (boot === 'editor' && import.meta.env.DEV) {
     openEditor();
+    return;
+  }
+  const shipPrefabId = params.get('shipPrefab');
+  if (shipPrefabId && import.meta.env.DEV) {
+    import('./ship_play_session')
+      .then((module) => module.startShipPlaySession(shipPrefabId))
+      .catch((error) => console.error('ClaudeCitizen ship sandbox failed to load.', error));
     return;
   }
   if (boot === 'play' || params.has('stationPrefab')) {

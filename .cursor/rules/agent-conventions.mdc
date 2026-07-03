@@ -11,7 +11,37 @@ Before architectural or cross-cutting changes, read the project's agent docs:
 2. `claude.md` at repo root, if present
 3. `agents.md` at repo root, if present
 
-Also scan `.agents/` for any additional convention files. Use those docs for bounded-context ownership, import boundaries, terrain/foot sync, and security. Do not restate them here — read the source files.
+Also scan `.agents/` for any additional convention files. Use those docs for bounded-context ownership, import boundaries, terrain/foot sync, security, and performance pitfalls. Do not restate them here — read the source files.
+
+## Performance — first-class requirement
+
+ClaudeCitizen is a **real-time web game** (React UI + Three.js/WebGL) targeting smooth play on consumer hardware, with a future **Nest.js MMO backend** (WebSockets, authoritative simulation). Performance is not a polish pass — it is a **core product constraint**. A Star Citizen–scale world on the web fails instantly if the main thread stalls, draw calls explode, or sync work scales with player count.
+
+**Treat every change as a frame-budget decision.** Aim for sustained interactive framerate; profile when unsure; prefer bounded, incremental work over "do it all now" loops.
+
+### When performance matters (always)
+
+- Game loop, render path, terrain/LOD, vegetation, ship/station loading
+- React UI that re-renders during play (HUD, menus, editor panels)
+- Per-frame or per-tick simulation (`world/`, `flight/`, `player/`)
+- Asset size, mesh complexity, texture resolution, GLB/GLTF loads
+- Workers, caching, and anything that can block the main thread
+- Future server: tick rate, broadcast fan-out, payload size, DB hot paths
+
+### Client — React + Three.js
+
+- **Main thread is sacred.** Heavy work belongs in Web Workers (`planet_tile_worker.js`), async loads, or spread across frames — never unbounded sync loops on the hot path.
+- **Respect existing budgets.** Per-frame tile/vegetation build caps, LOD selection, and quality presets (`?quality=performance|balanced|high`) exist because unbounded work freezes the game at 0 FPS.
+- **React stays out of the render loop.** UI updates on state/events; do not drive Three.js from React render churn. Memoize; avoid new object/array allocations every frame in shared paths.
+- **Three.js discipline.** Reuse geometries/materials; instancing where possible; frustum/distance culling; minimize scene graph churn and `dispose()` leaks.
+- **Measure.** Use the in-game FPS counter and quality presets when validating changes; see AGENTS.md "Terrain mesh vs foot placement" for terrain-specific traps.
+
+### Server — Nest.js / MMO (future)
+
+- **Server tick is a budget too.** Simulation, interest management, and broadcasts must scale with concurrent players — design for O(players-in-range), not O(world).
+- **WebSockets: small, frequent beats.** Prefer compact binary or minimal JSON deltas; batch when it helps; never ship full world state every tick.
+- **Authority without blocking.** Nest handlers stay thin; heavy domain work in services; no synchronous DB/network chains on the hot path.
+- **Client sends intents, server decides outcomes** — keeps cheating down and avoids duplicating expensive simulation on every client.
 
 ## When to read
 
@@ -19,12 +49,14 @@ Also scan `.agents/` for any additional convention files. Use those docs for bou
 - Touching terrain mesh, foot placement, or LOD
 - Working with assets, builds, secrets, or protected paths
 - Any change that affects architecture or cross-layer dependencies
+- Anything on the main thread, in the frame loop, or on a future realtime server path
 
 ## Quick triggers
 
 - New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `render/`)
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Assets / build / secrets → see AGENTS.md "Security"
+- Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 
 ## Key reminders
 
@@ -32,3 +64,4 @@ Also scan `.agents/` for any additional convention files. Use those docs for bou
 - Foot placement uses `sampleFootPlanetSurface()` / `getFootSurfaceSampleLevel()`, not always max LOD
 - Never commit or relocate `protected/` assets
 - No unit tests in this project
+- **If it can freeze the tab or tank server tick rate, fix or bound it before shipping**

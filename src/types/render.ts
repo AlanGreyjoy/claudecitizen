@@ -72,6 +72,6 @@ export interface SpikeRenderWorld {
   stationRoomId?: string | null;
   /** Current ship walk zone while on board; drives interior camera clamping. */
   shipZoneId?: string | null;
-  /** Landing gear / ramp / cockpit door articulation, 0..1 each. */
-  shipRig?: { gear01: number; ramp01: number; cockpit01: number };
+  /** Landing gear / ramp / door articulation, 0..1 each (doors by layout id). */
+  shipRig?: { gear01: number; ramp01: number; doors: Record<string, number> };
 }

@@ -1,0 +1,393 @@
+{
+  "id": "phobos-starhopper",
+  "name": "Phobos Starhopper",
+  "version": 1,
+  "kind": "ship",
+  "root": {
+    "id": "root",
+    "name": "Phobos Starhopper",
+    "transform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "components": [
+      {
+        "type": "ship-frame"
+      }
+    ],
+    "children": [
+      {
+        "id": "hull",
+        "name": "Hull",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/assets/protected/ships/Phobos_Starhopper_Basic.glb"
+        },
+        "components": [
+          {
+            "type": "ship-hull",
+            "restHeight": 3.16
+          }
+        ]
+      },
+      {
+        "id": "zone-cabin",
+        "name": "Cabin Zone",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -1.42,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cabin",
+            "min": {
+              "x": -2.35,
+              "z": -6.6
+            },
+            "max": {
+              "x": 2.35,
+              "z": 2.62
+            },
+            "height": 3.08
+          }
+        ]
+      },
+      {
+        "id": "zone-cockpit",
+        "name": "Cockpit Zone",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -0.97,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cockpit",
+            "min": {
+              "x": -1.65,
+              "z": 2.83
+            },
+            "max": {
+              "x": 1.65,
+              "z": 7.1
+            },
+            "height": 2.63
+          }
+        ]
+      },
+      {
+        "id": "zone-cockpit-door",
+        "name": "Cockpit Doorway",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -0.97,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cockpit-door",
+            "min": {
+              "x": -0.85,
+              "z": 2.42
+            },
+            "max": {
+              "x": 0.85,
+              "z": 3.03
+            },
+            "height": 2.63,
+            "slopeMinUp": -0.45,
+            "gate": {
+              "doorId": "cockpit"
+            },
+            "passage": true
+          }
+        ]
+      },
+      {
+        "id": "zone-ramp",
+        "name": "Ramp Zone",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -1.42,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "ramp",
+            "min": {
+              "x": -1.05,
+              "z": -8.55
+            },
+            "max": {
+              "x": 1.05,
+              "z": -6.4
+            },
+            "height": 3.08,
+            "slopeMinUp": -1.72,
+            "gate": "ramp"
+          }
+        ]
+      },
+      {
+        "id": "door-cockpit",
+        "name": "Cockpit Door",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -1,
+            "z": 2.72
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ship-door",
+            "id": "cockpit",
+            "label": "cockpit",
+            "motion": "slide",
+            "axis": "x",
+            "nodes": [
+              {
+                "name": "CockpitDoor_L",
+                "delta": -1
+              },
+              {
+                "name": "CockpitDoor_R",
+                "delta": 1
+              }
+            ],
+            "radius": 1.55
+          }
+        ]
+      },
+      {
+        "id": "pilot-seat",
+        "name": "Pilot Seat",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -0.62,
+            "z": 6.05
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "pilot-seat",
+            "eye": {
+              "x": 0,
+              "y": 0.87,
+              "z": 0.25
+            },
+            "stand": {
+              "x": 0,
+              "z": -1.55
+            },
+            "interactRadius": 1.45
+          }
+        ]
+      },
+      {
+        "id": "ramp-button-outside",
+        "name": "Ramp Button Outside",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -3,
+            "z": -9.7
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ramp-interact",
+            "placement": "outside",
+            "radius": 3
+          }
+        ]
+      },
+      {
+        "id": "ramp-panel-deck",
+        "name": "Ramp Panel",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -1.42,
+            "z": -5.7
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ramp-interact",
+            "placement": "deck",
+            "radius": 1.7
+          }
+        ]
+      },
+      {
+        "id": "ramp-mount",
+        "name": "Ramp Mount",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -3,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ramp-mount",
+            "min": {
+              "x": -1.05,
+              "z": -8.8
+            },
+            "max": {
+              "x": 1.05,
+              "z": -8
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

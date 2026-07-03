@@ -2,12 +2,20 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import { loadPrefabModel, createPrimitiveMesh } from '../prefabs/prefab_renderer';
+import { BUILTIN_GEAR_HINGES, BUILTIN_RAMP_HINGE } from '../main/scene/ship_model';
 import type { EditorEntity, EditorStore } from '../../editor/document';
 import type { PrefabComponent } from '../../world/prefabs/schema';
 import type { Vec3 } from '../../types';
 
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 export type GizmoSpace = 'local' | 'world';
+
+export interface ShipPreviewState {
+  gearDown: boolean;
+  rampDown: boolean;
+  /** Open/closed per ship-door id. */
+  doorsOpen: Record<string, boolean>;
+}
 
 export interface EditorViewportOptions {
   /** Called when an asset card is dropped onto the scene. */
@@ -18,6 +26,8 @@ export interface EditorViewport {
   setGizmoMode: (mode: GizmoMode) => void;
   setGizmoSpace: (space: GizmoSpace) => void;
   setSnap: (enabled: boolean, translateStep: number, rotateStepDegrees: number) => void;
+  /** Ship kind only: articulates gear/ramp/doors on loaded models for preview. */
+  setShipPreview: (state: ShipPreviewState) => void;
   focusSelection: () => void;
   /** True while the RMB flythrough owns the camera (WASD is flying, not tool shortcuts). */
   isFlying: () => boolean;
@@ -31,6 +41,13 @@ const FLOOR_COLORS: Record<string, number> = {
   hab: 0x8bd8ff,
   lobby: 0x3fc6ff,
   hangar: 0xffce6f,
+};
+
+const SHIP_ZONE_COLORS: Record<string, number> = {
+  cabin: 0x3fc6ff,
+  cockpit: 0x7dffa8,
+  'cockpit-door': 0xffce6f,
+  ramp: 0xff9d5c,
 };
 
 export function createEditorViewport(
@@ -226,22 +243,30 @@ export function createEditorViewport(
     return mesh;
   }
 
+  /** XZ box outline + translucent fill, origin-relative (used by zones and mounts). */
+  function makeZoneBoxHelper(
+    min: { x: number; z: number },
+    max: { x: number; z: number },
+    height: number,
+    color: number,
+    baseY = 0,
+  ): THREE.Group {
+    const width = Math.max(0.01, max.x - min.x);
+    const depth = Math.max(0.01, max.z - min.z);
+    const group = new THREE.Group();
+    const fill = makeHelperMesh(new THREE.BoxGeometry(width, height, depth), color, 0.07);
+    const wire = makeHelperMesh(new THREE.BoxGeometry(width, height, depth), color, 0.4, true);
+    fill.position.set((min.x + max.x) / 2, baseY + height / 2, (min.z + max.z) / 2);
+    wire.position.copy(fill.position);
+    group.add(fill, wire);
+    return group;
+  }
+
   function buildComponentHelper(component: PrefabComponent): THREE.Object3D | null {
     switch (component.type) {
       case 'walk-volume': {
-        const width = Math.max(0.01, component.max.x - component.min.x);
-        const depth = Math.max(0.01, component.max.z - component.min.z);
-        const height = component.height ?? 4;
         const color = FLOOR_COLORS[component.floorId] ?? 0x3fc6ff;
-        const group = new THREE.Group();
-        const fill = makeHelperMesh(new THREE.BoxGeometry(width, height, depth), color, 0.07);
-        const wire = makeHelperMesh(new THREE.BoxGeometry(width, height, depth), color, 0.4, true);
-        const centerX = (component.min.x + component.max.x) / 2;
-        const centerZ = (component.min.z + component.max.z) / 2;
-        fill.position.set(centerX, height / 2, centerZ);
-        wire.position.copy(fill.position);
-        group.add(fill, wire);
-        return group;
+        return makeZoneBoxHelper(component.min, component.max, component.height ?? 4, color);
       }
       case 'spawn-point': {
         const group = new THREE.Group();
@@ -290,8 +315,73 @@ export function createEditorViewport(
         if (offset) box.position.set(offset.x, offset.y, offset.z);
         return box;
       }
-      case 'station-frame': {
+      case 'station-frame':
+      case 'ship-frame': {
         return new THREE.AxesHelper(2);
+      }
+      case 'ship-hull': {
+        // Subtle marker only — the hull is the entity's own model.
+        const ring = makeHelperMesh(new THREE.TorusGeometry(1.2, 0.05, 8, 32), 0x8bd8ff, 0.5);
+        ring.rotation.x = Math.PI / 2;
+        return ring;
+      }
+      case 'ship-walk-zone': {
+        const color = SHIP_ZONE_COLORS[component.zoneId] ?? 0x9d8bff;
+        const group = makeZoneBoxHelper(
+          component.min,
+          component.max,
+          component.height ?? 3.1,
+          color,
+        );
+        if (component.slopeMinUp !== undefined && component.slopeMinUp !== 0) {
+          // Slope indicator: line from the min-Z edge (offset floor) to max-Z edge.
+          const geometry = track(new THREE.BufferGeometry());
+          geometry.setFromPoints([
+            new THREE.Vector3(
+              (component.min.x + component.max.x) / 2,
+              component.slopeMinUp,
+              component.min.z,
+            ),
+            new THREE.Vector3((component.min.x + component.max.x) / 2, 0, component.max.z),
+          ]);
+          const material = track(
+            new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 }),
+          );
+          group.add(new THREE.Line(geometry, material));
+        }
+        return group;
+      }
+      case 'ship-door': {
+        const group = new THREE.Group();
+        const sphere = makeHelperMesh(
+          new THREE.SphereGeometry(component.radius ?? 1.6, 16, 12),
+          0xffce6f,
+          0.24,
+          true,
+        );
+        const panel = makeHelperMesh(new THREE.BoxGeometry(1.2, 1.8, 0.08), 0xffce6f, 0.4);
+        panel.position.y = 0.9;
+        group.add(sphere, panel);
+        return group;
+      }
+      case 'pilot-seat': {
+        const group = new THREE.Group();
+        const seat = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), 0x7dffa8, 0.6);
+        const back = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.8, 0.12), 0x7dffa8, 0.45);
+        back.position.set(0, 0.45, -0.3);
+        const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
+        const eyeDot = makeHelperMesh(new THREE.SphereGeometry(0.08, 10, 8), 0xffffff, 0.85);
+        eyeDot.position.set(eye.x, eye.y, eye.z);
+        group.add(seat, back, eyeDot);
+        return group;
+      }
+      case 'ramp-interact': {
+        const color = component.placement === 'outside' ? 0xff9d5c : 0xffce6f;
+        const radius = component.radius ?? (component.placement === 'outside' ? 3 : 1.7);
+        return makeHelperMesh(new THREE.SphereGeometry(radius, 16, 12), color, 0.22, true);
+      }
+      case 'ramp-mount': {
+        return makeZoneBoxHelper(component.min, component.max, 0.4, 0xff9d5c);
       }
     }
   }
@@ -326,10 +416,20 @@ export function createEditorViewport(
     if (entity.asset) {
       hasVisual = true;
       const url = entity.asset.url;
+      // The game recenters the flyable hull on its bounding-box center
+      // (ship_model.ts), so mirror that here or zones drift from the mesh.
+      const recenterAsHull = entity.components.some(
+        (component) => component.type === 'ship-hull',
+      );
       void loadPrefabModel(url)
         .then((model) => {
           if (generation !== buildGeneration) return;
+          if (recenterAsHull) {
+            const box = new THREE.Box3().setFromObject(model);
+            model.position.sub(box.getCenter(new THREE.Vector3()));
+          }
           group.add(model);
+          applyShipPreview();
         })
         .catch(() => {
           if (generation !== buildGeneration) return;
@@ -371,6 +471,78 @@ export function createEditorViewport(
       entityRoot.add(buildEntityObject(entity, buildGeneration));
     }
     if (selectedId) attachSelection(selectedId);
+    applyShipPreview();
+  }
+
+  // ---- ship preview articulation (gear / ramp / doors) ---------------------
+
+  let shipPreview: ShipPreviewState = { gearDown: true, rampDown: false, doorsOpen: {} };
+  const articulationBase = new WeakMap<
+    THREE.Object3D,
+    { position: THREE.Vector3; quaternion: THREE.Quaternion }
+  >();
+  const previewQuat = new THREE.Quaternion();
+  const previewAxis = new THREE.Vector3();
+  const PREVIEW_AXES = {
+    x: new THREE.Vector3(1, 0, 0),
+    y: new THREE.Vector3(0, 1, 0),
+    z: new THREE.Vector3(0, 0, 1),
+  } as const;
+
+  function baseOf(object: THREE.Object3D) {
+    let base = articulationBase.get(object);
+    if (!base) {
+      base = { position: object.position.clone(), quaternion: object.quaternion.clone() };
+      articulationBase.set(object, base);
+    }
+    return base;
+  }
+
+  function previewHinge(name: string, radians: number, axis: 'x' | 'y' | 'z' = 'x'): void {
+    const object = entityRoot.getObjectByName(name);
+    if (!object) return;
+    const base = baseOf(object);
+    previewQuat.setFromAxisAngle(PREVIEW_AXES[axis], radians);
+    object.quaternion.copy(base.quaternion).multiply(previewQuat);
+  }
+
+  function previewSlide(name: string, offset: number, axis: 'x' | 'y' | 'z'): void {
+    const object = entityRoot.getObjectByName(name);
+    if (!object) return;
+    const base = baseOf(object);
+    previewAxis.copy(PREVIEW_AXES[axis]).multiplyScalar(offset);
+    object.position.copy(base.position).add(previewAxis);
+  }
+
+  function collectDoorComponents(): Extract<PrefabComponent, { type: 'ship-door' }>[] {
+    const doors: Extract<PrefabComponent, { type: 'ship-door' }>[] = [];
+    const visit = (entities: EditorEntity[]): void => {
+      for (const entity of entities) {
+        for (const component of entity.components) {
+          if (component.type === 'ship-door') doors.push(component);
+        }
+        visit(entity.children);
+      }
+    };
+    visit(store.getState().roots);
+    return doors;
+  }
+
+  function applyShipPreview(): void {
+    if (store.getState().kind !== 'ship') return;
+    const gear01 = shipPreview.gearDown ? 1 : 0;
+    for (const hinge of BUILTIN_GEAR_HINGES) {
+      previewHinge(hinge.name, hinge.deployRadians * gear01);
+    }
+    previewHinge(BUILTIN_RAMP_HINGE.name, BUILTIN_RAMP_HINGE.lowerRadians * (shipPreview.rampDown ? 1 : 0));
+    for (const door of collectDoorComponents()) {
+      const open = shipPreview.doorsOpen[door.id] ?? door.defaultOpen ?? false;
+      const open01 = open ? 1 : 0;
+      for (const node of door.nodes) {
+        if (door.motion === 'slide') previewSlide(node.name, node.delta * open01, door.axis);
+        else previewHinge(node.name, node.delta * open01, door.axis);
+      }
+    }
   }
 
   // ---- selection ---------------------------------------------------------
@@ -611,6 +783,10 @@ export function createEditorViewport(
       snapTranslate = Math.max(0.01, translateStep);
       snapRotateDegrees = Math.max(1, rotateStepDegrees);
       applySnapState();
+    },
+    setShipPreview(state) {
+      shipPreview = state;
+      applyShipPreview();
     },
     focusSelection,
     isFlying: () => flying,

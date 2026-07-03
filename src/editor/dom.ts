@@ -54,6 +54,78 @@ export function showToast(message: string, isError = false): void {
   }, 2600);
 }
 
+export interface ContextMenuItem {
+  label: string;
+  action?: () => void;
+  disabled?: boolean;
+}
+
+export type ContextMenuEntry = ContextMenuItem | 'sep';
+
+let activeContextMenu: HTMLElement | null = null;
+let closeContextMenuListeners: (() => void) | null = null;
+
+export function closeContextMenu(): void {
+  activeContextMenu?.remove();
+  activeContextMenu = null;
+  closeContextMenuListeners?.();
+  closeContextMenuListeners = null;
+}
+
+/** Floating right-click menu at viewport coordinates; one open at a time. */
+export function showContextMenu(x: number, y: number, entries: ContextMenuEntry[]): void {
+  closeContextMenu();
+
+  const menu = el('div', { className: 'ed-menu-dropdown ed-context-menu' });
+  for (const entry of entries) {
+    if (entry === 'sep') {
+      menu.append(el('div', { className: 'ed-menu-sep' }));
+      continue;
+    }
+    const button = el(
+      'button',
+      {
+        className: 'ed-menu-item',
+        on: {
+          click: () => {
+            if (entry.disabled) return;
+            closeContextMenu();
+            entry.action?.();
+          },
+        },
+      },
+      [el('span', { className: 'ed-menu-item-label', text: entry.label })],
+    );
+    button.disabled = entry.disabled ?? false;
+    menu.append(button);
+  }
+
+  const host = document.getElementById('editor-root') ?? document.body;
+  host.append(menu);
+  activeContextMenu = menu;
+
+  // Clamp inside the viewport once the size is known.
+  const rect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.min(x, window.innerWidth - rect.width - 8)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - rect.height - 8)}px`;
+
+  const onPointerDown = (event: PointerEvent): void => {
+    if (event.target instanceof Node && menu.contains(event.target)) return;
+    closeContextMenu();
+  };
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') closeContextMenu();
+  };
+  window.addEventListener('pointerdown', onPointerDown, true);
+  window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('blur', closeContextMenu);
+  closeContextMenuListeners = () => {
+    window.removeEventListener('pointerdown', onPointerDown, true);
+    window.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('blur', closeContextMenu);
+  };
+}
+
 export type ConfirmDialogOptions = {
   title?: string;
   message: string;
