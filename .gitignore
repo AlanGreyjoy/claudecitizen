@@ -50,3 +50,6 @@ src/assets/protected/**
 
 # Supabase (when added)
 .supabase/
+
+# Local Netlify folder
+.netlify

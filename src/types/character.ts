@@ -45,6 +45,9 @@ export interface CameraOrbit {
 
 export type CameraView = 'first-person' | 'third-person';
 
+/** Piloting camera: seated cockpit eye or external chase view. */
+export type ShipCameraView = 'cockpit' | 'external';
+
 export type GameMode =
   | 'on-foot'
   | 'entering-ship'

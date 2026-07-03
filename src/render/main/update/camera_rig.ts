@@ -17,6 +17,7 @@ import {
   SHIP_INTERIOR_CEILING_UP,
   SHIP_WALK_ZONES,
 } from '../../../player/ship_deck';
+import { PILOT_EYE_LOCAL } from '../../../player/ship_interaction';
 import {
   getStationRoom,
   worldToStationLocal,
@@ -164,26 +165,44 @@ export function updateCameraRig(
     station !== null && (mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR);
 
   if (mode === 'in-ship' || !character) {
-    const zoom = shipCameraZoom ?? 1.0;
-    const cameraBackMeters = (58 + altitudeFactor * 180) * zoom;
-    const cameraUpMeters = (9 + altitudeFactor * 136) * zoom;
-    const cameraOffset = new THREE.Vector3(
-      (-shipForward.x * cameraBackMeters + shipUp.x * cameraUpMeters) * renderScale,
-      (-shipForward.y * cameraBackMeters + shipUp.y * cameraUpMeters) * renderScale,
-      (-shipForward.z * cameraBackMeters + shipUp.z * cameraUpMeters) * renderScale,
-    );
-    camera.position.lerp(cameraOffset, 0.12);
-    cameraTarget.lerp(
-      new THREE.Vector3(
-        (shipForward.x * (170 + altitudeFactor * 340) + shipUp.x * (-6 + altitudeFactor * 52)) *
-          renderScale,
-        (shipForward.y * (170 + altitudeFactor * 340) + shipUp.y * (-6 + altitudeFactor * 52)) *
-          renderScale,
-        (shipForward.z * (170 + altitudeFactor * 340) + shipUp.z * (-6 + altitudeFactor * 52)) *
-          renderScale,
-      ),
-      0.16,
-    );
+    if ((world.shipCameraView ?? 'cockpit') === 'cockpit') {
+      // Cockpit first person: rigidly attached to the ship frame and snapped
+      // every frame — smoothing here would drag the eye through the canopy
+      // whenever the ship rotates. The ship (render focus) sits at the origin.
+      const shipRight = normalize(cross(shipForward, shipUp));
+      const eye = add(
+        add(scale(shipRight, PILOT_EYE_LOCAL.right), scale(shipUp, PILOT_EYE_LOCAL.up)),
+        scale(shipForward, PILOT_EYE_LOCAL.forward),
+      );
+      const lookMeters = 60;
+      camera.position.set(eye.x * renderScale, eye.y * renderScale, eye.z * renderScale);
+      cameraTarget.set(
+        (eye.x + shipForward.x * lookMeters) * renderScale,
+        (eye.y + shipForward.y * lookMeters) * renderScale,
+        (eye.z + shipForward.z * lookMeters) * renderScale,
+      );
+    } else {
+      const zoom = shipCameraZoom ?? 1.0;
+      const cameraBackMeters = (58 + altitudeFactor * 180) * zoom;
+      const cameraUpMeters = (9 + altitudeFactor * 136) * zoom;
+      const cameraOffset = new THREE.Vector3(
+        (-shipForward.x * cameraBackMeters + shipUp.x * cameraUpMeters) * renderScale,
+        (-shipForward.y * cameraBackMeters + shipUp.y * cameraUpMeters) * renderScale,
+        (-shipForward.z * cameraBackMeters + shipUp.z * cameraUpMeters) * renderScale,
+      );
+      camera.position.lerp(cameraOffset, 0.12);
+      cameraTarget.lerp(
+        new THREE.Vector3(
+          (shipForward.x * (170 + altitudeFactor * 340) + shipUp.x * (-6 + altitudeFactor * 52)) *
+            renderScale,
+          (shipForward.y * (170 + altitudeFactor * 340) + shipUp.y * (-6 + altitudeFactor * 52)) *
+            renderScale,
+          (shipForward.z * (170 + altitudeFactor * 340) + shipUp.z * (-6 + altitudeFactor * 52)) *
+            renderScale,
+        ),
+        0.16,
+      );
+    }
     camera.up.copy(v3(shipUp));
   } else {
     const pitchLimit = firstPersonActive ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;

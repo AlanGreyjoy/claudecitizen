@@ -24,6 +24,14 @@ const AMBIENT_SKY_NIGHT = new THREE.Color(0x6e86bd);
 const AMBIENT_GROUND_DAY = new THREE.Color(0x473b28);
 const AMBIENT_GROUND_NIGHT = new THREE.Color(0x1f2740);
 
+// Classic THREE.Fog only runs above the volumetric fog band (>72 km), so it
+// models the air column seen from near-space rather than ground haze: its
+// near edge tracks the top of that column and its span widens toward zero
+// density as spaceFactor climbs. With the old fixed ~61 km far plane the
+// whole planet sat past full fog from orbit and rendered as a flat ball.
+const SPACE_HAZE_DEPTH_METERS = 45_000;
+const SPACE_FOG_SPAN_METERS = 61_000;
+
 export interface EnvironmentUpdateInput {
   scene: THREE.Scene;
   defaultFog: THREE.Fog;
@@ -89,9 +97,17 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
   scene.background = volumetricSkyActive ? null : backgroundColor;
   scene.fog = volumetricSkyActive || planetFogActive ? null : defaultFog;
   if (scene.fog) {
+    const hazeTopMeters = Math.max(
+      40 + altitudeFactor * 1_200,
+      altitudeMeters - SPACE_HAZE_DEPTH_METERS,
+    );
+    // 0 just above the 72 km handoff, 1 by ~170 km: the haze thins out until
+    // the planet reads crisp from orbit and only the atmosphere limb remains.
+    const vacuumClearing = clamp01((spaceFactor - 0.31) / 0.55);
+    const spanMeters = SPACE_FOG_SPAN_METERS / Math.max(1 - vacuumClearing, 0.002);
     scene.fog.color.copy(fogColor);
-    scene.fog.near = (40 + altitudeFactor * 1_200) * renderScale;
-    scene.fog.far = (900 + altitudeFactor * 60_000) * renderScale;
+    scene.fog.near = hazeTopMeters * renderScale;
+    scene.fog.far = (hazeTopMeters + spanMeters) * renderScale;
   }
 
   normalPass.setEnabled(volumetricSkyActive);

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
-const PROTECTED_SHIP_URL = '/assets/protected/ships/Phobos_Starhopper_Basic.glb';
+const PROTECTED_SHIP_URL =
+  '/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
 const FALLBACK_SHIP_URL = new URL('../../../assets/ships/Ship_Large.gltf', import.meta.url).href;
 const SHIP_FORWARD_ALIGNMENT_RADIANS = 0;
 

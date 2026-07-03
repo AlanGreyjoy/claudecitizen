@@ -1,4 +1,4 @@
-import type { CameraView, GameMode } from '../types';
+import type { CameraView, GameMode, ShipCameraView } from '../types';
 import {
   applyShipWheelZoom,
   applyWheelZoom,
@@ -58,8 +58,13 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   };
   let mode: GameMode | 'on-foot' | 'in-ship' = 'on-foot';
   let cameraView: CameraView = 'third-person';
+  let shipCameraView: ShipCameraView = 'cockpit';
 
   function toggleCameraView() {
+    if (mode === 'in-ship') {
+      shipCameraView = shipCameraView === 'cockpit' ? 'external' : 'cockpit';
+      return;
+    }
     cameraView = cameraView === 'first-person' ? 'third-person' : 'first-person';
     if (cameraView === 'third-person') {
       orbitLook.pitchRadians = Math.max(
@@ -121,6 +126,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     if (delta === 0) return;
     event.preventDefault();
     if (mode === 'in-ship') {
+      if (shipCameraView === 'cockpit') return;
       shipLook.targetZoomDistance = applyShipWheelZoom(shipLook.targetZoomDistance, delta);
       return;
     }
@@ -166,6 +172,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     return {
       cameraView,
       pitchRadians: orbitLook.pitchRadians,
+      shipCameraView,
       shipZoomDistance: shipLook.zoomDistance,
       yawRadians: orbitLook.yawRadians,
       zoomDistance: orbitLook.zoomDistance,
@@ -207,6 +214,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     sampleCharacterInput,
     sampleFlightInput,
     setMode(nextMode: GameMode | 'on-foot' | 'in-ship') {
+      // Taking the pilot seat always starts in the cockpit view.
+      if (nextMode === 'in-ship' && mode !== 'in-ship') shipCameraView = 'cockpit';
       mode = nextMode;
       if (mode !== 'in-ship') {
         flightLook.pitch01 = 0;

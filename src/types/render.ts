@@ -1,4 +1,10 @@
-import type { CameraOrbit, CameraView, CharacterRenderState, GameMode } from './character';
+import type {
+  CameraOrbit,
+  CameraView,
+  CharacterRenderState,
+  GameMode,
+  ShipCameraView,
+} from './character';
 import type { FlightBody } from './flight';
 
 export interface FogSettings {
@@ -57,6 +63,8 @@ export interface SpikeRenderWorld {
   character?: CharacterRenderState | null;
   cameraOrbit?: CameraOrbit;
   cameraView?: CameraView;
+  /** Piloting camera view; cockpit first person is the default. */
+  shipCameraView?: ShipCameraView;
   timeSeconds?: number;
   shipCameraZoom?: number;
   prompt?: string;

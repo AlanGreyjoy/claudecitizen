@@ -298,6 +298,7 @@ export function createGameLoop({
       zoomDistance: camera.zoomDistance,
     };
     world.cameraView = camera.cameraView;
+    world.shipCameraView = camera.shipCameraView;
     world.shipCameraZoom = camera.shipZoomDistance;
 
     const characterInput = controls.sampleCharacterInput();
@@ -356,6 +357,7 @@ export function createGameLoop({
       renderStats = renderer?.render({
         cameraOrbit: world.cameraOrbit,
         cameraView: world.cameraView,
+        shipCameraView: world.shipCameraView,
         shipCameraZoom: world.shipCameraZoom,
         character:
           world.mode === MODE_IN_SHIP

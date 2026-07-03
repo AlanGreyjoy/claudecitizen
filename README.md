@@ -89,6 +89,7 @@ Anything included in a Netlify deploy is publicly downloadable by clients. Keep 
 | `Space` / `C` | Jump                                            | Lift / descend        |
 | `B`           | —                                               | Brake                 |
 | `F`           | Enter / exit ship, leave / return to pilot seat | Same                  |
+| `V`           | Toggle first / third person                     | Toggle cockpit / external view |
 | `R`           | Reset to landing site                           | Reset to landing site |
 
 Use the **Vegetation** panel (top-left) to tune grass, trees, and fog at runtime.

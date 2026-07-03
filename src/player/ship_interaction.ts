@@ -16,6 +16,9 @@ import type {
 /** Ship-local offset from ship origin to the seated pilot pose. */
 export const PILOT_SEAT_LOCAL: LocalOffset = { right: 0, up: -0.62, forward: 6.05 };
 
+/** Ship-local offset to the seated pilot's eye point (cockpit camera). */
+export const PILOT_EYE_LOCAL: LocalOffset = { right: 0, up: 0.25, forward: 6.3 };
+
 /** Standing spot just behind the chair after getting up. */
 export const SEAT_STAND_LOCAL = { right: 0, forward: 4.5 };
 

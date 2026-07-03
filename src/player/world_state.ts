@@ -6,6 +6,7 @@ import type {
   GameMode,
   Planet,
   Pose,
+  ShipCameraView,
 } from '../types';
 import type { DeckCharacterState } from './ship_deck';
 import type { ShipRigState } from './ship_rig';
@@ -33,6 +34,8 @@ export type WorldCharacter = CharacterState &
 export interface WorldState {
   cameraOrbit: CameraOrbit;
   cameraView: CameraView;
+  /** Piloting camera: seated cockpit eye (default) or external chase view. */
+  shipCameraView: ShipCameraView;
   shipCameraZoom: number;
   character: WorldCharacter;
   mode: GameMode;
@@ -57,6 +60,7 @@ export function createWorldState(planet: Planet, seed: number): WorldState {
       zoomDistance: 5.2,
     },
     cameraView: 'third-person',
+    shipCameraView: 'cockpit',
     shipCameraZoom: 1.0,
     character,
     mode: MODE_IN_STATION,
