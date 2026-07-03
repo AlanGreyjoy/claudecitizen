@@ -21,7 +21,12 @@ function configureShadowCamera(
   renderMode: RenderMode,
   renderScale: number,
 ): void {
-  if (renderMode === 'on-foot' || renderMode === 'on-ship-deck') {
+  if (
+    renderMode === 'on-foot' ||
+    renderMode === 'on-ship-deck' ||
+    renderMode === 'in-station' ||
+    renderMode === 'riding-elevator'
+  ) {
     const shadowSize = 35 * renderScale;
     light.shadow.camera.left = -shadowSize;
     light.shadow.camera.right = shadowSize;
@@ -70,7 +75,13 @@ export function updateSunSystem(
   const skyBodyDist = 200_000;
   sunMesh.position.copy(sunDirScratch).multiplyScalar(skyBodyDist);
 
-  const shadowDist = (renderMode === 'on-foot' || renderMode === 'on-ship-deck' ? 200 : 1500) * renderScale;
+  const shadowDist =
+    (renderMode === 'on-foot' ||
+    renderMode === 'on-ship-deck' ||
+    renderMode === 'in-station' ||
+    renderMode === 'riding-elevator'
+      ? 200
+      : 1500) * renderScale;
   sun.position.copy(sunDirScratch).multiplyScalar(shadowDist);
   sun.target.position.set(0, 0, 0);
   configureShadowCamera(sun, renderMode, renderScale);

@@ -5,28 +5,26 @@ export const MODE_ENTERING_SHIP: GameMode = 'entering-ship';
 export const MODE_IN_SHIP: GameMode = 'in-ship';
 export const MODE_ON_SHIP_DECK: GameMode = 'on-ship-deck';
 export const MODE_LEAVING_PILOT: GameMode = 'leaving-pilot';
-export const MODE_RETURNING_PILOT: GameMode = 'returning-pilot';
-export const MODE_EXITING_SHIP: GameMode = 'exiting-ship';
+export const MODE_IN_STATION: GameMode = 'in-station';
+export const MODE_RIDING_ELEVATOR: GameMode = 'riding-elevator';
 
-export const ENTER_TRANSITION_SECONDS = 1.3;
-export const EXIT_TRANSITION_SECONDS = 1.05;
-export const LEAVE_PILOT_TRANSITION_SECONDS = 1.0;
-export const RETURN_PILOT_TRANSITION_SECONDS = 1.3;
+export const SIT_TRANSITION_SECONDS = 1.3;
+export const STAND_TRANSITION_SECONDS = 1.0;
 
 export function modeLabel(mode: GameMode): string {
   switch (mode) {
     case MODE_IN_SHIP:
       return 'Ship';
     case MODE_ON_SHIP_DECK:
-      return 'On Deck';
+      return 'On Board';
     case MODE_ENTERING_SHIP:
-      return 'Boarding';
+      return 'Taking Seat';
     case MODE_LEAVING_PILOT:
-      return 'Leaving Pilot';
-    case MODE_RETURNING_PILOT:
-      return 'Returning Pilot';
-    case MODE_EXITING_SHIP:
-      return 'Disembarking';
+      return 'Standing Up';
+    case MODE_IN_STATION:
+      return 'On Station';
+    case MODE_RIDING_ELEVATOR:
+      return 'Elevator';
     default:
       return 'On Foot';
   }

@@ -22,6 +22,8 @@ export interface HudElements {
   readoutsEl: HTMLElement;
   statusEl: HTMLElement;
   controlsEl: HTMLElement;
+  interactPromptEl: HTMLElement;
+  screenFadeEl: HTMLElement;
 }
 
 export interface HudUpdateParams {
@@ -82,6 +84,11 @@ export function createHud(
 
   function update(params: HudUpdateParams): void {
     fpsCounter.update(params.nowMs);
+
+    const prompt = params.world.prompt;
+    elements.interactPromptEl.textContent = prompt;
+    elements.interactPromptEl.classList.toggle('is-visible', prompt.length > 0);
+    elements.screenFadeEl.style.opacity = String(params.world.screenFade ?? 0);
 
     const showCharacter = params.world.mode !== MODE_IN_SHIP;
     minimap.update({

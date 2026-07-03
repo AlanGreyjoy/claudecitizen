@@ -1,31 +1,17 @@
 import { vec3 } from '../math/vec3';
 import { integrateHoveringShip } from '../flight/flight_body';
-import { placeCharacterOnSurface } from './character_controller';
 import {
-  ENTER_TRANSITION_SECONDS,
-  EXIT_TRANSITION_SECONDS,
-  LEAVE_PILOT_TRANSITION_SECONDS,
   MODE_ENTERING_SHIP,
-  MODE_EXITING_SHIP,
   MODE_IN_SHIP,
   MODE_LEAVING_PILOT,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
-  MODE_RETURNING_PILOT,
-  RETURN_PILOT_TRANSITION_SECONDS,
+  SIT_TRANSITION_SECONDS,
+  STAND_TRANSITION_SECONDS,
 } from './modes';
-import {
-  createDeckCharacterState,
-  getLeavePilotStandPose,
-} from './ship_deck';
-import {
-  createTransitionPose,
-  getPilotWheelAnchor,
-  getShipExitPosition,
-  getShipExitRampAnchor,
-} from './ship_interaction';
+import { createDeckCharacterState, getLeavePilotStandPose } from './ship_deck';
+import { createTransitionPose, getPilotSeatAnchor, SEAT_STAND_LOCAL } from './ship_interaction';
 import type { GameMode, Planet, Pose } from '../types';
-import type { DeckCharacterState } from './ship_deck';
 import type { TransitionType, WorldState } from './world_state';
 
 function clamp01(value: number): number {
@@ -42,19 +28,12 @@ function zeroVelocity() {
 }
 
 function transitionAnimation(type: TransitionType): string {
-  if (type === 'enter' || type === 'return-pilot') return 'Sitting_Enter';
-  if (type === 'exit' || type === 'leave-pilot') return 'Sitting_Exit';
-  return 'Idle_Loop';
+  return type === 'sit' ? 'Sitting_Enter' : 'Sitting_Exit';
 }
 
-function seatedCharacterFromPose(
-  pose: Pose,
-  animation: string,
-  deckLocal: DeckCharacterState['deckLocal'] | undefined,
-) {
+function transitionCharacterFromPose(pose: Pose, animation: string) {
   return {
     animation,
-    deckLocal,
     forward: pose.forward,
     grounded: true as const,
     jumpPhase: 'grounded' as const,
@@ -71,40 +50,27 @@ export interface TransitionContext {
   setControlsMode: (mode: GameMode | 'on-foot' | 'in-ship') => void;
 }
 
-export function beginEnterTransition(world: WorldState): void {
-  const anchor = getPilotWheelAnchor(world.ship);
+/** Deck character near the chair sits down and takes the controls. */
+export function beginSitTransition(world: WorldState): void {
+  const seat = getPilotSeatAnchor(world.ship);
   world.mode = MODE_ENTERING_SHIP;
   world.prompt = '';
   world.transition = {
-    duration: ENTER_TRANSITION_SECONDS,
+    duration: SIT_TRANSITION_SECONDS,
     elapsed: 0,
-    endPose: anchor,
+    endPose: seat,
     startPose: {
       forward: world.character.forward,
       position: world.character.position,
       up: world.character.up,
     },
-    type: 'enter',
+    type: 'sit',
   };
 }
 
-export function beginExitTransition(world: WorldState, planet: Planet, seed: number): void {
-  const ramp = getShipExitRampAnchor(world.ship);
-  const exitPose = getShipExitPosition(world.ship, planet, seed);
-  world.mode = MODE_EXITING_SHIP;
-  world.prompt = '';
-  world.transition = {
-    duration: EXIT_TRANSITION_SECONDS,
-    elapsed: 0,
-    endPose: exitPose,
-    startPose: ramp,
-    type: 'exit',
-  };
-  world.character = seatedCharacterFromPose(ramp, 'Sitting_Exit', world.character.deckLocal);
-}
-
-export function beginLeavePilotTransition(world: WorldState): void {
-  const wheel = getPilotWheelAnchor(world.ship);
+/** Pilot stands up out of the chair to the spot just behind it. */
+export function beginStandTransition(world: WorldState): void {
+  const seat = getPilotSeatAnchor(world.ship);
   const stand = getLeavePilotStandPose(world.ship);
   world.ship = {
     ...world.ship,
@@ -113,84 +79,37 @@ export function beginLeavePilotTransition(world: WorldState): void {
   world.mode = MODE_LEAVING_PILOT;
   world.prompt = '';
   world.transition = {
-    duration: LEAVE_PILOT_TRANSITION_SECONDS,
+    duration: STAND_TRANSITION_SECONDS,
     elapsed: 0,
     endPose: stand,
-    startPose: wheel,
-    type: 'leave-pilot',
+    startPose: seat,
+    type: 'stand',
   };
-  world.character = seatedCharacterFromPose(wheel, 'Sitting_Exit', world.character?.deckLocal);
-}
-
-export function beginReturnToPilotTransition(world: WorldState): void {
-  const wheel = getPilotWheelAnchor(world.ship);
-  const stand = getLeavePilotStandPose(world.ship);
-  world.mode = MODE_RETURNING_PILOT;
-  world.prompt = '';
-  world.transition = {
-    duration: RETURN_PILOT_TRANSITION_SECONDS,
-    elapsed: 0,
-    endPose: wheel,
-    startPose: stand,
-    type: 'return-pilot',
-  };
-  world.character = seatedCharacterFromPose(stand, 'Sitting_Enter', world.character.deckLocal);
+  world.character = transitionCharacterFromPose(seat, 'Sitting_Exit');
 }
 
 export function updateTransition(world: WorldState, dt: number, ctx: TransitionContext): void {
   const transition = world.transition;
   if (!transition) return;
 
-  if (
-    transition.type === 'leave-pilot' ||
-    transition.type === 'return-pilot' ||
-    transition.type === 'exit'
-  ) {
-    world.ship = integrateHoveringShip(world.ship, dt, ctx.planet, ctx.seed);
-  }
+  world.ship = integrateHoveringShip(world.ship, dt, ctx.planet, ctx.seed);
 
   transition.elapsed = Math.min(transition.duration, transition.elapsed + dt);
   const eased = smoothstep01(transition.elapsed / transition.duration);
   const pose = createTransitionPose(transition.startPose, transition.endPose, eased);
-  world.character = seatedCharacterFromPose(
-    pose,
-    transitionAnimation(transition.type),
-    world.character.deckLocal,
-  );
+  world.character = transitionCharacterFromPose(pose, transitionAnimation(transition.type));
 
   if (transition.elapsed < transition.duration) return;
 
-  if (transition.type === 'enter') {
+  if (transition.type === 'sit') {
     world.mode = MODE_IN_SHIP;
     world.transition = null;
     ctx.setControlsMode(MODE_IN_SHIP);
     return;
   }
 
-  if (transition.type === 'leave-pilot') {
-    world.character = createDeckCharacterState(world.ship);
-    world.mode = MODE_ON_SHIP_DECK;
-    world.transition = null;
-    ctx.setControlsMode(MODE_ON_FOOT);
-    return;
-  }
-
-  if (transition.type === 'return-pilot') {
-    world.mode = MODE_IN_SHIP;
-    world.transition = null;
-    ctx.setControlsMode(MODE_IN_SHIP);
-    return;
-  }
-
-  world.character = placeCharacterOnSurface(
-    transition.endPose.position,
-    transition.endPose.forward,
-  );
-  world.ship = {
-    ...world.ship,
-    velocity: zeroVelocity(),
-  };
-  world.mode = MODE_ON_FOOT;
+  world.character = createDeckCharacterState(world.ship, SEAT_STAND_LOCAL, 'cockpit');
+  world.mode = MODE_ON_SHIP_DECK;
   world.transition = null;
   ctx.setControlsMode(MODE_ON_FOOT);
 }

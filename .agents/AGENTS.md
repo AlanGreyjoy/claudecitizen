@@ -72,6 +72,14 @@ The visible terrain mesh and on-foot physics **must sample the same LOD grid**. 
 
 ## Security
 
+### Protected assets
+
+- **Never stage or commit proprietary/local-only assets.** Anything under `public/assets/protected/` or `src/assets/protected/` is intentionally ignored and must stay out of git.
+- **Do not relocate protected assets into tracked folders.** If code needs them, reference the protected path and provide a tracked fallback or placeholder so public checkouts still build and run.
+- **Do not derive tracked assets from protected source files.** Avoid committing baked meshes, textures, screenshots, or data dumps generated from paid/non-redistributable packs unless the license explicitly allows redistribution.
+- **Use path references only in docs and code.** Do not copy asset bytes, embedded base64, vendor package contents, or license-restricted metadata into tracked files.
+- **Do not opt protected assets into public builds.** `npm run build` strips `dist/assets/protected/` by default; set `INCLUDE_PROTECTED_ASSETS=1` only for private/internal builds where redistribution is allowed.
+
 ### Client (current browser game)
 
 - **No secrets in the repo or bundle.** API keys, DB URLs, and admin tokens belong server-side only — never commit sensitive values to `import.meta.env` or source.

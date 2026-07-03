@@ -12,6 +12,11 @@ const JUMP_START_SECONDS = 0.18;
 const JUMP_LAND_SECONDS = 0.18;
 const TURN_SPEED = 10;
 export const ORBIT_PITCH_LIMIT = 1.15;
+export const FIRST_PERSON_PITCH_LIMIT = 1.5;
+export const FIRST_PERSON_EYE_HEIGHT_METERS = 1.62;
+// Nudges the eye ahead of the neck so shoulders stay behind the near plane.
+const FIRST_PERSON_FORWARD_OFFSET_METERS = 0.22;
+const FIRST_PERSON_LOOK_DISTANCE_METERS = 10;
 const CAMERA_REF_ZOOM = 7.4;
 
 interface TangentBasis {
@@ -102,11 +107,12 @@ export function resolveOrbitCamera(
   position: Vec3,
   yawRadians: number,
   pitchRadians: number,
+  pitchLimit: number = ORBIT_PITCH_LIMIT,
 ): OrbitCamera {
   const up = radialUp(position);
   const planarForward = forwardFromYaw(position, yawRadians);
   const right = normalize(cross(planarForward, up));
-  const clampedPitch = clamp(pitchRadians, -ORBIT_PITCH_LIMIT, ORBIT_PITCH_LIMIT);
+  const clampedPitch = clamp(pitchRadians, -pitchLimit, pitchLimit);
   const forward = normalize(rotateAroundAxis(planarForward, right, clampedPitch));
   return {
     forward,
@@ -128,6 +134,19 @@ export function resolveCharacterCameraRig(orbit: OrbitCamera, zoomDistance: numb
       scale(orbit.up, shoulderUp),
     ),
     targetOffset: add(scale(orbit.right, shoulderRight), scale(orbit.up, targetUp)),
+  };
+}
+
+export function resolveFirstPersonCameraRig(orbit: OrbitCamera): CharacterCameraRig {
+  // Planar (yaw-only) forward, so pitching the view does not slide the eye.
+  const planarForward = normalize(cross(orbit.up, orbit.right));
+  const eyeOffset = add(
+    scale(orbit.up, FIRST_PERSON_EYE_HEIGHT_METERS),
+    scale(planarForward, FIRST_PERSON_FORWARD_OFFSET_METERS),
+  );
+  return {
+    positionOffset: eyeOffset,
+    targetOffset: add(eyeOffset, scale(orbit.forward, FIRST_PERSON_LOOK_DISTANCE_METERS)),
   };
 }
 
@@ -194,7 +213,10 @@ export function updateCharacterState(
   let jumpPhase = state.jumpPhase;
   let jumpPhaseTime = state.jumpPhase === 'grounded' ? 0 : state.jumpPhaseTime + dt;
   let up = radialUp(position);
-  let forward = rotateToward(state.forward, desiredDirection, up, dt);
+  const desiredFacing = input.faceCameraYaw
+    ? forwardFromYaw(position, input.cameraYawRadians ?? 0)
+    : desiredDirection;
+  let forward = rotateToward(state.forward, desiredFacing, up, dt);
 
   if (grounded) {
     const step = scale(desiredDirection, moveSpeed * dt);

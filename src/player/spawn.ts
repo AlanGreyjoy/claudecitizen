@@ -14,7 +14,10 @@ import { resolveLandingSite } from '../world/landing_sites';
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from '../world/planet_surface';
 import type { CharacterState, FlightBody, Planet, Vec3 } from '../types';
 
-const SHIP_SPAWN_ALTITUDE_METERS = 1;
+import { SHIP_GEAR_REST_HEIGHT_METERS } from '../world/station';
+
+/** Parked ships rest on deployed landing gear. */
+const SHIP_SPAWN_ALTITUDE_METERS = SHIP_GEAR_REST_HEIGHT_METERS;
 const CHARACTER_SPAWN_SIDE_METERS = 12;
 
 function tangentize(vector: Vec3, up: Vec3): Vec3 {

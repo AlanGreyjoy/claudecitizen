@@ -1,4 +1,4 @@
-import type { CameraOrbit, CharacterRenderState, GameMode } from './character';
+import type { CameraOrbit, CameraView, CharacterRenderState, GameMode } from './character';
 import type { FlightBody } from './flight';
 
 export interface FogSettings {
@@ -56,7 +56,14 @@ export interface SpikeRenderWorld {
   ship: FlightBody;
   character?: CharacterRenderState | null;
   cameraOrbit?: CameraOrbit;
+  cameraView?: CameraView;
   timeSeconds?: number;
   shipCameraZoom?: number;
   prompt?: string;
+  /** Current station room while in station modes; drives interior camera clamping. */
+  stationRoomId?: string | null;
+  /** Current ship walk zone while on board; drives interior camera clamping. */
+  shipZoneId?: string | null;
+  /** Landing gear / ramp / cockpit door articulation, 0..1 each. */
+  shipRig?: { gear01: number; ramp01: number; cockpit01: number };
 }

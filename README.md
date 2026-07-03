@@ -26,6 +26,38 @@ npm run dev
 
 Open [http://localhost:4173](http://localhost:4173). Click the canvas to lock the mouse.
 
+## Optional protected assets
+
+Some local development assets are not part of the open-source repo. Put paid or otherwise non-redistributable runtime assets under `public/assets/protected/`; that folder is ignored by git.
+
+The Starhopper model is expected at:
+
+```text
+public/assets/protected/ships/Phobos_Starhopper_Basic.glb
+```
+
+If it is missing, the game falls back to the tracked placeholder ship.
+
+Production builds remove `dist/assets/protected/` by default so local-only assets are not accidentally published. Set `INCLUDE_PROTECTED_ASSETS=1` only for a private build where those assets are allowed to ship.
+
+## Netlify deployment
+
+Netlify uses `npm run build` and publishes `dist/` via `netlify.toml`.
+
+```bash
+npm run deploy:netlify       # draft deploy, protected assets stripped
+npm run deploy:netlify:prod  # production deploy, protected assets stripped
+```
+
+For private/licensed deploys where protected assets are allowed to ship:
+
+```bash
+npm run deploy:netlify:protected
+npm run deploy:netlify:protected:prod
+```
+
+Anything included in a Netlify deploy is publicly downloadable by clients. Keep proprietary assets under `public/assets/protected/` and use the protected deploy scripts only when that is acceptable.
+
 ## Commands
 
 | Script              | Description                                      |
@@ -33,6 +65,11 @@ Open [http://localhost:4173](http://localhost:4173). Click the canvas to lock th
 | `npm run dev`       | Dev server with hot reload (port 4173)           |
 | `npm run serve`     | Same as `dev`                                    |
 | `npm run build`     | Typecheck + production build to `dist/`          |
+| `npm run build:protected` | Production build including `public/assets/protected/` |
+| `npm run deploy:netlify` | Draft Netlify deploy with protected assets stripped |
+| `npm run deploy:netlify:prod` | Production Netlify deploy with protected assets stripped |
+| `npm run deploy:netlify:protected` | Draft Netlify deploy including protected assets |
+| `npm run deploy:netlify:protected:prod` | Production Netlify deploy including protected assets |
 | `npm run typecheck` | Run TypeScript without emitting                  |
 | `npm run demo`      | Headless scripted takeoff / orbit / landing demo |
 

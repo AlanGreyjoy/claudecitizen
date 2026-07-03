@@ -14,9 +14,11 @@ import { clamp01 } from './domain/math';
 import { applyRenderQualitySettings } from './domain/apply_render_quality';
 import { DAY_LENGTH_SECONDS } from './domain/constants';
 import type { RenderMode, SpikeRenderer, TimeOverride } from './domain/types';
+import { getStationFrame } from '../../world/station';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
 import { createComposerStack } from './scene/composer_stack';
 import { createShipModel } from './scene/ship_model';
+import { createStationModel } from './scene/station_model';
 import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene_lighting';
 import { createWebGlRenderer } from './scene/webgl_renderer';
 import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
@@ -61,9 +63,16 @@ export function createSpikeRenderer(
   const atmosphereMesh = buildAtmosphereMesh(planet, tileManager.renderScale);
   scene.add(atmosphereMesh);
 
-  const shipMesh = createShipModel(tileManager.renderScale);
+  const shipModel = createShipModel(tileManager.renderScale);
+  const shipMesh = shipModel.group;
   shipMesh.frustumCulled = false;
   scene.add(shipMesh);
+  window.__claudecitizenShipModel = shipModel;
+
+  const stationFrame = getStationFrame(planet);
+  const stationMesh = createStationModel(tileManager.renderScale);
+  stationMesh.frustumCulled = false;
+  scene.add(stationMesh);
 
   const avatar = createCharacterAvatar(scene, tileManager.renderScale);
 
@@ -90,11 +99,19 @@ export function createSpikeRenderer(
 
   function render(world: SpikeRenderWorld): RenderStats {
     const {
+      cameraView = 'third-person',
       character = null,
       mode = 'in-ship',
       ship,
       timeSeconds: nowSeconds = 0,
     } = world;
+
+    // First person only applies while the player walks; transitions and flight
+    // keep the third-person framing so animated poses stay visible.
+    const firstPersonActive =
+      cameraView === 'first-person' &&
+      character != null &&
+      (mode === 'on-foot' || mode === 'on-ship-deck' || mode === 'in-station');
 
     const renderMode = mode as RenderMode;
     const dt = Math.max(0.0001, Math.min(nowSeconds - lastTime, 0.1));
@@ -135,6 +152,13 @@ export function createSpikeRenderer(
     cloudShell.update(focusBody.position, nowSeconds, spaceFactor, surface.altitudeMeters);
 
     updateShipPlacement(shipMesh, ship, focusBody.position, renderScale);
+    if (world.shipRig) shipModel.setArticulation(world.shipRig);
+    updateShipPlacement(
+      stationMesh,
+      { position: stationFrame.origin, up: stationFrame.up, forward: stationFrame.forward },
+      focusBody.position,
+      renderScale,
+    );
 
     const { backgroundColor } = updateEnvironment({
       scene,
@@ -154,7 +178,7 @@ export function createSpikeRenderer(
       volumetricEnabled,
     });
 
-    avatar.update(character, focusBody.position, nowSeconds);
+    avatar.update(character, focusBody.position, nowSeconds, firstPersonActive);
 
     lakeWaterManager.update(
       focusBody.position,
@@ -164,7 +188,17 @@ export function createSpikeRenderer(
       backgroundColor,
     );
 
-    updateCameraRig(camera, cameraTarget, world, renderScale, altitudeFactor, shipUp, shipForward);
+    updateCameraRig(
+      camera,
+      cameraTarget,
+      world,
+      renderScale,
+      altitudeFactor,
+      shipUp,
+      shipForward,
+      firstPersonActive,
+      { frame: stationFrame, roomId: world.stationRoomId ?? null },
+    );
     updateSpeedBlur(composerStack.speedBlurEffect, world);
 
     composerStack.composer.render(dt);

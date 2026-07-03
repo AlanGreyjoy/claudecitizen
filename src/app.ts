@@ -28,6 +28,8 @@ const promptEl = requireElement<HTMLElement>('prompt');
 const readoutsEl = requireElement<HTMLElement>('readouts');
 const statusEl = requireElement<HTMLElement>('status');
 const controlsEl = requireElement<HTMLElement>('hud-controls');
+const interactPromptEl = requireElement<HTMLElement>('interact-prompt');
+const screenFadeEl = requireElement<HTMLElement>('screen-fade');
 
 const seed = 20061;
 const planet = CLAUDECITIZEN_PLANET;
@@ -58,6 +60,8 @@ const hud = createHud(
     readoutsEl,
     statusEl,
     controlsEl,
+    interactPromptEl,
+    screenFadeEl,
   },
   planet,
   seed,

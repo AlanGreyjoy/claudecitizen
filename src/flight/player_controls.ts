@@ -1,4 +1,4 @@
-import type { GameMode } from '../types';
+import type { CameraView, GameMode } from '../types';
 import {
   applyShipWheelZoom,
   applyWheelZoom,
@@ -8,13 +8,16 @@ import {
   updateSmoothZoom,
 } from './camera_zoom';
 import { buildCharacterInput, buildFlightInput } from './control_mix';
-import { ORBIT_PITCH_LIMIT } from '../player/character_controller';
+import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character_controller';
 
 const HANDLED_KEYS = new Set([
   'ArrowDown',
   'ArrowLeft',
   'ArrowRight',
   'ArrowUp',
+  'Digit1',
+  'Digit2',
+  'Digit3',
   'KeyA',
   'KeyB',
   'KeyC',
@@ -24,6 +27,7 @@ const HANDLED_KEYS = new Set([
   'KeyQ',
   'KeyR',
   'KeyS',
+  'KeyV',
   'KeyW',
   'ShiftLeft',
   'ShiftRight',
@@ -53,13 +57,28 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     targetZoomDistance: DEFAULT_SHIP_CAMERA_ZOOM,
   };
   let mode: GameMode | 'on-foot' | 'in-ship' = 'on-foot';
+  let cameraView: CameraView = 'third-person';
+
+  function toggleCameraView() {
+    cameraView = cameraView === 'first-person' ? 'third-person' : 'first-person';
+    if (cameraView === 'third-person') {
+      orbitLook.pitchRadians = Math.max(
+        -ORBIT_PITCH_LIMIT,
+        Math.min(ORBIT_PITCH_LIMIT, orbitLook.pitchRadians),
+      );
+    }
+  }
 
   function onKeyChange(event: KeyboardEvent, down: boolean) {
     if (!HANDLED_KEYS.has(event.code)) return;
     event.preventDefault();
     if (down) {
       if (event.code === 'KeyR') onReset?.();
-      if (!keys.has(event.code) && (event.code === 'KeyF' || event.code === 'Space')) {
+      if (!keys.has(event.code) && event.code === 'KeyV') toggleCameraView();
+      if (
+        !keys.has(event.code) &&
+        (event.code === 'KeyF' || event.code === 'Space' || event.code.startsWith('Digit'))
+      ) {
         justPressed.add(event.code);
       }
       keys.add(event.code);
@@ -75,10 +94,11 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       flightLook.pitch01 = clampAxis(flightLook.pitch01 - event.movementY * 0.015);
       return;
     }
+    const pitchLimit = cameraView === 'first-person' ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
     orbitLook.yawRadians -= event.movementX * 0.0035;
     orbitLook.pitchRadians = Math.max(
-      -ORBIT_PITCH_LIMIT,
-      Math.min(ORBIT_PITCH_LIMIT, orbitLook.pitchRadians - event.movementY * 0.0028),
+      -pitchLimit,
+      Math.min(pitchLimit, orbitLook.pitchRadians - event.movementY * 0.0028),
     );
   }
 
@@ -104,6 +124,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       shipLook.targetZoomDistance = applyShipWheelZoom(shipLook.targetZoomDistance, delta);
       return;
     }
+    if (cameraView === 'first-person') return;
     orbitLook.targetZoomDistance = applyWheelZoom(orbitLook.targetZoomDistance, delta);
   }
 
@@ -115,9 +136,17 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   canvas.addEventListener('click', onCanvasClick);
 
   function consumeActions() {
+    const hangarDigit = justPressed.has('Digit1')
+      ? 1
+      : justPressed.has('Digit2')
+        ? 2
+        : justPressed.has('Digit3')
+          ? 3
+          : null;
     const actions = {
       interactPressed: justPressed.has('KeyF'),
       jumpPressed: justPressed.has('Space'),
+      hangarDigit,
     };
     justPressed.clear();
     return actions;
@@ -135,6 +164,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       dt,
     );
     return {
+      cameraView,
       pitchRadians: orbitLook.pitchRadians,
       shipZoomDistance: shipLook.zoomDistance,
       yawRadians: orbitLook.yawRadians,
@@ -143,7 +173,10 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function sampleCharacterInput() {
-    return buildCharacterInput(keys, orbitLook);
+    return {
+      ...buildCharacterInput(keys, orbitLook),
+      faceCameraYaw: cameraView === 'first-person',
+    };
   }
 
   function sampleFlightInput() {
@@ -179,6 +212,14 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         flightLook.pitch01 = 0;
         flightLook.yaw01 = 0;
       }
+    },
+    /** Snaps the orbit camera, e.g. to face out of an elevator on arrival. */
+    setOrbitFacing(yawRadians: number, pitchRadians = -0.12) {
+      orbitLook.yawRadians = yawRadians;
+      orbitLook.pitchRadians = Math.max(
+        -ORBIT_PITCH_LIMIT,
+        Math.min(ORBIT_PITCH_LIMIT, pitchRadians),
+      );
     },
   };
 }

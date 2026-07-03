@@ -4,6 +4,8 @@ export interface CharacterInput {
   cameraPitchRadians?: number;
   cameraYawRadians?: number;
   cameraZoomDistance?: number;
+  /** First person: keep the body aligned with the camera yaw instead of the move direction. */
+  faceCameraYaw?: boolean;
   moveX?: number;
   moveY?: number;
   sprint?: boolean;
@@ -41,14 +43,16 @@ export interface CameraOrbit {
   zoomDistance: number;
 }
 
+export type CameraView = 'first-person' | 'third-person';
+
 export type GameMode =
   | 'on-foot'
   | 'entering-ship'
   | 'in-ship'
   | 'on-ship-deck'
   | 'leaving-pilot'
-  | 'returning-pilot'
-  | 'exiting-ship';
+  | 'in-station'
+  | 'riding-elevator';
 
 export interface CharacterRenderState {
   animation: string;

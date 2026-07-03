@@ -1,32 +1,36 @@
-import { add, cross, distance, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
-import { CHARACTER_GROUND_OFFSET_METERS } from './character_controller';
-import { radialUp, surfacePointFromPosition } from '../world/coordinates';
-import { sampleRenderablePlanetSurface } from '../world/planet_surface';
+import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
 import type {
   CharacterState,
   FlightBody,
   LocalOffset,
-  Planet,
-  PlanetSurfaceSample,
   Pose,
   Vec3,
 } from '../types';
 
-export const ENTER_DISTANCE_METERS = 7;
-export const EXIT_MAX_ALTITUDE_METERS = 5;
-export const EXIT_MAX_SPEED_METERS_PER_SECOND = 12;
+/**
+ * Phobos Starhopper gameplay anchors, measured from the model rig:
+ * nose is +forward, the pilot seat sits in the cockpit at forward ~6.4 behind
+ * sliding doors at ~2.7, and the boarding ramp drops from the tail at ~-8.4.
+ */
 
-/** Ship-local offset from ship origin to the pilot wheel (right, up, forward). */
-export const PILOT_WHEEL_LOCAL: LocalOffset = { right: 3.8, up: 1.3, forward: -0.6 };
+/** Ship-local offset from ship origin to the seated pilot pose. */
+export const PILOT_SEAT_LOCAL: LocalOffset = { right: 0, up: -0.62, forward: 6.05 };
 
-/** Standing pose beside the wheel when leaving pilot mode (toward deck center). */
-export const LEAVE_PILOT_STAND_LOCAL: LocalOffset = { right: 2.6, up: 1.3, forward: -0.6 };
+/** Standing spot just behind the chair after getting up. */
+export const SEAT_STAND_LOCAL = { right: 0, forward: 4.5 };
 
-/** Deck disembark point on the hull side away from the wheel. */
-export const EXIT_RAMP_LOCAL: LocalOffset = { right: 5.0, up: 1.3, forward: -0.6 };
+/** Outside interaction point at the foot of the (lowered) ramp. */
+export const RAMP_OUTSIDE_LOCAL = { right: 0, forward: -9.7 };
+export const RAMP_OUTSIDE_INTERACT_DISTANCE_METERS = 3.0;
 
-export const PILOT_INTERACT_DISTANCE_METERS = 2;
-export const EXIT_RAMP_INTERACT_DISTANCE_METERS = 2.4;
+/** Walking into this tail strip (parked, ramp down) steps onto the ramp. */
+const MOUNT_MIN_FORWARD = -8.8;
+const MOUNT_MAX_FORWARD = -8.0;
+const MOUNT_MAX_RIGHT = 1.05;
+/** Above the dismount line so mounting does not immediately step back off. */
+const MOUNT_CLAMP_FORWARD = -8.2;
+
+export const PARKED_MAX_SPEED_METERS_PER_SECOND = 1.0;
 
 interface ShipAnchor extends Pose {
   right: Vec3;
@@ -48,68 +52,69 @@ export function localOffsetToWorld(ship: FlightBody, local: LocalOffset): Vec3 {
   );
 }
 
-export function getPilotWheelAnchor(ship: FlightBody): ShipAnchor {
-  const right = getShipRight(ship);
-  const wheelPosition = localOffsetToWorld(ship, PILOT_WHEEL_LOCAL);
+export interface ShipLocalPoint {
+  right: number;
+  up: number;
+  forward: number;
+}
+
+export function worldToShipLocal(ship: FlightBody, position: Vec3): ShipLocalPoint {
+  const delta = sub(position, ship.position);
+  return {
+    right: dot(delta, getShipRight(ship)),
+    up: dot(delta, ship.up),
+    forward: dot(delta, normalize(tangentize(ship.forward, ship.up))),
+  };
+}
+
+export function getPilotSeatAnchor(ship: FlightBody): ShipAnchor {
   return {
     forward: normalize(tangentize(ship.forward, ship.up)),
-    position: wheelPosition,
-    right,
+    position: localOffsetToWorld(ship, PILOT_SEAT_LOCAL),
+    right: getShipRight(ship),
     up: ship.up,
   };
 }
 
-/** @deprecated Use getPilotWheelAnchor */
-export function getShipInteractionAnchor(ship: FlightBody): ShipAnchor {
-  return getPilotWheelAnchor(ship);
+export function isShipParked(ship: FlightBody): boolean {
+  return ship.grounded && length(ship.velocity) <= PARKED_MAX_SPEED_METERS_PER_SECOND;
 }
 
-export function getDeckPoseFromLocal(ship: FlightBody, local: LocalOffset): ShipAnchor {
-  const right = getShipRight(ship);
-  const position = localOffsetToWorld(ship, local);
-  return {
-    forward: normalize(tangentize(ship.forward, ship.up)),
-    position,
-    right,
-    up: ship.up,
-  };
+/** Feet near the ground plane under a parked ship (rejects other station floors). */
+function atShipGroundLevel(localUp: number): boolean {
+  return Math.abs(localUp + 3.2) <= 2.4;
 }
 
-export function getShipExitRampAnchor(ship: FlightBody): ShipAnchor {
-  return getDeckPoseFromLocal(ship, EXIT_RAMP_LOCAL);
-}
-
-export function getShipExitPosition(ship: FlightBody, planet: Planet, seed: number): Pose {
-  const ramp = getShipExitRampAnchor(ship);
-  const exitProbe = add(ramp.position, scale(ramp.right, 2.4));
-  const surface = sampleRenderablePlanetSurface(planet, seed, exitProbe);
-  const position = surfacePointFromPosition(
-    exitProbe,
-    surface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS,
-  );
-  const up = surface.normal ?? radialUp(position);
-  return {
-    forward: normalize(tangentize(ship.forward, up)),
-    position,
-    up,
-  };
-}
-
-export function canEnterShip(character: Pick<CharacterState, 'position'>, ship: FlightBody): boolean {
-  const anchor = getPilotWheelAnchor(ship);
-  return distance(character.position, anchor.position) <= ENTER_DISTANCE_METERS;
-}
-
-export function canExitShip(
+/** Near the tail ramp button while standing on the ground outside. */
+export function nearShipRampOutside(
+  character: Pick<CharacterState, 'position'>,
   ship: FlightBody,
-  surface?: Pick<PlanetSurfaceSample, 'altitudeMeters'> | null,
 ): boolean {
-  const shipSurface = surface ?? { altitudeMeters: 0 };
+  const local = worldToShipLocal(ship, character.position);
+  if (!atShipGroundLevel(local.up)) return false;
   return (
-    shipSurface.altitudeMeters <= EXIT_MAX_ALTITUDE_METERS &&
-    length(ship.velocity) <= EXIT_MAX_SPEED_METERS_PER_SECOND
+    Math.hypot(local.right - RAMP_OUTSIDE_LOCAL.right, local.forward - RAMP_OUTSIDE_LOCAL.forward) <=
+    RAMP_OUTSIDE_INTERACT_DISTANCE_METERS
   );
 }
+
+/**
+ * Ship-local 2D spot to start deck-walking from when a character on the
+ * ground walks into the foot of the lowered ramp, or null when outside it.
+ */
+export function sampleRampMount(
+  character: Pick<CharacterState, 'position'>,
+  ship: FlightBody,
+): { right: number; forward: number } | null {
+  const local = worldToShipLocal(ship, character.position);
+  if (!atShipGroundLevel(local.up)) return null;
+  if (Math.abs(local.right) > MOUNT_MAX_RIGHT) return null;
+  if (local.forward < MOUNT_MIN_FORWARD || local.forward > MOUNT_MAX_FORWARD) return null;
+  return { right: local.right, forward: Math.max(local.forward, MOUNT_CLAMP_FORWARD) };
+}
+
+/** Ground spot just past the ramp tip for a character stepping off. */
+export const RAMP_DISMOUNT_GROUND_LOCAL = { right: 0, forward: -9.6 };
 
 export function createTransitionPose(start: Pose, end: Pose, t: number): Pose {
   const clamped = Math.max(0, Math.min(1, t));

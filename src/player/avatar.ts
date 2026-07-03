@@ -24,6 +24,7 @@ interface CharacterAvatar {
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
+    firstPerson?: boolean,
   ) => void;
 }
 
@@ -44,6 +45,7 @@ export function createCharacterAvatar(scene: THREE.Scene, renderScale: number): 
   let mixer: THREE.AnimationMixer | null = null;
   let activeAction: THREE.AnimationAction | null = null;
   let activeAnimation: string | null = null;
+  let headBone: THREE.Object3D | null = null;
   let loadError: unknown = null;
   let modelOffsetY = -CHARACTER_GROUND_OFFSET_METERS * renderScale;
   const actions = new Map<string, THREE.AnimationAction>();
@@ -63,6 +65,7 @@ export function createCharacterAvatar(scene: THREE.Scene, renderScale: number): 
       });
       bbox.setFromObject(sceneRoot);
       modelOffsetY = -bbox.min.y - CHARACTER_GROUND_OFFSET_METERS * renderScale;
+      headBone = sceneRoot.getObjectByName('Head') ?? null;
       modelOffset.add(sceneRoot);
       mixer = new THREE.AnimationMixer(sceneRoot);
       for (const clip of gltf.animations) {
@@ -105,6 +108,7 @@ export function createCharacterAvatar(scene: THREE.Scene, renderScale: number): 
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
+    firstPerson = false,
   ): void {
     if (!character || loadError) {
       root.visible = false;
@@ -130,6 +134,12 @@ export function createCharacterAvatar(scene: THREE.Scene, renderScale: number): 
           ? 0
           : clamp01(nowSeconds - mixerClock.lastNowSeconds) * ANIMATION_TIME_SCALE;
       mixer.update(dt);
+    }
+    // After the mixer has written bone transforms, collapse the head bone in
+    // first person so the skull never blocks the camera while the body,
+    // arms, and legs stay visible when looking down or running.
+    if (headBone) {
+      headBone.scale.setScalar(firstPerson ? 0.001 : 1);
     }
     mixerClock.lastNowSeconds = nowSeconds;
   }

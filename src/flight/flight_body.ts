@@ -17,6 +17,7 @@ import {
   surfacePointFromPosition,
 } from '../world/coordinates';
 import { sampleRenderablePlanetSurface } from '../world/planet_surface';
+import { getStationFrame, sampleHangarRest, worldToStationLocal } from '../world/station';
 import type { FlightBody, FlightInput, Planet, Vec3 } from '../types';
 import { FLIGHT_CONFIG } from './flight_config';
 
@@ -185,6 +186,24 @@ export function integrateFlightBody(
     forward = frame.forward;
     up = frame.up;
     grounded = true;
+  }
+
+  // Station hangar decks act as landing surfaces: settle onto the pad at
+  // gear-rest height instead of falling through toward the planet.
+  const stationFrame = getStationFrame(planet);
+  const hangarRest = sampleHangarRest(stationFrame, position);
+  if (hangarRest) {
+    const localUp = worldToStationLocal(stationFrame, position).up;
+    if (localUp <= hangarRest.restUp) {
+      position = add(position, scale(stationFrame.up, hangarRest.restUp - localUp));
+      const inwardSpeed = dot(velocity, stationFrame.up);
+      if (inwardSpeed < 0) velocity = sub(velocity, scale(stationFrame.up, inwardSpeed));
+      up = stationFrame.up;
+      frame = orthonormalFrame(forward, up, stationFrame.up);
+      forward = frame.forward;
+      up = frame.up;
+      grounded = true;
+    }
   }
 
   return {

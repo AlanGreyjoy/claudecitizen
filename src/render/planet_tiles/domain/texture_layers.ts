@@ -1,4 +1,4 @@
-import type { Biome } from '../../../types';
+import type { Biome } from "../../../types";
 
 // Splat-map texture layers sampled by the terrain material. Order must match
 // the layer order of the DataArrayTexture built in render/terrain_texture_array.ts.
@@ -21,25 +21,25 @@ export const TERRAIN_TEXTURE_REPEAT_METERS = 4;
 
 export function terrainTextureLayerForBiome(biome: Biome): TerrainTextureLayer {
   switch (biome) {
-    case 'ocean':
+    case "ocean":
       return TerrainTextureLayer.Water;
-    case 'lake':
+    case "lake":
       return TerrainTextureLayer.Rock;
-    case 'river':
+    case "river":
       return TerrainTextureLayer.Beach;
-    case 'beach':
+    case "beach":
       return TerrainTextureLayer.Beach;
-    case 'desert':
+    case "desert":
       return TerrainTextureLayer.Desert;
-    case 'plains':
+    case "plains":
       return TerrainTextureLayer.Grass;
-    case 'forest':
+    case "forest":
       return TerrainTextureLayer.Forest;
-    case 'tundra':
+    case "tundra":
       return TerrainTextureLayer.SnowyGrass;
-    case 'highlands':
+    case "highlands":
       return TerrainTextureLayer.Rock;
-    case 'peak':
+    case "peak":
       return TerrainTextureLayer.Snow;
     default:
       return TerrainTextureLayer.Rock;

@@ -115,6 +115,14 @@ export function createLakeWaterMaterial(normalMap: THREE.Texture): THREE.ShaderM
     side: THREE.DoubleSide,
     transparent: true,
     uniforms: {
+      // fog: true pulls in the fog shader chunks, which read these uniforms
+      // whenever scene.fog is a THREE.Fog (true at orbital altitudes where the
+      // volumetric fog pass hands back to classic fog). Without them three
+      // crashes in refreshFogUniforms.
+      fogColor: { value: new THREE.Color(0xffffff) },
+      fogDensity: { value: 0.00025 },
+      fogFar: { value: 2000 },
+      fogNear: { value: 1 },
       normalMap: { value: normalMap },
       skyColor: { value: new THREE.Color(0x7eb8e8) },
       sunColor: { value: new THREE.Color(0xffffff) },

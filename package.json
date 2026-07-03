@@ -5,6 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
+    "build:protected": "INCLUDE_PROTECTED_ASSETS=1 npm run build",
+    "deploy:netlify": "npm run build && npx --yes netlify-cli deploy --dir=dist",
+    "deploy:netlify:prod": "npm run build && npx --yes netlify-cli deploy --prod --dir=dist",
+    "deploy:netlify:protected": "npm run build:protected && npx --yes netlify-cli deploy --dir=dist",
+    "deploy:netlify:protected:prod": "npm run build:protected && npx --yes netlify-cli deploy --prod --dir=dist",
     "dev": "vite --host 0.0.0.0 --port 4173",
     "demo": "tsx scripts/spike-demo.ts",
     "serve": "vite --host 0.0.0.0 --port 4173",

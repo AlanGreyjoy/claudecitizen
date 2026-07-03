@@ -1,9 +1,22 @@
-import type { CameraOrbit, CharacterState, FlightBody, GameMode, Planet, Pose } from '../types';
+import type {
+  CameraOrbit,
+  CameraView,
+  CharacterState,
+  FlightBody,
+  GameMode,
+  Planet,
+  Pose,
+} from '../types';
 import type { DeckCharacterState } from './ship_deck';
-import { MODE_ON_FOOT } from './modes';
-import { createSpawnCharacter, createSpawnShip, initialCameraYaw } from './spawn';
+import type { ShipRigState } from './ship_rig';
+import type { StationElevatorRide } from './station_interaction';
+import type { StationCharacterState } from './station_walk';
+import { MODE_IN_STATION } from './modes';
+import { createShipRigState } from './ship_rig';
+import { createSpawnShip } from './spawn';
+import { createStationSpawnCharacter, initialStationCameraYaw } from './station_walk';
 
-export type TransitionType = 'enter' | 'exit' | 'leave-pilot' | 'return-pilot';
+export type TransitionType = 'sit' | 'stand';
 
 export interface WorldTransition {
   duration: number;
@@ -13,32 +26,46 @@ export interface WorldTransition {
   type: TransitionType;
 }
 
-export type WorldCharacter = CharacterState & Partial<Pick<DeckCharacterState, 'deckLocal'>>;
+export type WorldCharacter = CharacterState &
+  Partial<Pick<DeckCharacterState, 'deckLocal' | 'deckZone'>> &
+  Partial<Pick<StationCharacterState, 'stationLocal' | 'stationRoomId'>>;
 
 export interface WorldState {
   cameraOrbit: CameraOrbit;
+  cameraView: CameraView;
   shipCameraZoom: number;
   character: WorldCharacter;
   mode: GameMode;
   prompt: string;
   ship: FlightBody;
+  shipRig: ShipRigState;
   transition: WorldTransition | null;
+  /** Hangar the ship was delivered to via the lobby terminal, if called. */
+  assignedHangar: number | null;
+  stationElevator: StationElevatorRide | null;
+  /** 0..1 black overlay opacity used for elevator rides. */
+  screenFade: number;
 }
 
 export function createWorldState(planet: Planet, seed: number): WorldState {
   const ship = createSpawnShip(planet, seed);
-  const character = createSpawnCharacter(planet, seed, ship);
+  const character = createStationSpawnCharacter(planet);
   return {
     cameraOrbit: {
-      pitchRadians: -0.35,
-      yawRadians: initialCameraYaw(character),
-      zoomDistance: 7.4,
+      pitchRadians: -0.12,
+      yawRadians: initialStationCameraYaw(),
+      zoomDistance: 5.2,
     },
+    cameraView: 'third-person',
     shipCameraZoom: 1.0,
     character,
-    mode: MODE_ON_FOOT,
+    mode: MODE_IN_STATION,
     prompt: '',
     ship,
+    shipRig: createShipRigState({ gearDown: true, rampDown: false, cockpitOpen: false }),
     transition: null,
+    assignedHangar: null,
+    stationElevator: null,
+    screenFade: 0,
   };
 }

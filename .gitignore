@@ -39,5 +39,14 @@ desktop.ini
 *.local
 .cache/
 
+# Proprietary/local-only game assets.
+# Keep paid or otherwise non-redistributable models, textures, and packs here.
+public/assets/protected/**
+!public/assets/protected/
+!public/assets/protected/README.md
+src/assets/protected/**
+!src/assets/protected/
+!src/assets/protected/README.md
+
 # Supabase (when added)
 .supabase/

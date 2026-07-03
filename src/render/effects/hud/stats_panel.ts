@@ -2,12 +2,12 @@ import { dot, length } from '../../../math/vec3';
 import { radialUp } from '../../../world/coordinates';
 import {
   MODE_ENTERING_SHIP,
-  MODE_EXITING_SHIP,
   MODE_IN_SHIP,
+  MODE_IN_STATION,
   MODE_LEAVING_PILOT,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
-  MODE_RETURNING_PILOT,
+  MODE_RIDING_ELEVATOR,
   modeLabel,
 } from '../../../player/modes';
 import type { WorldState } from '../../../player/world_state';
@@ -99,25 +99,31 @@ export function createStatsPanel(elements: StatsPanelElements) {
         'This browser could not start WebGL rendering. Refresh once, then try a different browser or GPU mode if it stays black.';
     } else if (world.mode === MODE_ENTERING_SHIP) {
       elements.statusEl.textContent =
-        'Boarding the ship. Flight control will hand over as soon as the sit animation finishes.';
+        'Taking the pilot seat. Flight control hands over when the sit animation finishes.';
     } else if (world.mode === MODE_LEAVING_PILOT) {
-      elements.statusEl.textContent = 'Stepping away from the wheel. Deck control returns when you stand up.';
-    } else if (world.mode === MODE_RETURNING_PILOT) {
-      elements.statusEl.textContent = 'Returning to the wheel. Flight control resumes when you sit down.';
-    } else if (world.mode === MODE_EXITING_SHIP) {
       elements.statusEl.textContent =
-        'Stepping back onto the surface. Control returns when the exit animation finishes.';
+        'Standing up behind the seat. Walk control returns on your feet.';
+    } else if (world.mode === MODE_RIDING_ELEVATOR) {
+      elements.statusEl.textContent = 'Riding the station elevator.';
+    } else if (world.mode === MODE_IN_STATION) {
+      if (!isPointerLocked) {
+        elements.statusEl.textContent =
+          'Click the view to lock the mouse, then walk the station with WASD and sprint with Shift.';
+      } else if (world.assignedHangar === null) {
+        elements.statusEl.textContent =
+          'Your ship is in storage. Take the hab elevator down to the lobby and call it from the terminal.';
+      } else {
+        elements.statusEl.textContent = `Your ship is parked in Hangar ${world.assignedHangar}. Ride the hangar elevators from the lobby.`;
+      }
     } else if (world.mode === MODE_ON_SHIP_DECK) {
       if (!isPointerLocked) {
         elements.statusEl.textContent =
-          'Click the view to lock the mouse, then walk the deck with WASD and sprint with Shift.';
+          'Click the view to lock the mouse, then walk the ship with WASD and sprint with Shift.';
       } else if (world.prompt) {
-        elements.statusEl.textContent = world.prompt.includes('pilot')
-          ? 'You are at the wheel. Press F to take the controls.'
-          : 'You are at the ramp. Press F to step down onto the surface.';
+        elements.statusEl.textContent = 'Press F to use what is in front of you.';
       } else {
         elements.statusEl.textContent =
-          'Walk the upper deck. Return to the wheel to pilot, or use the ramp to disembark when landed.';
+          'Walk the cabin. The cockpit doors are forward; the boarding ramp is at the tail.';
       }
     } else if (world.mode === MODE_ON_FOOT) {
       if (!isPointerLocked) {
@@ -125,10 +131,13 @@ export function createStatsPanel(elements: StatsPanelElements) {
           'Click the view to lock the mouse, then move with WASD, sprint with Shift, and jump with Space.';
       } else if (world.prompt) {
         elements.statusEl.textContent =
-          'You are close enough to board. Press F to swap from surface travel into flight.';
+          'Use the ramp controls at the tail, then walk up the ramp to board.';
+      } else if (world.cameraView === 'first-person') {
+        elements.statusEl.textContent =
+          'First-person traversal is active. Look with the mouse and walk the terrain toward the ship. Press V for third person.';
       } else {
         elements.statusEl.textContent =
-          'Third-person traversal is active. Orbit the camera with the mouse and walk the terrain toward the ship.';
+          'Third-person traversal is active. Orbit the camera with the mouse and walk the terrain toward the ship. Press V for first person.';
       }
     } else if (shipSurface.altitudeMeters < 20) {
       elements.statusEl.textContent =

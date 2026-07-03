@@ -1,0 +1,34 @@
+---
+description: Consult project agent convention docs before architectural changes
+alwaysApply: true
+---
+
+# Agent Conventions
+
+Before architectural or cross-cutting changes, read the project's agent docs:
+
+1. `.agents/AGENTS.md` (primary)
+2. `claude.md` at repo root, if present
+3. `agents.md` at repo root, if present
+
+Also scan `.agents/` for any additional convention files. Use those docs for bounded-context ownership, import boundaries, terrain/foot sync, and security. Do not restate them here — read the source files.
+
+## When to read
+
+- Adding features or changing module boundaries
+- Touching terrain mesh, foot placement, or LOD
+- Working with assets, builds, secrets, or protected paths
+- Any change that affects architecture or cross-layer dependencies
+
+## Quick triggers
+
+- New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `render/`)
+- Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
+- Assets / build / secrets → see AGENTS.md "Security"
+
+## Key reminders
+
+- Domain logic lives in `world/`, `flight/`, `player/` — not in `render/` or `app.js`
+- Foot placement uses `sampleFootPlanetSurface()` / `getFootSurfaceSampleLevel()`, not always max LOD
+- Never commit or relocate `protected/` assets
+- No unit tests in this project

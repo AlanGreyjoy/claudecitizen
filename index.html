@@ -531,6 +531,48 @@
         color: var(--text);
         background: rgba(255, 255, 255, 0.06);
       }
+
+      .sc-screen-fade {
+        position: fixed;
+        inset: 0;
+        background: #000;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 150;
+      }
+
+      .sc-interact-prompt {
+        position: fixed;
+        left: 50%;
+        bottom: 16vh;
+        transform: translateX(-50%);
+        padding: 10px 22px;
+        border: 1px solid rgba(255, 206, 111, 0.45);
+        background: rgba(6, 12, 26, 0.72);
+        color: var(--accent-2);
+        font: 600 16px/1.2 var(--sc-font);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        clip-path: polygon(
+          8px 0,
+          calc(100% - 8px) 0,
+          100% 8px,
+          100% calc(100% - 8px),
+          calc(100% - 8px) 100%,
+          8px 100%,
+          0 calc(100% - 8px),
+          0 8px
+        );
+        opacity: 0;
+        transition: opacity 0.12s ease;
+        pointer-events: none;
+        z-index: 200;
+      }
+
+      .sc-interact-prompt.is-visible {
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
@@ -832,12 +874,16 @@
           <div><kbd>↑</kbd>/<kbd>↓</kbd> pitch</div>
           <div><kbd>Space</kbd>/<kbd>C</kbd> jump or lift</div>
           <div><kbd>B</kbd> brake</div>
-          <div><kbd>F</kbd> enter / exit ship</div>
+          <div><kbd>F</kbd> interact / enter / exit</div>
+          <div><kbd>1</kbd>-<kbd>3</kbd> hangar elevator</div>
+          <div><kbd>V</kbd> first / third person</div>
           <div><kbd>R</kbd> reset</div>
         </div>
         <div class="prompt" id="prompt"></div>
         <div class="status" id="status"></div>
       </section>
+      <div class="sc-interact-prompt" id="interact-prompt" aria-live="polite"></div>
+      <div class="sc-screen-fade" id="screen-fade"></div>
     </div>
     <script type="module" src="./src/app.ts"></script>
   </body>
