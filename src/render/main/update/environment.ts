@@ -75,7 +75,15 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
   } = input;
 
   const { ambient, sun } = lighting;
-  const { normalPass, atmospherePass, volumetricFogPass, volumetricFogEffect, volumetricClouds, starField } =
+  const {
+    normalPass,
+    atmospherePass,
+    volumetricFogPass,
+    volumetricFogEffect,
+    spaceSkybox,
+    volumetricClouds,
+    starField,
+  } =
     composerStack;
   const { sunDir, daylightFactor, rawDaylight, planetCenter } = sunState;
 
@@ -94,7 +102,13 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
   fogColor.lerp(SPACE_FOG_COLOR, spaceFactor * 0.82);
   fogColor.lerp(NIGHT_FOG_COLOR, (1 - daylightFactor) * (1 - spaceFactor));
 
-  scene.background = volumetricSkyActive ? null : backgroundColor;
+  const spaceSkyboxActive =
+    !volumetricSkyActive && altitudeMeters >= planet.atmosphereHeightMeters;
+  scene.background = volumetricSkyActive
+    ? null
+    : spaceSkyboxActive
+      ? spaceSkybox.getBackground(backgroundColor)
+      : backgroundColor;
   scene.fog = volumetricSkyActive || planetFogActive ? null : defaultFog;
   if (scene.fog) {
     const hazeTopMeters = Math.max(

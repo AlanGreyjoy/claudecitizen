@@ -7,6 +7,7 @@ import {
 } from '../../effects';
 import { SpeedBlurEffect } from '../effects/speed_blur';
 import { resolveRenderQuality } from '../domain/render_quality';
+import { createSpaceSkybox, type SpaceSkybox } from './space_skybox';
 import {
   EffectComposer,
   EffectPass,
@@ -26,6 +27,7 @@ export interface ComposerStack {
   volumetricFogPass: EffectPass;
   volumetricFogEffect: VolumetricFogEffect;
   speedBlurEffect: SpeedBlurEffect;
+  spaceSkybox: SpaceSkybox;
   volumetricClouds: ReturnType<typeof createVolumetricCloudManager>;
   starField: ReturnType<typeof createStarField>;
   resize: (width: number, height: number, pixelRatio: number) => void;
@@ -53,6 +55,7 @@ export function createComposerStack(
   const normalPass = new NormalPass(scene, camera, { resolutionScale: 0.5 });
   composer.addPass(normalPass);
 
+  const spaceSkybox = createSpaceSkybox();
   const volumetricClouds = createVolumetricCloudManager(renderer, scene, camera, planet, sun, normalPass);
   const starField = createStarField(scene);
 
@@ -113,6 +116,7 @@ export function createComposerStack(
   }
 
   function dispose(): void {
+    spaceSkybox.dispose();
     starField.dispose();
     volumetricClouds.dispose();
     composer.dispose();
@@ -125,6 +129,7 @@ export function createComposerStack(
     volumetricFogPass,
     volumetricFogEffect,
     speedBlurEffect,
+    spaceSkybox,
     volumetricClouds,
     starField,
     resize,
