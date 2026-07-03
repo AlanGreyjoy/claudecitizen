@@ -1,0 +1,61 @@
+{
+  "id": "untitled-prefab",
+  "name": "Untitled Prefab",
+  "version": 1,
+  "kind": "station",
+  "root": {
+    "id": "root",
+    "name": "Untitled Prefab",
+    "transform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "components": [
+      {
+        "type": "station-frame"
+      }
+    ],
+    "children": [
+      {
+        "id": "e-dfc79cb8",
+        "name": "Phobos_Starhopper_Basic",
+        "transform": {
+          "position": {
+            "x": -0.5,
+            "y": 0,
+            "z": -0.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/assets/protected/ships/Phobos_Starhopper_Basic.glb",
+          "castShadow": true
+        }
+      }
+    ]
+  }
+}

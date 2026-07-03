@@ -3,8 +3,8 @@ import { CHARACTER_GROUND_OFFSET_METERS } from './character_controller';
 import {
   getStationFrame,
   getStationRoom,
+  getStationSpawn,
   getStationWalkRects,
-  STATION_SPAWN,
   stationDirToWorld,
   stationLocalToWorld,
   type ElevatorDestination,
@@ -156,11 +156,12 @@ export function createStationCharacterAt(
 
 export function createStationSpawnCharacter(planet: Planet): StationCharacterState {
   const frame = getStationFrame(planet);
+  const spawn = getStationSpawn();
   return createStationCharacterAt(
     frame,
-    STATION_SPAWN.roomId,
-    { right: STATION_SPAWN.right, forward: STATION_SPAWN.forward },
-    STATION_SPAWN.face,
+    spawn.roomId,
+    { right: spawn.right, forward: spawn.forward },
+    spawn.face,
   );
 }
 
@@ -182,7 +183,7 @@ export function stationYawForDir(dir: StationDir2): number {
 }
 
 export function initialStationCameraYaw(): number {
-  return stationYawForDir(STATION_SPAWN.face);
+  return stationYawForDir(getStationSpawn().face);
 }
 
 export function updateCharacterInStation(

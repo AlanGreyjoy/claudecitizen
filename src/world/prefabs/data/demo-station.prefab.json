@@ -1,0 +1,764 @@
+{
+  "id": "demo-station",
+  "name": "Demo Station",
+  "version": 1,
+  "kind": "station",
+  "root": {
+    "id": "root",
+    "name": "Demo Station",
+    "transform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "components": [
+      {
+        "type": "station-frame"
+      }
+    ],
+    "children": [
+      {
+        "id": "lobby-floor",
+        "name": "Lobby Floor",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -0.2,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 24,
+            "y": 0.4,
+            "z": 16
+          },
+          "color": "#2c333d"
+        }
+      },
+      {
+        "id": "lobby-wall-north",
+        "name": "Lobby Wall N",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 2,
+            "z": 8.2
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 24.8,
+            "y": 4,
+            "z": 0.4
+          },
+          "color": "#4c5663"
+        }
+      },
+      {
+        "id": "lobby-wall-south",
+        "name": "Lobby Wall S",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 2,
+            "z": -8.2
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 24.8,
+            "y": 4,
+            "z": 0.4
+          },
+          "color": "#4c5663"
+        }
+      },
+      {
+        "id": "lobby-wall-east",
+        "name": "Lobby Wall E",
+        "transform": {
+          "position": {
+            "x": 12.2,
+            "y": 2,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 0.4,
+            "y": 4,
+            "z": 16
+          },
+          "color": "#4c5663"
+        }
+      },
+      {
+        "id": "lobby-wall-west",
+        "name": "Lobby Wall W",
+        "transform": {
+          "position": {
+            "x": -12.2,
+            "y": 2,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 0.4,
+            "y": 4,
+            "z": 16
+          },
+          "color": "#4c5663"
+        }
+      },
+      {
+        "id": "lobby-volume",
+        "name": "Lobby Walk Volume",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "walk-volume",
+            "floorId": "lobby",
+            "min": {
+              "x": -11.6,
+              "z": -7.6
+            },
+            "max": {
+              "x": 11.6,
+              "z": 7.6
+            },
+            "height": 5
+          }
+        ]
+      },
+      {
+        "id": "spawn",
+        "name": "Spawn Point",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": -4
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "spawn-point",
+            "floorId": "lobby"
+          }
+        ]
+      },
+      {
+        "id": "hab-floor",
+        "name": "Hab Deck Floor",
+        "transform": {
+          "position": {
+            "x": -6,
+            "y": 7.8,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 12,
+            "y": 0.4,
+            "z": 10
+          },
+          "color": "#39424e"
+        }
+      },
+      {
+        "id": "hab-volume",
+        "name": "Hab Walk Volume",
+        "transform": {
+          "position": {
+            "x": -6,
+            "y": 8,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "walk-volume",
+            "floorId": "hab",
+            "min": {
+              "x": -5.6,
+              "z": -4.6
+            },
+            "max": {
+              "x": 5.6,
+              "z": 4.6
+            },
+            "height": 3.5
+          }
+        ]
+      },
+      {
+        "id": "lift-lobby-to-hab",
+        "name": "Lift Pad (Lobby to Hab)",
+        "transform": {
+          "position": {
+            "x": -10,
+            "y": 0.05,
+            "z": 6
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 2,
+            "y": 0.1,
+            "z": 2
+          },
+          "color": "#3fc6ff"
+        },
+        "components": [
+          {
+            "type": "elevator",
+            "id": "hab-lift",
+            "targetFloor": "hab"
+          }
+        ]
+      },
+      {
+        "id": "lift-hab-to-lobby",
+        "name": "Lift Pad (Hab to Lobby)",
+        "transform": {
+          "position": {
+            "x": -10,
+            "y": 8.05,
+            "z": 3
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 2,
+            "y": 0.1,
+            "z": 2
+          },
+          "color": "#3fc6ff"
+        },
+        "components": [
+          {
+            "type": "elevator",
+            "id": "hab-lift",
+            "targetFloor": "lobby"
+          }
+        ]
+      },
+      {
+        "id": "hangar-floor",
+        "name": "Hangar Floor",
+        "transform": {
+          "position": {
+            "x": 32,
+            "y": -0.2,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 32,
+            "y": 0.4,
+            "z": 28
+          },
+          "color": "#2c333d"
+        }
+      },
+      {
+        "id": "hangar-wall-back",
+        "name": "Hangar Wall Back",
+        "transform": {
+          "position": {
+            "x": 32,
+            "y": 5,
+            "z": -14.2
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 32.8,
+            "y": 10,
+            "z": 0.4
+          },
+          "color": "#39424e"
+        }
+      },
+      {
+        "id": "hangar-wall-west",
+        "name": "Hangar Wall W",
+        "transform": {
+          "position": {
+            "x": 15.8,
+            "y": 5,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 0.4,
+            "y": 10,
+            "z": 28
+          },
+          "color": "#39424e"
+        }
+      },
+      {
+        "id": "hangar-wall-east",
+        "name": "Hangar Wall E",
+        "transform": {
+          "position": {
+            "x": 48.2,
+            "y": 5,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 0.4,
+            "y": 10,
+            "z": 28
+          },
+          "color": "#39424e"
+        }
+      },
+      {
+        "id": "hangar-volume",
+        "name": "Hangar Walk Volume",
+        "transform": {
+          "position": {
+            "x": 32,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "walk-volume",
+            "floorId": "hangar",
+            "min": {
+              "x": -15.6,
+              "z": -13.6
+            },
+            "max": {
+              "x": 15.6,
+              "z": 13.6
+            },
+            "height": 12,
+            "open": [
+              "maxForward"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "hangar-pad-visual",
+        "name": "Hangar Pad",
+        "transform": {
+          "position": {
+            "x": 32,
+            "y": 0.06,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 16,
+            "y": 0.12,
+            "z": 16
+          },
+          "color": "#141a22"
+        }
+      },
+      {
+        "id": "hangar-pad-marker",
+        "name": "Hangar Pad Marker",
+        "transform": {
+          "position": {
+            "x": 32,
+            "y": 0.12,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "hangar-pad",
+            "hangarId": "bay-1",
+            "padIndex": 1
+          }
+        ]
+      },
+      {
+        "id": "lift-lobby-to-hangar",
+        "name": "Lift Pad (Lobby to Hangar)",
+        "transform": {
+          "position": {
+            "x": 10,
+            "y": 0.05,
+            "z": -6
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 2,
+            "y": 0.1,
+            "z": 2
+          },
+          "color": "#3fc6ff"
+        },
+        "components": [
+          {
+            "type": "elevator",
+            "id": "hangar-lift",
+            "targetFloor": "hangar"
+          }
+        ]
+      },
+      {
+        "id": "lift-hangar-to-lobby",
+        "name": "Lift Pad (Hangar to Lobby)",
+        "transform": {
+          "position": {
+            "x": 18,
+            "y": 0.05,
+            "z": -12
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 2,
+            "y": 0.1,
+            "z": 2
+          },
+          "color": "#3fc6ff"
+        },
+        "components": [
+          {
+            "type": "elevator",
+            "id": "hangar-lift",
+            "targetFloor": "lobby"
+          }
+        ]
+      },
+      {
+        "id": "demo-terminal",
+        "name": "Demo Terminal",
+        "transform": {
+          "position": {
+            "x": 10,
+            "y": 0.7,
+            "z": 6
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": {
+            "x": 0.8,
+            "y": 1.4,
+            "z": 0.5
+          },
+          "color": "#06131c"
+        },
+        "components": [
+          {
+            "type": "interaction",
+            "id": "demo-terminal",
+            "prompt": "Demo Station — assembled in the ClaudeCitizen editor",
+            "radius": 2.5
+          }
+        ]
+      },
+      {
+        "id": "e-1f9560a9",
+        "name": "CommonTree_5",
+        "transform": {
+          "position": {
+            "x": 20,
+            "y": 0,
+            "z": 8.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/stylized-nature-magakit/CommonTree_5.gltf",
+          "castShadow": true
+        }
+      }
+    ]
+  }
+}

@@ -21,6 +21,12 @@
       ],
       "three/examples/jsm/utils/BufferGeometryUtils": [
         "./node_modules/@types/three/examples/jsm/utils/BufferGeometryUtils.d.ts"
+      ],
+      "three/examples/jsm/controls/OrbitControls": [
+        "./node_modules/@types/three/examples/jsm/controls/OrbitControls.d.ts"
+      ],
+      "three/examples/jsm/controls/TransformControls": [
+        "./node_modules/@types/three/examples/jsm/controls/TransformControls.d.ts"
       ]
     }
   },

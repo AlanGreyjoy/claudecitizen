@@ -41,7 +41,12 @@ import {
 } from '../player/station_walk';
 import { beginSitTransition, beginStandTransition, updateTransition } from '../player/transitions';
 import { createWorldState, type WorldState } from '../player/world_state';
-import { getStationFrame, HANGARS, sampleHangarRest, worldToStationLocal } from '../world/station';
+import {
+  getStationFrame,
+  getStationHangars,
+  sampleHangarRest,
+  worldToStationLocal,
+} from '../world/station';
 import { sampleRenderablePlanetSurface } from '../world/planet_surface';
 import type { HudUpdateParams } from '../render/effects';
 import type { SpikeRenderer } from '../render/main';
@@ -83,9 +88,11 @@ export function createGameLoop({
 
   // Console-only dev shortcuts (mirrors the __spikeScene diagnostic).
   window.__claudecitizenDev = {
-    callShip: () => callShipToHangar(world, planet, seed).index,
+    callShip: () => callShipToHangar(world, planet, seed)?.index ?? 0,
     teleportToHangar: (index: number) => {
-      const hangar = HANGARS.find((entry) => entry.index === index) ?? HANGARS[0];
+      const hangars = getStationHangars();
+      const hangar = hangars.find((entry) => entry.index === index) ?? hangars[0];
+      if (!hangar) return;
       world.character = createStationCharacterAt(
         stationFrame,
         hangar.roomId,
@@ -124,6 +131,10 @@ export function createGameLoop({
           : `Press 1 / 2 / 3 — elevator to hangars (your ship: Hangar ${world.assignedHangar})`;
       case 'hangar-lift-up':
         return 'Press F — elevator to Lobby';
+      case 'prefab-elevator':
+        return `Press F — elevator to ${interaction.marker.targetFloor}`;
+      case 'prefab-info':
+        return interaction.prompt;
     }
   }
 
@@ -208,7 +219,7 @@ export function createGameLoop({
     if (interaction.kind === 'terminal') {
       if (actions.interactPressed && world.assignedHangar === null) {
         const hangar = callShipToHangar(world, planet, seed);
-        world.prompt = `Ship delivered to Hangar ${hangar.index}`;
+        if (hangar) world.prompt = `Ship delivered to Hangar ${hangar.index}`;
       }
       return;
     }

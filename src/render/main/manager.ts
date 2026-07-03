@@ -15,6 +15,8 @@ import { applyRenderQualitySettings } from './domain/apply_render_quality';
 import { DAY_LENGTH_SECONDS } from './domain/constants';
 import type { RenderMode, SpikeRenderer, TimeOverride } from './domain/types';
 import { getStationFrame } from '../../world/station';
+import { createPrefabStationGroup } from '../prefabs/prefab_renderer';
+import type { PrefabDocument } from '../../world/prefabs/schema';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
 import { createComposerStack } from './scene/composer_stack';
 import { createShipModel } from './scene/ship_model';
@@ -25,10 +27,16 @@ import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
 import { setFogSettings as applyFogSettings, updateEnvironment } from './update/environment';
 import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun_system';
 
+export interface SpikeRendererOptions {
+  /** Dev preview: render this prefab as the orbital station instead of the procedural model. */
+  stationPrefab?: PrefabDocument | null;
+}
+
 export function createSpikeRenderer(
   canvas: HTMLCanvasElement,
   planet: Planet,
   seed: number,
+  options?: SpikeRendererOptions,
 ): SpikeRenderer {
   applyRenderQualitySettings();
 
@@ -70,7 +78,9 @@ export function createSpikeRenderer(
   window.__claudecitizenShipModel = shipModel;
 
   const stationFrame = getStationFrame(planet);
-  const stationMesh = createStationModel(tileManager.renderScale);
+  const stationMesh = options?.stationPrefab
+    ? createPrefabStationGroup(options.stationPrefab, tileManager.renderScale)
+    : createStationModel(tileManager.renderScale);
   stationMesh.frustumCulled = false;
   scene.add(stationMesh);
 

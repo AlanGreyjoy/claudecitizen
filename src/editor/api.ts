@@ -1,0 +1,57 @@
+import { parsePrefabDocument, type PrefabDocument } from '../world/prefabs/schema';
+
+/** Client for the dev-only /__editor API provided by the Vite plugin. */
+
+export type AssetRoot = 'public/assets' | 'src/assets';
+
+export interface AssetEntry {
+  /** Path relative to the root, forward slashes. */
+  path: string;
+  kind: 'dir' | 'file';
+  size?: number;
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const payload = (await response.json().catch(() => null)) as
+    | (T & { error?: string })
+    | null;
+  if (!response.ok || payload === null) {
+    throw new Error(payload?.error ?? `${init?.method ?? 'GET'} ${url} failed (${response.status})`);
+  }
+  return payload;
+}
+
+export async function fetchAssetListing(root: AssetRoot): Promise<AssetEntry[]> {
+  const payload = await requestJson<{ entries: AssetEntry[] }>(
+    `/__editor/assets?root=${encodeURIComponent(root)}`,
+  );
+  return payload.entries;
+}
+
+export async function fetchPrefabList(): Promise<string[]> {
+  const payload = await requestJson<{ prefabs: string[] }>('/__editor/prefabs');
+  return payload.prefabs;
+}
+
+export async function fetchPrefab(id: string): Promise<PrefabDocument> {
+  const payload = await requestJson<{ document: unknown }>(
+    `/__editor/prefab?id=${encodeURIComponent(id)}`,
+  );
+  return parsePrefabDocument(payload.document);
+}
+
+export async function savePrefab(doc: PrefabDocument): Promise<string> {
+  const payload = await requestJson<{ path: string }>('/__editor/prefab', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: doc }),
+  });
+  return payload.path;
+}
+
+/** Maps an asset-browser entry to the url the dev server serves it from. */
+export function assetUrlFor(root: AssetRoot, path: string): string {
+  const encoded = path.split('/').map(encodeURIComponent).join('/');
+  return root === 'public/assets' ? `/assets/${encoded}` : `/src/assets/${encoded}`;
+}

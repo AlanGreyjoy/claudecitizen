@@ -252,12 +252,19 @@ export const HANGARS: HangarSpec[] = [
   },
 ];
 
+export interface StationSpawnPose {
+  roomId: string;
+  right: number;
+  forward: number;
+  face: StationDir2;
+}
+
 /** Player spawn pose inside the hab room, facing the door. */
-export const STATION_SPAWN = {
+export const STATION_SPAWN: StationSpawnPose = {
   roomId: 'hab-room',
   right: -4.4,
   forward: 5.2,
-  face: { right: 1, forward: 0 } as StationDir2,
+  face: { right: 1, forward: 0 },
 };
 
 export const STATION_ANCHORS = {
@@ -350,8 +357,66 @@ export function stationDirToWorld(frame: StationFrame, dir: StationDir2): Vec3 {
   );
 }
 
+/**
+ * Prefab-driven station layouts (dev preview via ?stationPrefab=<id>).
+ *
+ * When an override is active the room/walk/hangar/spawn queries below read
+ * from it instead of the hand-authored constants. The default path (no
+ * override) is bit-identical to the original behavior. Elevator and info
+ * markers replace the bespoke anchor wiring in station_interaction.ts.
+ */
+export interface StationElevatorMarker {
+  /** Markers sharing a pairId form one elevator; ride goes to the marker on targetFloor. */
+  pairId: string;
+  floorId: StationFloorId;
+  roomId: string;
+  right: number;
+  forward: number;
+  radius: number;
+  targetFloor: StationFloorId;
+  face: StationDir2;
+}
+
+export interface StationInfoMarker {
+  id: string;
+  floorId: StationFloorId;
+  right: number;
+  forward: number;
+  radius: number;
+  prompt: string;
+}
+
+export interface StationLayoutOverride {
+  rooms: StationRoom[];
+  doorways: StationDoorway[];
+  hangars: HangarSpec[];
+  spawn: StationSpawnPose;
+  elevatorMarkers: StationElevatorMarker[];
+  infoMarkers: StationInfoMarker[];
+}
+
+let layoutOverride: StationLayoutOverride | null = null;
+
+export function setStationLayoutOverride(override: StationLayoutOverride | null): void {
+  layoutOverride = override;
+  walkRectsByFloor.clear();
+}
+
+export function getStationLayoutOverride(): StationLayoutOverride | null {
+  return layoutOverride;
+}
+
+export function getStationSpawn(): StationSpawnPose {
+  return layoutOverride?.spawn ?? STATION_SPAWN;
+}
+
+export function getStationHangars(): HangarSpec[] {
+  return layoutOverride?.hangars ?? HANGARS;
+}
+
 export function getStationRoom(roomId: string): StationRoom | null {
-  return STATION_ROOMS.find((room) => room.id === roomId) ?? null;
+  const rooms = layoutOverride?.rooms ?? STATION_ROOMS;
+  return rooms.find((room) => room.id === roomId) ?? null;
 }
 
 export interface HangarRestSample {
@@ -369,7 +434,7 @@ export interface HangarRestSample {
  */
 export function sampleHangarRest(frame: StationFrame, position: Vec3): HangarRestSample | null {
   const local = worldToStationLocal(frame, position);
-  for (const hangar of HANGARS) {
+  for (const hangar of getStationHangars()) {
     const room = getStationRoom(hangar.roomId);
     if (!room) continue;
     if (local.right < room.minRight || local.right > room.maxRight) continue;
@@ -378,7 +443,10 @@ export function sampleHangarRest(frame: StationFrame, position: Vec3): HangarRes
     const onPad =
       Math.abs(local.right - hangar.padLocal.right) <= HANGAR_PAD_HALF_METERS &&
       Math.abs(local.forward - hangar.padLocal.forward) <= HANGAR_PAD_HALF_METERS;
-    const surfaceUp = room.floorUp + (onPad ? HANGAR_PAD_HEIGHT : 0);
+    // padLocal.up is the ship rest pose, so the pad surface sits one
+    // gear-rest height below it (default layout: floor + pad plate height).
+    const padSurfaceUp = hangar.padLocal.up - SHIP_GEAR_REST_HEIGHT_METERS;
+    const surfaceUp = onPad ? padSurfaceUp : room.floorUp;
     return {
       hangar,
       surfaceUp,
@@ -436,8 +504,10 @@ const walkRectsByFloor = new Map<StationFloorId, StationWalkRect[]>();
 export function getStationWalkRects(floorId: StationFloorId): StationWalkRect[] {
   const cached = walkRectsByFloor.get(floorId);
   if (cached) return cached;
+  const rooms = layoutOverride?.rooms ?? STATION_ROOMS;
+  const doorways = layoutOverride?.doorways ?? STATION_DOORWAYS;
   const rects: StationWalkRect[] = [
-    ...STATION_ROOMS.filter((room) => room.floorId === floorId).map(
+    ...rooms.filter((room) => room.floorId === floorId).map(
       (room): StationWalkRect => ({
         kind: 'room',
         id: room.id,
@@ -449,7 +519,7 @@ export function getStationWalkRects(floorId: StationFloorId): StationWalkRect[] 
         floorUp: room.floorUp,
       }),
     ),
-    ...STATION_DOORWAYS.filter((doorway) => doorway.floorId === floorId).map(doorwayWalkRect),
+    ...doorways.filter((doorway) => doorway.floorId === floorId).map(doorwayWalkRect),
   ];
   walkRectsByFloor.set(floorId, rects);
   return rects;

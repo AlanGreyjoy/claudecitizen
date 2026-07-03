@@ -573,10 +573,148 @@
       .sc-interact-prompt.is-visible {
         opacity: 1;
       }
+
+      .is-hidden {
+        display: none !important;
+      }
+
+      .sc-title-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 300;
+        display: grid;
+        place-items: center;
+        background:
+          linear-gradient(180deg, rgba(4, 8, 18, 0.62) 0%, rgba(2, 5, 13, 0.82) 100%),
+          radial-gradient(circle at 24% 18%, rgba(63, 198, 255, 0.08), transparent 34%),
+          radial-gradient(circle at 78% 82%, rgba(255, 206, 111, 0.06), transparent 40%),
+          url('./src/assets/images/wallpaper-1.png') center / cover no-repeat,
+          linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
+      }
+
+      .sc-title-core {
+        text-align: center;
+        padding: 48px 56px;
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
+          var(--panel);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 48px var(--sc-glow);
+        clip-path: polygon(
+          18px 0,
+          calc(100% - 18px) 0,
+          100% 18px,
+          100% calc(100% - 18px),
+          calc(100% - 18px) 100%,
+          18px 100%,
+          0 calc(100% - 18px),
+          0 18px
+        );
+      }
+
+      .sc-title-logo {
+        margin: 0;
+        font: 700 44px/1 var(--sc-font);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--text);
+      }
+
+      .sc-title-logo span {
+        color: var(--accent);
+      }
+
+      .sc-title-tag {
+        margin: 14px 0 0;
+        font: 500 14px/1.5 var(--sc-font);
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .sc-title-actions {
+        margin-top: 34px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        align-items: center;
+      }
+
+      .sc-title-btn {
+        min-width: 260px;
+        padding: 14px 30px;
+        border: 1px solid rgba(139, 216, 255, 0.5);
+        background: rgba(139, 216, 255, 0.08);
+        color: var(--accent);
+        font: 700 18px/1 var(--sc-font);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        cursor: pointer;
+        clip-path: polygon(
+          10px 0,
+          calc(100% - 10px) 0,
+          100% 10px,
+          100% calc(100% - 10px),
+          calc(100% - 10px) 100%,
+          10px 100%,
+          0 calc(100% - 10px),
+          0 10px
+        );
+        transition: background 120ms ease, box-shadow 120ms ease;
+      }
+
+      .sc-title-btn:hover {
+        background: rgba(139, 216, 255, 0.18);
+        box-shadow: 0 0 22px rgba(80, 200, 255, 0.25);
+      }
+
+      .sc-title-btn-secondary {
+        border-color: rgba(255, 206, 111, 0.45);
+        background: rgba(255, 206, 111, 0.06);
+        color: var(--accent-2);
+      }
+
+      .sc-title-btn-secondary:hover {
+        background: rgba(255, 206, 111, 0.14);
+        box-shadow: 0 0 22px rgba(255, 206, 111, 0.2);
+      }
+
+      .sc-title-hint {
+        margin: 20px 0 0;
+        font: 500 12px/1.4 var(--sc-font);
+        letter-spacing: 0.1em;
+        color: var(--muted);
+      }
+
+      #editor-root {
+        position: fixed;
+        inset: 0;
+        z-index: 250;
+      }
     </style>
   </head>
   <body>
-    <div id="app">
+    <div id="title-screen" class="sc-title-screen is-hidden">
+      <div class="sc-title-core">
+        <h1 class="sc-title-logo">Claude<span>Citizen</span></h1>
+        <p class="sc-title-tag">Asteron orbital sandbox — surface to orbit, no loading screens.</p>
+        <div class="sc-title-actions">
+          <button id="title-play-btn" class="sc-title-btn" type="button">Play</button>
+          <button
+            id="title-editor-btn"
+            class="sc-title-btn sc-title-btn-secondary is-hidden"
+            type="button"
+          >
+            Editor
+          </button>
+        </div>
+        <p class="sc-title-hint is-hidden" id="title-editor-hint">
+          Editor assembles prefabs from the assets/ library — development builds only.
+        </p>
+      </div>
+    </div>
+    <div id="editor-root" class="is-hidden"></div>
+    <div id="app" class="is-hidden">
       <canvas id="view" aria-label="ClaudeCitizen spike flight view"></canvas>
 
       <div class="sc-panel sc-hud-fps" aria-live="polite">
@@ -886,5 +1024,6 @@
       <div class="sc-screen-fade" id="screen-fade"></div>
     </div>
     <script type="module" src="./src/app.ts"></script>
+    <noscript>ClaudeCitizen needs JavaScript and WebGL2.</noscript>
   </body>
 </html>

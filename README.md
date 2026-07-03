@@ -24,7 +24,60 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173). Click the canvas to lock the mouse.
+Open [http://localhost:4173](http://localhost:4173). In dev you get a title screen with **Play** and **Editor**; production builds boot straight into the game. Click the canvas to lock the mouse.
+
+## Game editor (dev only)
+
+The in-browser editor assembles **prefabs** — trees of GLB assets, box primitives, and gameplay markers — that the game can load as the orbital station. It is only available under `npm run dev`; production builds contain no editor code.
+
+![ClaudeCitizen prefab editor](docs/editor-screenshot.png)
+
+The screenshot above shows the dev-only prefab editor: a Unity-style layout with hierarchy, scene view, inspector, and project browser. Here the Phobos Starhopper is being placed in a station prefab with a `walk-volume` component for on-foot collision.
+
+Open it from the title screen or deep-link with `http://localhost:4173/?boot=editor`.
+
+| Panel | What it does |
+| --- | --- |
+| **Hierarchy** (left) | Scene tree — click to select, double-click to rename, drag rows to reparent, eye toggles visibility |
+| **Scene View** (center) | Orbit camera (LMB drag orbit, MMB pan, wheel zoom), Unity-style flythrough (hold RMB + WASD, `Q`/`E` down/up, `Shift` fast, wheel adjusts fly speed), transform gizmo, click to select, drag assets in to place them |
+| **Inspector** (right) | Name, transform fields, box primitive / model settings, and gameplay components |
+| **Project** (bottom) | Asset browser over `public/assets/` and `src/assets/` with model thumbnails; drag GLB/GLTF cards into the scene |
+
+Toolbar: **Move / Rotate / Scale** (`W` / `E` / `R`), local/world space, snap toggle with translate (default `0.25 m`) and rotate (default `15°`) increments (hold `Ctrl` to invert snapping while dragging), `+ Box` / `+ Empty`, undo/redo (`Ctrl+Z` / `Ctrl+Shift+Z`), prefab name + kind, **New / Load / Save** (`Ctrl+S`), **Preview in Play**, Exit. `F` focuses the selection, `Ctrl+D` duplicates, `Del` deletes.
+
+### Prefabs
+
+Saving writes JSON to `src/world/prefabs/data/<id>.prefab.json` (tracked — metadata only, asset urls may point at gitignored protected files). The game bundles these files, so saved prefabs load in dev and production alike.
+
+Gameplay components (added in the Inspector, usually on `+ Empty` marker entities):
+
+| Component | Purpose |
+| --- | --- |
+| `walk-volume` | Walkable floor box per floor (`hab` / `lobby` / `hangar`); edges are collision. Mark hangar mouths with open sides |
+| `spawn-point` | Player spawn; the entity's forward (+Z) sets facing |
+| `elevator` | Two markers sharing a pair id on different floors form a working elevator (F to ride) |
+| `hangar-pad` | Ship parking spot inside a hangar walk volume; place at pad surface height |
+| `interaction` | Shows a prompt within a radius |
+| `collider` | Reserved for future physics |
+
+### Previewing a station prefab
+
+The hand-rolled procedural station remains the default. To play a prefab station instead (dev only):
+
+```text
+http://localhost:4173/?stationPrefab=<prefab-id>
+```
+
+Try the tracked example: `?stationPrefab=demo-station`. The **Preview in Play** toolbar button saves and jumps there directly, and the **Back to Editor** banner at the top of the preview returns you to the editor with the same prefab open (press `Esc` first to release the mouse). Walk volumes, spawn, elevators, and hangar pads all come from the prefab's components; the ship terminal/hangar-bank flow still belongs to the procedural station until cutover.
+
+### Importing Synty packs (e.g. POLYGON Sci-Fi Worlds)
+
+1. Export the modular pieces you want from Unity as FBX, then convert to GLB — Blender (`File → Export → glTF 2.0`) or [`gltf-transform`](https://gltf-transform.dev/) both work. One piece per file keeps snapping simple.
+2. Drop the GLBs under `public/assets/protected/synty/sci-fi-worlds/{Buildings,Props,Environment,...}/`. Everything under `public/assets/protected/` is gitignored, exactly like the Starhopper.
+3. Verify a file with `node scripts/inspect_glb.mjs <path>` if materials or hierarchy look off; the bake approach in `scripts/bake_ship_textures.py` is the template for fixing Unity trim-sheet materials that do not translate to Three.js PBR.
+4. Refresh the editor's Project panel — the files appear under the `public` root with generated thumbnails, ready to drag into a scene.
+
+Prefab JSON only references asset paths, so prefabs are safe to commit even when they point at protected files; public checkouts simply see missing-model placeholders.
 
 ## Optional protected assets
 
