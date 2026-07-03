@@ -1,6 +1,11 @@
 import { add, cross, dot, length, lerp, normalize, scale, sub, vec3 } from '../math/vec3';
-import { getShipLayout, type ShipWalkZone } from './ship_layout';
-import { getShipRight } from './ship_interaction';
+import {
+  integrateCharacterLocomotion,
+  SPRINT_SPEED_METERS_PER_SECOND,
+  WALK_SPEED_METERS_PER_SECOND,
+} from './character_controller';
+import { getShipLayout, type ShipSeatSpec, type ShipWalkZone } from './ship_layout';
+import { getShipRight, worldToShipLocal } from './ship_interaction';
 import type { CharacterInput, CharacterState, FlightBody, Pose, Vec3 } from '../types';
 
 /**
@@ -24,9 +29,9 @@ export interface DeckCharacterState extends CharacterState {
   deckZone: ShipZoneId;
 }
 
-const WALK_SPEED_METERS_PER_SECOND = 4.2;
-const SPRINT_SPEED_METERS_PER_SECOND = 7.9;
 const TURN_SPEED = 10;
+/** Matches the offset baked into getDeckWorldPose. */
+const DECK_FLOOR_OFFSET_METERS = 0.02;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -44,12 +49,17 @@ export function getShipWalkZone(zoneId: string): ShipWalkZone | null {
   return getShipLayout().walkZones.find((zone) => zone.id === zoneId) ?? null;
 }
 
-/** Floor height within a zone; slopes interpolate along forward. */
+/** Floor height within a zone; slopes interpolate along forward; stairs snap to steps. */
 function zoneFloorUpAt(zone: ShipWalkZone, forward: number): number {
   if (zone.slopeMinUp === undefined) return zone.floorUp;
   const span = zone.maxForward - zone.minForward;
   if (span <= 1e-6) return zone.floorUp;
   const t = clamp((forward - zone.minForward) / span, 0, 1);
+  if (zone.stepCount !== undefined && zone.stepCount > 0) {
+    const stepIndex = Math.min(zone.stepCount, Math.floor(t * zone.stepCount + 1e-6));
+    const stepT = stepIndex / zone.stepCount;
+    return zone.slopeMinUp + (zone.floorUp - zone.slopeMinUp) * stepT;
+  }
   return zone.slopeMinUp + (zone.floorUp - zone.slopeMinUp) * t;
 }
 
@@ -187,7 +197,7 @@ function localDistance(a: DeckLocal, b: { right: number; forward: number }): num
 
 export function getDeckWorldPose(ship: FlightBody, local: DeckLocal): Pose {
   const right = getShipRight(ship);
-  const floorUp = shipFloorUpAt(local) + 0.02;
+  const floorUp = shipFloorUpAt(local) + DECK_FLOOR_OFFSET_METERS;
   const position = add(
     add(ship.position, scale(right, local.right)),
     add(scale(ship.up, floorUp), scale(ship.forward, local.forward)),
@@ -236,7 +246,8 @@ function findZoneIdAt(local: DeckLocal): ShipZoneId {
  */
 export function getDefaultDeckSpawnLocal(): DeckLocal {
   const layout = getShipLayout();
-  const stand = layout.seatStand;
+  const pilot = layout.seats.find((seat) => seat.role === 'pilot');
+  const stand = pilot?.stand ?? layout.seatStand;
   const zones = layout.walkZones;
   const standWalkable = zones.some(
     (zone) => !zone.gate && !zone.passage && zoneContains(zone, stand),
@@ -256,12 +267,53 @@ export function getLeavePilotStandPose(ship: FlightBody): Pose {
   return { ...pose, forward: normalize(tangentize(scale(ship.forward, -1), ship.up)) };
 }
 
-export function nearChair(deckLocal: DeckLocal): boolean {
-  const chair = getShipLayout().chairInteract;
-  return localDistance(deckLocal, chair) <= chair.radius;
+/** Prompt anchor sits just in front of the stand spot so you interact standing. */
+const SEAT_INTERACT_FORWARD_OFFSET = 0.35;
+
+function seatInteractPoint(seat: ShipSeatSpec): { right: number; forward: number } {
+  const deltaRight = seat.seat.right - seat.stand.right;
+  const deltaForward = seat.seat.forward - seat.stand.forward;
+  const len = Math.hypot(deltaRight, deltaForward);
+  if (len < 1e-4) {
+    return { right: seat.stand.right, forward: seat.stand.forward + SEAT_INTERACT_FORWARD_OFFSET };
+  }
+  const backset = Math.min(0.55, len * 0.35);
+  return {
+    right: seat.stand.right + (deltaRight / len) * backset,
+    forward: seat.stand.forward + (deltaForward / len) * backset,
+  };
 }
 
-/** Nearest door whose interact anchor is within reach, or null. */
+/** Nearest authored seat within interact reach, or null. */
+export function nearestSeat(deckLocal: DeckLocal): ShipSeatSpec | null {
+  let best: { seat: ShipSeatSpec; distance: number } | null = null;
+  for (const seat of getShipLayout().seats) {
+    const anchor = seatInteractPoint(seat);
+    const distance = localDistance(deckLocal, anchor);
+    if (distance > seat.interactRadius) continue;
+    if (!best || distance < best.distance) best = { seat, distance };
+  }
+  return best?.seat ?? null;
+}
+
+export function seatInteractPrompt(seat: ShipSeatSpec): string {
+  switch (seat.role) {
+    case 'pilot':
+      return 'Press F — take the seat';
+    case 'copilot':
+      return 'Press F — take the copilot seat';
+    case 'turret':
+      return 'Press F — man the turret';
+    default:
+      return 'Press F — sit down';
+  }
+}
+
+/** True when near an authored pilot seat (not legacy fallback anchors). */
+export function canReturnToPilot(deckLocal: DeckLocal): boolean {
+  const nearby = nearestSeat(deckLocal);
+  return nearby?.role === 'pilot';
+}
 export function nearestDoor(deckLocal: DeckLocal): { doorId: string } | null {
   let best: { doorId: string; distance: number } | null = null;
   for (const door of getShipLayout().doors) {
@@ -283,11 +335,6 @@ export function nearRampPanel(deckLocal: DeckLocal): boolean {
   );
 }
 
-export function canReturnToPilot(deckLocal: DeckLocal): boolean {
-  const layout = getShipLayout();
-  return nearChair(deckLocal) && deckLocal.forward > layout.pilotSeat.forward - 2.4;
-}
-
 export interface DeckUpdateResult {
   state: DeckCharacterState;
   /** Set when the character walked off the bottom of the lowered ramp. */
@@ -300,6 +347,7 @@ export function updateCharacterOnDeck(
   gates: ShipWalkGates,
   input: CharacterInput,
   dt: number,
+  gravityMetersPerSecond2: number,
 ): DeckUpdateResult {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -311,51 +359,85 @@ export function updateCharacterOnDeck(
 
   const right = getShipRight(ship);
   const up = ship.up;
+  const deckForward = normalize(tangentize(ship.forward, up));
   const desiredFacing = input.faceCameraYaw
     ? deckCameraForward(ship, input.cameraYawRadians ?? 0)
     : desiredDirection;
-  let forward = rotateToward(state.forward, desiredFacing, up, dt);
 
   let resolved: ResolvedDeckStep = { local: state.deckLocal, zone: state.deckZone };
-  if (moveMagnitude > 0.08) {
-    const step = scale(desiredDirection, moveSpeed * dt);
-    resolved = resolveDeckStep(
-      state,
-      dot(step, right),
-      dot(step, normalize(tangentize(ship.forward, up))),
-      gates,
-    );
+  const isMoving = moveMagnitude > 0.08;
+
+  const motion = integrateCharacterLocomotion(
+    state,
+    {
+      wantsJump: Boolean(input.jumpPressed),
+      wantsSprint,
+      isMoving,
+      desiredDirection,
+      moveSpeed,
+    },
+    dt,
+    up,
+    gravityMetersPerSecond2,
+    {
+      onGroundedStep: () => {
+        if (isMoving) {
+          const step = scale(desiredDirection, moveSpeed * dt);
+          resolved = resolveDeckStep(
+            state,
+            dot(step, right),
+            dot(step, deckForward),
+            gates,
+          );
+        } else {
+          resolved = { local: state.deckLocal, zone: state.deckZone };
+        }
+        const pose = getDeckWorldPose(ship, resolved.local);
+        return { position: pose.position, up: pose.up };
+      },
+      tryLand: (candidate) => {
+        const local = worldToShipLocal(ship, candidate);
+        const floorUp = shipFloorUpAt({ right: local.right, forward: local.forward }) + DECK_FLOOR_OFFSET_METERS;
+        if (local.up > floorUp) return null;
+        const landedLocal = { right: local.right, forward: local.forward };
+        const zone = findZone(landedLocal, gates);
+        resolved = {
+          local: landedLocal,
+          zone: zone ? (zone.passage ? state.deckZone : zone.id) : state.deckZone,
+        };
+        const pose = getDeckWorldPose(ship, resolved.local);
+        return { position: pose.position, up: pose.up };
+      },
+    },
+  );
+
+  let forward = rotateToward(state.forward, desiredFacing, motion.up, dt);
+  if (length(forward) < 1e-6) {
+    forward = normalize(tangentize(state.forward, motion.up));
+  } else {
+    forward = normalize(tangentize(forward, motion.up));
   }
 
   const layout = getShipLayout();
   const resolvedZone = getShipWalkZone(resolved.zone);
   const dismounted =
-    resolvedZone?.gate === 'ramp' && resolved.local.forward <= layout.rampDismountForward;
-
-  const pose = getDeckWorldPose(ship, resolved.local);
-  const velocity = dt > 0 ? scale(sub(pose.position, state.position), 1 / dt) : vec3(0, 0, 0);
-  const isMoving = moveMagnitude > 0.08;
-  const animation = isMoving && wantsSprint ? 'Sprint_Loop' : isMoving ? 'Walk_Loop' : 'Idle_Loop';
-
-  if (length(forward) < 1e-6) {
-    forward = normalize(tangentize(state.forward, up));
-  } else {
-    forward = normalize(tangentize(forward, up));
-  }
+    motion.grounded &&
+    resolvedZone?.gate === 'ramp' &&
+    resolved.local.forward <= layout.rampDismountForward;
 
   return {
     dismounted,
     state: {
-      animation,
+      animation: motion.animation,
       deckLocal: resolved.local,
       deckZone: resolved.zone,
       forward,
-      grounded: true,
-      jumpPhase: 'grounded',
-      jumpPhaseTime: 0,
-      position: pose.position,
-      up: pose.up,
-      velocity,
+      grounded: motion.grounded,
+      jumpPhase: motion.jumpPhase,
+      jumpPhaseTime: motion.jumpPhaseTime,
+      position: motion.position,
+      up: motion.up,
+      velocity: motion.velocity,
     },
   };
 }

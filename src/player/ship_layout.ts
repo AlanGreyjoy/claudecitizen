@@ -1,11 +1,13 @@
 import type { LocalOffset } from '../types';
 
 /**
- * Ship gameplay layout: walk zones, doors, pilot seat, and ramp anchors in
+ * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
  * ship-local right/up/forward meters. The default layout carries the Phobos
  * Starhopper values measured from the model rig; a ship prefab can replace
  * it via setShipLayoutOverride (see world/prefabs/ship_runtime.ts).
  */
+
+export type ShipSeatRole = 'pilot' | 'copilot' | 'turret' | 'passenger';
 
 export interface ShipWalkZone {
   id: string;
@@ -17,6 +19,8 @@ export interface ShipWalkZone {
   floorUp: number;
   /** Floor height at the minForward edge — slopes for ramps and steps. */
   slopeMinUp?: number;
+  /** Discrete steps across the run instead of a smooth slope. */
+  stepCount?: number;
   /** Interior ceiling for camera containment. */
   ceilingUp: number;
   /** Walkable only while the boarding ramp or the given door is open. */
@@ -55,6 +59,17 @@ export interface ShipRampMount {
   clampForward: number;
 }
 
+export interface ShipSeatSpec {
+  /** Prefab entity id for this seat marker. */
+  id: string;
+  role: ShipSeatRole;
+  seat: LocalOffset;
+  eye: LocalOffset;
+  /** Standing spot just behind the chair after getting up (2D deck local). */
+  stand: { right: number; forward: number };
+  interactRadius: number;
+}
+
 export interface ShipLayout {
   /** GLB url for the flyable hull; null = built-in Phobos Starhopper. */
   hullUrl: string | null;
@@ -65,11 +80,13 @@ export interface ShipLayout {
   restHeightMeters: number | null;
   walkZones: ShipWalkZone[];
   doors: ShipDoorSpec[];
+  /** All authored seat markers from the prefab (may be empty). */
+  seats: ShipSeatSpec[];
+  /** Primary flight seat — derived from the first pilot-role seat, if any. */
   pilotSeat: LocalOffset;
   pilotEye: LocalOffset;
-  /** Standing spot just behind the chair after getting up (2D deck local). */
+  /** Standing spot just behind the primary pilot chair (2D deck local). */
   seatStand: { right: number; forward: number };
-  chairInteract: { right: number; forward: number; radius: number };
   rampInteracts: ShipRampInteract[];
   rampMount: ShipRampMount | null;
   /** Walking past this ship-local forward on a ramp zone steps off. */
@@ -140,10 +157,19 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
       defaultOpen: false,
     },
   ],
+  seats: [
+    {
+      id: 'pilot-seat',
+      role: 'pilot',
+      seat: { right: 0, up: -0.62, forward: 6.05 },
+      eye: { right: 0, up: 0.25, forward: 6.3 },
+      stand: { right: 0, forward: 4.5 },
+      interactRadius: 1.45,
+    },
+  ],
   pilotSeat: { right: 0, up: -0.62, forward: 6.05 },
   pilotEye: { right: 0, up: 0.25, forward: 6.3 },
   seatStand: { right: 0, forward: 4.5 },
-  chairInteract: { right: 0, forward: 5.55, radius: 1.45 },
   rampInteracts: [
     { placement: 'outside', right: 0, forward: -9.7, radius: 3.0 },
     { placement: 'deck', right: 0, forward: -5.7, radius: 1.7 },

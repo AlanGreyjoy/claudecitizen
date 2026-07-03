@@ -6,6 +6,7 @@ import {
   type ComponentDef,
 } from '../../world/prefabs/component_registry';
 import type { PrefabComponent, ShipZoneGate } from '../../world/prefabs/schema';
+import { SHIP_SEAT_ROLES } from '../../world/prefabs/schema';
 import type { StationFloorId, StationSide } from '../../world/station';
 
 const FLOOR_OPTIONS: StationFloorId[] = ['hab', 'lobby', 'hangar'];
@@ -432,6 +433,84 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
         );
         return rows;
       }
+      case 'ship-stairs': {
+        const gateValue =
+          component.gate === undefined ? 'none' : component.gate === 'ramp' ? 'ramp' : 'door';
+        const rows: HTMLElement[] = [
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Zone id' }),
+            textInput(component.zoneId, (zoneId) => update({ ...component, zoneId })),
+          ]),
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Min XZ' }),
+            numberInput(component.min.x, (x) => update({ ...component, min: { ...component.min, x } })),
+            numberInput(component.min.z, (z) => update({ ...component, min: { ...component.min, z } })),
+            el('span', {}),
+          ]),
+          el('div', { className: 'ed-field-row' }, [
+            el('span', { className: 'ed-field-label', text: 'Max XZ' }),
+            numberInput(component.max.x, (x) => update({ ...component, max: { ...component.max, x } })),
+            numberInput(component.max.z, (z) => update({ ...component, max: { ...component.max, z } })),
+            el('span', {}),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Rise' }),
+            numberInput(component.riseUp, (riseUp) =>
+              update({ ...component, riseUp: Math.max(0.05, riseUp) }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Steps' }),
+            numberInput(component.stepCount ?? 4, (stepCount) =>
+              update({ ...component, stepCount: Math.max(1, Math.floor(stepCount)) }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Height' }),
+            numberInput(component.height ?? 3.1, (height) =>
+              update({ ...component, height: Math.max(0.5, height) }),
+            ),
+          ]),
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Gate' }),
+            selectInput(['none', 'ramp', 'door'], gateValue, (next) => {
+              const gate: ShipZoneGate | undefined =
+                next === 'none' ? undefined : next === 'ramp' ? 'ramp' : { doorId: 'door-1' };
+              update({ ...component, gate });
+            }),
+          ]),
+        ];
+        if (typeof component.gate === 'object') {
+          rows.push(
+            el('div', { className: 'ed-field-row-wide' }, [
+              el('span', { className: 'ed-field-label', text: 'Door id' }),
+              textInput(component.gate.doorId, (doorId) =>
+                update({ ...component, gate: { doorId } }),
+              ),
+            ]),
+          );
+        }
+        rows.push(
+          el('label', { className: 'ed-checkbox-row' }, [
+            (() => {
+              const checkbox = el('input', {
+                attrs: { type: 'checkbox' },
+                on: {
+                  change: (event) =>
+                    update({
+                      ...component,
+                      passage: (event.target as HTMLInputElement).checked || undefined,
+                    }),
+                },
+              });
+              checkbox.checked = component.passage ?? false;
+              return checkbox;
+            })(),
+            el('span', { text: 'Passage (connects rooms)' }),
+          ]),
+        );
+        return rows;
+      }
       case 'ship-door': {
         const rows: HTMLElement[] = [
           el('div', { className: 'ed-field-row-wide' }, [
@@ -530,7 +609,14 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
       case 'pilot-seat': {
         const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
         const stand = component.stand ?? { x: 0, z: -1.55 };
+        const role = component.role ?? 'passenger';
         return [
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Role' }),
+            selectInput([...SHIP_SEAT_ROLES], role, (next) =>
+              update({ ...component, role: next as (typeof SHIP_SEAT_ROLES)[number] }),
+            ),
+          ]),
           el('div', { className: 'ed-field-row' }, [
             el('span', { className: 'ed-field-label', text: 'Eye' }),
             ...(['x', 'y', 'z'] as const).map((axis) =>

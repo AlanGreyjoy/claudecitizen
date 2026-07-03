@@ -9,12 +9,13 @@ import {
 } from '../player/modes';
 import { placeCharacterOnSurface, updateCharacterState } from '../player/character_controller';
 import {
-  canReturnToPilot,
   createDeckCharacterState,
   getShipWalkZone,
   getShipWalkZones,
   nearestDoor,
+  nearestSeat,
   nearRampPanel,
+  seatInteractPrompt,
   updateCharacterOnDeck,
   type DeckCharacterState,
   type DeckLocal,
@@ -207,8 +208,9 @@ export function createGameLoop({
     world.character = updateCharacterInStation(
       world.character as StationCharacterState,
       stationFrame,
-      characterInput,
+      { ...characterInput, jumpPressed: actions.jumpPressed },
       dt,
+      planet.gravityMetersPerSecond2 ?? 9.8,
     );
 
     if (tryMountRamp()) return;
@@ -274,8 +276,9 @@ export function createGameLoop({
       world.character as DeckCharacterState,
       world.ship,
       gates,
-      characterInput,
+      { ...characterInput, jumpPressed: actions.jumpPressed },
       dt,
+      planet.gravityMetersPerSecond2 ?? 9.8,
     );
     world.character = result.state;
 
@@ -286,9 +289,10 @@ export function createGameLoop({
 
     const deckLocal = result.state.deckLocal;
 
-    if (canReturnToPilot(deckLocal)) {
-      world.prompt = 'Press F — take the seat';
-      if (actions.interactPressed) beginSitTransition(world);
+    const seatNearby = nearestSeat(deckLocal);
+    if (seatNearby) {
+      world.prompt = seatInteractPrompt(seatNearby);
+      if (actions.interactPressed && seatNearby.role === 'pilot') beginSitTransition(world);
       return;
     }
 

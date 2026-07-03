@@ -6,13 +6,14 @@ import {
   type ShipLayout,
   type ShipRampInteract,
   type ShipRampMount,
+  type ShipSeatSpec,
   type ShipWalkZone,
 } from '../../player/ship_layout';
 import type { PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
 
 /**
- * Derives the ship gameplay layout (walk zones, doors, pilot seat, ramp
+ * Derives the ship gameplay layout (walk zones, doors, seats, ramp
  * anchors, hull url) from a ship prefab's components.
  *
  * Prefab/scene axes map to ship-local gameplay axes as right = -x, up = y,
@@ -26,8 +27,7 @@ const DEFAULT_DOOR_RADIUS = 1.6;
 const DEFAULT_RAMP_OUTSIDE_RADIUS = 3.0;
 const DEFAULT_RAMP_DECK_RADIUS = 1.7;
 const DEFAULT_CHAIR_RADIUS = 1.45;
-/** Chair prompt anchor sits just behind the seat so you interact standing. */
-const CHAIR_INTERACT_BACKSET_METERS = 0.5;
+const DEFAULT_STAIR_STEPS = 4;
 /** Dismount line sits just above the ramp zone's tail edge. */
 const RAMP_DISMOUNT_INSET_METERS = 0.05;
 /** Mount clamp keeps a fresh mount above the dismount line. */
@@ -40,12 +40,16 @@ interface CollectedShip {
   restHeight: number | null;
   walkZones: ShipWalkZone[];
   doors: ShipDoorSpec[];
-  pilotSeat: { right: number; up: number; forward: number } | null;
-  pilotEye: { right: number; up: number; forward: number } | null;
-  seatStand: { right: number; forward: number } | null;
-  chairRadius: number;
+  seats: ShipSeatSpec[];
   rampInteracts: ShipRampInteract[];
   rampMount: ShipRampMount | null;
+}
+
+function pushWalkZone(
+  out: CollectedShip,
+  zone: Omit<ShipWalkZone, 'id'> & { id: string },
+): void {
+  out.walkZones.push(zone);
 }
 
 function collect(
@@ -83,12 +87,9 @@ function collect(
         if (component.restHeight !== undefined) out.restHeight ??= component.restHeight;
         break;
       case 'ship-walk-zone': {
-        // Extents scale with the entity so the runtime matches the editor
-        // gizmo; scene x-range [minX, maxX] flips into ship right as
-        // [-maxX, -minX].
         const minX = position.x + component.min.x * scale.x;
         const maxX = position.x + component.max.x * scale.x;
-        out.walkZones.push({
+        pushWalkZone(out, {
           id: component.zoneId,
           minRight: -maxX,
           maxRight: -minX,
@@ -99,6 +100,27 @@ function collect(
             ? { slopeMinUp: position.y + component.slopeMinUp * scale.y }
             : {}),
           ceilingUp: position.y + (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y,
+          ...(component.gate !== undefined ? { gate: component.gate } : {}),
+          ...(component.passage ? { passage: true } : {}),
+        });
+        break;
+      }
+      case 'ship-stairs': {
+        const minX = position.x + component.min.x * scale.x;
+        const maxX = position.x + component.max.x * scale.x;
+        const minForward = position.z + component.min.z * scale.z;
+        const maxForward = position.z + component.max.z * scale.z;
+        const rise = component.riseUp * scale.y;
+        pushWalkZone(out, {
+          id: component.zoneId,
+          minRight: -maxX,
+          maxRight: -minX,
+          minForward,
+          maxForward,
+          floorUp: position.y + rise,
+          slopeMinUp: position.y,
+          stepCount: component.stepCount ?? DEFAULT_STAIR_STEPS,
+          ceilingUp: position.y + rise + (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y,
           ...(component.gate !== undefined ? { gate: component.gate } : {}),
           ...(component.passage ? { passage: true } : {}),
         });
@@ -117,19 +139,23 @@ function collect(
         });
         break;
       case 'pilot-seat': {
-        out.pilotSeat = { right, up: position.y, forward };
         const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
-        out.pilotEye = {
-          right: -(position.x + eye.x),
-          up: position.y + eye.y,
-          forward: position.z + eye.z,
-        };
         const stand = component.stand ?? { x: 0, z: -1.55 };
-        out.seatStand = {
-          right: -(position.x + stand.x),
-          forward: position.z + stand.z,
-        };
-        out.chairRadius = component.interactRadius ?? DEFAULT_CHAIR_RADIUS;
+        out.seats.push({
+          id: entity.id,
+          role: component.role ?? 'passenger',
+          seat: { right, up: position.y, forward },
+          eye: {
+            right: -(position.x + eye.x),
+            up: position.y + eye.y,
+            forward: position.z + eye.z,
+          },
+          stand: {
+            right: -(position.x + stand.x),
+            forward: position.z + stand.z,
+          },
+          interactRadius: component.interactRadius ?? DEFAULT_CHAIR_RADIUS,
+        });
         break;
       }
       case 'ramp-interact':
@@ -168,12 +194,16 @@ function collect(
   }
 }
 
+function primaryPilotSeat(seats: ShipSeatSpec[]): ShipSeatSpec | null {
+  return seats.find((seat) => seat.role === 'pilot') ?? null;
+}
+
 /**
  * Builds the ship layout for a ship prefab. Returns null only when the
  * prefab has no ship components at all. An in-progress prefab (e.g. hull
  * only, no walk zones yet) still yields a layout so previews show the
  * authored ship; deck walking simply stays unavailable until zones exist.
- * Missing seat anchors fall back to the built-in Starhopper values.
+ * Missing primary pilot seat falls back to the built-in Starhopper anchors.
  */
 export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | null {
   const out: CollectedShip = {
@@ -181,10 +211,7 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
     restHeight: null,
     walkZones: [],
     doors: [],
-    pilotSeat: null,
-    pilotEye: null,
-    seatStand: null,
-    chairRadius: DEFAULT_CHAIR_RADIUS,
+    seats: [],
     rampInteracts: [],
     rampMount: null,
   };
@@ -194,7 +221,7 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
     out.hullUrl !== null ||
     out.walkZones.length > 0 ||
     out.doors.length > 0 ||
-    out.pilotSeat !== null ||
+    out.seats.length > 0 ||
     out.rampInteracts.length > 0 ||
     out.rampMount !== null;
   if (!hasShipContent) {
@@ -203,7 +230,7 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
   }
   if (out.walkZones.length === 0) {
     console.warn(
-      `Ship prefab "${doc.id}" has no ship-walk-zone components; the deck is not walkable yet.`,
+      `Ship prefab "${doc.id}" has no ship-walk-zone or ship-stairs components; the deck is not walkable yet.`,
     );
   }
   if (!out.hullUrl) {
@@ -213,15 +240,25 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
   }
 
   const fallback = DEFAULT_SHIP_LAYOUT;
-  if (!out.pilotSeat) {
-    console.warn(`Ship prefab "${doc.id}" has no pilot-seat; using the built-in seat anchors.`);
+  const pilot = primaryPilotSeat(out.seats);
+  if (out.seats.length > 0 && !pilot) {
+    console.warn(
+      `Ship prefab "${doc.id}" has seats but none with role "pilot"; flight controls stay unavailable until one is marked pilot.`,
+    );
+  } else if (out.seats.length === 0) {
+    console.warn(`Ship prefab "${doc.id}" has no ship-seat markers; using the built-in pilot anchors.`);
   }
-  const pilotSeat = out.pilotSeat ?? fallback.pilotSeat;
-  const pilotEye = out.pilotEye ?? fallback.pilotEye;
-  const seatStand = out.seatStand ?? fallback.seatStand;
+  const pilotCount = out.seats.filter((seat) => seat.role === 'pilot').length;
+  if (pilotCount > 1) {
+    console.warn(
+      `Ship prefab "${doc.id}" has ${pilotCount} pilot seats; the first pilot marker wins for flight.`,
+    );
+  }
 
-  // Ramp geometry derives from the first ramp-gated zone; ships without a
-  // boarding ramp (or with it unauthored yet) simply lose ramp interactions.
+  const pilotSeat = pilot?.seat ?? fallback.pilotSeat;
+  const pilotEye = pilot?.eye ?? fallback.pilotEye;
+  const seatStand = pilot?.stand ?? fallback.seatStand;
+
   const rampZone = out.walkZones.find((zone) => zone.gate === 'ramp') ?? null;
   const rampDismountForward = rampZone
     ? rampZone.minForward + RAMP_DISMOUNT_INSET_METERS
@@ -238,14 +275,10 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
     restHeightMeters: out.restHeight,
     walkZones: out.walkZones,
     doors: out.doors,
+    seats: out.seats,
     pilotSeat,
     pilotEye,
     seatStand,
-    chairInteract: {
-      right: pilotSeat.right,
-      forward: pilotSeat.forward - CHAIR_INTERACT_BACKSET_METERS,
-      radius: out.chairRadius,
-    },
     rampInteracts: out.rampInteracts,
     rampMount: out.rampMount,
     rampDismountForward,

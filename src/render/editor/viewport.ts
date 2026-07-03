@@ -351,6 +351,31 @@ export function createEditorViewport(
         }
         return group;
       }
+      case 'ship-stairs': {
+        const color = SHIP_ZONE_COLORS[component.zoneId] ?? 0xffa86b;
+        const rise = component.riseUp;
+        const steps = component.stepCount ?? 4;
+        const group = makeZoneBoxHelper(
+          component.min,
+          component.max,
+          (component.height ?? 3.1) + rise,
+          color,
+        );
+        group.position.y = rise / 2;
+        for (let step = 0; step <= steps; step += 1) {
+          const t = step / steps;
+          const z = component.min.z + (component.max.z - component.min.z) * t;
+          const y = rise * t;
+          const tread = makeHelperMesh(
+            new THREE.BoxGeometry(component.max.x - component.min.x, 0.04, 0.18),
+            color,
+            0.55,
+          );
+          tread.position.set((component.min.x + component.max.x) / 2, y, z);
+          group.add(tread);
+        }
+        return group;
+      }
       case 'ship-door': {
         const group = new THREE.Group();
         const sphere = makeHelperMesh(
@@ -366,13 +391,22 @@ export function createEditorViewport(
       }
       case 'pilot-seat': {
         const group = new THREE.Group();
-        const seat = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), 0x7dffa8, 0.6);
-        const back = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.8, 0.12), 0x7dffa8, 0.45);
+        const role = component.role ?? 'passenger';
+        const seatColor =
+          role === 'pilot' ? 0x7dffa8 : role === 'copilot' ? 0x7db8ff : role === 'turret' ? 0xff9d5c : 0x9aa3b8;
+        const seat = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), seatColor, 0.6);
+        const back = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.8, 0.12), seatColor, 0.45);
         back.position.set(0, 0.45, -0.3);
         const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
         const eyeDot = makeHelperMesh(new THREE.SphereGeometry(0.08, 10, 8), 0xffffff, 0.85);
         eyeDot.position.set(eye.x, eye.y, eye.z);
-        group.add(seat, back, eyeDot);
+        const stand = component.stand ?? { x: 0, z: -1.55 };
+        const standDot = makeHelperMesh(new THREE.SphereGeometry(0.1, 10, 8), 0xffce6f, 0.7);
+        standDot.position.set(stand.x, 0.05, stand.z);
+        const radius = component.interactRadius ?? 1.45;
+        const reach = makeHelperMesh(new THREE.SphereGeometry(radius, 16, 12), seatColor, 0.12, true);
+        reach.position.set(stand.x, 0.5, stand.z);
+        group.add(seat, back, eyeDot, standDot, reach);
         return group;
       }
       case 'ramp-interact': {

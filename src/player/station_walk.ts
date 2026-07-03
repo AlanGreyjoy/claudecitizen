@@ -1,5 +1,10 @@
 import { add, cross, dot, length, lerp, normalize, scale, sub, vec3 } from '../math/vec3';
-import { CHARACTER_GROUND_OFFSET_METERS } from './character_controller';
+import {
+  CHARACTER_GROUND_OFFSET_METERS,
+  integrateCharacterLocomotion,
+  SPRINT_SPEED_METERS_PER_SECOND,
+  WALK_SPEED_METERS_PER_SECOND,
+} from './character_controller';
 import {
   getStationFrame,
   getStationRoom,
@@ -7,6 +12,7 @@ import {
   getStationWalkRects,
   stationDirToWorld,
   stationLocalToWorld,
+  worldToStationLocal,
   type ElevatorDestination,
   type StationDir2,
   type StationFrame,
@@ -25,8 +31,6 @@ export interface StationCharacterState extends CharacterState {
   stationRoomId: string;
 }
 
-const WALK_SPEED_METERS_PER_SECOND = 4.2;
-const SPRINT_SPEED_METERS_PER_SECOND = 7.9;
 const TURN_SPEED = 10;
 
 function clamp(value: number, min: number, max: number): number {
@@ -191,6 +195,7 @@ export function updateCharacterInStation(
   frame: StationFrame,
   input: CharacterInput,
   dt: number,
+  gravityMetersPerSecond2: number,
 ): StationCharacterState {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -200,53 +205,87 @@ export function updateCharacterInStation(
   const moveSpeed =
     (wantsSprint ? SPRINT_SPEED_METERS_PER_SECOND : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
 
-  const up = frame.up;
   const room = getStationRoom(state.stationRoomId);
   const rects = getStationWalkRects(room?.floorId ?? 'lobby');
-
   const desiredFacing = input.faceCameraYaw
     ? stationCameraForward(frame, input.cameraYawRadians ?? 0)
     : desiredDirection;
-  let forward = rotateToward(state.forward, desiredFacing, up, dt);
 
   let resolved: ResolvedStep = {
     local: state.stationLocal,
     roomId: state.stationRoomId,
     floorUp: room?.floorUp ?? 0,
   };
-  if (moveMagnitude > 0.08) {
-    const step = scale(desiredDirection, moveSpeed * dt);
-    resolved = resolveStationStep(
-      rects,
-      state.stationLocal,
-      state.stationRoomId,
-      dot(step, frame.right),
-      dot(step, frame.forward),
-      room?.floorUp ?? 0,
-    );
-  }
-
-  const position = stationWalkPose(frame, resolved.local, resolved.floorUp);
-  const velocity = dt > 0 ? scale(sub(position, state.position), 1 / dt) : vec3(0, 0, 0);
   const isMoving = moveMagnitude > 0.08;
-  const animation = isMoving && wantsSprint ? 'Sprint_Loop' : isMoving ? 'Walk_Loop' : 'Idle_Loop';
 
+  const motion = integrateCharacterLocomotion(
+    state,
+    {
+      wantsJump: Boolean(input.jumpPressed),
+      wantsSprint,
+      isMoving,
+      desiredDirection,
+      moveSpeed,
+    },
+    dt,
+    frame.up,
+    gravityMetersPerSecond2,
+    {
+      onGroundedStep: () => {
+        if (isMoving) {
+          const step = scale(desiredDirection, moveSpeed * dt);
+          resolved = resolveStationStep(
+            rects,
+            state.stationLocal,
+            state.stationRoomId,
+            dot(step, frame.right),
+            dot(step, frame.forward),
+            room?.floorUp ?? 0,
+          );
+        } else {
+          resolved = {
+            local: state.stationLocal,
+            roomId: state.stationRoomId,
+            floorUp: room?.floorUp ?? 0,
+          };
+        }
+        const position = stationWalkPose(frame, resolved.local, resolved.floorUp);
+        return { position, up: frame.up };
+      },
+      tryLand: (candidate) => {
+        const local = worldToStationLocal(frame, candidate);
+        const rect = findContainingRect(rects, { right: local.right, forward: local.forward });
+        const floorUp = rect?.floorUp ?? resolved.floorUp;
+        const restUp = floorUp + CHARACTER_GROUND_OFFSET_METERS;
+        if (local.up > restUp) return null;
+        resolved = {
+          local: { right: local.right, forward: local.forward },
+          roomId: rect?.kind === 'room' ? rect.id : state.stationRoomId,
+          floorUp,
+        };
+        const position = stationWalkPose(frame, resolved.local, resolved.floorUp);
+        return { position, up: frame.up };
+      },
+    },
+  );
+
+  let forward = rotateToward(state.forward, desiredFacing, motion.up, dt);
   if (length(forward) < 1e-6) {
-    forward = normalize(tangentize(state.forward, up));
+    forward = normalize(tangentize(state.forward, motion.up));
   } else {
-    forward = normalize(tangentize(forward, up));
+    forward = normalize(tangentize(forward, motion.up));
   }
 
   return {
-    animation,
+    animation: motion.animation,
     forward,
-    grounded: true,
-    jumpPhase: 'grounded',
-    jumpPhaseTime: 0,
-    position,
+    grounded: motion.grounded,
+    jumpPhase: motion.jumpPhase,
+    jumpPhaseTime: motion.jumpPhaseTime,
+    position: motion.position,
     stationLocal: resolved.local,
     stationRoomId: resolved.roomId,
-    up,
-    velocity,
+    up: motion.up,
+    velocity: motion.velocity,
   };
 }

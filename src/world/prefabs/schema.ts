@@ -48,6 +48,11 @@ export interface PrefabPrimitive {
 /** Which gate controls a ship walk zone's walkability. */
 export type ShipZoneGate = 'ramp' | { doorId: string };
 
+/** Seat role for ship-seat components (pilot seat flies the ship). */
+export type ShipSeatRole = 'pilot' | 'copilot' | 'turret' | 'passenger';
+
+export const SHIP_SEAT_ROLES: ShipSeatRole[] = ['pilot', 'copilot', 'turret', 'passenger'];
+
 export type PrefabComponent =
   | { type: 'station-frame' }
   | { type: 'spawn-point'; floorId: StationFloorId }
@@ -109,12 +114,29 @@ export type PrefabComponent =
     }
   | {
       type: 'pilot-seat';
+      /** pilot = flight controls; others are for future seated interactions. */
+      role?: ShipSeatRole;
       /** Eye offset from the seat in scene axes (default {0, 0.87, 0.25}). */
       eye?: Vec3;
       /** Stand-up spot offset from the seat in scene XZ (default {0, -1.55}). */
       stand?: PrefabVec2;
       /** Interact distance around the chair (default 1.45). */
       interactRadius?: number;
+    }
+  | {
+      type: 'ship-stairs';
+      zoneId: string;
+      /** Local XZ offsets from the entity origin; entity Y is the bottom step height. */
+      min: PrefabVec2;
+      max: PrefabVec2;
+      /** Total rise from the bottom to the top edge of the run (meters). */
+      riseUp: number;
+      /** Number of discrete steps across the run (default 4). */
+      stepCount?: number;
+      /** Interior height above the top step for camera containment (default 3.1). */
+      height?: number;
+      gate?: ShipZoneGate;
+      passage?: boolean;
     }
   | {
       type: 'ramp-interact';
@@ -333,9 +355,17 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         defaultOpen: value.defaultOpen === undefined ? undefined : Boolean(value.defaultOpen),
       };
     }
-    case 'pilot-seat':
+    case 'pilot-seat': {
+      const roleRaw = value.role;
+      const role =
+        roleRaw === undefined
+          ? undefined
+          : SHIP_SEAT_ROLES.includes(roleRaw as ShipSeatRole)
+            ? (roleRaw as ShipSeatRole)
+            : fail(`${path}.role`, `expected one of: ${SHIP_SEAT_ROLES.join(', ')}`);
       return {
         type,
+        role,
         eye: value.eye === undefined ? undefined : parseVec3(value.eye, `${path}.eye`),
         stand: value.stand === undefined ? undefined : parseVec2(value.stand, `${path}.stand`),
         interactRadius:
@@ -345,6 +375,28 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                 10,
                 Math.max(0.5, parseFiniteNumber(value.interactRadius, `${path}.interactRadius`)),
               ),
+      };
+    }
+    case 'ship-stairs':
+      return {
+        type,
+        zoneId: parseString(value.zoneId, `${path}.zoneId`, 64),
+        min: parseVec2(value.min, `${path}.min`),
+        max: parseVec2(value.max, `${path}.max`),
+        riseUp: Math.min(
+          20,
+          Math.max(0.05, parseFiniteNumber(value.riseUp, `${path}.riseUp`)),
+        ),
+        stepCount:
+          value.stepCount === undefined
+            ? undefined
+            : Math.min(64, Math.max(1, Math.floor(parseFiniteNumber(value.stepCount, `${path}.stepCount`)))),
+        height:
+          value.height === undefined
+            ? undefined
+            : Math.min(20, Math.max(1, parseFiniteNumber(value.height, `${path}.height`))),
+        gate: value.gate === undefined ? undefined : parseShipZoneGate(value.gate, `${path}.gate`),
+        passage: value.passage === undefined ? undefined : Boolean(value.passage),
       };
     case 'ramp-interact': {
       const placement = value.placement;

@@ -282,6 +282,7 @@
         "components": [
           {
             "type": "pilot-seat",
+            "role": "pilot",
             "eye": {
               "x": 0,
               "y": 0.87,

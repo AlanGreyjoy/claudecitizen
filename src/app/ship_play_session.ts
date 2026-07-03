@@ -2,18 +2,22 @@ import * as THREE from 'three';
 import { createPlayerControls } from '../flight/player_controls';
 import {
   FIRST_PERSON_PITCH_LIMIT,
+  integrateCharacterLocomotion,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
   resolveFirstPersonCameraRig,
+  SPRINT_SPEED_METERS_PER_SECOND,
+  WALK_SPEED_METERS_PER_SECOND,
 } from '../player/character_controller';
 import {
-  canReturnToPilot,
   createDeckCharacterState,
   getDefaultDeckSpawnLocal,
   getShipWalkZone,
   getShipWalkZones,
   nearestDoor,
+  nearestSeat,
   nearRampPanel,
+  seatInteractPrompt,
   updateCharacterOnDeck,
   type DeckCharacterState,
   type DeckLocal,
@@ -55,8 +59,8 @@ import type { CharacterState, FlightBody, Pose, Vec3 } from '../types';
  */
 
 const PAD_RADIUS_METERS = 42;
-const WALK_SPEED = 4.2;
-const SPRINT_SPEED = 7.9;
+const SANDBOX_GROUND_Y_METERS = 0.05;
+const SANDBOX_GRAVITY = 9.8;
 const TURN_SPEED = 10;
 const SIT_SECONDS = 1.3;
 const STAND_SECONDS = 1.0;
@@ -105,7 +109,7 @@ function groundCharacterAt(position: Vec3, forward: Vec3): CharacterState {
     grounded: true,
     jumpPhase: 'grounded',
     jumpPhaseTime: 0,
-    position: { x: position.x, y: 0.05, z: position.z },
+    position: { x: position.x, y: SANDBOX_GROUND_Y_METERS, z: position.z },
     up: { ...WORLD_UP },
     velocity: vec3(0, 0, 0),
   };
@@ -313,14 +317,15 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     );
   }
 
-  function updateDeck(dt: number, actions: { interactPressed: boolean }): void {
+  function updateDeck(dt: number, actions: { interactPressed: boolean; jumpPressed: boolean }): void {
     const input = controls.sampleCharacterInput();
     const result = updateCharacterOnDeck(
       character as DeckCharacterState,
       ship,
       gates(),
-      input,
+      { ...input, jumpPressed: actions.jumpPressed },
       dt,
+      SANDBOX_GRAVITY,
     );
     character = result.state;
     prompt = '';
@@ -335,9 +340,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
     const deckLocal = result.state.deckLocal;
 
-    if (canReturnToPilot(deckLocal)) {
-      prompt = 'Press F — take the seat';
-      if (actions.interactPressed) {
+    const seatNearby = nearestSeat(deckLocal);
+    if (seatNearby) {
+      prompt = seatInteractPrompt(seatNearby);
+      if (actions.interactPressed && seatNearby.role === 'pilot') {
         transition = {
           start: {
             forward: character.forward,
@@ -373,7 +379,14 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     }
   }
 
-  function updateGround(dt: number, actions: { interactPressed: boolean }): void {
+  function clampToSandboxPad(position: Vec3): Vec3 {
+    const radial = Math.hypot(position.x, position.z);
+    if (radial <= PAD_RADIUS_METERS - 1) return position;
+    const pull = (PAD_RADIUS_METERS - 1) / radial;
+    return { x: position.x * pull, y: position.y, z: position.z * pull };
+  }
+
+  function updateGround(dt: number, actions: { interactPressed: boolean; jumpPressed: boolean }): void {
     const input = controls.sampleCharacterInput();
     const moveX = input.moveX ?? 0;
     const moveY = input.moveY ?? 0;
@@ -381,18 +394,47 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const orbit = resolveSandboxOrbit(yaw, 0, ORBIT_PITCH_LIMIT);
     const moveDir = add(scale(orbit.right, moveX), scale(orbit.forward, moveY));
     const magnitude = Math.min(1, Math.hypot(moveX, moveY));
-    const speed = (input.sprint ? SPRINT_SPEED : WALK_SPEED) * magnitude;
+    const moveSpeed =
+      (input.sprint ? SPRINT_SPEED_METERS_PER_SECOND : WALK_SPEED_METERS_PER_SECOND) * magnitude;
+    const isMoving = magnitude > 0.08;
+    const desiredDirection =
+      isMoving && Math.hypot(moveDir.x, moveDir.z) > 1e-4
+        ? normalize({ x: moveDir.x, y: 0, z: moveDir.z })
+        : vec3(0, 0, 0);
 
-    let position = character.position;
-    if (magnitude > 0.08) {
-      const flat = normalize({ x: moveDir.x, y: 0, z: moveDir.z });
-      position = add(position, scale(flat, speed * dt));
-      const radial = Math.hypot(position.x, position.z);
-      if (radial > PAD_RADIUS_METERS - 1) {
-        const pull = (PAD_RADIUS_METERS - 1) / radial;
-        position = { x: position.x * pull, y: position.y, z: position.z * pull };
-      }
-    }
+    const motion = integrateCharacterLocomotion(
+      character,
+      {
+        wantsJump: actions.jumpPressed,
+        wantsSprint: Boolean(input.sprint),
+        isMoving,
+        desiredDirection,
+        moveSpeed,
+      },
+      dt,
+      WORLD_UP,
+      SANDBOX_GRAVITY,
+      {
+        onGroundedStep: () => {
+          let position = character.position;
+          if (isMoving) {
+            position = clampToSandboxPad(add(position, scale(desiredDirection, moveSpeed * dt)));
+          }
+          return {
+            position: { x: position.x, y: SANDBOX_GROUND_Y_METERS, z: position.z },
+            up: WORLD_UP,
+          };
+        },
+        tryLand: (candidate) => {
+          if (candidate.y > SANDBOX_GROUND_Y_METERS) return null;
+          const clamped = clampToSandboxPad(candidate);
+          return {
+            position: { x: clamped.x, y: SANDBOX_GROUND_Y_METERS, z: clamped.z },
+            up: WORLD_UP,
+          };
+        },
+      },
+    );
 
     const desiredFacing = input.faceCameraYaw ? orbit.forward : moveDir;
     let forward = character.forward;
@@ -406,13 +448,16 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       });
     }
 
-    const isMoving = magnitude > 0.08;
     character = {
       ...character,
-      animation: isMoving && input.sprint ? 'Sprint_Loop' : isMoving ? 'Walk_Loop' : 'Idle_Loop',
+      animation: motion.animation,
       forward,
-      position: { ...position, y: 0.05 },
-      velocity: vec3(0, 0, 0),
+      grounded: motion.grounded,
+      jumpPhase: motion.jumpPhase,
+      jumpPhaseTime: motion.jumpPhaseTime,
+      position: motion.position,
+      up: motion.up,
+      velocity: motion.velocity,
     };
     prompt = '';
 
