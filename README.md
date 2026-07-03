@@ -17,6 +17,10 @@ This project is **100% vibe coded** — built iteratively with AI-assisted devel
 
 **Work in progress.** Phase 1 is FPS weapons and character-controller updates — see the [roadmap](#roadmap).
 
+## Live Play Test
+
+[https://claudecitizen.netlify.app/](https://claudecitizen.netlify.app/)
+
 ## Quick start
 
 ```bash
