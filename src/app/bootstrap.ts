@@ -1,3 +1,4 @@
+import { showLoadingScreen } from './loading_screen';
 import { showTitleScreen } from './title_screen';
 import { startPlaySession } from './play_session';
 
@@ -7,14 +8,19 @@ import { startPlaySession } from './play_session';
  * Production: straight into the game (no title screen, no editor code in the
  * bundle — the editor chunk is only reachable behind import.meta.env.DEV).
  *
- * Dev: title screen with Play + Editor. Deep links skip the title:
+ * Dev: title screen with Play. Deep links skip the title:
  *   ?boot=play              — jump into the game
  *   ?boot=editor            — jump into the editor
  *   ?stationPrefab=<id>     — jump into the game previewing a station prefab
  */
+function startPlayWithLoading(): void {
+  const loading = showLoadingScreen();
+  void startPlaySession(loading);
+}
+
 export function bootstrap(): void {
   if (!import.meta.env.DEV) {
-    void startPlaySession();
+    startPlayWithLoading();
     return;
   }
 
@@ -32,12 +38,12 @@ export function bootstrap(): void {
     return;
   }
   if (boot === 'play' || params.has('stationPrefab')) {
-    void startPlaySession();
+    startPlayWithLoading();
     return;
   }
 
   showTitleScreen({
-    onPlay: () => void startPlaySession(),
+    onPlay: startPlayWithLoading,
     onEditor: openEditor,
   });
 }

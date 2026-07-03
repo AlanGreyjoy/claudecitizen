@@ -57,7 +57,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     targetZoomDistance: DEFAULT_SHIP_CAMERA_ZOOM,
   };
   let mode: GameMode | 'on-foot' | 'in-ship' = 'on-foot';
-  let cameraView: CameraView = 'third-person';
+  let cameraView: CameraView = 'first-person';
   let shipCameraView: ShipCameraView = 'cockpit';
 
   function toggleCameraView() {

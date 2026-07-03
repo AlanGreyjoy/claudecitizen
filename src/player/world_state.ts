@@ -59,7 +59,7 @@ export function createWorldState(planet: Planet, seed: number): WorldState {
       yawRadians: initialStationCameraYaw(),
       zoomDistance: 5.2,
     },
-    cameraView: 'third-person',
+    cameraView: 'first-person',
     shipCameraView: 'cockpit',
     shipCameraZoom: 1.0,
     character,

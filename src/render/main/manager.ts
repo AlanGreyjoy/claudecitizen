@@ -109,7 +109,7 @@ export function createSpikeRenderer(
 
   function render(world: SpikeRenderWorld): RenderStats {
     const {
-      cameraView = 'third-person',
+      cameraView = 'first-person',
       character = null,
       mode = 'in-ship',
       ship,

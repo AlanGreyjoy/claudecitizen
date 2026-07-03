@@ -686,6 +686,121 @@
         color: var(--muted);
       }
 
+      .sc-title-footnote {
+        margin: 22px 0 0;
+        max-width: 380px;
+        font: 500 16px/1.5 var(--sc-font);
+        letter-spacing: 0.03em;
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      .sc-title-footnote a {
+        color: var(--accent-2);
+        text-decoration: none;
+      }
+
+      .sc-title-footnote a:hover {
+        text-decoration: underline;
+      }
+
+      .sc-title-disclaimer {
+        position: absolute;
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        max-width: min(640px, 94vw);
+        margin: 0;
+        padding: 12px 20px;
+        text-align: center;
+        font: 600 13px/1.5 var(--sc-font);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border: 1px solid rgba(90, 190, 255, 0.22);
+        background: rgba(6, 12, 26, 0.72);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 0 20px rgba(80, 200, 255, 0.08);
+      }
+
+      .sc-loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 310;
+        display: grid;
+        place-items: center;
+        background:
+          linear-gradient(180deg, rgba(4, 8, 18, 0.72) 0%, rgba(2, 5, 13, 0.88) 100%),
+          radial-gradient(circle at 24% 18%, rgba(63, 198, 255, 0.08), transparent 34%),
+          radial-gradient(circle at 78% 82%, rgba(255, 206, 111, 0.06), transparent 40%),
+          url('./src/assets/images/wallpaper-1.png') center / cover no-repeat,
+          linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
+      }
+
+      .sc-loading-core {
+        width: min(420px, calc(100vw - 48px));
+        padding: 36px 44px;
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
+          var(--panel);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 48px var(--sc-glow);
+        clip-path: polygon(
+          14px 0,
+          calc(100% - 14px) 0,
+          100% 14px,
+          100% calc(100% - 14px),
+          calc(100% - 14px) 100%,
+          14px 100%,
+          0 calc(100% - 14px),
+          0 14px
+        );
+      }
+
+      .sc-loading-label {
+        margin: 0;
+        font: 700 22px/1 var(--sc-font);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--text);
+        text-align: center;
+      }
+
+      .sc-loading-bar {
+        margin-top: 28px;
+        height: 8px;
+        border: 1px solid rgba(90, 190, 255, 0.35);
+        background: rgba(0, 0, 0, 0.32);
+        overflow: hidden;
+        clip-path: polygon(
+          4px 0,
+          calc(100% - 4px) 0,
+          100% 4px,
+          100% calc(100% - 4px),
+          calc(100% - 4px) 100%,
+          4px 100%,
+          0 calc(100% - 4px),
+          0 4px
+        );
+      }
+
+      .sc-loading-bar-fill {
+        height: 100%;
+        width: calc(var(--progress, 0) * 1%);
+        background: linear-gradient(90deg, rgba(139, 216, 255, 0.65), var(--accent));
+        box-shadow: 0 0 12px rgba(80, 200, 255, 0.35);
+        transition: width 120ms ease-out;
+      }
+
+      .sc-loading-status {
+        margin: 16px 0 0;
+        font: 500 13px/1.4 var(--sc-font);
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        text-align: center;
+      }
+
       #editor-root {
         position: fixed;
         inset: 0;
@@ -697,9 +812,14 @@
     <div id="title-screen" class="sc-title-screen is-hidden">
       <div class="sc-title-core">
         <h1 class="sc-title-logo">Claude<span>Citizen</span></h1>
-        <p class="sc-title-tag">Asteron orbital sandbox — surface to orbit, no loading screens.</p>
+        <p class="sc-title-tag">Walk, fly, and reach orbit on Asteron — one world, no loading screens.</p>
         <div class="sc-title-actions">
           <button id="title-play-btn" class="sc-title-btn" type="button">Play</button>
+          <p class="sc-title-footnote">
+            They have a billion in funding. We have
+            <a href="https://www.buymeacoffee.com/alangreyjoy" target="_blank" rel="noopener noreferrer">Buy Me a Coffee</a>
+            and Fable.
+          </p>
           <button
             id="title-editor-btn"
             class="sc-title-btn sc-title-btn-secondary is-hidden"
@@ -711,6 +831,25 @@
         <p class="sc-title-hint is-hidden" id="title-editor-hint">
           Editor assembles prefabs from the assets/ library — development builds only.
         </p>
+      </div>
+      <p class="sc-title-disclaimer">
+        Not affiliated with Star Citizen, Cloud Imperium Games, or Roberts Space Industries.
+      </p>
+    </div>
+    <div id="loading-screen" class="sc-loading-screen is-hidden">
+      <div class="sc-loading-core">
+        <p class="sc-loading-label">Loading</p>
+        <div
+          id="loading-bar"
+          class="sc-loading-bar"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <div id="loading-bar-fill" class="sc-loading-bar-fill"></div>
+        </div>
+        <p id="loading-status" class="sc-loading-status">Preparing Asteron...</p>
       </div>
     </div>
     <div id="editor-root" class="is-hidden"></div>

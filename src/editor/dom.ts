@@ -53,3 +53,93 @@ export function showToast(message: string, isError = false): void {
     toastElement?.classList.remove('is-visible');
   }, 2600);
 }
+
+export type ConfirmDialogOptions = {
+  title?: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+};
+
+let activeConfirmDialog: { finish: (confirmed: boolean) => void } | null = null;
+
+export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolean> {
+  if (activeConfirmDialog) activeConfirmDialog.finish(false);
+
+  return new Promise((resolve) => {
+    // Defer until after the triggering click finishes (e.g. File menu items).
+    window.setTimeout(() => {
+      const title = options.title ?? 'Confirm';
+      const confirmLabel = options.confirmLabel ?? 'OK';
+      const cancelLabel = options.cancelLabel ?? 'Cancel';
+      const destructive = options.destructive ?? false;
+
+      const host = document.getElementById('editor-root') ?? document.body;
+      const overlay = el('div', { className: 'ed-dialog-overlay' });
+      const dialog = el('div', {
+        className: 'ed-dialog',
+        attrs: {
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'ed-dialog-title',
+        },
+      });
+
+      const cancelBtn = el('button', {
+        className: 'ed-btn ed-dialog-btn-cancel',
+        text: cancelLabel,
+        attrs: { type: 'button' },
+        on: { click: () => finish(false) },
+      });
+
+      const confirmBtn = el('button', {
+        className: `ed-btn ed-dialog-btn-confirm${destructive ? ' ed-btn-accent' : ''}`,
+        text: confirmLabel,
+        attrs: { type: 'button' },
+        on: { click: () => finish(true) },
+      });
+
+      dialog.append(
+        el('h2', { className: 'ed-dialog-title', text: title, attrs: { id: 'ed-dialog-title' } }),
+        el('p', { className: 'ed-dialog-message', text: options.message }),
+        el('div', { className: 'ed-dialog-actions' }, [cancelBtn, confirmBtn]),
+      );
+      overlay.append(dialog);
+      host.append(overlay);
+
+      const onKeyDown = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          finish(false);
+        }
+      };
+
+      const onOverlayClick = (event: Event): void => {
+        if (event.target === overlay) finish(false);
+      };
+
+      overlay.addEventListener('click', onOverlayClick);
+      window.addEventListener('keydown', onKeyDown);
+      requestAnimationFrame(() => overlay.classList.add('is-visible'));
+
+      function cleanup(): void {
+        overlay.removeEventListener('click', onOverlayClick);
+        window.removeEventListener('keydown', onKeyDown);
+        overlay.classList.remove('is-visible');
+        window.setTimeout(() => overlay.remove(), 150);
+        activeConfirmDialog = null;
+      }
+
+      function finish(confirmed: boolean): void {
+        if (!activeConfirmDialog) return;
+        activeConfirmDialog = null;
+        cleanup();
+        resolve(confirmed);
+      }
+
+      activeConfirmDialog = { finish };
+      cancelBtn.focus();
+    }, 0);
+  });
+}

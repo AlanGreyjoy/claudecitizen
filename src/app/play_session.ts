@@ -1,5 +1,6 @@
 import { createPlayerControls } from '../flight/player_controls';
 import { createGameLoop } from './game_loop';
+import type { LoadingScreenHandle } from './loading_screen';
 import { createHud } from '../render/effects';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { createVegetationControls } from '../render/vegetation';
@@ -72,14 +73,14 @@ function mountEditorReturnButton(prefabId: string): void {
 
 let started = false;
 
-export async function startPlaySession(): Promise<void> {
+export async function startPlaySession(loading?: LoadingScreenHandle): Promise<void> {
   if (started) return;
   started = true;
 
   const stationPrefab = await resolveStationPrefabPreview();
+  loading?.setProgress(0.15);
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
-  requireElement<HTMLElement>('app').classList.remove('is-hidden');
   if (stationPrefab) mountEditorReturnButton(stationPrefab.id);
 
   const canvas = requireElement<HTMLCanvasElement>('view');
@@ -111,6 +112,7 @@ export async function startPlaySession(): Promise<void> {
     rendererError = error;
     console.error('ClaudeCitizen renderer init failed.', error);
   }
+  loading?.setProgress(0.45);
 
   createVegetationControls(vegetationMenuEl, vegetationResetEl, renderer);
 
@@ -144,6 +146,7 @@ export async function startPlaySession(): Promise<void> {
   const controls = createPlayerControls(canvas, {
     onReset: () => gameLoop.resetWorld(),
   });
+  loading?.setProgress(0.75);
 
   gameLoop = createGameLoop({
     planet,
@@ -162,5 +165,12 @@ export async function startPlaySession(): Promise<void> {
   window.addEventListener('resize', resize);
   resize();
 
+  loading?.setProgress(0.95);
   gameLoop.start();
+
+  if (loading) {
+    await loading.complete();
+    loading.hide();
+  }
+  requireElement<HTMLElement>('app').classList.remove('is-hidden');
 }

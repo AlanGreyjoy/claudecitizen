@@ -667,6 +667,73 @@ const EDITOR_CSS = `
   border-color: rgba(255, 125, 125, 0.6);
   color: #ffb0b0;
 }
+
+.ed-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 5, 13, 0.72);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.ed-dialog-overlay.is-visible {
+  opacity: 1;
+}
+
+.ed-dialog {
+  width: min(420px, 100%);
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
+    rgba(6, 12, 26, 0.97);
+  box-shadow:
+    0 0 24px var(--sc-glow),
+    0 16px 48px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  clip-path: polygon(
+    10px 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 calc(100% - 10px),
+    0 10px
+  );
+  padding: 20px 22px 18px;
+  font: 13px/1.35 var(--sc-font);
+  color: var(--text);
+}
+
+.ed-dialog-title {
+  margin: 0 0 10px;
+  font: 700 14px/1.2 var(--sc-font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.ed-dialog-message {
+  margin: 0 0 18px;
+  font: 500 14px/1.45 var(--sc-font);
+  color: var(--text);
+}
+
+.ed-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ed-dialog-btn-cancel,
+.ed-dialog-btn-confirm {
+  min-width: 96px;
+}
 `;
 
 let injected = false;

@@ -1,6 +1,6 @@
 import { fetchPrefab, fetchPrefabList, savePrefab } from './api';
 import { createEditorStore, createEmptyEntity } from './document';
-import { el, showToast } from './dom';
+import { el, showConfirmDialog, showToast } from './dom';
 import { createHierarchyPanel } from './panels/hierarchy';
 import { createInspectorPanel } from './panels/inspector';
 import { createProjectPanel } from './panels/project';
@@ -109,8 +109,18 @@ export function startEditorSession(): void {
     }
   }
 
+  async function confirmDiscard(message: string): Promise<boolean> {
+    return showConfirmDialog({
+      title: 'Unsaved changes',
+      message,
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+    });
+  }
+
   async function loadById(id: string): Promise<void> {
-    if (store.isDirty() && !window.confirm('Discard unsaved changes and load?')) return;
+    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and load?'))) return;
     try {
       const doc = await fetchPrefab(id);
       store.loadDocument(fromPrefabDocument(doc));
@@ -120,8 +130,8 @@ export function startEditorSession(): void {
     }
   }
 
-  function newDocument(): void {
-    if (store.isDirty() && !window.confirm('Discard unsaved changes?')) return;
+  async function newDocument(): Promise<void> {
+    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes?'))) return;
     store.newDocument();
   }
 
@@ -135,8 +145,11 @@ export function startEditorSession(): void {
     window.location.href = `/?stationPrefab=${encodeURIComponent(id)}`;
   }
 
-  function exitToTitle(): void {
-    if (store.isDirty() && !window.confirm('Discard unsaved changes and exit?')) return;
+  let allowUnload = false;
+
+  async function exitToTitle(): Promise<void> {
+    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and exit?'))) return;
+    allowUnload = true;
     window.location.href = '/';
   }
 
@@ -147,11 +160,11 @@ export function startEditorSession(): void {
     onSnapChange: (enabled, translate, rotate) => viewport.setSnap(enabled, translate, rotate),
     onAddBox: addBox,
     onAddEmpty: addEmpty,
-    onNew: newDocument,
+    onNew: () => void newDocument(),
     onSave: () => void saveCurrent(),
     onLoad: (id) => void loadById(id),
     onPreview: () => void previewInPlay(),
-    onExit: exitToTitle,
+    onExit: () => void exitToTitle(),
   });
 
   createHierarchyPanel(hierarchyEl, store);
@@ -229,7 +242,7 @@ export function startEditorSession(): void {
   });
 
   window.addEventListener('beforeunload', (event) => {
-    if (!store.isDirty()) return;
+    if (allowUnload || !store.isDirty()) return;
     event.preventDefault();
   });
 }
