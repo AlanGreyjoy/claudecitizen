@@ -6,6 +6,12 @@ import { createInspectorPanel } from './panels/inspector';
 import { createProjectPanel } from './panels/project';
 import { createToolbar, type ToolbarGizmoMode } from './panels/toolbar';
 import { fromPrefabDocument, toPrefabDocument } from './serialize';
+import {
+  attachColumnSplitter,
+  attachRowSplitter,
+  PANEL_SIZE_BOUNDS,
+  restorePanelSizes,
+} from './panel_resize';
 import { injectEditorStyles } from './styles';
 import { parsePrefabDocument, slugifyPrefabName } from '../world/prefabs/schema';
 import { createEditorViewport } from '../render/editor/viewport';
@@ -43,9 +49,34 @@ export function startEditorSession(): void {
     }),
   ]);
   const inspectorEl = el('div', { className: 'ed-panel' });
-  const mainEl = el('div', { className: 'ed-main' }, [hierarchyEl, viewportEl, inspectorEl]);
+  const hierarchySplitter = el('div', { className: 'ed-splitter ed-splitter-col' });
+  const inspectorSplitter = el('div', { className: 'ed-splitter ed-splitter-col' });
+  const projectSplitter = el('div', { className: 'ed-splitter ed-splitter-row' });
+  const mainEl = el('div', { className: 'ed-main' }, [
+    hierarchyEl,
+    hierarchySplitter,
+    viewportEl,
+    inspectorSplitter,
+    inspectorEl,
+  ]);
   const projectEl = el('div', { className: 'ed-project' });
-  root.append(toolbarEl, mainEl, projectEl);
+  root.append(toolbarEl, mainEl, projectSplitter, projectEl);
+
+  restorePanelSizes(root, mainEl, projectEl);
+  attachColumnSplitter(hierarchySplitter, mainEl, '--ed-hierarchy-width', {
+    ...PANEL_SIZE_BOUNDS.hierarchyWidth,
+    storageKey: 'hierarchyWidth',
+  });
+  attachColumnSplitter(inspectorSplitter, mainEl, '--ed-inspector-width', {
+    ...PANEL_SIZE_BOUNDS.inspectorWidth,
+    invert: true,
+    storageKey: 'inspectorWidth',
+  });
+  attachRowSplitter(projectSplitter, root, '--ed-project-height', {
+    min: PANEL_SIZE_BOUNDS.projectHeight.min,
+    max: PANEL_SIZE_BOUNDS.projectHeight.max,
+    storageKey: 'projectHeight',
+  });
 
   // --- store + viewport -------------------------------------------------------
   const store = createEditorStore();

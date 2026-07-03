@@ -3,7 +3,7 @@
 const EDITOR_CSS = `
 #editor-root {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 240px;
+  grid-template-rows: auto minmax(0, 1fr) 4px var(--ed-project-height, 240px);
   background: #060a14;
   color: var(--text);
   font: 13px/1.35 var(--sc-font);
@@ -233,8 +233,49 @@ const EDITOR_CSS = `
 
 .ed-main {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 320px;
+  grid-template-columns:
+    var(--ed-hierarchy-width, 264px)
+    4px
+    minmax(0, 1fr)
+    4px
+    var(--ed-inspector-width, 320px);
   min-height: 0;
+}
+
+.ed-splitter {
+  position: relative;
+  z-index: 2;
+  touch-action: none;
+}
+
+.ed-splitter-col {
+  cursor: col-resize;
+  margin: 0 -1px;
+}
+
+.ed-splitter-row {
+  cursor: row-resize;
+  margin: -1px 0;
+  border-top: 1px solid var(--line);
+}
+
+.ed-splitter:hover,
+.ed-splitter.is-dragging {
+  background: rgba(139, 216, 255, 0.22);
+}
+
+body.ed-resize-active {
+  user-select: none;
+}
+
+body.ed-resize-col,
+body.ed-resize-col * {
+  cursor: col-resize !important;
+}
+
+body.ed-resize-row,
+body.ed-resize-row * {
+  cursor: row-resize !important;
 }
 
 .ed-panel {
@@ -557,7 +598,10 @@ const EDITOR_CSS = `
 /* Project panel */
 .ed-project {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns:
+    var(--ed-project-side-width, 280px)
+    4px
+    minmax(0, 1fr);
   border-top: 1px solid var(--line);
   min-height: 0;
   background: rgba(6, 12, 26, 0.7);

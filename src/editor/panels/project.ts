@@ -1,4 +1,5 @@
 import { assetUrlFor, fetchAssetListing, type AssetEntry, type AssetRoot } from '../api';
+import { attachColumnSplitter, PANEL_SIZE_BOUNDS } from '../panel_resize';
 import { clearChildren, el, showToast } from '../dom';
 
 const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
@@ -73,7 +74,13 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
     ]),
     folderTree,
   ]);
-  container.append(side, grid);
+  const sideSplitter = el('div', { className: 'ed-splitter ed-splitter-col' });
+  container.append(side, sideSplitter, grid);
+
+  attachColumnSplitter(sideSplitter, container, '--ed-project-side-width', {
+    ...PANEL_SIZE_BOUNDS.projectSideWidth,
+    storageKey: 'projectSideWidth',
+  });
 
   function renderRootTabs(): void {
     clearChildren(rootTabs);

@@ -14,7 +14,7 @@ export function showTitleScreen(options: TitleScreenOptions): void {
   const screen = requireElement<HTMLElement>('title-screen');
   const playBtn = requireElement<HTMLButtonElement>('title-play-btn');
   const editorBtn = requireElement<HTMLButtonElement>('title-editor-btn');
-  const editorHint = document.getElementById('title-editor-hint');
+  const editorAccess = document.getElementById('title-editor-access');
 
   screen.classList.remove('is-hidden');
 
@@ -29,8 +29,7 @@ export function showTitleScreen(options: TitleScreenOptions): void {
 
   if (options.onEditor) {
     const onEditor = options.onEditor;
-    editorBtn.classList.remove('is-hidden');
-    editorHint?.classList.remove('is-hidden');
+    editorAccess?.classList.remove('is-hidden');
     editorBtn.addEventListener(
       'click',
       () => {

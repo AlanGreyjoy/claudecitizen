@@ -613,16 +613,17 @@
         );
       }
 
-      .sc-title-logo {
-        margin: 0;
-        font: 700 44px/1 var(--sc-font);
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: var(--text);
+      .sc-brand-logo {
+        display: block;
+        width: min(480px, calc(100vw - 80px));
+        height: auto;
+        margin: 0 auto;
+        filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
       }
 
-      .sc-title-logo span {
-        color: var(--accent);
+      .sc-loading-core .sc-brand-logo {
+        width: min(360px, calc(100vw - 96px));
+        margin-bottom: 24px;
       }
 
       .sc-title-tag {
@@ -679,11 +680,31 @@
         box-shadow: 0 0 22px rgba(255, 206, 111, 0.2);
       }
 
-      .sc-title-hint {
-        margin: 20px 0 0;
-        font: 500 12px/1.4 var(--sc-font);
-        letter-spacing: 0.1em;
+      .sc-title-editor-access {
+        position: absolute;
+        top: 28px;
+        right: 28px;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+        max-width: min(280px, calc(100vw - 56px));
+      }
+
+      .sc-title-editor-btn {
+        min-width: 0;
+        padding: 10px 22px;
+        font-size: 14px;
+      }
+
+      .sc-title-editor-hint {
+        margin: 0;
+        max-width: 240px;
+        font: 500 11px/1.4 var(--sc-font);
+        letter-spacing: 0.06em;
         color: var(--muted);
+        text-align: right;
       }
 
       .sc-title-footnote {
@@ -810,8 +831,26 @@
   </head>
   <body>
     <div id="title-screen" class="sc-title-screen is-hidden">
+      <div class="sc-title-editor-access is-hidden" id="title-editor-access">
+        <button
+          id="title-editor-btn"
+          class="sc-title-btn sc-title-btn-secondary sc-title-editor-btn"
+          type="button"
+        >
+          Editor
+        </button>
+        <p class="sc-title-editor-hint" id="title-editor-hint">
+          Editor assembles prefabs from the assets/ library — development builds only.
+        </p>
+      </div>
       <div class="sc-title-core">
-        <h1 class="sc-title-logo">Claude<span>Citizen</span></h1>
+        <img
+          class="sc-brand-logo"
+          src="./src/assets/generated/claudecitizen-logo-transparent.png"
+          alt="ClaudeCitizen"
+          width="720"
+          height="360"
+        />
         <p class="sc-title-tag">Walk, fly, and reach orbit on Asteron — one world, no loading screens.</p>
         <div class="sc-title-actions">
           <button id="title-play-btn" class="sc-title-btn" type="button">Play</button>
@@ -820,17 +859,7 @@
             <a href="https://www.buymeacoffee.com/alangreyjoy" target="_blank" rel="noopener noreferrer">Buy Me a Coffee</a>
             and Fable.
           </p>
-          <button
-            id="title-editor-btn"
-            class="sc-title-btn sc-title-btn-secondary is-hidden"
-            type="button"
-          >
-            Editor
-          </button>
         </div>
-        <p class="sc-title-hint is-hidden" id="title-editor-hint">
-          Editor assembles prefabs from the assets/ library — development builds only.
-        </p>
       </div>
       <p class="sc-title-disclaimer">
         Not affiliated with Star Citizen, Cloud Imperium Games, or Roberts Space Industries.
@@ -838,6 +867,13 @@
     </div>
     <div id="loading-screen" class="sc-loading-screen is-hidden">
       <div class="sc-loading-core">
+        <img
+          class="sc-brand-logo"
+          src="./src/assets/generated/claudecitizen-logo-transparent.png"
+          alt="ClaudeCitizen"
+          width="720"
+          height="360"
+        />
         <p class="sc-loading-label">Loading</p>
         <div
           id="loading-bar"
