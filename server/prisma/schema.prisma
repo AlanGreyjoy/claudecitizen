@@ -27,6 +27,8 @@ model Player {
   displayName       String
   currentInstanceId String
   currentRoomId     String   @default("hab-room")
+  arcBalance        Int      @default(0)
+  starterLoadoutGrantedAt DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -36,6 +38,7 @@ model Player {
 model Ship {
   id                String   @id @default(cuid())
   playerId          String
+  shipDefinitionId  String?
   prefabId          String
   displayName       String
   currentInstanceId String?
@@ -46,8 +49,34 @@ model Ship {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  shipDefinition    ShipDefinition? @relation(fields: [shipDefinitionId], references: [id], onDelete: SetNull)
 
   @@index([playerId])
+  @@index([shipDefinitionId])
+}
+
+model ShipDefinition {
+  id                 String   @id @default(cuid())
+  name               String
+  description        String
+  prefabId           String
+  costArc            Int
+  maxHp              Float
+  maxShields         Float
+  shieldRegenPerSec  Float
+  maxSpeedMps        Float
+  throttleAccelMps2  Float
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  ships              Ship[]
+}
+
+model GameSettings {
+  id                     String   @id @default("singleton")
+  startingArcBalance     Int      @default(0)
+  starterShipDefinitionIds String[] @default([])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }
 
 model RefreshToken {

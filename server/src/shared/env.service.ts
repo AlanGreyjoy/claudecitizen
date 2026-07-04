@@ -40,6 +40,9 @@ export class EnvService {
   readonly redisUrl = readEnv('REDIS_URL', 'redis://localhost:6379');
   readonly jwtAccessSecret = readEnv('JWT_ACCESS_SECRET', 'dev-access-secret-change-me');
   readonly jwtRefreshSecret = readEnv('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me');
+  readonly adminEmail = readEnv('ADMIN_EMAIL', 'admin@claude-citizen.com');
+  readonly adminPassword = readEnv('ADMIN_PASSWORD');
+  readonly adminSessionSecret = readEnv('ADMIN_SESSION_SECRET', this.jwtAccessSecret);
   readonly cookieDomain = readEnv('COOKIE_DOMAIN');
   readonly cookieSameSite = readSameSite();
   readonly cookieSecure = readBoolean('COOKIE_SECURE', this.nodeEnv === 'production');
@@ -54,6 +57,7 @@ export class EnvService {
   readonly smtpUser = readEnv('SMTP_USER');
   readonly smtpPass = readEnv('SMTP_PASS');
   readonly smtpFrom = readEnv('SMTP_FROM', 'ClaudeCitizen <noreply@localhost>');
+  readonly logLevel = readEnv('LOG_LEVEL', this.nodeEnv === 'production' ? 'info' : 'debug');
 
   get isProduction(): boolean {
     return this.nodeEnv === 'production';

@@ -1,14 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
 import nodemailer from 'nodemailer';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { EnvService } from '../shared/env.service';
 
 @Injectable()
 export class MailService {
-  constructor(@Inject(EnvService) private readonly env: EnvService) {}
+  constructor(
+    @Inject(EnvService) private readonly env: EnvService,
+    @InjectPinoLogger(MailService.name) private readonly logger: PinoLogger,
+  ) {}
 
   async sendPasswordReset(email: string, resetUrl: string): Promise<void> {
     if (!this.env.smtpHost) {
-      console.info(`[auth] Password reset link for ${email}: ${resetUrl}`);
+      this.logger.info(
+        { email },
+        'Password reset requested but SMTP is not configured; email not sent',
+      );
       return;
     }
 
@@ -28,5 +35,6 @@ export class MailService {
       subject: 'Reset your ClaudeCitizen password',
       text: `Reset your password: ${resetUrl}\n\nThis link expires in 30 minutes.`,
     });
+    this.logger.info({ email }, 'Password reset email sent');
   }
 }

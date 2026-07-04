@@ -1,24 +1,29 @@
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { EnvService } from '../shared/env.service';
 
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   private readonly client: Redis;
 
-  constructor(@Inject(EnvService) env: EnvService) {
+  constructor(
+    @Inject(EnvService) env: EnvService,
+    @InjectPinoLogger(RedisService.name) private readonly logger: PinoLogger,
+  ) {
     this.client = new Redis(env.redisUrl, {
       enableOfflineQueue: true,
       lazyConnect: false,
       maxRetriesPerRequest: 2,
     });
     this.client.on('error', (error) => {
-      console.warn('[redis]', error.message);
+      this.logger.warn({ err: error }, 'Redis client error');
     });
   }
 
   async onModuleDestroy(): Promise<void> {
     this.client.disconnect();
+    this.logger.debug('Redis client disconnected');
   }
 
   async get(key: string): Promise<string | null> {

@@ -14,6 +14,9 @@ export interface AuthSession {
 
 export interface GameBootstrap {
   player: AuthSession['player'];
+  economy: {
+    arcBalance: number;
+  };
   spawn: {
     instanceId: string;
     apartmentInstanceId: string;
@@ -22,12 +25,16 @@ export interface GameBootstrap {
   };
   ships: {
     id: string;
+    shipDefinitionId: string | null;
     prefabId: string;
     displayName: string;
     hp: number;
     shields: number;
     maxHp: number;
     maxShields: number;
+    shieldRegenPerSec: number;
+    maxSpeedMps: number;
+    throttleAccelMps2: number;
   }[];
   featureFlags: {
     nativeWebSocketPresence: boolean;

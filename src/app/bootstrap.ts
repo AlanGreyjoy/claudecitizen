@@ -35,6 +35,13 @@ export function bootstrap(): void {
       .catch((error) => console.error('ClaudeCitizen editor failed to load.', error));
   };
 
+  if (boot === 'admin') {
+    import('./admin_screen')
+      .then((module) => module.showAdminScreen())
+      .catch((error) => console.error('ClaudeCitizen admin screen failed to load.', error));
+    return;
+  }
+
   if (boot === 'editor' && import.meta.env.DEV) {
     openEditor();
     return;

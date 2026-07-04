@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Prisma, type User } from '@prisma/client';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { EnvService } from '../shared/env.service';
@@ -18,8 +19,6 @@ import type { AccessTokenPayload, AuthSession, RefreshTokenPayload } from './aut
 const ACCESS_COOKIE_MS = 15 * 60 * 1000;
 const REFRESH_COOKIE_MS = 30 * 24 * 60 * 60 * 1000;
 const RESET_TOKEN_MS = 30 * 60 * 1000;
-const STARTER_SHIP_PREFAB_ID = 'phobos-starhopper';
-const STARTER_SHIP_NAME = 'Star Hopper';
 
 export interface IssuedAuthTokens {
   accessToken: string;
@@ -69,6 +68,7 @@ export class AuthService {
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(EnvService) private readonly env: EnvService,
     @Inject(MailService) private readonly mail: MailService,
+    @InjectPinoLogger(AuthService.name) private readonly logger: PinoLogger,
   ) {}
 
   readonly accessCookieMs = ACCESS_COOKIE_MS;
@@ -94,9 +94,13 @@ export class AuthService {
         passwordHash,
       });
     } catch (error) {
-      if (isUniqueConstraint(error)) throw new ConflictException('Email or username is already taken.');
+      if (isUniqueConstraint(error)) {
+        this.logger.warn({ username: cleanUsername }, 'Registration conflict');
+        throw new ConflictException('Email or username is already taken.');
+      }
       throw error;
     }
+    this.logger.info({ userId: user.id, username: cleanUsername }, 'User registered');
     return { session: await this.sessionForUser(user.id), tokens: await this.issueTokens(user.id) };
   }
 
@@ -110,9 +114,16 @@ export class AuthService {
         OR: [{ email: clean }, { username: normalizeUsername(clean) }],
       },
     });
-    if (!user?.passwordHash) throw new UnauthorizedException('Invalid credentials.');
+    if (!user?.passwordHash) {
+      this.logger.warn({ identifier: clean }, 'Login failed');
+      throw new UnauthorizedException('Invalid credentials.');
+    }
     const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('Invalid credentials.');
+    if (!valid) {
+      this.logger.warn({ identifier: clean }, 'Login failed');
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+    this.logger.info({ userId: user.id }, 'User logged in');
     return { session: await this.sessionForUser(user.id), tokens: await this.issueTokens(user.id) };
   }
 
@@ -122,6 +133,7 @@ export class AuthService {
       where: { tokenHash: sha256(refreshToken), revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    this.logger.info('User logged out');
   }
 
   async refresh(refreshToken: string | undefined): Promise<{
@@ -140,6 +152,7 @@ export class AuthService {
       record.revokedAt ||
       record.expiresAt <= new Date()
     ) {
+      this.logger.warn('Refresh token invalid');
       throw new UnauthorizedException('Refresh token is invalid.');
     }
 
@@ -180,6 +193,7 @@ export class AuthService {
       scope: 'identify email',
       state,
     });
+    this.logger.debug('Discord login started');
     return `https://discord.com/oauth2/authorize?${params.toString()}`;
   }
 
@@ -187,12 +201,19 @@ export class AuthService {
     session: AuthSession;
     tokens: IssuedAuthTokens;
   }> {
-    if (!code || !state) throw new BadRequestException('Discord callback is missing state or code.');
+    if (!code || !state) {
+      this.logger.warn({ reason: 'Discord callback is missing state or code' }, 'Discord login failed');
+      throw new BadRequestException('Discord callback is missing state or code.');
+    }
     const stateKey = `oauth:discord:${state}`;
     const validState = await this.redis.get(stateKey);
     await this.redis.del(stateKey);
-    if (!validState) throw new UnauthorizedException('Discord state expired.');
+    if (!validState) {
+      this.logger.warn({ reason: 'Discord state expired' }, 'Discord login failed');
+      throw new UnauthorizedException('Discord state expired.');
+    }
     if (!this.env.discordClientId || !this.env.discordClientSecret) {
+      this.logger.warn({ reason: 'Discord OAuth is not configured' }, 'Discord login failed');
       throw new BadRequestException('Discord OAuth is not configured.');
     }
 
@@ -207,20 +228,33 @@ export class AuthService {
         redirect_uri: this.env.discordRedirectUri,
       }),
     });
-    if (!tokenResponse.ok) throw new UnauthorizedException('Discord token exchange failed.');
+    if (!tokenResponse.ok) {
+      this.logger.warn({ reason: 'Discord token exchange failed' }, 'Discord login failed');
+      throw new UnauthorizedException('Discord token exchange failed.');
+    }
     const tokenJson = (await tokenResponse.json()) as DiscordTokenResponse;
-    if (!tokenJson.access_token) throw new UnauthorizedException('Discord token missing.');
+    if (!tokenJson.access_token) {
+      this.logger.warn({ reason: 'Discord token missing' }, 'Discord login failed');
+      throw new UnauthorizedException('Discord token missing.');
+    }
 
     const userResponse = await fetch('https://discord.com/api/users/@me', {
       headers: { Authorization: `Bearer ${tokenJson.access_token}` },
     });
-    if (!userResponse.ok) throw new UnauthorizedException('Discord profile lookup failed.');
+    if (!userResponse.ok) {
+      this.logger.warn({ reason: 'Discord profile lookup failed' }, 'Discord login failed');
+      throw new UnauthorizedException('Discord profile lookup failed.');
+    }
     const discordUser = (await userResponse.json()) as DiscordUserResponse;
 
     const existingDiscord = await this.prisma.user.findUnique({
       where: { discordId: discordUser.id },
     });
     if (existingDiscord) {
+      this.logger.info(
+        { userId: existingDiscord.id, discordId: discordUser.id },
+        'Discord login (existing user)',
+      );
       return {
         session: await this.sessionForUser(existingDiscord.id),
         tokens: await this.issueTokens(existingDiscord.id),
@@ -243,6 +277,10 @@ export class AuthService {
       displayName,
       discordId: discordUser.id,
     });
+    this.logger.info(
+      { userId: user.id, discordId: discordUser.id, username },
+      'Discord login (new user)',
+    );
     return { session: await this.sessionForUser(user.id), tokens: await this.issueTokens(user.id) };
   }
 
@@ -260,6 +298,7 @@ export class AuthService {
       },
     });
     const resetUrl = `${this.env.clientOrigin}/?auth=reset&token=${encodeURIComponent(token)}`;
+    this.logger.info({ userId: user.id }, 'Password reset requested');
     await this.mail.sendPasswordReset(cleanEmail, resetUrl);
   }
 
@@ -269,6 +308,7 @@ export class AuthService {
       where: { tokenHash: sha256(token) },
     });
     if (!record || record.usedAt || record.expiresAt <= new Date()) {
+      this.logger.warn('Password reset token invalid or expired');
       throw new UnauthorizedException('Reset token is invalid or expired.');
     }
     const passwordHash = await bcrypt.hash(password, 12);
@@ -286,6 +326,7 @@ export class AuthService {
         data: { revokedAt: new Date() },
       }),
     ]);
+    this.logger.info({ userId: record.userId }, 'Password reset completed');
   }
 
   private async verifyRefreshToken(token: string): Promise<RefreshTokenPayload> {
@@ -346,7 +387,7 @@ export class AuthService {
           discordId: data.discordId,
         },
       });
-      const player = await tx.player.create({
+      await tx.player.create({
         data: {
           userId: user.id,
           handle: data.username,
@@ -354,18 +395,6 @@ export class AuthService {
           currentInstanceId: `apartment:${user.id}`,
           currentRoomId: 'hab-room',
         },
-      });
-      await tx.ship.create({
-        data: {
-          playerId: player.id,
-          prefabId: STARTER_SHIP_PREFAB_ID,
-          displayName: STARTER_SHIP_NAME,
-          currentInstanceId: `hangar:${player.id}`,
-        },
-      });
-      await tx.player.update({
-        where: { id: player.id },
-        data: { currentInstanceId: `apartment:${player.id}` },
       });
       return user;
     });

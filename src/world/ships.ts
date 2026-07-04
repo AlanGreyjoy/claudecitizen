@@ -102,8 +102,11 @@ export async function syncBootstrapShips(
     instance.vitals.shields = primary.shields;
     instance.spec = {
       ...getShipLayoutForPrefab(primary.prefabId).spec,
+      maxSpeedMps: primary.maxSpeedMps,
+      throttleAccelMps2: primary.throttleAccelMps2,
       maxHp: primary.maxHp,
       maxShields: primary.maxShields,
+      shieldRegenPerSec: primary.shieldRegenPerSec,
     };
     setActiveShipPrefabId(primary.prefabId);
     return;
@@ -122,8 +125,11 @@ export async function syncBootstrapShips(
   });
   instance.spec = {
     ...instance.spec,
+    maxSpeedMps: primary.maxSpeedMps,
+    throttleAccelMps2: primary.throttleAccelMps2,
     maxHp: primary.maxHp,
     maxShields: primary.maxShields,
+    shieldRegenPerSec: primary.shieldRegenPerSec,
   };
   registerShipInstance(instance);
   setActiveShipPrefabId(primary.prefabId);

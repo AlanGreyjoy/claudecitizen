@@ -99,6 +99,7 @@ export function updateTransition(world: WorldState, dt: number, ctx: TransitionC
   const instance = getActiveShip(world);
   instance.body = integrateHoveringShip(instance.body, dt, ctx.planet, ctx.seed, {
     maxSpeedMps: instance.spec.maxSpeedMps,
+    throttleAccelMps2: instance.spec.throttleAccelMps2,
   });
 
   transition.elapsed = Math.min(transition.duration, transition.elapsed + dt);

@@ -360,6 +360,7 @@ export function createGameLoop({
     const rig = instance.rig;
     instance.body = integrateHoveringShip(ship, dt, planet, seed, {
       maxSpeedMps: instance.spec.maxSpeedMps,
+      throttleAccelMps2: instance.spec.throttleAccelMps2,
     });
     const parked = isShipParked(instance.body);
     const gates = {
@@ -484,7 +485,10 @@ export function createGameLoop({
         dt,
         planet,
         seed,
-        { maxSpeedMps: instance.spec.maxSpeedMps },
+        {
+          maxSpeedMps: instance.spec.maxSpeedMps,
+          throttleAccelMps2: instance.spec.throttleAccelMps2,
+        },
       );
       world.prompt = "Hold F — look around · Hold Y — get up";
       if (actions.exitSeatPressed) {

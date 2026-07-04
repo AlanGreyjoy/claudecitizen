@@ -1,37 +1,54 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  hydrateOwnedShip,
+  sortShipsForBootstrap,
+} from './game.catalog.helpers';
+import { GameCatalogService } from './game.catalog.service';
 import type { GameBootstrapDto } from './game.types';
-
-const STARTER_SHIP_PREFAB_ID = 'phobos-starhopper';
-const STARTER_SHIP_NAME = 'Star Hopper';
 
 @Injectable()
 export class GameService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(GameCatalogService) private readonly catalog: GameCatalogService,
+  ) {}
 
   async bootstrapForUser(userId: string): Promise<GameBootstrapDto> {
+    await this.catalog.grantStarterLoadout(userId);
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
         player: {
-          include: { ships: { orderBy: { createdAt: 'asc' } } },
+          include: {
+            ships: {
+              include: { shipDefinition: true },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
         },
       },
     });
     if (!user?.player) throw new UnauthorizedException('Account has no player.');
 
-    let ships = user.player.ships;
-    if (!ships.some((ship) => ship.prefabId === STARTER_SHIP_PREFAB_ID)) {
-      const starter = await this.prisma.ship.create({
-        data: {
-          playerId: user.player.id,
-          prefabId: STARTER_SHIP_PREFAB_ID,
-          displayName: STARTER_SHIP_NAME,
-          currentInstanceId: `hangar:${user.player.id}`,
-        },
-      });
-      ships = [...ships, starter];
-    }
+    const settings = await this.catalog.getSettings();
+    const legacyDefinitions = await this.catalog.listDefinitionsByPrefabIds(
+      user.player.ships
+        .filter((ship) => ship.shipDefinitionId === null)
+        .map((ship) => ship.prefabId),
+    );
+    const definitionByPrefabId = new Map(
+      legacyDefinitions.map((definition) => [
+        definition.prefabId,
+        this.catalog.asShipStatsSource(definition),
+      ]),
+    );
+    const orderedShips = sortShipsForBootstrap(
+      user.player.ships,
+      settings.starterShipDefinitionIds,
+      definitionByPrefabId,
+    );
 
     const apartmentInstanceId = `apartment:${user.player.id}`;
     const hangarInstanceId = `hangar:${user.player.id}`;
@@ -43,21 +60,37 @@ export class GameService {
         handle: user.player.handle,
         displayName: user.player.displayName,
       },
+      economy: {
+        arcBalance: user.player.arcBalance,
+      },
       spawn: {
         instanceId: currentInstanceId,
         apartmentInstanceId,
         hangarInstanceId,
         stationRoomId: user.player.currentRoomId || 'hab-room',
       },
-      ships: ships.map((ship) => ({
-        id: ship.id,
-        prefabId: ship.prefabId,
-        displayName: ship.displayName,
-        hp: ship.hp,
-        shields: ship.shields,
-        maxHp: ship.maxHp,
-        maxShields: ship.maxShields,
-      })),
+      ships: orderedShips.map((ship) => {
+        const authoritative = hydrateOwnedShip({
+          ship: ship,
+          definition:
+            ship.shipDefinition
+              ? this.catalog.asShipStatsSource(ship.shipDefinition)
+              : definitionByPrefabId.get(ship.prefabId) ?? null,
+        });
+        return {
+          id: ship.id,
+          shipDefinitionId: authoritative.shipDefinitionId,
+          prefabId: authoritative.prefabId,
+          displayName: authoritative.displayName,
+          hp: authoritative.hp,
+          shields: authoritative.shields,
+          maxHp: authoritative.maxHp,
+          maxShields: authoritative.maxShields,
+          shieldRegenPerSec: authoritative.shieldRegenPerSec,
+          maxSpeedMps: authoritative.maxSpeedMps,
+          throttleAccelMps2: authoritative.throttleAccelMps2,
+        };
+      }),
       featureFlags: {
         nativeWebSocketPresence: true,
         serverAuthoritativePhysics: false,

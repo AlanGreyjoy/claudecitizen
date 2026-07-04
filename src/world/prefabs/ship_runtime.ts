@@ -61,6 +61,8 @@ interface CollectedShip {
 function mergeShipSpec(partial: Partial<ShipSpec>): ShipSpec {
   return {
     maxSpeedMps: partial.maxSpeedMps ?? DEFAULT_SHIP_SPEC.maxSpeedMps,
+    throttleAccelMps2:
+      partial.throttleAccelMps2 ?? DEFAULT_SHIP_SPEC.throttleAccelMps2,
     maxHp: partial.maxHp ?? DEFAULT_SHIP_SPEC.maxHp,
     maxShields: partial.maxShields ?? DEFAULT_SHIP_SPEC.maxShields,
     shieldRegenPerSec:

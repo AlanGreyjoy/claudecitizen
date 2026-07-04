@@ -70,6 +70,8 @@ export function createFlightBody(
 export interface FlightIntegrateOptions {
   /** Per-ship max speed cap; defaults to FLIGHT_CONFIG when omitted. */
   maxSpeedMps?: number;
+  /** Per-ship forward thrust acceleration; defaults to FLIGHT_CONFIG when omitted. */
+  throttleAccelMps2?: number;
 }
 
 export function integrateFlightBody(
@@ -129,9 +131,11 @@ export function integrateFlightBody(
   }
 
   const boostFactor = 1 + (input.boost01 ?? 0) * FLIGHT_CONFIG.BOOST_FACTOR;
+  const throttleAccelMag =
+    options?.throttleAccelMps2 ?? FLIGHT_CONFIG.THROTTLE_ACCEL;
   const forwardAccel = scale(
     forward,
-    (input.throttle01 ?? 0) * FLIGHT_CONFIG.THROTTLE_ACCEL * boostFactor * dt,
+    (input.throttle01 ?? 0) * throttleAccelMag * boostFactor * dt,
   );
   const liftAccelMag = grounded ? FLIGHT_CONFIG.GROUND_LIFT_ACCEL : FLIGHT_CONFIG.LIFT_ACCEL;
   const liftDirection = grounded ? up : gravityUp;

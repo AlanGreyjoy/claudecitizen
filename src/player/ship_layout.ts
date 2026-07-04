@@ -25,6 +25,7 @@ export interface ShipRampHingeSpec {
 /** Static per-ship-type stats and articulation authored on the prefab. */
 export interface ShipSpec {
   maxSpeedMps: number;
+  throttleAccelMps2: number;
   maxHp: number;
   maxShields: number;
   shieldRegenPerSec: number;
@@ -46,6 +47,7 @@ export const DEFAULT_STARHOPPER_RAMP_HINGE: ShipRampHingeSpec = {
 
 export const DEFAULT_SHIP_SPEC: ShipSpec = {
   maxSpeedMps: FLIGHT_CONFIG.MAX_SPEED_METERS_PER_SECOND,
+  throttleAccelMps2: FLIGHT_CONFIG.THROTTLE_ACCEL,
   maxHp: 1000,
   maxShields: 500,
   shieldRegenPerSec: 25,

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { parse as parseCookie } from 'cookie';
 import type { IncomingMessage } from 'node:http';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { WebSocket } from 'ws';
 import { AuthService } from '../auth/auth.service';
 import { GameService } from '../game/game.service';
@@ -133,6 +134,7 @@ export class WorldService {
     @Inject(GameService) private readonly game: GameService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(RedisService) private readonly redis: RedisService,
+    @InjectPinoLogger(WorldService.name) private readonly logger: PinoLogger,
   ) {}
 
   async connect(client: WebSocket, request: IncomingMessage): Promise<void> {
@@ -155,8 +157,19 @@ export class WorldService {
       this.sessions.set(client, session);
       client.on('message', (raw) => void this.handleRawMessage(client, raw.toString()));
       client.on('close', () => this.disconnect(client));
+      this.logger.info(
+        {
+          userId: session.userId,
+          playerId: session.playerId,
+          displayName: session.displayName,
+          instanceId: session.instanceId,
+        },
+        'World client connected',
+      );
       this.send(client, { t: 'world:ready', data: bootstrap });
     } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Unauthorized';
+      this.logger.warn({ reason }, 'World client connection rejected');
       this.send(client, {
         t: 'world:error',
         data: { message: error instanceof Error ? error.message : 'Unauthorized' },
@@ -170,6 +183,10 @@ export class WorldService {
     if (!session) return;
     this.sessions.delete(client);
     this.entities.delete(session.playerId);
+    this.logger.info(
+      { playerId: session.playerId, instanceId: session.instanceId },
+      'World client disconnected',
+    );
     this.broadcastRemove(session.playerId, session.instanceId);
   }
 
@@ -289,9 +306,16 @@ export class WorldService {
       update.mode === 'in-ship' && update.ship
         ? update.ship.position
         : update.character?.position ?? update.ship?.position ?? null;
-    if (nextFocus && this.isImpossibleJump(session, update.mode, nextFocus)) {
-      this.sendError(session.client, 'Presence update rejected.');
-      return;
+    if (nextFocus) {
+      const jumpCheck = this.checkImpossibleJump(session, update.mode, nextFocus);
+      if (jumpCheck.rejected) {
+        this.logger.warn(
+          { playerId: session.playerId, mode: update.mode, speed: jumpCheck.speed },
+          'Presence update rejected',
+        );
+        this.sendError(session.client, 'Presence update rejected.');
+        return;
+      }
     }
 
     session.stationRoomId = update.stationRoomId ?? session.stationRoomId;
@@ -326,6 +350,7 @@ export class WorldService {
     if (!text) return;
     const allowed = await this.redis.rateLimit(`chat:${session.playerId}`, 6, 5);
     if (!allowed) {
+      this.logger.debug({ playerId: session.playerId }, 'Chat rate limited');
       this.sendError(session.client, 'You are transmitting too quickly.');
       return;
     }
@@ -398,14 +423,18 @@ export class WorldService {
     };
   }
 
-  private isImpossibleJump(session: WorldSession, mode: string, nextFocus: Vec3Dto): boolean {
-    if (!session.entity) return false;
+  private checkImpossibleJump(
+    session: WorldSession,
+    mode: string,
+    nextFocus: Vec3Dto,
+  ): { rejected: boolean; speed?: number } {
+    if (!session.entity) return { rejected: false };
     const previous = entityFocusPosition(session.entity);
-    if (!previous) return false;
+    if (!previous) return { rejected: false };
     const elapsedSeconds = Math.max(0.05, (Date.now() - session.entity.updatedAt) / 1000);
     const speed = distance(previous, nextFocus) / elapsedSeconds;
     const maxSpeed = mode === 'in-ship' ? 200_000 : 120;
-    return speed > maxSpeed;
+    return { rejected: speed > maxSpeed, speed };
   }
 
   private async persistPlayerLocation(session: WorldSession): Promise<void> {
