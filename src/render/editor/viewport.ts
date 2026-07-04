@@ -1,14 +1,20 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
-import { loadPrefabModel, createPrimitiveMesh } from '../prefabs/prefab_renderer';
-import { BUILTIN_GEAR_HINGES, BUILTIN_RAMP_HINGE } from '../main/scene/ship_model';
-import type { EditorEntity, EditorStore } from '../../editor/document';
-import type { PrefabComponent } from '../../world/prefabs/schema';
-import type { Vec3 } from '../../types';
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls";
+import {
+  loadPrefabModel,
+  createPrimitiveMesh,
+} from "../prefabs/prefab_renderer";
+import {
+  BUILTIN_GEAR_HINGES,
+  BUILTIN_RAMP_HINGE,
+} from "../main/scene/ship_model";
+import type { EditorEntity, EditorStore } from "../../editor/document";
+import type { PrefabComponent } from "../../world/prefabs/schema";
+import type { Vec3 } from "../../types";
 
-export type GizmoMode = 'translate' | 'rotate' | 'scale';
-export type GizmoSpace = 'local' | 'world';
+export type GizmoMode = "translate" | "rotate" | "scale";
+export type GizmoSpace = "local" | "world";
 
 export interface ShipPreviewState {
   gearDown: boolean;
@@ -25,7 +31,11 @@ export interface EditorViewportOptions {
 export interface EditorViewport {
   setGizmoMode: (mode: GizmoMode) => void;
   setGizmoSpace: (space: GizmoSpace) => void;
-  setSnap: (enabled: boolean, translateStep: number, rotateStepDegrees: number) => void;
+  setSnap: (
+    enabled: boolean,
+    translateStep: number,
+    rotateStepDegrees: number,
+  ) => void;
   /** Ship kind only: articulates gear/ramp/doors on loaded models for preview. */
   setShipPreview: (state: ShipPreviewState) => void;
   focusSelection: () => void;
@@ -46,7 +56,7 @@ const FLOOR_COLORS: Record<string, number> = {
 const SHIP_ZONE_COLORS: Record<string, number> = {
   cabin: 0x3fc6ff,
   cockpit: 0x7dffa8,
-  'cockpit-door': 0xffce6f,
+  "cockpit-door": 0xffce6f,
   ramp: 0xff9d5c,
 };
 
@@ -55,7 +65,7 @@ export function createEditorViewport(
   store: EditorStore,
   options: EditorViewportOptions,
 ): EditorViewport {
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.tabIndex = 0;
   container.appendChild(canvas);
 
@@ -82,7 +92,7 @@ export function createEditorViewport(
   scene.add(new THREE.AxesHelper(3));
 
   const entityRoot = new THREE.Group();
-  entityRoot.name = 'editor-entities';
+  entityRoot.name = "editor-entities";
   scene.add(entityRoot);
 
   const orbit = new OrbitControls(camera, canvas);
@@ -102,20 +112,20 @@ export function createEditorViewport(
   // ---- flythrough camera (hold RMB, Unity-style) ---------------------------
 
   const FLY_KEY_CODES = new Set([
-    'KeyW',
-    'KeyA',
-    'KeyS',
-    'KeyD',
-    'KeyQ',
-    'KeyE',
-    'ShiftLeft',
-    'ShiftRight',
+    "KeyW",
+    "KeyA",
+    "KeyS",
+    "KeyD",
+    "KeyQ",
+    "KeyE",
+    "ShiftLeft",
+    "ShiftRight",
   ]);
   const FLY_LOOK_RADIANS_PER_PIXEL = 0.0022;
   const FLY_PITCH_LIMIT = Math.PI / 2 - 0.01;
 
   const flyKeys = new Set<string>();
-  const flyEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const flyEuler = new THREE.Euler(0, 0, 0, "YXZ");
   const flyForward = new THREE.Vector3();
   const flyRight = new THREE.Vector3();
   const flyMove = new THREE.Vector3();
@@ -127,7 +137,7 @@ export function createEditorViewport(
     if (flying) return;
     flying = true;
     flyTargetDistance = Math.max(4, camera.position.distanceTo(orbit.target));
-    flyEuler.setFromQuaternion(camera.quaternion, 'YXZ');
+    flyEuler.setFromQuaternion(camera.quaternion, "YXZ");
     flyEuler.z = 0;
     orbit.enabled = false;
     canvas.requestPointerLock?.();
@@ -141,7 +151,9 @@ export function createEditorViewport(
     // Re-aim the orbit pivot in front of the camera so orbiting continues
     // naturally from wherever the flythrough ended.
     camera.getWorldDirection(flyForward);
-    orbit.target.copy(camera.position).addScaledVector(flyForward, flyTargetDistance);
+    orbit.target
+      .copy(camera.position)
+      .addScaledVector(flyForward, flyTargetDistance);
     orbit.enabled = true;
     orbit.update();
   }
@@ -150,7 +162,10 @@ export function createEditorViewport(
     if (!flying) return;
     flyEuler.y -= event.movementX * FLY_LOOK_RADIANS_PER_PIXEL;
     flyEuler.x -= event.movementY * FLY_LOOK_RADIANS_PER_PIXEL;
-    flyEuler.x = Math.max(-FLY_PITCH_LIMIT, Math.min(FLY_PITCH_LIMIT, flyEuler.x));
+    flyEuler.x = Math.max(
+      -FLY_PITCH_LIMIT,
+      Math.min(FLY_PITCH_LIMIT, flyEuler.x),
+    );
     camera.quaternion.setFromEuler(flyEuler);
   }
 
@@ -158,14 +173,14 @@ export function createEditorViewport(
     camera.getWorldDirection(flyForward);
     flyRight.crossVectors(flyForward, camera.up).normalize();
     flyMove.set(0, 0, 0);
-    if (flyKeys.has('KeyW')) flyMove.add(flyForward);
-    if (flyKeys.has('KeyS')) flyMove.sub(flyForward);
-    if (flyKeys.has('KeyD')) flyMove.add(flyRight);
-    if (flyKeys.has('KeyA')) flyMove.sub(flyRight);
-    if (flyKeys.has('KeyE')) flyMove.y += 1;
-    if (flyKeys.has('KeyQ')) flyMove.y -= 1;
+    if (flyKeys.has("KeyW")) flyMove.add(flyForward);
+    if (flyKeys.has("KeyS")) flyMove.sub(flyForward);
+    if (flyKeys.has("KeyD")) flyMove.add(flyRight);
+    if (flyKeys.has("KeyA")) flyMove.sub(flyRight);
+    if (flyKeys.has("KeyE")) flyMove.y += 1;
+    if (flyKeys.has("KeyQ")) flyMove.y -= 1;
     if (flyMove.lengthSq() === 0) return;
-    const boost = flyKeys.has('ShiftLeft') || flyKeys.has('ShiftRight') ? 4 : 1;
+    const boost = flyKeys.has("ShiftLeft") || flyKeys.has("ShiftRight") ? 4 : 1;
     flyMove.normalize().multiplyScalar(flySpeed * boost * dt);
     camera.position.add(flyMove);
   }
@@ -173,21 +188,21 @@ export function createEditorViewport(
   function onFlyKey(event: KeyboardEvent): void {
     if (!flying || !FLY_KEY_CODES.has(event.code)) return;
     event.preventDefault();
-    if (event.type === 'keydown') flyKeys.add(event.code);
+    if (event.type === "keydown") flyKeys.add(event.code);
     else flyKeys.delete(event.code);
   }
-  window.addEventListener('keydown', onFlyKey);
-  window.addEventListener('keyup', onFlyKey);
+  window.addEventListener("keydown", onFlyKey);
+  window.addEventListener("keyup", onFlyKey);
 
   function onPointerLockChange(): void {
     // Esc releases pointer lock — treat it as ending the flythrough.
     if (flying && document.pointerLockElement !== canvas) endFly();
   }
-  document.addEventListener('pointerlockchange', onPointerLockChange);
+  document.addEventListener("pointerlockchange", onPointerLockChange);
 
-  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  canvas.addEventListener('pointermove', onFlyLook);
-  canvas.addEventListener('pointerdown', (event) => {
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  canvas.addEventListener("pointermove", onFlyLook);
+  canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 2) return;
     // Capture keeps the pointerup on the canvas even if pointer lock is denied.
     try {
@@ -197,17 +212,20 @@ export function createEditorViewport(
     }
     beginFly();
   });
-  canvas.addEventListener('pointerup', (event) => {
+  canvas.addEventListener("pointerup", (event) => {
     if (event.button === 2) endFly();
   });
-  canvas.addEventListener('pointercancel', () => endFly());
+  canvas.addEventListener("pointercancel", () => endFly());
   canvas.addEventListener(
-    'wheel',
+    "wheel",
     (event) => {
       if (!flying) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      flySpeed = Math.min(200, Math.max(0.5, flySpeed * Math.pow(1.1, -event.deltaY / 100)));
+      flySpeed = Math.min(
+        200,
+        Math.max(0.5, flySpeed * Math.pow(1.1, -event.deltaY / 100)),
+      );
     },
     { passive: false, capture: true },
   );
@@ -254,47 +272,92 @@ export function createEditorViewport(
     const width = Math.max(0.01, max.x - min.x);
     const depth = Math.max(0.01, max.z - min.z);
     const group = new THREE.Group();
-    const fill = makeHelperMesh(new THREE.BoxGeometry(width, height, depth), color, 0.07);
-    const wire = makeHelperMesh(new THREE.BoxGeometry(width, height, depth), color, 0.4, true);
-    fill.position.set((min.x + max.x) / 2, baseY + height / 2, (min.z + max.z) / 2);
+    const fill = makeHelperMesh(
+      new THREE.BoxGeometry(width, height, depth),
+      color,
+      0.07,
+    );
+    const wire = makeHelperMesh(
+      new THREE.BoxGeometry(width, height, depth),
+      color,
+      0.4,
+      true,
+    );
+    fill.position.set(
+      (min.x + max.x) / 2,
+      baseY + height / 2,
+      (min.z + max.z) / 2,
+    );
     wire.position.copy(fill.position);
     group.add(fill, wire);
     return group;
   }
 
-  function buildComponentHelper(component: PrefabComponent): THREE.Object3D | null {
+  function buildComponentHelper(
+    component: PrefabComponent,
+  ): THREE.Object3D | null {
     switch (component.type) {
-      case 'walk-volume': {
+      case "walk-volume": {
         const color = FLOOR_COLORS[component.floorId] ?? 0x3fc6ff;
-        return makeZoneBoxHelper(component.min, component.max, component.height ?? 4, color);
+        return makeZoneBoxHelper(
+          component.min,
+          component.max,
+          component.height ?? 4,
+          color,
+        );
       }
-      case 'spawn-point': {
+      case "spawn-point": {
         const group = new THREE.Group();
-        const cone = makeHelperMesh(new THREE.ConeGeometry(0.35, 1.4, 12), 0x7dffa8, 0.8);
+        const cone = makeHelperMesh(
+          new THREE.ConeGeometry(0.35, 1.4, 12),
+          0x7dffa8,
+          0.8,
+        );
         cone.position.y = 0.7;
-        const disc = makeHelperMesh(new THREE.CylinderGeometry(0.7, 0.7, 0.05, 20), 0x7dffa8, 0.3);
+        const disc = makeHelperMesh(
+          new THREE.CylinderGeometry(0.7, 0.7, 0.05, 20),
+          0x7dffa8,
+          0.3,
+        );
         group.add(cone, disc);
         return group;
       }
-      case 'elevator': {
+      case "elevator": {
         const group = new THREE.Group();
-        const pad = makeHelperMesh(new THREE.CylinderGeometry(0.9, 0.9, 0.18, 20), 0x3fc6ff, 0.55);
+        const pad = makeHelperMesh(
+          new THREE.CylinderGeometry(0.9, 0.9, 0.18, 20),
+          0x3fc6ff,
+          0.55,
+        );
         pad.position.y = 0.09;
-        const beam = makeHelperMesh(new THREE.CylinderGeometry(0.12, 0.12, 3.2, 8), 0x3fc6ff, 0.3);
+        const beam = makeHelperMesh(
+          new THREE.CylinderGeometry(0.12, 0.12, 3.2, 8),
+          0x3fc6ff,
+          0.3,
+        );
         beam.position.y = 1.6;
         group.add(pad, beam);
         return group;
       }
-      case 'hangar-pad': {
+      case "hangar-pad": {
         const group = new THREE.Group();
         // HANGAR_PAD_HALF_METERS in gameplay is 8m — visualize the landing square.
-        const outline = makeHelperMesh(new THREE.BoxGeometry(16, 0.25, 16), 0xffce6f, 0.35, true);
-        const marker = makeHelperMesh(new THREE.CylinderGeometry(1.4, 1.4, 0.2, 24), 0xffce6f, 0.55);
+        const outline = makeHelperMesh(
+          new THREE.BoxGeometry(16, 0.25, 16),
+          0xffce6f,
+          0.35,
+          true,
+        );
+        const marker = makeHelperMesh(
+          new THREE.CylinderGeometry(1.4, 1.4, 0.2, 24),
+          0xffce6f,
+          0.55,
+        );
         marker.position.y = 0.1;
         group.add(outline, marker);
         return group;
       }
-      case 'interaction': {
+      case "interaction": {
         const sphere = makeHelperMesh(
           new THREE.SphereGeometry(component.radius, 16, 12),
           0xffce6f,
@@ -303,7 +366,7 @@ export function createEditorViewport(
         );
         return sphere;
       }
-      case 'collider': {
+      case "collider": {
         const size = component.size;
         const box = makeHelperMesh(
           new THREE.BoxGeometry(size.x, size.y, size.z),
@@ -315,17 +378,21 @@ export function createEditorViewport(
         if (offset) box.position.set(offset.x, offset.y, offset.z);
         return box;
       }
-      case 'station-frame':
-      case 'ship-frame': {
+      case "station-frame":
+      case "ship-frame": {
         return new THREE.AxesHelper(2);
       }
-      case 'ship-hull': {
+      case "ship-hull": {
         // Subtle marker only — the hull is the entity's own model.
-        const ring = makeHelperMesh(new THREE.TorusGeometry(1.2, 0.05, 8, 32), 0x8bd8ff, 0.5);
+        const ring = makeHelperMesh(
+          new THREE.TorusGeometry(1.2, 0.05, 8, 32),
+          0x8bd8ff,
+          0.5,
+        );
         ring.rotation.x = Math.PI / 2;
         return ring;
       }
-      case 'ship-walk-zone': {
+      case "ship-walk-zone": {
         const color = SHIP_ZONE_COLORS[component.zoneId] ?? 0x9d8bff;
         const group = makeZoneBoxHelper(
           component.min,
@@ -342,20 +409,28 @@ export function createEditorViewport(
               component.slopeMinUp,
               component.min.z,
             ),
-            new THREE.Vector3((component.min.x + component.max.x) / 2, 0, component.max.z),
+            new THREE.Vector3(
+              (component.min.x + component.max.x) / 2,
+              0,
+              component.max.z,
+            ),
           ]);
           const material = track(
-            new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 }),
+            new THREE.LineBasicMaterial({
+              color,
+              transparent: true,
+              opacity: 0.85,
+            }),
           );
           group.add(new THREE.Line(geometry, material));
         }
         return group;
       }
-      case 'ship-stairs': {
-        const isLadder = component.variant === 'ladder';
+      case "ship-stairs": {
+        const isLadder = component.variant === "ladder";
         const color = isLadder
-          ? SHIP_ZONE_COLORS[component.zoneId] ?? 0xff8c42
-          : SHIP_ZONE_COLORS[component.zoneId] ?? 0xffa86b;
+          ? (SHIP_ZONE_COLORS[component.zoneId] ?? 0xff8c42)
+          : (SHIP_ZONE_COLORS[component.zoneId] ?? 0xffa86b);
         const rise = component.riseUp;
         const headroom = component.height ?? 3.1;
         const spanZ = component.max.z - component.min.z;
@@ -378,7 +453,10 @@ export function createEditorViewport(
               rise,
             );
             headroomGroup.traverse((child) => {
-              if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+              if (
+                child instanceof THREE.Mesh &&
+                child.material instanceof THREE.MeshBasicMaterial
+              ) {
                 child.material.opacity *= 0.35;
               }
             });
@@ -430,7 +508,7 @@ export function createEditorViewport(
         }
         return group;
       }
-      case 'ship-door': {
+      case "ship-door": {
         const group = new THREE.Group();
         const sphere = makeHelperMesh(
           new THREE.SphereGeometry(component.radius ?? 1.6, 16, 12),
@@ -438,54 +516,101 @@ export function createEditorViewport(
           0.24,
           true,
         );
-        const panel = makeHelperMesh(new THREE.BoxGeometry(1.2, 1.8, 0.08), 0xffce6f, 0.4);
+        const panel = makeHelperMesh(
+          new THREE.BoxGeometry(1.2, 1.8, 0.08),
+          0xffce6f,
+          0.4,
+        );
         panel.position.y = 0.9;
         group.add(sphere, panel);
         return group;
       }
-      case 'pilot-seat': {
+      case "pilot-seat": {
         const group = new THREE.Group();
-        const role = component.role ?? 'passenger';
+        const role = component.role ?? "passenger";
         const seatColor =
-          role === 'pilot' ? 0x7dffa8 : role === 'copilot' ? 0x7db8ff : role === 'turret' ? 0xff9d5c : 0x9aa3b8;
-        const seat = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.12, 0.6), seatColor, 0.6);
-        const back = makeHelperMesh(new THREE.BoxGeometry(0.6, 0.8, 0.12), seatColor, 0.45);
+          role === "pilot"
+            ? 0x7dffa8
+            : role === "copilot"
+              ? 0x7db8ff
+              : role === "turret"
+                ? 0xff9d5c
+                : 0x9aa3b8;
+        const seat = makeHelperMesh(
+          new THREE.BoxGeometry(0.6, 0.12, 0.6),
+          seatColor,
+          0.6,
+        );
+        const back = makeHelperMesh(
+          new THREE.BoxGeometry(0.6, 0.8, 0.12),
+          seatColor,
+          0.45,
+        );
         back.position.set(0, 0.45, -0.3);
         const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
-        const eyeDot = makeHelperMesh(new THREE.SphereGeometry(0.08, 10, 8), 0xffffff, 0.85);
+        const eyeDot = makeHelperMesh(
+          new THREE.SphereGeometry(0.08, 10, 8),
+          0xffffff,
+          0.85,
+        );
         eyeDot.position.set(eye.x, eye.y, eye.z);
         const stand = component.stand ?? { x: 0, z: -1.55 };
-        const standDot = makeHelperMesh(new THREE.SphereGeometry(0.1, 10, 8), 0xffce6f, 0.7);
+        const standDot = makeHelperMesh(
+          new THREE.SphereGeometry(0.1, 10, 8),
+          0xffce6f,
+          0.7,
+        );
         standDot.position.set(stand.x, 0.05, stand.z);
         const radius = component.interactRadius ?? 1.45;
-        const reach = makeHelperMesh(new THREE.SphereGeometry(radius, 16, 12), seatColor, 0.12, true);
+        const reach = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 16, 12),
+          seatColor,
+          0.12,
+          true,
+        );
         reach.position.set(stand.x, 0.5, stand.z);
         group.add(seat, back, eyeDot, standDot, reach);
         return group;
       }
-      case 'ramp-interact': {
-        const color = component.placement === 'outside' ? 0xff9d5c : 0xffce6f;
-        const radius = component.radius ?? (component.placement === 'outside' ? 3 : 1.7);
-        return makeHelperMesh(new THREE.SphereGeometry(radius, 16, 12), color, 0.22, true);
+      case "ramp-interact": {
+        const color = component.placement === "outside" ? 0xff9d5c : 0xffce6f;
+        const radius =
+          component.radius ?? (component.placement === "outside" ? 3 : 1.7);
+        return makeHelperMesh(
+          new THREE.SphereGeometry(radius, 16, 12),
+          color,
+          0.22,
+          true,
+        );
       }
-      case 'ramp-mount': {
+      case "ramp-mount": {
         return makeZoneBoxHelper(component.min, component.max, 0.4, 0xff9d5c);
       }
     }
   }
 
-  function applyEntityTransformToObject(object: THREE.Object3D, entity: EditorEntity): void {
-    object.position.set(entity.position.x, entity.position.y, entity.position.z);
+  function applyEntityTransformToObject(
+    object: THREE.Object3D,
+    entity: EditorEntity,
+  ): void {
+    object.position.set(
+      entity.position.x,
+      entity.position.y,
+      entity.position.z,
+    );
     object.rotation.set(
       entity.rotation.x * DEG_TO_RAD,
       entity.rotation.y * DEG_TO_RAD,
       entity.rotation.z * DEG_TO_RAD,
-      'XYZ',
+      "XYZ",
     );
     object.scale.set(entity.scale.x, entity.scale.y, entity.scale.z);
   }
 
-  function buildEntityObject(entity: EditorEntity, generation: number): THREE.Group {
+  function buildEntityObject(
+    entity: EditorEntity,
+    generation: number,
+  ): THREE.Group {
     const group = new THREE.Group();
     group.name = entity.name;
     group.userData.entityId = entity.id;
@@ -507,7 +632,7 @@ export function createEditorViewport(
       // The game recenters the flyable hull on its bounding-box center
       // (ship_model.ts), so mirror that here or zones drift from the mesh.
       const recenterAsHull = entity.components.some(
-        (component) => component.type === 'ship-hull',
+        (component) => component.type === "ship-hull",
       );
       void loadPrefabModel(url)
         .then((model) => {
@@ -521,7 +646,12 @@ export function createEditorViewport(
         })
         .catch(() => {
           if (generation !== buildGeneration) return;
-          const placeholder = makeHelperMesh(new THREE.BoxGeometry(1, 1, 1), 0xff7d7d, 0.5, true);
+          const placeholder = makeHelperMesh(
+            new THREE.BoxGeometry(1, 1, 1),
+            0xff7d7d,
+            0.5,
+            true,
+          );
           group.add(placeholder);
           console.warn(`Editor: asset failed to load: ${url}`);
         });
@@ -536,7 +666,12 @@ export function createEditorViewport(
     }
 
     if (!hasVisual && entity.children.length === 0) {
-      const marker = makeHelperMesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), 0x8fa3c9, 0.5, true);
+      const marker = makeHelperMesh(
+        new THREE.BoxGeometry(0.4, 0.4, 0.4),
+        0x8fa3c9,
+        0.5,
+        true,
+      );
       group.add(marker);
     }
 
@@ -564,7 +699,11 @@ export function createEditorViewport(
 
   // ---- ship preview articulation (gear / ramp / doors) ---------------------
 
-  let shipPreview: ShipPreviewState = { gearDown: true, rampDown: false, doorsOpen: {} };
+  let shipPreview: ShipPreviewState = {
+    gearDown: true,
+    rampDown: false,
+    doorsOpen: {},
+  };
   const articulationBase = new WeakMap<
     THREE.Object3D,
     { position: THREE.Vector3; quaternion: THREE.Quaternion }
@@ -580,13 +719,20 @@ export function createEditorViewport(
   function baseOf(object: THREE.Object3D) {
     let base = articulationBase.get(object);
     if (!base) {
-      base = { position: object.position.clone(), quaternion: object.quaternion.clone() };
+      base = {
+        position: object.position.clone(),
+        quaternion: object.quaternion.clone(),
+      };
       articulationBase.set(object, base);
     }
     return base;
   }
 
-  function previewHinge(name: string, radians: number, axis: 'x' | 'y' | 'z' = 'x'): void {
+  function previewHinge(
+    name: string,
+    radians: number,
+    axis: "x" | "y" | "z" = "x",
+  ): void {
     const object = entityRoot.getObjectByName(name);
     if (!object) return;
     const base = baseOf(object);
@@ -594,7 +740,11 @@ export function createEditorViewport(
     object.quaternion.copy(base.quaternion).multiply(previewQuat);
   }
 
-  function previewSlide(name: string, offset: number, axis: 'x' | 'y' | 'z'): void {
+  function previewSlide(
+    name: string,
+    offset: number,
+    axis: "x" | "y" | "z",
+  ): void {
     const object = entityRoot.getObjectByName(name);
     if (!object) return;
     const base = baseOf(object);
@@ -602,12 +752,15 @@ export function createEditorViewport(
     object.position.copy(base.position).add(previewAxis);
   }
 
-  function collectDoorComponents(): Extract<PrefabComponent, { type: 'ship-door' }>[] {
-    const doors: Extract<PrefabComponent, { type: 'ship-door' }>[] = [];
+  function collectDoorComponents(): Extract<
+    PrefabComponent,
+    { type: "ship-door" }
+  >[] {
+    const doors: Extract<PrefabComponent, { type: "ship-door" }>[] = [];
     const visit = (entities: EditorEntity[]): void => {
       for (const entity of entities) {
         for (const component of entity.components) {
-          if (component.type === 'ship-door') doors.push(component);
+          if (component.type === "ship-door") doors.push(component);
         }
         visit(entity.children);
       }
@@ -617,17 +770,21 @@ export function createEditorViewport(
   }
 
   function applyShipPreview(): void {
-    if (store.getState().kind !== 'ship') return;
+    if (store.getState().kind !== "ship") return;
     const gear01 = shipPreview.gearDown ? 1 : 0;
     for (const hinge of BUILTIN_GEAR_HINGES) {
       previewHinge(hinge.name, hinge.deployRadians * gear01);
     }
-    previewHinge(BUILTIN_RAMP_HINGE.name, BUILTIN_RAMP_HINGE.lowerRadians * (shipPreview.rampDown ? 1 : 0));
+    previewHinge(
+      BUILTIN_RAMP_HINGE.name,
+      BUILTIN_RAMP_HINGE.lowerRadians * (shipPreview.rampDown ? 1 : 0),
+    );
     for (const door of collectDoorComponents()) {
       const open = shipPreview.doorsOpen[door.id] ?? door.defaultOpen ?? false;
       const open01 = open ? 1 : 0;
       for (const node of door.nodes) {
-        if (door.motion === 'slide') previewSlide(node.name, node.delta * open01, door.axis);
+        if (door.motion === "slide")
+          previewSlide(node.name, node.delta * open01, door.axis);
         else previewHinge(node.name, node.delta * open01, door.axis);
       }
     }
@@ -683,14 +840,17 @@ export function createEditorViewport(
     return null;
   }
 
-  canvas.addEventListener('pointerdown', (event) => {
+  canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
     pointerDownAt = { x: event.clientX, y: event.clientY };
   });
 
-  canvas.addEventListener('pointerup', (event) => {
+  canvas.addEventListener("pointerup", (event) => {
     if (event.button !== 0 || !pointerDownAt) return;
-    const moved = Math.hypot(event.clientX - pointerDownAt.x, event.clientY - pointerDownAt.y);
+    const moved = Math.hypot(
+      event.clientX - pointerDownAt.x,
+      event.clientY - pointerDownAt.y,
+    );
     pointerDownAt = null;
     if (moved > 5) return;
     if (gizmo.axis) return; // click consumed by the gizmo
@@ -701,7 +861,7 @@ export function createEditorViewport(
 
   let draggingEntityId: string | null = null;
 
-  gizmo.addEventListener('dragging-changed', (event) => {
+  gizmo.addEventListener("dragging-changed", (event) => {
     const dragging = Boolean((event as unknown as { value: boolean }).value);
     orbit.enabled = !dragging;
     if (dragging) {
@@ -713,11 +873,15 @@ export function createEditorViewport(
     }
   });
 
-  gizmo.addEventListener('objectChange', () => {
+  gizmo.addEventListener("objectChange", () => {
     const object = gizmo.object;
     if (!object || !draggingEntityId) return;
     store.previewTransform(draggingEntityId, {
-      position: { x: object.position.x, y: object.position.y, z: object.position.z },
+      position: {
+        x: object.position.x,
+        y: object.position.y,
+        z: object.position.z,
+      },
       rotation: {
         x: object.rotation.x * RAD_TO_DEG,
         y: object.rotation.y * RAD_TO_DEG,
@@ -743,13 +907,16 @@ export function createEditorViewport(
   applySnapState();
 
   function onKeyChange(event: KeyboardEvent): void {
-    if (event.key === 'Control' || event.ctrlKey !== ctrlHeld) {
-      ctrlHeld = event.type === 'keydown' ? event.ctrlKey || event.key === 'Control' : event.ctrlKey;
+    if (event.key === "Control" || event.ctrlKey !== ctrlHeld) {
+      ctrlHeld =
+        event.type === "keydown"
+          ? event.ctrlKey || event.key === "Control"
+          : event.ctrlKey;
       applySnapState();
     }
   }
-  window.addEventListener('keydown', onKeyChange);
-  window.addEventListener('keyup', onKeyChange);
+  window.addEventListener("keydown", onKeyChange);
+  window.addEventListener("keyup", onKeyChange);
 
   // ---- drag & drop placement ----------------------------------------------
 
@@ -768,22 +935,29 @@ export function createEditorViewport(
       raycaster.ray.at(12, dropPoint);
     }
     const snap = snapEnabled ? snapTranslate : 0;
-    const snapValue = (value: number) => (snap > 0 ? Math.round(value / snap) * snap : value);
-    return { x: snapValue(dropPoint.x), y: Math.max(0, snapValue(dropPoint.y)), z: snapValue(dropPoint.z) };
+    const snapValue = (value: number) =>
+      snap > 0 ? Math.round(value / snap) * snap : value;
+    return {
+      x: snapValue(dropPoint.x),
+      y: Math.max(0, snapValue(dropPoint.y)),
+      z: snapValue(dropPoint.z),
+    };
   }
 
-  container.addEventListener('dragover', (event) => {
+  container.addEventListener("dragover", (event) => {
     if (!event.dataTransfer) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-    container.classList.add('ed-drop-active');
+    event.dataTransfer.dropEffect = "copy";
+    container.classList.add("ed-drop-active");
   });
-  container.addEventListener('dragleave', () => container.classList.remove('ed-drop-active'));
-  container.addEventListener('drop', (event) => {
-    container.classList.remove('ed-drop-active');
+  container.addEventListener("dragleave", () =>
+    container.classList.remove("ed-drop-active"),
+  );
+  container.addEventListener("drop", (event) => {
+    container.classList.remove("ed-drop-active");
     const payload =
-      event.dataTransfer?.getData('application/x-claudecitizen-asset') ||
-      event.dataTransfer?.getData('text/plain');
+      event.dataTransfer?.getData("application/x-claudecitizen-asset") ||
+      event.dataTransfer?.getData("text/plain");
     if (!payload) return;
     event.preventDefault();
     options.onDropAsset(payload, dropPositionFromEvent(event));
@@ -792,11 +966,15 @@ export function createEditorViewport(
   // ---- store subscription --------------------------------------------------
 
   const unsubscribe = store.subscribe((event) => {
-    if (event.type === 'structure' || event.type === 'document' || event.type === 'entity') {
+    if (
+      event.type === "structure" ||
+      event.type === "document" ||
+      event.type === "entity"
+    ) {
       rebuildAll();
       return;
     }
-    if (event.type === 'transform') {
+    if (event.type === "transform") {
       const entity = store.locate(event.entityId)?.entity;
       const object = objectsById.get(event.entityId);
       if (entity && object && draggingEntityId !== event.entityId) {
@@ -804,7 +982,7 @@ export function createEditorViewport(
       }
       return;
     }
-    if (event.type === 'selection') {
+    if (event.type === "selection") {
       attachSelection(event.entityId);
     }
   });
@@ -827,7 +1005,9 @@ export function createEditorViewport(
     const radius = Math.max(2, box.getSize(new THREE.Vector3()).length() / 2);
     const direction = camera.position.clone().sub(orbit.target).normalize();
     orbit.target.copy(center);
-    camera.position.copy(center.clone().add(direction.multiplyScalar(radius * 2.2)));
+    camera.position.copy(
+      center.clone().add(direction.multiplyScalar(radius * 2.2)),
+    );
   }
 
   function resize(): void {
@@ -882,11 +1062,11 @@ export function createEditorViewport(
       disposed = true;
       endFly();
       unsubscribe();
-      window.removeEventListener('keydown', onKeyChange);
-      window.removeEventListener('keyup', onKeyChange);
-      window.removeEventListener('keydown', onFlyKey);
-      window.removeEventListener('keyup', onFlyKey);
-      document.removeEventListener('pointerlockchange', onPointerLockChange);
+      window.removeEventListener("keydown", onKeyChange);
+      window.removeEventListener("keyup", onKeyChange);
+      window.removeEventListener("keydown", onFlyKey);
+      window.removeEventListener("keyup", onFlyKey);
+      document.removeEventListener("pointerlockchange", onPointerLockChange);
       resizeObserver.disconnect();
       gizmo.detach();
       gizmo.dispose();

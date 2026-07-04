@@ -1,5 +1,10 @@
-import { mulQuat, quatIdentity, rotateVec3ByQuat, type Quat } from '../../math/quat';
-import { normalize, vec3 } from '../../math/vec3';
+import {
+  mulQuat,
+  quatIdentity,
+  rotateVec3ByQuat,
+  type Quat,
+} from "../../math/quat";
+import { normalize, vec3 } from "../../math/vec3";
 import {
   DEFAULT_SHIP_LAYOUT,
   type ShipDoorSpec,
@@ -9,10 +14,10 @@ import {
   type ShipSeatSpec,
   type ShipWalkZone,
   type ShipWalkZoneOriented,
-} from '../../player/ship_layout';
-import { orientedZoneBounds } from '../../player/ship_zone_oriented';
-import type { PrefabComponent, PrefabDocument, PrefabEntity } from './schema';
-import type { Vec3 } from '../../types';
+} from "../../player/ship_layout";
+import { orientedZoneBounds } from "../../player/ship_zone_oriented";
+import type { PrefabComponent, PrefabDocument, PrefabEntity } from "./schema";
+import type { Vec3 } from "../../types";
 
 /**
  * Derives the ship gameplay layout (walk zones, doors, seats, ramp
@@ -49,7 +54,7 @@ interface CollectedShip {
 
 function pushWalkZone(
   out: CollectedShip,
-  zone: Omit<ShipWalkZone, 'id'> & { id: string },
+  zone: Omit<ShipWalkZone, "id"> & { id: string },
 ): void {
   out.walkZones.push(zone);
 }
@@ -63,7 +68,11 @@ function isQuatIdentity(rotation: Quat, eps = 1e-5): boolean {
   );
 }
 
-function sceneToShipPoint(point: Vec3): { right: number; up: number; forward: number } {
+function sceneToShipPoint(point: Vec3): {
+  right: number;
+  up: number;
+  forward: number;
+} {
   return { right: -point.x, up: point.y, forward: point.z };
 }
 
@@ -72,11 +81,11 @@ function sceneToShipVec(vector: Vec3): Vec3 {
 }
 
 function bakeOrientedWalkZone(
-  component: Extract<PrefabComponent, { type: 'ship-walk-zone' }>,
+  component: Extract<PrefabComponent, { type: "ship-walk-zone" }>,
   position: Vec3,
   rotation: Quat,
   scale: Vec3,
-): Omit<ShipWalkZone, 'id'> {
+): Omit<ShipWalkZone, "id"> {
   const halfWidth = ((component.max.x - component.min.x) / 2) * scale.x;
   const halfDepth = ((component.max.z - component.min.z) / 2) * scale.z;
   const zoneHeight = (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y;
@@ -93,9 +102,15 @@ function bakeOrientedWalkZone(
   );
   const oriented: ShipWalkZoneOriented = {
     origin: sceneToShipPoint(floorCenterScene),
-    axisRight: normalize(sceneToShipVec(rotateVec3ByQuat(vec3(1, 0, 0), rotation))),
-    axisUp: normalize(sceneToShipVec(rotateVec3ByQuat(vec3(0, 1, 0), rotation))),
-    axisForward: normalize(sceneToShipVec(rotateVec3ByQuat(vec3(0, 0, 1), rotation))),
+    axisRight: normalize(
+      sceneToShipVec(rotateVec3ByQuat(vec3(1, 0, 0), rotation)),
+    ),
+    axisUp: normalize(
+      sceneToShipVec(rotateVec3ByQuat(vec3(0, 1, 0), rotation)),
+    ),
+    axisForward: normalize(
+      sceneToShipVec(rotateVec3ByQuat(vec3(0, 0, 1), rotation)),
+    ),
     halfWidth,
     halfDepth,
     height: zoneHeight,
@@ -115,10 +130,10 @@ function bakeOrientedWalkZone(
 }
 
 function bakeAxisAlignedWalkZone(
-  component: Extract<PrefabComponent, { type: 'ship-walk-zone' }>,
+  component: Extract<PrefabComponent, { type: "ship-walk-zone" }>,
   position: Vec3,
   scale: Vec3,
-): Omit<ShipWalkZone, 'id'> {
+): Omit<ShipWalkZone, "id"> {
   const minX = position.x + component.min.x * scale.x;
   const maxX = position.x + component.max.x * scale.x;
   return {
@@ -166,11 +181,12 @@ function collect(
 
   for (const component of entity.components ?? []) {
     switch (component.type) {
-      case 'ship-hull':
+      case "ship-hull":
         if (entity.asset) out.hullUrl ??= entity.asset.url;
-        if (component.restHeight !== undefined) out.restHeight ??= component.restHeight;
+        if (component.restHeight !== undefined)
+          out.restHeight ??= component.restHeight;
         break;
-      case 'ship-walk-zone': {
+      case "ship-walk-zone": {
         const baked =
           isQuatIdentity(rotation) || component.slopeMinUp !== undefined
             ? bakeAxisAlignedWalkZone(component, position, scale)
@@ -178,7 +194,7 @@ function collect(
         pushWalkZone(out, { id: component.zoneId, ...baked });
         break;
       }
-      case 'ship-stairs': {
+      case "ship-stairs": {
         const minX = position.x + component.min.x * scale.x;
         const maxX = position.x + component.max.x * scale.x;
         const minForward = position.z + component.min.z * scale.z;
@@ -192,16 +208,19 @@ function collect(
           maxForward,
           floorUp: position.y + rise,
           slopeMinUp: position.y,
-          ...(component.variant !== 'ladder'
+          ...(component.variant !== "ladder"
             ? { stepCount: component.stepCount ?? DEFAULT_STAIR_STEPS }
             : { ladder: true }),
-          ceilingUp: position.y + rise + (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y,
+          ceilingUp:
+            position.y +
+            rise +
+            (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y,
           ...(component.gate !== undefined ? { gate: component.gate } : {}),
           ...(component.passage ? { passage: true } : {}),
         });
         break;
       }
-      case 'ship-door':
+      case "ship-door":
         out.doors.push({
           id: component.id,
           label: component.label,
@@ -213,12 +232,12 @@ function collect(
           defaultOpen: component.defaultOpen ?? false,
         });
         break;
-      case 'pilot-seat': {
+      case "pilot-seat": {
         const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
         const stand = component.stand ?? { x: 0, z: -1.55 };
         out.seats.push({
           id: entity.id,
-          role: component.role ?? 'passenger',
+          role: component.role ?? "passenger",
           seat: { right, up: position.y, forward },
           eye: {
             right: -(position.x + eye.x),
@@ -233,19 +252,19 @@ function collect(
         });
         break;
       }
-      case 'ramp-interact':
+      case "ramp-interact":
         out.rampInteracts.push({
           placement: component.placement,
           right,
           forward,
           radius:
             component.radius ??
-            (component.placement === 'outside'
+            (component.placement === "outside"
               ? DEFAULT_RAMP_OUTSIDE_RADIUS
               : DEFAULT_RAMP_DECK_RADIUS),
         });
         break;
-      case 'ramp-mount': {
+      case "ramp-mount": {
         const minX = position.x + component.min.x * scale.x;
         const maxX = position.x + component.max.x * scale.x;
         const minForward = position.z + component.min.z * scale.z;
@@ -255,7 +274,10 @@ function collect(
           maxRight: -minX,
           minForward,
           maxForward,
-          clampForward: Math.min(maxForward, minForward + RAMP_MOUNT_CLAMP_METERS),
+          clampForward: Math.min(
+            maxForward,
+            minForward + RAMP_MOUNT_CLAMP_METERS,
+          ),
         };
         break;
       }
@@ -270,7 +292,7 @@ function collect(
 }
 
 function primaryPilotSeat(seats: ShipSeatSpec[]): ShipSeatSpec | null {
-  return seats.find((seat) => seat.role === 'pilot') ?? null;
+  return seats.find((seat) => seat.role === "pilot") ?? null;
 }
 
 /**
@@ -280,7 +302,9 @@ function primaryPilotSeat(seats: ShipSeatSpec[]): ShipSeatSpec | null {
  * authored ship; deck walking simply stays unavailable until zones exist.
  * Missing primary pilot seat falls back to the built-in Starhopper anchors.
  */
-export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | null {
+export function buildShipLayoutFromPrefab(
+  doc: PrefabDocument,
+): ShipLayout | null {
   const out: CollectedShip = {
     hullUrl: null,
     restHeight: null,
@@ -300,7 +324,9 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
     out.rampInteracts.length > 0 ||
     out.rampMount !== null;
   if (!hasShipContent) {
-    console.warn(`Ship prefab "${doc.id}" has no ship components; using the built-in ship.`);
+    console.warn(
+      `Ship prefab "${doc.id}" has no ship components; using the built-in ship.`,
+    );
     return null;
   }
   if (out.walkZones.length === 0) {
@@ -321,9 +347,11 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
       `Ship prefab "${doc.id}" has seats but none with role "pilot"; flight controls stay unavailable until one is marked pilot.`,
     );
   } else if (out.seats.length === 0) {
-    console.warn(`Ship prefab "${doc.id}" has no ship-seat markers; using the built-in pilot anchors.`);
+    console.warn(
+      `Ship prefab "${doc.id}" has no ship-seat markers; using the built-in pilot anchors.`,
+    );
   }
-  const pilotCount = out.seats.filter((seat) => seat.role === 'pilot').length;
+  const pilotCount = out.seats.filter((seat) => seat.role === "pilot").length;
   if (pilotCount > 1) {
     console.warn(
       `Ship prefab "${doc.id}" has ${pilotCount} pilot seats; the first pilot marker wins for flight.`,
@@ -334,7 +362,7 @@ export function buildShipLayoutFromPrefab(doc: PrefabDocument): ShipLayout | nul
   const pilotEye = pilot?.eye ?? fallback.pilotEye;
   const seatStand = pilot?.stand ?? fallback.seatStand;
 
-  const rampZone = out.walkZones.find((zone) => zone.gate === 'ramp') ?? null;
+  const rampZone = out.walkZones.find((zone) => zone.gate === "ramp") ?? null;
   const rampDismountForward = rampZone
     ? rampZone.minForward + RAMP_DISMOUNT_INSET_METERS
     : fallback.rampDismountForward;

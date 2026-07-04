@@ -1,13 +1,19 @@
-import { integrateFlightBody, integrateHoveringShip } from '../flight/flight_body';
-import { createPlayerControls } from '../flight/player_controls';
+import {
+  integrateFlightBody,
+  integrateHoveringShip,
+} from "../flight/flight_body";
+import { createPlayerControls } from "../flight/player_controls";
 import {
   MODE_IN_SHIP,
   MODE_IN_STATION,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
   MODE_RIDING_ELEVATOR,
-} from '../player/modes';
-import { placeCharacterOnSurface, updateCharacterState } from '../player/character_controller';
+} from "../player/modes";
+import {
+  placeCharacterOnSurface,
+  updateCharacterState,
+} from "../player/character_controller";
 import {
   createDeckCharacterState,
   getShipWalkZone,
@@ -22,16 +28,21 @@ import {
   updateCharacterOnDeck,
   type DeckCharacterState,
   type DeckLocal,
-} from '../player/ship_deck';
-import { getShipLayout, getShipRestHeightMeters } from '../player/ship_layout';
+} from "../player/ship_deck";
+import { getShipLayout, getShipRestHeightMeters } from "../player/ship_layout";
 import {
   getRampDismountGroundLocal,
   isShipParked,
   localOffsetToWorld,
   nearShipRampOutside,
   sampleRampMount,
-} from '../player/ship_interaction';
-import { doorBlends, isDoorPassable, isRampUsable, updateShipRig } from '../player/ship_rig';
+} from "../player/ship_interaction";
+import {
+  doorBlends,
+  isDoorPassable,
+  isRampUsable,
+  updateShipRig,
+} from "../player/ship_rig";
 import {
   beginElevatorRide,
   callShipToHangar,
@@ -39,27 +50,31 @@ import {
   resolveStationInteraction,
   updateElevatorRide,
   type StationInteraction,
-} from '../player/station_interaction';
+} from "../player/station_interaction";
 import {
   createStationCharacterAt,
   stationYawForDir,
   updateCharacterInStation,
   type StationCharacterState,
-} from '../player/station_walk';
-import { beginSitTransition, beginStandTransition, updateTransition } from '../player/transitions';
-import { createWorldState, type WorldState } from '../player/world_state';
+} from "../player/station_walk";
+import {
+  beginSitTransition,
+  beginStandTransition,
+  updateTransition,
+} from "../player/transitions";
+import { createWorldState, type WorldState } from "../player/world_state";
 import {
   getStationFrame,
   getStationHangars,
   sampleHangarRest,
   worldToStationLocal,
-} from '../world/station';
-import { sampleRenderablePlanetSurface } from '../world/planet_surface';
-import type { HudUpdateParams } from '../render/effects';
-import type { SpikeRenderer } from '../render/main';
-import type { Planet, Vec3 } from '../types';
-import type { GameBootstrap } from '../net/api';
-import type { WorldClient } from '../net/world_client';
+} from "../world/station";
+import { sampleRenderablePlanetSurface } from "../world/planet_surface";
+import type { HudUpdateParams } from "../render/effects";
+import type { SpikeRenderer } from "../render/main";
+import type { Planet, Vec3 } from "../types";
+import type { GameBootstrap } from "../net/api";
+import type { WorldClient } from "../net/world_client";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
@@ -97,14 +112,18 @@ export function createGameLoop({
     setControlsMode: controls.setMode.bind(controls),
   };
 
-  controls.setOrbitFacing(world.cameraOrbit.yawRadians, world.cameraOrbit.pitchRadians);
+  controls.setOrbitFacing(
+    world.cameraOrbit.yawRadians,
+    world.cameraOrbit.pitchRadians,
+  );
 
   // Console-only dev shortcuts (mirrors the __spikeScene diagnostic).
   window.__claudecitizenDev = {
     callShip: () => callShipToHangar(world, planet, seed)?.index ?? 0,
     teleportToHangar: (index: number) => {
       const hangars = getStationHangars();
-      const hangar = hangars.find((entry) => entry.index === index) ?? hangars[0];
+      const hangar =
+        hangars.find((entry) => entry.index === index) ?? hangars[0];
       if (!hangar) return;
       world.character = createStationCharacterAt(
         stationFrame,
@@ -123,53 +142,63 @@ export function createGameLoop({
   function resetWorld(): void {
     world = createWorldState(planet, seed);
     controls.setMode(MODE_ON_FOOT);
-    controls.setOrbitFacing(world.cameraOrbit.yawRadians, world.cameraOrbit.pitchRadians);
+    controls.setOrbitFacing(
+      world.cameraOrbit.yawRadians,
+      world.cameraOrbit.pitchRadians,
+    );
     if (bootstrap) {
-      network?.transition(bootstrap.spawn.apartmentInstanceId, bootstrap.spawn.stationRoomId);
+      network?.transition(
+        bootstrap.spawn.apartmentInstanceId,
+        bootstrap.spawn.stationRoomId,
+      );
     }
     onResetPeak();
   }
 
   function stationPrompt(interaction: StationInteraction | null): string {
-    if (!interaction) return '';
+    if (!interaction) return "";
     switch (interaction.kind) {
-      case 'hab-lift-down':
-        return 'Press F — elevator to Lobby';
-      case 'hab-lift-up':
-        return 'Press F — elevator to Habs';
-      case 'terminal':
+      case "hab-lift-down":
+        return "Press F — elevator to Lobby";
+      case "hab-lift-up":
+        return "Press F — elevator to Habs";
+      case "terminal":
         return world.assignedHangar === null
-          ? 'Press F — call your ship to a hangar'
+          ? "Press F — call your ship to a hangar"
           : `Ship delivered to Hangar ${world.assignedHangar}`;
-      case 'hangar-bank':
+      case "hangar-bank":
         return world.assignedHangar === null
-          ? 'Press 1 / 2 / 3 — elevator to hangars'
+          ? "Press 1 / 2 / 3 — elevator to hangars"
           : `Press 1 / 2 / 3 — elevator to hangars (your ship: Hangar ${world.assignedHangar})`;
-      case 'hangar-lift-up':
-        return 'Press F — elevator to Lobby';
-      case 'prefab-elevator':
+      case "hangar-lift-up":
+        return "Press F — elevator to Lobby";
+      case "prefab-elevator":
         return `Press F — elevator to ${interaction.marker.targetFloor}`;
-      case 'prefab-info':
+      case "prefab-info":
         return interaction.prompt;
     }
   }
 
-  function networkInstanceForInteraction(interaction: StationInteraction): string | null {
+  function networkInstanceForInteraction(
+    interaction: StationInteraction,
+  ): string | null {
     if (!bootstrap) return null;
     switch (interaction.kind) {
-      case 'hab-lift-down':
-      case 'hangar-lift-up':
-        return 'station:public';
-      case 'hab-lift-up':
+      case "hab-lift-down":
+      case "hangar-lift-up":
+        return "station:public";
+      case "hab-lift-up":
         return bootstrap.spawn.apartmentInstanceId;
-      case 'hangar-bank':
+      case "hangar-bank":
         return bootstrap.spawn.hangarInstanceId;
-      case 'prefab-elevator':
-        if (interaction.marker.targetFloor === 'hangar') return bootstrap.spawn.hangarInstanceId;
-        if (interaction.marker.targetFloor === 'hab') return bootstrap.spawn.apartmentInstanceId;
-        return 'station:public';
-      case 'terminal':
-      case 'prefab-info':
+      case "prefab-elevator":
+        if (interaction.marker.targetFloor === "hangar")
+          return bootstrap.spawn.hangarInstanceId;
+        if (interaction.marker.targetFloor === "hab")
+          return bootstrap.spawn.apartmentInstanceId;
+        return "station:public";
+      case "terminal":
+      case "prefab-info":
         return null;
     }
   }
@@ -196,7 +225,7 @@ export function createGameLoop({
     if (!nearShipRampOutside(world.character, world.ship)) return null;
     const rig = world.shipRig;
     if (interactPressed) rig.rampDown = !rig.rampDown;
-    return rig.rampDown ? 'Press F — raise ramp' : 'Press F — lower ramp';
+    return rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
   }
 
   /** Walking into the foot of the lowered ramp steps aboard. */
@@ -206,7 +235,7 @@ export function createGameLoop({
     if (!mount) return false;
     world.character = createDeckCharacterState(world.ship, mount);
     world.mode = MODE_ON_SHIP_DECK;
-    world.prompt = '';
+    world.prompt = "";
     return true;
   }
 
@@ -242,8 +271,8 @@ export function createGameLoop({
   }
 
   function updateStationMode(
-    characterInput: ReturnType<PlayerControls['sampleCharacterInput']>,
-    actions: ReturnType<PlayerControls['consumeActions']>,
+    characterInput: ReturnType<PlayerControls["sampleCharacterInput"]>,
+    actions: ReturnType<PlayerControls["consumeActions"]>,
     dt: number,
   ): void {
     world.character = updateCharacterInStation(
@@ -262,11 +291,13 @@ export function createGameLoop({
       return;
     }
 
-    const interaction = resolveStationInteraction(world.character as StationCharacterState);
+    const interaction = resolveStationInteraction(
+      world.character as StationCharacterState,
+    );
     world.prompt = stationPrompt(interaction);
     if (!interaction) return;
 
-    if (interaction.kind === 'terminal') {
+    if (interaction.kind === "terminal") {
       if (actions.interactPressed && world.assignedHangar === null) {
         const hangar = callShipToHangar(world, planet, seed);
         if (hangar) world.prompt = `Ship delivered to Hangar ${hangar.index}`;
@@ -274,9 +305,12 @@ export function createGameLoop({
       return;
     }
 
-    if (interaction.kind === 'hangar-bank') {
+    if (interaction.kind === "hangar-bank") {
       if (actions.hangarDigit) {
-        const destination = elevatorDestinationFor(interaction, actions.hangarDigit);
+        const destination = elevatorDestinationFor(
+          interaction,
+          actions.hangarDigit,
+        );
         if (destination) {
           beginElevatorRide(world, destination);
           announceElevatorTransition(interaction, destination);
@@ -298,7 +332,7 @@ export function createGameLoop({
   function standingInDoorway(doorId: string, deckLocal: DeckLocal): boolean {
     return getShipWalkZones().some(
       (zone) =>
-        typeof zone.gate === 'object' &&
+        typeof zone.gate === "object" &&
         zone.gate.doorId === doorId &&
         deckLocal.right >= zone.minRight &&
         deckLocal.right <= zone.maxRight &&
@@ -308,8 +342,8 @@ export function createGameLoop({
   }
 
   function updateDeckMode(
-    characterInput: ReturnType<PlayerControls['sampleCharacterInput']>,
-    actions: ReturnType<PlayerControls['consumeActions']>,
+    characterInput: ReturnType<PlayerControls["sampleCharacterInput"]>,
+    actions: ReturnType<PlayerControls["consumeActions"]>,
     dt: number,
   ): void {
     world.ship = integrateHoveringShip(world.ship, dt, planet, seed);
@@ -339,13 +373,16 @@ export function createGameLoop({
     const seatNearby = nearestSeat(deckLocal);
     if (seatNearby) {
       world.prompt = seatInteractPrompt(seatNearby);
-      if (actions.interactPressed && seatNearby.role === 'pilot') beginSitTransition(world);
+      if (actions.interactPressed && seatNearby.role === "pilot")
+        beginSitTransition(world);
       return;
     }
 
     const doorNearby = nearestDoor(deckLocal);
     if (doorNearby) {
-      const door = getShipLayout().doors.find((entry) => entry.id === doorNearby.doorId);
+      const door = getShipLayout().doors.find(
+        (entry) => entry.id === doorNearby.doorId,
+      );
       const doorRig = rig.doors[doorNearby.doorId];
       if (door && doorRig) {
         world.prompt = doorRig.isOpen
@@ -361,7 +398,11 @@ export function createGameLoop({
       }
     }
 
-    const ladder = resolveLadderInteraction(deckLocal, gates, result.state.deckZone);
+    const ladder = resolveLadderInteraction(
+      deckLocal,
+      gates,
+      result.state.deckZone,
+    );
     if (ladder) {
       world.prompt = ladderInteractPrompt(ladder.direction);
       if (actions.interactPressed) {
@@ -377,14 +418,17 @@ export function createGameLoop({
       return;
     }
 
-    const standingOnRamp = getShipWalkZone(result.state.deckZone)?.gate === 'ramp';
+    const standingOnRamp =
+      getShipWalkZone(result.state.deckZone)?.gate === "ramp";
     if (parked && nearRampPanel(deckLocal) && !standingOnRamp) {
-      world.prompt = rig.rampDown ? 'Press F — raise ramp' : 'Press F — lower ramp';
+      world.prompt = rig.rampDown
+        ? "Press F — raise ramp"
+        : "Press F — lower ramp";
       if (actions.interactPressed) rig.rampDown = !rig.rampDown;
       return;
     }
 
-    world.prompt = '';
+    world.prompt = "";
   }
 
   function frame(nowMs: number): void {
@@ -417,7 +461,7 @@ export function createGameLoop({
         seed,
       );
       if (!tryMountRamp()) {
-        world.prompt = handleRampOutside(actions.interactPressed) ?? '';
+        world.prompt = handleRampOutside(actions.interactPressed) ?? "";
       }
     } else if (world.mode === MODE_IN_SHIP) {
       world.ship = integrateFlightBody(
@@ -427,7 +471,7 @@ export function createGameLoop({
         planet,
         seed,
       );
-      world.prompt = 'Hold F — look around · Hold Y — get up';
+      world.prompt = "Hold F — look around · Hold Y — get up";
       if (actions.exitSeatPressed) {
         beginStandTransition(world);
       }
@@ -437,7 +481,7 @@ export function createGameLoop({
       updateStationMode(characterInput, actions, dt);
     } else if (world.mode === MODE_RIDING_ELEVATOR) {
       const ride = updateElevatorRide(world, stationFrame, dt);
-      world.prompt = ride.destination ? `${ride.destination.label}…` : '';
+      world.prompt = ride.destination ? `${ride.destination.label}…` : "";
       if (ride.teleportedNow && ride.destination) {
         controls.setOrbitFacing(stationYawForDir(ride.destination.face));
       }
@@ -448,52 +492,67 @@ export function createGameLoop({
     updateShipSystems(dt);
     network?.publishPresence(world);
 
-    const shipSurface = sampleRenderablePlanetSurface(planet, seed, world.ship.position);
+    const shipSurface = sampleRenderablePlanetSurface(
+      planet,
+      seed,
+      world.ship.position,
+    );
     const focusPosition =
-      world.mode === MODE_IN_SHIP ? world.ship.position : world.character.position;
+      world.mode === MODE_IN_SHIP
+        ? world.ship.position
+        : world.character.position;
     const focusVelocity =
-      world.mode === MODE_IN_SHIP ? world.ship.velocity : world.character.velocity;
-    const focusSurface = sampleRenderablePlanetSurface(planet, seed, focusPosition);
+      world.mode === MODE_IN_SHIP
+        ? world.ship.velocity
+        : world.character.velocity;
+    const focusSurface = sampleRenderablePlanetSurface(
+      planet,
+      seed,
+      focusPosition,
+    );
 
     let renderStats = null;
     try {
-      renderStats = renderer?.render({
-        cameraOrbit: world.cameraOrbit,
-        cameraView: world.cameraView,
-        shipCameraView: world.shipCameraView,
-        shipCameraZoom: world.shipCameraZoom,
-        seatLook: camera.seatLook,
-        character:
-          world.mode === MODE_IN_SHIP
-            ? null
-            : {
-                animation: world.character.animation,
-                forward: world.character.forward,
-                position: world.character.position,
-                up: world.character.up,
-              },
-        mode: world.mode,
-        prompt: world.prompt,
-        ship: world.ship,
-        shipRig: {
-          gear01: world.shipRig.gear01,
-          ramp01: world.shipRig.ramp01,
-          doors: doorBlends(world.shipRig),
-        },
-        networkEntities: network?.getRemoteEntities(nowMs) ?? [],
-        shipZoneId: world.character.deckZone ?? null,
-        stationRoomId: world.character.stationRoomId ?? null,
-        timeSeconds: nowMs / 1000,
-      }) ?? null;
+      renderStats =
+        renderer?.render({
+          cameraOrbit: world.cameraOrbit,
+          cameraView: world.cameraView,
+          shipCameraView: world.shipCameraView,
+          shipCameraZoom: world.shipCameraZoom,
+          seatLook: camera.seatLook,
+          character:
+            world.mode === MODE_IN_SHIP
+              ? null
+              : {
+                  animation: world.character.animation,
+                  forward: world.character.forward,
+                  position: world.character.position,
+                  up: world.character.up,
+                },
+          mode: world.mode,
+          prompt: world.prompt,
+          ship: world.ship,
+          shipRig: {
+            gear01: world.shipRig.gear01,
+            ramp01: world.shipRig.ramp01,
+            doors: doorBlends(world.shipRig),
+          },
+          networkEntities: network?.getRemoteEntities(nowMs) ?? [],
+          shipZoneId: world.character.deckZone ?? null,
+          stationRoomId: world.character.stationRoomId ?? null,
+          timeSeconds: nowMs / 1000,
+        }) ?? null;
     } catch (error) {
-      console.error('ClaudeCitizen render frame failed.', error);
+      console.error("ClaudeCitizen render frame failed.", error);
       frameRendererError = error;
     }
     window.__claudecitizenRenderStats = renderStats;
     window.__claudecitizenWorld = world;
 
     const focusForward =
-      world.mode === MODE_IN_SHIP ? world.ship.forward : world.character.forward;
+      world.mode === MODE_IN_SHIP
+        ? world.ship.forward
+        : world.character.forward;
 
     onHudUpdate({
       world,

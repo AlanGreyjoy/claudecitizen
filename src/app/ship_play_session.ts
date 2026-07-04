@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { createPlayerControls } from '../flight/player_controls';
+import * as THREE from "three";
+import { createPlayerControls } from "../flight/player_controls";
 import {
   FIRST_PERSON_PITCH_LIMIT,
   integrateCharacterLocomotion,
@@ -8,7 +8,7 @@ import {
   resolveFirstPersonCameraRig,
   SPRINT_SPEED_METERS_PER_SECOND,
   WALK_SPEED_METERS_PER_SECOND,
-} from '../player/character_controller';
+} from "../player/character_controller";
 import {
   createDeckCharacterState,
   getDefaultDeckSpawnLocal,
@@ -24,12 +24,12 @@ import {
   updateCharacterOnDeck,
   type DeckCharacterState,
   type DeckLocal,
-} from '../player/ship_deck';
+} from "../player/ship_deck";
 import {
   getShipLayout,
   getShipRestHeightMeters,
   setShipLayoutOverride,
-} from '../player/ship_layout';
+} from "../player/ship_layout";
 import {
   createTransitionPose,
   getPilotSeatAnchor,
@@ -37,22 +37,29 @@ import {
   localOffsetToWorld,
   nearShipRampOutside,
   sampleRampMount,
-} from '../player/ship_interaction';
-import { getLeavePilotStandPose } from '../player/ship_deck';
+} from "../player/ship_interaction";
+import { getLeavePilotStandPose } from "../player/ship_deck";
 import {
   createShipRigState,
   doorBlends,
   isDoorPassable,
   isRampUsable,
   updateShipRig,
-} from '../player/ship_rig';
-import { createCharacterAvatar } from '../player/avatar';
-import { createShipModel } from '../render/main/scene/ship_model';
-import { updateShipPlacement } from '../render/main/update/sun_system';
-import { loadPrefabDocument } from '../world/prefabs/loader';
-import { buildShipLayoutFromPrefab } from '../world/prefabs/ship_runtime';
-import { add, cross, normalize, rotateAroundAxis, scale, vec3 } from '../math/vec3';
-import type { CharacterState, FlightBody, Pose, Vec3 } from '../types';
+} from "../player/ship_rig";
+import { createCharacterAvatar } from "../player/avatar";
+import { createShipModel } from "../render/main/scene/ship_model";
+import { updateShipPlacement } from "../render/main/update/sun_system";
+import { loadPrefabDocument } from "../world/prefabs/loader";
+import { buildShipLayoutFromPrefab } from "../world/prefabs/ship_runtime";
+import {
+  add,
+  cross,
+  normalize,
+  rotateAroundAxis,
+  scale,
+  vec3,
+} from "../math/vec3";
+import type { CharacterState, FlightBody, Pose, Vec3 } from "../types";
 
 /**
  * Dev-only ship sandbox (?shipPrefab=<id>): loads a ship prefab, applies its
@@ -71,7 +78,7 @@ const STAND_SECONDS = 1.0;
 const WORLD_UP: Vec3 = { x: 0, y: 1, z: 0 };
 const SHIP_FORWARD: Vec3 = { x: 0, y: 0, z: 1 };
 
-type SandboxMode = 'deck' | 'ground' | 'pilot' | 'sitting' | 'standing';
+type SandboxMode = "deck" | "ground" | "pilot" | "sitting" | "standing";
 
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -89,11 +96,18 @@ function smoothstep01(value: number): number {
 }
 
 /** Y-up orbit camera basis for the flat sandbox frame. */
-function resolveSandboxOrbit(yawRadians: number, pitchRadians: number, pitchLimit: number) {
+function resolveSandboxOrbit(
+  yawRadians: number,
+  pitchRadians: number,
+  pitchLimit: number,
+) {
   const right0 = normalize(cross(SHIP_FORWARD, WORLD_UP));
   const deckYaw = -yawRadians;
   const planarForward = normalize(
-    add(scale(SHIP_FORWARD, Math.cos(deckYaw)), scale(right0, Math.sin(deckYaw))),
+    add(
+      scale(SHIP_FORWARD, Math.cos(deckYaw)),
+      scale(right0, Math.sin(deckYaw)),
+    ),
   );
   const right = normalize(cross(planarForward, WORLD_UP));
   const clampedPitch = clamp(pitchRadians, -pitchLimit, pitchLimit);
@@ -107,10 +121,10 @@ function resolveSandboxOrbit(yawRadians: number, pitchRadians: number, pitchLimi
 
 function groundCharacterAt(position: Vec3, forward: Vec3): CharacterState {
   return {
-    animation: 'Idle_Loop',
+    animation: "Idle_Loop",
     forward: normalize({ x: forward.x, y: 0, z: forward.z }),
     grounded: true,
-    jumpPhase: 'grounded',
+    jumpPhase: "grounded",
     jumpPhaseTime: 0,
     position: { x: position.x, y: SANDBOX_GROUND_Y_METERS, z: position.z },
     up: { ...WORLD_UP },
@@ -118,45 +132,50 @@ function groundCharacterAt(position: Vec3, forward: Vec3): CharacterState {
   };
 }
 
-function mountBanner(prefabId: string, hintText: string, isWarning: boolean): void {
-  const button = document.createElement('button');
-  button.type = 'button';
+function mountBanner(
+  prefabId: string,
+  hintText: string,
+  isWarning: boolean,
+): void {
+  const button = document.createElement("button");
+  button.type = "button";
   button.textContent = `◂ Back to Editor (${prefabId})`;
-  button.title = 'Return to the editor with this prefab loaded (press Esc first to unlock the mouse)';
+  button.title =
+    "Return to the editor with this prefab loaded (press Esc first to unlock the mouse)";
   Object.assign(button.style, {
-    position: 'fixed',
-    top: '18px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: '250',
-    padding: '9px 18px',
-    border: '1px solid rgba(255, 206, 111, 0.5)',
-    background: 'rgba(6, 12, 26, 0.88)',
-    color: 'var(--accent-2, #ffce6f)',
+    position: "fixed",
+    top: "18px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: "250",
+    padding: "9px 18px",
+    border: "1px solid rgba(255, 206, 111, 0.5)",
+    background: "rgba(6, 12, 26, 0.88)",
+    color: "var(--accent-2, #ffce6f)",
     font: "600 13px/1 'Rajdhani', sans-serif",
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
+    letterSpacing: "0.14em",
+    textTransform: "uppercase",
+    cursor: "pointer",
   } satisfies Partial<CSSStyleDeclaration>);
-  button.addEventListener('click', () => {
+  button.addEventListener("click", () => {
     window.location.href = `/?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
   });
   document.body.appendChild(button);
 
-  const hint = document.createElement('div');
+  const hint = document.createElement("div");
   hint.textContent = hintText;
   Object.assign(hint.style, {
-    position: 'fixed',
-    bottom: '18px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: '250',
-    padding: '8px 16px',
-    border: '1px solid rgba(90, 190, 255, 0.35)',
-    background: 'rgba(6, 12, 26, 0.82)',
-    color: isWarning ? 'var(--accent-2, #ffce6f)' : 'var(--muted, #8fa3c9)',
+    position: "fixed",
+    bottom: "18px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: "250",
+    padding: "8px 16px",
+    border: "1px solid rgba(90, 190, 255, 0.35)",
+    background: "rgba(6, 12, 26, 0.82)",
+    color: isWarning ? "var(--accent-2, #ffce6f)" : "var(--muted, #8fa3c9)",
     font: "500 12px/1.4 'Rajdhani', sans-serif",
-    letterSpacing: '0.08em',
+    letterSpacing: "0.08em",
   } satisfies Partial<CSSStyleDeclaration>);
   document.body.appendChild(hint);
 }
@@ -171,9 +190,13 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   const doc = await loadPrefabDocument(prefabId);
   let prefabApplied = false;
   if (!doc) {
-    console.warn(`Ship prefab "${prefabId}" not found; sandbox uses the built-in Starhopper.`);
-  } else if (doc.kind !== 'ship') {
-    console.warn(`Prefab "${prefabId}" is kind "${doc.kind}", not ship; using the built-in layout.`);
+    console.warn(
+      `Ship prefab "${prefabId}" not found; sandbox uses the built-in Starhopper.`,
+    );
+  } else if (doc.kind !== "ship") {
+    console.warn(
+      `Prefab "${prefabId}" is kind "${doc.kind}", not ship; using the built-in layout.`,
+    );
   } else {
     const layout = buildShipLayoutFromPrefab(doc);
     if (layout) {
@@ -186,24 +209,28 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   // prefab is missing entirely); otherwise start on the pad beside the ship.
   const walkable = (prefabApplied || !doc) && getShipWalkZones().length > 0;
   const hint = walkable
-    ? 'Ship sandbox — WASD walk · F interact · V camera · G gear · Esc unlock mouse'
+    ? "Ship sandbox — WASD walk · F interact · V camera · G gear · Esc unlock mouse"
     : prefabApplied
-      ? 'Hull loaded — add ship-walk-zone components (and a pilot-seat) in the editor to walk the deck'
+      ? "Hull loaded — add ship-walk-zone components (and a pilot-seat) in the editor to walk the deck"
       : 'Ship prefab not applied (kind must be "ship") — showing the built-in ship';
 
   // --- DOM --------------------------------------------------------------------
-  document.getElementById('title-screen')?.classList.add('is-hidden');
-  requireElement<HTMLElement>('app').classList.remove('is-hidden');
+  document.getElementById("title-screen")?.classList.add("is-hidden");
+  requireElement<HTMLElement>("app").classList.remove("is-hidden");
   mountBanner(prefabId, hint, !walkable);
 
   // Trim the full-game HUD down to FPS + interact prompt.
-  for (const selector of ['.sc-hud-minimap', '.sc-hud-chat', '.sc-hud-debug-wrap']) {
+  for (const selector of [
+    ".sc-hud-minimap",
+    ".sc-hud-chat",
+    ".sc-hud-debug-wrap",
+  ]) {
     const element = document.querySelector<HTMLElement>(selector);
-    if (element) element.style.display = 'none';
+    if (element) element.style.display = "none";
   }
-  const canvas = requireElement<HTMLCanvasElement>('view');
-  const fpsEl = requireElement<HTMLElement>('hud-fps-value');
-  const interactPromptEl = requireElement<HTMLElement>('interact-prompt');
+  const canvas = requireElement<HTMLCanvasElement>("view");
+  const fpsEl = requireElement<HTMLElement>("hud-fps-value");
+  const interactPromptEl = requireElement<HTMLElement>("interact-prompt");
 
   // --- scene --------------------------------------------------------------------
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -233,12 +260,21 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   const pad = new THREE.Mesh(
     new THREE.CylinderGeometry(PAD_RADIUS_METERS, PAD_RADIUS_METERS, 0.5, 64),
-    new THREE.MeshStandardMaterial({ color: 0x2a3242, metalness: 0.15, roughness: 0.85 }),
+    new THREE.MeshStandardMaterial({
+      color: 0x2a3242,
+      metalness: 0.15,
+      roughness: 0.85,
+    }),
   );
   pad.position.y = -0.25;
   pad.receiveShadow = true;
   scene.add(pad);
-  const grid = new THREE.GridHelper(PAD_RADIUS_METERS * 2, 42, 0x33507a, 0x18243c);
+  const grid = new THREE.GridHelper(
+    PAD_RADIUS_METERS * 2,
+    42,
+    0x33507a,
+    0x18243c,
+  );
   (grid.material as THREE.Material).transparent = true;
   (grid.material as THREE.Material).opacity = 0.5;
   grid.position.y = 0.01;
@@ -278,26 +314,34 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       ship?: { min?: { up?: number } };
     } | null;
     const lowestUp = measured?.ship?.min?.up;
-    if (typeof lowestUp !== 'number') return;
-    ship.position = { ...ship.position, y: Math.min(30, Math.max(0.3, -lowestUp)) };
+    if (typeof lowestUp !== "number") return;
+    ship.position = {
+      ...ship.position,
+      y: Math.min(30, Math.max(0.3, -lowestUp)),
+    };
     autoRestPending = false;
   }
   const rig = createShipRigState({ gearDown: true, rampDown: true });
   rig.ramp01 = 1;
 
-  let mode: SandboxMode = walkable ? 'deck' : 'ground';
+  let mode: SandboxMode = walkable ? "deck" : "ground";
   let character: CharacterState | DeckCharacterState = walkable
     ? createDeckCharacterState(ship, getDefaultDeckSpawnLocal())
     : groundCharacterAt({ x: 12, y: 0, z: -16 }, { x: -0.5, y: 0, z: 0.65 });
-  let prompt = '';
-  let transition: { start: Pose; end: Pose; elapsed: number; duration: number } | null = null;
+  let prompt = "";
+  let transition: {
+    start: Pose;
+    end: Pose;
+    elapsed: number;
+    duration: number;
+  } | null = null;
 
   const controls = createPlayerControls(canvas);
-  controls.setMode('on-foot');
+  controls.setMode("on-foot");
 
   // Gear preview toggle (visual only — the parked pose does not move).
-  window.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyG') rig.gearDown = !rig.gearDown;
+  window.addEventListener("keydown", (event) => {
+    if (event.code === "KeyG") rig.gearDown = !rig.gearDown;
   });
 
   // --- sim ------------------------------------------------------------------------
@@ -311,7 +355,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   function standingInDoorway(doorId: string, deckLocal: DeckLocal): boolean {
     return getShipWalkZones().some(
       (zone) =>
-        typeof zone.gate === 'object' &&
+        typeof zone.gate === "object" &&
         zone.gate.doorId === doorId &&
         deckLocal.right >= zone.minRight &&
         deckLocal.right <= zone.maxRight &&
@@ -320,7 +364,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     );
   }
 
-  function updateDeck(dt: number, actions: { interactPressed: boolean; jumpPressed: boolean }): void {
+  function updateDeck(
+    dt: number,
+    actions: { interactPressed: boolean; jumpPressed: boolean },
+  ): void {
     const input = controls.sampleCharacterInput();
     const result = updateCharacterOnDeck(
       character as DeckCharacterState,
@@ -331,13 +378,13 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       SANDBOX_GRAVITY,
     );
     character = result.state;
-    prompt = '';
+    prompt = "";
 
     if (result.dismounted) {
       const spot = getRampDismountGroundLocal();
       const world = localOffsetToWorld(ship, { ...spot, up: 0 });
       character = groundCharacterAt(world, scale(ship.forward, -1));
-      mode = 'ground';
+      mode = "ground";
       return;
     }
 
@@ -346,7 +393,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const seatNearby = nearestSeat(deckLocal);
     if (seatNearby) {
       prompt = seatInteractPrompt(seatNearby);
-      if (actions.interactPressed && seatNearby.role === 'pilot') {
+      if (actions.interactPressed && seatNearby.role === "pilot") {
         transition = {
           start: {
             forward: character.forward,
@@ -357,25 +404,36 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           elapsed: 0,
           duration: SIT_SECONDS,
         };
-        mode = 'sitting';
+        mode = "sitting";
       }
       return;
     }
 
     const doorNearby = nearestDoor(deckLocal);
     if (doorNearby) {
-      const door = getShipLayout().doors.find((entry) => entry.id === doorNearby.doorId);
+      const door = getShipLayout().doors.find(
+        (entry) => entry.id === doorNearby.doorId,
+      );
       const doorRig = rig.doors[doorNearby.doorId];
       if (door && doorRig) {
-        prompt = doorRig.isOpen ? `Press F — close ${door.label}` : `Press F — open ${door.label}`;
-        if (actions.interactPressed && !(doorRig.isOpen && standingInDoorway(door.id, deckLocal))) {
+        prompt = doorRig.isOpen
+          ? `Press F — close ${door.label}`
+          : `Press F — open ${door.label}`;
+        if (
+          actions.interactPressed &&
+          !(doorRig.isOpen && standingInDoorway(door.id, deckLocal))
+        ) {
           doorRig.isOpen = !doorRig.isOpen;
         }
         return;
       }
     }
 
-    const ladder = resolveLadderInteraction(deckLocal, gates(), result.state.deckZone);
+    const ladder = resolveLadderInteraction(
+      deckLocal,
+      gates(),
+      result.state.deckZone,
+    );
     if (ladder) {
       prompt = ladderInteractPrompt(ladder.direction);
       if (actions.interactPressed) {
@@ -391,9 +449,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       return;
     }
 
-    const standingOnRamp = getShipWalkZone(result.state.deckZone)?.gate === 'ramp';
+    const standingOnRamp =
+      getShipWalkZone(result.state.deckZone)?.gate === "ramp";
     if (nearRampPanel(deckLocal) && !standingOnRamp) {
-      prompt = rig.rampDown ? 'Press F — raise ramp' : 'Press F — lower ramp';
+      prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
       if (actions.interactPressed) rig.rampDown = !rig.rampDown;
     }
   }
@@ -405,7 +464,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     return { x: position.x * pull, y: position.y, z: position.z * pull };
   }
 
-  function updateGround(dt: number, actions: { interactPressed: boolean; jumpPressed: boolean }): void {
+  function updateGround(
+    dt: number,
+    actions: { interactPressed: boolean; jumpPressed: boolean },
+  ): void {
     const input = controls.sampleCharacterInput();
     const moveX = input.moveX ?? 0;
     const moveY = input.moveY ?? 0;
@@ -414,7 +476,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const moveDir = add(scale(orbit.right, moveX), scale(orbit.forward, moveY));
     const magnitude = Math.min(1, Math.hypot(moveX, moveY));
     const moveSpeed =
-      (input.sprint ? SPRINT_SPEED_METERS_PER_SECOND : WALK_SPEED_METERS_PER_SECOND) * magnitude;
+      (input.sprint
+        ? SPRINT_SPEED_METERS_PER_SECOND
+        : WALK_SPEED_METERS_PER_SECOND) * magnitude;
     const isMoving = magnitude > 0.08;
     const desiredDirection =
       isMoving && Math.hypot(moveDir.x, moveDir.z) > 1e-4
@@ -437,10 +501,16 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
         onGroundedStep: () => {
           let position = character.position;
           if (isMoving) {
-            position = clampToSandboxPad(add(position, scale(desiredDirection, moveSpeed * dt)));
+            position = clampToSandboxPad(
+              add(position, scale(desiredDirection, moveSpeed * dt)),
+            );
           }
           return {
-            position: { x: position.x, y: SANDBOX_GROUND_Y_METERS, z: position.z },
+            position: {
+              x: position.x,
+              y: SANDBOX_GROUND_Y_METERS,
+              z: position.z,
+            },
             up: WORLD_UP,
           };
         },
@@ -448,7 +518,11 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           if (candidate.y > SANDBOX_GROUND_Y_METERS) return null;
           const clamped = clampToSandboxPad(candidate);
           return {
-            position: { x: clamped.x, y: SANDBOX_GROUND_Y_METERS, z: clamped.z },
+            position: {
+              x: clamped.x,
+              y: SANDBOX_GROUND_Y_METERS,
+              z: clamped.z,
+            },
             up: WORLD_UP,
           };
         },
@@ -458,7 +532,11 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const desiredFacing = input.faceCameraYaw ? orbit.forward : moveDir;
     let forward = character.forward;
     if (Math.hypot(desiredFacing.x, desiredFacing.z) > 1e-4) {
-      const target = normalize({ x: desiredFacing.x, y: 0, z: desiredFacing.z });
+      const target = normalize({
+        x: desiredFacing.x,
+        y: 0,
+        z: desiredFacing.z,
+      });
       const t = clamp(dt * TURN_SPEED, 0, 1);
       forward = normalize({
         x: forward.x + (target.x - forward.x) * t,
@@ -478,20 +556,20 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       up: motion.up,
       velocity: motion.velocity,
     };
-    prompt = '';
+    prompt = "";
 
     // Walking into the lowered ramp's foot steps aboard.
     if (walkable && isRampUsable(rig)) {
       const mount = sampleRampMount(character, ship);
       if (mount) {
         character = createDeckCharacterState(ship, mount);
-        mode = 'deck';
+        mode = "deck";
         return;
       }
     }
 
     if (nearShipRampOutside(character, ship)) {
-      prompt = rig.rampDown ? 'Press F — raise ramp' : 'Press F — lower ramp';
+      prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
       if (actions.interactPressed) rig.rampDown = !rig.rampDown;
     }
   }
@@ -502,27 +580,27 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const eased = smoothstep01(transition.elapsed / transition.duration);
     const pose = createTransitionPose(transition.start, transition.end, eased);
     character = {
-      animation: mode === 'sitting' ? 'Sitting_Enter' : 'Sitting_Exit',
+      animation: mode === "sitting" ? "Sitting_Enter" : "Sitting_Exit",
       forward: pose.forward,
       grounded: true,
-      jumpPhase: 'grounded',
+      jumpPhase: "grounded",
       jumpPhaseTime: 0,
       position: pose.position,
       up: pose.up,
       velocity: vec3(0, 0, 0),
     };
     if (transition.elapsed < transition.duration) return;
-    if (mode === 'sitting') {
-      mode = 'pilot';
+    if (mode === "sitting") {
+      mode = "pilot";
     } else {
       character = createDeckCharacterState(ship);
-      mode = 'deck';
+      mode = "deck";
     }
     transition = null;
   }
 
   function updatePilot(actions: { exitSeatPressed: boolean }): void {
-    prompt = 'Hold F — look around · Hold Y — get up';
+    prompt = "Hold F — look around · Hold Y — get up";
     if (actions.exitSeatPressed) {
       transition = {
         start: getPilotSeatAnchor(ship),
@@ -530,19 +608,20 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
         elapsed: 0,
         duration: STAND_SECONDS,
       };
-      mode = 'standing';
+      mode = "standing";
     }
   }
 
   // --- render loop -----------------------------------------------------------------
   function updateCamera(dt: number): void {
     const cameraState = controls.sampleCameraState(dt);
-    if (mode === 'pilot') {
+    if (mode === "pilot") {
       const eye = localOffsetToWorld(ship, getShipLayout().pilotEye);
       const seatLook = cameraState.seatLook;
       const lookForward =
         seatLook &&
-        (Math.abs(seatLook.yawRadians) > 1e-6 || Math.abs(seatLook.pitchRadians) > 1e-6)
+        (Math.abs(seatLook.yawRadians) > 1e-6 ||
+          Math.abs(seatLook.pitchRadians) > 1e-6)
           ? resolveSandboxOrbit(
               seatLook.yawRadians,
               seatLook.pitchRadians,
@@ -560,9 +639,18 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       return;
     }
 
-    const firstPerson = cameraState.cameraView === 'first-person' && mode !== 'sitting' && mode !== 'standing';
-    const pitchLimit = firstPerson ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
-    const orbit = resolveSandboxOrbit(cameraState.yawRadians, cameraState.pitchRadians, pitchLimit);
+    const firstPerson =
+      cameraState.cameraView === "first-person" &&
+      mode !== "sitting" &&
+      mode !== "standing";
+    const pitchLimit = firstPerson
+      ? FIRST_PERSON_PITCH_LIMIT
+      : ORBIT_PITCH_LIMIT;
+    const orbit = resolveSandboxOrbit(
+      cameraState.yawRadians,
+      cameraState.pitchRadians,
+      pitchLimit,
+    );
     const rigOffsets = firstPerson
       ? resolveFirstPersonCameraRig(orbit)
       : resolveCharacterCameraRig(orbit, cameraState.zoomDistance);
@@ -585,7 +673,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
   }
-  window.addEventListener('resize', resize);
+  window.addEventListener("resize", resize);
   resize();
 
   let lastMs = performance.now();
@@ -598,25 +686,29 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     lastMs = nowMs;
 
     tryAutoRest();
-    controls.setMode(mode === 'pilot' ? 'in-ship' : 'on-foot');
+    controls.setMode(mode === "pilot" ? "in-ship" : "on-foot");
     const actions = controls.consumeActions();
 
-    if (mode === 'deck') updateDeck(dt, actions);
-    else if (mode === 'ground') updateGround(dt, actions);
-    else if (mode === 'pilot') updatePilot(actions);
+    if (mode === "deck") updateDeck(dt, actions);
+    else if (mode === "ground") updateGround(dt, actions);
+    else if (mode === "pilot") updatePilot(actions);
     else updateTransitionMode(dt);
 
     updateShipRig(rig, dt);
-    shipModel.setArticulation({ gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) });
+    shipModel.setArticulation({
+      gear01: rig.gear01,
+      ramp01: rig.ramp01,
+      doors: doorBlends(rig),
+    });
     updateShipPlacement(shipModel.group, ship, vec3(0, 0, 0), 1);
 
     const firstPersonActive =
-      mode !== 'pilot' &&
-      mode !== 'sitting' &&
-      mode !== 'standing' &&
-      controls.sampleCameraState(0).cameraView === 'first-person';
+      mode !== "pilot" &&
+      mode !== "sitting" &&
+      mode !== "standing" &&
+      controls.sampleCameraState(0).cameraView === "first-person";
     avatar.update(
-      mode === 'pilot'
+      mode === "pilot"
         ? null
         : {
             animation: character.animation,
@@ -633,7 +725,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     renderer.render(scene, camera);
 
     interactPromptEl.textContent = prompt;
-    interactPromptEl.classList.toggle('is-visible', prompt.length > 0);
+    interactPromptEl.classList.toggle("is-visible", prompt.length > 0);
 
     fpsAccum += dt;
     fpsFrames += 1;

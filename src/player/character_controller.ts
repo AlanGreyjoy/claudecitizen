@@ -1,7 +1,28 @@
-import { add, cross, dot, length, lerp, normalize, rotateAroundAxis, scale, sub, vec3 } from '../math/vec3';
-import { eastVector, radialUp, surfacePointFromPosition } from '../world/coordinates';
-import { sampleFootPlanetSurface } from '../world/planet_surface';
-import type { CharacterInput, CharacterState, JumpPhase, Planet, Vec3 } from '../types';
+import {
+  add,
+  cross,
+  dot,
+  length,
+  lerp,
+  normalize,
+  rotateAroundAxis,
+  scale,
+  sub,
+  vec3,
+} from "../math/vec3";
+import {
+  eastVector,
+  radialUp,
+  surfacePointFromPosition,
+} from "../world/coordinates";
+import { sampleFootPlanetSurface } from "../world/planet_surface";
+import type {
+  CharacterInput,
+  CharacterState,
+  JumpPhase,
+  Planet,
+  Vec3,
+} from "../types";
 
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
 export const WALK_SPEED_METERS_PER_SECOND = 4.2;
@@ -57,7 +78,9 @@ function tangentize(vector: Vec3, up: Vec3): Vec3 {
 
 function forwardFromYaw(position: Vec3, yawRadians: number): Vec3 {
   const { east, north } = tangentBasis(position);
-  return normalize(add(scale(east, Math.cos(yawRadians)), scale(north, Math.sin(yawRadians))));
+  return normalize(
+    add(scale(east, Math.cos(yawRadians)), scale(north, Math.sin(yawRadians))),
+  );
 }
 
 function movementDirection(
@@ -76,19 +99,24 @@ function movementDirection(
 }
 
 export function animationFromState(
-  state: Pick<CharacterState, 'jumpPhase'>,
+  state: Pick<CharacterState, "jumpPhase">,
   isMoving: boolean,
   isSprinting: boolean,
 ): string {
-  if (state.jumpPhase === 'jump-start') return 'Jump_Start';
-  if (state.jumpPhase === 'jump-loop') return 'Jump_Loop';
-  if (state.jumpPhase === 'jump-land') return 'Jump_Land';
-  if (isMoving && isSprinting) return 'Sprint_Loop';
-  if (isMoving) return 'Walk_Loop';
-  return 'Idle_Loop';
+  if (state.jumpPhase === "jump-start") return "Jump_Start";
+  if (state.jumpPhase === "jump-loop") return "Jump_Loop";
+  if (state.jumpPhase === "jump-land") return "Jump_Land";
+  if (isMoving && isSprinting) return "Sprint_Loop";
+  if (isMoving) return "Walk_Loop";
+  return "Idle_Loop";
 }
 
-function rotateToward(currentForward: Vec3, desiredForward: Vec3, up: Vec3, dt: number): Vec3 {
+function rotateToward(
+  currentForward: Vec3,
+  desiredForward: Vec3,
+  up: Vec3,
+  dt: number,
+): Vec3 {
   if (length(desiredForward) < 1e-6) return normalize(currentForward);
   const current = normalize(tangentize(currentForward, up));
   const desired = normalize(tangentize(desiredForward, up));
@@ -98,12 +126,20 @@ function rotateToward(currentForward: Vec3, desiredForward: Vec3, up: Vec3, dt: 
 }
 
 function clampToGround(position: Vec3, surfaceRadiusMeters: number): Vec3 {
-  return surfacePointFromPosition(position, surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS);
+  return surfacePointFromPosition(
+    position,
+    surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS,
+  );
 }
 
-function updateGroundJumpState(state: Pick<CharacterState, 'jumpPhase' | 'jumpPhaseTime'>, dt: number): JumpPhase {
-  if (state.jumpPhase !== 'jump-land') return state.jumpPhase;
-  return state.jumpPhaseTime + dt >= JUMP_LAND_SECONDS ? 'grounded' : 'jump-land';
+function updateGroundJumpState(
+  state: Pick<CharacterState, "jumpPhase" | "jumpPhaseTime">,
+  dt: number,
+): JumpPhase {
+  if (state.jumpPhase !== "jump-land") return state.jumpPhase;
+  return state.jumpPhaseTime + dt >= JUMP_LAND_SECONDS
+    ? "grounded"
+    : "jump-land";
 }
 
 export interface LocomotionMotionInput {
@@ -133,7 +169,10 @@ export interface LocomotionCallbacks {
 
 /** Shared grounded/airborne jump integration for planet, deck, and station walkers. */
 export function integrateCharacterLocomotion(
-  state: Pick<CharacterState, 'position' | 'velocity' | 'grounded' | 'jumpPhase' | 'jumpPhaseTime'>,
+  state: Pick<
+    CharacterState,
+    "position" | "velocity" | "grounded" | "jumpPhase" | "jumpPhaseTime"
+  >,
   motion: LocomotionMotionInput,
   dt: number,
   initialUp: Vec3,
@@ -144,33 +183,40 @@ export function integrateCharacterLocomotion(
   let velocity = state.velocity;
   let grounded = state.grounded;
   let jumpPhase = state.jumpPhase;
-  let jumpPhaseTime = state.jumpPhase === 'grounded' ? 0 : state.jumpPhaseTime + dt;
+  let jumpPhaseTime =
+    state.jumpPhase === "grounded" ? 0 : state.jumpPhaseTime + dt;
   let up = initialUp;
 
   if (grounded) {
     const stepped = callbacks.onGroundedStep();
     position = stepped.position;
     up = stepped.up;
-    velocity = dt > 0 ? scale(sub(position, state.position), 1 / dt) : vec3(0, 0, 0);
+    velocity =
+      dt > 0 ? scale(sub(position, state.position), 1 / dt) : vec3(0, 0, 0);
 
     if (motion.wantsJump) {
       grounded = false;
-      jumpPhase = 'jump-start';
+      jumpPhase = "jump-start";
       jumpPhaseTime = 0;
       velocity = add(velocity, scale(up, JUMP_SPEED_METERS_PER_SECOND));
     } else {
       jumpPhase = updateGroundJumpState(state, dt);
-      if (jumpPhase === 'grounded') jumpPhaseTime = 0;
+      if (jumpPhase === "grounded") jumpPhaseTime = 0;
     }
   }
 
   if (!grounded) {
     const tangentVelocity = tangentize(velocity, up);
     const desiredVelocity = scale(motion.desiredDirection, motion.moveSpeed);
-    const blendedTangent = lerp(tangentVelocity, desiredVelocity, clamp(dt * AIR_CONTROL * 8, 0, 1));
+    const blendedTangent = lerp(
+      tangentVelocity,
+      desiredVelocity,
+      clamp(dt * AIR_CONTROL * 8, 0, 1),
+    );
     const verticalSpeed = dot(velocity, up);
     const gravityScale = verticalSpeed < 0 ? FALL_GRAVITY_MULTIPLIER : 1;
-    const verticalVelocity = verticalSpeed - gravityMetersPerSecond2 * gravityScale * dt;
+    const verticalVelocity =
+      verticalSpeed - gravityMetersPerSecond2 * gravityScale * dt;
     velocity = add(blendedTangent, scale(up, verticalVelocity));
     position = add(position, scale(velocity, dt));
 
@@ -180,21 +226,25 @@ export function integrateCharacterLocomotion(
       up = landed.up;
       velocity = tangentize(velocity, up);
       grounded = true;
-      jumpPhase = 'jump-land';
+      jumpPhase = "jump-land";
       jumpPhaseTime = 0;
     } else {
       if (callbacks.sampleAirborneUp) up = callbacks.sampleAirborneUp(position);
-      if (jumpPhase === 'jump-start' && jumpPhaseTime >= JUMP_START_SECONDS) {
-        jumpPhase = 'jump-loop';
+      if (jumpPhase === "jump-start" && jumpPhaseTime >= JUMP_START_SECONDS) {
+        jumpPhase = "jump-loop";
         jumpPhaseTime = 0;
-      } else if (jumpPhase === 'grounded') {
-        jumpPhase = 'jump-loop';
+      } else if (jumpPhase === "grounded") {
+        jumpPhase = "jump-loop";
         jumpPhaseTime = 0;
       }
     }
   }
 
-  const animation = animationFromState({ jumpPhase }, motion.isMoving, motion.wantsSprint);
+  const animation = animationFromState(
+    { jumpPhase },
+    motion.isMoving,
+    motion.wantsSprint,
+  );
 
   return {
     animation,
@@ -217,7 +267,9 @@ export function resolveOrbitCamera(
   const planarForward = forwardFromYaw(position, yawRadians);
   const right = normalize(cross(planarForward, up));
   const clampedPitch = clamp(pitchRadians, -pitchLimit, pitchLimit);
-  const forward = normalize(rotateAroundAxis(planarForward, right, clampedPitch));
+  const forward = normalize(
+    rotateAroundAxis(planarForward, right, clampedPitch),
+  );
   return {
     forward,
     pitchRadians: clampedPitch,
@@ -226,7 +278,10 @@ export function resolveOrbitCamera(
   };
 }
 
-export function resolveCharacterCameraRig(orbit: OrbitCamera, zoomDistance: number): CharacterCameraRig {
+export function resolveCharacterCameraRig(
+  orbit: OrbitCamera,
+  zoomDistance: number,
+): CharacterCameraRig {
   const zoomRatio = clamp(zoomDistance / CAMERA_REF_ZOOM, 0.22, 1.35);
   const shoulderUp = 3.2 * zoomRatio;
   const shoulderRight = 0.75 * Math.sqrt(zoomRatio);
@@ -234,14 +289,22 @@ export function resolveCharacterCameraRig(orbit: OrbitCamera, zoomDistance: numb
 
   return {
     positionOffset: add(
-      add(scale(orbit.forward, -zoomDistance), scale(orbit.right, shoulderRight)),
+      add(
+        scale(orbit.forward, -zoomDistance),
+        scale(orbit.right, shoulderRight),
+      ),
       scale(orbit.up, shoulderUp),
     ),
-    targetOffset: add(scale(orbit.right, shoulderRight), scale(orbit.up, targetUp)),
+    targetOffset: add(
+      scale(orbit.right, shoulderRight),
+      scale(orbit.up, targetUp),
+    ),
   };
 }
 
-export function resolveFirstPersonCameraRig(orbit: OrbitCamera): CharacterCameraRig {
+export function resolveFirstPersonCameraRig(
+  orbit: OrbitCamera,
+): CharacterCameraRig {
   // Planar (yaw-only) forward, so pitching the view does not slide the eye.
   const planarForward = normalize(cross(orbit.up, orbit.right));
   const eyeOffset = add(
@@ -250,7 +313,10 @@ export function resolveFirstPersonCameraRig(orbit: OrbitCamera): CharacterCamera
   );
   return {
     positionOffset: eyeOffset,
-    targetOffset: add(eyeOffset, scale(orbit.forward, FIRST_PERSON_LOOK_DISTANCE_METERS)),
+    targetOffset: add(
+      eyeOffset,
+      scale(orbit.forward, FIRST_PERSON_LOOK_DISTANCE_METERS),
+    ),
   };
 }
 
@@ -261,10 +327,10 @@ export function createCharacterState(
   const up = radialUp(position);
   const tangentForward = normalize(tangentize(forward, up));
   return {
-    animation: 'Idle_Loop',
+    animation: "Idle_Loop",
     forward: tangentForward,
     grounded: true,
-    jumpPhase: 'grounded',
+    jumpPhase: "grounded",
     jumpPhaseTime: 0,
     position,
     up,
@@ -279,10 +345,10 @@ export function placeCharacterOnSurface(
   const up = radialUp(position);
   const tangentForward = normalize(tangentize(forward, up));
   return {
-    animation: 'Idle_Loop',
+    animation: "Idle_Loop",
     forward: tangentForward,
     grounded: true,
-    jumpPhase: 'grounded',
+    jumpPhase: "grounded",
     jumpPhaseTime: 0,
     position,
     up,
@@ -309,7 +375,9 @@ export function updateCharacterState(
   );
   const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
   const moveSpeed =
-    (wantsSprint ? SPRINT_SPEED_METERS_PER_SECOND : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
+    (wantsSprint
+      ? SPRINT_SPEED_METERS_PER_SECOND
+      : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
 
   const isMoving = moveMagnitude > 0.08;
   const gravity = planet.gravityMetersPerSecond2 ?? 9.8;
@@ -324,14 +392,21 @@ export function updateCharacterState(
         const step = scale(desiredDirection, moveSpeed * dt);
         let nextPosition = add(state.position, step);
         const nextSurface = sampleFootPlanetSurface(planet, seed, nextPosition);
-        nextPosition = clampToGround(nextPosition, nextSurface.surfaceRadiusMeters);
+        nextPosition = clampToGround(
+          nextPosition,
+          nextSurface.surfaceRadiusMeters,
+        );
         return { position: nextPosition, up: radialUp(nextPosition) };
       },
       tryLand: (candidate) => {
         const nextSurface = sampleFootPlanetSurface(planet, seed, candidate);
-        const landingRadius = nextSurface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
+        const landingRadius =
+          nextSurface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
         if (length(candidate) > landingRadius) return null;
-        const snapped = clampToGround(candidate, nextSurface.surfaceRadiusMeters);
+        const snapped = clampToGround(
+          candidate,
+          nextSurface.surfaceRadiusMeters,
+        );
         return { position: snapped, up: radialUp(snapped) };
       },
       sampleAirborneUp: radialUp,

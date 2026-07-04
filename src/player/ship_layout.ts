@@ -1,4 +1,4 @@
-import type { LocalOffset, Vec3 } from '../types';
+import type { LocalOffset, Vec3 } from "../types";
 
 /**
  * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
@@ -7,7 +7,7 @@ import type { LocalOffset, Vec3 } from '../types';
  * it via setShipLayoutOverride (see world/prefabs/ship_runtime.ts).
  */
 
-export type ShipSeatRole = 'pilot' | 'copilot' | 'turret' | 'passenger';
+export type ShipSeatRole = "pilot" | "copilot" | "turret" | "passenger";
 
 /** Oriented walk volume baked from a rotated ship-walk-zone entity. */
 export interface ShipWalkZoneOriented {
@@ -39,7 +39,7 @@ export interface ShipWalkZone {
   /** Interior ceiling for camera containment. */
   ceilingUp: number;
   /** Walkable only while the boarding ramp or the given door is open. */
-  gate?: 'ramp' | { doorId: string };
+  gate?: "ramp" | { doorId: string };
   /** Passage zones connect rooms; real rooms win for camera framing. */
   passage?: boolean;
   /** Present when the prefab entity rotation tilts the walk volume off ship axes. */
@@ -50,8 +50,8 @@ export interface ShipDoorSpec {
   id: string;
   /** Prompt name ("Press F — open {label}"). */
   label: string;
-  motion: 'slide' | 'hinge';
-  axis: 'x' | 'y' | 'z';
+  motion: "slide" | "hinge";
+  axis: "x" | "y" | "z";
   /** GLB node names + signed open delta (slide: meters, hinge: radians). */
   nodes: { name: string; delta: number }[];
   /** Ship-local interact anchor. */
@@ -61,7 +61,7 @@ export interface ShipDoorSpec {
 }
 
 export interface ShipRampInteract {
-  placement: 'outside' | 'deck';
+  placement: "outside" | "deck";
   right: number;
   forward: number;
   radius: number;
@@ -118,7 +118,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   restHeightMeters: 3.16,
   walkZones: [
     {
-      id: 'cabin',
+      id: "cabin",
       minRight: -2.35,
       maxRight: 2.35,
       minForward: -6.6,
@@ -127,7 +127,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
       ceilingUp: 1.66,
     },
     {
-      id: 'cockpit',
+      id: "cockpit",
       minRight: -1.65,
       maxRight: 1.65,
       minForward: 2.83,
@@ -136,7 +136,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
       ceilingUp: 1.66,
     },
     {
-      id: 'cockpit-door',
+      id: "cockpit-door",
       minRight: -0.85,
       maxRight: 0.85,
       minForward: 2.42,
@@ -144,11 +144,11 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
       floorUp: -0.97,
       slopeMinUp: -1.42,
       ceilingUp: 1.66,
-      gate: { doorId: 'cockpit' },
+      gate: { doorId: "cockpit" },
       passage: true,
     },
     {
-      id: 'ramp',
+      id: "ramp",
       minRight: -1.05,
       maxRight: 1.05,
       minForward: -8.55,
@@ -156,18 +156,18 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
       floorUp: -1.42,
       slopeMinUp: -3.14,
       ceilingUp: 1.66,
-      gate: 'ramp',
+      gate: "ramp",
     },
   ],
   doors: [
     {
-      id: 'cockpit',
-      label: 'cockpit',
-      motion: 'slide',
-      axis: 'x',
+      id: "cockpit",
+      label: "cockpit",
+      motion: "slide",
+      axis: "x",
       nodes: [
-        { name: 'CockpitDoor_L', delta: -1 },
-        { name: 'CockpitDoor_R', delta: 1 },
+        { name: "CockpitDoor_L", delta: -1 },
+        { name: "CockpitDoor_R", delta: 1 },
       ],
       interact: { right: 0, up: 0, forward: 2.72 },
       radius: 1.55,
@@ -176,8 +176,8 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   ],
   seats: [
     {
-      id: 'pilot-seat',
-      role: 'pilot',
+      id: "pilot-seat",
+      role: "pilot",
       seat: { right: 0, up: -0.62, forward: 6.05 },
       eye: { right: 0, up: 0.25, forward: 6.3 },
       stand: { right: 0, forward: 4.5 },
@@ -188,8 +188,8 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   pilotEye: { right: 0, up: 0.25, forward: 6.3 },
   seatStand: { right: 0, forward: 4.5 },
   rampInteracts: [
-    { placement: 'outside', right: 0, forward: -9.7, radius: 3.0 },
-    { placement: 'deck', right: 0, forward: -5.7, radius: 1.7 },
+    { placement: "outside", right: 0, forward: -9.7, radius: 3.0 },
+    { placement: "deck", right: 0, forward: -5.7, radius: 1.7 },
   ],
   rampMount: {
     minRight: -1.05,
@@ -221,5 +221,9 @@ export function getShipLayout(): ShipLayout {
  * landing). Unauthored prefabs fall back to the Starhopper's measured value.
  */
 export function getShipRestHeightMeters(): number {
-  return getShipLayout().restHeightMeters ?? DEFAULT_SHIP_LAYOUT.restHeightMeters ?? 3.16;
+  return (
+    getShipLayout().restHeightMeters ??
+    DEFAULT_SHIP_LAYOUT.restHeightMeters ??
+    3.16
+  );
 }

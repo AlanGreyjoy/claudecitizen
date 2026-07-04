@@ -1,6 +1,6 @@
-import { setShipLayoutOverride } from '../player/ship_layout';
-import { loadPrefabDocument } from './prefabs/loader';
-import { buildShipLayoutFromPrefab } from './prefabs/ship_runtime';
+import { setShipLayoutOverride } from "../player/ship_layout";
+import { loadPrefabDocument } from "./prefabs/loader";
+import { buildShipLayoutFromPrefab } from "./prefabs/ship_runtime";
 
 /**
  * The player ship is a ship prefab: hull model, walk zones, doors, pilot
@@ -8,7 +8,7 @@ import { buildShipLayoutFromPrefab } from './prefabs/ship_runtime';
  * Starhopper layout in player/ship_layout.ts remains the fallback when the
  * prefab is missing or unusable.
  */
-export const DEFAULT_SHIP_PREFAB_ID = 'phobos-starhopper';
+export const DEFAULT_SHIP_PREFAB_ID = "phobos-starhopper";
 
 /** Loads the default ship prefab and activates its gameplay layout. */
 export async function applyDefaultShipPrefab(): Promise<void> {
@@ -19,8 +19,10 @@ export async function applyDefaultShipPrefab(): Promise<void> {
     );
     return;
   }
-  if (doc.kind !== 'ship') {
-    console.warn(`Prefab "${DEFAULT_SHIP_PREFAB_ID}" is not a ship prefab; using built-in layout.`);
+  if (doc.kind !== "ship") {
+    console.warn(
+      `Prefab "${DEFAULT_SHIP_PREFAB_ID}" is not a ship prefab; using built-in layout.`,
+    );
     return;
   }
   const layout = buildShipLayoutFromPrefab(doc);
