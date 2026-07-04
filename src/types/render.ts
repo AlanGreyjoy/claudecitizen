@@ -65,6 +65,25 @@ export interface NetworkShipRig {
   doors: Record<string, number>;
 }
 
+export interface RenderShipVitals {
+  hp: number;
+  shields: number;
+}
+
+export interface RenderShipSpecCaps {
+  maxHp: number;
+  maxShields: number;
+}
+
+export interface RenderShipInstance {
+  id: string;
+  prefabId: string;
+  body: import('./flight').FlightBody;
+  rig: NetworkShipRig;
+  vitals?: RenderShipVitals;
+  spec?: RenderShipSpecCaps;
+}
+
 export type NetworkLod = 'full' | 'medium' | 'marker';
 
 export interface NetworkRenderEntity {
@@ -83,7 +102,10 @@ export interface NetworkRenderEntity {
 
 export interface SpikeRenderWorld {
   mode?: GameMode;
-  ship: FlightBody;
+  ship: import('./flight').FlightBody;
+  /** All ship instances visible this frame (multi-ship render pool). */
+  ships?: RenderShipInstance[];
+  activeShipId?: string;
   character?: CharacterRenderState | null;
   cameraOrbit?: CameraOrbit;
   cameraView?: CameraView;

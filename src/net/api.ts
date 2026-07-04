@@ -20,7 +20,15 @@ export interface GameBootstrap {
     hangarInstanceId: string;
     stationRoomId: string;
   };
-  ships: { id: string; prefabId: string; displayName: string }[];
+  ships: {
+    id: string;
+    prefabId: string;
+    displayName: string;
+    hp: number;
+    shields: number;
+    maxHp: number;
+    maxShields: number;
+  }[];
   featureFlags: {
     nativeWebSocketPresence: boolean;
     serverAuthoritativePhysics: boolean;

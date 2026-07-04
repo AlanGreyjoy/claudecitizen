@@ -1,6 +1,7 @@
 import type { GameBootstrap } from './api';
 import { worldSocketUrl } from './api';
 import type { WorldState } from '../player/world_state';
+import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/world_state';
 import { MODE_IN_SHIP } from '../player/modes';
 import type { CharacterRenderState, FlightBody, NetworkLod, NetworkRenderEntity, NetworkShipRig, Vec3 } from '../types';
 
@@ -247,12 +248,20 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
                 position: world.character.position,
                 up: world.character.up,
               },
-        ship: world.ship,
+        ship: {
+          ...getActiveShipBody(world),
+          shipId: world.activeShipId,
+          prefabId: getActiveShip(world).prefabId,
+          hp: getActiveShip(world).vitals.hp,
+          shields: getActiveShip(world).vitals.shields,
+          maxHp: getActiveShip(world).spec.maxHp,
+          maxShields: getActiveShip(world).spec.maxShields,
+        },
         shipRig: {
-          gear01: world.shipRig.gear01,
-          ramp01: world.shipRig.ramp01,
+          gear01: getActiveShipRig(world).gear01,
+          ramp01: getActiveShipRig(world).ramp01,
           doors: Object.fromEntries(
-            Object.entries(world.shipRig.doors).map(([id, door]) => [
+            Object.entries(getActiveShipRig(world).doors).map(([id, door]) => [
               id,
               door.open01,
             ]),

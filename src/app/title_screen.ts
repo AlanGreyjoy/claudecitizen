@@ -39,6 +39,11 @@ function createLinkButton(label: string): HTMLButtonElement {
   return button;
 }
 
+const PASSWORD_SHOW_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>';
+const PASSWORD_HIDE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-4.4M6.7 6.7C4.6 8.1 3 10.2 2 12s3.5 7 10 7c1.8 0 3.4-.4 4.8-1.1M9.9 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a18.6 18.6 0 0 1-4.1 5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+
 function createField(label: string, input: HTMLInputElement): HTMLLabelElement {
   const field = document.createElement('label');
   field.className = 'sc-title-auth-field';
@@ -46,6 +51,37 @@ function createField(label: string, input: HTMLInputElement): HTMLLabelElement {
   labelEl.textContent = label;
   input.className = 'sc-title-auth-input';
   field.append(labelEl, input);
+  return field;
+}
+
+function createPasswordField(label: string, autocomplete: string): HTMLLabelElement {
+  const field = document.createElement('label');
+  field.className = 'sc-title-auth-field';
+  const labelEl = document.createElement('span');
+  labelEl.textContent = label;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'sc-title-auth-input-wrap';
+
+  const passwordInput = input('password', 'password', autocomplete);
+  passwordInput.className = 'sc-title-auth-input';
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'sc-title-auth-input-toggle';
+  toggle.setAttribute('aria-label', 'Show password');
+  toggle.setAttribute('aria-pressed', 'false');
+  toggle.innerHTML = PASSWORD_SHOW_ICON;
+  toggle.addEventListener('click', () => {
+    const visible = passwordInput.type === 'text';
+    passwordInput.type = visible ? 'password' : 'text';
+    toggle.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
+    toggle.setAttribute('aria-pressed', visible ? 'false' : 'true');
+    toggle.innerHTML = visible ? PASSWORD_SHOW_ICON : PASSWORD_HIDE_ICON;
+  });
+
+  wrap.append(passwordInput, toggle);
+  field.append(labelEl, wrap);
   return field;
 }
 
@@ -149,7 +185,6 @@ export function showTitleScreen(options: TitleScreenOptions): void {
     title.textContent = 'Login';
 
     const identifier = input('identifier', 'text', 'username');
-    const password = input('password', 'password', 'current-password');
     const submit = createButton('Login');
     submit.type = 'submit';
     const discord = createButton('Login with Discord', 'secondary');
@@ -164,7 +199,7 @@ export function showTitleScreen(options: TitleScreenOptions): void {
     form.append(
       title,
       createField('Email or handle', identifier),
-      createField('Password', password),
+      createPasswordField('Password', 'current-password'),
       submit,
       discord,
       renderLinks(forgot, create),
@@ -189,7 +224,6 @@ export function showTitleScreen(options: TitleScreenOptions): void {
 
     const email = input('email', 'email', 'email');
     const username = input('username', 'text', 'username');
-    const password = input('password', 'password', 'new-password');
     const submit = createButton('Register');
     submit.type = 'submit';
     const back = createLinkButton('Login');
@@ -199,7 +233,7 @@ export function showTitleScreen(options: TitleScreenOptions): void {
       title,
       createField('Email', email),
       createField('Handle', username),
-      createField('Password', password),
+      createPasswordField('Password', 'new-password'),
       submit,
       renderLinks(back),
       renderStatus(),
@@ -245,13 +279,12 @@ export function showTitleScreen(options: TitleScreenOptions): void {
     title.className = 'sc-title-auth-title';
     title.textContent = 'New Password';
 
-    const password = input('password', 'password', 'new-password');
     const submit = createButton('Reset');
     submit.type = 'submit';
     const back = createLinkButton('Login');
     back.addEventListener('click', () => renderLogin());
 
-    form.append(title, createField('Password', password), submit, renderLinks(back), renderStatus());
+    form.append(title, createPasswordField('Password', 'new-password'), submit, renderLinks(back), renderStatus());
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       setStatus('Resetting password...');

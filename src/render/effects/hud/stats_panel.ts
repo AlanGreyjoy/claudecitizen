@@ -11,6 +11,7 @@ import {
   modeLabel,
 } from '../../../player/modes';
 import type { WorldState } from '../../../player/world_state';
+import { getActiveShip, getActiveShipBody } from '../../../player/world_state';
 import type { Planet, PlanetSurfaceSample, RenderStats, Vec3 } from '../../../types';
 
 export interface StatsPanelElements {
@@ -46,7 +47,9 @@ export function createStatsPanel(elements: StatsPanelElements) {
     isPointerLocked,
   }: StatsPanelUpdateParams): void {
     const subjectPosition =
-      world.mode === MODE_IN_SHIP ? world.ship.position : world.character.position;
+      world.mode === MODE_IN_SHIP
+        ? getActiveShipBody(world).position
+        : world.character.position;
     const speed = length(focusVelocity);
     const verticalSpeed = dot(focusVelocity, radialUp(subjectPosition));
     peakAltitudeMeters = Math.max(peakAltitudeMeters, shipSurface.altitudeMeters);
@@ -54,6 +57,21 @@ export function createStatsPanel(elements: StatsPanelElements) {
       0,
       100 - Math.max(0, focusSurface.altitudeMeters / planet.atmosphereHeightMeters) * 100,
     );
+
+    const vitalsReadouts: [string, string][] = [];
+    if (
+      world.mode === MODE_IN_SHIP ||
+      world.mode === MODE_ON_SHIP_DECK ||
+      world.mode === MODE_ENTERING_SHIP ||
+      world.mode === MODE_LEAVING_PILOT
+    ) {
+      const ship = getActiveShip(world);
+      vitalsReadouts.push(
+        ['Hull', `${Math.round(ship.vitals.hp)} / ${ship.spec.maxHp}`],
+        ['Shields', `${Math.round(ship.vitals.shields)} / ${ship.spec.maxShields}`],
+        ['Max spd', `${Math.round(ship.spec.maxSpeedMps)} m/s`],
+      );
+    }
 
     const cacheReadouts: [string, string][] = renderStats
       ? [
@@ -81,6 +99,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
       ['Atmosphere', `${Math.max(0, Math.round(atmospherePct))}%`],
       ['Ship Alt', `${Math.round(shipSurface.altitudeMeters).toLocaleString()} m`],
       ['Peak', `${Math.round(peakAltitudeMeters).toLocaleString()} m`],
+      ...vitalsReadouts,
       ...cacheReadouts,
     ]
       .map(

@@ -412,6 +412,68 @@ export function createInspectorPanel(
         ];
       case "ship-frame":
         return [];
+      case "ship-stats":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max spd" }),
+            numberInput(component.maxSpeedMps ?? 100, (next) =>
+              update({
+                ...component,
+                maxSpeedMps: Math.min(500, Math.max(5, next)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max HP" }),
+            numberInput(component.maxHp ?? 1000, (next) =>
+              update({
+                ...component,
+                maxHp: Math.min(100_000, Math.max(1, next)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Shields" }),
+            numberInput(component.maxShields ?? 500, (next) =>
+              update({
+                ...component,
+                maxShields: Math.min(100_000, Math.max(0, next)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Regen/s" }),
+            numberInput(component.shieldRegenPerSec ?? 25, (next) =>
+              update({
+                ...component,
+                shieldRegenPerSec: Math.min(10_000, Math.max(0, next)),
+              }),
+            ),
+          ]),
+        ];
+      case "ship-gear":
+        return [
+          el("div", {
+            className: "ed-empty-note",
+            text: `${component.nodes.length} gear hinge(s). Edit nodes in the prefab JSON for now.`,
+          }),
+        ];
+      case "ship-ramp":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Node" }),
+            textInput(component.node, (node) => update({ ...component, node })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Lower °" }),
+            numberInput(component.lowerRadians, (lowerRadians) =>
+              update({
+                ...component,
+                lowerRadians: Math.min(10, Math.max(-10, lowerRadians)),
+              }),
+            ),
+          ]),
+        ];
       case "ship-hull":
         return [
           el("div", { className: "ed-field-row-wide" }, [

@@ -67,12 +67,18 @@ export function createFlightBody(
   };
 }
 
+export interface FlightIntegrateOptions {
+  /** Per-ship max speed cap; defaults to FLIGHT_CONFIG when omitted. */
+  maxSpeedMps?: number;
+}
+
 export function integrateFlightBody(
   body: FlightBody,
   input: FlightInput,
   dt: number,
   planet: Planet,
   seed: number,
+  options?: FlightIntegrateOptions,
 ): FlightBody {
   const gravityUp = radialUp(body.position);
   let frame = orthonormalFrame(body.forward, body.up ?? gravityUp, gravityUp);
@@ -168,7 +174,8 @@ export function integrateFlightBody(
   velocity = add(velocity, dragAccel);
   velocity = add(velocity, brakeAccel);
 
-  const maxSpeed = FLIGHT_CONFIG.MAX_SPEED_METERS_PER_SECOND;
+  const maxSpeed =
+    options?.maxSpeedMps ?? FLIGHT_CONFIG.MAX_SPEED_METERS_PER_SECOND;
   const finalSpeed = length(velocity);
   if (finalSpeed > maxSpeed) {
     velocity = scale(normalize(velocity), maxSpeed);
@@ -222,6 +229,7 @@ export function integrateHoveringShip(
   dt: number,
   planet: Planet,
   seed: number,
+  options?: FlightIntegrateOptions,
 ): FlightBody {
-  return integrateFlightBody(body, {}, dt, planet, seed);
+  return integrateFlightBody(body, {}, dt, planet, seed, options);
 }

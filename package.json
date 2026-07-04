@@ -16,7 +16,7 @@
     "deploy:netlify:protected": "npm run build:protected && npx --yes netlify-cli deploy --no-build --dir=dist",
     "deploy:netlify:protected:prod": "npm run build:protected && npx --yes netlify-cli deploy --no-build --prod --dir=dist",
     "dev": "vite --host 0.0.0.0 --port 4173",
-    "dev:infra": "docker compose up -d postgres redis",
+    "dev:infra": "docker compose up -d postgres redis mailpit",
     "dev:server": "npm run start:dev -w server",
     "dev:web": "vite --host 0.0.0.0 --port 4173",
     "demo": "tsx scripts/spike-demo.ts",

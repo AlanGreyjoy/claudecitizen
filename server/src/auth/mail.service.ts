@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import nodemailer from 'nodemailer';
 import { EnvService } from '../shared/env.service';
 
 @Injectable()
 export class MailService {
-  constructor(private readonly env: EnvService) {}
+  constructor(@Inject(EnvService) private readonly env: EnvService) {}
 
   async sendPasswordReset(email: string, resetUrl: string): Promise<void> {
     if (!this.env.smtpHost) {

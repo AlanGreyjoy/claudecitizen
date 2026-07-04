@@ -20,7 +20,7 @@ import { createPrefabStationGroup } from '../prefabs/prefab_renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
 import { createComposerStack } from './scene/composer_stack';
-import { createShipModel } from './scene/ship_model';
+import { createShipRenderPool } from './scene/ship_render_pool';
 import { createRemotePresenceRenderer } from './scene/remote_presence';
 import { createStationModel } from './scene/station_model';
 import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene_lighting';
@@ -73,20 +73,8 @@ export function createSpikeRenderer(
   const atmosphereMesh = buildAtmosphereMesh(planet, tileManager.renderScale);
   scene.add(atmosphereMesh);
 
-  const shipLayout = getShipLayout();
-  const shipModel = createShipModel(tileManager.renderScale, {
-    hullUrl: shipLayout.hullUrl,
-    doors: shipLayout.doors.map((door) => ({
-      id: door.id,
-      motion: door.motion,
-      axis: door.axis,
-      nodes: door.nodes,
-    })),
-  });
-  const shipMesh = shipModel.group;
-  shipMesh.frustumCulled = false;
-  scene.add(shipMesh);
-  window.__claudecitizenShipModel = shipModel;
+  const shipRenderPool = createShipRenderPool(scene, tileManager.renderScale);
+  window.__claudecitizenShipModel = shipRenderPool as unknown as typeof window.__claudecitizenShipModel;
 
   const stationFrame = getStationFrame(planet);
   const stationMesh = options?.stationPrefab
@@ -173,8 +161,22 @@ export function createSpikeRenderer(
     );
     cloudShell.update(focusBody.position, nowSeconds, spaceFactor, surface.altitudeMeters);
 
-    updateShipPlacement(shipMesh, ship, focusBody.position, renderScale);
-    if (world.shipRig) shipModel.setArticulation(world.shipRig);
+    const renderInstances =
+      world.ships ??
+      [
+        {
+          id: 'legacy',
+          prefabId: getShipLayout().hullUrl ? 'active' : 'phobos-starhopper',
+          body: ship,
+          rig: world.shipRig ?? { gear01: 1, ramp01: 0, doors: {} },
+        },
+      ];
+    shipRenderPool.sync(
+      renderInstances,
+      world.activeShipId,
+      focusBody.position,
+      renderScale,
+    );
     updateShipPlacement(
       stationMesh,
       { position: stationFrame.origin, up: stationFrame.up, forward: stationFrame.forward },
@@ -254,6 +256,7 @@ export function createSpikeRenderer(
       vegetationManager.dispose();
       remotePresence.dispose();
       avatar.dispose();
+      shipRenderPool.dispose();
       tileManager.dispose();
       composerStack.dispose();
       renderer.dispose();

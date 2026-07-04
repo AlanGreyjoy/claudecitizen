@@ -1,4 +1,4 @@
-import { getShipLayout } from './ship_layout';
+import { getShipLayout, type ShipDoorSpec } from './ship_layout';
 
 /**
  * Articulation state for the active ship: landing gear, rear boarding ramp,
@@ -34,20 +34,24 @@ export interface ShipRigOptions {
   doorsOpen?: Record<string, boolean>;
 }
 
-export function createShipRigState(options?: ShipRigOptions): ShipRigState {
+export function createShipRigState(
+  options?: ShipRigOptions,
+  doors?: readonly ShipDoorSpec[],
+): ShipRigState {
   const gearDown = options?.gearDown ?? true;
   const rampDown = options?.rampDown ?? false;
-  const doors: Record<string, ShipDoorRigState> = {};
-  for (const door of getShipLayout().doors) {
+  const doorList = doors ?? getShipLayout().doors;
+  const doorStates: Record<string, ShipDoorRigState> = {};
+  for (const door of doorList) {
     const isOpen = options?.doorsOpen?.[door.id] ?? door.defaultOpen;
-    doors[door.id] = { open01: isOpen ? 1 : 0, isOpen };
+    doorStates[door.id] = { open01: isOpen ? 1 : 0, isOpen };
   }
   return {
     gear01: gearDown ? 1 : 0,
     ramp01: rampDown ? 1 : 0,
     gearDown,
     rampDown,
-    doors,
+    doors: doorStates,
   };
 }
 

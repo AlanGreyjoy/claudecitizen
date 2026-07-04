@@ -7,7 +7,7 @@ import { createVegetationControls } from '../render/vegetation';
 import { CLAUDECITIZEN_PLANET } from '../world/planet';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
-import { applyDefaultShipPrefab } from '../world/ships';
+import { applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
 import { setStationLayoutOverride } from '../world/station';
 import type { PrefabDocument } from '../world/prefabs/schema';
 import {
@@ -212,6 +212,14 @@ export async function startPlaySession(
     onHudUpdate: (params) => hud.update(params),
     onResetPeak: () => hud.resetPeak(),
   });
+
+  if (bootstrap) {
+    await syncBootstrapShips(
+      bootstrap.ships,
+      bootstrap.player.id,
+      bootstrap.spawn.hangarInstanceId,
+    );
+  }
 
   function resize(): void {
     renderer?.resize(window.innerWidth, window.innerHeight);

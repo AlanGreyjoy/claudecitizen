@@ -78,6 +78,26 @@ export type PrefabComponent =
   | { type: "collider"; shape: "box"; size: Vec3; offset?: Vec3 }
   // --- ship components -------------------------------------------------------
   | { type: "ship-frame" }
+  /** Static combat and flight tuning for this ship type. */
+  | {
+      type: "ship-stats";
+      maxSpeedMps?: number;
+      maxHp?: number;
+      maxShields?: number;
+      shieldRegenPerSec?: number;
+    }
+  /** Landing gear hinge nodes on the hull GLB. */
+  | {
+      type: "ship-gear";
+      nodes: { name: string; deployRadians: number; axis?: "x" | "y" | "z" }[];
+    }
+  /** Boarding ramp hinge node on the hull GLB. */
+  | {
+      type: "ship-ramp";
+      node: string;
+      lowerRadians: number;
+      axis?: "x" | "y" | "z";
+    }
   /** Marks the entity whose GLB asset is the flyable hull. */
   | {
       type: "ship-hull";
@@ -322,6 +342,106 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
       };
     case "ship-frame":
       return { type };
+    case "ship-stats":
+      return {
+        type,
+        maxSpeedMps:
+          value.maxSpeedMps === undefined
+            ? undefined
+            : Math.min(
+                500,
+                Math.max(
+                  5,
+                  parseFiniteNumber(value.maxSpeedMps, `${path}.maxSpeedMps`),
+                ),
+              ),
+        maxHp:
+          value.maxHp === undefined
+            ? undefined
+            : Math.min(
+                100_000,
+                Math.max(1, parseFiniteNumber(value.maxHp, `${path}.maxHp`)),
+              ),
+        maxShields:
+          value.maxShields === undefined
+            ? undefined
+            : Math.min(
+                100_000,
+                Math.max(
+                  0,
+                  parseFiniteNumber(value.maxShields, `${path}.maxShields`),
+                ),
+              ),
+        shieldRegenPerSec:
+          value.shieldRegenPerSec === undefined
+            ? undefined
+            : Math.min(
+                10_000,
+                Math.max(
+                  0,
+                  parseFiniteNumber(
+                    value.shieldRegenPerSec,
+                    `${path}.shieldRegenPerSec`,
+                  ),
+                ),
+              ),
+      };
+    case "ship-gear": {
+      if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
+        fail(`${path}.nodes`, "expected non-empty array of gear hinges");
+      }
+      if (value.nodes.length > 12)
+        fail(`${path}.nodes`, "too many gear nodes (max 12)");
+      return {
+        type,
+        nodes: value.nodes.map((node, index) => {
+          if (!isRecord(node))
+            fail(`${path}.nodes[${index}]`, "expected {name, deployRadians}");
+          const axisRaw = node.axis;
+          const axis =
+            axisRaw === undefined
+              ? undefined
+              : axisRaw === "x" || axisRaw === "y" || axisRaw === "z"
+                ? axisRaw
+                : fail(`${path}.nodes[${index}].axis`, 'expected "x", "y", or "z"');
+          return {
+            name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
+            deployRadians: Math.min(
+              10,
+              Math.max(
+                -10,
+                parseFiniteNumber(
+                  node.deployRadians,
+                  `${path}.nodes[${index}].deployRadians`,
+                ),
+              ),
+            ),
+            axis,
+          };
+        }),
+      };
+    }
+    case "ship-ramp": {
+      const axisRaw = value.axis;
+      const axis =
+        axisRaw === undefined
+          ? undefined
+          : axisRaw === "x" || axisRaw === "y" || axisRaw === "z"
+            ? axisRaw
+            : fail(`${path}.axis`, 'expected "x", "y", or "z"');
+      return {
+        type,
+        node: parseString(value.node, `${path}.node`, 128),
+        lowerRadians: Math.min(
+          10,
+          Math.max(
+            -10,
+            parseFiniteNumber(value.lowerRadians, `${path}.lowerRadians`),
+          ),
+        ),
+        axis,
+      };
+    }
     case "ship-hull":
       return {
         type,

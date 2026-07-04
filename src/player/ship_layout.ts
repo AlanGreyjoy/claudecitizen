@@ -1,3 +1,4 @@
+import { FLIGHT_CONFIG } from "../flight/flight_config";
 import type { LocalOffset, Vec3 } from "../types";
 
 /**
@@ -6,6 +7,51 @@ import type { LocalOffset, Vec3 } from "../types";
  * Starhopper values measured from the model rig; a ship prefab can replace
  * it via setShipLayoutOverride (see world/prefabs/ship_runtime.ts).
  */
+
+/** Hinge binding for landing gear articulation (GLB node + deploy angle). */
+export interface ShipGearHingeSpec {
+  name: string;
+  deployRadians: number;
+  axis?: "x" | "y" | "z";
+}
+
+/** Hinge binding for the boarding ramp (GLB node + lowered angle). */
+export interface ShipRampHingeSpec {
+  name: string;
+  lowerRadians: number;
+  axis?: "x" | "y" | "z";
+}
+
+/** Static per-ship-type stats and articulation authored on the prefab. */
+export interface ShipSpec {
+  maxSpeedMps: number;
+  maxHp: number;
+  maxShields: number;
+  shieldRegenPerSec: number;
+  gearHinges: ShipGearHingeSpec[];
+  rampHinge: ShipRampHingeSpec | null;
+}
+
+/** Starhopper gear/ramp hinges — shared by layout defaults and render fallback. */
+export const DEFAULT_STARHOPPER_GEAR_HINGES: ShipGearHingeSpec[] = [
+  { name: "LandingGear_BackLeft", deployRadians: -0.55 },
+  { name: "LandingGear_BackRight", deployRadians: -0.55 },
+  { name: "LandingLeg_Front", deployRadians: 1.4 },
+];
+
+export const DEFAULT_STARHOPPER_RAMP_HINGE: ShipRampHingeSpec = {
+  name: "RampParent",
+  lowerRadians: -0.62,
+};
+
+export const DEFAULT_SHIP_SPEC: ShipSpec = {
+  maxSpeedMps: FLIGHT_CONFIG.MAX_SPEED_METERS_PER_SECOND,
+  maxHp: 1000,
+  maxShields: 500,
+  shieldRegenPerSec: 25,
+  gearHinges: DEFAULT_STARHOPPER_GEAR_HINGES,
+  rampHinge: DEFAULT_STARHOPPER_RAMP_HINGE,
+};
 
 export type ShipSeatRole = "pilot" | "copilot" | "turret" | "passenger";
 
@@ -88,6 +134,8 @@ export interface ShipSeatSpec {
 }
 
 export interface ShipLayout {
+  /** Combat, speed, and articulation tuning baked from ship-stats / gear / ramp. */
+  spec: ShipSpec;
   /** GLB url for the flyable hull; null = built-in Phobos Starhopper. */
   hullUrl: string | null;
   /**
@@ -114,6 +162,7 @@ export interface ShipLayout {
 
 /** Phobos Starhopper layout, measured from the model rig. */
 export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
+  spec: DEFAULT_SHIP_SPEC,
   hullUrl: null,
   restHeightMeters: 3.16,
   walkZones: [
@@ -203,6 +252,8 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
 };
 
 let override: ShipLayout | null = null;
+const layoutByPrefabId = new Map<string, ShipLayout>();
+let activePrefabId: string | null = null;
 
 export function setShipLayoutOverride(layout: ShipLayout | null): void {
   override = layout;
@@ -212,7 +263,34 @@ export function getShipLayoutOverride(): ShipLayout | null {
   return override;
 }
 
+/** Caches a baked layout for a prefab id (multi-ship / render pool). */
+export function registerShipLayoutForPrefab(
+  prefabId: string,
+  layout: ShipLayout,
+): void {
+  layoutByPrefabId.set(prefabId, layout);
+}
+
+export function getShipLayoutForPrefab(prefabId: string): ShipLayout {
+  return layoutByPrefabId.get(prefabId) ?? DEFAULT_SHIP_LAYOUT;
+}
+
+/** Selects which prefab layout getShipLayout() returns for deck/rig helpers. */
+export function setActiveShipPrefabId(prefabId: string): void {
+  activePrefabId = prefabId;
+  const cached = layoutByPrefabId.get(prefabId);
+  if (cached) setShipLayoutOverride(cached);
+}
+
+export function getActiveShipPrefabId(): string | null {
+  return activePrefabId;
+}
+
 export function getShipLayout(): ShipLayout {
+  if (activePrefabId) {
+    const cached = layoutByPrefabId.get(activePrefabId);
+    if (cached) return cached;
+  }
   return override ?? DEFAULT_SHIP_LAYOUT;
 }
 

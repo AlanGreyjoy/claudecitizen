@@ -13,6 +13,7 @@ import { createDeckCharacterState, getLeavePilotStandPose } from './ship_deck';
 import { createTransitionPose, getPilotSeatAnchor } from './ship_interaction';
 import type { GameMode, Planet, Pose } from '../types';
 import type { TransitionType, WorldState } from './world_state';
+import { getActiveShip, getActiveShipBody } from './world_state';
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -52,7 +53,8 @@ export interface TransitionContext {
 
 /** Deck character near the chair sits down and takes the controls. */
 export function beginSitTransition(world: WorldState): void {
-  const seat = getPilotSeatAnchor(world.ship);
+  const ship = getActiveShipBody(world);
+  const seat = getPilotSeatAnchor(ship);
   world.mode = MODE_ENTERING_SHIP;
   world.prompt = '';
   world.transition = {
@@ -70,10 +72,12 @@ export function beginSitTransition(world: WorldState): void {
 
 /** Pilot stands up out of the chair to the spot just behind it. */
 export function beginStandTransition(world: WorldState): void {
-  const seat = getPilotSeatAnchor(world.ship);
-  const stand = getLeavePilotStandPose(world.ship);
-  world.ship = {
-    ...world.ship,
+  const instance = getActiveShip(world);
+  const ship = instance.body;
+  const seat = getPilotSeatAnchor(ship);
+  const stand = getLeavePilotStandPose(ship);
+  instance.body = {
+    ...ship,
     velocity: zeroVelocity(),
   };
   world.mode = MODE_LEAVING_PILOT;
@@ -92,7 +96,10 @@ export function updateTransition(world: WorldState, dt: number, ctx: TransitionC
   const transition = world.transition;
   if (!transition) return;
 
-  world.ship = integrateHoveringShip(world.ship, dt, ctx.planet, ctx.seed);
+  const instance = getActiveShip(world);
+  instance.body = integrateHoveringShip(instance.body, dt, ctx.planet, ctx.seed, {
+    maxSpeedMps: instance.spec.maxSpeedMps,
+  });
 
   transition.elapsed = Math.min(transition.duration, transition.elapsed + dt);
   const eased = smoothstep01(transition.elapsed / transition.duration);
@@ -108,7 +115,7 @@ export function updateTransition(world: WorldState, dt: number, ctx: TransitionC
     return;
   }
 
-  world.character = createDeckCharacterState(world.ship);
+  world.character = createDeckCharacterState(instance.body);
   world.mode = MODE_ON_SHIP_DECK;
   world.transition = null;
   ctx.setControlsMode(MODE_ON_FOOT);

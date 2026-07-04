@@ -27,6 +27,13 @@
     "components": [
       {
         "type": "ship-frame"
+      },
+      {
+        "type": "ship-stats",
+        "maxSpeedMps": 100,
+        "maxHp": 1000,
+        "maxShields": 500,
+        "shieldRegenPerSec": 25
       }
     ],
     "children": [

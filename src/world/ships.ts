@@ -1,4 +1,21 @@
-import { setShipLayoutOverride } from "../player/ship_layout";
+import { createFlightBody } from "../flight/flight_body";
+import {
+  createShipInstance,
+} from "../flight/ship_instance";
+import {
+  getShipInstance,
+  registerShipInstance,
+} from "../flight/ship_world";
+import type { GameBootstrap } from "../net/api";
+import {
+  DEFAULT_SHIP_LAYOUT,
+  getShipLayoutForPrefab,
+  registerShipLayoutForPrefab,
+  setActiveShipPrefabId,
+  setShipLayoutOverride,
+  type ShipLayout,
+} from "../player/ship_layout";
+import { PLAYER_SHIP_INSTANCE_ID } from "../player/world_state";
 import { loadPrefabDocument } from "./prefabs/loader";
 import { buildShipLayoutFromPrefab } from "./prefabs/ship_runtime";
 
@@ -10,31 +27,104 @@ import { buildShipLayoutFromPrefab } from "./prefabs/ship_runtime";
  */
 export const DEFAULT_SHIP_PREFAB_ID = "phobos-starhopper";
 
-/** Loads the default ship prefab and activates its gameplay layout. */
-export async function applyDefaultShipPrefab(): Promise<void> {
-  const doc = await loadPrefabDocument(DEFAULT_SHIP_PREFAB_ID);
+registerShipLayoutForPrefab(DEFAULT_SHIP_PREFAB_ID, DEFAULT_SHIP_LAYOUT);
+
+/** Loads a ship prefab, caches its layout, and optionally activates it. */
+export async function loadShipPrefabLayout(
+  prefabId: string,
+): Promise<ShipLayout | null> {
+  const doc = await loadPrefabDocument(prefabId);
   if (!doc) {
-    console.warn(
-      `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" not found; using the built-in ship layout.`,
-    );
-    return;
+    console.warn(`Ship prefab "${prefabId}" not found.`);
+    return null;
   }
   if (doc.kind !== "ship") {
-    console.warn(
-      `Prefab "${DEFAULT_SHIP_PREFAB_ID}" is not a ship prefab; using built-in layout.`,
-    );
-    return;
+    console.warn(`Prefab "${prefabId}" is not a ship prefab.`);
+    return null;
   }
   const layout = buildShipLayoutFromPrefab(doc);
-  // The flyable ship must have a walkable deck; an in-progress prefab
-  // (hull only) falls back to the built-in layout in the main game.
+  if (!layout) return null;
+  registerShipLayoutForPrefab(prefabId, layout);
+  return layout;
+}
+
+/** Loads the default ship prefab and activates its gameplay layout. */
+export async function applyDefaultShipPrefab(): Promise<void> {
+  const layout = await loadShipPrefabLayout(DEFAULT_SHIP_PREFAB_ID);
   if (!layout || layout.walkZones.length === 0) {
     if (layout) {
       console.warn(
         `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" has no walk zones; using the built-in layout.`,
       );
+    } else {
+      console.warn(
+        `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" not found; using the built-in ship layout.`,
+      );
     }
     return;
   }
-  setShipLayoutOverride(layout);
+  setActiveShipPrefabId(DEFAULT_SHIP_PREFAB_ID);
+}
+
+/** Activates a cached or freshly loaded prefab layout for deck/rig helpers. */
+export async function activateShipPrefab(prefabId: string): Promise<ShipLayout> {
+  let layout = getShipLayoutForPrefab(prefabId);
+  const cached = layout;
+  const loaded = await loadShipPrefabLayout(prefabId);
+  if (loaded) layout = loaded;
+  else if (cached) layout = cached;
+  setActiveShipPrefabId(prefabId);
+  return layout;
+}
+
+/** Clears the active prefab override (dev / teardown). */
+export function clearActiveShipPrefab(): void {
+  setShipLayoutOverride(null);
+}
+
+/** Applies server-owned ship records to the local ship instance registry. */
+export async function syncBootstrapShips(
+  ships: GameBootstrap["ships"],
+  playerId: string,
+  hangarInstanceId: string,
+): Promise<void> {
+  for (const owned of ships) {
+    await loadShipPrefabLayout(owned.prefabId);
+  }
+  const primary = ships[0];
+  if (!primary) return;
+
+  let instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
+  if (instance) {
+    instance.ownerPlayerId = playerId;
+    instance.prefabId = primary.prefabId;
+    instance.vitals.hp = primary.hp;
+    instance.vitals.shields = primary.shields;
+    instance.spec = {
+      ...getShipLayoutForPrefab(primary.prefabId).spec,
+      maxHp: primary.maxHp,
+      maxShields: primary.maxShields,
+    };
+    setActiveShipPrefabId(primary.prefabId);
+    return;
+  }
+
+  const layout = getShipLayoutForPrefab(primary.prefabId);
+  const body = createFlightBody({ x: 0, y: 0, z: 0 });
+  instance = createShipInstance({
+    id: PLAYER_SHIP_INSTANCE_ID,
+    prefabId: primary.prefabId,
+    layout,
+    body,
+    ownerPlayerId: playerId,
+    instanceId: hangarInstanceId,
+    vitals: { hp: primary.hp, shields: primary.shields },
+  });
+  instance.spec = {
+    ...instance.spec,
+    maxHp: primary.maxHp,
+    maxShields: primary.maxShields,
+  };
+  registerShipInstance(instance);
+  setActiveShipPrefabId(primary.prefabId);
 }

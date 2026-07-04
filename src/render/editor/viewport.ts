@@ -586,7 +586,12 @@ export function createEditorViewport(
       case "ramp-mount": {
         return makeZoneBoxHelper(component.min, component.max, 0.4, 0xff9d5c);
       }
+      case "ship-stats":
+      case "ship-gear":
+      case "ship-ramp":
+        return null;
     }
+    return null;
   }
 
   function applyEntityTransformToObject(

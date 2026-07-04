@@ -32,6 +32,29 @@ services:
       timeout: 5s
       retries: 20
 
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8025/livez",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   claude_citizen_pg:
   claude_citizen_redis:

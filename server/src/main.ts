@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import 'reflect-metadata';
 import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';

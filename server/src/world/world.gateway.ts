@@ -5,7 +5,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { OnModuleDestroy } from '@nestjs/common';
+import { Inject, OnModuleDestroy } from '@nestjs/common';
 import type { IncomingMessage } from 'node:http';
 import { WebSocket, WebSocketServer as NativeWebSocketServer } from 'ws';
 import { WorldService } from './world.service';
@@ -19,7 +19,7 @@ export class WorldGateway
 
   private snapshotTimer: NodeJS.Timeout | null = null;
 
-  constructor(private readonly world: WorldService) {}
+  constructor(@Inject(WorldService) private readonly world: WorldService) {}
 
   afterInit(): void {
     this.snapshotTimer = setInterval(() => this.world.broadcastSnapshots(), 50);

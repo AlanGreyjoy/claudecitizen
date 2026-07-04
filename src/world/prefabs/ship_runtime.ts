@@ -7,11 +7,16 @@ import {
 import { normalize, vec3 } from "../../math/vec3";
 import {
   DEFAULT_SHIP_LAYOUT,
+  DEFAULT_SHIP_SPEC,
+  DEFAULT_STARHOPPER_GEAR_HINGES,
+  DEFAULT_STARHOPPER_RAMP_HINGE,
   type ShipDoorSpec,
+  type ShipGearHingeSpec,
   type ShipLayout,
   type ShipRampInteract,
   type ShipRampMount,
   type ShipSeatSpec,
+  type ShipSpec,
   type ShipWalkZone,
   type ShipWalkZoneOriented,
 } from "../../player/ship_layout";
@@ -45,11 +50,27 @@ const RAMP_GROUND_OFFSET_METERS = 1.05;
 interface CollectedShip {
   hullUrl: string | null;
   restHeight: number | null;
+  spec: Partial<ShipSpec>;
   walkZones: ShipWalkZone[];
   doors: ShipDoorSpec[];
   seats: ShipSeatSpec[];
   rampInteracts: ShipRampInteract[];
   rampMount: ShipRampMount | null;
+}
+
+function mergeShipSpec(partial: Partial<ShipSpec>): ShipSpec {
+  return {
+    maxSpeedMps: partial.maxSpeedMps ?? DEFAULT_SHIP_SPEC.maxSpeedMps,
+    maxHp: partial.maxHp ?? DEFAULT_SHIP_SPEC.maxHp,
+    maxShields: partial.maxShields ?? DEFAULT_SHIP_SPEC.maxShields,
+    shieldRegenPerSec:
+      partial.shieldRegenPerSec ?? DEFAULT_SHIP_SPEC.shieldRegenPerSec,
+    gearHinges:
+      partial.gearHinges && partial.gearHinges.length > 0
+        ? partial.gearHinges
+        : DEFAULT_STARHOPPER_GEAR_HINGES,
+    rampHinge: partial.rampHinge ?? DEFAULT_STARHOPPER_RAMP_HINGE,
+  };
 }
 
 function pushWalkZone(
@@ -181,6 +202,31 @@ function collect(
 
   for (const component of entity.components ?? []) {
     switch (component.type) {
+      case "ship-stats":
+        if (component.maxSpeedMps !== undefined)
+          out.spec.maxSpeedMps ??= component.maxSpeedMps;
+        if (component.maxHp !== undefined) out.spec.maxHp ??= component.maxHp;
+        if (component.maxShields !== undefined)
+          out.spec.maxShields ??= component.maxShields;
+        if (component.shieldRegenPerSec !== undefined)
+          out.spec.shieldRegenPerSec ??= component.shieldRegenPerSec;
+        break;
+      case "ship-gear":
+        out.spec.gearHinges = component.nodes.map(
+          (node): ShipGearHingeSpec => ({
+            name: node.name,
+            deployRadians: node.deployRadians,
+            ...(node.axis ? { axis: node.axis } : {}),
+          }),
+        );
+        break;
+      case "ship-ramp":
+        out.spec.rampHinge = {
+          name: component.node,
+          lowerRadians: component.lowerRadians,
+          ...(component.axis ? { axis: component.axis } : {}),
+        };
+        break;
       case "ship-hull":
         if (entity.asset) out.hullUrl ??= entity.asset.url;
         if (component.restHeight !== undefined)
@@ -308,6 +354,7 @@ export function buildShipLayoutFromPrefab(
   const out: CollectedShip = {
     hullUrl: null,
     restHeight: null,
+    spec: {},
     walkZones: [],
     doors: [],
     seats: [],
@@ -322,7 +369,8 @@ export function buildShipLayoutFromPrefab(
     out.doors.length > 0 ||
     out.seats.length > 0 ||
     out.rampInteracts.length > 0 ||
-    out.rampMount !== null;
+    out.rampMount !== null ||
+    Object.keys(out.spec).length > 0;
   if (!hasShipContent) {
     console.warn(
       `Ship prefab "${doc.id}" has no ship components; using the built-in ship.`,
@@ -374,6 +422,7 @@ export function buildShipLayoutFromPrefab(
     : fallback.rampDismountGround;
 
   return {
+    spec: mergeShipSpec(out.spec),
     hullUrl: out.hullUrl,
     restHeightMeters: out.restHeight,
     walkZones: out.walkZones,

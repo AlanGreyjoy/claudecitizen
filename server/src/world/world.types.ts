@@ -13,6 +13,12 @@ export interface NetworkBodyDto {
 export interface NetworkShipDto extends NetworkBodyDto {
   grounded?: boolean;
   velocity?: Vec3Dto;
+  shipId?: string;
+  prefabId?: string;
+  hp?: number;
+  shields?: number;
+  maxHp?: number;
+  maxShields?: number;
 }
 
 export interface NetworkCharacterDto extends NetworkBodyDto {

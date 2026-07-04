@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -63,11 +64,11 @@ function isUniqueConstraint(error: unknown): boolean {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly jwt: JwtService,
-    private readonly redis: RedisService,
-    private readonly env: EnvService,
-    private readonly mail: MailService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(JwtService) private readonly jwt: JwtService,
+    @Inject(RedisService) private readonly redis: RedisService,
+    @Inject(EnvService) private readonly env: EnvService,
+    @Inject(MailService) private readonly mail: MailService,
   ) {}
 
   readonly accessCookieMs = ACCESS_COOKIE_MS;

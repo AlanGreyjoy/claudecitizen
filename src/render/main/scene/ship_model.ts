@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import {
+  DEFAULT_STARHOPPER_GEAR_HINGES,
+  DEFAULT_STARHOPPER_RAMP_HINGE,
+  type ShipGearHingeSpec,
+  type ShipRampHingeSpec,
+} from '../../../player/ship_layout';
 
 const PROTECTED_SHIP_URL =
   '/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
@@ -89,6 +95,10 @@ export interface ShipModelOptions {
   hullUrl?: string | null;
   /** Prefab-authored doors; defaults to the Starhopper cockpit slide pair. */
   doors?: ShipDoorBinding[];
+  /** Prefab-authored landing gear hinges. */
+  gearHinges?: ShipGearHingeSpec[];
+  /** Prefab-authored boarding ramp hinge. */
+  rampHinge?: ShipRampHingeSpec | null;
 }
 
 export interface ShipModelHandle {
@@ -118,23 +128,19 @@ interface BoundDoor {
   nodes: BoundDoorNode[];
 }
 
-/**
- * Swing angles measured against the Phobos Starhopper rig so that all three
- * gear feet rest on one plane ~3.16 m below the ship origin and the lowered
- * ramp tip meets that same ground plane at the tail.
- */
-const GEAR_BACK_DEPLOY_RADIANS = -0.55;
-const GEAR_FRONT_DEPLOY_RADIANS = 1.4;
-const RAMP_LOWER_RADIANS = -0.62;
+interface BoundGearHinge extends ArticulatedNode {
+  deployRadians: number;
+  axis: 'x' | 'y' | 'z';
+}
+
+interface BoundRampHinge extends ArticulatedNode {
+  lowerRadians: number;
+  axis: 'x' | 'y' | 'z';
+}
 
 /** Built-in gear/ramp hinges (Starhopper rig) shared with the editor preview. */
-export const BUILTIN_GEAR_HINGES: { name: string; deployRadians: number }[] = [
-  { name: 'LandingGear_BackLeft', deployRadians: GEAR_BACK_DEPLOY_RADIANS },
-  { name: 'LandingGear_BackRight', deployRadians: GEAR_BACK_DEPLOY_RADIANS },
-  { name: 'LandingLeg_Front', deployRadians: GEAR_FRONT_DEPLOY_RADIANS },
-];
-
-export const BUILTIN_RAMP_HINGE = { name: 'RampParent', lowerRadians: RAMP_LOWER_RADIANS };
+export const BUILTIN_GEAR_HINGES = DEFAULT_STARHOPPER_GEAR_HINGES;
+export const BUILTIN_RAMP_HINGE = DEFAULT_STARHOPPER_RAMP_HINGE;
 
 /** Starhopper cockpit doors — used when no prefab doors are provided. */
 export const DEFAULT_SHIP_DOOR_BINDINGS: ShipDoorBinding[] = [
@@ -197,19 +203,29 @@ export function createShipModel(
   const center = new THREE.Vector3();
 
   const doorBindings = options?.doors ?? DEFAULT_SHIP_DOOR_BINDINGS;
+  const gearSpecs = options?.gearHinges ?? DEFAULT_STARHOPPER_GEAR_HINGES;
+  const rampSpec = options?.rampHinge ?? DEFAULT_STARHOPPER_RAMP_HINGE;
 
-  let gearBackLeft: ArticulatedNode | null = null;
-  let gearBackRight: ArticulatedNode | null = null;
-  let gearFront: ArticulatedNode | null = null;
-  let ramp: ArticulatedNode | null = null;
+  let boundGear: BoundGearHinge[] = [];
+  let boundRamp: BoundRampHinge | null = null;
   let boundDoors: BoundDoor[] = [];
   let pending: ShipArticulation = { gear01: 1, ramp01: 0, doors: {} };
 
   function applyArticulation(articulation: ShipArticulation): void {
-    applyHingeRotation(gearBackLeft, GEAR_BACK_DEPLOY_RADIANS * articulation.gear01);
-    applyHingeRotation(gearBackRight, GEAR_BACK_DEPLOY_RADIANS * articulation.gear01);
-    applyHingeRotation(gearFront, GEAR_FRONT_DEPLOY_RADIANS * articulation.gear01);
-    applyHingeRotation(ramp, RAMP_LOWER_RADIANS * articulation.ramp01);
+    for (const hinge of boundGear) {
+      applyHingeRotation(
+        hinge,
+        hinge.deployRadians * articulation.gear01,
+        hinge.axis,
+      );
+    }
+    if (boundRamp) {
+      applyHingeRotation(
+        boundRamp,
+        boundRamp.lowerRadians * articulation.ramp01,
+        boundRamp.axis,
+      );
+    }
     for (const door of boundDoors) {
       const open01 = articulation.doors[door.binding.id] ?? 0;
       for (const node of door.nodes) {
@@ -222,7 +238,31 @@ export function createShipModel(
     }
   }
 
-  function bindDoors(sceneRoot: THREE.Object3D): void {
+  function bindArticulation(sceneRoot: THREE.Object3D): void {
+    boundGear = gearSpecs
+      .map((spec) => {
+        const captured = captureNode(sceneRoot, spec.name);
+        return captured
+          ? {
+              ...captured,
+              deployRadians: spec.deployRadians,
+              axis: spec.axis ?? 'x',
+            }
+          : null;
+      })
+      .filter((hinge): hinge is BoundGearHinge => hinge !== null);
+
+    if (rampSpec) {
+      const captured = captureNode(sceneRoot, rampSpec.name);
+      boundRamp = captured
+        ? {
+            ...captured,
+            lowerRadians: rampSpec.lowerRadians,
+            axis: rampSpec.axis ?? 'x',
+          }
+        : null;
+    }
+
     boundDoors = doorBindings.map((binding) => ({
       binding,
       nodes: binding.nodes
@@ -254,11 +294,7 @@ export function createShipModel(
         sceneRoot.position.sub(center);
         group.add(sceneRoot);
 
-        gearBackLeft = captureNode(sceneRoot, 'LandingGear_BackLeft');
-        gearBackRight = captureNode(sceneRoot, 'LandingGear_BackRight');
-        gearFront = captureNode(sceneRoot, 'LandingLeg_Front');
-        ramp = captureNode(sceneRoot, 'RampParent');
-        bindDoors(sceneRoot);
+        bindArticulation(sceneRoot);
         applyArticulation(pending);
       },
       undefined,

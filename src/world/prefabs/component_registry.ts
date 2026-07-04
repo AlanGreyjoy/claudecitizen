@@ -120,6 +120,47 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Marks the prefab origin the flight body is anchored to.",
   },
   {
+    type: "ship-stats",
+    label: "Ship Stats",
+    kinds: ["ship"],
+    singleton: true,
+    createDefault: () => ({
+      type: "ship-stats",
+      maxSpeedMps: 100,
+      maxHp: 1000,
+      maxShields: 500,
+      shieldRegenPerSec: 25,
+    }),
+    hint: "Max speed, HP, shields, and shield regen for this ship type. Place on the root next to ship-frame.",
+  },
+  {
+    type: "ship-gear",
+    label: "Ship Gear",
+    kinds: ["ship"],
+    singleton: true,
+    createDefault: () => ({
+      type: "ship-gear",
+      nodes: [
+        { name: "LandingGear_BackLeft", deployRadians: -0.55 },
+        { name: "LandingGear_BackRight", deployRadians: -0.55 },
+        { name: "LandingLeg_Front", deployRadians: 1.4 },
+      ],
+    }),
+    hint: "Landing gear hinge nodes on the hull GLB. Omit to use Starhopper defaults.",
+  },
+  {
+    type: "ship-ramp",
+    label: "Ship Ramp",
+    kinds: ["ship"],
+    singleton: true,
+    createDefault: () => ({
+      type: "ship-ramp",
+      node: "RampParent",
+      lowerRadians: -0.62,
+    }),
+    hint: "Boarding ramp hinge on the hull GLB. Omit to use Starhopper defaults.",
+  },
+  {
     type: "ship-hull",
     label: "Ship Hull",
     kinds: ["ship"],

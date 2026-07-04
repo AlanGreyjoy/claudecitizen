@@ -2,6 +2,8 @@ import {
   integrateFlightBody,
   integrateHoveringShip,
 } from "../flight/flight_body";
+import { regenerateShipShields } from "../flight/ship_instance";
+import { listShipInstances } from "../flight/ship_world";
 import { createPlayerControls } from "../flight/player_controls";
 import {
   MODE_IN_SHIP,
@@ -62,7 +64,7 @@ import {
   beginStandTransition,
   updateTransition,
 } from "../player/transitions";
-import { createWorldState, type WorldState } from "../player/world_state";
+import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, type WorldState } from "../player/world_state";
 import {
   getStationFrame,
   getStationHangars,
@@ -213,27 +215,33 @@ export function createGameLoop({
   }
 
   function updateShipSystems(dt: number): void {
-    const rig = world.shipRig;
-    rig.gearDown = world.ship.grounded;
-    if (!isShipParked(world.ship)) rig.rampDown = false;
-    updateShipRig(rig, dt);
+    for (const instance of listShipInstances()) {
+      const rig = instance.rig;
+      rig.gearDown = instance.body.grounded;
+      if (!isShipParked(instance.body)) rig.rampDown = false;
+      updateShipRig(rig, dt);
+      regenerateShipShields(instance, dt);
+    }
   }
 
   /** Ramp toggle prompt/action for a character standing near the parked ship's tail. */
   function handleRampOutside(interactPressed: boolean): string | null {
-    if (!isShipParked(world.ship)) return null;
-    if (!nearShipRampOutside(world.character, world.ship)) return null;
-    const rig = world.shipRig;
+    const ship = getActiveShipBody(world);
+    const rig = getActiveShipRig(world);
+    if (!isShipParked(ship)) return null;
+    if (!nearShipRampOutside(world.character, ship)) return null;
     if (interactPressed) rig.rampDown = !rig.rampDown;
     return rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
   }
 
   /** Walking into the foot of the lowered ramp steps aboard. */
   function tryMountRamp(): boolean {
-    if (!isShipParked(world.ship) || !isRampUsable(world.shipRig)) return false;
-    const mount = sampleRampMount(world.character, world.ship);
+    const ship = getActiveShipBody(world);
+    const rig = getActiveShipRig(world);
+    if (!isShipParked(ship) || !isRampUsable(rig)) return false;
+    const mount = sampleRampMount(world.character, ship);
     if (!mount) return false;
-    world.character = createDeckCharacterState(world.ship, mount);
+    world.character = createDeckCharacterState(ship, mount);
     world.mode = MODE_ON_SHIP_DECK;
     world.prompt = "";
     return true;
@@ -241,19 +249,20 @@ export function createGameLoop({
 
   /** Steps off the ramp tip onto whatever the ship is parked on. */
   function dismountToGround(): void {
-    const groundPosition: Vec3 = localOffsetToWorld(world.ship, {
+    const ship = getActiveShipBody(world);
+    const groundPosition: Vec3 = localOffsetToWorld(ship, {
       ...getRampDismountGroundLocal(),
       up: 0,
     });
     const hangarRest = sampleHangarRest(
       stationFrame,
-      world.ship.position,
+      ship.position,
       getShipRestHeightMeters(),
     );
     const facing = {
-      x: -world.ship.forward.x,
-      y: -world.ship.forward.y,
-      z: -world.ship.forward.z,
+      x: -ship.forward.x,
+      y: -ship.forward.y,
+      z: -ship.forward.z,
     };
     if (hangarRest) {
       const local = worldToStationLocal(stationFrame, groundPosition);
@@ -346,16 +355,20 @@ export function createGameLoop({
     actions: ReturnType<PlayerControls["consumeActions"]>,
     dt: number,
   ): void {
-    world.ship = integrateHoveringShip(world.ship, dt, planet, seed);
-    const rig = world.shipRig;
-    const parked = isShipParked(world.ship);
+    const instance = getActiveShip(world);
+    const ship = instance.body;
+    const rig = instance.rig;
+    instance.body = integrateHoveringShip(ship, dt, planet, seed, {
+      maxSpeedMps: instance.spec.maxSpeedMps,
+    });
+    const parked = isShipParked(instance.body);
     const gates = {
       rampWalkable: parked && isRampUsable(rig),
       isDoorOpen: (doorId: string) => isDoorPassable(rig, doorId),
     };
     const result = updateCharacterOnDeck(
       world.character as DeckCharacterState,
-      world.ship,
+      instance.body,
       gates,
       { ...characterInput, jumpPressed: actions.jumpPressed },
       dt,
@@ -411,7 +424,7 @@ export function createGameLoop({
           ladder.zone,
           ladder.direction,
           gates,
-          world.ship,
+          instance.body,
         );
         if (next) world.character = next;
       }
@@ -464,12 +477,14 @@ export function createGameLoop({
         world.prompt = handleRampOutside(actions.interactPressed) ?? "";
       }
     } else if (world.mode === MODE_IN_SHIP) {
-      world.ship = integrateFlightBody(
-        world.ship,
+      const instance = getActiveShip(world);
+      instance.body = integrateFlightBody(
+        instance.body,
         controls.sampleFlightInput(),
         dt,
         planet,
         seed,
+        { maxSpeedMps: instance.spec.maxSpeedMps },
       );
       world.prompt = "Hold F — look around · Hold Y — get up";
       if (actions.exitSeatPressed) {
@@ -492,18 +507,19 @@ export function createGameLoop({
     updateShipSystems(dt);
     network?.publishPresence(world);
 
+    const activeShip = getActiveShipBody(world);
     const shipSurface = sampleRenderablePlanetSurface(
       planet,
       seed,
-      world.ship.position,
+      activeShip.position,
     );
     const focusPosition =
       world.mode === MODE_IN_SHIP
-        ? world.ship.position
+        ? activeShip.position
         : world.character.position;
     const focusVelocity =
       world.mode === MODE_IN_SHIP
-        ? world.ship.velocity
+        ? activeShip.velocity
         : world.character.velocity;
     const focusSurface = sampleRenderablePlanetSurface(
       planet,
@@ -531,11 +547,27 @@ export function createGameLoop({
                 },
           mode: world.mode,
           prompt: world.prompt,
-          ship: world.ship,
+          ship: activeShip,
+          activeShipId: world.activeShipId,
+          ships: listShipInstances().map((instance) => ({
+            id: instance.id,
+            prefabId: instance.prefabId,
+            body: instance.body,
+            rig: {
+              gear01: instance.rig.gear01,
+              ramp01: instance.rig.ramp01,
+              doors: doorBlends(instance.rig),
+            },
+            vitals: { ...instance.vitals },
+            spec: {
+              maxHp: instance.spec.maxHp,
+              maxShields: instance.spec.maxShields,
+            },
+          })),
           shipRig: {
-            gear01: world.shipRig.gear01,
-            ramp01: world.shipRig.ramp01,
-            doors: doorBlends(world.shipRig),
+            gear01: getActiveShipRig(world).gear01,
+            ramp01: getActiveShipRig(world).ramp01,
+            doors: doorBlends(getActiveShipRig(world)),
           },
           networkEntities: network?.getRemoteEntities(nowMs) ?? [],
           shipZoneId: world.character.deckZone ?? null,
@@ -551,7 +583,7 @@ export function createGameLoop({
 
     const focusForward =
       world.mode === MODE_IN_SHIP
-        ? world.ship.forward
+        ? activeShip.forward
         : world.character.forward;
 
     onHudUpdate({
@@ -567,8 +599,8 @@ export function createGameLoop({
       seed,
       focusPosition,
       focusForward,
-      shipPosition: world.ship.position,
-      shipForward: world.ship.forward,
+      shipPosition: activeShip.position,
+      shipForward: activeShip.forward,
       characterPosition: world.character.position,
       nowMs,
     });

@@ -289,6 +289,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       axis: door.axis,
       nodes: door.nodes,
     })),
+    gearHinges: layout.spec.gearHinges,
+    rampHinge: layout.spec.rampHinge,
   });
   shipModel.group.frustumCulled = false;
   scene.add(shipModel.group);

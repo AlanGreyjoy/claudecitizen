@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { GameBootstrapDto } from './game.types';
 
@@ -7,7 +7,7 @@ const STARTER_SHIP_NAME = 'Star Hopper';
 
 @Injectable()
 export class GameService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async bootstrapForUser(userId: string): Promise<GameBootstrapDto> {
     const user = await this.prisma.user.findUnique({
@@ -53,6 +53,10 @@ export class GameService {
         id: ship.id,
         prefabId: ship.prefabId,
         displayName: ship.displayName,
+        hp: ship.hp,
+        shields: ship.shields,
+        maxHp: ship.maxHp,
+        maxShields: ship.maxShields,
       })),
       featureFlags: {
         nativeWebSocketPresence: true,

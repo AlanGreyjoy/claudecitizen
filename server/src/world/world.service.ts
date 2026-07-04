@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { parse as parseCookie } from 'cookie';
 import type { IncomingMessage } from 'node:http';
 import { WebSocket } from 'ws';
@@ -129,10 +129,10 @@ export class WorldService {
   private tick = 0;
 
   constructor(
-    private readonly auth: AuthService,
-    private readonly game: GameService,
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
+    @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(GameService) private readonly game: GameService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(RedisService) private readonly redis: RedisService,
   ) {}
 
   async connect(client: WebSocket, request: IncomingMessage): Promise<void> {
@@ -363,6 +363,28 @@ export class WorldService {
             ...shipBody,
             grounded: typeof data.ship.grounded === 'boolean' ? data.ship.grounded : undefined,
             velocity: isVec3(data.ship.velocity) ? data.ship.velocity : undefined,
+            shipId:
+              typeof data.ship.shipId === 'string' ? data.ship.shipId.slice(0, 64) : undefined,
+            prefabId:
+              typeof data.ship.prefabId === 'string'
+                ? data.ship.prefabId.slice(0, 64)
+                : undefined,
+            hp:
+              typeof data.ship.hp === 'number' && Number.isFinite(data.ship.hp)
+                ? Math.max(0, data.ship.hp)
+                : undefined,
+            shields:
+              typeof data.ship.shields === 'number' && Number.isFinite(data.ship.shields)
+                ? Math.max(0, data.ship.shields)
+                : undefined,
+            maxHp:
+              typeof data.ship.maxHp === 'number' && Number.isFinite(data.ship.maxHp)
+                ? Math.max(1, data.ship.maxHp)
+                : undefined,
+            maxShields:
+              typeof data.ship.maxShields === 'number' && Number.isFinite(data.ship.maxShields)
+                ? Math.max(0, data.ship.maxShields)
+                : undefined,
           }
         : null;
     if (!character && !ship) return null;

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Inject,
   Post,
   Query,
   Req,
@@ -24,8 +25,8 @@ function readString(body: unknown, key: string): string {
 @Controller('auth')
 export class AuthController {
   constructor(
-    private readonly auth: AuthService,
-    private readonly env: EnvService,
+    @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(EnvService) private readonly env: EnvService,
   ) {}
 
   @Post('register')

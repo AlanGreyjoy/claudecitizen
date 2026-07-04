@@ -39,6 +39,10 @@ model Ship {
   prefabId          String
   displayName       String
   currentInstanceId String?
+  hp                Float    @default(1000)
+  shields           Float    @default(500)
+  maxHp             Float    @default(1000)
+  maxShields        Float    @default(500)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)

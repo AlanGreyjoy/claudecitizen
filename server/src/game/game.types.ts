@@ -4,6 +4,10 @@ export interface OwnedShipDto {
   id: string;
   prefabId: string;
   displayName: string;
+  hp: number;
+  shields: number;
+  maxHp: number;
+  maxShields: number;
 }
 
 export interface GameBootstrapDto {
