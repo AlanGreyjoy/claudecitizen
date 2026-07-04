@@ -43,6 +43,12 @@ export interface CameraOrbit {
   zoomDistance: number;
 }
 
+/** Cockpit free-look offset while seated (ship-relative yaw/pitch). */
+export interface SeatLook {
+  pitchRadians: number;
+  yawRadians: number;
+}
+
 export type CameraView = 'first-person' | 'third-person';
 
 /** Piloting camera: seated cockpit eye or external chase view. */

@@ -173,12 +173,24 @@ export function updateCameraRig(
         add(scale(shipRight, pilotEye.right), scale(shipUp, pilotEye.up)),
         scale(shipForward, pilotEye.forward),
       );
+      const seatLook = world.seatLook;
+      const lookForward =
+        seatLook &&
+        (Math.abs(seatLook.yawRadians) > 1e-6 || Math.abs(seatLook.pitchRadians) > 1e-6)
+          ? resolveShipDeckOrbit(
+              shipForward,
+              shipUp,
+              seatLook.yawRadians,
+              seatLook.pitchRadians,
+              FIRST_PERSON_PITCH_LIMIT,
+            ).forward
+          : shipForward;
       const lookMeters = 60;
       camera.position.set(eye.x * renderScale, eye.y * renderScale, eye.z * renderScale);
       cameraTarget.set(
-        (eye.x + shipForward.x * lookMeters) * renderScale,
-        (eye.y + shipForward.y * lookMeters) * renderScale,
-        (eye.z + shipForward.z * lookMeters) * renderScale,
+        (eye.x + lookForward.x * lookMeters) * renderScale,
+        (eye.y + lookForward.y * lookMeters) * renderScale,
+        (eye.z + lookForward.z * lookMeters) * renderScale,
       );
     } else {
       const zoom = shipCameraZoom ?? 1.0;

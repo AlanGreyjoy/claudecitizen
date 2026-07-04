@@ -21,6 +21,7 @@ import type { PrefabDocument } from '../../world/prefabs/schema';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
 import { createComposerStack } from './scene/composer_stack';
 import { createShipModel } from './scene/ship_model';
+import { createRemotePresenceRenderer } from './scene/remote_presence';
 import { createStationModel } from './scene/station_model';
 import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene_lighting';
 import { createWebGlRenderer } from './scene/webgl_renderer';
@@ -95,6 +96,7 @@ export function createSpikeRenderer(
   scene.add(stationMesh);
 
   const avatar = createCharacterAvatar(scene, tileManager.renderScale);
+  const remotePresence = createRemotePresenceRenderer(scene, tileManager.renderScale);
 
   let lastTime = 0;
   let timeOverride: TimeOverride = 'auto';
@@ -199,6 +201,7 @@ export function createSpikeRenderer(
     });
 
     avatar.update(character, focusBody.position, nowSeconds, firstPersonActive);
+    remotePresence.update(world.networkEntities ?? [], focusBody.position);
 
     lakeWaterManager.update(
       focusBody.position,
@@ -249,6 +252,7 @@ export function createSpikeRenderer(
       cloudShell.dispose();
       lakeWaterManager.dispose();
       vegetationManager.dispose();
+      remotePresence.dispose();
       avatar.dispose();
       tileManager.dispose();
       composerStack.dispose();

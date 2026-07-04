@@ -8,6 +8,8 @@ import type { PrefabComponent, PrefabComponentType, PrefabKind } from './schema'
  */
 export interface ComponentDef {
   type: PrefabComponentType;
+  /** Unique registry key when multiple palette entries share the same type. */
+  registryKey?: string;
   label: string;
   /** Prefab kinds whose component palette includes this type. */
   kinds: PrefabKind[];
@@ -121,7 +123,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       max: { x: 2, z: 3 },
       height: 3.1,
     }),
-    hint: 'Walkable deck rect (local XZ box). Entity height sets the floor level.',
+    hint: 'Walkable deck volume (local XZ box). Entity Y sets floor height; rotate the entity to tilt ramps and passages.',
   },
   {
     type: 'ship-door',
@@ -160,6 +162,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     marker: true,
     createDefault: () => ({
       type: 'ship-stairs',
+      variant: 'stairs',
       zoneId: 'stairs',
       min: { x: -1, z: -1.5 },
       max: { x: 1, z: 1.5 },
@@ -167,7 +170,24 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       stepCount: 4,
       height: 3.1,
     }),
-    hint: 'Stepped walk volume (local XZ box). Entity Y is the bottom step; riseUp climbs toward +Z.',
+    hint: 'Stepped walk volume (local XZ box). Entity Y is the bottom step; riseUp climbs toward +Z. Use variant Ladder for a smooth climb.',
+  },
+  {
+    type: 'ship-stairs',
+    registryKey: 'ship-ladder',
+    label: 'Ship Ladder',
+    kinds: ['ship'],
+    marker: true,
+    createDefault: () => ({
+      type: 'ship-stairs',
+      variant: 'ladder',
+      zoneId: 'ladder',
+      min: { x: -0.35, z: -1.5 },
+      max: { x: 0.35, z: 1.5 },
+      riseUp: 1.2,
+      height: 3.1,
+    }),
+    hint: 'Vertical climb volume. Entity Y is the bottom; Press F at the foot/head to go up or down.',
   },
   {
     type: 'ramp-interact',
@@ -192,7 +212,9 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   },
 ];
 
-const registryByType = new Map(COMPONENT_REGISTRY.map((def) => [def.type, def]));
+const registryByType = new Map(
+  COMPONENT_REGISTRY.map((def) => [def.registryKey ?? def.type, def]),
+);
 
 export function getComponentDef(type: PrefabComponentType): ComponentDef | null {
   return registryByType.get(type) ?? null;

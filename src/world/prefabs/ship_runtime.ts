@@ -1,5 +1,5 @@
 import { mulQuat, quatIdentity, rotateVec3ByQuat, type Quat } from '../../math/quat';
-import { vec3 } from '../../math/vec3';
+import { normalize, vec3 } from '../../math/vec3';
 import {
   DEFAULT_SHIP_LAYOUT,
   type ShipDoorSpec,
@@ -8,8 +8,10 @@ import {
   type ShipRampMount,
   type ShipSeatSpec,
   type ShipWalkZone,
+  type ShipWalkZoneOriented,
 } from '../../player/ship_layout';
-import type { PrefabDocument, PrefabEntity } from './schema';
+import { orientedZoneBounds } from '../../player/ship_zone_oriented';
+import type { PrefabComponent, PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
 
 /**
@@ -18,8 +20,8 @@ import type { Vec3 } from '../../types';
  *
  * Prefab/scene axes map to ship-local gameplay axes as right = -x, up = y,
  * forward = z (matching the render group orientation from
- * updateShipPlacement). Zones and mounts are axis-aligned in ship space;
- * entity rotation is ignored for them.
+ * updateShipPlacement). Walk zones honor entity rotation when tilted; other
+ * mounts stay axis-aligned in ship space.
  */
 
 const DEFAULT_ZONE_HEIGHT = 3.1;
@@ -50,6 +52,88 @@ function pushWalkZone(
   zone: Omit<ShipWalkZone, 'id'> & { id: string },
 ): void {
   out.walkZones.push(zone);
+}
+
+function isQuatIdentity(rotation: Quat, eps = 1e-5): boolean {
+  return (
+    Math.abs(rotation.w - 1) < eps &&
+    Math.abs(rotation.x) < eps &&
+    Math.abs(rotation.y) < eps &&
+    Math.abs(rotation.z) < eps
+  );
+}
+
+function sceneToShipPoint(point: Vec3): { right: number; up: number; forward: number } {
+  return { right: -point.x, up: point.y, forward: point.z };
+}
+
+function sceneToShipVec(vector: Vec3): Vec3 {
+  return vec3(-vector.x, vector.y, vector.z);
+}
+
+function bakeOrientedWalkZone(
+  component: Extract<PrefabComponent, { type: 'ship-walk-zone' }>,
+  position: Vec3,
+  rotation: Quat,
+  scale: Vec3,
+): Omit<ShipWalkZone, 'id'> {
+  const halfWidth = ((component.max.x - component.min.x) / 2) * scale.x;
+  const halfDepth = ((component.max.z - component.min.z) / 2) * scale.z;
+  const zoneHeight = (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y;
+  const localCenter = vec3(
+    ((component.min.x + component.max.x) / 2) * scale.x,
+    0,
+    ((component.min.z + component.max.z) / 2) * scale.z,
+  );
+  const rotatedCenter = rotateVec3ByQuat(localCenter, rotation);
+  const floorCenterScene = vec3(
+    position.x + rotatedCenter.x,
+    position.y + rotatedCenter.y,
+    position.z + rotatedCenter.z,
+  );
+  const oriented: ShipWalkZoneOriented = {
+    origin: sceneToShipPoint(floorCenterScene),
+    axisRight: normalize(sceneToShipVec(rotateVec3ByQuat(vec3(1, 0, 0), rotation))),
+    axisUp: normalize(sceneToShipVec(rotateVec3ByQuat(vec3(0, 1, 0), rotation))),
+    axisForward: normalize(sceneToShipVec(rotateVec3ByQuat(vec3(0, 0, 1), rotation))),
+    halfWidth,
+    halfDepth,
+    height: zoneHeight,
+  };
+  const bounds = orientedZoneBounds(oriented);
+  return {
+    minRight: bounds.minRight,
+    maxRight: bounds.maxRight,
+    minForward: bounds.minForward,
+    maxForward: bounds.maxForward,
+    floorUp: bounds.floorUp,
+    ceilingUp: bounds.ceilingUp,
+    oriented,
+    ...(component.gate !== undefined ? { gate: component.gate } : {}),
+    ...(component.passage ? { passage: true } : {}),
+  };
+}
+
+function bakeAxisAlignedWalkZone(
+  component: Extract<PrefabComponent, { type: 'ship-walk-zone' }>,
+  position: Vec3,
+  scale: Vec3,
+): Omit<ShipWalkZone, 'id'> {
+  const minX = position.x + component.min.x * scale.x;
+  const maxX = position.x + component.max.x * scale.x;
+  return {
+    minRight: -maxX,
+    maxRight: -minX,
+    minForward: position.z + component.min.z * scale.z,
+    maxForward: position.z + component.max.z * scale.z,
+    floorUp: position.y,
+    ...(component.slopeMinUp !== undefined
+      ? { slopeMinUp: position.y + component.slopeMinUp * scale.y }
+      : {}),
+    ceilingUp: position.y + (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y,
+    ...(component.gate !== undefined ? { gate: component.gate } : {}),
+    ...(component.passage ? { passage: true } : {}),
+  };
 }
 
 function collect(
@@ -87,22 +171,11 @@ function collect(
         if (component.restHeight !== undefined) out.restHeight ??= component.restHeight;
         break;
       case 'ship-walk-zone': {
-        const minX = position.x + component.min.x * scale.x;
-        const maxX = position.x + component.max.x * scale.x;
-        pushWalkZone(out, {
-          id: component.zoneId,
-          minRight: -maxX,
-          maxRight: -minX,
-          minForward: position.z + component.min.z * scale.z,
-          maxForward: position.z + component.max.z * scale.z,
-          floorUp: position.y,
-          ...(component.slopeMinUp !== undefined
-            ? { slopeMinUp: position.y + component.slopeMinUp * scale.y }
-            : {}),
-          ceilingUp: position.y + (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y,
-          ...(component.gate !== undefined ? { gate: component.gate } : {}),
-          ...(component.passage ? { passage: true } : {}),
-        });
+        const baked =
+          isQuatIdentity(rotation) || component.slopeMinUp !== undefined
+            ? bakeAxisAlignedWalkZone(component, position, scale)
+            : bakeOrientedWalkZone(component, position, rotation, scale);
+        pushWalkZone(out, { id: component.zoneId, ...baked });
         break;
       }
       case 'ship-stairs': {
@@ -119,7 +192,9 @@ function collect(
           maxForward,
           floorUp: position.y + rise,
           slopeMinUp: position.y,
-          stepCount: component.stepCount ?? DEFAULT_STAIR_STEPS,
+          ...(component.variant !== 'ladder'
+            ? { stepCount: component.stepCount ?? DEFAULT_STAIR_STEPS }
+            : { ladder: true }),
           ceilingUp: position.y + rise + (component.height ?? DEFAULT_ZONE_HEIGHT) * scale.y,
           ...(component.gate !== undefined ? { gate: component.gate } : {}),
           ...(component.passage ? { passage: true } : {}),

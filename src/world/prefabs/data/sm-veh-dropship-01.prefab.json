@@ -93,7 +93,8 @@
               "x": 2,
               "z": 3
             },
-            "height": 3.1
+            "height": 3.1,
+            "passage": true
           }
         ]
       },
@@ -243,6 +244,290 @@
               "z": -1.55
             },
             "interactRadius": 1.45
+          }
+        ]
+      },
+      {
+        "id": "e-fac7f141",
+        "name": "Ladder",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -7,
+            "z": 6.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1.7,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ship-stairs",
+            "variant": "ladder",
+            "zoneId": "ladder",
+            "min": {
+              "x": -0.35,
+              "z": -1.5
+            },
+            "max": {
+              "x": 0.35,
+              "z": 1.5
+            },
+            "riseUp": 2.4,
+            "height": 2.4
+          }
+        ]
+      },
+      {
+        "id": "e-e3f3f735",
+        "name": "Walk_Zone_02",
+        "transform": {
+          "position": {
+            "x": 0.22738,
+            "y": -3.61485,
+            "z": 8.62936
+          },
+          "rotation": {
+            "x": -0.285261,
+            "y": 0.078924,
+            "z": 0.016721,
+            "w": 0.955049
+          },
+          "scale": {
+            "x": 0.4,
+            "y": 0.83835,
+            "z": 0.73519
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cabin",
+            "min": {
+              "x": -2,
+              "z": -3
+            },
+            "max": {
+              "x": 2,
+              "z": 3
+            },
+            "height": 3.1,
+            "passage": true
+          }
+        ]
+      },
+      {
+        "id": "e-e28917ef",
+        "name": "Walk_Zone_Cockpit",
+        "transform": {
+          "position": {
+            "x": -0.0205,
+            "y": -2.74094,
+            "z": 11.13079
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 0.6376,
+            "y": 0.78484,
+            "z": 0.37691
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cabin",
+            "min": {
+              "x": -2,
+              "z": -3
+            },
+            "max": {
+              "x": 2,
+              "z": 3
+            },
+            "height": 3.1,
+            "passage": true
+          }
+        ]
+      },
+      {
+        "id": "e-8b6b00f0",
+        "name": "Walk_Zone_Cockpit Copy",
+        "transform": {
+          "position": {
+            "x": 0.02495,
+            "y": -3.21774,
+            "z": 13.29567
+          },
+          "rotation": {
+            "x": 0.185901,
+            "y": 0.003572,
+            "z": -0.003765,
+            "w": 0.982555
+          },
+          "scale": {
+            "x": 0.6376,
+            "y": 0.78484,
+            "z": 0.37691
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cabin",
+            "min": {
+              "x": -2,
+              "z": -3
+            },
+            "max": {
+              "x": 2,
+              "z": 3
+            },
+            "height": 3.1,
+            "passage": true
+          }
+        ]
+      },
+      {
+        "id": "e-df23b869",
+        "name": "Cockpit_Walk",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -3.54918,
+            "z": 14.84184
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 0.6,
+            "y": 1,
+            "z": 0.43368
+          }
+        },
+        "components": [
+          {
+            "type": "ship-walk-zone",
+            "zoneId": "cock_pit",
+            "min": {
+              "x": -2,
+              "z": -3
+            },
+            "max": {
+              "x": 2,
+              "z": 3
+            },
+            "height": 3.1,
+            "passage": true
+          }
+        ]
+      },
+      {
+        "id": "e-02a6191a",
+        "name": "Inside_Ramp_Trigger",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -4.25,
+            "z": -3.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ramp-interact",
+            "placement": "deck",
+            "radius": 3
+          }
+        ]
+      },
+      {
+        "id": "e-4dda5bc0",
+        "name": "Outside_Ramp_Trigger Copy",
+        "transform": {
+          "position": {
+            "x": 1,
+            "y": -6.75,
+            "z": -6
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ramp-interact",
+            "placement": "outside",
+            "radius": 3
+          }
+        ]
+      },
+      {
+        "id": "e-fa37a3b5",
+        "name": "Empty",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -6.75,
+            "z": -4.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "ramp-mount",
+            "min": {
+              "x": -1.05,
+              "z": -0.4
+            },
+            "max": {
+              "x": 1.05,
+              "z": 0.4
+            }
           }
         ]
       }

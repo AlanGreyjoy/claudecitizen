@@ -15,7 +15,10 @@ import {
   nearestDoor,
   nearestSeat,
   nearRampPanel,
+  ladderInteractPrompt,
+  resolveLadderInteraction,
   seatInteractPrompt,
+  traverseLadder,
   updateCharacterOnDeck,
   type DeckCharacterState,
   type DeckLocal,
@@ -55,6 +58,8 @@ import { sampleRenderablePlanetSurface } from '../world/planet_surface';
 import type { HudUpdateParams } from '../render/effects';
 import type { SpikeRenderer } from '../render/main';
 import type { Planet, Vec3 } from '../types';
+import type { GameBootstrap } from '../net/api';
+import type { WorldClient } from '../net/world_client';
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
@@ -64,6 +69,8 @@ export interface GameLoopOptions {
   controls: PlayerControls;
   renderer: SpikeRenderer | null;
   rendererError: unknown;
+  network?: WorldClient | null;
+  bootstrap?: GameBootstrap | null;
   onHudUpdate: (params: HudUpdateParams) => void;
   onResetPeak: () => void;
 }
@@ -74,6 +81,8 @@ export function createGameLoop({
   controls,
   renderer,
   rendererError,
+  network = null,
+  bootstrap = null,
   onHudUpdate,
   onResetPeak,
 }: GameLoopOptions) {
@@ -115,6 +124,9 @@ export function createGameLoop({
     world = createWorldState(planet, seed);
     controls.setMode(MODE_ON_FOOT);
     controls.setOrbitFacing(world.cameraOrbit.yawRadians, world.cameraOrbit.pitchRadians);
+    if (bootstrap) {
+      network?.transition(bootstrap.spawn.apartmentInstanceId, bootstrap.spawn.stationRoomId);
+    }
     onResetPeak();
   }
 
@@ -140,6 +152,35 @@ export function createGameLoop({
       case 'prefab-info':
         return interaction.prompt;
     }
+  }
+
+  function networkInstanceForInteraction(interaction: StationInteraction): string | null {
+    if (!bootstrap) return null;
+    switch (interaction.kind) {
+      case 'hab-lift-down':
+      case 'hangar-lift-up':
+        return 'station:public';
+      case 'hab-lift-up':
+        return bootstrap.spawn.apartmentInstanceId;
+      case 'hangar-bank':
+        return bootstrap.spawn.hangarInstanceId;
+      case 'prefab-elevator':
+        if (interaction.marker.targetFloor === 'hangar') return bootstrap.spawn.hangarInstanceId;
+        if (interaction.marker.targetFloor === 'hab') return bootstrap.spawn.apartmentInstanceId;
+        return 'station:public';
+      case 'terminal':
+      case 'prefab-info':
+        return null;
+    }
+  }
+
+  function announceElevatorTransition(
+    interaction: StationInteraction,
+    destination: { roomId: string } | null,
+  ): void {
+    const instanceId = networkInstanceForInteraction(interaction);
+    if (!instanceId || !destination) return;
+    network?.transition(instanceId, destination.roomId);
   }
 
   function updateShipSystems(dt: number): void {
@@ -236,14 +277,20 @@ export function createGameLoop({
     if (interaction.kind === 'hangar-bank') {
       if (actions.hangarDigit) {
         const destination = elevatorDestinationFor(interaction, actions.hangarDigit);
-        if (destination) beginElevatorRide(world, destination);
+        if (destination) {
+          beginElevatorRide(world, destination);
+          announceElevatorTransition(interaction, destination);
+        }
       }
       return;
     }
 
     if (actions.interactPressed) {
       const destination = elevatorDestinationFor(interaction);
-      if (destination) beginElevatorRide(world, destination);
+      if (destination) {
+        beginElevatorRide(world, destination);
+        announceElevatorTransition(interaction, destination);
+      }
     }
   }
 
@@ -314,6 +361,22 @@ export function createGameLoop({
       }
     }
 
+    const ladder = resolveLadderInteraction(deckLocal, gates, result.state.deckZone);
+    if (ladder) {
+      world.prompt = ladderInteractPrompt(ladder.direction);
+      if (actions.interactPressed) {
+        const next = traverseLadder(
+          world.character as DeckCharacterState,
+          ladder.zone,
+          ladder.direction,
+          gates,
+          world.ship,
+        );
+        if (next) world.character = next;
+      }
+      return;
+    }
+
     const standingOnRamp = getShipWalkZone(result.state.deckZone)?.gate === 'ramp';
     if (parked && nearRampPanel(deckLocal) && !standingOnRamp) {
       world.prompt = rig.rampDown ? 'Press F — raise ramp' : 'Press F — lower ramp';
@@ -364,8 +427,8 @@ export function createGameLoop({
         planet,
         seed,
       );
-      world.prompt = 'Press F — get up';
-      if (actions.interactPressed) {
+      world.prompt = 'Hold F — look around · Hold Y — get up';
+      if (actions.exitSeatPressed) {
         beginStandTransition(world);
       }
     } else if (world.mode === MODE_ON_SHIP_DECK) {
@@ -383,6 +446,7 @@ export function createGameLoop({
     }
 
     updateShipSystems(dt);
+    network?.publishPresence(world);
 
     const shipSurface = sampleRenderablePlanetSurface(planet, seed, world.ship.position);
     const focusPosition =
@@ -398,6 +462,7 @@ export function createGameLoop({
         cameraView: world.cameraView,
         shipCameraView: world.shipCameraView,
         shipCameraZoom: world.shipCameraZoom,
+        seatLook: camera.seatLook,
         character:
           world.mode === MODE_IN_SHIP
             ? null
@@ -415,6 +480,7 @@ export function createGameLoop({
           ramp01: world.shipRig.ramp01,
           doors: doorBlends(world.shipRig),
         },
+        networkEntities: network?.getRemoteEntities(nowMs) ?? [],
         shipZoneId: world.character.deckZone ?? null,
         stationRoomId: world.character.stationRoomId ?? null,
         timeSeconds: nowMs / 1000,

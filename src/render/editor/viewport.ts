@@ -352,26 +352,80 @@ export function createEditorViewport(
         return group;
       }
       case 'ship-stairs': {
-        const color = SHIP_ZONE_COLORS[component.zoneId] ?? 0xffa86b;
+        const isLadder = component.variant === 'ladder';
+        const color = isLadder
+          ? SHIP_ZONE_COLORS[component.zoneId] ?? 0xff8c42
+          : SHIP_ZONE_COLORS[component.zoneId] ?? 0xffa86b;
         const rise = component.riseUp;
-        const steps = component.stepCount ?? 4;
+        const headroom = component.height ?? 3.1;
+        const spanZ = component.max.z - component.min.z;
+        const spanX = component.max.x - component.min.x;
+        const centerZ = (component.min.z + component.max.z) / 2;
+        const midX = (component.min.x + component.max.x) / 2;
+
+        if (isLadder) {
+          const group = new THREE.Group();
+          const climbDepth = Math.min(spanZ, 0.35);
+          const climbMin = { x: component.min.x, z: centerZ - climbDepth / 2 };
+          const climbMax = { x: component.max.x, z: centerZ + climbDepth / 2 };
+          group.add(makeZoneBoxHelper(climbMin, climbMax, rise, color));
+          if (headroom > 0.05) {
+            const headroomGroup = makeZoneBoxHelper(
+              component.min,
+              component.max,
+              headroom,
+              color,
+              rise,
+            );
+            headroomGroup.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+                child.material.opacity *= 0.35;
+              }
+            });
+            group.add(headroomGroup);
+          }
+          const rungs = Math.max(4, Math.round(rise / 0.3));
+          const railThickness = 0.08;
+          for (const railX of [component.min.x, component.max.x]) {
+            const rail = makeHelperMesh(
+              new THREE.BoxGeometry(railThickness, rise, railThickness),
+              color,
+              0.75,
+            );
+            rail.position.set(railX, rise / 2, centerZ);
+            group.add(rail);
+          }
+          for (let rung = 0; rung <= rungs; rung += 1) {
+            const y = (rung / rungs) * rise;
+            const rungMesh = makeHelperMesh(
+              new THREE.BoxGeometry(spanX, 0.06, 0.1),
+              color,
+              0.7,
+            );
+            rungMesh.position.set(midX, y, centerZ);
+            group.add(rungMesh);
+          }
+          return group;
+        }
+
         const group = makeZoneBoxHelper(
           component.min,
           component.max,
-          (component.height ?? 3.1) + rise,
+          headroom + rise,
           color,
         );
         group.position.y = rise / 2;
+        const steps = component.stepCount ?? 4;
         for (let step = 0; step <= steps; step += 1) {
           const t = step / steps;
-          const z = component.min.z + (component.max.z - component.min.z) * t;
+          const z = component.min.z + spanZ * t;
           const y = rise * t;
           const tread = makeHelperMesh(
-            new THREE.BoxGeometry(component.max.x - component.min.x, 0.04, 0.18),
+            new THREE.BoxGeometry(spanX, 0.04, 0.18),
             color,
             0.55,
           );
-          tread.position.set((component.min.x + component.max.x) / 2, y, z);
+          tread.position.set(midX, y, z);
           group.add(tread);
         }
         return group;

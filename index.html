@@ -680,6 +680,93 @@
         box-shadow: 0 0 22px rgba(255, 206, 111, 0.2);
       }
 
+      .sc-title-auth-form {
+        width: min(360px, calc(100vw - 96px));
+        display: grid;
+        gap: 12px;
+      }
+
+      .sc-title-auth-title {
+        margin: 0;
+        font: 700 22px/1 var(--sc-font);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--text);
+      }
+
+      .sc-title-auth-field {
+        display: grid;
+        gap: 6px;
+        text-align: left;
+      }
+
+      .sc-title-auth-field span {
+        font: 600 11px/1 var(--sc-font);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .sc-title-auth-input {
+        width: 100%;
+        border: 1px solid rgba(90, 190, 255, 0.28);
+        border-radius: 0;
+        background: rgba(0, 0, 0, 0.28);
+        color: var(--text);
+        font: 500 16px/1.2 var(--sc-font);
+        padding: 12px 14px;
+        outline: none;
+        clip-path: polygon(
+          7px 0,
+          calc(100% - 7px) 0,
+          100% 7px,
+          100% calc(100% - 7px),
+          calc(100% - 7px) 100%,
+          7px 100%,
+          0 calc(100% - 7px),
+          0 7px
+        );
+      }
+
+      .sc-title-auth-input:focus {
+        border-color: rgba(139, 216, 255, 0.6);
+        box-shadow: 0 0 12px rgba(80, 200, 255, 0.15);
+      }
+
+      .sc-title-auth-links {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .sc-title-link-btn {
+        border: 0;
+        background: transparent;
+        color: var(--accent-2);
+        font: 600 13px/1 var(--sc-font);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+        padding: 4px;
+      }
+
+      .sc-title-link-btn:hover {
+        text-decoration: underline;
+      }
+
+      .sc-title-auth-message {
+        min-height: 20px;
+        margin: 0;
+        font: 600 13px/1.4 var(--sc-font);
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+
+      .sc-title-auth-message.is-error {
+        color: #ff9b9b;
+      }
+
       .sc-title-editor-access {
         position: absolute;
         top: 28px;
@@ -852,7 +939,7 @@
           height="360"
         />
         <p class="sc-title-tag">Walk, fly, and reach orbit on Asteron — one world, no loading screens.</p>
-        <div class="sc-title-actions">
+        <div class="sc-title-actions" id="title-actions">
           <button id="title-play-btn" class="sc-title-btn" type="button">Play</button>
           <p class="sc-title-footnote">
             They have a billion in funding. We have

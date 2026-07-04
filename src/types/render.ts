@@ -3,9 +3,11 @@ import type {
   CameraView,
   CharacterRenderState,
   GameMode,
+  SeatLook,
   ShipCameraView,
 } from './character';
 import type { FlightBody } from './flight';
+import type { Vec3 } from './math';
 
 export interface FogSettings {
   density: number;
@@ -57,6 +59,28 @@ export interface RenderStats {
   vegetation: VegetationCacheStats;
 }
 
+export interface NetworkShipRig {
+  gear01: number;
+  ramp01: number;
+  doors: Record<string, number>;
+}
+
+export type NetworkLod = 'full' | 'medium' | 'marker';
+
+export interface NetworkRenderEntity {
+  id: string;
+  playerId: string;
+  displayName: string;
+  lod: NetworkLod;
+  mode: GameMode | string;
+  character: CharacterRenderState | null;
+  ship: FlightBody | null;
+  shipRig: NetworkShipRig | null;
+  markerPosition: Vec3;
+  stationRoomId: string | null;
+  shipZoneId: string | null;
+}
+
 export interface SpikeRenderWorld {
   mode?: GameMode;
   ship: FlightBody;
@@ -65,6 +89,8 @@ export interface SpikeRenderWorld {
   cameraView?: CameraView;
   /** Piloting camera view; cockpit first person is the default. */
   shipCameraView?: ShipCameraView;
+  /** Cockpit free-look offset while holding F in the pilot seat. */
+  seatLook?: SeatLook;
   timeSeconds?: number;
   shipCameraZoom?: number;
   prompt?: string;
@@ -74,4 +100,6 @@ export interface SpikeRenderWorld {
   shipZoneId?: string | null;
   /** Landing gear / ramp / door articulation, 0..1 each (doors by layout id). */
   shipRig?: { gear01: number; ramp01: number; doors: Record<string, number> };
+  /** Remote players/ships received from the native WebSocket presence service. */
+  networkEntities?: NetworkRenderEntity[];
 }

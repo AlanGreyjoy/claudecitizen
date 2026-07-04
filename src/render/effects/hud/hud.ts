@@ -47,6 +47,7 @@ export interface HudUpdateParams {
 
 export interface HudCallbacks {
   onTimeOverrideChange?: (mode: 'auto' | 'day' | 'night') => void;
+  onChatSend?: (text: string) => void;
 }
 
 export function createHud(
@@ -58,7 +59,9 @@ export function createHud(
   const debugSettings = createDebugSettings();
   const fpsCounter = createFpsCounter(elements.fpsEl);
   const minimap = createMinimap(elements.minimapCanvas, planet, seed);
-  createChatPanel(elements.chatMessagesEl, elements.chatInputEl);
+  const chatPanel = createChatPanel(elements.chatMessagesEl, elements.chatInputEl, {
+    onSendMessage: callbacks.onChatSend,
+  });
   createDebugMenu(
     { debugBtnEl: elements.debugBtnEl, debugMenuEl: elements.debugMenuEl },
     debugSettings,
@@ -109,6 +112,9 @@ export function createHud(
   }
 
   return {
+    appendChatMessage(author: string, text: string) {
+      chatPanel.appendMessage(author, text);
+    },
     resetPeak() {
       statsPanel.resetPeak();
     },

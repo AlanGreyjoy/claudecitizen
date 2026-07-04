@@ -1,4 +1,12 @@
-export function createChatPanel(messagesEl: HTMLElement, inputEl: HTMLInputElement) {
+export interface ChatPanelCallbacks {
+  onSendMessage?: (text: string) => void;
+}
+
+export function createChatPanel(
+  messagesEl: HTMLElement,
+  inputEl: HTMLInputElement,
+  callbacks: ChatPanelCallbacks = {},
+) {
   function appendMessage(author: string, text: string): void {
     const line = document.createElement('div');
     line.className = 'sc-chat-line';
@@ -10,7 +18,11 @@ export function createChatPanel(messagesEl: HTMLElement, inputEl: HTMLInputEleme
   function sendMessage(): void {
     const text = inputEl.value.trim();
     if (!text) return;
-    appendMessage('You', text);
+    if (callbacks.onSendMessage) {
+      callbacks.onSendMessage(text);
+    } else {
+      appendMessage('You', text);
+    }
     inputEl.value = '';
   }
 
@@ -27,7 +39,7 @@ export function createChatPanel(messagesEl: HTMLElement, inputEl: HTMLInputEleme
 
   appendMessage('SYS', 'Comms channel ready.');
 
-  return { sendMessage };
+  return { appendMessage, sendMessage };
 }
 
 function escapeHtml(text: string): string {

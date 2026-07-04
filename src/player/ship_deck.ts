@@ -6,13 +6,13 @@ import {
 } from './character_controller';
 import { getShipLayout, type ShipSeatSpec, type ShipWalkZone } from './ship_layout';
 import { getShipRight, worldToShipLocal } from './ship_interaction';
+import { orientedFloorUpAt, orientedZoneContains } from './ship_zone_oriented';
 import type { CharacterInput, CharacterState, FlightBody, Pose, Vec3 } from '../types';
 
 /**
  * Walkable ship interior driven by the active ship layout (ship_layout.ts):
- * axis-aligned zones in ship-local right/forward meters with per-zone floor
- * heights, optional slopes (ramps, doorway steps), and gates (boarding ramp,
- * doors). The default layout is the Phobos Starhopper measured from its rig.
+ * axis-aligned and oriented walk zones in ship-local right/forward meters with
+ * per-zone floor heights, optional slopes (ramps, doorway steps), and gates.
  */
 
 export type ShipZoneId = string;
@@ -50,7 +50,8 @@ export function getShipWalkZone(zoneId: string): ShipWalkZone | null {
 }
 
 /** Floor height within a zone; slopes interpolate along forward; stairs snap to steps. */
-function zoneFloorUpAt(zone: ShipWalkZone, forward: number): number {
+function zoneFloorUpAt(zone: ShipWalkZone, right: number, forward: number): number {
+  if (zone.oriented) return orientedFloorUpAt(zone.oriented, right, forward);
   if (zone.slopeMinUp === undefined) return zone.floorUp;
   const span = zone.maxForward - zone.minForward;
   if (span <= 1e-6) return zone.floorUp;
@@ -66,24 +67,28 @@ function zoneFloorUpAt(zone: ShipWalkZone, forward: number): number {
 /**
  * Floor height at a deck point. Sloped zones (ramps, doorway steps) win over
  * flat rooms where they overlap so the character glides along the slope.
+ * Ladder volumes are excluded — they are F-only, not walkable surfaces.
  */
 export function shipFloorUpAt(local: DeckLocal): number {
   const zones = getShipLayout().walkZones;
   let flat: ShipWalkZone | null = null;
   for (const zone of zones) {
+    if (zone.ladder) continue;
     if (!zoneContains(zone, local)) continue;
-    if (zone.slopeMinUp !== undefined) return zoneFloorUpAt(zone, local.forward);
+    if (zone.oriented) return orientedFloorUpAt(zone.oriented, local.right, local.forward);
+    if (zone.slopeMinUp !== undefined) return zoneFloorUpAt(zone, local.right, local.forward);
     flat ??= zone;
   }
   if (flat) return flat.floorUp;
   // Off every zone (transitions, dismounts): nearest zone's edge height.
   let best: { distance: number; up: number } | null = null;
   for (const zone of zones) {
+    if (zone.ladder) continue;
     const right = clamp(local.right, zone.minRight, zone.maxRight);
     const forward = clamp(local.forward, zone.minForward, zone.maxForward);
     const distance = Math.hypot(right - local.right, forward - local.forward);
     if (!best || distance < best.distance) {
-      best = { distance, up: zoneFloorUpAt(zone, forward) };
+      best = { distance, up: zoneFloorUpAt(zone, right, forward) };
     }
   }
   return best?.up ?? 0;
@@ -103,6 +108,9 @@ function zoneActive(zone: ShipWalkZone, gates: ShipWalkGates): boolean {
 }
 
 function zoneContains(zone: ShipWalkZone, local: DeckLocal): boolean {
+  if (zone.oriented) {
+    return orientedZoneContains(zone.oriented, local.right, local.forward);
+  }
   return (
     local.right >= zone.minRight &&
     local.right <= zone.maxRight &&
@@ -111,19 +119,42 @@ function zoneContains(zone: ShipWalkZone, local: DeckLocal): boolean {
   );
 }
 
-/** Real rooms win over passages so deckZone tracks a camera-safe box. */
-function findZone(local: DeckLocal, gates: ShipWalkGates): ShipWalkZone | null {
+function ladderAnchor(zone: ShipWalkZone): DeckLocal {
+  return {
+    right: (zone.minRight + zone.maxRight) / 2,
+    forward: (zone.minForward + zone.maxForward) / 2,
+  };
+}
+
+function ladderZoneAt(local: DeckLocal, gates: ShipWalkGates): ShipWalkZone | null {
+  for (const zone of getShipLayout().walkZones) {
+    if (!zone.ladder || !zoneActive(zone, gates)) continue;
+    if (!zoneContains(zone, local)) continue;
+    return zone;
+  }
+  return null;
+}
+
+function insideActiveLadder(local: DeckLocal, gates: ShipWalkGates): boolean {
+  return ladderZoneAt(local, gates) !== null;
+}
+
+/** Walkable zones for normal movement; ladder volumes are F-only traversals. */
+function findWalkZone(local: DeckLocal, gates: ShipWalkGates): ShipWalkZone | null {
   let passage: ShipWalkZone | null = null;
+  let flat: ShipWalkZone | null = null;
   for (const zone of getShipLayout().walkZones) {
     if (!zoneActive(zone, gates)) continue;
+    if (zone.ladder) continue;
     if (!zoneContains(zone, local)) continue;
     if (zone.passage) {
       passage ??= zone;
       continue;
     }
-    return zone;
+    if (zone.slopeMinUp !== undefined) return zone;
+    flat ??= zone;
   }
-  return passage;
+  return flat ?? passage;
 }
 
 interface ResolvedDeckStep {
@@ -143,7 +174,8 @@ function resolveDeckStep(
     { right: state.deckLocal.right, forward: state.deckLocal.forward + deltaForward },
   ];
   for (const candidate of candidates) {
-    const zone = findZone(candidate, gates);
+    if (insideActiveLadder(candidate, gates)) continue;
+    const zone = findWalkZone(candidate, gates);
     if (zone) {
       return {
         local: candidate,
@@ -234,8 +266,8 @@ export function createDeckCharacterState(
 /** Non-gated zone lookup for spawn placement (ignores ramp/door state). */
 function findZoneIdAt(local: DeckLocal): ShipZoneId {
   const zones = getShipLayout().walkZones;
-  const hit = zones.find((zone) => !zone.passage && zoneContains(zone, local));
-  return (hit ?? zones[0])?.id ?? 'cabin';
+  const hit = zones.find((zone) => !zone.gate && !zone.passage && !zone.ladder && zoneContains(zone, local));
+  return (hit ?? zones.find((zone) => !zone.ladder && zoneContains(zone, local)))?.id ?? 'cabin';
 }
 
 /**
@@ -335,6 +367,97 @@ export function nearRampPanel(deckLocal: DeckLocal): boolean {
   );
 }
 
+export const LADDER_INTERACT_RADIUS = 1.45;
+const LADDER_TRAVERSE_EPSILON = 0.15;
+
+export type LadderDirection = 'up' | 'down';
+
+export function ladderEndLocal(zone: ShipWalkZone, end: 'bottom' | 'top'): DeckLocal {
+  return {
+    right: (zone.minRight + zone.maxRight) / 2,
+    forward: end === 'bottom' ? zone.minForward : zone.maxForward,
+  };
+}
+
+function resolveLadderTraverseTarget(
+  zone: ShipWalkZone,
+  direction: LadderDirection,
+  deckZone: ShipZoneId,
+  gates: ShipWalkGates,
+): ResolvedDeckStep | null {
+  const anchor = ladderAnchor(zone);
+  const forward =
+    direction === 'up'
+      ? zone.maxForward + LADDER_TRAVERSE_EPSILON
+      : zone.minForward - LADDER_TRAVERSE_EPSILON;
+  const candidate: DeckLocal = { right: anchor.right, forward };
+  const hit = findWalkZone(candidate, gates);
+  if (!hit) return null;
+  return {
+    local: candidate,
+    zone: hit.passage ? deckZone : hit.id,
+  };
+}
+
+/** Nearest ladder end within interact reach, or null. */
+export function resolveLadderInteraction(
+  deckLocal: DeckLocal,
+  gates: ShipWalkGates,
+  deckZone: ShipZoneId = 'cabin',
+): { zone: ShipWalkZone; direction: LadderDirection } | null {
+  let best: { zone: ShipWalkZone; direction: LadderDirection; distance: number } | null = null;
+
+  for (const zone of getShipLayout().walkZones) {
+    if (!zone.ladder || !zoneActive(zone, gates)) continue;
+
+    const bottomDist = localDistance(deckLocal, ladderEndLocal(zone, 'bottom'));
+    if (bottomDist <= LADDER_INTERACT_RADIUS && resolveLadderTraverseTarget(zone, 'up', deckZone, gates)) {
+      if (!best || bottomDist < best.distance) {
+        best = { zone, direction: 'up', distance: bottomDist };
+      }
+    }
+
+    const topDist = localDistance(deckLocal, ladderEndLocal(zone, 'top'));
+    if (topDist <= LADDER_INTERACT_RADIUS && resolveLadderTraverseTarget(zone, 'down', deckZone, gates)) {
+      if (!best || topDist < best.distance) {
+        best = { zone, direction: 'down', distance: topDist };
+      }
+    }
+  }
+
+  return best ? { zone: best.zone, direction: best.direction } : null;
+}
+
+export function ladderInteractPrompt(direction: LadderDirection): string {
+  return direction === 'up' ? 'Press F to go up' : 'Press F to go down';
+}
+
+/** Snap the character to the opposite ladder end on a connected walk zone. */
+export function traverseLadder(
+  state: DeckCharacterState,
+  zone: ShipWalkZone,
+  direction: LadderDirection,
+  gates: ShipWalkGates,
+  ship: FlightBody,
+): DeckCharacterState | null {
+  const target = resolveLadderTraverseTarget(zone, direction, state.deckZone, gates);
+  if (!target) return null;
+  const pose = getDeckWorldPose(ship, target.local);
+  return {
+    ...state,
+    animation: 'Idle_Loop',
+    deckLocal: target.local,
+    deckZone: target.zone,
+    forward: pose.forward,
+    grounded: true,
+    jumpPhase: 'grounded',
+    jumpPhaseTime: 0,
+    position: pose.position,
+    up: pose.up,
+    velocity: vec3(0, 0, 0),
+  };
+}
+
 export interface DeckUpdateResult {
   state: DeckCharacterState;
   /** Set when the character walked off the bottom of the lowered ramp. */
@@ -381,7 +504,7 @@ export function updateCharacterOnDeck(
     gravityMetersPerSecond2,
     {
       onGroundedStep: () => {
-        if (isMoving) {
+        if (isMoving && !insideActiveLadder(state.deckLocal, gates)) {
           const step = scale(desiredDirection, moveSpeed * dt);
           resolved = resolveDeckStep(
             state,
@@ -400,7 +523,8 @@ export function updateCharacterOnDeck(
         const floorUp = shipFloorUpAt({ right: local.right, forward: local.forward }) + DECK_FLOOR_OFFSET_METERS;
         if (local.up > floorUp) return null;
         const landedLocal = { right: local.right, forward: local.forward };
-        const zone = findZone(landedLocal, gates);
+        if (insideActiveLadder(landedLocal, gates)) return null;
+        const zone = findWalkZone(landedLocal, gates);
         resolved = {
           local: landedLocal,
           zone: zone ? (zone.passage ? state.deckZone : zone.id) : state.deckZone,

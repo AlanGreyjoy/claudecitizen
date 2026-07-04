@@ -3,17 +3,28 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "server"
+  ],
   "scripts": {
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run build:web",
+    "build:web": "tsc --noEmit && vite build",
+    "build:server": "npm run build -w server",
     "build:protected": "INCLUDE_PROTECTED_ASSETS=1 npm run build",
     "deploy:netlify": "npm run build && npx --yes netlify-cli deploy --no-build --dir=dist",
     "deploy:netlify:prod": "npm run build && npx --yes netlify-cli deploy --no-build --prod --dir=dist",
     "deploy:netlify:protected": "npm run build:protected && npx --yes netlify-cli deploy --no-build --dir=dist",
     "deploy:netlify:protected:prod": "npm run build:protected && npx --yes netlify-cli deploy --no-build --prod --dir=dist",
     "dev": "vite --host 0.0.0.0 --port 4173",
+    "dev:infra": "docker compose up -d postgres redis",
+    "dev:server": "npm run start:dev -w server",
+    "dev:web": "vite --host 0.0.0.0 --port 4173",
     "demo": "tsx scripts/spike-demo.ts",
+    "prisma:deploy": "npm run prisma:deploy -w server",
+    "prisma:generate": "npm run prisma:generate -w server",
+    "prisma:migrate": "npm run prisma:migrate -w server",
     "serve": "vite --host 0.0.0.0 --port 4173",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && npm run typecheck -w server"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",

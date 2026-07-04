@@ -142,7 +142,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
     } else if (shipSurface.altitudeMeters < 20) {
       elements.statusEl.textContent =
         speed < 50
-          ? 'Press F to walk the deck, or push throttle and lift to take off again.'
+          ? 'Hold F to look around the cockpit. Hold Y to get up and walk the deck, or push throttle and lift to take off.'
           : 'Surface contact at speed.';
     } else if (shipSurface.altitudeMeters > planet.atmosphereHeightMeters) {
       elements.statusEl.textContent =

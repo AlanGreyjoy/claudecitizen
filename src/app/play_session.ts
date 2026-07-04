@@ -10,6 +10,13 @@ import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
 import { applyDefaultShipPrefab } from '../world/ships';
 import { setStationLayoutOverride } from '../world/station';
 import type { PrefabDocument } from '../world/prefabs/schema';
+import {
+  fetchGameBootstrap,
+  getSession,
+  type AuthSession,
+  type GameBootstrap,
+} from '../net/api';
+import { createWorldClient, type WorldClient } from '../net/world_client';
 
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -74,8 +81,29 @@ function mountEditorReturnButton(prefabId: string): void {
 
 let started = false;
 
-export async function startPlaySession(loading?: LoadingScreenHandle): Promise<void> {
+export interface StartPlaySessionOptions {
+  requireAuth?: boolean;
+  session?: AuthSession | null;
+}
+
+export async function startPlaySession(
+  loading?: LoadingScreenHandle,
+  options: StartPlaySessionOptions = {},
+): Promise<void> {
   if (started) return;
+
+  const requireAuth = options.requireAuth ?? true;
+  let session: AuthSession | null = options.session ?? null;
+  let bootstrap: GameBootstrap | null = null;
+
+  if (requireAuth) {
+    loading?.setStatus('Checking credentials...');
+    session = session ?? (await getSession());
+    if (!session) throw new Error('Login required.');
+    loading?.setStatus('Loading citizen record...');
+    bootstrap = await fetchGameBootstrap();
+  }
+
   started = true;
 
   // The ship layout must be active before the renderer (hull, doors) and the
@@ -120,6 +148,8 @@ export async function startPlaySession(loading?: LoadingScreenHandle): Promise<v
 
   createVegetationControls(vegetationMenuEl, vegetationResetEl, renderer);
 
+  let networkClient: WorldClient | null = null;
+
   const hud = createHud(
     {
       fpsEl,
@@ -141,9 +171,28 @@ export async function startPlaySession(loading?: LoadingScreenHandle): Promise<v
     planet,
     seed,
     {
+      onChatSend: (text) => networkClient?.sendChat(text),
       onTimeOverrideChange: (mode) => renderer?.setTimeOverride(mode),
     },
   );
+
+  if (bootstrap) {
+    loading?.setStatus('Opening relay link...');
+    networkClient = createWorldClient({
+      bootstrap,
+      onChatMessage: (message) => hud.appendChatMessage(message.author, message.text),
+      onStatus: (status) => hud.appendChatMessage('NET', status),
+    });
+    try {
+      await networkClient.connect();
+    } catch (error) {
+      console.warn('ClaudeCitizen world socket failed to connect.', error);
+      hud.appendChatMessage('NET', 'Relay unavailable. Continuing local simulation.');
+      networkClient = null;
+    }
+  } else {
+    hud.appendChatMessage('SYS', 'Offline dev session.');
+  }
 
   let gameLoop: ReturnType<typeof createGameLoop>;
 
@@ -158,6 +207,8 @@ export async function startPlaySession(loading?: LoadingScreenHandle): Promise<v
     controls,
     renderer,
     rendererError,
+    network: networkClient,
+    bootstrap,
     onHudUpdate: (params) => hud.update(params),
     onResetPeak: () => hud.resetPeak(),
   });

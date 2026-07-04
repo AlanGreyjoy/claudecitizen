@@ -434,9 +434,25 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
         return rows;
       }
       case 'ship-stairs': {
+        const isLadder = component.variant === 'ladder';
         const gateValue =
           component.gate === undefined ? 'none' : component.gate === 'ramp' ? 'ramp' : 'door';
         const rows: HTMLElement[] = [
+          el('div', { className: 'ed-field-row-wide' }, [
+            el('span', { className: 'ed-field-label', text: 'Variant' }),
+            selectInput(['stairs', 'ladder'], component.variant ?? 'stairs', (next) => {
+              if (next === 'ladder') {
+                const { stepCount: _removed, ...rest } = component;
+                update({ ...rest, variant: 'ladder' });
+              } else {
+                update({
+                  ...component,
+                  variant: undefined,
+                  stepCount: component.stepCount ?? 4,
+                });
+              }
+            }),
+          ]),
           el('div', { className: 'ed-field-row-wide' }, [
             el('span', { className: 'ed-field-label', text: 'Zone id' }),
             textInput(component.zoneId, (zoneId) => update({ ...component, zoneId })),
@@ -459,12 +475,18 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
               update({ ...component, riseUp: Math.max(0.05, riseUp) }),
             ),
           ]),
-          el('div', { className: 'ed-field-row-wide' }, [
-            el('span', { className: 'ed-field-label', text: 'Steps' }),
-            numberInput(component.stepCount ?? 4, (stepCount) =>
-              update({ ...component, stepCount: Math.max(1, Math.floor(stepCount)) }),
-            ),
-          ]),
+        ];
+        if (!isLadder) {
+          rows.push(
+            el('div', { className: 'ed-field-row-wide' }, [
+              el('span', { className: 'ed-field-label', text: 'Steps' }),
+              numberInput(component.stepCount ?? 4, (stepCount) =>
+                update({ ...component, stepCount: Math.max(1, Math.floor(stepCount)) }),
+              ),
+            ]),
+          );
+        }
+        rows.push(
           el('div', { className: 'ed-field-row-wide' }, [
             el('span', { className: 'ed-field-label', text: 'Height' }),
             numberInput(component.height ?? 3.1, (height) =>
@@ -479,7 +501,7 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
               update({ ...component, gate });
             }),
           ]),
-        ];
+        );
         if (typeof component.gate === 'object') {
           rows.push(
             el('div', { className: 'ed-field-row-wide' }, [
@@ -817,12 +839,19 @@ export function createInspectorPanel(container: HTMLElement, store: EditorStore)
         store.setComponents(entity.id, components);
       };
       const bodyEl = el('div', { className: 'ed-component-body' }, componentFields(component, update));
-      const hint = getComponentDef(component.type)?.hint;
+      const hint =
+        component.type === 'ship-stairs' && component.variant === 'ladder'
+          ? 'Vertical climb volume. Entity Y is the bottom; Press F at the foot/head to go up or down.'
+          : getComponentDef(component.type)?.hint;
       if (hint) bodyEl.append(el('div', { className: 'ed-empty-note', text: hint }));
+      const componentLabel =
+        component.type === 'ship-stairs' && component.variant === 'ladder'
+          ? 'ship-stairs (ladder)'
+          : component.type;
       section.append(
         el('div', { className: 'ed-component' }, [
           el('div', { className: 'ed-component-head' }, [
-            el('span', { text: component.type }),
+            el('span', { text: componentLabel }),
             el('button', {
               className: 'ed-remove-btn',
               text: '✕',

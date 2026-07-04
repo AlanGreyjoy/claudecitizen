@@ -17,7 +17,10 @@ import {
   nearestDoor,
   nearestSeat,
   nearRampPanel,
+  ladderInteractPrompt,
+  resolveLadderInteraction,
   seatInteractPrompt,
+  traverseLadder,
   updateCharacterOnDeck,
   type DeckCharacterState,
   type DeckLocal,
@@ -372,6 +375,22 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       }
     }
 
+    const ladder = resolveLadderInteraction(deckLocal, gates(), result.state.deckZone);
+    if (ladder) {
+      prompt = ladderInteractPrompt(ladder.direction);
+      if (actions.interactPressed) {
+        const next = traverseLadder(
+          character as DeckCharacterState,
+          ladder.zone,
+          ladder.direction,
+          gates(),
+          ship,
+        );
+        if (next) character = next;
+      }
+      return;
+    }
+
     const standingOnRamp = getShipWalkZone(result.state.deckZone)?.gate === 'ramp';
     if (nearRampPanel(deckLocal) && !standingOnRamp) {
       prompt = rig.rampDown ? 'Press F — raise ramp' : 'Press F — lower ramp';
@@ -502,9 +521,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     transition = null;
   }
 
-  function updatePilot(actions: { interactPressed: boolean }): void {
-    prompt = 'Press F — get up';
-    if (actions.interactPressed) {
+  function updatePilot(actions: { exitSeatPressed: boolean }): void {
+    prompt = 'Hold F — look around · Hold Y — get up';
+    if (actions.exitSeatPressed) {
       transition = {
         start: getPilotSeatAnchor(ship),
         end: getLeavePilotStandPose(ship),
@@ -520,11 +539,21 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const cameraState = controls.sampleCameraState(dt);
     if (mode === 'pilot') {
       const eye = localOffsetToWorld(ship, getShipLayout().pilotEye);
+      const seatLook = cameraState.seatLook;
+      const lookForward =
+        seatLook &&
+        (Math.abs(seatLook.yawRadians) > 1e-6 || Math.abs(seatLook.pitchRadians) > 1e-6)
+          ? resolveSandboxOrbit(
+              seatLook.yawRadians,
+              seatLook.pitchRadians,
+              FIRST_PERSON_PITCH_LIMIT,
+            ).forward
+          : ship.forward;
       camera.position.set(eye.x, eye.y, eye.z);
       cameraTarget.set(
-        eye.x + ship.forward.x * 60,
-        eye.y + ship.forward.y * 60,
-        eye.z + ship.forward.z * 60,
+        eye.x + lookForward.x * 60,
+        eye.y + lookForward.y * 60,
+        eye.z + lookForward.z * 60,
       );
       camera.up.set(0, 1, 0);
       camera.lookAt(cameraTarget);
@@ -569,6 +598,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     lastMs = nowMs;
 
     tryAutoRest();
+    controls.setMode(mode === 'pilot' ? 'in-ship' : 'on-foot');
     const actions = controls.consumeActions();
 
     if (mode === 'deck') updateDeck(dt, actions);

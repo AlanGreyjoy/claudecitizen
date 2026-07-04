@@ -1,4 +1,4 @@
-import type { LocalOffset } from '../types';
+import type { LocalOffset, Vec3 } from '../types';
 
 /**
  * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
@@ -8,6 +8,19 @@ import type { LocalOffset } from '../types';
  */
 
 export type ShipSeatRole = 'pilot' | 'copilot' | 'turret' | 'passenger';
+
+/** Oriented walk volume baked from a rotated ship-walk-zone entity. */
+export interface ShipWalkZoneOriented {
+  /** Floor center in ship-local right/up/forward. */
+  origin: { right: number; up: number; forward: number };
+  /** Unit axes in ship-local 3-space (entity local X/Y/Z after rotation). */
+  axisRight: Vec3;
+  axisUp: Vec3;
+  axisForward: Vec3;
+  halfWidth: number;
+  halfDepth: number;
+  height: number;
+}
 
 export interface ShipWalkZone {
   id: string;
@@ -21,12 +34,16 @@ export interface ShipWalkZone {
   slopeMinUp?: number;
   /** Discrete steps across the run instead of a smooth slope. */
   stepCount?: number;
+  /** Vertical climb — height from climb progress, no horizontal travel. */
+  ladder?: boolean;
   /** Interior ceiling for camera containment. */
   ceilingUp: number;
   /** Walkable only while the boarding ramp or the given door is open. */
   gate?: 'ramp' | { doorId: string };
   /** Passage zones connect rooms; real rooms win for camera framing. */
   passage?: boolean;
+  /** Present when the prefab entity rotation tilts the walk volume off ship axes. */
+  oriented?: ShipWalkZoneOriented;
 }
 
 export interface ShipDoorSpec {

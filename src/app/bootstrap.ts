@@ -1,6 +1,7 @@
 import { showLoadingScreen } from './loading_screen';
 import { showTitleScreen } from './title_screen';
 import { startPlaySession } from './play_session';
+import type { AuthSession } from '../net/api';
 
 /**
  * Boot dispatcher.
@@ -14,9 +15,13 @@ import { startPlaySession } from './play_session';
  *   ?stationPrefab=<id>     — jump into the game previewing a station prefab
  *   ?shipPrefab=<id>        — jump into the ship sandbox for a ship prefab (dev only)
  */
-function startPlayWithLoading(): void {
+function startPlayWithLoading(options: { requireAuth: boolean; session?: AuthSession | null }): void {
   const loading = showLoadingScreen();
-  void startPlaySession(loading);
+  void startPlaySession(loading, options).catch((error) => {
+    console.error('ClaudeCitizen play session failed to start.', error);
+    loading.hide();
+    document.getElementById('title-screen')?.classList.remove('is-hidden');
+  });
 }
 
 export function bootstrap(): void {
@@ -41,13 +46,13 @@ export function bootstrap(): void {
       .catch((error) => console.error('ClaudeCitizen ship sandbox failed to load.', error));
     return;
   }
-  if (boot === 'play' || params.has('stationPrefab')) {
-    startPlayWithLoading();
+  if ((boot === 'play' || params.has('stationPrefab')) && import.meta.env.DEV) {
+    startPlayWithLoading({ requireAuth: false });
     return;
   }
 
   showTitleScreen({
-    onPlay: startPlayWithLoading,
+    onPlay: (session) => startPlayWithLoading({ requireAuth: true, session }),
     onEditor: import.meta.env.DEV ? openEditor : undefined,
   });
 }

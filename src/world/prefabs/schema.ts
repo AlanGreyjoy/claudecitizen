@@ -125,13 +125,15 @@ export type PrefabComponent =
     }
   | {
       type: 'ship-stairs';
+      /** stairs = discrete treads; ladder = smooth climb slope. */
+      variant?: 'stairs' | 'ladder';
       zoneId: string;
       /** Local XZ offsets from the entity origin; entity Y is the bottom step height. */
       min: PrefabVec2;
       max: PrefabVec2;
       /** Total rise from the bottom to the top edge of the run (meters). */
       riseUp: number;
-      /** Number of discrete steps across the run (default 4). */
+      /** Number of discrete steps across the run (default 4; ignored for ladder). */
       stepCount?: number;
       /** Interior height above the top step for camera containment (default 3.1). */
       height?: number;
@@ -377,9 +379,17 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
               ),
       };
     }
-    case 'ship-stairs':
+    case 'ship-stairs': {
+      const variantRaw = value.variant;
+      const variant =
+        variantRaw === undefined
+          ? undefined
+          : variantRaw === 'stairs' || variantRaw === 'ladder'
+            ? variantRaw
+            : fail(`${path}.variant`, 'expected "stairs" or "ladder"');
       return {
         type,
+        variant,
         zoneId: parseString(value.zoneId, `${path}.zoneId`, 64),
         min: parseVec2(value.min, `${path}.min`),
         max: parseVec2(value.max, `${path}.max`),
@@ -398,6 +408,7 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         gate: value.gate === undefined ? undefined : parseShipZoneGate(value.gate, `${path}.gate`),
         passage: value.passage === undefined ? undefined : Boolean(value.passage),
       };
+    }
     case 'ramp-interact': {
       const placement = value.placement;
       if (placement !== 'outside' && placement !== 'deck') {
