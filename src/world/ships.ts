@@ -82,6 +82,33 @@ export function clearActiveShipPrefab(): void {
   setShipLayoutOverride(null);
 }
 
+export type OwnedShipRecord = GameBootstrap["ships"][number];
+
+/** Swaps the local player ship instance to a server-owned record. */
+export async function applyOwnedShipToInstance(
+  owned: OwnedShipRecord,
+  playerId: string,
+): Promise<void> {
+  await loadShipPrefabLayout(owned.prefabId);
+  const instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
+  if (!instance) {
+    throw new Error(`Missing ship instance "${PLAYER_SHIP_INSTANCE_ID}".`);
+  }
+  instance.ownerPlayerId = playerId;
+  instance.prefabId = owned.prefabId;
+  instance.vitals.hp = owned.hp;
+  instance.vitals.shields = owned.shields;
+  instance.spec = {
+    ...getShipLayoutForPrefab(owned.prefabId).spec,
+    maxSpeedMps: owned.maxSpeedMps,
+    throttleAccelMps2: owned.throttleAccelMps2,
+    maxHp: owned.maxHp,
+    maxShields: owned.maxShields,
+    shieldRegenPerSec: owned.shieldRegenPerSec,
+  };
+  setActiveShipPrefabId(owned.prefabId);
+}
+
 /** Applies server-owned ship records to the local ship instance registry. */
 export async function syncBootstrapShips(
   ships: GameBootstrap["ships"],
@@ -94,27 +121,15 @@ export async function syncBootstrapShips(
   const primary = ships[0];
   if (!primary) return;
 
-  let instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
+  const instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
   if (instance) {
-    instance.ownerPlayerId = playerId;
-    instance.prefabId = primary.prefabId;
-    instance.vitals.hp = primary.hp;
-    instance.vitals.shields = primary.shields;
-    instance.spec = {
-      ...getShipLayoutForPrefab(primary.prefabId).spec,
-      maxSpeedMps: primary.maxSpeedMps,
-      throttleAccelMps2: primary.throttleAccelMps2,
-      maxHp: primary.maxHp,
-      maxShields: primary.maxShields,
-      shieldRegenPerSec: primary.shieldRegenPerSec,
-    };
-    setActiveShipPrefabId(primary.prefabId);
+    await applyOwnedShipToInstance(primary, playerId);
     return;
   }
 
   const layout = getShipLayoutForPrefab(primary.prefabId);
   const body = createFlightBody({ x: 0, y: 0, z: 0 });
-  instance = createShipInstance({
+  const created = createShipInstance({
     id: PLAYER_SHIP_INSTANCE_ID,
     prefabId: primary.prefabId,
     layout,
@@ -123,14 +138,14 @@ export async function syncBootstrapShips(
     instanceId: hangarInstanceId,
     vitals: { hp: primary.hp, shields: primary.shields },
   });
-  instance.spec = {
-    ...instance.spec,
+  created.spec = {
+    ...created.spec,
     maxSpeedMps: primary.maxSpeedMps,
     throttleAccelMps2: primary.throttleAccelMps2,
     maxHp: primary.maxHp,
     maxShields: primary.maxShields,
     shieldRegenPerSec: primary.shieldRegenPerSec,
   };
-  registerShipInstance(instance);
+  registerShipInstance(created);
   setActiveShipPrefabId(primary.prefabId);
 }

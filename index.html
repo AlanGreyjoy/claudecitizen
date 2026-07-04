@@ -13,1219 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        color-scheme: dark;
-        --bg: #050814;
-        --panel: rgba(6, 12, 26, 0.78);
-        --line: rgba(90, 190, 255, 0.35);
-        --text: #e8efff;
-        --muted: #8fa3c9;
-        --accent: #8bd8ff;
-        --accent-2: #ffce6f;
-        --surface: #5f7d52;
-        --sc-glow: rgba(80, 200, 255, 0.12);
-        --sc-font: 'Rajdhani', ui-sans-serif, system-ui, sans-serif;
-        --sc-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        overflow: hidden;
-        background:
-          radial-gradient(circle at top, rgba(39, 69, 132, 0.4), transparent 42%),
-          linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
-        color: var(--text);
-        font: 14px/1.4 var(--sc-mono);
-      }
-
-      .sc-panel {
-        position: fixed;
-        border: 1px solid var(--line);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
-          var(--panel);
-        backdrop-filter: blur(10px);
-        box-shadow:
-          0 0 24px var(--sc-glow),
-          inset 0 1px 0 rgba(255, 255, 255, 0.06);
-        clip-path: polygon(
-          10px 0,
-          calc(100% - 10px) 0,
-          100% 10px,
-          100% calc(100% - 10px),
-          calc(100% - 10px) 100%,
-          10px 100%,
-          0 calc(100% - 10px),
-          0 10px
-        );
-        pointer-events: none;
-      }
-
-      .sc-label {
-        font: 600 11px/1 var(--sc-font);
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-
-      .sc-debug-panel {
-        display: none;
-      }
-
-      .sc-debug-panel.is-visible {
-        display: block;
-      }
-
-      .sc-hud-fps {
-        top: 18px;
-        left: 18px;
-        min-width: 96px;
-        padding: 10px 14px;
-      }
-
-      .sc-hud-fps-value {
-        margin-top: 4px;
-        font: 700 28px/1 var(--sc-font);
-        color: var(--accent);
-        letter-spacing: 0.04em;
-      }
-
-      .sc-hud-fps-unit {
-        margin-left: 4px;
-        font: 600 14px/1 var(--sc-font);
-        color: var(--muted);
-      }
-
-      .sc-hud-minimap {
-        top: 18px;
-        right: 18px;
-        width: 196px;
-        height: 196px;
-        padding: 0;
-        overflow: hidden;
-        border: none;
-        background: transparent;
-        box-shadow: none;
-        backdrop-filter: none;
-        clip-path: none;
-      }
-
-      .sc-hud-minimap canvas {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
-
-      .sc-hud-chat {
-        left: 18px;
-        bottom: 18px;
-        width: min(360px, calc(100vw - 36px));
-        pointer-events: auto;
-      }
-
-      .sc-hud-chat-header {
-        padding: 10px 14px 8px;
-        border-bottom: 1px solid rgba(90, 190, 255, 0.18);
-      }
-
-      .sc-hud-chat-messages {
-        max-height: 132px;
-        overflow-y: auto;
-        padding: 8px 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 100%);
-      }
-
-      .sc-chat-line {
-        font: 500 13px/1.35 var(--sc-font);
-        color: var(--text);
-      }
-
-      .sc-chat-author {
-        color: var(--accent);
-        margin-right: 8px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        font-weight: 700;
-      }
-
-      .sc-chat-text {
-        color: rgba(232, 239, 255, 0.88);
-      }
-
-      .sc-hud-chat-input-wrap {
-        padding: 8px 10px 10px;
-        border-top: 1px solid rgba(90, 190, 255, 0.18);
-      }
-
-      .sc-hud-chat-input {
-        width: 100%;
-        border: 1px solid rgba(90, 190, 255, 0.28);
-        border-radius: 0;
-        background: rgba(0, 0, 0, 0.28);
-        color: var(--text);
-        font: 500 14px/1.2 var(--sc-font);
-        padding: 8px 10px;
-        outline: none;
-        clip-path: polygon(
-          6px 0,
-          calc(100% - 6px) 0,
-          100% 6px,
-          100% calc(100% - 6px),
-          calc(100% - 6px) 100%,
-          6px 100%,
-          0 calc(100% - 6px),
-          0 6px
-        );
-      }
-
-      .sc-hud-chat-input:focus {
-        border-color: rgba(139, 216, 255, 0.55);
-        box-shadow: 0 0 12px rgba(80, 200, 255, 0.15);
-      }
-
-      .sc-hud-debug-wrap {
-        position: fixed;
-        right: 18px;
-        bottom: 18px;
-        pointer-events: auto;
-        z-index: 20;
-      }
-
-      .sc-hud-debug-btn {
-        width: 44px;
-        height: 44px;
-        border: 1px solid var(--line);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%),
-          rgba(6, 12, 26, 0.88);
-        color: var(--accent);
-        cursor: pointer;
-        display: grid;
-        place-items: center;
-        clip-path: polygon(
-          8px 0,
-          calc(100% - 8px) 0,
-          100% 8px,
-          100% calc(100% - 8px),
-          calc(100% - 8px) 100%,
-          8px 100%,
-          0 calc(100% - 8px),
-          0 8px
-        );
-        box-shadow: 0 0 18px var(--sc-glow);
-      }
-
-      .sc-hud-debug-btn:hover {
-        border-color: rgba(139, 216, 255, 0.55);
-        background: rgba(139, 216, 255, 0.08);
-      }
-
-      .sc-hud-debug-btn svg {
-        width: 22px;
-        height: 22px;
-      }
-
-      .sc-hud-debug-menu {
-        position: absolute;
-        right: 0;
-        bottom: calc(100% + 10px);
-        min-width: 220px;
-        padding: 10px 12px;
-        border: 1px solid var(--line);
-        background: rgba(6, 12, 26, 0.94);
-        backdrop-filter: blur(12px);
-        box-shadow: 0 0 24px var(--sc-glow);
-        clip-path: polygon(
-          10px 0,
-          calc(100% - 10px) 0,
-          100% 10px,
-          100% calc(100% - 10px),
-          calc(100% - 10px) 100%,
-          10px 100%,
-          0 calc(100% - 10px),
-          0 10px
-        );
-        display: none;
-      }
-
-      .sc-hud-debug-menu.is-open {
-        display: block;
-      }
-
-      .sc-hud-debug-menu-title {
-        margin: 0 0 8px;
-        font: 700 12px/1 var(--sc-font);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--accent);
-      }
-
-      .sc-hud-debug-menu-subtitle {
-        margin-top: 12px;
-        padding-top: 10px;
-        border-top: 1px solid rgba(90, 190, 255, 0.18);
-      }
-
-      .sc-hud-debug-option {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 0;
-        font: 500 14px/1.2 var(--sc-font);
-        color: var(--text);
-        cursor: pointer;
-      }
-
-      .sc-hud-debug-option input {
-        accent-color: var(--accent);
-      }
-
-      .sc-hud-tutorial {
-        left: 18px;
-        bottom: 210px;
-        max-width: min(360px, calc(100vw - 36px));
-        padding: 10px 12px;
-        color: var(--muted);
-        font: 500 13px/1.4 var(--sc-font);
-      }
-
-      #app {
-        position: fixed;
-        inset: 0;
-      }
-
-      canvas {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
-
-      .vegetation-menu {
-        position: fixed;
-        top: 18px;
-        left: 18px;
-        width: min(340px, calc(100vw - 36px));
-        border: 1px solid var(--line);
-        background: var(--panel);
-        backdrop-filter: blur(12px);
-        overflow: hidden;
-        pointer-events: auto;
-        z-index: 15;
-      }
-
-      .vegetation-menu summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px 14px;
-        cursor: pointer;
-        list-style: none;
-        user-select: none;
-      }
-
-      .vegetation-menu summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .vegetation-menu summary::after {
-        content: '▾';
-        color: var(--accent);
-        transition: transform 160ms ease;
-      }
-
-      .vegetation-menu[open] summary::after {
-        transform: rotate(180deg);
-      }
-
-      .vegetation-menu-title {
-        margin: 0;
-        font-size: 13px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .vegetation-menu-body {
-        padding: 0 14px 14px;
-        border-top: 1px solid var(--line);
-        max-height: min(72vh, 560px);
-        overflow: auto;
-      }
-
-      .vegetation-menu-body p {
-        margin: 10px 0 0;
-      }
-
-      .vegetation-section {
-        margin-top: 12px;
-        border: 1px solid rgba(171, 201, 255, 0.12);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.025);
-      }
-
-      .vegetation-section summary {
-        padding: 10px 12px;
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .vegetation-section-body {
-        padding: 0 12px 12px;
-      }
-
-      .vegetation-control {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 4px 10px;
-        margin-top: 10px;
-      }
-
-      .vegetation-control-label {
-        font-size: 12px;
-        color: var(--text);
-      }
-
-      .vegetation-control-value {
-        color: var(--accent);
-        font-size: 12px;
-      }
-
-      .vegetation-control input[type='range'] {
-        grid-column: 1 / -1;
-        width: 100%;
-        margin: 0;
-        accent-color: var(--accent);
-      }
-
-      .vegetation-actions {
-        margin-top: 12px;
-        display: flex;
-        justify-content: flex-end;
-      }
-
-      .vegetation-actions button {
-        border: 1px solid rgba(171, 201, 255, 0.22);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.05);
-        color: var(--text);
-        font: inherit;
-        padding: 7px 12px;
-        cursor: pointer;
-      }
-
-      .vegetation-menu.sc-debug-panel.is-visible {
-        top: 92px;
-      }
-
-      .hud {
-        position: fixed;
-        top: 230px;
-        right: 18px;
-        bottom: auto;
-        left: auto;
-        width: min(360px, calc(100vw - 36px));
-        max-height: calc(100vh - 248px);
-        overflow: auto;
-        padding: 14px 16px;
-        border: 1px solid var(--line);
-        background: var(--panel);
-        backdrop-filter: blur(12px);
-        pointer-events: none;
-        z-index: 12;
-        clip-path: polygon(
-          12px 0,
-          calc(100% - 12px) 0,
-          100% 12px,
-          100% calc(100% - 12px),
-          calc(100% - 12px) 100%,
-          12px 100%,
-          0 calc(100% - 12px),
-          0 12px
-        );
-        box-shadow: 0 0 24px var(--sc-glow);
-      }
-
-      .hud h1,
-      .hud p {
-        margin: 0;
-      }
-
-      .hud h1 {
-        font-size: 16px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .muted {
-        color: var(--muted);
-      }
-
-      .readout-grid {
-        margin-top: 12px;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px 12px;
-      }
-
-      .readout {
-        padding-top: 8px;
-        border-top: 1px solid var(--line);
-      }
-
-      .readout-label {
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .readout-value {
-        margin-top: 3px;
-        font-size: 18px;
-      }
-
-      .controls {
-        margin-top: 14px;
-        display: none;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 4px 12px;
-      }
-
-      .controls.is-visible {
-        display: grid;
-      }
-
-      .controls div {
-        color: var(--muted);
-      }
-
-      .status {
-        margin-top: 12px;
-        padding-top: 10px;
-        border-top: 1px solid var(--line);
-        color: var(--accent);
-      }
-
-      .prompt {
-        margin-top: 12px;
-        padding: 8px 10px;
-        border: 1px solid rgba(255, 206, 111, 0.24);
-        color: var(--accent-2);
-        min-height: 20px;
-      }
-
-      kbd {
-        padding: 1px 5px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        border-bottom-width: 2px;
-        border-radius: 6px;
-        color: var(--text);
-        background: rgba(255, 255, 255, 0.06);
-      }
-
-      .sc-screen-fade {
-        position: fixed;
-        inset: 0;
-        background: #000;
-        opacity: 0;
-        pointer-events: none;
-        z-index: 150;
-      }
-
-      .sc-interact-prompt {
-        position: fixed;
-        left: 50%;
-        bottom: 16vh;
-        transform: translateX(-50%);
-        padding: 10px 22px;
-        border: 1px solid rgba(255, 206, 111, 0.45);
-        background: rgba(6, 12, 26, 0.72);
-        color: var(--accent-2);
-        font: 600 16px/1.2 var(--sc-font);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        white-space: nowrap;
-        clip-path: polygon(
-          8px 0,
-          calc(100% - 8px) 0,
-          100% 8px,
-          100% calc(100% - 8px),
-          calc(100% - 8px) 100%,
-          8px 100%,
-          0 calc(100% - 8px),
-          0 8px
-        );
-        opacity: 0;
-        transition: opacity 0.12s ease;
-        pointer-events: none;
-        z-index: 200;
-      }
-
-      .sc-interact-prompt.is-visible {
-        opacity: 1;
-      }
-
-      .is-hidden {
-        display: none !important;
-      }
-
-      .sc-title-screen {
-        position: fixed;
-        inset: 0;
-        z-index: 300;
-        display: grid;
-        place-items: center;
-        background:
-          linear-gradient(180deg, rgba(4, 8, 18, 0.62) 0%, rgba(2, 5, 13, 0.82) 100%),
-          radial-gradient(circle at 24% 18%, rgba(63, 198, 255, 0.08), transparent 34%),
-          radial-gradient(circle at 78% 82%, rgba(255, 206, 111, 0.06), transparent 40%),
-          url('./src/assets/images/wallpaper-1.png') center / cover no-repeat,
-          linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
-      }
-
-      .sc-title-core {
-        text-align: center;
-        padding: 48px 56px;
-        border: 1px solid var(--line);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
-          var(--panel);
-        backdrop-filter: blur(10px);
-        box-shadow: 0 0 48px var(--sc-glow);
-        clip-path: polygon(
-          18px 0,
-          calc(100% - 18px) 0,
-          100% 18px,
-          100% calc(100% - 18px),
-          calc(100% - 18px) 100%,
-          18px 100%,
-          0 calc(100% - 18px),
-          0 18px
-        );
-      }
-
-      .sc-brand-logo {
-        display: block;
-        width: min(480px, calc(100vw - 80px));
-        height: auto;
-        margin: 0 auto;
-        filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
-      }
-
-      .sc-loading-core .sc-brand-logo {
-        width: min(360px, calc(100vw - 96px));
-        margin-bottom: 24px;
-      }
-
-      .sc-title-tag {
-        margin: 14px 0 0;
-        font: 500 14px/1.5 var(--sc-font);
-        letter-spacing: 0.08em;
-        color: var(--muted);
-      }
-
-      .sc-title-actions {
-        margin-top: 34px;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        align-items: center;
-      }
-
-      .sc-title-btn {
-        min-width: 260px;
-        padding: 14px 30px;
-        border: 1px solid rgba(139, 216, 255, 0.5);
-        background: rgba(139, 216, 255, 0.08);
-        color: var(--accent);
-        font: 700 18px/1 var(--sc-font);
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        cursor: pointer;
-        clip-path: polygon(
-          10px 0,
-          calc(100% - 10px) 0,
-          100% 10px,
-          100% calc(100% - 10px),
-          calc(100% - 10px) 100%,
-          10px 100%,
-          0 calc(100% - 10px),
-          0 10px
-        );
-        transition: background 120ms ease, box-shadow 120ms ease;
-      }
-
-      .sc-title-btn:hover {
-        background: rgba(139, 216, 255, 0.18);
-        box-shadow: 0 0 22px rgba(80, 200, 255, 0.25);
-      }
-
-      .sc-title-btn-secondary {
-        border-color: rgba(255, 206, 111, 0.45);
-        background: rgba(255, 206, 111, 0.06);
-        color: var(--accent-2);
-      }
-
-      .sc-title-btn-secondary:hover {
-        background: rgba(255, 206, 111, 0.14);
-        box-shadow: 0 0 22px rgba(255, 206, 111, 0.2);
-      }
-
-      .sc-title-auth-form {
-        width: min(360px, calc(100vw - 96px));
-        display: grid;
-        gap: 12px;
-      }
-
-      .sc-title-auth-title {
-        margin: 0;
-        font: 700 22px/1 var(--sc-font);
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--text);
-      }
-
-      .sc-title-auth-field {
-        display: grid;
-        gap: 6px;
-        text-align: left;
-      }
-
-      .sc-title-auth-field span {
-        font: 600 11px/1 var(--sc-font);
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-
-      .sc-title-auth-input-wrap {
-        position: relative;
-        display: grid;
-      }
-
-      .sc-title-auth-input {
-        width: 100%;
-        border: 1px solid rgba(90, 190, 255, 0.28);
-        border-radius: 0;
-        background: rgba(0, 0, 0, 0.28);
-        color: var(--text);
-        font: 500 16px/1.2 var(--sc-font);
-        padding: 12px 14px;
-        outline: none;
-        clip-path: polygon(
-          7px 0,
-          calc(100% - 7px) 0,
-          100% 7px,
-          100% calc(100% - 7px),
-          calc(100% - 7px) 100%,
-          7px 100%,
-          0 calc(100% - 7px),
-          0 7px
-        );
-      }
-
-      .sc-title-auth-input-wrap .sc-title-auth-input {
-        padding-right: 44px;
-      }
-
-      .sc-title-auth-input:focus {
-        border-color: rgba(139, 216, 255, 0.6);
-        box-shadow: 0 0 12px rgba(80, 200, 255, 0.15);
-      }
-
-      .sc-title-auth-input-toggle {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: 44px;
-        border: 0;
-        background: transparent;
-        color: var(--muted);
-        cursor: pointer;
-        display: grid;
-        place-items: center;
-        padding: 0;
-      }
-
-      .sc-title-auth-input-toggle:hover {
-        color: var(--accent-2);
-      }
-
-      .sc-title-auth-input-toggle:focus-visible {
-        outline: 2px solid rgba(139, 216, 255, 0.6);
-        outline-offset: -2px;
-      }
-
-      .sc-title-auth-input-toggle svg {
-        width: 20px;
-        height: 20px;
-      }
-
-      .sc-title-auth-links {
-        display: flex;
-        justify-content: center;
-        gap: 16px;
-        flex-wrap: wrap;
-      }
-
-      .sc-title-link-btn {
-        border: 0;
-        background: transparent;
-        color: var(--accent-2);
-        font: 600 13px/1 var(--sc-font);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        cursor: pointer;
-        padding: 4px;
-      }
-
-      .sc-title-link-btn:hover {
-        text-decoration: underline;
-      }
-
-      .sc-title-auth-message {
-        min-height: 20px;
-        margin: 0;
-        font: 600 13px/1.4 var(--sc-font);
-        letter-spacing: 0.06em;
-        color: var(--muted);
-      }
-
-      .sc-title-auth-message.is-error {
-        color: #ff9b9b;
-      }
-
-      .sc-title-editor-access {
-        position: absolute;
-        top: 28px;
-        right: 28px;
-        z-index: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 8px;
-        max-width: min(280px, calc(100vw - 56px));
-      }
-
-      .sc-title-editor-btn {
-        min-width: 0;
-        padding: 10px 22px;
-        font-size: 14px;
-      }
-
-      .sc-title-editor-hint {
-        margin: 0;
-        max-width: 240px;
-        font: 500 11px/1.4 var(--sc-font);
-        letter-spacing: 0.06em;
-        color: var(--muted);
-        text-align: right;
-      }
-
-      .sc-title-footnote {
-        margin: 22px 0 0;
-        max-width: 380px;
-        font: 500 16px/1.5 var(--sc-font);
-        letter-spacing: 0.03em;
-        color: var(--muted);
-        font-style: italic;
-      }
-
-      .sc-title-footnote a {
-        color: var(--accent-2);
-        text-decoration: none;
-      }
-
-      .sc-title-footnote a:hover {
-        text-decoration: underline;
-      }
-
-      .sc-title-disclaimer {
-        position: absolute;
-        bottom: 28px;
-        left: 50%;
-        transform: translateX(-50%);
-        max-width: min(640px, 94vw);
-        margin: 0;
-        padding: 12px 20px;
-        text-align: center;
-        font: 600 13px/1.5 var(--sc-font);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-        border: 1px solid rgba(90, 190, 255, 0.22);
-        background: rgba(6, 12, 26, 0.72);
-        backdrop-filter: blur(8px);
-        box-shadow: 0 0 20px rgba(80, 200, 255, 0.08);
-      }
-
-      .sc-loading-screen {
-        position: fixed;
-        inset: 0;
-        z-index: 310;
-        display: grid;
-        place-items: center;
-        background:
-          linear-gradient(180deg, rgba(4, 8, 18, 0.72) 0%, rgba(2, 5, 13, 0.88) 100%),
-          radial-gradient(circle at 24% 18%, rgba(63, 198, 255, 0.08), transparent 34%),
-          radial-gradient(circle at 78% 82%, rgba(255, 206, 111, 0.06), transparent 40%),
-          url('./src/assets/images/wallpaper-1.png') center / cover no-repeat,
-          linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
-      }
-
-      .sc-loading-core {
-        width: min(420px, calc(100vw - 48px));
-        padding: 36px 44px;
-        border: 1px solid var(--line);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
-          var(--panel);
-        backdrop-filter: blur(10px);
-        box-shadow: 0 0 48px var(--sc-glow);
-        clip-path: polygon(
-          14px 0,
-          calc(100% - 14px) 0,
-          100% 14px,
-          100% calc(100% - 14px),
-          calc(100% - 14px) 100%,
-          14px 100%,
-          0 calc(100% - 14px),
-          0 14px
-        );
-      }
-
-      .sc-loading-label {
-        margin: 0;
-        font: 700 22px/1 var(--sc-font);
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-        color: var(--text);
-        text-align: center;
-      }
-
-      .sc-loading-bar {
-        margin-top: 28px;
-        height: 8px;
-        border: 1px solid rgba(90, 190, 255, 0.35);
-        background: rgba(0, 0, 0, 0.32);
-        overflow: hidden;
-        clip-path: polygon(
-          4px 0,
-          calc(100% - 4px) 0,
-          100% 4px,
-          100% calc(100% - 4px),
-          calc(100% - 4px) 100%,
-          4px 100%,
-          0 calc(100% - 4px),
-          0 4px
-        );
-      }
-
-      .sc-loading-bar-fill {
-        height: 100%;
-        width: calc(var(--progress, 0) * 1%);
-        background: linear-gradient(90deg, rgba(139, 216, 255, 0.65), var(--accent));
-        box-shadow: 0 0 12px rgba(80, 200, 255, 0.35);
-        transition: width 120ms ease-out;
-      }
-
-      .sc-loading-status {
-        margin: 16px 0 0;
-        font: 500 13px/1.4 var(--sc-font);
-        letter-spacing: 0.08em;
-        color: var(--muted);
-        text-align: center;
-      }
-
-      .sc-title-disclaimer {
-        position: absolute;
-        bottom: 18px;
-        left: 50%;
-        transform: translateX(-50%);
-        margin: 0;
-        max-width: min(720px, calc(100vw - 48px));
-        font: 400 11px/1.5 var(--sc-font);
-        letter-spacing: 0.04em;
-        color: rgba(180, 198, 220, 0.45);
-        text-align: center;
-      }
-
-      .sc-admin-screen {
-        position: fixed;
-        inset: 0;
-        z-index: 310;
-        overflow: auto;
-        background:
-          linear-gradient(180deg, rgba(4, 8, 18, 0.92) 0%, rgba(2, 5, 13, 0.96) 100%),
-          radial-gradient(circle at 24% 18%, rgba(63, 198, 255, 0.06), transparent 34%),
-          linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
-        color: var(--text);
-        font: 400 14px/1.5 var(--sc-font);
-      }
-
-      .sc-admin-core {
-        width: min(1120px, calc(100vw - 32px));
-        margin: 32px auto 48px;
-        padding: 28px 32px 36px;
-        border: 1px solid var(--line);
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
-          var(--panel);
-        backdrop-filter: blur(10px);
-        box-shadow: 0 0 48px var(--sc-glow);
-        clip-path: polygon(
-          18px 0,
-          calc(100% - 18px) 0,
-          100% 18px,
-          100% calc(100% - 18px),
-          calc(100% - 18px) 100%,
-          18px 100%,
-          0 calc(100% - 18px),
-          0 18px
-        );
-      }
-
-      .sc-admin-header {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 16px 24px;
-        margin-bottom: 28px;
-        padding-bottom: 18px;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .sc-admin-title {
-        margin: 0;
-        font: 700 20px/1.2 var(--sc-font);
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--accent);
-      }
-
-      .sc-admin-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        flex: 1;
-      }
-
-      .sc-admin-nav-btn {
-        padding: 8px 16px;
-        border: 1px solid rgba(139, 216, 255, 0.35);
-        background: transparent;
-        color: var(--muted);
-        font: 600 12px/1 var(--sc-font);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        cursor: pointer;
-        transition: background 120ms ease, color 120ms ease;
-      }
-
-      .sc-admin-nav-btn:hover,
-      .sc-admin-nav-btn.is-active {
-        background: rgba(139, 216, 255, 0.12);
-        color: var(--accent);
-      }
-
-      .sc-admin-content {
-        min-height: 240px;
-      }
-
-      .sc-admin-table-wrap {
-        overflow-x: auto;
-      }
-
-      .sc-admin-table {
-        width: 100%;
-        border-collapse: collapse;
-        font: 400 13px/1.4 var(--sc-font);
-      }
-
-      .sc-admin-table th,
-      .sc-admin-table td {
-        padding: 10px 12px;
-        border-bottom: 1px solid rgba(139, 216, 255, 0.12);
-        text-align: left;
-        vertical-align: top;
-      }
-
-      .sc-admin-table th {
-        font: 600 11px/1.3 var(--sc-font);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-
-      .sc-admin-table tbody tr {
-        cursor: pointer;
-        transition: background 120ms ease;
-      }
-
-      .sc-admin-table tbody tr:hover {
-        background: rgba(139, 216, 255, 0.06);
-      }
-
-      .sc-admin-table tbody tr.is-static {
-        cursor: default;
-      }
-
-      .sc-admin-table tbody tr.is-static:hover {
-        background: transparent;
-      }
-
-      .sc-admin-form {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        max-width: 560px;
-      }
-
-      .sc-admin-form-wide {
-        max-width: 720px;
-      }
-
-      .sc-admin-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .sc-admin-field span {
-        font: 600 11px/1.3 var(--sc-font);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-
-      .sc-admin-input,
-      .sc-admin-select,
-      .sc-admin-textarea {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid rgba(139, 216, 255, 0.28);
-        background: rgba(4, 10, 22, 0.72);
-        color: var(--text);
-        font: 400 14px/1.4 var(--sc-font);
-      }
-
-      .sc-admin-textarea {
-        min-height: 96px;
-        resize: vertical;
-      }
-
-      .sc-admin-input:focus,
-      .sc-admin-select:focus,
-      .sc-admin-textarea:focus {
-        outline: none;
-        border-color: rgba(139, 216, 255, 0.55);
-        box-shadow: 0 0 0 1px rgba(139, 216, 255, 0.25);
-      }
-
-      .sc-admin-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 8px;
-      }
-
-      .sc-admin-section-title {
-        margin: 0 0 16px;
-        font: 700 16px/1.3 var(--sc-font);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--accent);
-      }
-
-      .sc-admin-meta {
-        margin: 0 0 20px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .sc-admin-detail-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 12px 20px;
-        margin-bottom: 24px;
-      }
-
-      .sc-admin-detail-item dt {
-        margin: 0;
-        font: 600 10px/1.3 var(--sc-font);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-
-      .sc-admin-detail-item dd {
-        margin: 4px 0 0;
-        font-size: 14px;
-      }
-
-      .sc-admin-starter-list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .sc-admin-starter-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 10px;
-        border: 1px solid rgba(139, 216, 255, 0.18);
-        background: rgba(4, 10, 22, 0.5);
-      }
-
-      .sc-admin-starter-item span {
-        flex: 1;
-      }
-
-      .sc-admin-link-btn {
-        padding: 0;
-        border: none;
-        background: none;
-        color: var(--accent);
-        font: inherit;
-        cursor: pointer;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-      }
-
-      .sc-admin-link-btn:hover {
-        color: #fff;
-      }
-
-      .sc-admin-message {
-        margin: 0;
-        font-size: 13px;
-        color: var(--muted);
-      }
-
-      .sc-admin-message.is-error {
-        color: #ff8f8f;
-      }
-
-      #editor-root {
-        position: fixed;
-        inset: 0;
-        z-index: 250;
-      }
-    </style>
+    <link rel="stylesheet" href="./src/ui/sc-ui.css" />
   </head>
   <body>
     <div id="title-screen" class="sc-title-screen is-hidden">
@@ -1600,6 +388,213 @@
       </section>
       <div class="sc-interact-prompt" id="interact-prompt" aria-live="polite"></div>
       <div class="sc-screen-fade" id="screen-fade"></div>
+      <div
+        class="sc-game-menu"
+        id="game-menu"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="game-menu-title"
+        aria-hidden="true"
+      >
+        <div class="sc-game-menu-shell">
+          <nav class="sc-game-menu-nav" aria-label="Settings sections">
+            <h2 class="sc-game-menu-title" id="game-menu-title">Menu</h2>
+            <button
+              class="sc-game-menu-nav-btn is-active"
+              type="button"
+              data-game-menu-tab="video"
+              aria-controls="game-menu-panel-video"
+            >
+              Video
+            </button>
+            <button
+              class="sc-game-menu-nav-btn"
+              type="button"
+              data-game-menu-tab="audio"
+              aria-controls="game-menu-panel-audio"
+            >
+              Audio
+            </button>
+            <button
+              class="sc-game-menu-nav-btn"
+              type="button"
+              data-game-menu-tab="controls"
+              aria-controls="game-menu-panel-controls"
+            >
+              Controls
+            </button>
+            <button
+              class="sc-game-menu-nav-btn is-danger"
+              type="button"
+              data-game-menu-tab="exit"
+              aria-controls="game-menu-panel-exit"
+            >
+              Exit Game
+            </button>
+          </nav>
+          <div class="sc-game-menu-main">
+            <section
+              class="sc-game-menu-panel is-active"
+              id="game-menu-panel-video"
+              data-game-menu-panel="video"
+            >
+              <h3 class="sc-game-menu-panel-title">Video</h3>
+              <p class="sc-game-menu-note">Render quality applies after reload.</p>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-quality" value="performance" />
+                Performance
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-quality" value="balanced" />
+                Balanced
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-quality" value="high" />
+                High
+              </label>
+            </section>
+            <section
+              class="sc-game-menu-panel"
+              id="game-menu-panel-audio"
+              data-game-menu-panel="audio"
+            >
+              <h3 class="sc-game-menu-panel-title">Audio</h3>
+              <p class="sc-game-menu-note">Saved for when audio ships.</p>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">Master</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-master-value">100%</span>
+                <input
+                  type="range"
+                  id="game-menu-master-volume"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="100"
+                />
+              </div>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">SFX</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-sfx-value">100%</span>
+                <input type="range" id="game-menu-sfx-volume" min="0" max="100" step="1" value="100" />
+              </div>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">Music</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-music-value">100%</span>
+                <input
+                  type="range"
+                  id="game-menu-music-volume"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="100"
+                />
+              </div>
+            </section>
+            <section
+              class="sc-game-menu-panel"
+              id="game-menu-panel-controls"
+              data-game-menu-panel="controls"
+            >
+              <h3 class="sc-game-menu-panel-title">Controls</h3>
+              <div class="sc-game-menu-controls">
+                <div><kbd>Esc</kbd> game menu</div>
+                <div><kbd>Click</kbd> lock mouse</div>
+                <div>Mouse look / steer</div>
+                <div><kbd>W</kbd>/<kbd>S</kbd> move or throttle</div>
+                <div><kbd>Shift</kbd> boost</div>
+                <div><kbd>A</kbd>/<kbd>D</kbd> strafe / ground steer</div>
+                <div><kbd>Q</kbd>/<kbd>E</kbd> roll</div>
+                <div><kbd>←</kbd>/<kbd>→</kbd> yaw</div>
+                <div><kbd>↑</kbd>/<kbd>↓</kbd> pitch</div>
+                <div><kbd>Space</kbd>/<kbd>C</kbd> jump or lift</div>
+                <div><kbd>B</kbd> brake</div>
+                <div><kbd>F</kbd> interact / enter / exit</div>
+                <div><kbd>1</kbd>-<kbd>3</kbd> hangar elevator</div>
+                <div><kbd>V</kbd> first / third person, cockpit / external</div>
+                <div><kbd>R</kbd> reset</div>
+              </div>
+            </section>
+            <section
+              class="sc-game-menu-panel"
+              id="game-menu-panel-exit"
+              data-game-menu-panel="exit"
+            >
+              <h3 class="sc-game-menu-panel-title">Exit Game</h3>
+              <p class="sc-game-menu-exit-copy">
+                Leave Asteron and return to the title screen. Your session stays signed in.
+              </p>
+              <button class="sc-title-btn sc-title-btn-secondary" type="button" id="game-menu-exit-btn">
+                Exit to Title Screen
+              </button>
+            </section>
+            <div class="sc-game-menu-footer">
+              <button class="sc-title-btn sc-game-menu-resume" type="button" id="game-menu-resume-btn">
+                Resume
+              </button>
+              <span class="sc-game-menu-hint">Press Esc to resume</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-avms"
+        id="avms-terminal"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="avms-title"
+        aria-modal="true"
+      >
+        <div class="sc-avms-backdrop"></div>
+        <div class="sc-avms-bezel">
+          <div class="sc-avms-screen">
+            <div class="sc-avms-scanlines" aria-hidden="true"></div>
+            <header class="sc-avms-header">
+              <div class="sc-avms-brand">
+                <span class="sc-avms-kicker">Asteron Vehicle Management System</span>
+                <h2 class="sc-avms-title" id="avms-title">AVMS</h2>
+              </div>
+              <span class="sc-avms-version">v1.0</span>
+            </header>
+            <div class="sc-avms-body">
+              <section class="sc-avms-panel" aria-label="Registered vehicles">
+                <h3 class="sc-avms-panel-title">Inventory</h3>
+                <div class="sc-avms-ship-list" id="avms-ship-list"></div>
+              </section>
+              <section class="sc-avms-panel sc-avms-detail" aria-label="Selected vehicle">
+                <h3 class="sc-avms-panel-title">Vehicle Status</h3>
+                <p class="sc-avms-detail-name" id="avms-detail-name">—</p>
+                <p class="sc-avms-detail-prefab" id="avms-detail-prefab">—</p>
+                <div class="sc-avms-stat">
+                  <span class="sc-avms-stat-label">Hull</span>
+                  <div class="sc-avms-stat-bar">
+                    <span class="sc-avms-stat-fill sc-avms-stat-fill-hp" id="avms-detail-hp-bar"></span>
+                  </div>
+                  <span class="sc-avms-stat-value" id="avms-detail-hp-value">—</span>
+                </div>
+                <div class="sc-avms-stat">
+                  <span class="sc-avms-stat-label">Shields</span>
+                  <div class="sc-avms-stat-bar">
+                    <span class="sc-avms-stat-fill sc-avms-stat-fill-shield" id="avms-detail-shield-bar"></span>
+                  </div>
+                  <span class="sc-avms-stat-value" id="avms-detail-shield-value">—</span>
+                </div>
+              </section>
+            </div>
+            <footer class="sc-avms-footer">
+              <p class="sc-avms-status" id="avms-status">Awaiting input…</p>
+              <p class="sc-avms-note">Hangar bay assigned automatically by station dispatch.</p>
+              <div class="sc-avms-actions">
+                <button class="sc-title-btn sc-avms-deliver" type="button" id="avms-deliver-btn">
+                  Request Delivery
+                </button>
+                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="avms-close-btn">
+                  Close
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      </div>
     </div>
     <script type="module" src="./src/app.ts"></script>
     <noscript>ClaudeCitizen needs JavaScript and WebGL2.</noscript>

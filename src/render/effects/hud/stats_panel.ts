@@ -130,7 +130,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
           'Click the view to lock the mouse, then walk the station with WASD and sprint with Shift.';
       } else if (world.assignedHangar === null) {
         elements.statusEl.textContent =
-          'Your ship is in storage. Take the hab elevator down to the lobby and call it from the terminal.';
+          'Your ship is in storage. Take the hab elevator down to the lobby and call it from the AVMS terminal.';
       } else {
         elements.statusEl.textContent = `Your ship is parked in Hangar ${world.assignedHangar}. Ride the hangar elevators from the lobby.`;
       }

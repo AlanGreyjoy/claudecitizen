@@ -86,6 +86,18 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Shows a prompt when the player is within the radius.",
   },
   {
+    type: "avms-terminal",
+    label: "AVMS Terminal",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "avms-terminal",
+      id: "avms-1",
+      radius: 2.5,
+    }),
+    hint: "Opens the Asteron Vehicle Management System to call ships from inventory.",
+  },
+  {
     type: "walk-volume",
     label: "Walk Volume",
     kinds: ["station", "site"],

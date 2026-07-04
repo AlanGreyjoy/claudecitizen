@@ -85,6 +85,21 @@ function parseQualityPreset(): RenderQualityPreset {
   if (raw === 'performance' || raw === 'balanced' || raw === 'high') {
     return raw;
   }
+  try {
+    const stored = localStorage.getItem('claudecitizen-game-settings');
+    if (stored) {
+      const parsed = JSON.parse(stored) as { renderQuality?: unknown };
+      if (
+        parsed.renderQuality === 'performance' ||
+        parsed.renderQuality === 'balanced' ||
+        parsed.renderQuality === 'high'
+      ) {
+        return parsed.renderQuality;
+      }
+    }
+  } catch {
+    // Ignore malformed local settings.
+  }
   return 'balanced';
 }
 

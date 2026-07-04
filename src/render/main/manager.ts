@@ -203,7 +203,7 @@ export function createSpikeRenderer(
     });
 
     avatar.update(character, focusBody.position, nowSeconds, firstPersonActive);
-    remotePresence.update(world.networkEntities ?? [], focusBody.position);
+    remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
 
     lakeWaterManager.update(
       focusBody.position,

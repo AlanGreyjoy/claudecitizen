@@ -1,19 +1,34 @@
 import * as THREE from 'three';
-import type { NetworkRenderEntity, Vec3 } from '../../../types';
+import { getShipLayoutForPrefab } from '../../../player/ship_layout';
+import type { NetworkRenderEntity, NetworkShipRig, Vec3 } from '../../../types';
+import {
+  createCharacterAvatarInstance,
+  type CharacterAvatarInstance,
+} from './character_avatar_model';
+import { createShipModel, type ShipModelHandle } from './ship_model';
 
 interface RemotePresenceHandle {
   dispose: () => void;
-  update: (entities: NetworkRenderEntity[], focusPosition: Vec3) => void;
+  update: (entities: NetworkRenderEntity[], focusPosition: Vec3, nowSeconds: number) => void;
 }
 
 interface RemoteObject {
   root: THREE.Group;
-  avatar: THREE.Mesh;
-  ship: THREE.Mesh;
+  avatar: CharacterAvatarInstance;
+  shipHandle: ShipModelHandle | null;
+  shipPrefabId: string | null;
   marker: THREE.Mesh;
   label: THREE.Sprite;
   labelTexture: THREE.CanvasTexture;
 }
+
+const DEFAULT_REMOTE_SHIP_PREFAB_ID = 'phobos-starhopper';
+
+const DEFAULT_REMOTE_SHIP_RIG: NetworkShipRig = {
+  gear01: 0,
+  ramp01: 0,
+  doors: {},
+};
 
 const labelCanvasSize = { width: 256, height: 64 };
 
@@ -39,36 +54,52 @@ function createLabelTexture(text: string): THREE.CanvasTexture {
   return texture;
 }
 
+function resolveRemoteShipPrefabId(entity: NetworkRenderEntity): string {
+  return entity.ship?.prefabId?.trim() || DEFAULT_REMOTE_SHIP_PREFAB_ID;
+}
+
+function createRemoteShipHandle(prefabId: string, renderScale: number): ShipModelHandle {
+  const layout = getShipLayoutForPrefab(prefabId);
+  const handle = createShipModel(renderScale, {
+    hullUrl: layout.hullUrl,
+    doors: layout.doors.map((door) => ({
+      id: door.id,
+      motion: door.motion,
+      axis: door.axis,
+      nodes: door.nodes,
+    })),
+    gearHinges: layout.spec.gearHinges,
+    rampHinge: layout.spec.rampHinge,
+  });
+  handle.group.frustumCulled = false;
+  return handle;
+}
+
+function ensureRemoteShip(
+  remote: RemoteObject,
+  prefabId: string,
+  renderScale: number,
+): ShipModelHandle {
+  if (remote.shipHandle && remote.shipPrefabId === prefabId) {
+    return remote.shipHandle;
+  }
+  if (remote.shipHandle) {
+    remote.root.remove(remote.shipHandle.group);
+    remote.shipHandle = null;
+    remote.shipPrefabId = null;
+  }
+  const handle = createRemoteShipHandle(prefabId, renderScale);
+  remote.root.add(handle.group);
+  remote.shipHandle = handle;
+  remote.shipPrefabId = prefabId;
+  return handle;
+}
+
 function createRemoteObject(displayName: string, renderScale: number): RemoteObject {
   const root = new THREE.Group();
   root.frustumCulled = false;
 
-  const avatar = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.34 * renderScale, 1.15 * renderScale, 4, 10),
-    new THREE.MeshStandardMaterial({
-      color: 0x8bd8ff,
-      emissive: 0x143044,
-      emissiveIntensity: 0.35,
-      roughness: 0.65,
-      metalness: 0.1,
-    }),
-  );
-  avatar.castShadow = true;
-  avatar.receiveShadow = true;
-
-  const ship = new THREE.Mesh(
-    new THREE.ConeGeometry(1.25 * renderScale, 3.4 * renderScale, 4),
-    new THREE.MeshStandardMaterial({
-      color: 0xffce6f,
-      emissive: 0x3a2505,
-      emissiveIntensity: 0.3,
-      roughness: 0.48,
-      metalness: 0.35,
-    }),
-  );
-  ship.rotation.x = Math.PI / 2;
-  ship.castShadow = true;
-  ship.receiveShadow = true;
+  const avatar = createCharacterAvatarInstance(renderScale);
 
   const marker = new THREE.Mesh(
     new THREE.OctahedronGeometry(0.7 * renderScale),
@@ -92,22 +123,24 @@ function createRemoteObject(displayName: string, renderScale: number): RemoteObj
   label.scale.set(3.6 * renderScale, 0.9 * renderScale, 1);
   label.position.y = 2.15 * renderScale;
 
-  root.add(avatar, ship, marker, label);
-  return { root, avatar, ship, marker, label, labelTexture };
+  root.add(avatar.root, marker, label);
+  return {
+    root,
+    avatar,
+    shipHandle: null,
+    shipPrefabId: null,
+    marker,
+    label,
+    labelTexture,
+  };
 }
 
 function disposeRemoteObject(object: RemoteObject): void {
-  object.avatar.geometry.dispose();
-  if (Array.isArray(object.avatar.material)) {
-    object.avatar.material.forEach((material) => material.dispose());
-  } else {
-    object.avatar.material.dispose();
-  }
-  object.ship.geometry.dispose();
-  if (Array.isArray(object.ship.material)) {
-    object.ship.material.forEach((material) => material.dispose());
-  } else {
-    object.ship.material.dispose();
+  object.avatar.dispose();
+  if (object.shipHandle) {
+    object.root.remove(object.shipHandle.group);
+    object.shipHandle = null;
+    object.shipPrefabId = null;
   }
   object.marker.geometry.dispose();
   if (Array.isArray(object.marker.material)) {
@@ -166,7 +199,11 @@ export function createRemotePresenceRenderer(
     return created;
   }
 
-  function update(entities: NetworkRenderEntity[], focusPosition: Vec3): void {
+  function update(
+    entities: NetworkRenderEntity[],
+    focusPosition: Vec3,
+    nowSeconds: number,
+  ): void {
     const live = new Set<string>();
     for (const entity of entities) {
       live.add(entity.id);
@@ -176,10 +213,22 @@ export function createRemotePresenceRenderer(
       const shipVisible = !isMarker && entity.mode === 'in-ship' && entity.ship !== null;
       const avatarVisible = !isMarker && !shipVisible && entity.character !== null;
 
-      remote.avatar.visible = avatarVisible;
-      remote.ship.visible = shipVisible;
+      remote.avatar.root.visible = avatarVisible;
+      if (remote.shipHandle) {
+        remote.shipHandle.group.visible = shipVisible;
+      }
       remote.marker.visible = isMarker;
       remote.label.visible = !isMarker;
+
+      if (avatarVisible && entity.character) {
+        remote.avatar.setAnimation(entity.character.animation);
+        remote.avatar.updateMixer(nowSeconds);
+      }
+
+      if (shipVisible && entity.ship) {
+        const handle = ensureRemoteShip(remote, resolveRemoteShipPrefabId(entity), renderScale);
+        handle.setArticulation(entity.shipRig ?? DEFAULT_REMOTE_SHIP_RIG);
+      }
 
       if (isMarker || !body) {
         setMarkerPose(remote.root, entity.markerPosition, focusPosition, renderScale);

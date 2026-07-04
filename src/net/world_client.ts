@@ -3,7 +3,7 @@ import { worldSocketUrl } from './api';
 import type { WorldState } from '../player/world_state';
 import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/world_state';
 import { MODE_IN_SHIP } from '../player/modes';
-import type { CharacterRenderState, FlightBody, NetworkLod, NetworkRenderEntity, NetworkShipRig, Vec3 } from '../types';
+import type { CharacterRenderState, NetworkLod, NetworkRenderEntity, NetworkShipBody, NetworkShipRig, Vec3 } from '../types';
 
 export interface NetworkChatMessage {
   id: string;
@@ -26,7 +26,7 @@ interface SnapshotEntityWire {
   lod: NetworkLod;
   mode: string;
   character?: CharacterRenderState | null;
-  ship?: FlightBody | null;
+  ship?: NetworkShipBody | null;
   shipRig?: NetworkShipRig | null;
   markerPosition: Vec3;
   stationRoomId?: string | null;
@@ -81,7 +81,7 @@ function lerpVec(a: Vec3, b: Vec3, t: number): Vec3 {
   };
 }
 
-function interpolateBody<T extends CharacterRenderState | FlightBody>(a: T, b: T, t: number): T {
+function interpolateBody<T extends CharacterRenderState | NetworkShipBody>(a: T, b: T, t: number): T {
   return {
     ...b,
     position: lerpVec(a.position, b.position, t),

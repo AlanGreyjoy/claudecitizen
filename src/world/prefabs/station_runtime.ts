@@ -6,6 +6,7 @@ import {
   type StationElevatorMarker,
   type StationFloorId,
   type StationInfoMarker,
+  type StationAvmsMarker,
   type StationLayoutOverride,
   type StationRoom,
   type StationSpawnPose,
@@ -53,6 +54,13 @@ interface FlattenedComponents {
   infoSeeds: {
     id: string;
     prompt: string;
+    radius: number;
+    right: number;
+    up: number;
+    forward: number;
+  }[];
+  avmsSeeds: {
+    id: string;
     radius: number;
     right: number;
     up: number;
@@ -154,6 +162,15 @@ function collect(
           forward,
         });
         break;
+      case 'avms-terminal':
+        out.avmsSeeds.push({
+          id: component.id,
+          radius: component.radius,
+          right,
+          up: position.y,
+          forward,
+        });
+        break;
       case 'station-frame':
       case 'collider':
         break;
@@ -194,6 +211,7 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
     elevatorSeeds: [],
     hangarSeeds: [],
     infoSeeds: [],
+    avmsSeeds: [],
   };
   collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
 
@@ -290,6 +308,19 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
     });
   }
 
+  const avmsMarkers: StationAvmsMarker[] = [];
+  for (const seed of out.avmsSeeds) {
+    const room = roomContaining(out.rooms, seed.right, seed.up, seed.forward);
+    if (!room) continue;
+    avmsMarkers.push({
+      id: seed.id,
+      floorId: room.floorId,
+      right: seed.right,
+      forward: seed.forward,
+      radius: seed.radius,
+    });
+  }
+
   return {
     rooms: out.rooms,
     doorways: [],
@@ -297,5 +328,6 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
     spawn,
     elevatorMarkers,
     infoMarkers,
+    avmsMarkers,
   };
 }

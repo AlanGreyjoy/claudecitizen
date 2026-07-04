@@ -77,6 +77,7 @@ import type { SpikeRenderer } from "../render/main";
 import type { Planet, Vec3 } from "../types";
 import type { GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
+import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
@@ -88,8 +89,10 @@ export interface GameLoopOptions {
   rendererError: unknown;
   network?: WorldClient | null;
   bootstrap?: GameBootstrap | null;
+  avmsTerminal?: AvmsTerminalController | null;
   onHudUpdate: (params: HudUpdateParams) => void;
   onResetPeak: () => void;
+  isPaused?: () => boolean;
 }
 
 export function createGameLoop({
@@ -100,11 +103,14 @@ export function createGameLoop({
   rendererError,
   network = null,
   bootstrap = null,
+  avmsTerminal = null,
   onHudUpdate,
   onResetPeak,
+  isPaused,
 }: GameLoopOptions) {
   let world: WorldState = createWorldState(planet, seed);
   let lastMs = performance.now();
+  let running = false;
   let frameRendererError: unknown = rendererError;
   const stationFrame = getStationFrame(planet);
 
@@ -121,7 +127,15 @@ export function createGameLoop({
 
   // Console-only dev shortcuts (mirrors the __spikeScene diagnostic).
   window.__claudecitizenDev = {
-    callShip: () => callShipToHangar(world, planet, seed)?.index ?? 0,
+    callShip: async () => {
+      const hangar = await callShipToHangar(
+        world,
+        planet,
+        seed,
+        bootstrap?.ships[0],
+      );
+      return hangar?.index ?? 0;
+    },
     teleportToHangar: (index: number) => {
       const hangars = getStationHangars();
       const hangar =
@@ -157,6 +171,32 @@ export function createGameLoop({
     onResetPeak();
   }
 
+  function avmsPrompt(): string {
+    return world.assignedHangar === null
+      ? "Press F — AVMS terminal"
+      : `Ship delivered to Hangar ${world.assignedHangar}`;
+  }
+
+  function shipsForAvms(): GameBootstrap["ships"] {
+    if (bootstrap?.ships.length) return bootstrap.ships;
+    const ship = getActiveShip(world);
+    return [
+      {
+        id: ship.id,
+        shipDefinitionId: null,
+        prefabId: ship.prefabId,
+        displayName: ship.prefabId,
+        hp: ship.vitals.hp,
+        shields: ship.vitals.shields,
+        maxHp: ship.spec.maxHp,
+        maxShields: ship.spec.maxShields,
+        shieldRegenPerSec: ship.spec.shieldRegenPerSec,
+        maxSpeedMps: ship.spec.maxSpeedMps,
+        throttleAccelMps2: ship.spec.throttleAccelMps2,
+      },
+    ];
+  }
+
   function stationPrompt(interaction: StationInteraction | null): string {
     if (!interaction) return "";
     switch (interaction.kind) {
@@ -165,9 +205,8 @@ export function createGameLoop({
       case "hab-lift-up":
         return "Press F — elevator to Habs";
       case "terminal":
-        return world.assignedHangar === null
-          ? "Press F — call your ship to a hangar"
-          : `Ship delivered to Hangar ${world.assignedHangar}`;
+      case "avms-terminal":
+        return avmsPrompt();
       case "hangar-bank":
         return world.assignedHangar === null
           ? "Press 1 / 2 / 3 — elevator to hangars"
@@ -200,6 +239,7 @@ export function createGameLoop({
           return bootstrap.spawn.apartmentInstanceId;
         return "station:public";
       case "terminal":
+      case "avms-terminal":
       case "prefab-info":
         return null;
     }
@@ -306,10 +346,16 @@ export function createGameLoop({
     world.prompt = stationPrompt(interaction);
     if (!interaction) return;
 
-    if (interaction.kind === "terminal") {
+    if (interaction.kind === "terminal" || interaction.kind === "avms-terminal") {
       if (actions.interactPressed && world.assignedHangar === null) {
-        const hangar = callShipToHangar(world, planet, seed);
-        if (hangar) world.prompt = `Ship delivered to Hangar ${hangar.index}`;
+        avmsTerminal?.open({
+          ships: shipsForAvms(),
+          onDeliver: async (ship) => {
+            const hangar = await callShipToHangar(world, planet, seed, ship);
+            if (!hangar) throw new Error("No hangar bays available.");
+            world.prompt = `Ship delivered to Hangar ${hangar.index}`;
+          },
+        });
       }
       return;
     }
@@ -446,70 +492,77 @@ export function createGameLoop({
   }
 
   function frame(nowMs: number): void {
-    const dt = Math.min((nowMs - lastMs) / 1000, 1 / 30);
+    if (!running) return;
+
+    const paused = isPaused?.() ?? false;
+    const dt = paused ? 0 : Math.min((nowMs - lastMs) / 1000, 1 / 30);
     lastMs = nowMs;
 
-    controls.setMode(world.mode === MODE_IN_SHIP ? MODE_IN_SHIP : MODE_ON_FOOT);
-    const actions = controls.consumeActions();
-    const camera = controls.sampleCameraState(dt);
-    world.cameraOrbit = {
-      pitchRadians: camera.pitchRadians,
-      yawRadians: camera.yawRadians,
-      zoomDistance: camera.zoomDistance,
-    };
-    world.cameraView = camera.cameraView;
-    world.shipCameraView = camera.shipCameraView;
-    world.shipCameraZoom = camera.shipZoomDistance;
+    let camera = controls.sampleCameraState(0);
 
-    const characterInput = controls.sampleCharacterInput();
+    if (!paused) {
+      controls.setMode(world.mode === MODE_IN_SHIP ? MODE_IN_SHIP : MODE_ON_FOOT);
+      const actions = controls.consumeActions();
+      camera = controls.sampleCameraState(dt);
+      world.cameraOrbit = {
+        pitchRadians: camera.pitchRadians,
+        yawRadians: camera.yawRadians,
+        zoomDistance: camera.zoomDistance,
+      };
+      world.cameraView = camera.cameraView;
+      world.shipCameraView = camera.shipCameraView;
+      world.shipCameraZoom = camera.shipZoomDistance;
 
-    if (world.mode === MODE_ON_FOOT) {
-      world.character = updateCharacterState(
-        world.character,
-        {
-          ...characterInput,
-          jumpPressed: actions.jumpPressed,
-        },
-        dt,
-        planet,
-        seed,
-      );
-      if (!tryMountRamp()) {
-        world.prompt = handleRampOutside(actions.interactPressed) ?? "";
+      const characterInput = controls.sampleCharacterInput();
+
+      if (world.mode === MODE_ON_FOOT) {
+        world.character = updateCharacterState(
+          world.character,
+          {
+            ...characterInput,
+            jumpPressed: actions.jumpPressed,
+          },
+          dt,
+          planet,
+          seed,
+        );
+        if (!tryMountRamp()) {
+          world.prompt = handleRampOutside(actions.interactPressed) ?? "";
+        }
+      } else if (world.mode === MODE_IN_SHIP) {
+        const instance = getActiveShip(world);
+        instance.body = integrateFlightBody(
+          instance.body,
+          controls.sampleFlightInput(),
+          dt,
+          planet,
+          seed,
+          {
+            maxSpeedMps: instance.spec.maxSpeedMps,
+            throttleAccelMps2: instance.spec.throttleAccelMps2,
+          },
+        );
+        world.prompt = "Hold F — look around · Hold Y — get up";
+        if (actions.exitSeatPressed) {
+          beginStandTransition(world);
+        }
+      } else if (world.mode === MODE_ON_SHIP_DECK) {
+        updateDeckMode(characterInput, actions, dt);
+      } else if (world.mode === MODE_IN_STATION) {
+        updateStationMode(characterInput, actions, dt);
+      } else if (world.mode === MODE_RIDING_ELEVATOR) {
+        const ride = updateElevatorRide(world, stationFrame, dt);
+        world.prompt = ride.destination ? `${ride.destination.label}…` : "";
+        if (ride.teleportedNow && ride.destination) {
+          controls.setOrbitFacing(stationYawForDir(ride.destination.face));
+        }
+      } else {
+        updateTransition(world, dt, transitionContext);
       }
-    } else if (world.mode === MODE_IN_SHIP) {
-      const instance = getActiveShip(world);
-      instance.body = integrateFlightBody(
-        instance.body,
-        controls.sampleFlightInput(),
-        dt,
-        planet,
-        seed,
-        {
-          maxSpeedMps: instance.spec.maxSpeedMps,
-          throttleAccelMps2: instance.spec.throttleAccelMps2,
-        },
-      );
-      world.prompt = "Hold F — look around · Hold Y — get up";
-      if (actions.exitSeatPressed) {
-        beginStandTransition(world);
-      }
-    } else if (world.mode === MODE_ON_SHIP_DECK) {
-      updateDeckMode(characterInput, actions, dt);
-    } else if (world.mode === MODE_IN_STATION) {
-      updateStationMode(characterInput, actions, dt);
-    } else if (world.mode === MODE_RIDING_ELEVATOR) {
-      const ride = updateElevatorRide(world, stationFrame, dt);
-      world.prompt = ride.destination ? `${ride.destination.label}…` : "";
-      if (ride.teleportedNow && ride.destination) {
-        controls.setOrbitFacing(stationYawForDir(ride.destination.face));
-      }
-    } else {
-      updateTransition(world, dt, transitionContext);
+
+      updateShipSystems(dt);
+      network?.publishPresence(world);
     }
-
-    updateShipSystems(dt);
-    network?.publishPresence(world);
 
     const activeShip = getActiveShipBody(world);
     const shipSurface = sampleRenderablePlanetSurface(
@@ -613,14 +666,21 @@ export function createGameLoop({
   }
 
   function start(): void {
+    if (running) return;
+    running = true;
     requestAnimationFrame((now) => {
       lastMs = now;
       requestAnimationFrame(frame);
     });
   }
 
+  function stop(): void {
+    running = false;
+  }
+
   return {
     resetWorld,
     start,
+    stop,
   };
 }

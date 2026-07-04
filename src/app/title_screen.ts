@@ -17,6 +17,24 @@ export interface TitleScreenOptions {
 
 type SceneName = 'login' | 'register' | 'forgot' | 'reset' | 'signed-in';
 
+interface TitleScreenController {
+  renderSignedIn: (session: AuthSession) => void;
+  renderLogin: (message?: string) => void;
+}
+
+let titleScreenController: TitleScreenController | null = null;
+
+export function restoreTitleScreen(session?: AuthSession | null): void {
+  document.getElementById('app')?.classList.add('is-hidden');
+  document.getElementById('title-screen')?.classList.remove('is-hidden');
+  if (!titleScreenController) return;
+  if (session) {
+    titleScreenController.renderSignedIn(session);
+    return;
+  }
+  titleScreenController.renderLogin();
+}
+
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Missing required element #${id}`);
@@ -326,4 +344,9 @@ export function showTitleScreen(options: TitleScreenOptions): void {
     .catch(() => {
       if (currentScene === null && lastSession === null) renderLogin();
     });
+
+  titleScreenController = {
+    renderSignedIn,
+    renderLogin,
+  };
 }

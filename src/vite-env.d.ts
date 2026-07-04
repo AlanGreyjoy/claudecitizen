@@ -14,7 +14,7 @@ declare global {
     __claudecitizenWorld?: import('./player/world_state').WorldState;
     __claudecitizenShipModel?: import('./render/main/scene/ship_model').ShipModelHandle;
     __claudecitizenDev?: {
-      callShip: () => number;
+      callShip: () => Promise<number>;
       teleportToHangar: (index: number) => void;
       face: (yawRadians: number, pitchRadians?: number) => void;
     };

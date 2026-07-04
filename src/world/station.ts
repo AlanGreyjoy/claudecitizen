@@ -384,6 +384,14 @@ export interface StationInfoMarker {
   prompt: string;
 }
 
+export interface StationAvmsMarker {
+  id: string;
+  floorId: StationFloorId;
+  right: number;
+  forward: number;
+  radius: number;
+}
+
 export interface StationLayoutOverride {
   rooms: StationRoom[];
   doorways: StationDoorway[];
@@ -391,6 +399,7 @@ export interface StationLayoutOverride {
   spawn: StationSpawnPose;
   elevatorMarkers: StationElevatorMarker[];
   infoMarkers: StationInfoMarker[];
+  avmsMarkers: StationAvmsMarker[];
 }
 
 let layoutOverride: StationLayoutOverride | null = null;

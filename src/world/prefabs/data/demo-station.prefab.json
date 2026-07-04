@@ -726,9 +726,8 @@
         },
         "components": [
           {
-            "type": "interaction",
+            "type": "avms-terminal",
             "id": "demo-terminal",
-            "prompt": "Demo Station — assembled in the ClaudeCitizen editor",
             "radius": 2.5
           }
         ]
@@ -758,6 +757,118 @@
           "url": "/src/assets/stylized-nature-magakit/CommonTree_5.gltf",
           "castShadow": true
         }
+      },
+      {
+        "id": "e-bbab2fd2",
+        "name": "SM_Prop_Monitor_06",
+        "transform": {
+          "position": {
+            "x": -3.75,
+            "y": 0,
+            "z": -7.25
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/SM_Prop_Monitor_06.glb"
+        },
+        "children": [
+          {
+            "id": "e-4e5749b9",
+            "name": "AVMS Terminal",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "avms-terminal",
+                "id": "avms-1",
+                "radius": 2.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e-27041308",
+        "name": "SM_Prop_Monitor_06",
+        "transform": {
+          "position": {
+            "x": 32.25,
+            "y": 0,
+            "z": -13
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1.5,
+            "y": 1.5,
+            "z": 1.5
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/SM_Prop_Monitor_06.glb"
+        },
+        "children": [
+          {
+            "id": "e-4626d2d5",
+            "name": "AVMS Terminal",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "avms-terminal",
+                "id": "avms-1",
+                "radius": 2.5
+              }
+            ]
+          }
+        ]
       }
     ]
   }

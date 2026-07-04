@@ -1,7 +1,10 @@
 import { createPlayerControls } from '../flight/player_controls';
 import { createGameLoop } from './game_loop';
 import type { LoadingScreenHandle } from './loading_screen';
+import { restoreTitleScreen } from './title_screen';
 import { createHud } from '../render/effects';
+import { createGameMenu } from '../render/effects/hud/game_menu';
+import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { createVegetationControls } from '../render/vegetation';
 import { CLAUDECITIZEN_PLANET } from '../world/planet';
@@ -17,6 +20,8 @@ import {
   type GameBootstrap,
 } from '../net/api';
 import { createWorldClient, type WorldClient } from '../net/world_client';
+import type { GameMenuController } from '../render/effects/hud/game_menu';
+import type { AvmsTerminalController } from '../render/effects/hud/avms_terminal';
 
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -53,7 +58,7 @@ async function resolveStationPrefabPreview(): Promise<PrefabDocument | null> {
 }
 
 /** Dev preview affordance: banner + button that jumps back into the editor with the prefab open. */
-function mountEditorReturnButton(prefabId: string): void {
+function mountEditorReturnButton(prefabId: string): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = `◂ Back to Editor (${prefabId})`;
@@ -77,9 +82,43 @@ function mountEditorReturnButton(prefabId: string): void {
     window.location.href = `/?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
   });
   document.body.appendChild(button);
+  return button;
 }
 
 let started = false;
+
+interface PlaySessionCleanup {
+  gameLoop: ReturnType<typeof createGameLoop>;
+  controls: ReturnType<typeof createPlayerControls>;
+  renderer: SpikeRenderer | null;
+  networkClient: WorldClient | null;
+  vegetationControls: ReturnType<typeof createVegetationControls>;
+  gameMenu: GameMenuController;
+  avmsTerminal: AvmsTerminalController;
+  resize: () => void;
+  session: AuthSession | null;
+  editorReturnButton: HTMLButtonElement | null;
+}
+
+let activeCleanup: PlaySessionCleanup | null = null;
+
+export function stopPlaySession(): void {
+  const cleanup = activeCleanup;
+  if (!cleanup) return;
+  activeCleanup = null;
+
+  cleanup.gameMenu.dispose();
+  cleanup.avmsTerminal.dispose();
+  cleanup.gameLoop.stop();
+  cleanup.controls.dispose();
+  cleanup.renderer?.dispose();
+  cleanup.networkClient?.close();
+  cleanup.vegetationControls.dispose();
+  window.removeEventListener('resize', cleanup.resize);
+  cleanup.editorReturnButton?.remove();
+  started = false;
+  restoreTitleScreen(cleanup.session);
+}
 
 export interface StartPlaySessionOptions {
   requireAuth?: boolean;
@@ -113,7 +152,10 @@ export async function startPlaySession(
   loading?.setProgress(0.15);
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
-  if (stationPrefab) mountEditorReturnButton(stationPrefab.id);
+  let editorReturnButton: HTMLButtonElement | null = null;
+  if (stationPrefab) {
+    editorReturnButton = mountEditorReturnButton(stationPrefab.id);
+  }
 
   const canvas = requireElement<HTMLCanvasElement>('view');
   const fpsEl = requireElement<HTMLElement>('hud-fps-value');
@@ -132,6 +174,26 @@ export async function startPlaySession(
   const controlsEl = requireElement<HTMLElement>('hud-controls');
   const interactPromptEl = requireElement<HTMLElement>('interact-prompt');
   const screenFadeEl = requireElement<HTMLElement>('screen-fade');
+  const gameMenuEl = requireElement<HTMLElement>('game-menu');
+  const gameMenuResumeBtn = requireElement<HTMLButtonElement>('game-menu-resume-btn');
+  const gameMenuExitBtn = requireElement<HTMLButtonElement>('game-menu-exit-btn');
+  const gameMenuMasterVolume = requireElement<HTMLInputElement>('game-menu-master-volume');
+  const gameMenuSfxVolume = requireElement<HTMLInputElement>('game-menu-sfx-volume');
+  const gameMenuMusicVolume = requireElement<HTMLInputElement>('game-menu-music-volume');
+  const gameMenuMasterValue = requireElement<HTMLElement>('game-menu-master-value');
+  const gameMenuSfxValue = requireElement<HTMLElement>('game-menu-sfx-value');
+  const gameMenuMusicValue = requireElement<HTMLElement>('game-menu-music-value');
+  const avmsTerminalEl = requireElement<HTMLElement>('avms-terminal');
+  const avmsShipListEl = requireElement<HTMLElement>('avms-ship-list');
+  const avmsDetailNameEl = requireElement<HTMLElement>('avms-detail-name');
+  const avmsDetailPrefabEl = requireElement<HTMLElement>('avms-detail-prefab');
+  const avmsDetailHpBarEl = requireElement<HTMLElement>('avms-detail-hp-bar');
+  const avmsDetailShieldBarEl = requireElement<HTMLElement>('avms-detail-shield-bar');
+  const avmsDetailHpValueEl = requireElement<HTMLElement>('avms-detail-hp-value');
+  const avmsDetailShieldValueEl = requireElement<HTMLElement>('avms-detail-shield-value');
+  const avmsStatusEl = requireElement<HTMLElement>('avms-status');
+  const avmsDeliverBtn = requireElement<HTMLButtonElement>('avms-deliver-btn');
+  const avmsCloseBtn = requireElement<HTMLButtonElement>('avms-close-btn');
 
   const seed = 20061;
   const planet = CLAUDECITIZEN_PLANET;
@@ -146,7 +208,7 @@ export async function startPlaySession(
   }
   loading?.setProgress(0.45);
 
-  createVegetationControls(vegetationMenuEl, vegetationResetEl, renderer);
+  const vegetationControls = createVegetationControls(vegetationMenuEl, vegetationResetEl, renderer);
 
   let networkClient: WorldClient | null = null;
 
@@ -199,6 +261,39 @@ export async function startPlaySession(
   const controls = createPlayerControls(canvas, {
     onReset: () => gameLoop.resetWorld(),
   });
+
+  const gameMenu = createGameMenu(
+    {
+      rootEl: gameMenuEl,
+      resumeBtnEl: gameMenuResumeBtn,
+      exitBtnEl: gameMenuExitBtn,
+      chatInputEl,
+      masterVolumeEl: gameMenuMasterVolume,
+      sfxVolumeEl: gameMenuSfxVolume,
+      musicVolumeEl: gameMenuMusicVolume,
+      masterValueEl: gameMenuMasterValue,
+      sfxValueEl: gameMenuSfxValue,
+      musicValueEl: gameMenuMusicValue,
+    },
+    {
+      onExitGame: () => stopPlaySession(),
+    },
+  );
+
+  const avmsTerminal = createAvmsTerminal({
+    rootEl: avmsTerminalEl,
+    shipListEl: avmsShipListEl,
+    detailNameEl: avmsDetailNameEl,
+    detailPrefabEl: avmsDetailPrefabEl,
+    detailHpBarEl: avmsDetailHpBarEl,
+    detailShieldBarEl: avmsDetailShieldBarEl,
+    detailHpValueEl: avmsDetailHpValueEl,
+    detailShieldValueEl: avmsDetailShieldValueEl,
+    statusEl: avmsStatusEl,
+    deliverBtnEl: avmsDeliverBtn,
+    closeBtnEl: avmsCloseBtn,
+  });
+
   loading?.setProgress(0.75);
 
   gameLoop = createGameLoop({
@@ -209,8 +304,10 @@ export async function startPlaySession(
     rendererError,
     network: networkClient,
     bootstrap,
+    avmsTerminal,
     onHudUpdate: (params) => hud.update(params),
     onResetPeak: () => hud.resetPeak(),
+    isPaused: () => gameMenu.isPaused() || avmsTerminal.isPaused(),
   });
 
   if (bootstrap) {
@@ -230,6 +327,19 @@ export async function startPlaySession(
 
   loading?.setProgress(0.95);
   gameLoop.start();
+
+  activeCleanup = {
+    gameLoop,
+    controls,
+    renderer,
+    networkClient,
+    vegetationControls,
+    gameMenu,
+    avmsTerminal,
+    resize,
+    session,
+    editorReturnButton,
+  };
 
   if (loading) {
     await loading.complete();

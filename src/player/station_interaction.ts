@@ -18,6 +18,8 @@ import {
   type StationElevatorMarker,
   type StationFrame,
 } from '../world/station';
+import type { GameBootstrap } from '../net/api';
+import { applyOwnedShipToInstance } from '../world/ships';
 import { getShipRestHeightMeters } from './ship_layout';
 import { characterAtElevatorDestination, type StationCharacterState } from './station_walk';
 import type { Planet } from '../types';
@@ -41,7 +43,8 @@ export type StationInteraction =
   | { kind: 'hangar-bank' }
   | { kind: 'hangar-lift-up'; hangar: HangarSpec }
   | { kind: 'prefab-elevator'; marker: StationElevatorMarker }
-  | { kind: 'prefab-info'; prompt: string };
+  | { kind: 'prefab-info'; prompt: string }
+  | { kind: 'avms-terminal' };
 
 function nearAnchor(character: StationCharacterState, anchor: StationAnchor): boolean {
   const room = getStationRoom(character.stationRoomId);
@@ -71,6 +74,16 @@ function resolvePrefabInteraction(
         character.stationLocal.forward - marker.forward,
       ) <= marker.radius;
     if (near) return { kind: 'prefab-elevator', marker };
+  }
+
+  for (const avms of override.avmsMarkers) {
+    if (avms.floorId !== room.floorId) continue;
+    const near =
+      Math.hypot(
+        character.stationLocal.right - avms.right,
+        character.stationLocal.forward - avms.forward,
+      ) <= avms.radius;
+    if (near) return { kind: 'avms-terminal' };
   }
 
   for (const info of override.infoMarkers) {
@@ -215,13 +228,18 @@ export function updateElevatorRide(
  * zero velocity, grounded, nose facing the hangar mouth. Returns null when
  * the active station layout has no hangar pads.
  */
-export function callShipToHangar(
+export async function callShipToHangar(
   world: WorldState,
   planet: Planet,
   seed: number,
-): HangarSpec | null {
+  ownedShip?: GameBootstrap['ships'][number],
+): Promise<HangarSpec | null> {
   const hangars = getStationHangars();
   if (hangars.length === 0) return null;
+  if (ownedShip) {
+    const playerId = getActiveShip(world).ownerPlayerId ?? '';
+    await applyOwnedShipToInstance(ownedShip, playerId);
+  }
   const hangar = hangars[Math.abs(seed) % hangars.length];
   const instance = getActiveShip(world);
   const frame = getStationFrame(planet);

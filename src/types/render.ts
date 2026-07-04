@@ -65,6 +65,16 @@ export interface NetworkShipRig {
   doors: Record<string, number>;
 }
 
+/** Ship body fields relayed from other players over the presence WebSocket. */
+export interface NetworkShipBody extends FlightBody {
+  shipId?: string;
+  prefabId?: string;
+  hp?: number;
+  shields?: number;
+  maxHp?: number;
+  maxShields?: number;
+}
+
 export interface RenderShipVitals {
   hp: number;
   shields: number;
@@ -93,7 +103,7 @@ export interface NetworkRenderEntity {
   lod: NetworkLod;
   mode: GameMode | string;
   character: CharacterRenderState | null;
-  ship: FlightBody | null;
+  ship: NetworkShipBody | null;
   shipRig: NetworkShipRig | null;
   markerPosition: Vec3;
   stationRoomId: string | null;

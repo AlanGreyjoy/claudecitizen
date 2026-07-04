@@ -308,6 +308,19 @@ export function createInspectorPanel(
             ),
           ]),
         ];
+      case "avms-terminal":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Radius" }),
+            numberInput(component.radius, (radius) =>
+              update({ ...component, radius: Math.max(0.5, radius) }),
+            ),
+          ]),
+        ];
       case "walk-volume": {
         const openSet = new Set(component.open ?? []);
         return [

@@ -64,6 +64,7 @@ export type PrefabComponent =
   | { type: "elevator"; id: string; targetFloor: StationFloorId }
   | { type: "hangar-pad"; hangarId: string; padIndex: number }
   | { type: "interaction"; id: string; prompt: string; radius: number }
+  | { type: "avms-terminal"; id: string; radius: number }
   | {
       type: "walk-volume";
       floorId: StationFloorId;
@@ -304,6 +305,15 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         type,
         id: parseString(value.id, `${path}.id`, 64),
         prompt: parseString(value.prompt, `${path}.prompt`, 200),
+        radius: Math.min(
+          50,
+          Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
+        ),
+      };
+    case "avms-terminal":
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
         radius: Math.min(
           50,
           Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
