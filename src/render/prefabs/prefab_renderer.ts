@@ -111,3 +111,12 @@ export function createPrefabStationGroup(doc: PrefabDocument, renderScale: numbe
   group.frustumCulled = false;
   return group;
 }
+
+/** Builds a single prop prefab instance (not scaled — caller sets transform). */
+export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
+  const group = new THREE.Group();
+  group.name = `prop:${doc.id}`;
+  group.add(buildEntity(doc.root));
+  group.frustumCulled = false;
+  return group;
+}

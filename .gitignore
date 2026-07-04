@@ -41,6 +41,13 @@ desktop.ini
 
 # Proprietary/local-only game assets.
 # Keep paid or otherwise non-redistributable models, textures, and packs here.
+editor/assets/**
+!editor/assets/
+!editor/assets/README.md
+!editor/assets/free/
+!editor/assets/free/README.md
+!editor/assets/protected/
+!editor/assets/protected/README.md
 public/assets/protected/**
 !public/assets/protected/
 !public/assets/protected/README.md

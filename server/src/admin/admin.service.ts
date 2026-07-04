@@ -228,7 +228,41 @@ export class AdminService {
   async updateSettings(input: {
     startingArcBalance: number;
     starterShipDefinitionIds: string[];
+    starterPropDefinitionIds: string[];
   }) {
     return this.catalog.updateSettings(input);
+  }
+
+  async listPropDefinitions() {
+    return this.catalog.listPropDefinitions();
+  }
+
+  async createPropDefinition(input: {
+    name: string;
+    description: string;
+    prefabId: string;
+    costArc: number;
+    category: string;
+    maxPerHangar: number | null;
+    allowRotateY: boolean;
+    snapGridM: number | null;
+  }) {
+    return this.catalog.createPropDefinition(input);
+  }
+
+  async updatePropDefinition(
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      prefabId?: string;
+      costArc?: number;
+      category?: string;
+      maxPerHangar?: number | null;
+      allowRotateY?: boolean;
+      snapGridM?: number | null;
+    },
+  ) {
+    return this.catalog.updatePropDefinition(id, input);
   }
 }

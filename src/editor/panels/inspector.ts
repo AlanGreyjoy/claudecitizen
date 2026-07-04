@@ -1,9 +1,13 @@
-import { clearChildren, el, showToast } from "../dom";
+import { clearChildren, el } from "../dom";
 import {
-  createEmptyEntity,
   type EditorEntity,
   type EditorStore,
+  type EntityTransform,
 } from "../document";
+import {
+  addComponentFromPalette,
+  collectExistingComponentTypes,
+} from "../component_actions";
 import {
   getComponentDef,
   searchComponents,
@@ -21,9 +25,22 @@ const SIDE_OPTIONS: StationSide[] = [
   "maxForward",
 ];
 
+export interface InspectorPanelOptions {
+  getGlbNodeLocalTransform?: (
+    entityId: string,
+    nodeUuid: string,
+  ) => EntityTransform | null;
+  setGlbNodeLocalTransform?: (
+    entityId: string,
+    nodeUuid: string,
+    transform: Partial<EntityTransform>,
+  ) => void;
+}
+
 export function createInspectorPanel(
   container: HTMLElement,
   store: EditorStore,
+  options: InspectorPanelOptions = {},
 ): void {
   const body = el("div", { className: "ed-panel-body" });
   container.append(
@@ -92,6 +109,8 @@ export function createInspectorPanel(
     fields: Record<"position" | "rotation" | "scale", HTMLInputElement[]>;
   }
   let transformInputs: TransformInputs | null = null;
+  let glbTransformInputs: TransformInputs | null = null;
+  let glbTransformTarget: { entityId: string; nodeUuid: string } | null = null;
 
   function commitTransform(entity: EditorEntity): void {
     if (!transformInputs) return;
@@ -138,6 +157,65 @@ export function createInspectorPanel(
     return section;
   }
 
+  function commitGlbTransform(): void {
+    if (!glbTransformInputs || !glbTransformTarget || !options.setGlbNodeLocalTransform) {
+      return;
+    }
+    const read = (inputs: HTMLInputElement[]) => ({
+      x: Number(inputs[0].value) || 0,
+      y: Number(inputs[1].value) || 0,
+      z: Number(inputs[2].value) || 0,
+    });
+    options.setGlbNodeLocalTransform(glbTransformTarget.entityId, glbTransformTarget.nodeUuid, {
+      position: read(glbTransformInputs.fields.position),
+      rotation: read(glbTransformInputs.fields.rotation),
+      scale: read(glbTransformInputs.fields.scale),
+    });
+  }
+
+  function glbNodeTransformSection(
+    entityId: string,
+    nodeUuid: string,
+    transform: EntityTransform,
+  ): HTMLElement | null {
+    if (!options.getGlbNodeLocalTransform || !options.setGlbNodeLocalTransform) {
+      return null;
+    }
+    const section = el("div", { className: "ed-section" }, [
+      el("h3", { className: "ed-section-title", text: "Mesh Transform" }),
+      el("div", {
+        className: "ed-empty-note",
+        text: "Local pose on the selected GLB part — use for door hinge preview. Not saved to the prefab; copy rotation into ship-door delta.",
+      }),
+    ]);
+    const fields: TransformInputs["fields"] = {
+      position: [],
+      rotation: [],
+      scale: [],
+    };
+    const rows: [keyof TransformInputs["fields"], string, number][] = [
+      ["position", "Position", 0.01],
+      ["rotation", "Rotation°", 1],
+      ["scale", "Scale", 0.01],
+    ];
+    for (const [key, label, step] of rows) {
+      const source = transform[key];
+      const inputs = (["x", "y", "z"] as const).map((axis) =>
+        numberInput(source[axis], () => commitGlbTransform(), step),
+      );
+      fields[key] = inputs;
+      section.append(
+        el("div", { className: "ed-field-row" }, [
+          el("span", { className: "ed-field-label", text: label }),
+          ...inputs,
+        ]),
+      );
+    }
+    glbTransformInputs = { fields };
+    glbTransformTarget = { entityId, nodeUuid };
+    return section;
+  }
+
   function visualSection(entity: EditorEntity): HTMLElement {
     const section = el("div", { className: "ed-section" }, [
       el("h3", { className: "ed-section-title", text: "Visual" }),
@@ -177,6 +255,21 @@ export function createInspectorPanel(
           on: { click: () => store.setAsset(entity.id, null) },
         }),
       );
+      const sub = store.getSubSelection();
+      if (sub?.entityId === entity.id) {
+        const nodeName =
+          store.getGlbNodeName(entity.id, sub.nodeUuid) ?? sub.nodeUuid;
+        section.append(
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "GLB node" }),
+            el("span", {
+              className: "ed-tree-name",
+              text: nodeName,
+              title: nodeName,
+            }),
+          ]),
+        );
+      }
       return section;
     }
 
@@ -242,6 +335,7 @@ export function createInspectorPanel(
   ): HTMLElement[] {
     switch (component.type) {
       case "station-frame":
+      case "prop-frame":
         return [];
       case "spawn-point":
         return [
@@ -936,37 +1030,12 @@ export function createInspectorPanel(
     let open = false;
 
     /** Singletons are unique per document, not per entity. */
-    function existingTypes(): PrefabComponent["type"][] {
-      const types: PrefabComponent["type"][] = [];
-      const visit = (entities: EditorEntity[]): void => {
-        for (const current of entities) {
-          for (const component of current.components)
-            types.push(component.type);
-          visit(current.children);
-        }
-      };
-      visit(store.getState().roots);
-      return types;
+    function existingTypes() {
+      return collectExistingComponentTypes(store);
     }
 
     function addComponent(def: ComponentDef): void {
-      // Unity-style: spatial components live on their own empty marker
-      // entities. Adding one to a model entity spawns a child marker (and
-      // selects it) so the gizmo positions the component independently.
-      const hasVisual = Boolean(entity.asset || entity.primitive);
-      if (def.marker && hasVisual) {
-        const marker = createEmptyEntity(def.label);
-        marker.components = [def.createDefault()];
-        store.addEntity(marker, entity.id);
-        showToast(
-          `Added "${def.label}" as a child marker — position it with the gizmo.`,
-        );
-        return;
-      }
-      const components = structuredClone(entity.components);
-      components.push(def.createDefault());
-      store.setComponents(entity.id, components);
-      // The store event re-renders the inspector, discarding this combobox.
+      addComponentFromPalette(store, entity.id, def);
     }
 
     /** Moves the highlight without rebuilding the list (rebuilding under the
@@ -1124,6 +1193,8 @@ export function createInspectorPanel(
   function render(): void {
     clearChildren(body);
     transformInputs = null;
+    glbTransformInputs = null;
+    glbTransformTarget = null;
     const entity = store.getSelectedEntity();
     if (!entity) {
       body.append(
@@ -1135,7 +1206,7 @@ export function createInspectorPanel(
       return;
     }
 
-    body.append(
+    const sections: HTMLElement[] = [
       el("div", { className: "ed-section" }, [
         el("div", { className: "ed-field-row-wide" }, [
           el("span", { className: "ed-field-label", text: "Name" }),
@@ -1145,9 +1216,57 @@ export function createInspectorPanel(
         ]),
       ]),
       transformSection(entity),
-      visualSection(entity),
-      componentsSection(entity),
-    );
+    ];
+
+    const sub = store.getSubSelection();
+    if (
+      sub?.entityId === entity.id &&
+      options.getGlbNodeLocalTransform
+    ) {
+      const meshTransform = options.getGlbNodeLocalTransform(
+        sub.entityId,
+        sub.nodeUuid,
+      );
+      if (meshTransform) {
+        const meshSection = glbNodeTransformSection(
+          sub.entityId,
+          sub.nodeUuid,
+          meshTransform,
+        );
+        if (meshSection) sections.push(meshSection);
+      }
+    }
+
+    sections.push(visualSection(entity), componentsSection(entity));
+    body.append(...sections);
+  }
+
+  function refreshGlbTransformInputs(entityId: string, nodeUuid: string): void {
+    if (
+      !glbTransformInputs ||
+      !glbTransformTarget ||
+      glbTransformTarget.entityId !== entityId ||
+      glbTransformTarget.nodeUuid !== nodeUuid ||
+      !options.getGlbNodeLocalTransform
+    ) {
+      return;
+    }
+    const transform = options.getGlbNodeLocalTransform(entityId, nodeUuid);
+    if (!transform) return;
+    const groups: (keyof TransformInputs["fields"])[] = [
+      "position",
+      "rotation",
+      "scale",
+    ];
+    for (const key of groups) {
+      const source = transform[key];
+      const inputs = glbTransformInputs.fields[key];
+      (["x", "y", "z"] as const).forEach((axis, index) => {
+        const input = inputs[index];
+        if (document.activeElement === input) return;
+        input.value = String(Math.round(source[axis] * 1000) / 1000);
+      });
+    }
   }
 
   function refreshTransformInputs(entityId: string): void {
@@ -1172,6 +1291,7 @@ export function createInspectorPanel(
   store.subscribe((event) => {
     if (
       event.type === "selection" ||
+      event.type === "sub-selection" ||
       event.type === "document" ||
       event.type === "structure"
     ) {
@@ -1184,6 +1304,10 @@ export function createInspectorPanel(
     }
     if (event.type === "transform") {
       refreshTransformInputs(event.entityId);
+      return;
+    }
+    if (event.type === "glb-transform") {
+      refreshGlbTransformInputs(event.entityId, event.nodeUuid);
     }
   });
   render();

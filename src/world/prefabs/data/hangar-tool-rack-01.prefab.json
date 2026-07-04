@@ -1,0 +1,40 @@
+{
+  "id": "hangar-tool-rack-01",
+  "name": "Tool Rack",
+  "version": 1,
+  "kind": "prop",
+  "root": {
+    "id": "root",
+    "name": "Tool Rack",
+    "transform": {
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+      "scale": { "x": 1, "y": 1, "z": 1 }
+    },
+    "components": [{ "type": "prop-frame" }],
+    "children": [
+      {
+        "id": "frame",
+        "name": "Rack Frame",
+        "transform": {
+          "position": { "x": 0, "y": 0.9, "z": 0 },
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+          "scale": { "x": 1, "y": 1, "z": 1 }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": { "x": 1.4, "y": 1.8, "z": 0.45 },
+          "color": "#5a6578"
+        },
+        "components": [
+          {
+            "type": "collider",
+            "shape": "box",
+            "size": { "x": 1.4, "y": 1.8, "z": 0.45 },
+            "offset": { "x": 0, "y": 0, "z": 0 }
+          }
+        ]
+      }
+    ]
+  }
+}

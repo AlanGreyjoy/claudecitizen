@@ -395,16 +395,16 @@ export function nearestSeat(deckLocal: DeckLocal): ShipSeatSpec | null {
   return best?.seat ?? null;
 }
 
-export function seatInteractPrompt(seat: ShipSeatSpec): string {
+export function seatInteractPrompt(seat: ShipSeatSpec, interactLabel = "F"): string {
   switch (seat.role) {
     case "pilot":
-      return "Press F — take the seat";
+      return `Press ${interactLabel} — take the seat`;
     case "copilot":
-      return "Press F — take the copilot seat";
+      return `Press ${interactLabel} — take the copilot seat`;
     case "turret":
-      return "Press F — man the turret";
+      return `Press ${interactLabel} — man the turret`;
     default:
-      return "Press F — sit down";
+      return `Press ${interactLabel} — sit down`;
   }
 }
 
@@ -508,8 +508,10 @@ export function resolveLadderInteraction(
   return best ? { zone: best.zone, direction: best.direction } : null;
 }
 
-export function ladderInteractPrompt(direction: LadderDirection): string {
-  return direction === "up" ? "Press F to go up" : "Press F to go down";
+export function ladderInteractPrompt(direction: LadderDirection, interactLabel = "F"): string {
+  return direction === "up"
+    ? `Press ${interactLabel} to go up`
+    : `Press ${interactLabel} to go down`;
 }
 
 /** Snap the character to the opposite ladder end on a connected walk zone. */

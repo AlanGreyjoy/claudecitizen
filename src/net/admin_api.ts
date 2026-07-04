@@ -97,8 +97,34 @@ export interface GameSettings {
   id: string;
   startingArcBalance: number;
   starterShipDefinitionIds: string[];
+  starterPropDefinitionIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PropDefinition {
+  id: string;
+  name: string;
+  description: string;
+  prefabId: string;
+  costArc: number;
+  category: string;
+  maxPerHangar: number | null;
+  allowRotateY: boolean;
+  snapGridM: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropDefinitionInput {
+  name: string;
+  description: string;
+  prefabId: string;
+  costArc: number;
+  category: string;
+  maxPerHangar: number | null;
+  allowRotateY: boolean;
+  snapGridM: number | null;
 }
 
 export class AdminAuthError extends Error {
@@ -210,9 +236,31 @@ export function getGameSettings(): Promise<GameSettings> {
 export function updateGameSettings(body: {
   startingArcBalance: number;
   starterShipDefinitionIds: string[];
+  starterPropDefinitionIds: string[];
 }): Promise<GameSettings> {
   return requestAdminJson<GameSettings>('/admin/settings', {
     method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export function listPropDefinitions(): Promise<PropDefinition[]> {
+  return requestAdminJson<PropDefinition[]>('/admin/props', { method: 'GET' });
+}
+
+export function createPropDefinition(body: PropDefinitionInput): Promise<PropDefinition> {
+  return requestAdminJson<PropDefinition>('/admin/props', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updatePropDefinition(
+  id: string,
+  body: Partial<PropDefinitionInput>,
+): Promise<PropDefinition> {
+  return requestAdminJson<PropDefinition>(`/admin/props/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
     body: JSON.stringify(body),
   });
 }

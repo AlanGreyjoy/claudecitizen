@@ -506,6 +506,68 @@ body.ed-resize-row * {
   min-width: 0;
 }
 
+.ed-tree-row.is-parent-selected {
+  background: rgba(139, 216, 255, 0.08);
+  border-color: rgba(139, 216, 255, 0.2);
+}
+
+.ed-tree-row-glb {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ed-tree-row-glb.is-selected {
+  background: rgba(139, 216, 255, 0.12);
+  border-color: rgba(139, 216, 255, 0.28);
+  color: var(--text);
+}
+
+.ed-tree-row-glb-asset {
+  font: 600 9px/1 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ed-tree-name-glb {
+  font-family: var(--sc-mono);
+  font-size: 11px;
+}
+
+.ed-tree-label-muted {
+  color: var(--muted);
+  font: 600 9px/1 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ed-tree-chevron {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 0;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.ed-tree-chevron:hover {
+  color: var(--accent);
+}
+
+.ed-tree-chevron-spacer {
+  display: inline-block;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.ed-context-menu .ed-menu-flyout {
+  position: absolute;
+  min-width: 180px;
+}
+
 .ed-empty-note {
   padding: 14px 12px;
   color: var(--muted);

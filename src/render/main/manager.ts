@@ -29,6 +29,18 @@ import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
 import { setFogSettings as applyFogSettings, updateEnvironment } from './update/environment';
 import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun_system';
 
+const DAY_NIGHT_FADE_START_METERS = 18_000;
+
+function smoothstep01(value: number, edge0: number, edge1: number): number {
+  const t = clamp01((value - edge0) / Math.max(edge1 - edge0, 0.000001));
+  return t * t * (3 - 2 * t);
+}
+
+function resolveDayNightInfluence(altitudeMeters: number, atmosphereHeightMeters: number): number {
+  const fadeStart = Math.min(DAY_NIGHT_FADE_START_METERS, atmosphereHeightMeters * 0.35);
+  return 1 - smoothstep01(altitudeMeters, fadeStart, atmosphereHeightMeters);
+}
+
 export interface SpikeRendererOptions {
   /** Dev preview: render this prefab as the orbital station instead of the procedural model. */
   stationPrefab?: PrefabDocument | null;
@@ -137,6 +149,10 @@ export function createSpikeRenderer(
     const spaceFactor = clamp01(
       (surface.altitudeMeters - 18_000) / (planet.atmosphereHeightMeters * 1.6),
     );
+    const dayNightInfluence = resolveDayNightInfluence(
+      surface.altitudeMeters,
+      planet.atmosphereHeightMeters,
+    );
     const renderScale = tileManager.renderScale;
 
     const sunState = updateSunSystem(
@@ -145,6 +161,7 @@ export function createSpikeRenderer(
       renderScale,
       renderMode,
       up,
+      dayNightInfluence,
       lighting.sun,
       lighting.sunMesh,
       lighting.moonMesh,
@@ -260,6 +277,15 @@ export function createSpikeRenderer(
       tileManager.dispose();
       composerStack.dispose();
       renderer.dispose();
+    },
+    getStationRoot() {
+      return stationMesh;
+    },
+    getCamera() {
+      return camera;
+    },
+    getRenderScale() {
+      return tileManager.renderScale;
     },
   };
 }

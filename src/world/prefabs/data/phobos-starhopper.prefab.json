@@ -59,7 +59,7 @@
           }
         },
         "asset": {
-          "url": "/assets/protected/ships/Phobos_Starhopper_Basic.glb"
+          "url": "/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb"
         },
         "components": [
           {

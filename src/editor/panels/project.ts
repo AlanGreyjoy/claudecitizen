@@ -1,4 +1,10 @@
-import { assetUrlFor, fetchAssetListing, type AssetEntry, type AssetRoot } from '../api';
+import {
+  EDITOR_ASSET_ROOT,
+  assetUrlFor,
+  fetchAssetListing,
+  type AssetEntry,
+  type AssetRoot,
+} from '../api';
 import { attachColumnSplitter, PANEL_SIZE_BOUNDS } from '../panel_resize';
 import { clearChildren, el, showToast } from '../dom';
 
@@ -52,7 +58,7 @@ function buildFolderTree(entries: AssetEntry[]): FolderNode {
 }
 
 export function createProjectPanel(container: HTMLElement, options: ProjectPanelOptions): void {
-  let activeRoot: AssetRoot = 'public/assets';
+  const activeRoot: AssetRoot = EDITOR_ASSET_ROOT;
   let tree: FolderNode = { name: '', path: '', children: new Map(), files: [] };
   let selectedFolder = '';
   const expanded = new Set<string>(['']);
@@ -84,15 +90,14 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
 
   function renderRootTabs(): void {
     clearChildren(rootTabs);
-    (['public/assets', 'src/assets'] as AssetRoot[]).forEach((root) => {
+    ([EDITOR_ASSET_ROOT] as AssetRoot[]).forEach((root) => {
       rootTabs.append(
         el('button', {
           className: `ed-btn${root === activeRoot ? ' is-active' : ''}`,
-          text: root === 'public/assets' ? 'public' : 'src',
+          text: 'assets',
           title: root,
           on: {
             click: () => {
-              activeRoot = root;
               selectedFolder = '';
               void load();
             },
@@ -198,7 +203,7 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
       grid.append(
         el('div', {
           className: 'ed-empty-note',
-          text: 'No GLB / GLTF / image files in this folder. Drop Synty exports under public/assets/protected/synty/.',
+          text: 'No GLB / GLTF / image files in this folder. Drop assets under editor/assets/free/ or editor/assets/protected/.',
         }),
       );
       return;

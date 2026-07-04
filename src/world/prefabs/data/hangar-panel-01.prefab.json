@@ -1,0 +1,40 @@
+{
+  "id": "hangar-panel-01",
+  "name": "Wall Panel",
+  "version": 1,
+  "kind": "prop",
+  "root": {
+    "id": "root",
+    "name": "Wall Panel",
+    "transform": {
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+      "scale": { "x": 1, "y": 1, "z": 1 }
+    },
+    "components": [{ "type": "prop-frame" }],
+    "children": [
+      {
+        "id": "panel",
+        "name": "Panel",
+        "transform": {
+          "position": { "x": 0, "y": 1.2, "z": 0 },
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+          "scale": { "x": 1, "y": 1, "z": 1 }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": { "x": 2.4, "y": 2.4, "z": 0.12 },
+          "color": "#4c5663"
+        },
+        "components": [
+          {
+            "type": "collider",
+            "shape": "box",
+            "size": { "x": 2.4, "y": 2.4, "z": 0.12 },
+            "offset": { "x": 0, "y": 0, "z": 0 }
+          }
+        ]
+      }
+    ]
+  }
+}

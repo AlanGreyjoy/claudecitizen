@@ -1,7 +1,16 @@
 import { clearChildren, el, showContextMenu, type ContextMenuEntry } from '../dom';
-import { createEmptyEntity, type EditorEntity, type EditorStore } from '../document';
+import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../document';
+import {
+  buildEntityComponentsSubmenu,
+  buildGlbAuthoringMenu,
+} from '../component_actions';
+import type { Vec3 } from '../../types';
 
 const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
+
+export interface HierarchyPanelOptions {
+  getGlbNodePrefabPosition?: (entityId: string, nodeUuid: string) => Vec3 | null;
+}
 
 function componentBadge(entity: EditorEntity): string | null {
   if (entity.components.length === 0) return null;
@@ -9,7 +18,24 @@ function componentBadge(entity: EditorEntity): string | null {
   return `${entity.components.length} components`;
 }
 
-export function createHierarchyPanel(container: HTMLElement, store: EditorStore): void {
+function collectExpandUuids(
+  tree: GlbNodeRef,
+  targetUuid: string,
+  path: string[] = [],
+): string[] | null {
+  if (tree.uuid === targetUuid) return path;
+  for (const child of tree.children) {
+    const found = collectExpandUuids(child, targetUuid, [...path, tree.uuid]);
+    if (found) return found;
+  }
+  return null;
+}
+
+export function createHierarchyPanel(
+  container: HTMLElement,
+  store: EditorStore,
+  options: HierarchyPanelOptions = {},
+): void {
   const body = el('div', { className: 'ed-panel-body' });
   container.append(
     el('div', { className: 'ed-panel-title' }, [
@@ -20,6 +46,8 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
   );
 
   let renaming: string | null = null;
+  const expandedGlbEntities = new Set<string>();
+  const expandedGlbNodes = new Set<string>();
 
   function beginRename(entityId: string): void {
     renaming = entityId;
@@ -40,21 +68,185 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
     store.addEntity(entity, parentId);
   }
 
+  function spawnPositionForEntity(entityId: string): (() => Vec3 | null) | undefined {
+    const sub = store.getSubSelection();
+    if (!sub || sub.entityId !== entityId || !options.getGlbNodePrefabPosition) {
+      return undefined;
+    }
+    return () => options.getGlbNodePrefabPosition!(sub.entityId, sub.nodeUuid);
+  }
+
   function entityMenuEntries(entity: EditorEntity): ContextMenuEntry[] {
     return [
       { label: 'Add Child Empty', action: () => addEmptyTo(entity.id) },
       { label: 'Add Child Box', action: () => addBoxTo(entity.id) },
       'sep',
+      buildEntityComponentsSubmenu(store, entity.id, spawnPositionForEntity(entity.id)),
+      'sep',
       { label: 'Rename', action: () => beginRename(entity.id) },
       { label: 'Duplicate', action: () => store.duplicateEntity(entity.id) },
-      { label: entity.visible ? 'Hide' : 'Show', action: () => store.setVisible(entity.id, !entity.visible) },
+      {
+        label: entity.visible ? 'Hide' : 'Show',
+        action: () => store.setVisible(entity.id, !entity.visible),
+      },
       'sep',
       { label: 'Delete', action: () => store.deleteEntity(entity.id) },
     ];
   }
 
+  function glbMenuEntries(entityId: string, node: GlbNodeRef): ContextMenuEntry[] {
+    const getPosition =
+      options.getGlbNodePrefabPosition ??
+      (() => null);
+    return buildGlbAuthoringMenu(
+      store,
+      entityId,
+      node.uuid,
+      getPosition,
+      node.name,
+    );
+  }
+
+  function ensureGlbExpanded(entityId: string, nodeUuid?: string | null): void {
+    expandedGlbEntities.add(entityId);
+    const tree = store.getGlbTree(entityId);
+    if (!tree || !nodeUuid) return;
+    const path = collectExpandUuids(tree, nodeUuid);
+    if (!path) return;
+    for (const uuid of path) expandedGlbNodes.add(uuid);
+    expandedGlbNodes.add(nodeUuid);
+  }
+
+  function renderGlbRow(
+    entityId: string,
+    node: GlbNodeRef,
+    depth: number,
+    rows: HTMLElement[],
+  ): void {
+    const sub = store.getSubSelection();
+    const selected =
+      sub?.entityId === entityId && sub.nodeUuid === node.uuid;
+    const hasChildren = node.children.length > 0;
+    const expanded = expandedGlbNodes.has(node.uuid);
+
+    const toggle = hasChildren
+      ? el('button', {
+          className: `ed-tree-chevron${expanded ? ' is-expanded' : ''}`,
+          text: expanded ? '▾' : '▸',
+          title: expanded ? 'Collapse' : 'Expand',
+          on: {
+            click: (event) => {
+              event.stopPropagation();
+              if (expanded) expandedGlbNodes.delete(node.uuid);
+              else expandedGlbNodes.add(node.uuid);
+              render();
+            },
+          },
+        })
+      : el('span', { className: 'ed-tree-chevron-spacer' });
+
+    const row = el(
+      'div',
+      {
+        className: `ed-tree-row ed-tree-row-glb${selected ? ' is-selected' : ''}`,
+        attrs: { 'data-glb-uuid': node.uuid, 'data-entity-id': entityId },
+        on: {
+          click: () => {
+            ensureGlbExpanded(entityId, node.uuid);
+            store.setSubSelection(entityId, node.uuid);
+          },
+          contextmenu: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            ensureGlbExpanded(entityId, node.uuid);
+            store.setSubSelection(entityId, node.uuid);
+            const mouse = event as MouseEvent;
+            showContextMenu(mouse.clientX, mouse.clientY, glbMenuEntries(entityId, node));
+          },
+        },
+      },
+      [
+        toggle,
+        el('span', {
+          className: 'ed-tree-name ed-tree-name-glb',
+          text: node.name,
+          title: node.name,
+        }),
+      ],
+    );
+    row.style.paddingLeft = `${10 + depth * 14}px`;
+    rows.push(row);
+
+    if (hasChildren && expanded) {
+      for (const child of node.children) {
+        renderGlbRow(entityId, child, depth + 1, rows);
+      }
+    }
+  }
+
+  function renderGlbSubtree(
+    entity: EditorEntity,
+    depth: number,
+    rows: HTMLElement[],
+  ): void {
+    const tree = store.getGlbTree(entity.id);
+    if (!tree) return;
+
+    const sub = store.getSubSelection();
+    if (sub?.entityId === entity.id || store.getSelection() === entity.id) {
+      ensureGlbExpanded(entity.id, sub?.nodeUuid ?? null);
+    }
+
+    const expanded = expandedGlbEntities.has(entity.id);
+    const toggle = el('button', {
+      className: `ed-tree-chevron ed-tree-chevron-asset${expanded ? ' is-expanded' : ''}`,
+      text: expanded ? '▾' : '▸',
+      title: expanded ? 'Collapse model' : 'Expand model',
+      on: {
+        click: (event) => {
+          event.stopPropagation();
+          if (expanded) expandedGlbEntities.delete(entity.id);
+          else expandedGlbEntities.add(entity.id);
+          render();
+        },
+      },
+    });
+
+    const assetRow = el(
+      'div',
+      {
+        className: 'ed-tree-row ed-tree-row-glb ed-tree-row-glb-asset',
+        on: {
+          click: (event) => {
+            event.stopPropagation();
+            if (expanded) expandedGlbEntities.delete(entity.id);
+            else expandedGlbEntities.add(entity.id);
+            render();
+          },
+        },
+      },
+      [
+        toggle,
+        el('span', {
+          className: 'ed-tree-label-muted',
+          text: 'Model',
+        }),
+      ],
+    );
+    assetRow.style.paddingLeft = `${10 + depth * 14}px`;
+    rows.push(assetRow);
+
+    if (expanded) {
+      renderGlbRow(entity.id, tree, depth + 1, rows);
+    }
+  }
+
   function renderRow(entity: EditorEntity, depth: number, rows: HTMLElement[]): void {
-    const selected = store.getSelection() === entity.id;
+    const selection = store.getSelection();
+    const sub = store.getSubSelection();
+    const selected = selection === entity.id && !sub;
+    const parentSelected =
+      selection === entity.id && Boolean(sub) && sub?.entityId === entity.id;
     const badge = componentBadge(entity);
 
     const nameEl =
@@ -87,7 +279,7 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
     const row = el(
       'div',
       {
-        className: `ed-tree-row${selected ? ' is-selected' : ''}`,
+        className: `ed-tree-row${selected ? ' is-selected' : ''}${parentSelected ? ' is-parent-selected' : ''}`,
         attrs: { draggable: 'true', 'data-entity-id': entity.id },
         on: {
           click: () => store.setSelection(entity.id),
@@ -139,10 +331,13 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
     row.style.paddingLeft = `${10 + depth * 14}px`;
     rows.push(row);
 
+    if (entity.asset && store.getGlbTree(entity.id)) {
+      renderGlbSubtree(entity, depth + 1, rows);
+    }
+
     for (const child of entity.children) renderRow(child, depth + 1, rows);
   }
 
-  // Right-click on blank panel space adds at the root level.
   body.addEventListener('contextmenu', (event) => {
     event.preventDefault();
     showContextMenu(event.clientX, event.clientY, [
@@ -175,7 +370,7 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
           const draggedId = dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE);
           if (!draggedId) return;
           dragEvent.preventDefault();
-          store.reparentEntity(draggedId, null); // dropped on blank space → move to root
+          store.reparentEntity(draggedId, null);
         },
       },
     });
@@ -190,8 +385,13 @@ export function createHierarchyPanel(container: HTMLElement, store: EditorStore)
       event.type === 'structure' ||
       event.type === 'document' ||
       event.type === 'selection' ||
+      event.type === 'sub-selection' ||
+      event.type === 'glb-tree' ||
       event.type === 'entity'
     ) {
+      if (event.type === 'sub-selection' && event.entityId && event.nodeUuid) {
+        ensureGlbExpanded(event.entityId, event.nodeUuid);
+      }
       render();
     }
   });

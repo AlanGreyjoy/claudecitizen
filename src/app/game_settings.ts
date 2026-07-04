@@ -1,6 +1,11 @@
 import type { RenderQualityPreset } from '../render/main/domain/render_quality';
+import {
+  normalizeInputSettings,
+  type InputSettings,
+} from '../flight/input_settings';
 
 export interface GameSettings {
+  input: InputSettings;
   renderQuality: RenderQualityPreset;
   masterVolume: number;
   sfxVolume: number;
@@ -8,8 +13,10 @@ export interface GameSettings {
 }
 
 const STORAGE_KEY = 'claudecitizen-game-settings';
+export const GAME_SETTINGS_CHANGED_EVENT = 'claudecitizen-game-settings-changed';
 
 const DEFAULT_SETTINGS: GameSettings = {
+  input: normalizeInputSettings(undefined),
   renderQuality: 'balanced',
   masterVolume: 1,
   sfxVolume: 1,
@@ -30,6 +37,7 @@ function normalizeSettings(raw: Partial<GameSettings>): GameSettings {
       : DEFAULT_SETTINGS.renderQuality;
 
   return {
+    input: normalizeInputSettings(raw.input),
     renderQuality,
     masterVolume: clampVolume(raw.masterVolume ?? DEFAULT_SETTINGS.masterVolume),
     sfxVolume: clampVolume(raw.sfxVolume ?? DEFAULT_SETTINGS.sfxVolume),
@@ -39,17 +47,18 @@ function normalizeSettings(raw: Partial<GameSettings>): GameSettings {
 
 export function loadGameSettings(): GameSettings {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return { ...DEFAULT_SETTINGS };
+  if (!raw) return normalizeSettings(DEFAULT_SETTINGS);
   try {
     return normalizeSettings(JSON.parse(raw) as Partial<GameSettings>);
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return normalizeSettings(DEFAULT_SETTINGS);
   }
 }
 
 export function saveGameSettings(settings: GameSettings): GameSettings {
   const next = normalizeSettings(settings);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent<GameSettings>(GAME_SETTINGS_CHANGED_EVENT, { detail: next }));
   return next;
 }
 

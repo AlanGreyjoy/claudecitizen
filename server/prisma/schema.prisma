@@ -27,12 +27,15 @@ model Player {
   displayName       String
   currentInstanceId String
   currentRoomId     String   @default("hab-room")
+  assignedHangar    Int?
   arcBalance        Int      @default(0)
   starterLoadoutGrantedAt DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   ships             Ship[]
+  props             PlayerProp[]
+  hangarPlacements  HangarPlacement[]
 }
 
 model Ship {
@@ -72,11 +75,60 @@ model ShipDefinition {
 }
 
 model GameSettings {
-  id                     String   @id @default("singleton")
-  startingArcBalance     Int      @default(0)
+  id                       String   @id @default("singleton")
+  startingArcBalance       Int      @default(0)
   starterShipDefinitionIds String[] @default([])
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  starterPropDefinitionIds String[] @default([])
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model PropDefinition {
+  id             String   @id @default(cuid())
+  name           String
+  description    String
+  prefabId       String
+  costArc        Int
+  category       String   @default("decoration")
+  maxPerHangar   Int?
+  allowRotateY   Boolean  @default(true)
+  snapGridM      Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  inventory      PlayerProp[]
+  placements     HangarPlacement[]
+}
+
+model PlayerProp {
+  id               String         @id @default(cuid())
+  playerId         String
+  propDefinitionId String
+  quantity         Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  player           Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  propDefinition   PropDefinition @relation(fields: [propDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, propDefinitionId])
+  @@index([playerId])
+  @@index([propDefinitionId])
+}
+
+model HangarPlacement {
+  id               String         @id @default(cuid())
+  playerId         String
+  propDefinitionId String
+  right            Float
+  up               Float
+  forward          Float
+  rotationY        Float          @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  player           Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  propDefinition   PropDefinition @relation(fields: [propDefinitionId], references: [id], onDelete: Restrict)
+
+  @@index([playerId])
+  @@index([propDefinitionId])
 }
 
 model RefreshToken {

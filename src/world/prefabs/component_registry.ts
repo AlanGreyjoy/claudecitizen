@@ -29,7 +29,8 @@ export interface ComponentDef {
   hint?: string;
 }
 
-const ALL_KINDS: PrefabKind[] = ["station", "ship", "site"];
+const ALL_KINDS: PrefabKind[] = ["station", "ship", "site", "prop"];
+const PROP_KINDS: PrefabKind[] = ["prop"];
 
 export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
@@ -39,6 +40,14 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     singleton: true,
     createDefault: () => ({ type: "station-frame" }),
     hint: "Marks the prefab origin used for orbital placement.",
+  },
+  {
+    type: "prop-frame",
+    label: "Prop Frame",
+    kinds: PROP_KINDS,
+    singleton: true,
+    createDefault: () => ({ type: "prop-frame" }),
+    hint: "Marks the prop origin used when placed in a hangar.",
   },
   {
     type: "spawn-point",
@@ -114,7 +123,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "collider",
     label: "Collider",
-    kinds: ALL_KINDS,
+    kinds: ["station", "ship", "site", "prop"],
     createDefault: () => ({
       type: "collider",
       shape: "box",

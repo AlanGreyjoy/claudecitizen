@@ -58,6 +58,7 @@ export interface ContextMenuItem {
   label: string;
   action?: () => void;
   disabled?: boolean;
+  children?: ContextMenuEntry[];
 }
 
 export type ContextMenuEntry = ContextMenuItem | 'sep';
@@ -77,28 +78,58 @@ export function showContextMenu(x: number, y: number, entries: ContextMenuEntry[
   closeContextMenu();
 
   const menu = el('div', { className: 'ed-menu-dropdown ed-context-menu' });
-  for (const entry of entries) {
-    if (entry === 'sep') {
-      menu.append(el('div', { className: 'ed-menu-sep' }));
-      continue;
-    }
-    const button = el(
-      'button',
-      {
-        className: 'ed-menu-item',
-        on: {
-          click: () => {
-            if (entry.disabled) return;
-            closeContextMenu();
-            entry.action?.();
+
+  function appendEntries(host: HTMLElement, items: ContextMenuEntry[]): void {
+    for (const entry of items) {
+      if (entry === 'sep') {
+        host.append(el('div', { className: 'ed-menu-sep' }));
+        continue;
+      }
+      if (entry.children && entry.children.length > 0) {
+        const submenuWrap = el('div', { className: 'ed-menu-submenu' });
+        const trigger = el(
+          'button',
+          { className: 'ed-menu-item ed-menu-submenu-trigger' },
+          [
+            el('span', { className: 'ed-menu-item-label', text: entry.label }),
+            el('span', { className: 'ed-menu-item-shortcut', text: '▸' }),
+          ],
+        );
+        const flyout = el('div', { className: 'ed-menu-dropdown ed-menu-flyout' });
+        appendEntries(flyout, entry.children);
+        submenuWrap.append(trigger, flyout);
+        trigger.addEventListener('mouseenter', () => {
+          for (const node of menu.querySelectorAll('.ed-menu-submenu')) {
+            node.classList.remove('is-open');
+          }
+          submenuWrap.classList.add('is-open');
+        });
+        submenuWrap.addEventListener('mouseleave', () => {
+          submenuWrap.classList.remove('is-open');
+        });
+        host.append(submenuWrap);
+        continue;
+      }
+      const button = el(
+        'button',
+        {
+          className: 'ed-menu-item',
+          on: {
+            click: () => {
+              if (entry.disabled) return;
+              closeContextMenu();
+              entry.action?.();
+            },
           },
         },
-      },
-      [el('span', { className: 'ed-menu-item-label', text: entry.label })],
-    );
-    button.disabled = entry.disabled ?? false;
-    menu.append(button);
+        [el('span', { className: 'ed-menu-item-label', text: entry.label })],
+      );
+      button.disabled = entry.disabled ?? false;
+      host.append(button);
+    }
   }
+
+  appendEntries(menu, entries);
 
   const host = document.getElementById('editor-root') ?? document.body;
   host.append(menu);

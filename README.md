@@ -45,13 +45,13 @@ Open it from the title screen or deep-link with `http://localhost:4173/?boot=edi
 | **Hierarchy** (left) | Scene tree — click to select, double-click to rename, drag rows to reparent, eye toggles visibility |
 | **Scene View** (center) | Orbit camera (LMB drag orbit, MMB pan, wheel zoom), Unity-style flythrough (hold RMB + WASD, `Q`/`E` down/up, `Shift` fast, wheel adjusts fly speed), transform gizmo, click to select, drag assets in to place them |
 | **Inspector** (right) | Name, transform fields, box primitive / model settings, and gameplay components |
-| **Project** (bottom) | Asset browser over `public/assets/` and `src/assets/` with model thumbnails; drag GLB/GLTF cards into the scene |
+| **Project** (bottom) | Asset browser over `editor/assets/` with model thumbnails; drag GLB/GLTF cards into the scene |
 
 Toolbar: **Move / Rotate / Scale** (`W` / `E` / `R`), local/world space, snap toggle with translate (default `0.25 m`) and rotate (default `15°`) increments (hold `Ctrl` to invert snapping while dragging), `+ Box` / `+ Empty`, undo/redo (`Ctrl+Z` / `Ctrl+Shift+Z`), prefab name + kind, **New / Load / Save** (`Ctrl+S`), **Preview Station / Preview Ship** (per kind), Exit. `F` focuses the selection, `Ctrl+D` duplicates, `Del` deletes.
 
 ### Prefabs
 
-Saving writes JSON to `src/world/prefabs/data/<id>.prefab.json` (tracked — metadata only, asset urls may point at gitignored protected files). The game bundles these files, so saved prefabs load in dev and production alike.
+Saving writes JSON to `src/world/prefabs/data/<id>.prefab.json` (tracked — metadata only, asset urls may point at gitignored protected files). The game bundles these files, and the production build copies only the asset files referenced by those prefabs.
 
 Components are added in the Inspector through a **search/autocomplete box** (type to filter, arrows + Enter to add) that only offers types valid for the current prefab kind. Unity-style placement: adding a spatial component (zones, doors, seats, pads, …) to a model entity creates an **empty child marker** carrying the component, selected and ready to move with the gizmo; adding to an empty attaches directly. Station components:
 
@@ -107,43 +107,36 @@ The ship sits parked on a flat test pad — no planet, station, or flight — so
 ### Importing Synty packs (e.g. POLYGON Sci-Fi Worlds)
 
 1. Export the modular pieces you want from Unity as FBX, then convert to GLB — Blender (`File → Export → glTF 2.0`) or [`gltf-transform`](https://gltf-transform.dev/) both work. One piece per file keeps snapping simple.
-2. Drop the GLBs under `public/assets/protected/synty/sci-fi-worlds/{Buildings,Props,Environment,...}/`. Everything under `public/assets/protected/` is gitignored, exactly like the Starhopper.
+2. Drop the GLBs under `editor/assets/protected/synty/sci-fi-worlds/{Buildings,Props,Environment,...}/`. Everything under `editor/assets/` is gitignored by default, exactly like the Starhopper.
 3. Verify a file with `node scripts/inspect_glb.mjs <path>` if materials or hierarchy look off; the bake approach in `scripts/bake_ship_textures.py` is the template for fixing Unity trim-sheet materials that do not translate to Three.js PBR.
-4. Refresh the editor's Project panel — the files appear under the `public` root with generated thumbnails, ready to drag into a scene.
+4. Refresh the editor's Project panel — the files appear under the `assets` root with generated thumbnails, ready to drag into a scene.
 
 Prefab JSON only references asset paths, so prefabs are safe to commit even when they point at protected files; public checkouts simply see missing-model placeholders.
 
 ## Optional protected assets
 
-Some local development assets are not part of the open-source repo. Put paid or otherwise non-redistributable runtime assets under `public/assets/protected/`; that folder is ignored by git.
+Some local development assets are not part of the open-source repo. Put paid or otherwise non-redistributable runtime assets under `editor/assets/protected/`; editor asset files are ignored by git by default. Use `editor/assets/free/` for local assets that are license-safe but still should not be committed automatically.
 
 The Starhopper model is expected at:
 
 ```text
-public/assets/protected/ships/Phobos_Starhopper_Basic.glb
+editor/assets/protected/ships/Phobos_Starhopper_Basic.glb
 ```
 
 If it is missing, the game falls back to the tracked placeholder ship.
 
-Production builds remove `dist/assets/protected/` by default so local-only assets are not accidentally published. Set `INCLUDE_PROTECTED_ASSETS=1` only for a private build where those assets are allowed to ship.
+Production builds scan saved prefab JSON and copy only referenced files from `editor/assets/` into `dist/editor/assets/`. A prefab that uses one protected asset includes that asset in the web build; a local library of unused assets stays out of `dist/`.
 
 ## Netlify deployment
 
 Netlify uses `npm run build` and publishes `dist/` via `netlify.toml`.
 
 ```bash
-npm run deploy:netlify       # draft deploy, protected assets stripped
-npm run deploy:netlify:prod  # production deploy, protected assets stripped
+npm run deploy:netlify       # draft deploy
+npm run deploy:netlify:prod  # production deploy
 ```
 
-For private/licensed deploys where protected assets are allowed to ship:
-
-```bash
-npm run deploy:netlify:protected
-npm run deploy:netlify:protected:prod
-```
-
-Anything included in a Netlify deploy is publicly downloadable by clients. Keep proprietary assets under `public/assets/protected/` and use the protected deploy scripts only when that is acceptable.
+Anything included in a Netlify deploy is publicly downloadable by clients. Keep proprietary source libraries under `editor/assets/protected/`; only reference assets in prefabs when they are allowed to ship in that build.
 
 ## Commands
 
@@ -152,11 +145,11 @@ Anything included in a Netlify deploy is publicly downloadable by clients. Keep 
 | `npm run dev`       | Dev server with hot reload (port 4173)           |
 | `npm run serve`     | Same as `dev`                                    |
 | `npm run build`     | Typecheck + production build to `dist/`          |
-| `npm run build:protected` | Production build including `public/assets/protected/` |
-| `npm run deploy:netlify` | Draft Netlify deploy with protected assets stripped |
-| `npm run deploy:netlify:prod` | Production Netlify deploy with protected assets stripped |
-| `npm run deploy:netlify:protected` | Draft Netlify deploy including protected assets |
-| `npm run deploy:netlify:protected:prod` | Production Netlify deploy including protected assets |
+| `npm run build:protected` | Compatibility alias for `npm run build` |
+| `npm run deploy:netlify` | Draft Netlify deploy |
+| `npm run deploy:netlify:prod` | Production Netlify deploy |
+| `npm run deploy:netlify:protected` | Compatibility alias for draft Netlify deploy |
+| `npm run deploy:netlify:protected:prod` | Compatibility alias for production Netlify deploy |
 | `npm run typecheck` | Run TypeScript without emitting                  |
 | `npm run demo`      | Headless scripted takeoff / orbit / landing demo |
 
@@ -524,6 +517,8 @@ src/
   player/             Character, deck, ship interaction
   render/             Three.js presentation layer
   assets/             GLTF models (ship, vegetation)
+editor/
+  assets/             Local editor asset library (free/protected)
 scripts/              Dev utilities and the orbit demo
 .agents/AGENTS.md     Architecture and agent conventions
 ```

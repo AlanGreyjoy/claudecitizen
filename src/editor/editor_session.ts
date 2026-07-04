@@ -45,7 +45,7 @@ export function startEditorSession(): void {
     viewportToolbarEl,
     el('div', {
       className: 'ed-viewport-hint',
-      text: 'LMB select/orbit · MMB pan · wheel zoom · hold RMB + WASD fly (Q/E down/up, Shift fast, wheel speed) · W/E/R gizmo · F focus · Ctrl+D duplicate · Del delete',
+      text: 'LMB select · re-click drill · RMB sub-mesh: add empty/component · MMB pan · wheel zoom · hold RMB + WASD fly · W/E/R gizmo · F focus · Ctrl+D duplicate · Del delete',
     }),
   ]);
   const inspectorEl = el('div', { className: 'ed-panel' });
@@ -254,8 +254,16 @@ export function startEditorSession(): void {
     onShipPreviewChange: (state) => viewport.setShipPreview(state),
   });
 
-  createHierarchyPanel(hierarchyEl, store);
-  createInspectorPanel(inspectorEl, store);
+  createHierarchyPanel(hierarchyEl, store, {
+    getGlbNodePrefabPosition: (entityId, nodeUuid) =>
+      viewport.getGlbNodePrefabPosition(entityId, nodeUuid),
+  });
+  createInspectorPanel(inspectorEl, store, {
+    getGlbNodeLocalTransform: (entityId, nodeUuid) =>
+      viewport.getGlbNodeLocalTransform(entityId, nodeUuid),
+    setGlbNodeLocalTransform: (entityId, nodeUuid, transform) =>
+      viewport.setGlbNodeLocalTransform(entityId, nodeUuid, transform),
+  });
   createProjectPanel(projectEl, { getModelThumbnail });
   void refreshPrefabList();
 

@@ -1,0 +1,54 @@
+{
+  "id": "hangar-lamp-01",
+  "name": "Hangar Lamp",
+  "version": 1,
+  "kind": "prop",
+  "root": {
+    "id": "root",
+    "name": "Hangar Lamp",
+    "transform": {
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+      "scale": { "x": 1, "y": 1, "z": 1 }
+    },
+    "components": [{ "type": "prop-frame" }],
+    "children": [
+      {
+        "id": "post",
+        "name": "Lamp Post",
+        "transform": {
+          "position": { "x": 0, "y": 1.2, "z": 0 },
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+          "scale": { "x": 1, "y": 1, "z": 1 }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": { "x": 0.25, "y": 2.4, "z": 0.25 },
+          "color": "#3d4654"
+        }
+      },
+      {
+        "id": "head",
+        "name": "Lamp Head",
+        "transform": {
+          "position": { "x": 0, "y": 2.55, "z": 0 },
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+          "scale": { "x": 1, "y": 1, "z": 1 }
+        },
+        "primitive": {
+          "shape": "box",
+          "size": { "x": 0.7, "y": 0.35, "z": 0.7 },
+          "color": "#8bd8ff"
+        },
+        "components": [
+          {
+            "type": "collider",
+            "shape": "box",
+            "size": { "x": 0.8, "y": 2.8, "z": 0.8 },
+            "offset": { "x": 0, "y": -1.2, "z": 0 }
+          }
+        ]
+      }
+    ]
+  }
+}

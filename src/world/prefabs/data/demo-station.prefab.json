@@ -780,7 +780,7 @@
           }
         },
         "asset": {
-          "url": "/src/assets/protected/props/SM_Prop_Monitor_06.glb"
+          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
         },
         "children": [
           {
@@ -836,7 +836,7 @@
           }
         },
         "asset": {
-          "url": "/src/assets/protected/props/SM_Prop_Monitor_06.glb"
+          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
         },
         "children": [
           {

@@ -16,9 +16,9 @@ import type { StationFloorId, StationSide } from "../station";
  * station-local gameplay axes as: right = -x, up = y, forward = z.
  */
 
-export type PrefabKind = "station" | "ship" | "site";
+export type PrefabKind = "station" | "ship" | "site" | "prop";
 
-export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site"];
+export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site", "prop"];
 
 /** Horizontal (XZ plane) extent used by walk volumes, in prefab/scene axes. */
 export interface PrefabVec2 {
@@ -33,7 +33,7 @@ export interface PrefabTransform {
 }
 
 export interface PrefabAsset {
-  /** Absolute dev-server url, e.g. "/assets/protected/synty/.../Wall_01.glb". */
+  /** Absolute dev-server url, e.g. "/editor/assets/protected/synty/.../Wall_01.glb". */
   url: string;
   castShadow?: boolean;
 }
@@ -60,6 +60,7 @@ export const SHIP_SEAT_ROLES: ShipSeatRole[] = [
 
 export type PrefabComponent =
   | { type: "station-frame" }
+  | { type: "prop-frame" }
   | { type: "spawn-point"; floorId: StationFloorId }
   | { type: "elevator"; id: string; targetFloor: StationFloorId }
   | { type: "hangar-pad"; hangarId: string; padIndex: number }
@@ -282,6 +283,8 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
   const type = value.type;
   switch (type) {
     case "station-frame":
+      return { type };
+    case "prop-frame":
       return { type };
     case "spawn-point":
       return { type, floorId: parseFloorId(value.floorId, `${path}.floorId`) };

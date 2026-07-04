@@ -36,10 +36,45 @@ export interface GameBootstrap {
     maxSpeedMps: number;
     throttleAccelMps2: number;
   }[];
+  hangar: HangarBuildState;
   featureFlags: {
     nativeWebSocketPresence: boolean;
     serverAuthoritativePhysics: boolean;
   };
+}
+
+export interface PropDefinitionEntry {
+  id: string;
+  name: string;
+  description: string;
+  prefabId: string;
+  costArc: number;
+  category: string;
+  maxPerHangar: number | null;
+  allowRotateY: boolean;
+  snapGridM: number | null;
+}
+
+export interface PlayerPropInventoryEntry {
+  propDefinitionId: string;
+  quantity: number;
+}
+
+export interface HangarPlacementEntry {
+  id: string;
+  propDefinitionId: string;
+  prefabId: string;
+  right: number;
+  up: number;
+  forward: number;
+  rotationY: number;
+}
+
+export interface HangarBuildState {
+  assignedHangar: number;
+  catalog: PropDefinitionEntry[];
+  inventory: PlayerPropInventoryEntry[];
+  placements: HangarPlacementEntry[];
 }
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
@@ -141,4 +176,56 @@ export function discordStartUrl(): string {
 
 export function fetchGameBootstrap(): Promise<GameBootstrap> {
   return requestJson<GameBootstrap>('/game/bootstrap', { method: 'GET' });
+}
+
+export interface HangarBuildResponse extends HangarBuildState {
+  arcBalance: number;
+}
+
+export function fetchHangarBuildState(): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>('/game/hangar/build', { method: 'GET' });
+}
+
+export function purchaseHangarProp(propDefinitionId: string): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>('/game/hangar/purchase', {
+    method: 'POST',
+    body: JSON.stringify({ propDefinitionId }),
+  });
+}
+
+export function createHangarPlacement(
+  propDefinitionId: string,
+  transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
+): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>('/game/hangar/placements', {
+    method: 'POST',
+    body: JSON.stringify({ propDefinitionId, ...transform }),
+  });
+}
+
+export function updateHangarPlacement(
+  placementId: string,
+  transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
+): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>(
+    `/game/hangar/placements/${encodeURIComponent(placementId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(transform),
+    },
+  );
+}
+
+export function deleteHangarPlacement(placementId: string): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>(
+    `/game/hangar/placements/${encodeURIComponent(placementId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+export function setAssignedHangarBay(hangarIndex: number): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>('/game/hangar/assigned-bay', {
+    method: 'POST',
+    body: JSON.stringify({ hangarIndex }),
+  });
 }

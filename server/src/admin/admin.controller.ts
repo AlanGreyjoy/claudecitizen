@@ -163,7 +163,69 @@ function parseSettingsUpdate(body: unknown) {
       2_000_000_000,
     ),
     starterShipDefinitionIds: readStringArray(body, 'starterShipDefinitionIds'),
+    starterPropDefinitionIds: readStringArray(body, 'starterPropDefinitionIds'),
   };
+}
+
+function parsePropDefinitionCreate(body: unknown) {
+  const maxPerHangarRaw = readFiniteNumber(body, 'maxPerHangar');
+  const snapGridRaw = readFiniteNumber(body, 'snapGridM');
+  return {
+    name: requireText(readString(body, 'name'), 'Name', 80),
+    description: requireText(readString(body, 'description'), 'Description', 2_000),
+    prefabId: requirePrefabId(readString(body, 'prefabId')),
+    costArc: requireInteger(readFiniteNumber(body, 'costArc'), 'Cost', 0, 2_000_000_000),
+    category: requireText(readString(body, 'category') || 'decoration', 'Category', 40),
+    maxPerHangar:
+      maxPerHangarRaw === null ? null : requireInteger(maxPerHangarRaw, 'Max per hangar', 1, 64),
+    allowRotateY: readString(body, 'allowRotateY') !== 'false',
+    snapGridM: snapGridRaw === null ? null : requireFloat(snapGridRaw, 'Snap grid', 0.1, 4),
+  };
+}
+
+function parsePropDefinitionPatch(body: unknown) {
+  const next: {
+    name?: string;
+    description?: string;
+    prefabId?: string;
+    costArc?: number;
+    category?: string;
+    maxPerHangar?: number | null;
+    allowRotateY?: boolean;
+    snapGridM?: number | null;
+  } = {};
+
+  const name = readOptionalString(body, 'name');
+  if (name !== undefined) next.name = requireText(name, 'Name', 80);
+
+  const description = readOptionalString(body, 'description');
+  if (description !== undefined) next.description = requireText(description, 'Description', 2_000);
+
+  const prefabId = readOptionalString(body, 'prefabId');
+  if (prefabId !== undefined) next.prefabId = requirePrefabId(prefabId);
+
+  const costArc = readFiniteNumber(body, 'costArc');
+  if (costArc !== null) next.costArc = requireInteger(costArc, 'Cost', 0, 2_000_000_000);
+
+  const category = readOptionalString(body, 'category');
+  if (category !== undefined) next.category = requireText(category, 'Category', 40);
+
+  if (typeof body === 'object' && body !== null && 'maxPerHangar' in body) {
+    const maxPerHangar = readFiniteNumber(body, 'maxPerHangar');
+    next.maxPerHangar =
+      maxPerHangar === null ? null : requireInteger(maxPerHangar, 'Max per hangar', 1, 64);
+  }
+
+  if (typeof body === 'object' && body !== null && 'allowRotateY' in body) {
+    next.allowRotateY = readString(body, 'allowRotateY') !== 'false';
+  }
+
+  if (typeof body === 'object' && body !== null && 'snapGridM' in body) {
+    const snapGridM = readFiniteNumber(body, 'snapGridM');
+    next.snapGridM = snapGridM === null ? null : requireFloat(snapGridM, 'Snap grid', 0.1, 4);
+  }
+
+  return next;
 }
 
 @Controller('admin')
@@ -257,6 +319,36 @@ export class AdminController {
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : 'Game settings are invalid.',
+      );
+    }
+  }
+
+  @Get('props')
+  @UseGuards(AdminGuard)
+  async listProps() {
+    return this.admin.listPropDefinitions();
+  }
+
+  @Post('props')
+  @UseGuards(AdminGuard)
+  async createProp(@Body() body: unknown) {
+    try {
+      return this.admin.createPropDefinition(parsePropDefinitionCreate(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Prop definition is invalid.',
+      );
+    }
+  }
+
+  @Patch('props/:id')
+  @UseGuards(AdminGuard)
+  async updateProp(@Param('id') id: string, @Body() body: unknown) {
+    try {
+      return this.admin.updatePropDefinition(id, parsePropDefinitionPatch(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Prop definition update is invalid.',
       );
     }
   }

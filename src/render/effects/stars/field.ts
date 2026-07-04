@@ -106,7 +106,8 @@ function loadStarsData(): Promise<ArrayBuffer> {
 
 function resolveStarState(daylightFactor: number, spaceFactor: number): StarFieldState {
   const nightFactor = 1 - daylightFactor;
-  const daylightSuppression = 1 - clamp01((daylightFactor - 0.38) / 0.2);
+  const surfaceFactor = 1 - clamp01(spaceFactor);
+  const daylightSuppression = 1 - clamp01((daylightFactor - 0.38) / 0.2) * surfaceFactor;
   const nightSurface = nightFactor * (1 - spaceFactor * 0.25);
   const orbit = spaceFactor;
   const strength = clamp01(Math.max(nightSurface, orbit * 0.85)) * daylightSuppression;

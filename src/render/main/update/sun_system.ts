@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Vec3 } from '../../../types';
 import { normalize } from '../../../math/vec3';
 import { radialUp } from '../../../world/coordinates';
-import { v3 } from '../domain/math';
+import { clamp01, v3 } from '../domain/math';
 import type { RenderMode } from '../domain/types';
 import { DAY_LENGTH_SECONDS } from '../domain/constants';
 
@@ -10,11 +10,20 @@ export interface SunSystemState {
   sunDir: THREE.Vector3;
   daylightFactor: number;
   rawDaylight: number;
+  surfaceDaylightFactor: number;
+  surfaceRawDaylight: number;
+  dayNightInfluence: number;
   planetCenter: THREE.Vector3;
 }
 
+const cycleSunDirScratch = new THREE.Vector3();
 const sunDirScratch = new THREE.Vector3();
 const moonDirScratch = new THREE.Vector3();
+const spaceSunDir = new THREE.Vector3(0.72, 0.34, 0.6).normalize();
+
+function lerpNumber(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
 
 function configureShadowCamera(
   light: THREE.DirectionalLight,
@@ -52,17 +61,21 @@ export function updateSunSystem(
   renderScale: number,
   renderMode: RenderMode,
   up: Vec3,
+  dayNightInfluence: number,
   sun: THREE.DirectionalLight,
   sunMesh: THREE.Mesh,
   moonMesh?: THREE.Mesh,
   moonLight?: THREE.DirectionalLight,
 ): SunSystemState {
   const theta = (nowSeconds / DAY_LENGTH_SECONDS) * Math.PI * 2;
-  sunDirScratch.set(
+  const surfaceInfluence = clamp01(dayNightInfluence);
+  const spaceInfluence = 1 - surfaceInfluence;
+  cycleSunDirScratch.set(
     Math.cos(theta),
     Math.sin(theta) * 0.364,
     Math.sin(theta) * 0.939,
   ).normalize();
+  sunDirScratch.copy(spaceSunDir).lerp(cycleSunDirScratch, surfaceInfluence).normalize();
 
   const planetCenter = new THREE.Vector3(
     -focusPosition.x * renderScale,
@@ -86,23 +99,25 @@ export function updateSunSystem(
   sun.target.position.set(0, 0, 0);
   configureShadowCamera(sun, renderMode, renderScale);
 
-  const rawDaylight = sunDirScratch.dot(v3(up));
-  const daylightFactor = Math.max(0, Math.min(1, rawDaylight + 0.2));
+  const surfaceRawDaylight = cycleSunDirScratch.dot(v3(up));
+  const surfaceDaylightFactor = clamp01(surfaceRawDaylight + 0.2);
+  const rawDaylight = lerpNumber(surfaceRawDaylight, 1, spaceInfluence);
+  const daylightFactor = lerpNumber(surfaceDaylightFactor, 1, spaceInfluence);
 
   const shadowsEnabled = sun.userData.shadowsEnabled === true;
 
   if (moonMesh && moonLight) {
     // Full-moon model: the moon sits opposite the sun, so it is up at night.
-    moonDirScratch.copy(sunDirScratch).negate();
+    moonDirScratch.copy(cycleSunDirScratch).negate();
     moonMesh.position.copy(moonDirScratch).multiplyScalar(skyBodyDist * 0.92);
     const moonElevation = Math.max(0, moonDirScratch.dot(v3(up)));
-    const nightFactor = 1 - daylightFactor;
-    moonMesh.visible = moonElevation > 0.01;
+    const nightFactor = 1 - surfaceDaylightFactor;
+    moonMesh.visible = surfaceInfluence > 0.02 && moonElevation > 0.01;
     moonLight.position.copy(moonDirScratch).multiplyScalar(shadowDist);
     moonLight.target.position.set(0, 0, 0);
     // Soft curve so moonlight ramps up quickly once the moon clears the horizon.
     // Kept well below sun intensity (~1.65) so night reads as night.
-    moonLight.intensity = 0.7 * Math.pow(moonElevation, 0.6) * nightFactor;
+    moonLight.intensity = 0.7 * Math.pow(moonElevation, 0.6) * nightFactor * surfaceInfluence;
     configureShadowCamera(moonLight, renderMode, renderScale);
 
     // Only one shadow map per frame: whichever body is meaningfully lighting
@@ -117,6 +132,9 @@ export function updateSunSystem(
     sunDir: sunDirScratch.clone(),
     daylightFactor,
     rawDaylight,
+    surfaceDaylightFactor,
+    surfaceRawDaylight,
+    dayNightInfluence: surfaceInfluence,
     planetCenter,
   };
 }
@@ -126,7 +144,7 @@ export function updateSunIntensity(
   rawDaylight: number,
   spaceFactor: number,
 ): void {
-  sun.intensity = (1.65 + spaceFactor * 0.55) * Math.max(0, Math.min(1, rawDaylight * 2.0 + 0.2));
+  sun.intensity = (1.65 + spaceFactor * 0.55) * clamp01(rawDaylight * 2.0 + 0.2);
 }
 
 export interface ShipPlacementInput {

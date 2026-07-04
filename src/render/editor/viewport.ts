@@ -9,9 +9,11 @@ import {
   BUILTIN_GEAR_HINGES,
   BUILTIN_RAMP_HINGE,
 } from "../main/scene/ship_model";
-import type { EditorEntity, EditorStore } from "../../editor/document";
+import type { EditorEntity, EditorStore, EntityTransform, GlbNodeRef } from "../../editor/document";
 import type { PrefabComponent } from "../../world/prefabs/schema";
 import type { Vec3 } from "../../types";
+import { showContextMenu } from "../../editor/dom";
+import { buildGlbAuthoringMenu } from "../../editor/component_actions";
 
 export type GizmoMode = "translate" | "rotate" | "scale";
 export type GizmoSpace = "local" | "world";
@@ -39,6 +41,16 @@ export interface EditorViewport {
   /** Ship kind only: articulates gear/ramp/doors on loaded models for preview. */
   setShipPreview: (state: ShipPreviewState) => void;
   focusSelection: () => void;
+  getGlbNodePrefabPosition: (entityId: string, nodeUuid: string) => Vec3 | null;
+  getGlbNodeLocalTransform: (
+    entityId: string,
+    nodeUuid: string,
+  ) => EntityTransform | null;
+  setGlbNodeLocalTransform: (
+    entityId: string,
+    nodeUuid: string,
+    transform: Partial<EntityTransform>,
+  ) => void;
   /** True while the RMB flythrough owns the camera (WASD is flying, not tool shortcuts). */
   isFlying: () => boolean;
   dispose: () => void;
@@ -200,7 +212,24 @@ export function createEditorViewport(
   }
   document.addEventListener("pointerlockchange", onPointerLockChange);
 
-  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  canvas.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    if (flying) return;
+    const sub = store.getSubSelection();
+    if (!sub) return;
+    const nodeName = store.getGlbNodeName(sub.entityId, sub.nodeUuid);
+    showContextMenu(
+      event.clientX,
+      event.clientY,
+      buildGlbAuthoringMenu(
+        store,
+        sub.entityId,
+        sub.nodeUuid,
+        getGlbNodePrefabPosition,
+        nodeName,
+      ),
+    );
+  });
   canvas.addEventListener("pointermove", onFlyLook);
   canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 2) return;
@@ -612,6 +641,63 @@ export function createEditorViewport(
     object.scale.set(entity.scale.x, entity.scale.y, entity.scale.z);
   }
 
+  function applyTransformToObject3D(
+    object: THREE.Object3D,
+    transform: EntityTransform,
+  ): void {
+    object.position.set(
+      transform.position.x,
+      transform.position.y,
+      transform.position.z,
+    );
+    object.rotation.set(
+      transform.rotation.x * DEG_TO_RAD,
+      transform.rotation.y * DEG_TO_RAD,
+      transform.rotation.z * DEG_TO_RAD,
+      "XYZ",
+    );
+    object.scale.set(transform.scale.x, transform.scale.y, transform.scale.z);
+  }
+
+  function findGlbNodeByName(
+    entityGroup: THREE.Object3D,
+    nodeName: string,
+  ): THREE.Object3D | null {
+    return entityGroup.getObjectByName(nodeName) ?? null;
+  }
+
+  function applyGlbOverrideToNode(
+    entityId: string,
+    nodeName: string,
+    transform: EntityTransform,
+  ): void {
+    const entityGroup = objectsById.get(entityId);
+    if (!entityGroup) return;
+    const node = findGlbNodeByName(entityGroup, nodeName);
+    if (!node) return;
+    applyTransformToObject3D(node, transform);
+    selectionBox?.update();
+  }
+
+  function applyGlbOverridesForEntity(entityId: string): void {
+    for (const entry of store.getGlbOverridesForEntity(entityId)) {
+      applyGlbOverrideToNode(entityId, entry.nodeName, entry.transform);
+    }
+  }
+
+  function buildGlbNodeRef(object: THREE.Object3D): GlbNodeRef {
+    return {
+      uuid: object.uuid,
+      name: object.name || "(unnamed)",
+      children: object.children.map((child) => buildGlbNodeRef(child)),
+    };
+  }
+
+  function tagGlbNodes(object: THREE.Object3D): void {
+    object.userData.glbNodeUuid = object.uuid;
+    for (const child of object.children) tagGlbNodes(child);
+  }
+
   function buildEntityObject(
     entity: EditorEntity,
     generation: number,
@@ -646,7 +732,10 @@ export function createEditorViewport(
             const box = new THREE.Box3().setFromObject(model);
             model.position.sub(box.getCenter(new THREE.Vector3()));
           }
+          tagGlbNodes(model);
           group.add(model);
+          store.setGlbTree(entity.id, buildGlbNodeRef(model));
+          applyGlbOverridesForEntity(entity.id);
           applyShipPreview();
         })
         .catch(() => {
@@ -658,6 +747,7 @@ export function createEditorViewport(
             true,
           );
           group.add(placeholder);
+          store.setGlbTree(entity.id, null);
           console.warn(`Editor: asset failed to load: ${url}`);
         });
     }
@@ -688,17 +778,17 @@ export function createEditorViewport(
 
   function rebuildAll(): void {
     buildGeneration += 1;
-    const selectedId = store.getSelection();
     gizmo.detach();
     entityRoot.clear();
     objectsById.clear();
+    store.clearGlbTrees();
     for (const resource of disposables) resource.dispose();
     disposables.length = 0;
 
     for (const entity of store.getState().roots) {
       entityRoot.add(buildEntityObject(entity, buildGeneration));
     }
-    if (selectedId) attachSelection(selectedId);
+    syncSelectionHighlight();
     applyShipPreview();
   }
 
@@ -798,8 +888,50 @@ export function createEditorViewport(
   // ---- selection ---------------------------------------------------------
 
   let selectionBox: THREE.BoxHelper | null = null;
+  let drillDepth = 0;
+  let lastDrillEntityId: string | null = null;
+  let lastDrillScreen: { x: number; y: number } | null = null;
 
-  function attachSelection(entityId: string | null): void {
+  function findObjectByUuid(
+    root: THREE.Object3D,
+    uuid: string,
+  ): THREE.Object3D | null {
+    let found: THREE.Object3D | null = null;
+    root.traverse((object) => {
+      if (!found && object.uuid === uuid) found = object;
+    });
+    return found;
+  }
+
+  function pathFromEntityRoot(
+    root: THREE.Object3D,
+    hit: THREE.Object3D,
+  ): THREE.Object3D[] {
+    const chain: THREE.Object3D[] = [];
+    let current: THREE.Object3D | null = hit;
+    while (current) {
+      chain.unshift(current);
+      if (current === root) break;
+      current = current.parent;
+    }
+    return chain[0] === root ? chain : [root];
+  }
+
+  function getGizmoTarget(): THREE.Object3D | null {
+    const entityId = store.getSelection();
+    if (!entityId) return null;
+    const entityObject = objectsById.get(entityId);
+    if (!entityObject) return null;
+    const sub = store.getSubSelection();
+    if (sub && sub.entityId === entityId) {
+      const node = findObjectByUuid(entityObject, sub.nodeUuid);
+      if (node) return node;
+    }
+    return entityObject;
+  }
+
+  function syncSelectionHighlight(): void {
+    const entityId = store.getSelection();
     gizmo.detach();
     if (selectionBox) {
       scene.remove(selectionBox);
@@ -808,16 +940,18 @@ export function createEditorViewport(
       selectionBox = null;
     }
     if (!entityId) return;
-    const object = objectsById.get(entityId);
-    if (!object) return;
-    gizmo.attach(object);
-    selectionBox = new THREE.BoxHelper(object, 0x8bd8ff);
+    const target = getGizmoTarget();
+    if (!target) return;
+    gizmo.attach(target);
+    selectionBox = new THREE.BoxHelper(target, 0x8bd8ff);
     scene.add(selectionBox);
   }
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let pointerDownAt: { x: number; y: number } | null = null;
+  const worldPositionScratch = new THREE.Vector3();
+  const localPositionScratch = new THREE.Vector3();
 
   function entityIdFromObject(object: THREE.Object3D): string | null {
     let current: THREE.Object3D | null = object;
@@ -829,7 +963,10 @@ export function createEditorViewport(
     return null;
   }
 
-  function pickEntity(clientX: number, clientY: number): string | null {
+  function pickAtScreen(
+    clientX: number,
+    clientY: number,
+  ): { entityId: string; hitObject: THREE.Object3D; path: THREE.Object3D[] } | null {
     const rect = canvas.getBoundingClientRect();
     pointer.set(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -839,10 +976,73 @@ export function createEditorViewport(
     const hits = raycaster.intersectObjects(entityRoot.children, true);
     for (const hit of hits) {
       if (!hit.object.visible) continue;
-      const id = entityIdFromObject(hit.object);
-      if (id) return id;
+      const entityId = entityIdFromObject(hit.object);
+      if (!entityId) continue;
+      const root = objectsById.get(entityId);
+      if (!root) continue;
+      return {
+        entityId,
+        hitObject: hit.object,
+        path: pathFromEntityRoot(root, hit.object),
+      };
     }
     return null;
+  }
+
+  function getGlbNodeLocalTransform(
+    entityId: string,
+    nodeUuid: string,
+  ): EntityTransform | null {
+    const override = store.getGlbNodeOverride(entityId, nodeUuid);
+    if (override) return override;
+    const entityGroup = objectsById.get(entityId);
+    if (!entityGroup) return null;
+    const node = findObjectByUuid(entityGroup, nodeUuid);
+    if (!node) return null;
+    return {
+      position: { x: node.position.x, y: node.position.y, z: node.position.z },
+      rotation: {
+        x: node.rotation.x * RAD_TO_DEG,
+        y: node.rotation.y * RAD_TO_DEG,
+        z: node.rotation.z * RAD_TO_DEG,
+      },
+      scale: { x: node.scale.x, y: node.scale.y, z: node.scale.z },
+    };
+  }
+
+  function setGlbNodeLocalTransform(
+    entityId: string,
+    nodeUuid: string,
+    transform: Partial<EntityTransform>,
+  ): void {
+    const before = getGlbNodeLocalTransform(entityId, nodeUuid);
+    if (!before) return;
+    const after: EntityTransform = {
+      position: transform.position
+        ? { ...transform.position }
+        : { ...before.position },
+      rotation: transform.rotation
+        ? { ...transform.rotation }
+        : { ...before.rotation },
+      scale: transform.scale ? { ...transform.scale } : { ...before.scale },
+    };
+    store.commitGlbNodeTransform(entityId, nodeUuid, before, after);
+  }
+
+  function getGlbNodePrefabPosition(entityId: string, nodeUuid: string): Vec3 | null {
+    const entityGroup = objectsById.get(entityId);
+    if (!entityGroup) return null;
+    const node = findObjectByUuid(entityGroup, nodeUuid);
+    if (!node) return null;
+    entityGroup.updateMatrixWorld(true);
+    node.getWorldPosition(worldPositionScratch);
+    localPositionScratch.copy(worldPositionScratch);
+    entityGroup.worldToLocal(localPositionScratch);
+    return {
+      x: localPositionScratch.x,
+      y: localPositionScratch.y,
+      z: localPositionScratch.z,
+    };
   }
 
   canvas.addEventListener("pointerdown", (event) => {
@@ -856,31 +1056,103 @@ export function createEditorViewport(
       event.clientX - pointerDownAt.x,
       event.clientY - pointerDownAt.y,
     );
+    const clickAt = { x: event.clientX, y: event.clientY };
     pointerDownAt = null;
     if (moved > 5) return;
-    if (gizmo.axis) return; // click consumed by the gizmo
-    store.setSelection(pickEntity(event.clientX, event.clientY));
+    if (gizmo.axis) return;
+
+    const pick = pickAtScreen(clickAt.x, clickAt.y);
+    if (!pick) {
+      drillDepth = 0;
+      lastDrillEntityId = null;
+      lastDrillScreen = null;
+      store.setSelection(null);
+      return;
+    }
+
+    const { entityId, path } = pick;
+    const sameEntity = entityId === lastDrillEntityId;
+    const sameSpot =
+      sameEntity &&
+      lastDrillScreen !== null &&
+      Math.hypot(clickAt.x - lastDrillScreen.x, clickAt.y - lastDrillScreen.y) <= 5;
+
+    if (!sameSpot) {
+      drillDepth = 0;
+      lastDrillEntityId = entityId;
+      lastDrillScreen = clickAt;
+      store.setSelection(entityId);
+      return;
+    }
+
+    drillDepth = Math.min(drillDepth + 1, path.length - 1);
+    lastDrillScreen = clickAt;
+    if (drillDepth <= 0) {
+      store.setSelection(entityId);
+      return;
+    }
+    store.setSubSelection(entityId, path[drillDepth].uuid);
   });
 
   // ---- gizmo <-> store ---------------------------------------------------
 
   let draggingEntityId: string | null = null;
+  let draggingGlbNode: { entityId: string; nodeUuid: string } | null = null;
 
   gizmo.addEventListener("dragging-changed", (event) => {
     const dragging = Boolean((event as unknown as { value: boolean }).value);
     orbit.enabled = !dragging;
     if (dragging) {
-      draggingEntityId = store.getSelection();
+      const sub = store.getSubSelection();
+      const entityId = store.getSelection();
+      const gizmoTarget = getGizmoTarget();
+      if (
+        sub &&
+        entityId &&
+        gizmoTarget &&
+        gizmoTarget.uuid === sub.nodeUuid &&
+        gizmoTarget !== objectsById.get(entityId)
+      ) {
+        draggingGlbNode = { entityId, nodeUuid: sub.nodeUuid };
+        draggingEntityId = null;
+        const before = getGlbNodeLocalTransform(entityId, sub.nodeUuid);
+        if (before) {
+          store.beginGlbTransformGesture(entityId, sub.nodeUuid, before);
+        }
+        return;
+      }
+      draggingGlbNode = null;
+      draggingEntityId = entityId;
       if (draggingEntityId) store.beginTransformGesture(draggingEntityId);
-    } else {
-      store.endTransformGesture();
-      draggingEntityId = null;
+      return;
     }
+    if (draggingEntityId) store.endTransformGesture();
+    if (draggingGlbNode) store.endGlbTransformGesture();
+    draggingEntityId = null;
+    draggingGlbNode = null;
   });
 
   gizmo.addEventListener("objectChange", () => {
     const object = gizmo.object;
-    if (!object || !draggingEntityId) return;
+    if (!object) return;
+    if (draggingGlbNode) {
+      store.previewGlbTransform(draggingGlbNode.entityId, draggingGlbNode.nodeUuid, {
+        position: {
+          x: object.position.x,
+          y: object.position.y,
+          z: object.position.z,
+        },
+        rotation: {
+          x: object.rotation.x * RAD_TO_DEG,
+          y: object.rotation.y * RAD_TO_DEG,
+          z: object.rotation.z * RAD_TO_DEG,
+        },
+        scale: { x: object.scale.x, y: object.scale.y, z: object.scale.z },
+      });
+      selectionBox?.update();
+      return;
+    }
+    if (!draggingEntityId) return;
     store.previewTransform(draggingEntityId, {
       position: {
         x: object.position.x,
@@ -987,16 +1259,33 @@ export function createEditorViewport(
       }
       return;
     }
-    if (event.type === "selection") {
-      attachSelection(event.entityId);
+    if (event.type === "selection" || event.type === "sub-selection") {
+      if (event.type === "selection") {
+        drillDepth = 0;
+        lastDrillEntityId = event.entityId;
+      }
+      syncSelectionHighlight();
+      return;
+    }
+    if (event.type === "glb-transform") {
+      const override = store.getGlbNodeOverride(
+        event.entityId,
+        event.nodeUuid,
+      );
+      if (override) {
+        applyGlbOverrideToNode(event.entityId, event.nodeName, override);
+      }
+      return;
+    }
+    if (event.type === "history") {
+      return;
     }
   });
 
   // ---- focus / resize / loop ------------------------------------------------
 
   function focusSelection(): void {
-    const selectedId = store.getSelection();
-    const target = selectedId ? objectsById.get(selectedId) : null;
+    const target = getGizmoTarget();
     const box = new THREE.Box3();
     if (target) {
       box.setFromObject(target);
@@ -1062,6 +1351,9 @@ export function createEditorViewport(
       applyShipPreview();
     },
     focusSelection,
+    getGlbNodePrefabPosition,
+    getGlbNodeLocalTransform,
+    setGlbNodeLocalTransform,
     isFlying: () => flying,
     dispose() {
       disposed = true;

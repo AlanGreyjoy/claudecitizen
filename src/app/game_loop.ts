@@ -5,6 +5,7 @@ import {
 import { regenerateShipShields } from "../flight/ship_instance";
 import { listShipInstances } from "../flight/ship_world";
 import { createPlayerControls } from "../flight/player_controls";
+import type { KeyboardActionId } from "../flight/input_settings";
 import {
   MODE_IN_SHIP,
   MODE_IN_STATION,
@@ -65,21 +66,32 @@ import {
   updateTransition,
 } from "../player/transitions";
 import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, type WorldState } from "../player/world_state";
+import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
+import type { BuildTerminalController } from "../render/effects/hud/build_terminal";
+import type { HangarBuildController } from "../player/hangar_build/build_controller";
+import type { HangarPropRenderer } from "../render/hangar/prop_instances";
+import { pickHangarFloorPoint } from "../render/hangar/prop_instances";
 import {
   getStationFrame,
   getStationHangars,
   sampleHangarRest,
   worldToStationLocal,
 } from "../world/station";
+import { setAssignedHangarBay } from "../net/api";
 import { sampleRenderablePlanetSurface } from "../world/planet_surface";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
 import type { Planet, Vec3 } from "../types";
 import type { GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
-import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
+
+export interface HangarBuildRuntime {
+  controller: HangarBuildController;
+  terminal: BuildTerminalController;
+  propRenderer: HangarPropRenderer;
+}
 
 export interface GameLoopOptions {
   planet: Planet;
@@ -90,6 +102,7 @@ export interface GameLoopOptions {
   network?: WorldClient | null;
   bootstrap?: GameBootstrap | null;
   avmsTerminal?: AvmsTerminalController | null;
+  hangarBuild?: HangarBuildRuntime | null;
   onHudUpdate: (params: HudUpdateParams) => void;
   onResetPeak: () => void;
   isPaused?: () => boolean;
@@ -104,11 +117,15 @@ export function createGameLoop({
   network = null,
   bootstrap = null,
   avmsTerminal = null,
+  hangarBuild = null,
   onHudUpdate,
   onResetPeak,
   isPaused,
 }: GameLoopOptions) {
   let world: WorldState = createWorldState(planet, seed);
+  if (bootstrap?.hangar.assignedHangar) {
+    world.assignedHangar = bootstrap.hangar.assignedHangar;
+  }
   let lastMs = performance.now();
   let running = false;
   let frameRendererError: unknown = rendererError;
@@ -124,6 +141,22 @@ export function createGameLoop({
     world.cameraOrbit.yawRadians,
     world.cameraOrbit.pitchRadians,
   );
+
+  function keyLabel(action: KeyboardActionId): string {
+    return controls.getKeyboardActionLabel(action);
+  }
+
+  function pressInteractPrompt(text: string): string {
+    return `Press ${keyLabel("interact")} — ${text}`;
+  }
+
+  function holdPrompt(action: KeyboardActionId, text: string): string {
+    return `Hold ${keyLabel(action)} — ${text}`;
+  }
+
+  function hangarDigitPrompt(): string {
+    return `${keyLabel("hangar1")} / ${keyLabel("hangar2")} / ${keyLabel("hangar3")}`;
+  }
 
   // Console-only dev shortcuts (mirrors the __spikeScene diagnostic).
   window.__claudecitizenDev = {
@@ -173,7 +206,7 @@ export function createGameLoop({
 
   function avmsPrompt(): string {
     return world.assignedHangar === null
-      ? "Press F — AVMS terminal"
+      ? pressInteractPrompt("AVMS terminal")
       : `Ship delivered to Hangar ${world.assignedHangar}`;
   }
 
@@ -198,26 +231,31 @@ export function createGameLoop({
   }
 
   function stationPrompt(interaction: StationInteraction | null): string {
-    if (!interaction) return "";
-    switch (interaction.kind) {
-      case "hab-lift-down":
-        return "Press F — elevator to Lobby";
-      case "hab-lift-up":
-        return "Press F — elevator to Habs";
-      case "terminal":
-      case "avms-terminal":
-        return avmsPrompt();
-      case "hangar-bank":
-        return world.assignedHangar === null
-          ? "Press 1 / 2 / 3 — elevator to hangars"
-          : `Press 1 / 2 / 3 — elevator to hangars (your ship: Hangar ${world.assignedHangar})`;
-      case "hangar-lift-up":
-        return "Press F — elevator to Lobby";
-      case "prefab-elevator":
-        return `Press F — elevator to ${interaction.marker.targetFloor}`;
-      case "prefab-info":
-        return interaction.prompt;
+    if (interaction) {
+      switch (interaction.kind) {
+        case "hab-lift-down":
+          return pressInteractPrompt("elevator to Lobby");
+        case "hab-lift-up":
+          return pressInteractPrompt("elevator to Habs");
+        case "terminal":
+        case "avms-terminal":
+          return avmsPrompt();
+        case "hangar-bank":
+          return world.assignedHangar === null
+            ? `Press ${hangarDigitPrompt()} — elevator to hangars`
+            : `Press ${hangarDigitPrompt()} — elevator to hangars (your ship: Hangar ${world.assignedHangar})`;
+        case "hangar-lift-up":
+          return pressInteractPrompt("elevator to Lobby");
+        case "prefab-elevator":
+          return pressInteractPrompt(`elevator to ${interaction.marker.targetFloor}`);
+        case "prefab-info":
+          return interaction.prompt;
+      }
     }
+    if (isInPlayerHangarRoom() && hangarBuild) {
+      return `Press ${keyLabel("hangarBuild")} — hangar build mode`;
+    }
+    return "";
   }
 
   function networkInstanceForInteraction(
@@ -271,7 +309,7 @@ export function createGameLoop({
     if (!isShipParked(ship)) return null;
     if (!nearShipRampOutside(world.character, ship)) return null;
     if (interactPressed) rig.rampDown = !rig.rampDown;
-    return rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
+    return rig.rampDown ? pressInteractPrompt("raise ramp") : pressInteractPrompt("lower ramp");
   }
 
   /** Walking into the foot of the lowered ramp steps aboard. */
@@ -319,11 +357,128 @@ export function createGameLoop({
     world.mode = MODE_ON_FOOT;
   }
 
+  function isInPlayerHangarRoom(): boolean {
+    if (!bootstrap || world.mode !== MODE_IN_STATION) return false;
+    const roomId = (world.character as StationCharacterState).stationRoomId;
+    return roomId.startsWith("hangar-");
+  }
+
+  async function syncHangarPropsVisuals(): Promise<void> {
+    if (!hangarBuild) return;
+    const context = hangarBuild.controller.getContext();
+    await hangarBuild.propRenderer.setPlacements(context.state.placements);
+    const ghost = context.ghost;
+    const definition = context.selectedDefinitionId
+      ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
+      : null;
+    if (ghost && definition && context.toolMode === "place") {
+      await hangarBuild.propRenderer.setGhost({
+        prefabId: definition.prefabId,
+        transform: ghost,
+      });
+    } else if (context.toolMode === "move" && ghost && context.selectedPlacementId) {
+      const placement = context.state.placements.find(
+        (entry) => entry.id === context.selectedPlacementId,
+      );
+      if (placement) {
+        await hangarBuild.propRenderer.setGhost({
+          prefabId: placement.prefabId,
+          transform: ghost,
+        });
+      }
+    } else {
+      await hangarBuild.propRenderer.setGhost(null);
+    }
+  }
+
+  function pickHangarFloorFromPointer(): { right: number; up: number; forward: number } | null {
+    if (!renderer || !hangarBuild) return null;
+    return pickHangarFloorPoint(
+      renderer.getCamera(),
+      hangarBuild.controller.getPointerNdc(),
+      renderer.getStationRoot(),
+    );
+  }
+
+  function updateHangarBuildTool(): void {
+    if (!hangarBuild?.controller.isBuildToolActive()) return;
+    const floorPoint = pickHangarFloorFromPointer();
+    hangarBuild.controller.updateGhostFromFloor(floorPoint);
+    const context = hangarBuild.controller.getContext();
+    if (!context.ghost) {
+      if (hangarBuild.propRenderer.getGhost()) {
+        void hangarBuild.propRenderer.setGhost(null);
+      }
+      return;
+    }
+
+    const rendererGhost = hangarBuild.propRenderer.getGhost();
+    if (context.toolMode === "place") {
+      const definition = context.selectedDefinitionId
+        ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
+        : null;
+      if (!definition) return;
+      if (!rendererGhost || rendererGhost.prefabId !== definition.prefabId) {
+        void hangarBuild.propRenderer.setGhost({
+          prefabId: definition.prefabId,
+          transform: context.ghost,
+        });
+        return;
+      }
+    } else if (context.toolMode === "move" && context.selectedPlacementId) {
+      const placement = context.state.placements.find(
+        (entry) => entry.id === context.selectedPlacementId,
+      );
+      if (!placement) return;
+      if (!rendererGhost || rendererGhost.prefabId !== placement.prefabId) {
+        void hangarBuild.propRenderer.setGhost({
+          prefabId: placement.prefabId,
+          transform: context.ghost,
+        });
+        return;
+      }
+    } else {
+      if (rendererGhost) void hangarBuild.propRenderer.setGhost(null);
+      return;
+    }
+
+    hangarBuild.propRenderer.updateGhostTransform(context.ghost);
+  }
+
   function updateStationMode(
     characterInput: ReturnType<PlayerControls["sampleCharacterInput"]>,
     actions: ReturnType<PlayerControls["consumeActions"]>,
     dt: number,
   ): void {
+    if (hangarBuild?.controller.isBuildToolActive()) {
+      world.character = updateCharacterInStation(
+        world.character as StationCharacterState,
+        stationFrame,
+        { ...characterInput, jumpPressed: actions.jumpPressed },
+        dt,
+        planet.gravityMetersPerSecond2 ?? 9.8,
+      );
+      updateHangarBuildTool();
+      const tool = hangarBuild.controller.getContext().toolMode;
+      world.prompt =
+        tool === "place"
+          ? `Click to place · ${keyLabel("hangarRotate")} rotate · ${keyLabel("hangarCancel")} cancel · ${keyLabel("hangarBuild")} catalog`
+          : tool === "move"
+            ? `Click prop, move, click confirm · ${keyLabel("hangarCancel")} cancel · ${keyLabel("hangarBuild")} catalog`
+            : `Click prop to pick up · ${keyLabel("hangarCancel")} cancel · ${keyLabel("hangarBuild")} catalog`;
+      if (actions.hangarBuildPressed) hangarBuild.terminal.open();
+      if (actions.hangarRotatePressed) {
+        hangarBuild.controller.rotateGhost(Math.PI / 12);
+        const ghost = hangarBuild.controller.getContext().ghost;
+        if (ghost) hangarBuild.propRenderer.updateGhostTransform(ghost);
+      }
+      if (actions.hangarCancelPressed) {
+        hangarBuild.controller.cancelTool();
+        void syncHangarPropsVisuals();
+      }
+      return;
+    }
+
     world.character = updateCharacterInStation(
       world.character as StationCharacterState,
       stationFrame,
@@ -340,6 +495,10 @@ export function createGameLoop({
       return;
     }
 
+    if (isInPlayerHangarRoom() && actions.hangarBuildPressed) {
+      hangarBuild?.terminal.open();
+    }
+
     const interaction = resolveStationInteraction(
       world.character as StationCharacterState,
     );
@@ -354,6 +513,23 @@ export function createGameLoop({
             const hangar = await callShipToHangar(world, planet, seed, ship);
             if (!hangar) throw new Error("No hangar bays available.");
             world.prompt = `Ship delivered to Hangar ${hangar.index}`;
+            if (bootstrap) {
+              try {
+                const response = await setAssignedHangarBay(hangar.index);
+                hangarBuild?.controller.syncBootstrap(
+                  {
+                    assignedHangar: response.assignedHangar,
+                    catalog: response.catalog,
+                    inventory: response.inventory,
+                    placements: response.placements,
+                  },
+                  response.arcBalance,
+                );
+                await syncHangarPropsVisuals();
+              } catch (error) {
+                console.warn("Failed to persist assigned hangar bay.", error);
+              }
+            }
           },
         });
       }
@@ -432,7 +608,7 @@ export function createGameLoop({
 
     const seatNearby = nearestSeat(deckLocal);
     if (seatNearby) {
-      world.prompt = seatInteractPrompt(seatNearby);
+      world.prompt = seatInteractPrompt(seatNearby, keyLabel("interact"));
       if (actions.interactPressed && seatNearby.role === "pilot")
         beginSitTransition(world);
       return;
@@ -446,8 +622,8 @@ export function createGameLoop({
       const doorRig = rig.doors[doorNearby.doorId];
       if (door && doorRig) {
         world.prompt = doorRig.isOpen
-          ? `Press F — close ${door.label}`
-          : `Press F — open ${door.label}`;
+          ? pressInteractPrompt(`close ${door.label}`)
+          : pressInteractPrompt(`open ${door.label}`);
         if (
           actions.interactPressed &&
           !(doorRig.isOpen && standingInDoorway(door.id, deckLocal))
@@ -464,7 +640,7 @@ export function createGameLoop({
       result.state.deckZone,
     );
     if (ladder) {
-      world.prompt = ladderInteractPrompt(ladder.direction);
+      world.prompt = ladderInteractPrompt(ladder.direction, keyLabel("interact"));
       if (actions.interactPressed) {
         const next = traverseLadder(
           world.character as DeckCharacterState,
@@ -482,8 +658,8 @@ export function createGameLoop({
       getShipWalkZone(result.state.deckZone)?.gate === "ramp";
     if (parked && nearRampPanel(deckLocal) && !standingOnRamp) {
       world.prompt = rig.rampDown
-        ? "Press F — raise ramp"
-        : "Press F — lower ramp";
+        ? pressInteractPrompt("raise ramp")
+        : pressInteractPrompt("lower ramp");
       if (actions.interactPressed) rig.rampDown = !rig.rampDown;
       return;
     }
@@ -542,7 +718,7 @@ export function createGameLoop({
             throttleAccelMps2: instance.spec.throttleAccelMps2,
           },
         );
-        world.prompt = "Hold F — look around · Hold Y — get up";
+        world.prompt = `${holdPrompt("seatLook", "look around")} · ${holdPrompt("exitSeat", "get up")}`;
         if (actions.exitSeatPressed) {
           beginStandTransition(world);
         }

@@ -3,29 +3,48 @@ import {
   adminLogin,
   adminLogout,
   createShipDefinition,
+  createPropDefinition,
   getAdminSession,
   getAdminUser,
   getGameSettings,
   listAdminUsers,
+  listPropDefinitions,
   listShipDefinitions,
   updateGameSettings,
+  updatePropDefinition,
   updateShipDefinition,
   type AdminSession,
   type AdminUserDetail,
   type AdminUserSummary,
+  type PropDefinition,
+  type PropDefinitionInput,
   type ShipDefinition,
   type ShipDefinitionInput,
 } from '../net/admin_api';
 import { listShipPrefabOptions, type ShipPrefabOption } from '../world/prefabs/list_ship_prefabs';
+import { listPropPrefabOptions, type PropPrefabOption } from '../world/prefabs/list_prop_prefabs';
 
-type AdminTab = 'users' | 'ships' | 'settings';
+type AdminTab = 'users' | 'ships' | 'props' | 'settings';
 type AdminScene =
   | 'login'
   | 'users'
   | 'user-detail'
   | 'ships'
   | 'ship-form'
+  | 'props'
+  | 'prop-form'
   | 'settings';
+
+const DEFAULT_PROP_FORM: PropDefinitionInput = {
+  name: '',
+  description: '',
+  prefabId: 'hangar-crate-01',
+  costArc: 250,
+  category: 'decoration',
+  maxPerHangar: 8,
+  allowRotateY: true,
+  snapGridM: 0.5,
+};
 
 const DEFAULT_SHIP_FORM: ShipDefinitionInput = {
   name: '',
@@ -154,7 +173,9 @@ export function showAdminScreen(): void {
   let currentTab: AdminTab = 'users';
   let currentScene: AdminScene = 'login';
   let shipPrefabs: ShipPrefabOption[] = [];
+  let propPrefabs: PropPrefabOption[] = [];
   let editingShipId: string | null = null;
+  let editingPropId: string | null = null;
   let selectedUserId: string | null = null;
 
   function setStatus(message: string, isError = false): void {
@@ -184,16 +205,18 @@ export function showAdminScreen(): void {
     const tabs: Array<{ id: AdminTab; label: string }> = [
       { id: 'users', label: 'Users' },
       { id: 'ships', label: 'Ships' },
+      { id: 'props', label: 'Props' },
       { id: 'settings', label: 'Game Settings' },
     ];
 
     for (const tab of tabs) {
       const button = createSmallButton(tab.label);
-      button.classList.toggle('is-active', currentTab === tab.id && currentScene !== 'user-detail' && currentScene !== 'ship-form');
+      button.classList.toggle('is-active', currentTab === tab.id && currentScene !== 'user-detail' && currentScene !== 'ship-form' && currentScene !== 'prop-form');
       button.addEventListener('click', () => {
         currentTab = tab.id;
         if (tab.id === 'users') void showUsers();
         else if (tab.id === 'ships') void showShips();
+        else if (tab.id === 'props') void showProps();
         else void showSettings();
       });
       nav.append(button);
@@ -646,8 +669,185 @@ export function showAdminScreen(): void {
     renderShell([back, form], 'ship-form', 'ships');
   }
 
+  function renderPropsTable(props: PropDefinition[]): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'sc-admin-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'sc-admin-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Prefab</th>
+          <th>Category</th>
+          <th>Cost (ARC)</th>
+          <th>Max / hangar</th>
+          <th>Grid</th>
+        </tr>
+      </thead>
+    `;
+    const body = document.createElement('tbody');
+    for (const prop of props) {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${prop.name}</td>
+        <td>${prop.prefabId}</td>
+        <td>${prop.category}</td>
+        <td>${prop.costArc.toLocaleString()}</td>
+        <td>${prop.maxPerHangar ?? '—'}</td>
+        <td>${prop.snapGridM ?? 'free'}</td>
+      `;
+      row.addEventListener('click', () => {
+        editingPropId = prop.id;
+        void showPropForm(prop);
+      });
+      body.append(row);
+    }
+    table.append(body);
+    wrap.append(table);
+    return wrap;
+  }
+
+  async function showProps(): Promise<void> {
+    renderShell([renderMessage('Loading prop catalog...')], 'props', 'props');
+    try {
+      const props = await listPropDefinitions();
+      const title = document.createElement('h2');
+      title.className = 'sc-admin-section-title';
+      title.textContent = 'Prop definitions';
+      const createBtn = createButton('Create prop definition');
+      createBtn.addEventListener('click', () => {
+        editingPropId = null;
+        void showPropForm();
+      });
+      const actions = document.createElement('div');
+      actions.className = 'sc-admin-actions';
+      actions.append(createBtn);
+      renderShell([title, actions, renderPropsTable(props), renderMessage('')], 'props', 'props');
+    } catch (error) {
+      if (error instanceof AdminAuthError) {
+        renderLogin(error.message);
+        return;
+      }
+      renderShell(
+        [renderMessage(error instanceof Error ? error.message : 'Failed to load props.', true)],
+        'props',
+        'props',
+      );
+    }
+  }
+
+  async function ensurePropPrefabs(): Promise<PropPrefabOption[]> {
+    if (propPrefabs.length > 0) return propPrefabs;
+    propPrefabs = await listPropPrefabOptions();
+    return propPrefabs;
+  }
+
+  function readPropForm(form: HTMLFormElement): PropDefinitionInput {
+    const maxPerHangarRaw = formValue(form, 'maxPerHangar');
+    const snapGridRaw = formValue(form, 'snapGridM');
+    return {
+      name: formValue(form, 'name'),
+      description: formValue(form, 'description'),
+      prefabId: formValue(form, 'prefabId'),
+      costArc: Math.round(formNumber(form, 'costArc')),
+      category: formValue(form, 'category') || 'decoration',
+      maxPerHangar: maxPerHangarRaw ? Math.round(Number(maxPerHangarRaw)) : null,
+      allowRotateY: formValue(form, 'allowRotateY') !== 'false',
+      snapGridM: snapGridRaw ? Number(snapGridRaw) : null,
+    };
+  }
+
+  async function showPropForm(existing?: PropDefinition): Promise<void> {
+    const prefabs = await ensurePropPrefabs();
+    const defaults = existing
+      ? {
+          name: existing.name,
+          description: existing.description,
+          prefabId: existing.prefabId,
+          costArc: existing.costArc,
+          category: existing.category,
+          maxPerHangar: existing.maxPerHangar,
+          allowRotateY: existing.allowRotateY,
+          snapGridM: existing.snapGridM,
+        }
+      : { ...DEFAULT_PROP_FORM, prefabId: prefabs[0]?.id ?? DEFAULT_PROP_FORM.prefabId };
+
+    const form = document.createElement('form');
+    form.className = 'sc-admin-form sc-admin-form-wide';
+    const title = document.createElement('h2');
+    title.className = 'sc-admin-section-title';
+    title.textContent = existing ? 'Edit prop definition' : 'Create prop definition';
+    const back = createButton('Back to props', 'secondary');
+    back.addEventListener('click', () => {
+      editingPropId = null;
+      void showProps();
+    });
+
+    form.append(
+      title,
+      createField('Name', createTextInput('name', defaults.name)),
+      createField('Description', createTextArea('description', defaults.description)),
+      createField(
+        'Prop prefab',
+        createSelect(
+          'prefabId',
+          prefabs.map((prefab) => ({ value: prefab.id, label: `${prefab.label} (${prefab.id})` })),
+          defaults.prefabId,
+        ),
+      ),
+      createField('Category', createTextInput('category', defaults.category)),
+      createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
+      createField(
+        'Max per hangar',
+        createNumberInput('maxPerHangar', defaults.maxPerHangar ?? 0),
+      ),
+      createField(
+        'Snap grid (m, 0 = free)',
+        createNumberInput('snapGridM', defaults.snapGridM ?? 0, '0.1'),
+      ),
+      createField(
+        'Allow Y rotation',
+        createSelect(
+          'allowRotateY',
+          [
+            { value: 'true', label: 'Yes' },
+            { value: 'false', label: 'No' },
+          ],
+          defaults.allowRotateY ? 'true' : 'false',
+        ),
+      ),
+    );
+
+    const save = createButton(existing ? 'Save changes' : 'Create definition');
+    save.type = 'submit';
+    const actions = document.createElement('div');
+    actions.className = 'sc-admin-actions';
+    actions.append(save);
+    form.append(actions, renderMessage(''));
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      setStatus('Saving prop definition...');
+      const payload = readPropForm(form);
+      const request = existing
+        ? updatePropDefinition(existing.id, payload)
+        : createPropDefinition(payload);
+      request
+        .then(() => {
+          editingPropId = null;
+          void showProps();
+        })
+        .catch((error) => {
+          setStatus(error instanceof Error ? error.message : 'Save failed.', true);
+        });
+    });
+
+    renderShell([back, form], 'prop-form', 'props');
+  }
+
   function renderStarterEditor(
-    definitions: ShipDefinition[],
+    definitions: Array<{ id: string; name: string }>,
     selectedIds: string[],
     onChange: (next: string[]) => void,
   ): HTMLElement {
@@ -717,12 +917,14 @@ export function showAdminScreen(): void {
   async function showSettings(): Promise<void> {
     renderShell([renderMessage('Loading game settings...')], 'settings', 'settings');
     try {
-      const [settings, definitions] = await Promise.all([
+      const [settings, definitions, propDefinitions] = await Promise.all([
         getGameSettings(),
         listShipDefinitions(),
+        listPropDefinitions(),
       ]);
 
       let starterIds = [...settings.starterShipDefinitionIds];
+      let starterPropIds = [...settings.starterPropDefinitionIds];
       const form = document.createElement('form');
       form.className = 'sc-admin-form sc-admin-form-wide';
 
@@ -749,19 +951,34 @@ export function showAdminScreen(): void {
       };
       renderStarterSection();
 
+      const propStarterHost = document.createElement('div');
+      const renderPropStarterSection = (): void => {
+        propStarterHost.replaceChildren(
+          createField(
+            'Starter hangar props',
+            renderStarterEditor(propDefinitions, starterPropIds, (next) => {
+              starterPropIds = next;
+              renderPropStarterSection();
+            }),
+          ),
+        );
+      };
+      renderPropStarterSection();
+
       const save = createButton('Save settings');
       save.type = 'submit';
       const actions = document.createElement('div');
       actions.className = 'sc-admin-actions';
       actions.append(save);
 
-      form.append(title, arcField, starterHost, actions, renderMessage(''));
+      form.append(title, arcField, starterHost, propStarterHost, actions, renderMessage(''));
       form.addEventListener('submit', (event) => {
         event.preventDefault();
         setStatus('Saving settings...');
         updateGameSettings({
           startingArcBalance: Math.round(formNumber(form, 'startingArcBalance')),
           starterShipDefinitionIds: starterIds,
+          starterPropDefinitionIds: starterPropIds,
         })
           .then(() => {
             setStatus('Settings saved.');
@@ -801,7 +1018,16 @@ export function showAdminScreen(): void {
               else void showShips();
             })
             .catch(() => void showShips());
+        } else if (editingPropId) {
+          listPropDefinitions()
+            .then((props) => {
+              const prop = props.find((entry) => entry.id === editingPropId);
+              if (prop) void showPropForm(prop);
+              else void showProps();
+            })
+            .catch(() => void showProps());
         } else if (currentTab === 'ships') void showShips();
+        else if (currentTab === 'props') void showProps();
         else if (currentTab === 'settings') void showSettings();
         else void showUsers();
         return;

@@ -93,15 +93,24 @@ export class GameCatalogService {
   async updateSettings(input: {
     startingArcBalance: number;
     starterShipDefinitionIds: string[];
+    starterPropDefinitionIds: string[];
   }) {
     if (input.starterShipDefinitionIds.length === 0) {
       throw new BadRequestException('Choose at least one starter ship.');
     }
-    const count = await this.prisma.shipDefinition.count({
+    const shipCount = await this.prisma.shipDefinition.count({
       where: { id: { in: input.starterShipDefinitionIds } },
     });
-    if (count !== input.starterShipDefinitionIds.length) {
+    if (shipCount !== input.starterShipDefinitionIds.length) {
       throw new BadRequestException('Game settings reference unknown ship definitions.');
+    }
+    if (input.starterPropDefinitionIds.length > 0) {
+      const propCount = await this.prisma.propDefinition.count({
+        where: { id: { in: input.starterPropDefinitionIds } },
+      });
+      if (propCount !== input.starterPropDefinitionIds.length) {
+        throw new BadRequestException('Game settings reference unknown prop definitions.');
+      }
     }
     return this.prisma.gameSettings.upsert({
       where: { id: GAME_SETTINGS_ID },
@@ -163,6 +172,26 @@ export class GameCatalogService {
             playerId: user.player!.id,
             currentInstanceId: `hangar:${user.player!.id}`,
           })),
+        });
+      }
+
+      const starterPropDefinitions = await tx.propDefinition.findMany({
+        where: { id: { in: settings.starterPropDefinitionIds } },
+      });
+      for (const definition of starterPropDefinitions) {
+        await tx.playerProp.upsert({
+          where: {
+            playerId_propDefinitionId: {
+              playerId: user.player!.id,
+              propDefinitionId: definition.id,
+            },
+          },
+          create: {
+            playerId: user.player!.id,
+            propDefinitionId: definition.id,
+            quantity: 3,
+          },
+          update: {},
         });
       }
 
@@ -233,5 +262,50 @@ export class GameCatalogService {
       maxSpeedMps: DEFAULT_SHIP_TUNING.maxSpeedMps,
       throttleAccelMps2: DEFAULT_SHIP_TUNING.throttleAccelMps2,
     };
+  }
+
+  async listPropDefinitions() {
+    return this.prisma.propDefinition.findMany({
+      orderBy: [{ category: 'asc' }, { name: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  async createPropDefinition(input: {
+    name: string;
+    description: string;
+    prefabId: string;
+    costArc: number;
+    category: string;
+    maxPerHangar: number | null;
+    allowRotateY: boolean;
+    snapGridM: number | null;
+  }) {
+    return this.prisma.propDefinition.create({ data: input });
+  }
+
+  async updatePropDefinition(
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      prefabId?: string;
+      costArc?: number;
+      category?: string;
+      maxPerHangar?: number | null;
+      allowRotateY?: boolean;
+      snapGridM?: number | null;
+    },
+  ) {
+    try {
+      return await this.prisma.propDefinition.update({ where: { id }, data: input });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Prop definition "${id}" not found.`);
+      }
+      throw error;
+    }
   }
 }

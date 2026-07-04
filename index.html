@@ -496,23 +496,7 @@
               data-game-menu-panel="controls"
             >
               <h3 class="sc-game-menu-panel-title">Controls</h3>
-              <div class="sc-game-menu-controls">
-                <div><kbd>Esc</kbd> game menu</div>
-                <div><kbd>Click</kbd> lock mouse</div>
-                <div>Mouse look / steer</div>
-                <div><kbd>W</kbd>/<kbd>S</kbd> move or throttle</div>
-                <div><kbd>Shift</kbd> boost</div>
-                <div><kbd>A</kbd>/<kbd>D</kbd> strafe / ground steer</div>
-                <div><kbd>Q</kbd>/<kbd>E</kbd> roll</div>
-                <div><kbd>←</kbd>/<kbd>→</kbd> yaw</div>
-                <div><kbd>↑</kbd>/<kbd>↓</kbd> pitch</div>
-                <div><kbd>Space</kbd>/<kbd>C</kbd> jump or lift</div>
-                <div><kbd>B</kbd> brake</div>
-                <div><kbd>F</kbd> interact / enter / exit</div>
-                <div><kbd>1</kbd>-<kbd>3</kbd> hangar elevator</div>
-                <div><kbd>V</kbd> first / third person, cockpit / external</div>
-                <div><kbd>R</kbd> reset</div>
-              </div>
+              <div class="sc-game-menu-controls" id="game-menu-controls"></div>
             </section>
             <section
               class="sc-game-menu-panel"
@@ -588,6 +572,57 @@
                   Request Delivery
                 </button>
                 <button class="sc-title-btn sc-title-btn-secondary" type="button" id="avms-close-btn">
+                  Close
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-avms sc-build"
+        id="build-terminal"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="build-title"
+        aria-modal="true"
+      >
+        <div class="sc-avms-backdrop"></div>
+        <div class="sc-avms-bezel">
+          <div class="sc-avms-screen">
+            <div class="sc-avms-scanlines" aria-hidden="true"></div>
+            <header class="sc-avms-header">
+              <div class="sc-avms-brand">
+                <span class="sc-avms-kicker">Hangar Workshop</span>
+                <h2 class="sc-avms-title" id="build-title">Build Mode</h2>
+              </div>
+              <span class="sc-avms-version">Bay layout</span>
+            </header>
+            <div class="sc-avms-body">
+              <section class="sc-avms-panel" aria-label="Owned props">
+                <h3 class="sc-avms-panel-title">Inventory</h3>
+                <div class="sc-avms-ship-list" id="build-prop-list"></div>
+              </section>
+              <section class="sc-avms-panel sc-avms-detail" aria-label="Selected prop">
+                <h3 class="sc-avms-panel-title">Prop Details</h3>
+                <p class="sc-avms-detail-name" id="build-detail-name">—</p>
+                <p class="sc-avms-detail-prefab" id="build-detail-meta">—</p>
+                <p class="sc-build-desc" id="build-detail-desc">—</p>
+                <p class="sc-build-stat"><span>Owned</span> <strong id="build-detail-qty">—</strong></p>
+                <p class="sc-build-stat"><span>Cost</span> <strong id="build-detail-cost">—</strong></p>
+              </section>
+            </div>
+            <footer class="sc-avms-footer">
+              <p class="sc-avms-status" id="build-status">Select a prop or choose a tool.</p>
+              <p class="sc-avms-note">Place, move, rotate (R), and delete props in your private hangar bay.</p>
+              <div class="sc-avms-actions sc-build-actions">
+                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-purchase-btn">
+                  Purchase
+                </button>
+                <button class="sc-title-btn" type="button" id="build-place-btn">Place</button>
+                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-move-btn">Move</button>
+                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-delete-btn">Delete</button>
+                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-close-btn">
                   Close
                 </button>
               </div>

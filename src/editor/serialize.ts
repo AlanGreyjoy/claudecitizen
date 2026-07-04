@@ -55,7 +55,9 @@ export function toPrefabDocument(state: EditorDocumentState): PrefabDocument {
       ? { components: [{ type: 'station-frame' as const }] }
       : state.kind === 'ship'
         ? { components: [{ type: 'ship-frame' as const }] }
-        : {};
+        : state.kind === 'prop'
+          ? { components: [{ type: 'prop-frame' as const }] }
+          : {};
   return {
     id,
     name: state.prefabName,

@@ -52,7 +52,7 @@
           }
         },
         "asset": {
-          "url": "/src/assets/protected/ships/SM_Veh_DropShip_01.glb"
+          "url": "/editor/assets/protected/ships/SM_Veh_DropShip_01.glb"
         },
         "components": [
           {

@@ -39,11 +39,26 @@ export interface EntityTransform {
   scale: Vec3;
 }
 
+/** Read-only GLB scene graph node cached after model load (not serialized). */
+export interface GlbNodeRef {
+  uuid: string;
+  name: string;
+  children: GlbNodeRef[];
+}
+
+export interface SubSelection {
+  entityId: string;
+  nodeUuid: string;
+}
+
 export type EditorEvent =
   | { type: 'structure' }
   | { type: 'transform'; entityId: string }
   | { type: 'entity'; entityId: string }
   | { type: 'selection'; entityId: string | null }
+  | { type: 'sub-selection'; entityId: string | null; nodeUuid: string | null }
+  | { type: 'glb-tree'; entityId: string }
+  | { type: 'glb-transform'; entityId: string; nodeUuid: string; nodeName: string }
   | { type: 'document' }
   | { type: 'history' };
 
@@ -97,6 +112,9 @@ export function createEditorStore() {
     roots: [],
   };
   let selection: string | null = null;
+  let subSelection: SubSelection | null = null;
+  const glbTreesByEntityId = new Map<string, GlbNodeRef>();
+  const glbNodeOverrides = new Map<string, EntityTransform>();
   let dirty = false;
 
   const listeners = new Set<(event: EditorEvent) => void>();
@@ -139,9 +157,97 @@ export function createEditorStore() {
   }
 
   function setSelection(id: string | null): void {
-    if (selection === id) return;
-    selection = id;
-    emit({ type: 'selection', entityId: id });
+    const selectionChanged = selection !== id;
+    const hadSub = subSelection !== null;
+    subSelection = null;
+    if (selectionChanged) {
+      selection = id;
+      emit({ type: 'selection', entityId: id });
+    }
+    if (hadSub) {
+      emit({ type: 'sub-selection', entityId: id, nodeUuid: null });
+    }
+  }
+
+  function setSubSelection(entityId: string, nodeUuid: string): void {
+    const prev = subSelection;
+    subSelection = { entityId, nodeUuid };
+    if (selection !== entityId) {
+      selection = entityId;
+      emit({ type: 'selection', entityId });
+    }
+    if (
+      !prev ||
+      prev.entityId !== entityId ||
+      prev.nodeUuid !== nodeUuid
+    ) {
+      emit({ type: 'sub-selection', entityId, nodeUuid });
+    }
+  }
+
+  function findGlbNodeName(tree: GlbNodeRef, nodeUuid: string): string | null {
+    if (tree.uuid === nodeUuid) return tree.name;
+    for (const child of tree.children) {
+      const name = findGlbNodeName(child, nodeUuid);
+      if (name) return name;
+    }
+    return null;
+  }
+
+  function setGlbTree(entityId: string, tree: GlbNodeRef | null): void {
+    if (tree) glbTreesByEntityId.set(entityId, tree);
+    else glbTreesByEntityId.delete(entityId);
+    emit({ type: 'glb-tree', entityId });
+  }
+
+  function clearGlbTrees(): void {
+    if (glbTreesByEntityId.size === 0) return;
+    glbTreesByEntityId.clear();
+    emit({ type: 'glb-tree', entityId: '' });
+  }
+
+  function glbOverrideKey(entityId: string, nodeName: string): string {
+    return `${entityId}::${nodeName}`;
+  }
+
+  function resolveGlbNodeName(entityId: string, nodeUuid: string): string | null {
+    const tree = glbTreesByEntityId.get(entityId);
+    if (!tree) return null;
+    return findGlbNodeName(tree, nodeUuid);
+  }
+
+  function clearGlbOverridesForEntity(entityId: string): void {
+    const prefix = `${entityId}::`;
+    for (const key of [...glbNodeOverrides.keys()]) {
+      if (key.startsWith(prefix)) glbNodeOverrides.delete(key);
+    }
+  }
+
+  function emitGlbTransform(
+    entityId: string,
+    nodeUuid: string,
+    nodeName: string,
+  ): void {
+    emit({ type: 'glb-transform', entityId, nodeUuid, nodeName });
+  }
+
+  function setGlbOverride(
+    entityId: string,
+    nodeName: string,
+    nodeUuid: string,
+    transform: EntityTransform,
+  ): void {
+    glbNodeOverrides.set(
+      glbOverrideKey(entityId, nodeName),
+      cloneTransform(transform),
+    );
+    emitGlbTransform(entityId, nodeUuid, nodeName);
+  }
+
+  function notifyGlbNodeTransform(entityId: string, nodeUuid: string): void {
+    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
+    if (!nodeName) return;
+    emitGlbTransform(entityId, nodeUuid, nodeName);
   }
 
   function insertEntity(entity: EditorEntity, parentId: string | null, index?: number): void {
@@ -189,6 +295,7 @@ export function createEditorStore() {
       label: `Delete ${entity.name}`,
       do() {
         detachEntity(id);
+        clearGlbOverridesForEntity(id);
         if (selection === id) setSelection(null);
         markDirty();
         emit({ type: 'structure' });
@@ -377,6 +484,80 @@ export function createEditorStore() {
 
   // Gizmo drags preview live and collapse into a single undo entry on release.
   let gesture: { entityId: string; before: EntityTransform } | null = null;
+  let glbGesture: {
+    entityId: string;
+    nodeUuid: string;
+    nodeName: string;
+    before: EntityTransform;
+  } | null = null;
+
+  function beginGlbTransformGesture(
+    entityId: string,
+    nodeUuid: string,
+    before: EntityTransform,
+  ): void {
+    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
+    if (!nodeName) return;
+    glbGesture = {
+      entityId,
+      nodeUuid,
+      nodeName,
+      before: cloneTransform(before),
+    };
+  }
+
+  function previewGlbTransform(
+    entityId: string,
+    nodeUuid: string,
+    transform: EntityTransform,
+  ): void {
+    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
+    if (!nodeName) return;
+    setGlbOverride(entityId, nodeName, nodeUuid, transform);
+  }
+
+  function endGlbTransformGesture(): void {
+    if (!glbGesture) return;
+    const { entityId, nodeUuid, nodeName, before } = glbGesture;
+    glbGesture = null;
+    const key = glbOverrideKey(entityId, nodeName);
+    const after = glbNodeOverrides.get(key);
+    if (!after) return;
+    const afterCopy = cloneTransform(after);
+    const beforeCopy = cloneTransform(before);
+    if (JSON.stringify(beforeCopy) === JSON.stringify(afterCopy)) return;
+    history.execute({
+      label: `Transform mesh ${nodeName}`,
+      do() {
+        setGlbOverride(entityId, nodeName, nodeUuid, afterCopy);
+      },
+      undo() {
+        setGlbOverride(entityId, nodeName, nodeUuid, beforeCopy);
+      },
+    });
+  }
+
+  function commitGlbNodeTransform(
+    entityId: string,
+    nodeUuid: string,
+    before: EntityTransform,
+    after: EntityTransform,
+  ): void {
+    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
+    if (!nodeName) return;
+    const beforeCopy = cloneTransform(before);
+    const afterCopy = cloneTransform(after);
+    if (JSON.stringify(beforeCopy) === JSON.stringify(afterCopy)) return;
+    history.execute({
+      label: `Transform mesh ${nodeName}`,
+      do() {
+        setGlbOverride(entityId, nodeName, nodeUuid, afterCopy);
+      },
+      undo() {
+        setGlbOverride(entityId, nodeName, nodeUuid, beforeCopy);
+      },
+    });
+  }
 
   function beginTransformGesture(id: string): void {
     const entity = locate(id)?.entity;
@@ -428,6 +609,9 @@ export function createEditorStore() {
   function newDocument(): void {
     state = { prefabId: '', prefabName: 'Untitled Prefab', kind: 'station', roots: [] };
     selection = null;
+    subSelection = null;
+    glbTreesByEntityId.clear();
+    glbNodeOverrides.clear();
     dirty = false;
     history.clear();
     emit({ type: 'document' });
@@ -438,6 +622,9 @@ export function createEditorStore() {
   function loadDocument(next: EditorDocumentState): void {
     state = next;
     selection = null;
+    subSelection = null;
+    glbTreesByEntityId.clear();
+    glbNodeOverrides.clear();
     dirty = false;
     history.clear();
     emit({ type: 'document' });
@@ -458,6 +645,29 @@ export function createEditorStore() {
     },
     getState: () => state,
     getSelection: () => selection,
+    getSubSelection: () => subSelection,
+    getGlbTree: (entityId: string) => glbTreesByEntityId.get(entityId) ?? null,
+    getGlbNodeName: (entityId: string, nodeUuid: string) => {
+      const tree = glbTreesByEntityId.get(entityId);
+      return tree ? findGlbNodeName(tree, nodeUuid) : null;
+    },
+    getGlbNodeOverride: (entityId: string, nodeUuid: string) => {
+      const nodeName = resolveGlbNodeName(entityId, nodeUuid);
+      if (!nodeName) return null;
+      return glbNodeOverrides.get(glbOverrideKey(entityId, nodeName)) ?? null;
+    },
+    getGlbOverridesForEntity: (entityId: string) => {
+      const prefix = `${entityId}::`;
+      const overrides: { nodeName: string; transform: EntityTransform }[] = [];
+      for (const [key, transform] of glbNodeOverrides.entries()) {
+        if (!key.startsWith(prefix)) continue;
+        overrides.push({
+          nodeName: key.slice(prefix.length),
+          transform: cloneTransform(transform),
+        });
+      }
+      return overrides;
+    },
     getSelectedEntity: () => (selection ? locate(selection)?.entity ?? null : null),
     isDirty: () => dirty,
     markSaved: () => {
@@ -465,6 +675,10 @@ export function createEditorStore() {
     },
     locate,
     setSelection,
+    setSubSelection,
+    setGlbTree,
+    clearGlbTrees,
+    notifyGlbNodeTransform,
     addEntity,
     deleteEntity,
     duplicateEntity,
@@ -478,6 +692,10 @@ export function createEditorStore() {
     beginTransformGesture,
     previewTransform,
     endTransformGesture,
+    beginGlbTransformGesture,
+    previewGlbTransform,
+    endGlbTransformGesture,
+    commitGlbNodeTransform,
     newDocument,
     loadDocument,
     setPrefabMeta,

@@ -8,7 +8,7 @@ import {
 } from '../../../player/ship_layout';
 
 const PROTECTED_SHIP_URL =
-  '/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
+  '/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
 const FALLBACK_SHIP_URL = new URL('../../../assets/ships/Ship_Large.gltf', import.meta.url).href;
 const SHIP_FORWARD_ALIGNMENT_RADIANS = 0;
 

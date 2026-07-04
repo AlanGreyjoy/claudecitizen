@@ -13,5 +13,8 @@ export interface SpikeRenderer {
   setVegetationSettings: (nextSettings: Partial<VegetationSettings>) => void;
   setFogSettings: (settings: FogSettings) => void;
   setTimeOverride: (mode: TimeOverride) => void;
+  getStationRoot: () => import('three').Object3D;
+  getCamera: () => import('three').Camera;
+  getRenderScale: () => number;
   dispose: () => void;
 }

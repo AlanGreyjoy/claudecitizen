@@ -5,9 +5,13 @@ import { restoreTitleScreen } from './title_screen';
 import { createHud } from '../render/effects';
 import { createGameMenu } from '../render/effects/hud/game_menu';
 import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
+import { createBuildTerminal } from '../render/effects/hud/build_terminal';
+import { createHangarBuildController } from '../player/hangar_build/build_controller';
+import { createHangarPropRenderer } from '../render/hangar/prop_instances';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { createVegetationControls } from '../render/vegetation';
 import { CLAUDECITIZEN_PLANET } from '../world/planet';
+import { pickHangarFloorPoint } from '../render/hangar/prop_instances';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
 import { applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
@@ -22,6 +26,9 @@ import {
 import { createWorldClient, type WorldClient } from '../net/world_client';
 import type { GameMenuController } from '../render/effects/hud/game_menu';
 import type { AvmsTerminalController } from '../render/effects/hud/avms_terminal';
+import type { BuildTerminalController } from '../render/effects/hud/build_terminal';
+import type { HangarBuildController } from '../player/hangar_build/build_controller';
+import type { HangarPropRenderer } from '../render/hangar/prop_instances';
 
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -95,6 +102,9 @@ interface PlaySessionCleanup {
   vegetationControls: ReturnType<typeof createVegetationControls>;
   gameMenu: GameMenuController;
   avmsTerminal: AvmsTerminalController;
+  buildTerminal: BuildTerminalController | null;
+  hangarBuildController: HangarBuildController | null;
+  hangarPropRenderer: HangarPropRenderer | null;
   resize: () => void;
   session: AuthSession | null;
   editorReturnButton: HTMLButtonElement | null;
@@ -109,6 +119,8 @@ export function stopPlaySession(): void {
 
   cleanup.gameMenu.dispose();
   cleanup.avmsTerminal.dispose();
+  cleanup.buildTerminal?.dispose();
+  cleanup.hangarPropRenderer?.dispose();
   cleanup.gameLoop.stop();
   cleanup.controls.dispose();
   cleanup.renderer?.dispose();
@@ -194,6 +206,19 @@ export async function startPlaySession(
   const avmsStatusEl = requireElement<HTMLElement>('avms-status');
   const avmsDeliverBtn = requireElement<HTMLButtonElement>('avms-deliver-btn');
   const avmsCloseBtn = requireElement<HTMLButtonElement>('avms-close-btn');
+  const buildTerminalEl = requireElement<HTMLElement>('build-terminal');
+  const buildPropListEl = requireElement<HTMLElement>('build-prop-list');
+  const buildDetailNameEl = requireElement<HTMLElement>('build-detail-name');
+  const buildDetailMetaEl = requireElement<HTMLElement>('build-detail-meta');
+  const buildDetailDescEl = requireElement<HTMLElement>('build-detail-desc');
+  const buildDetailQtyEl = requireElement<HTMLElement>('build-detail-qty');
+  const buildDetailCostEl = requireElement<HTMLElement>('build-detail-cost');
+  const buildStatusEl = requireElement<HTMLElement>('build-status');
+  const buildPurchaseBtn = requireElement<HTMLButtonElement>('build-purchase-btn');
+  const buildPlaceBtn = requireElement<HTMLButtonElement>('build-place-btn');
+  const buildMoveBtn = requireElement<HTMLButtonElement>('build-move-btn');
+  const buildDeleteBtn = requireElement<HTMLButtonElement>('build-delete-btn');
+  const buildCloseBtn = requireElement<HTMLButtonElement>('build-close-btn');
 
   const seed = 20061;
   const planet = CLAUDECITIZEN_PLANET;
@@ -294,6 +319,88 @@ export async function startPlaySession(
     closeBtnEl: avmsCloseBtn,
   });
 
+  let hangarBuildController: HangarBuildController | null = null;
+  let hangarPropRenderer: HangarPropRenderer | null = null;
+  let buildTerminal: BuildTerminalController | null = null;
+
+  if (bootstrap && renderer) {
+    hangarBuildController = createHangarBuildController({
+      initialState: bootstrap.hangar,
+      arcBalance: bootstrap.economy.arcBalance,
+      onPlacementsChange: (state) => {
+        void hangarPropRenderer?.setPlacements(state.placements);
+      },
+    });
+    hangarPropRenderer = createHangarPropRenderer({
+      stationRoot: renderer.getStationRoot(),
+    });
+    buildTerminal = createBuildTerminal(
+      {
+        rootEl: buildTerminalEl,
+        propListEl: buildPropListEl,
+        detailNameEl: buildDetailNameEl,
+        detailMetaEl: buildDetailMetaEl,
+        detailDescEl: buildDetailDescEl,
+        detailQtyEl: buildDetailQtyEl,
+        detailCostEl: buildDetailCostEl,
+        statusEl: buildStatusEl,
+        purchaseBtnEl: buildPurchaseBtn,
+        placeBtnEl: buildPlaceBtn,
+        moveBtnEl: buildMoveBtn,
+        deleteBtnEl: buildDeleteBtn,
+        closeBtnEl: buildCloseBtn,
+      },
+      { controller: hangarBuildController },
+    );
+    void hangarPropRenderer.setPlacements(bootstrap.hangar.placements);
+  }
+
+  const pointerNdcForHangarEvent = (event: MouseEvent): { x: number; y: number } => {
+    if (document.pointerLockElement === canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
+    };
+  };
+
+  const syncPointerForHangarBuild = (event: MouseEvent): void => {
+    if (!hangarBuildController?.isBuildToolActive()) return;
+    const pointer = pointerNdcForHangarEvent(event);
+    hangarBuildController.setPointerNdc(pointer.x, pointer.y);
+  };
+
+  canvas.addEventListener('mousemove', syncPointerForHangarBuild);
+  canvas.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || !hangarBuildController?.isBuildToolActive()) return;
+    if (!renderer) return;
+    const pointer = pointerNdcForHangarEvent(event);
+    hangarBuildController.setPointerNdc(pointer.x, pointer.y);
+    const floorPoint = pickHangarFloorPoint(
+      renderer.getCamera(),
+      hangarBuildController.getPointerNdc(),
+      renderer.getStationRoot(),
+    );
+    void hangarBuildController
+      .handlePrimaryAction(floorPoint)
+      .then(async () => {
+        const context = hangarBuildController!.getContext();
+        await hangarPropRenderer?.setPlacements(context.state.placements);
+        const definition = context.selectedDefinitionId
+          ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
+          : null;
+        if (context.ghost && definition && context.toolMode === 'place') {
+          await hangarPropRenderer?.setGhost({
+            prefabId: definition.prefabId,
+            transform: context.ghost,
+          });
+        } else {
+          await hangarPropRenderer?.setGhost(null);
+        }
+      })
+      .then(() => buildTerminal?.refresh());
+  });
+
   loading?.setProgress(0.75);
 
   gameLoop = createGameLoop({
@@ -305,9 +412,18 @@ export async function startPlaySession(
     network: networkClient,
     bootstrap,
     avmsTerminal,
+    hangarBuild:
+      hangarBuildController && buildTerminal && hangarPropRenderer
+        ? {
+            controller: hangarBuildController,
+            terminal: buildTerminal,
+            propRenderer: hangarPropRenderer,
+          }
+        : null,
     onHudUpdate: (params) => hud.update(params),
     onResetPeak: () => hud.resetPeak(),
-    isPaused: () => gameMenu.isPaused() || avmsTerminal.isPaused(),
+    isPaused: () =>
+      gameMenu.isPaused() || avmsTerminal.isPaused() || (buildTerminal?.isPaused() ?? false),
   });
 
   if (bootstrap) {
@@ -336,6 +452,9 @@ export async function startPlaySession(
     vegetationControls,
     gameMenu,
     avmsTerminal,
+    buildTerminal,
+    hangarBuildController,
+    hangarPropRenderer,
     resize,
     session,
     editorReturnButton,

@@ -673,6 +673,10 @@ kbd {
   max-width: 820px;
 }
 
+.sc-game-menu-panel[data-game-menu-panel='controls'] {
+  max-width: 1080px;
+}
+
 .sc-game-menu-panel.is-active {
   display: block;
 }
@@ -731,28 +735,186 @@ kbd {
 
 .sc-game-menu-slider input[type='range'] {
   grid-column: 1 / -1;
-  width: 100%;
+  width: calc(100% - 4px);
   height: 6px;
+  margin: 0 2px;
   accent-color: var(--accent);
 }
 
 .sc-game-menu-controls {
-  display: grid;
-  gap: 10px;
-  max-width: 640px;
-  font: 14px/1.6 var(--sc-mono);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  max-width: 960px;
+  overflow-x: hidden;
+  font: 14px/1.5 var(--sc-font);
   color: var(--text);
 }
 
-.sc-game-menu-controls kbd {
-  display: inline-block;
-  min-width: 1.6em;
-  padding: 2px 6px;
-  border: 1px solid rgba(139, 216, 255, 0.35);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  font: inherit;
+.sc-game-menu-control-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sc-game-menu-control-tab,
+.sc-game-menu-bind-btn,
+.sc-game-menu-small-btn {
+  border: 1px solid rgba(139, 216, 255, 0.24);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  font: 600 12px/1.2 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.sc-game-menu-control-tab {
+  min-height: 38px;
+  padding: 10px 14px;
+}
+
+.sc-game-menu-control-tab:hover,
+.sc-game-menu-bind-btn:hover,
+.sc-game-menu-small-btn:hover {
+  border-color: rgba(139, 216, 255, 0.45);
+  background: rgba(139, 216, 255, 0.09);
+  color: var(--accent);
+}
+
+.sc-game-menu-control-tab.is-active {
+  border-color: rgba(255, 206, 111, 0.44);
+  background: rgba(255, 206, 111, 0.08);
+  color: var(--accent-2);
+}
+
+.sc-game-menu-control-status {
+  margin: -4px 0 0;
+  color: var(--accent-2);
+  font: 600 13px/1.4 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-game-menu-control-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.sc-game-menu-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 16px 22px;
+  align-items: end;
+}
+
+.sc-game-menu-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  color: var(--text);
+  font: 600 13px/1.3 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-game-menu-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.sc-game-menu-section-title {
+  margin: 8px 0 -8px;
+  color: var(--muted);
+  font: 700 12px/1 var(--sc-font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.sc-game-menu-binding-list,
+.sc-game-menu-device-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sc-game-menu-binding-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(180px, 240px) minmax(120px, auto);
+  gap: 12px;
+  align-items: center;
+  min-height: 50px;
+  padding: 10px 12px;
+  border: 1px solid rgba(139, 216, 255, 0.14);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.sc-game-menu-binding-label {
+  min-width: 0;
+  color: var(--text);
+  font: 600 13px/1.35 var(--sc-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sc-game-menu-bind-btn {
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
   text-align: center;
+}
+
+.sc-game-menu-binding-extras {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sc-game-menu-binding-extras .sc-game-menu-toggle {
+  min-height: 30px;
+  font-size: 11px;
+}
+
+.sc-game-menu-small-btn {
+  min-height: 30px;
+  padding: 7px 10px;
+  color: var(--muted);
+}
+
+.sc-game-menu-device-row {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 206, 111, 0.15);
+  background: rgba(255, 206, 111, 0.035);
+}
+
+.sc-game-menu-device-name {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font: 600 13px/1.35 var(--sc-font);
+}
+
+.sc-game-menu-device-readout {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font: 12px/1.45 var(--sc-mono);
+}
+
+.sc-game-menu-control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 12px;
 }
 
 .sc-game-menu-exit-copy {
@@ -1085,7 +1247,107 @@ kbd {
   min-width: 180px;
 }
 
+.sc-build .sc-avms-title {
+  color: var(--accent-2);
+  text-shadow: 0 0 18px rgba(255, 206, 111, 0.28);
+}
+
+.sc-build-category {
+  margin: 8px 0 4px;
+  font: 600 10px/1 var(--sc-font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sc-build-qty {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font: 600 14px/1 var(--sc-mono);
+  color: var(--accent-2);
+}
+
+.sc-build-desc {
+  margin: 0 0 12px;
+  font: 13px/1.45 var(--sc-font);
+  color: var(--muted);
+}
+
+.sc-build-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  font: 12px/1.4 var(--sc-mono);
+  color: var(--muted);
+}
+
+.sc-build-stat strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sc-build-actions {
+  justify-content: flex-start;
+}
+
 @media (max-width: 900px) {
+  .sc-game-menu-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sc-game-menu-nav {
+    flex-flow: row wrap;
+    gap: 8px;
+    padding: 18px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(90, 190, 255, 0.18);
+  }
+
+  .sc-game-menu-title {
+    width: 100%;
+    margin: 0 0 6px;
+    padding: 0;
+    font-size: 20px;
+  }
+
+  .sc-game-menu-nav-btn {
+    flex: 1 1 130px;
+    min-height: 40px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .sc-game-menu-nav-btn.is-danger {
+    margin-top: 0;
+  }
+
+  .sc-game-menu-panel {
+    padding: 24px 18px 18px;
+    max-width: none;
+  }
+
+  .sc-game-menu-control-grid,
+  .sc-game-menu-binding-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sc-game-menu-binding-extras {
+    justify-content: flex-start;
+  }
+
+  .sc-game-menu-footer {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 18px;
+  }
+
+  .sc-game-menu-resume {
+    min-width: 0;
+  }
+
   .sc-avms-body {
     grid-template-columns: 1fr;
   }
