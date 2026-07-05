@@ -1,8 +1,11 @@
-/** Procedural station hangar bounds — must stay in sync with src/world/station.ts. */
+/** Procedural station build bounds — must stay in sync with src/world/station.ts. */
+export type BuildArea = 'hangar' | 'apartment';
+
+export const HAB_FLOOR_UP = 14;
 export const HANGAR_FLOOR_UP = -22;
 export const HANGAR_PAD_HALF_METERS = 8;
 
-export interface HangarRoomBounds {
+export interface BuildRoomBounds {
   roomId: string;
   minRight: number;
   maxRight: number;
@@ -18,7 +21,16 @@ export interface HangarPadSpec {
   padForward: number;
 }
 
-export const HANGAR_ROOMS: HangarRoomBounds[] = [
+export const APARTMENT_ROOM: BuildRoomBounds = {
+  roomId: 'hab-room',
+  minRight: -6.9,
+  maxRight: -1.9,
+  minForward: 2.6,
+  maxForward: 7.8,
+  floorUp: HAB_FLOOR_UP,
+};
+
+export const HANGAR_ROOMS: BuildRoomBounds[] = [
   {
     roomId: 'hangar-1',
     minRight: -56,
@@ -67,9 +79,16 @@ export interface PlacementTransform {
 const DEFAULT_PROP_FOOTPRINT = 0.75;
 const PAD_CLEARANCE_MARGIN = 0.5;
 
-export function hangarRoomForIndex(index: number | null | undefined): HangarRoomBounds {
+export function hangarRoomForIndex(index: number | null | undefined): BuildRoomBounds {
   const resolved = index === 1 || index === 2 || index === 3 ? index : 2;
   return HANGAR_ROOMS[resolved - 1]!;
+}
+
+export function buildRoomForArea(
+  area: BuildArea,
+  hangarIndex: number | null | undefined,
+): BuildRoomBounds {
+  return area === 'apartment' ? APARTMENT_ROOM : hangarRoomForIndex(hangarIndex);
 }
 
 export function snapScalar(value: number, grid: number | null | undefined): number {
@@ -100,9 +119,9 @@ export function normalizeRotationY(
   return Math.round(rotationY / snapRad) * snapRad;
 }
 
-export function isInsideHangarRoom(
+export function isInsideBuildRoom(
   point: StationLocalPoint,
-  room: HangarRoomBounds,
+  room: BuildRoomBounds,
   footprint = DEFAULT_PROP_FOOTPRINT,
 ): boolean {
   return (
@@ -141,6 +160,7 @@ export function boxesOverlap(
 }
 
 export function validatePlacementTransform(params: {
+  area: BuildArea;
   transform: PlacementTransform;
   hangarIndex: number;
   definition: {
@@ -149,17 +169,23 @@ export function validatePlacementTransform(params: {
   };
   existingPlacements: PlacementTransform[];
 }): { ok: true; transform: PlacementTransform } | { ok: false; message: string } {
-  const room = hangarRoomForIndex(params.hangarIndex);
+  const room = buildRoomForArea(params.area, params.hangarIndex);
   const snapped = snapTransform(params.transform, params.definition.snapGridM, room.floorUp);
   snapped.rotationY = normalizeRotationY(
     snapped.rotationY,
     params.definition.allowRotateY,
   );
 
-  if (!isInsideHangarRoom(snapped, room)) {
-    return { ok: false, message: 'Placement is outside your hangar bay.' };
+  if (!isInsideBuildRoom(snapped, room)) {
+    return {
+      ok: false,
+      message:
+        params.area === 'apartment'
+          ? 'Placement is outside your apartment.'
+          : 'Placement is outside your hangar bay.',
+    };
   }
-  if (overlapsShipPad(snapped, params.hangarIndex)) {
+  if (params.area === 'hangar' && overlapsShipPad(snapped, params.hangarIndex)) {
     return { ok: false, message: 'Placement is too close to the ship pad.' };
   }
 

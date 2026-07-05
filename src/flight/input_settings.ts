@@ -145,9 +145,9 @@ export const KEYBOARD_ACTIONS: readonly KeyboardActionDefinition[] = [
   { id: 'hangar1', label: 'Hangar Level 1', defaultBinding: { primary: 'Digit1' } },
   { id: 'hangar2', label: 'Hangar Level 2', defaultBinding: { primary: 'Digit2' } },
   { id: 'hangar3', label: 'Hangar Level 3', defaultBinding: { primary: 'Digit3' } },
-  { id: 'hangarBuild', label: 'Hangar Build Mode', defaultBinding: { primary: 'KeyH' } },
-  { id: 'hangarRotate', label: 'Rotate Hangar Prop', defaultBinding: { primary: 'KeyG' } },
-  { id: 'hangarCancel', label: 'Cancel Hangar Build Tool', defaultBinding: { primary: 'KeyX' } },
+  { id: 'hangarBuild', label: 'Build Mode', defaultBinding: { primary: 'KeyH' } },
+  { id: 'hangarRotate', label: 'Rotate Prop', defaultBinding: { primary: 'KeyG' } },
+  { id: 'hangarCancel', label: 'Cancel Build Tool', defaultBinding: { primary: 'KeyX' } },
 ] as const;
 
 export const FLIGHT_ANALOG_CONTROLS: readonly FlightAnalogControlDefinition[] = [

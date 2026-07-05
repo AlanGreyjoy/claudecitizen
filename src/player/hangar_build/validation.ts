@@ -2,9 +2,11 @@ import {
   HANGAR_FLOOR_UP,
   HANGAR_PAD_HALF_METERS,
   HANGARS,
+  getStationRoom,
   STATION_ROOMS,
   type StationRoom,
 } from '../../world/station';
+import type { BuildArea } from '../../net/api';
 
 export interface StationLocalPoint {
   right: number;
@@ -19,10 +21,22 @@ export interface PlacementTransform extends StationLocalPoint {
 const DEFAULT_PROP_FOOTPRINT = 0.75;
 const PAD_CLEARANCE_MARGIN = 0.5;
 
+const APARTMENT_ROOM_ID = 'hab-room';
+
 export function hangarRoomForIndex(index: number | null | undefined): StationRoom {
   const resolved = index === 1 || index === 2 || index === 3 ? index : 2;
   const hangar = HANGARS.find((entry) => entry.index === resolved) ?? HANGARS[1]!;
   return STATION_ROOMS.find((room) => room.id === hangar.roomId) ?? STATION_ROOMS[0]!;
+}
+
+export function buildRoomForArea(
+  area: BuildArea,
+  hangarIndex: number | null | undefined,
+): StationRoom {
+  if (area === 'apartment') {
+    return getStationRoom(APARTMENT_ROOM_ID) ?? STATION_ROOMS[0]!;
+  }
+  return hangarRoomForIndex(hangarIndex);
 }
 
 export function snapScalar(value: number, grid: number | null | undefined): number {
@@ -33,9 +47,10 @@ export function snapScalar(value: number, grid: number | null | undefined): numb
 export function snapTransform(
   transform: PlacementTransform,
   snapGridM: number | null | undefined,
+  area: BuildArea,
   hangarIndex: number,
 ): PlacementTransform {
-  const room = hangarRoomForIndex(hangarIndex);
+  const room = buildRoomForArea(area, hangarIndex);
   return {
     right: snapScalar(transform.right, snapGridM),
     forward: snapScalar(transform.forward, snapGridM),
@@ -95,23 +110,32 @@ export function boxesOverlap(
 }
 
 export function validateClientPlacement(params: {
+  area: BuildArea;
   transform: PlacementTransform;
   hangarIndex: number;
   allowRotateY: boolean;
   snapGridM: number | null;
   existingPlacements: PlacementTransform[];
 }): { ok: true; transform: PlacementTransform } | { ok: false; message: string } {
-  const room = hangarRoomForIndex(params.hangarIndex);
-  let snapped = snapTransform(params.transform, params.snapGridM, params.hangarIndex);
+  const room = buildRoomForArea(params.area, params.hangarIndex);
+  let snapped = snapTransform(
+    params.transform,
+    params.snapGridM,
+    params.area,
+    params.hangarIndex,
+  );
   snapped = {
     ...snapped,
     rotationY: normalizeRotationY(snapped.rotationY, params.allowRotateY),
   };
 
   if (!isInsideHangarRoom(snapped, room)) {
-    return { ok: false, message: 'Outside hangar bay bounds.' };
+    return {
+      ok: false,
+      message: params.area === 'apartment' ? 'Outside apartment bounds.' : 'Outside hangar bay bounds.',
+    };
   }
-  if (overlapsShipPad(snapped, params.hangarIndex)) {
+  if (params.area === 'hangar' && overlapsShipPad(snapped, params.hangarIndex)) {
     return { ok: false, message: 'Too close to the ship pad.' };
   }
   for (const existing of params.existingPlacements) {

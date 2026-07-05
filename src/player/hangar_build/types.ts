@@ -69,6 +69,7 @@ export function applyHangarBuildResponse(
   response: HangarBuildState & { arcBalance: number },
 ): void {
   context.state = {
+    area: response.area,
     assignedHangar: response.assignedHangar,
     catalog: response.catalog,
     inventory: response.inventory,

@@ -12,6 +12,7 @@ import {
 
 export interface HangarPropRendererOptions {
   stationRoot: THREE.Object3D;
+  rootName?: string;
 }
 
 export interface HangarPropGhost {
@@ -21,7 +22,7 @@ export interface HangarPropGhost {
 
 export function createHangarPropRenderer(options: HangarPropRendererOptions) {
   const root = new THREE.Group();
-  root.name = 'hangar-props';
+  root.name = options.rootName ?? 'hangar-props';
   options.stationRoot.add(root);
 
   const instanceGroups = new Map<string, THREE.Group>();
@@ -47,7 +48,7 @@ export function createHangarPropRenderer(options: HangarPropRendererOptions) {
     if (!doc) throw new Error(`Prop prefab "${prefabId}" not found.`);
 
     const group = createPropInstanceGroup(doc);
-    group.name = `hangar-prop:${placementId}`;
+    group.name = `${root.name}:${placementId}`;
     root.add(group);
     instanceGroups.set(placementId, group);
     return group;
@@ -146,10 +147,11 @@ function findFirstAssetUrl(entity: {
 
 export type HangarPropRenderer = ReturnType<typeof createHangarPropRenderer>;
 
-export function pickHangarFloorPoint(
+export function pickStationFloorPoint(
   camera: THREE.Camera,
   pointerNdc: { x: number; y: number },
   stationRoot: THREE.Object3D,
+  floorUp: number,
 ): { right: number; up: number; forward: number } | null {
   stationRoot.updateMatrixWorld(true);
   camera.updateMatrixWorld();
@@ -163,9 +165,17 @@ export function pickHangarFloorPoint(
   const localDirection = localEnd.sub(localOrigin).normalize();
   if (Math.abs(localDirection.y) < 1e-6) return null;
 
-  const distance = (HANGAR_FLOOR_UP - localOrigin.y) / localDirection.y;
+  const distance = (floorUp - localOrigin.y) / localDirection.y;
   if (distance < 0) return null;
 
   const hit = localOrigin.addScaledVector(localDirection, distance);
-  return { right: -hit.x, up: HANGAR_FLOOR_UP, forward: hit.z };
+  return { right: -hit.x, up: floorUp, forward: hit.z };
+}
+
+export function pickHangarFloorPoint(
+  camera: THREE.Camera,
+  pointerNdc: { x: number; y: number },
+  stationRoot: THREE.Object3D,
+): { right: number; up: number; forward: number } | null {
+  return pickStationFloorPoint(camera, pointerNdc, stationRoot, HANGAR_FLOOR_UP);
 }

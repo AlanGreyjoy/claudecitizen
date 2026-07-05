@@ -1,5 +1,5 @@
 import { createPlayerControls } from '../flight/player_controls';
-import { createGameLoop } from './game_loop';
+import { createGameLoop, type BuildAreaRuntime } from './game_loop';
 import type { LoadingScreenHandle } from './loading_screen';
 import { restoreTitleScreen } from './title_screen';
 import { createHud } from '../render/effects';
@@ -11,7 +11,8 @@ import { createHangarPropRenderer } from '../render/hangar/prop_instances';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { createVegetationControls } from '../render/vegetation';
 import { CLAUDECITIZEN_PLANET } from '../world/planet';
-import { pickHangarFloorPoint } from '../render/hangar/prop_instances';
+import { pickStationFloorPoint } from '../render/hangar/prop_instances';
+import { buildRoomForArea } from '../player/hangar_build/validation';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
 import { applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
@@ -21,13 +22,13 @@ import {
   fetchGameBootstrap,
   getSession,
   type AuthSession,
+  type BuildArea,
   type GameBootstrap,
 } from '../net/api';
 import { createWorldClient, type WorldClient } from '../net/world_client';
 import type { GameMenuController } from '../render/effects/hud/game_menu';
 import type { AvmsTerminalController } from '../render/effects/hud/avms_terminal';
 import type { BuildTerminalController } from '../render/effects/hud/build_terminal';
-import type { HangarBuildController } from '../player/hangar_build/build_controller';
 import type { HangarPropRenderer } from '../render/hangar/prop_instances';
 
 function requireElement<T extends HTMLElement>(id: string): T {
@@ -103,8 +104,7 @@ interface PlaySessionCleanup {
   gameMenu: GameMenuController;
   avmsTerminal: AvmsTerminalController;
   buildTerminal: BuildTerminalController | null;
-  hangarBuildController: HangarBuildController | null;
-  hangarPropRenderer: HangarPropRenderer | null;
+  buildPropRenderers: HangarPropRenderer[];
   resize: () => void;
   session: AuthSession | null;
   editorReturnButton: HTMLButtonElement | null;
@@ -120,7 +120,7 @@ export function stopPlaySession(): void {
   cleanup.gameMenu.dispose();
   cleanup.avmsTerminal.dispose();
   cleanup.buildTerminal?.dispose();
-  cleanup.hangarPropRenderer?.dispose();
+  for (const renderer of cleanup.buildPropRenderers) renderer.dispose();
   cleanup.gameLoop.stop();
   cleanup.controls.dispose();
   cleanup.renderer?.dispose();
@@ -207,6 +207,8 @@ export async function startPlaySession(
   const avmsDeliverBtn = requireElement<HTMLButtonElement>('avms-deliver-btn');
   const avmsCloseBtn = requireElement<HTMLButtonElement>('avms-close-btn');
   const buildTerminalEl = requireElement<HTMLElement>('build-terminal');
+  const buildKickerEl = requireElement<HTMLElement>('build-kicker');
+  const buildVersionEl = requireElement<HTMLElement>('build-version');
   const buildPropListEl = requireElement<HTMLElement>('build-prop-list');
   const buildDetailNameEl = requireElement<HTMLElement>('build-detail-name');
   const buildDetailMetaEl = requireElement<HTMLElement>('build-detail-meta');
@@ -214,6 +216,7 @@ export async function startPlaySession(
   const buildDetailQtyEl = requireElement<HTMLElement>('build-detail-qty');
   const buildDetailCostEl = requireElement<HTMLElement>('build-detail-cost');
   const buildStatusEl = requireElement<HTMLElement>('build-status');
+  const buildNoteEl = requireElement<HTMLElement>('build-note');
   const buildPurchaseBtn = requireElement<HTMLButtonElement>('build-purchase-btn');
   const buildPlaceBtn = requireElement<HTMLButtonElement>('build-place-btn');
   const buildMoveBtn = requireElement<HTMLButtonElement>('build-move-btn');
@@ -319,24 +322,43 @@ export async function startPlaySession(
     closeBtnEl: avmsCloseBtn,
   });
 
-  let hangarBuildController: HangarBuildController | null = null;
-  let hangarPropRenderer: HangarPropRenderer | null = null;
+  const buildAreas: Partial<Record<BuildArea, BuildAreaRuntime>> = {};
+  const buildPropRenderers: HangarPropRenderer[] = [];
   let buildTerminal: BuildTerminalController | null = null;
 
   if (bootstrap && renderer) {
-    hangarBuildController = createHangarBuildController({
-      initialState: bootstrap.hangar,
-      arcBalance: bootstrap.economy.arcBalance,
-      onPlacementsChange: (state) => {
-        void hangarPropRenderer?.setPlacements(state.placements);
-      },
-    });
-    hangarPropRenderer = createHangarPropRenderer({
-      stationRoot: renderer.getStationRoot(),
-    });
+    const createBuildRuntime = (
+      area: BuildArea,
+      rootName: string,
+      initialState: GameBootstrap['hangar'],
+    ): BuildAreaRuntime => {
+      let propRenderer: HangarPropRenderer | null = null;
+      const controller = createHangarBuildController({
+        initialState,
+        arcBalance: bootstrap.economy.arcBalance,
+        onPlacementsChange: (state) => {
+          void propRenderer?.setPlacements(state.placements);
+        },
+      });
+      propRenderer = createHangarPropRenderer({
+        rootName,
+        stationRoot: renderer.getStationRoot(),
+      });
+      const runtime = { controller, propRenderer };
+      buildAreas[area] = runtime;
+      buildPropRenderers.push(propRenderer);
+      void propRenderer.setPlacements(initialState.placements);
+      return runtime;
+    };
+
+    const hangarBuild = createBuildRuntime('hangar', 'hangar-props', bootstrap.hangar);
+    createBuildRuntime('apartment', 'apartment-props', bootstrap.apartment);
+
     buildTerminal = createBuildTerminal(
       {
         rootEl: buildTerminalEl,
+        kickerEl: buildKickerEl,
+        versionEl: buildVersionEl,
         propListEl: buildPropListEl,
         detailNameEl: buildDetailNameEl,
         detailMetaEl: buildDetailMetaEl,
@@ -349,13 +371,17 @@ export async function startPlaySession(
         moveBtnEl: buildMoveBtn,
         deleteBtnEl: buildDeleteBtn,
         closeBtnEl: buildCloseBtn,
+        noteEl: buildNoteEl,
       },
-      { controller: hangarBuildController },
+      { controller: hangarBuild.controller },
     );
-    void hangarPropRenderer.setPlacements(bootstrap.hangar.placements);
   }
 
-  const pointerNdcForHangarEvent = (event: MouseEvent): { x: number; y: number } => {
+  const activeBuildRuntime = (): BuildAreaRuntime | null =>
+    (buildAreas.hangar?.controller.isBuildToolActive() ? buildAreas.hangar : null) ??
+    (buildAreas.apartment?.controller.isBuildToolActive() ? buildAreas.apartment : null);
+
+  const pointerNdcForBuildEvent = (event: MouseEvent): { x: number; y: number } => {
     if (document.pointerLockElement === canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
@@ -364,38 +390,43 @@ export async function startPlaySession(
     };
   };
 
-  const syncPointerForHangarBuild = (event: MouseEvent): void => {
-    if (!hangarBuildController?.isBuildToolActive()) return;
-    const pointer = pointerNdcForHangarEvent(event);
-    hangarBuildController.setPointerNdc(pointer.x, pointer.y);
+  const syncPointerForBuild = (event: MouseEvent): void => {
+    const runtime = activeBuildRuntime();
+    if (!runtime) return;
+    const pointer = pointerNdcForBuildEvent(event);
+    runtime.controller.setPointerNdc(pointer.x, pointer.y);
   };
 
-  canvas.addEventListener('mousemove', syncPointerForHangarBuild);
+  canvas.addEventListener('mousemove', syncPointerForBuild);
   canvas.addEventListener('mousedown', (event) => {
-    if (event.button !== 0 || !hangarBuildController?.isBuildToolActive()) return;
+    const runtime = activeBuildRuntime();
+    if (event.button !== 0 || !runtime) return;
     if (!renderer) return;
-    const pointer = pointerNdcForHangarEvent(event);
-    hangarBuildController.setPointerNdc(pointer.x, pointer.y);
-    const floorPoint = pickHangarFloorPoint(
+    const pointer = pointerNdcForBuildEvent(event);
+    runtime.controller.setPointerNdc(pointer.x, pointer.y);
+    const context = runtime.controller.getContext();
+    const room = buildRoomForArea(context.state.area, context.state.assignedHangar);
+    const floorPoint = pickStationFloorPoint(
       renderer.getCamera(),
-      hangarBuildController.getPointerNdc(),
+      runtime.controller.getPointerNdc(),
       renderer.getStationRoot(),
+      room.floorUp,
     );
-    void hangarBuildController
+    void runtime.controller
       .handlePrimaryAction(floorPoint)
       .then(async () => {
-        const context = hangarBuildController!.getContext();
-        await hangarPropRenderer?.setPlacements(context.state.placements);
-        const definition = context.selectedDefinitionId
-          ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
+        const nextContext = runtime.controller.getContext();
+        await runtime.propRenderer.setPlacements(nextContext.state.placements);
+        const definition = nextContext.selectedDefinitionId
+          ? nextContext.state.catalog.find((entry) => entry.id === nextContext.selectedDefinitionId)
           : null;
-        if (context.ghost && definition && context.toolMode === 'place') {
-          await hangarPropRenderer?.setGhost({
+        if (nextContext.ghost && definition && nextContext.toolMode === 'place') {
+          await runtime.propRenderer.setGhost({
             prefabId: definition.prefabId,
-            transform: context.ghost,
+            transform: nextContext.ghost,
           });
         } else {
-          await hangarPropRenderer?.setGhost(null);
+          await runtime.propRenderer.setGhost(null);
         }
       })
       .then(() => buildTerminal?.refresh());
@@ -412,12 +443,11 @@ export async function startPlaySession(
     network: networkClient,
     bootstrap,
     avmsTerminal,
-    hangarBuild:
-      hangarBuildController && buildTerminal && hangarPropRenderer
+    build:
+      buildTerminal
         ? {
-            controller: hangarBuildController,
+            areas: buildAreas,
             terminal: buildTerminal,
-            propRenderer: hangarPropRenderer,
           }
         : null,
     onHudUpdate: (params) => hud.update(params),
@@ -453,8 +483,7 @@ export async function startPlaySession(
     gameMenu,
     avmsTerminal,
     buildTerminal,
-    hangarBuildController,
-    hangarPropRenderer,
+    buildPropRenderers,
     resize,
     session,
     editorReturnButton,

@@ -177,7 +177,7 @@ function parsePropDefinitionCreate(body: unknown) {
     costArc: requireInteger(readFiniteNumber(body, 'costArc'), 'Cost', 0, 2_000_000_000),
     category: requireText(readString(body, 'category') || 'decoration', 'Category', 40),
     maxPerHangar:
-      maxPerHangarRaw === null ? null : requireInteger(maxPerHangarRaw, 'Max per hangar', 1, 64),
+      maxPerHangarRaw === null ? null : requireInteger(maxPerHangarRaw, 'Max per space', 1, 64),
     allowRotateY: readString(body, 'allowRotateY') !== 'false',
     snapGridM: snapGridRaw === null ? null : requireFloat(snapGridRaw, 'Snap grid', 0.1, 4),
   };
@@ -213,7 +213,7 @@ function parsePropDefinitionPatch(body: unknown) {
   if (typeof body === 'object' && body !== null && 'maxPerHangar' in body) {
     const maxPerHangar = readFiniteNumber(body, 'maxPerHangar');
     next.maxPerHangar =
-      maxPerHangar === null ? null : requireInteger(maxPerHangar, 'Max per hangar', 1, 64);
+      maxPerHangar === null ? null : requireInteger(maxPerHangar, 'Max per space', 1, 64);
   }
 
   if (typeof body === 'object' && body !== null && 'allowRotateY' in body) {

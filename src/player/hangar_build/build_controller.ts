@@ -1,8 +1,8 @@
 import {
-  createHangarPlacement,
-  deleteHangarPlacement,
-  purchaseHangarProp,
-  updateHangarPlacement,
+  createBuildPlacement,
+  deleteBuildPlacement,
+  purchaseBuildProp,
+  updateBuildPlacement,
   type HangarBuildState,
 } from '../../net/api';
 import {
@@ -112,6 +112,7 @@ export function createHangarBuildController(options: HangarBuildControllerOption
           rotationY: context.ghost?.rotationY ?? 0,
         };
         const validation = validateClientPlacement({
+          area: context.state.area,
           transform: ghost,
           hangarIndex: context.state.assignedHangar,
           allowRotateY: definition.allowRotateY,
@@ -153,7 +154,7 @@ export function createHangarBuildController(options: HangarBuildControllerOption
       context.statusMessage = 'Purchasing…';
       notify();
       try {
-        const response = await purchaseHangarProp(definitionId);
+        const response = await purchaseBuildProp(context.state.area, definitionId);
         applyResponse(response);
         context.statusMessage = 'Purchase complete.';
       } catch (error) {
@@ -184,6 +185,7 @@ export function createHangarBuildController(options: HangarBuildControllerOption
           rotationY: 0,
         };
         const validation = validateClientPlacement({
+          area: context.state.area,
           transform: ghost,
           hangarIndex: context.state.assignedHangar,
           allowRotateY: definition.allowRotateY,
@@ -203,7 +205,11 @@ export function createHangarBuildController(options: HangarBuildControllerOption
         context.busy = true;
         notify();
         try {
-          const response = await createHangarPlacement(definitionId, validation.transform);
+          const response = await createBuildPlacement(
+            context.state.area,
+            definitionId,
+            validation.transform,
+          );
           applyResponse(response);
           context.ghost = validation.transform;
           context.statusMessage = 'Prop placed.';
@@ -249,6 +255,7 @@ export function createHangarBuildController(options: HangarBuildControllerOption
         if (!placement || !definition || !context.ghost) return;
 
         const validation = validateClientPlacement({
+          area: context.state.area,
           transform: context.ghost,
           hangarIndex: context.state.assignedHangar,
           allowRotateY: definition.allowRotateY,
@@ -271,7 +278,11 @@ export function createHangarBuildController(options: HangarBuildControllerOption
         context.busy = true;
         notify();
         try {
-          const response = await updateHangarPlacement(placement.id, validation.transform);
+          const response = await updateBuildPlacement(
+            context.state.area,
+            placement.id,
+            validation.transform,
+          );
           applyResponse(response);
           context.selectedPlacementId = null;
           context.ghost = null;
@@ -299,7 +310,7 @@ export function createHangarBuildController(options: HangarBuildControllerOption
         context.busy = true;
         notify();
         try {
-          const response = await deleteHangarPlacement(picked);
+          const response = await deleteBuildPlacement(context.state.area, picked);
           applyResponse(response);
           context.statusMessage = 'Prop removed.';
         } catch (error) {

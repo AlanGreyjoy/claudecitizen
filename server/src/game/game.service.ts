@@ -55,7 +55,10 @@ export class GameService {
     const apartmentInstanceId = `apartment:${user.player.id}`;
     const hangarInstanceId = `hangar:${user.player.id}`;
     const currentInstanceId = user.player.currentInstanceId || apartmentInstanceId;
-    const hangarState = await this.hangar.getBuildState(user.player.id);
+    const [hangarState, apartmentState] = await Promise.all([
+      this.hangar.getBuildState(user.player.id, 'hangar'),
+      this.hangar.getBuildState(user.player.id, 'apartment'),
+    ]);
 
     return {
       player: {
@@ -95,10 +98,18 @@ export class GameService {
         };
       }),
       hangar: {
+        area: hangarState.area,
         assignedHangar: hangarState.assignedHangar,
         catalog: hangarState.catalog,
         inventory: hangarState.inventory,
         placements: hangarState.placements,
+      },
+      apartment: {
+        area: apartmentState.area,
+        assignedHangar: apartmentState.assignedHangar,
+        catalog: apartmentState.catalog,
+        inventory: apartmentState.inventory,
+        placements: apartmentState.placements,
       },
       featureFlags: {
         nativeWebSocketPresence: true,

@@ -7,6 +7,8 @@ import {
 
 export interface BuildTerminalElements {
   rootEl: HTMLElement;
+  kickerEl?: HTMLElement;
+  versionEl?: HTMLElement;
   propListEl: HTMLElement;
   detailNameEl: HTMLElement;
   detailMetaEl: HTMLElement;
@@ -19,6 +21,7 @@ export interface BuildTerminalElements {
   moveBtnEl: HTMLButtonElement;
   deleteBtnEl: HTMLButtonElement;
   closeBtnEl: HTMLButtonElement;
+  noteEl?: HTMLElement;
 }
 
 export interface BuildTerminalOptions {
@@ -27,9 +30,27 @@ export interface BuildTerminalOptions {
 
 export function createBuildTerminal(elements: BuildTerminalElements, options: BuildTerminalOptions) {
   let open = false;
+  let controller = options.controller;
+
+  function areaNoun(): string {
+    return controller.getContext().state.area === 'apartment' ? 'apartment' : 'hangar bay';
+  }
+
+  function renderChrome(): void {
+    const isApartment = controller.getContext().state.area === 'apartment';
+    if (elements.kickerEl) {
+      elements.kickerEl.textContent = isApartment ? 'Apartment Workshop' : 'Hangar Workshop';
+    }
+    if (elements.versionEl) {
+      elements.versionEl.textContent = isApartment ? 'Hab layout' : 'Bay layout';
+    }
+    if (elements.noteEl) {
+      elements.noteEl.textContent = `Place, move, rotate (R), and delete props in your private ${areaNoun()}.`;
+    }
+  }
 
   function renderPropList(): void {
-    const context = options.controller.getContext();
+    const context = controller.getContext();
     elements.propListEl.replaceChildren();
 
     const grouped = new Map<string, typeof context.state.catalog>();
@@ -73,7 +94,7 @@ export function createBuildTerminal(elements: BuildTerminalElements, options: Bu
 
         row.append(name, meta, qty);
         row.addEventListener('click', () => {
-          options.controller.selectDefinition(entry.id);
+          controller.selectDefinition(entry.id);
           renderPropList();
           renderDetail();
         });
@@ -83,7 +104,7 @@ export function createBuildTerminal(elements: BuildTerminalElements, options: Bu
   }
 
   function renderDetail(): void {
-    const context = options.controller.getContext();
+    const context = controller.getContext();
     const definition = context.selectedDefinitionId
       ? findDefinition(context, context.selectedDefinitionId)
       : null;
@@ -106,7 +127,19 @@ export function createBuildTerminal(elements: BuildTerminalElements, options: Bu
   }
 
   function renderStatus(): void {
-    elements.statusEl.textContent = options.controller.getContext().statusMessage;
+    elements.statusEl.textContent = controller.getContext().statusMessage;
+  }
+
+  function setController(next: HangarBuildController): void {
+    if (controller === next) return;
+    if (open) controller.closeCatalog();
+    controller = next;
+    if (!open) return;
+    controller.openCatalog();
+    renderChrome();
+    renderPropList();
+    renderDetail();
+    renderStatus();
   }
 
   function setOpen(next: boolean): void {
@@ -116,24 +149,25 @@ export function createBuildTerminal(elements: BuildTerminalElements, options: Bu
     elements.rootEl.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (open) {
       document.exitPointerLock?.();
-      options.controller.openCatalog();
+      controller.openCatalog();
+      renderChrome();
       renderPropList();
       renderDetail();
       renderStatus();
       elements.closeBtnEl.focus();
       return;
     }
-    options.controller.closeCatalog();
+    controller.closeCatalog();
     elements.rootEl.blur();
   }
 
   function startTool(mode: BuildToolMode): void {
-    options.controller.setToolMode(mode);
+    controller.setToolMode(mode);
     setOpen(false);
   }
 
   elements.purchaseBtnEl.addEventListener('click', () => {
-    void options.controller.purchaseSelected().then(() => {
+    void controller.purchaseSelected().then(() => {
       renderPropList();
       renderDetail();
       renderStatus();
@@ -162,7 +196,8 @@ export function createBuildTerminal(elements: BuildTerminalElements, options: Bu
     isPaused() {
       return open;
     },
-    open() {
+    open(nextController?: HangarBuildController) {
+      if (nextController) setController(nextController);
       setOpen(true);
     },
     close() {
@@ -170,6 +205,7 @@ export function createBuildTerminal(elements: BuildTerminalElements, options: Bu
     },
     refresh() {
       if (!open) return;
+      renderChrome();
       renderPropList();
       renderDetail();
       renderStatus();

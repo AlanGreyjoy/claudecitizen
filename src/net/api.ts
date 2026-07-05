@@ -12,6 +12,8 @@ export interface AuthSession {
   };
 }
 
+export type BuildArea = 'hangar' | 'apartment';
+
 export interface GameBootstrap {
   player: AuthSession['player'];
   economy: {
@@ -37,6 +39,7 @@ export interface GameBootstrap {
     throttleAccelMps2: number;
   }[];
   hangar: HangarBuildState;
+  apartment: HangarBuildState;
   featureFlags: {
     nativeWebSocketPresence: boolean;
     serverAuthoritativePhysics: boolean;
@@ -62,6 +65,7 @@ export interface PlayerPropInventoryEntry {
 
 export interface HangarPlacementEntry {
   id: string;
+  area: BuildArea;
   propDefinitionId: string;
   prefabId: string;
   right: number;
@@ -71,6 +75,7 @@ export interface HangarPlacementEntry {
 }
 
 export interface HangarBuildState {
+  area: BuildArea;
   assignedHangar: number;
   catalog: PropDefinitionEntry[];
   inventory: PlayerPropInventoryEntry[];
@@ -182,14 +187,48 @@ export interface HangarBuildResponse extends HangarBuildState {
   arcBalance: number;
 }
 
+function buildAreaPath(area: BuildArea): string {
+  return area === 'apartment' ? '/game/apartment' : '/game/hangar';
+}
+
+export function fetchBuildState(area: BuildArea): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>(`${buildAreaPath(area)}/build`, { method: 'GET' });
+}
+
 export function fetchHangarBuildState(): Promise<HangarBuildResponse> {
-  return requestJson<HangarBuildResponse>('/game/hangar/build', { method: 'GET' });
+  return fetchBuildState('hangar');
+}
+
+export function fetchApartmentBuildState(): Promise<HangarBuildResponse> {
+  return fetchBuildState('apartment');
+}
+
+export function purchaseBuildProp(
+  area: BuildArea,
+  propDefinitionId: string,
+): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>(`${buildAreaPath(area)}/purchase`, {
+    method: 'POST',
+    body: JSON.stringify({ propDefinitionId }),
+  });
 }
 
 export function purchaseHangarProp(propDefinitionId: string): Promise<HangarBuildResponse> {
-  return requestJson<HangarBuildResponse>('/game/hangar/purchase', {
+  return purchaseBuildProp('hangar', propDefinitionId);
+}
+
+export function purchaseApartmentProp(propDefinitionId: string): Promise<HangarBuildResponse> {
+  return purchaseBuildProp('apartment', propDefinitionId);
+}
+
+export function createBuildPlacement(
+  area: BuildArea,
+  propDefinitionId: string,
+  transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
+): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>(`${buildAreaPath(area)}/placements`, {
     method: 'POST',
-    body: JSON.stringify({ propDefinitionId }),
+    body: JSON.stringify({ propDefinitionId, ...transform }),
   });
 }
 
@@ -197,18 +236,23 @@ export function createHangarPlacement(
   propDefinitionId: string,
   transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
 ): Promise<HangarBuildResponse> {
-  return requestJson<HangarBuildResponse>('/game/hangar/placements', {
-    method: 'POST',
-    body: JSON.stringify({ propDefinitionId, ...transform }),
-  });
+  return createBuildPlacement('hangar', propDefinitionId, transform);
 }
 
-export function updateHangarPlacement(
+export function createApartmentPlacement(
+  propDefinitionId: string,
+  transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
+): Promise<HangarBuildResponse> {
+  return createBuildPlacement('apartment', propDefinitionId, transform);
+}
+
+export function updateBuildPlacement(
+  area: BuildArea,
   placementId: string,
   transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
 ): Promise<HangarBuildResponse> {
   return requestJson<HangarBuildResponse>(
-    `/game/hangar/placements/${encodeURIComponent(placementId)}`,
+    `${buildAreaPath(area)}/placements/${encodeURIComponent(placementId)}`,
     {
       method: 'PATCH',
       body: JSON.stringify(transform),
@@ -216,11 +260,36 @@ export function updateHangarPlacement(
   );
 }
 
-export function deleteHangarPlacement(placementId: string): Promise<HangarBuildResponse> {
+export function updateHangarPlacement(
+  placementId: string,
+  transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
+): Promise<HangarBuildResponse> {
+  return updateBuildPlacement('hangar', placementId, transform);
+}
+
+export function updateApartmentPlacement(
+  placementId: string,
+  transform: Pick<HangarPlacementEntry, 'right' | 'up' | 'forward' | 'rotationY'>,
+): Promise<HangarBuildResponse> {
+  return updateBuildPlacement('apartment', placementId, transform);
+}
+
+export function deleteBuildPlacement(
+  area: BuildArea,
+  placementId: string,
+): Promise<HangarBuildResponse> {
   return requestJson<HangarBuildResponse>(
-    `/game/hangar/placements/${encodeURIComponent(placementId)}`,
+    `${buildAreaPath(area)}/placements/${encodeURIComponent(placementId)}`,
     { method: 'DELETE' },
   );
+}
+
+export function deleteHangarPlacement(placementId: string): Promise<HangarBuildResponse> {
+  return deleteBuildPlacement('hangar', placementId);
+}
+
+export function deleteApartmentPlacement(placementId: string): Promise<HangarBuildResponse> {
+  return deleteBuildPlacement('apartment', placementId);
 }
 
 export function setAssignedHangarBay(hangarIndex: number): Promise<HangarBuildResponse> {

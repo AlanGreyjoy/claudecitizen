@@ -17,6 +17,7 @@ import type { AuthenticatedRequest } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { GameHangarService } from './game.hangar.service';
 import { GameService } from './game.service';
+import type { BuildArea } from './game.hangar.validation';
 
 function readString(body: unknown, key: string): string {
   if (typeof body !== 'object' || body === null) return '';
@@ -68,26 +69,72 @@ export class GameController {
   @UseGuards(HttpAuthGuard)
   async getHangarBuild(@Req() req: AuthenticatedRequest) {
     const playerId = await this.requirePlayerId(req.user!.sub);
-    return this.hangar.getBuildState(playerId);
+    return this.hangar.getBuildState(playerId, 'hangar');
+  }
+
+  @Get('apartment/build')
+  @UseGuards(HttpAuthGuard)
+  async getApartmentBuild(@Req() req: AuthenticatedRequest) {
+    const playerId = await this.requirePlayerId(req.user!.sub);
+    return this.hangar.getBuildState(playerId, 'apartment');
+  }
+
+  private async purchasePropForArea(
+    req: AuthenticatedRequest,
+    body: unknown,
+    area: BuildArea,
+  ) {
+    const propDefinitionId = readString(body, 'propDefinitionId');
+    if (!propDefinitionId) throw new BadRequestException('propDefinitionId is required.');
+    const playerId = await this.requirePlayerId(req.user!.sub);
+    return this.hangar.purchaseProp(playerId, propDefinitionId, area);
   }
 
   @Post('hangar/purchase')
   @UseGuards(HttpAuthGuard)
   async purchaseProp(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    return this.purchasePropForArea(req, body, 'hangar');
+  }
+
+  @Post('apartment/purchase')
+  @UseGuards(HttpAuthGuard)
+  async purchaseApartmentProp(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    return this.purchasePropForArea(req, body, 'apartment');
+  }
+
+  private async createPlacementForArea(
+    req: AuthenticatedRequest,
+    body: unknown,
+    area: BuildArea,
+  ) {
     const propDefinitionId = readString(body, 'propDefinitionId');
     if (!propDefinitionId) throw new BadRequestException('propDefinitionId is required.');
+    const transform = parsePlacementTransform(body);
     const playerId = await this.requirePlayerId(req.user!.sub);
-    return this.hangar.purchaseProp(playerId, propDefinitionId);
+    return this.hangar.createPlacement(playerId, area, propDefinitionId, transform);
   }
 
   @Post('hangar/placements')
   @UseGuards(HttpAuthGuard)
   async createPlacement(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
-    const propDefinitionId = readString(body, 'propDefinitionId');
-    if (!propDefinitionId) throw new BadRequestException('propDefinitionId is required.');
+    return this.createPlacementForArea(req, body, 'hangar');
+  }
+
+  @Post('apartment/placements')
+  @UseGuards(HttpAuthGuard)
+  async createApartmentPlacement(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    return this.createPlacementForArea(req, body, 'apartment');
+  }
+
+  private async updatePlacementForArea(
+    req: AuthenticatedRequest,
+    id: string,
+    body: unknown,
+    area: BuildArea,
+  ) {
     const transform = parsePlacementTransform(body);
     const playerId = await this.requirePlayerId(req.user!.sub);
-    return this.hangar.createPlacement(playerId, propDefinitionId, transform);
+    return this.hangar.updatePlacement(playerId, area, id, transform);
   }
 
   @Patch('hangar/placements/:id')
@@ -97,16 +144,31 @@ export class GameController {
     @Param('id') id: string,
     @Body() body: unknown,
   ) {
-    const transform = parsePlacementTransform(body);
-    const playerId = await this.requirePlayerId(req.user!.sub);
-    return this.hangar.updatePlacement(playerId, id, transform);
+    return this.updatePlacementForArea(req, id, body, 'hangar');
+  }
+
+  @Patch('apartment/placements/:id')
+  @UseGuards(HttpAuthGuard)
+  async updateApartmentPlacement(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    return this.updatePlacementForArea(req, id, body, 'apartment');
   }
 
   @Delete('hangar/placements/:id')
   @UseGuards(HttpAuthGuard)
   async deletePlacement(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     const playerId = await this.requirePlayerId(req.user!.sub);
-    return this.hangar.deletePlacement(playerId, id);
+    return this.hangar.deletePlacement(playerId, 'hangar', id);
+  }
+
+  @Delete('apartment/placements/:id')
+  @UseGuards(HttpAuthGuard)
+  async deleteApartmentPlacement(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    const playerId = await this.requirePlayerId(req.user!.sub);
+    return this.hangar.deletePlacement(playerId, 'apartment', id);
   }
 
   @Post('hangar/assigned-bay')
@@ -116,6 +178,6 @@ export class GameController {
     if (hangarIndex === null) throw new BadRequestException('hangarIndex is required.');
     const playerId = await this.requirePlayerId(req.user!.sub);
     await this.hangar.setAssignedHangar(playerId, Math.round(hangarIndex));
-    return this.hangar.getBuildState(playerId);
+    return this.hangar.getBuildState(playerId, 'hangar');
   }
 }

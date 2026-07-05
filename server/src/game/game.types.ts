@@ -1,4 +1,5 @@
 import type { PublicPlayerProfile } from '../auth/auth.types';
+import type { BuildArea } from './game.hangar.validation';
 
 export interface OwnedShipDto {
   id: string;
@@ -33,6 +34,7 @@ export interface PlayerPropInventoryDto {
 
 export interface HangarPlacementDto {
   id: string;
+  area: BuildArea;
   propDefinitionId: string;
   prefabId: string;
   right: number;
@@ -42,6 +44,7 @@ export interface HangarPlacementDto {
 }
 
 export interface HangarBuildStateDto {
+  area: BuildArea;
   assignedHangar: number;
   catalog: PropDefinitionDto[];
   inventory: PlayerPropInventoryDto[];
@@ -61,6 +64,7 @@ export interface GameBootstrapDto {
   };
   ships: OwnedShipDto[];
   hangar: HangarBuildStateDto;
+  apartment: HangarBuildStateDto;
   featureFlags: {
     nativeWebSocketPresence: true;
     serverAuthoritativePhysics: false;

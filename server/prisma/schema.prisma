@@ -118,6 +118,7 @@ model HangarPlacement {
   id               String         @id @default(cuid())
   playerId         String
   propDefinitionId String
+  area             String         @default("hangar")
   right            Float
   up               Float
   forward          Float
@@ -128,6 +129,7 @@ model HangarPlacement {
   propDefinition   PropDefinition @relation(fields: [propDefinitionId], references: [id], onDelete: Restrict)
 
   @@index([playerId])
+  @@index([playerId, area])
   @@index([propDefinitionId])
 }
 

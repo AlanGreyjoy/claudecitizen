@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { GameCatalogService } from './game.catalog.service';
 import {
+  type BuildArea,
   validatePlacementTransform,
   type PlacementTransform,
 } from './game.hangar.validation';
@@ -30,6 +31,7 @@ export interface PlayerPropInventoryDto {
 
 export interface HangarPlacementDto {
   id: string;
+  area: BuildArea;
   propDefinitionId: string;
   prefabId: string;
   right: number;
@@ -39,6 +41,7 @@ export interface HangarPlacementDto {
 }
 
 export interface HangarBuildStateDto {
+  area: BuildArea;
   assignedHangar: number;
   catalog: PropDefinitionDto[];
   inventory: PlayerPropInventoryDto[];
@@ -53,7 +56,7 @@ export class GameHangarService {
     @Inject(GameCatalogService) private readonly catalog: GameCatalogService,
   ) {}
 
-  async getBuildState(playerId: string): Promise<HangarBuildStateDto> {
+  async getBuildState(playerId: string, area: BuildArea = 'hangar'): Promise<HangarBuildStateDto> {
     const player = await this.requirePlayer(playerId);
     const [catalog, inventoryRows, placementRows] = await Promise.all([
       this.catalog.listPropDefinitions(),
@@ -62,13 +65,14 @@ export class GameHangarService {
         orderBy: { propDefinitionId: 'asc' },
       }),
       this.prisma.hangarPlacement.findMany({
-        where: { playerId },
+        where: { playerId, area },
         include: { propDefinition: true },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
 
     return {
+      area,
       assignedHangar: player.assignedHangar ?? 2,
       arcBalance: player.arcBalance,
       catalog: catalog.map((entry) => this.asPropDefinitionDto(entry)),
@@ -78,6 +82,7 @@ export class GameHangarService {
       })),
       placements: placementRows.map((entry) => ({
         id: entry.id,
+        area,
         propDefinitionId: entry.propDefinitionId,
         prefabId: entry.propDefinition.prefabId,
         right: entry.right,
@@ -88,7 +93,11 @@ export class GameHangarService {
     };
   }
 
-  async purchaseProp(playerId: string, propDefinitionId: string): Promise<HangarBuildStateDto> {
+  async purchaseProp(
+    playerId: string,
+    propDefinitionId: string,
+    area: BuildArea = 'hangar',
+  ): Promise<HangarBuildStateDto> {
     await this.prisma.$transaction(async (tx) => {
       const player = await tx.player.findUnique({ where: { id: playerId } });
       if (!player) throw new NotFoundException('Player not found.');
@@ -115,11 +124,12 @@ export class GameHangarService {
       });
     });
 
-    return this.getBuildState(playerId);
+    return this.getBuildState(playerId, area);
   }
 
   async createPlacement(
     playerId: string,
+    area: BuildArea,
     propDefinitionId: string,
     transform: PlacementTransform,
   ): Promise<HangarBuildStateDto> {
@@ -142,18 +152,21 @@ export class GameHangarService {
       }
 
       const existing = await tx.hangarPlacement.findMany({
-        where: { playerId, propDefinitionId },
+        where: { playerId, area, propDefinitionId },
       });
-      const allPlacements = await tx.hangarPlacement.findMany({ where: { playerId } });
+      const allPlacements = await tx.hangarPlacement.findMany({ where: { playerId, area } });
 
       const perTypeCount = existing.length;
       if (definition.maxPerHangar !== null && perTypeCount >= definition.maxPerHangar) {
         throw new BadRequestException(
-          `You can only place ${definition.maxPerHangar} of this prop in your hangar.`,
+          `You can only place ${definition.maxPerHangar} of this prop in your ${
+            area === 'apartment' ? 'apartment' : 'hangar'
+          }.`,
         );
       }
 
       const validation = validatePlacementTransform({
+        area,
         transform,
         hangarIndex: player.assignedHangar ?? 2,
         definition,
@@ -170,6 +183,7 @@ export class GameHangarService {
         data: {
           playerId,
           propDefinitionId,
+          area,
           ...validation.transform,
         },
       });
@@ -182,11 +196,12 @@ export class GameHangarService {
       });
     });
 
-    return this.getBuildState(playerId);
+    return this.getBuildState(playerId, area);
   }
 
   async updatePlacement(
     playerId: string,
+    area: BuildArea,
     placementId: string,
     transform: PlacementTransform,
   ): Promise<HangarBuildStateDto> {
@@ -195,13 +210,14 @@ export class GameHangarService {
       if (!player) throw new NotFoundException('Player not found.');
 
       const placement = await tx.hangarPlacement.findFirst({
-        where: { id: placementId, playerId },
+        where: { id: placementId, playerId, area },
         include: { propDefinition: true },
       });
       if (!placement) throw new NotFoundException('Placement not found.');
 
-      const allPlacements = await tx.hangarPlacement.findMany({ where: { playerId } });
+      const allPlacements = await tx.hangarPlacement.findMany({ where: { playerId, area } });
       const validation = validatePlacementTransform({
+        area,
         transform,
         hangarIndex: player.assignedHangar ?? 2,
         definition: placement.propDefinition,
@@ -222,13 +238,17 @@ export class GameHangarService {
       });
     });
 
-    return this.getBuildState(playerId);
+    return this.getBuildState(playerId, area);
   }
 
-  async deletePlacement(playerId: string, placementId: string): Promise<HangarBuildStateDto> {
+  async deletePlacement(
+    playerId: string,
+    area: BuildArea,
+    placementId: string,
+  ): Promise<HangarBuildStateDto> {
     await this.prisma.$transaction(async (tx) => {
       const placement = await tx.hangarPlacement.findFirst({
-        where: { id: placementId, playerId },
+        where: { id: placementId, playerId, area },
       });
       if (!placement) throw new NotFoundException('Placement not found.');
 
@@ -249,7 +269,7 @@ export class GameHangarService {
       });
     });
 
-    return this.getBuildState(playerId);
+    return this.getBuildState(playerId, area);
   }
 
   async setAssignedHangar(playerId: string, hangarIndex: number): Promise<void> {

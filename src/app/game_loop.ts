@@ -69,8 +69,9 @@ import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, t
 import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
 import type { BuildTerminalController } from "../render/effects/hud/build_terminal";
 import type { HangarBuildController } from "../player/hangar_build/build_controller";
+import { buildRoomForArea } from "../player/hangar_build/validation";
 import type { HangarPropRenderer } from "../render/hangar/prop_instances";
-import { pickHangarFloorPoint } from "../render/hangar/prop_instances";
+import { pickStationFloorPoint } from "../render/hangar/prop_instances";
 import {
   getStationFrame,
   getStationHangars,
@@ -82,15 +83,19 @@ import { sampleRenderablePlanetSurface } from "../world/planet_surface";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
 import type { Planet, Vec3 } from "../types";
-import type { GameBootstrap } from "../net/api";
+import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
-export interface HangarBuildRuntime {
+export interface BuildAreaRuntime {
   controller: HangarBuildController;
-  terminal: BuildTerminalController;
   propRenderer: HangarPropRenderer;
+}
+
+export interface BuildRuntime {
+  areas: Partial<Record<BuildArea, BuildAreaRuntime>>;
+  terminal: BuildTerminalController;
 }
 
 export interface GameLoopOptions {
@@ -102,7 +107,7 @@ export interface GameLoopOptions {
   network?: WorldClient | null;
   bootstrap?: GameBootstrap | null;
   avmsTerminal?: AvmsTerminalController | null;
-  hangarBuild?: HangarBuildRuntime | null;
+  build?: BuildRuntime | null;
   onHudUpdate: (params: HudUpdateParams) => void;
   onResetPeak: () => void;
   isPaused?: () => boolean;
@@ -117,7 +122,7 @@ export function createGameLoop({
   network = null,
   bootstrap = null,
   avmsTerminal = null,
-  hangarBuild = null,
+  build = null,
   onHudUpdate,
   onResetPeak,
   isPaused,
@@ -252,8 +257,9 @@ export function createGameLoop({
           return interaction.prompt;
       }
     }
-    if (isInPlayerHangarRoom() && hangarBuild) {
-      return `Press ${keyLabel("hangarBuild")} — hangar build mode`;
+    const area = buildAreaForCurrentRoom();
+    if (area && buildRuntimeForArea(area)) {
+      return `Press ${keyLabel("hangarBuild")} — ${buildAreaLabel(area)} build mode`;
     }
     return "";
   }
@@ -357,22 +363,48 @@ export function createGameLoop({
     world.mode = MODE_ON_FOOT;
   }
 
-  function isInPlayerHangarRoom(): boolean {
-    if (!bootstrap || world.mode !== MODE_IN_STATION) return false;
-    const roomId = (world.character as StationCharacterState).stationRoomId;
-    return roomId.startsWith("hangar-");
+  function buildAreaLabel(area: BuildArea): string {
+    return area === "apartment" ? "apartment" : "hangar";
   }
 
-  async function syncHangarPropsVisuals(): Promise<void> {
-    if (!hangarBuild) return;
-    const context = hangarBuild.controller.getContext();
-    await hangarBuild.propRenderer.setPlacements(context.state.placements);
+  function buildRuntimes(): BuildAreaRuntime[] {
+    return [build?.areas.hangar, build?.areas.apartment].filter(
+      (runtime): runtime is BuildAreaRuntime => Boolean(runtime),
+    );
+  }
+
+  function buildRuntimeForArea(area: BuildArea): BuildAreaRuntime | null {
+    return build?.areas[area] ?? null;
+  }
+
+  function buildAreaForCurrentRoom(): BuildArea | null {
+    if (!bootstrap || world.mode !== MODE_IN_STATION) return null;
+    const roomId = (world.character as StationCharacterState).stationRoomId;
+    if (roomId === "hab-room") return "apartment";
+    if (roomId.startsWith("hangar-")) return "hangar";
+    return null;
+  }
+
+  function buildRuntimeForCurrentRoom(): BuildAreaRuntime | null {
+    const area = buildAreaForCurrentRoom();
+    return area ? buildRuntimeForArea(area) : null;
+  }
+
+  function activeBuildRuntime(): BuildAreaRuntime | null {
+    return (
+      buildRuntimes().find((runtime) => runtime.controller.isBuildToolActive()) ?? null
+    );
+  }
+
+  async function syncBuildPropsVisuals(runtime: BuildAreaRuntime): Promise<void> {
+    const context = runtime.controller.getContext();
+    await runtime.propRenderer.setPlacements(context.state.placements);
     const ghost = context.ghost;
     const definition = context.selectedDefinitionId
       ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
       : null;
     if (ghost && definition && context.toolMode === "place") {
-      await hangarBuild.propRenderer.setGhost({
+      await runtime.propRenderer.setGhost({
         prefabId: definition.prefabId,
         transform: ghost,
       });
@@ -381,45 +413,50 @@ export function createGameLoop({
         (entry) => entry.id === context.selectedPlacementId,
       );
       if (placement) {
-        await hangarBuild.propRenderer.setGhost({
+        await runtime.propRenderer.setGhost({
           prefabId: placement.prefabId,
           transform: ghost,
         });
       }
     } else {
-      await hangarBuild.propRenderer.setGhost(null);
+      await runtime.propRenderer.setGhost(null);
     }
   }
 
-  function pickHangarFloorFromPointer(): { right: number; up: number; forward: number } | null {
-    if (!renderer || !hangarBuild) return null;
-    return pickHangarFloorPoint(
+  function pickBuildFloorFromPointer(
+    runtime: BuildAreaRuntime,
+  ): { right: number; up: number; forward: number } | null {
+    if (!renderer) return null;
+    const context = runtime.controller.getContext();
+    const room = buildRoomForArea(context.state.area, context.state.assignedHangar);
+    return pickStationFloorPoint(
       renderer.getCamera(),
-      hangarBuild.controller.getPointerNdc(),
+      runtime.controller.getPointerNdc(),
       renderer.getStationRoot(),
+      room.floorUp,
     );
   }
 
-  function updateHangarBuildTool(): void {
-    if (!hangarBuild?.controller.isBuildToolActive()) return;
-    const floorPoint = pickHangarFloorFromPointer();
-    hangarBuild.controller.updateGhostFromFloor(floorPoint);
-    const context = hangarBuild.controller.getContext();
+  function updateBuildTool(runtime: BuildAreaRuntime): void {
+    if (!runtime.controller.isBuildToolActive()) return;
+    const floorPoint = pickBuildFloorFromPointer(runtime);
+    runtime.controller.updateGhostFromFloor(floorPoint);
+    const context = runtime.controller.getContext();
     if (!context.ghost) {
-      if (hangarBuild.propRenderer.getGhost()) {
-        void hangarBuild.propRenderer.setGhost(null);
+      if (runtime.propRenderer.getGhost()) {
+        void runtime.propRenderer.setGhost(null);
       }
       return;
     }
 
-    const rendererGhost = hangarBuild.propRenderer.getGhost();
+    const rendererGhost = runtime.propRenderer.getGhost();
     if (context.toolMode === "place") {
       const definition = context.selectedDefinitionId
         ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
         : null;
       if (!definition) return;
       if (!rendererGhost || rendererGhost.prefabId !== definition.prefabId) {
-        void hangarBuild.propRenderer.setGhost({
+        void runtime.propRenderer.setGhost({
           prefabId: definition.prefabId,
           transform: context.ghost,
         });
@@ -431,18 +468,18 @@ export function createGameLoop({
       );
       if (!placement) return;
       if (!rendererGhost || rendererGhost.prefabId !== placement.prefabId) {
-        void hangarBuild.propRenderer.setGhost({
+        void runtime.propRenderer.setGhost({
           prefabId: placement.prefabId,
           transform: context.ghost,
         });
         return;
       }
     } else {
-      if (rendererGhost) void hangarBuild.propRenderer.setGhost(null);
+      if (rendererGhost) void runtime.propRenderer.setGhost(null);
       return;
     }
 
-    hangarBuild.propRenderer.updateGhostTransform(context.ghost);
+    runtime.propRenderer.updateGhostTransform(context.ghost);
   }
 
   function updateStationMode(
@@ -450,7 +487,8 @@ export function createGameLoop({
     actions: ReturnType<PlayerControls["consumeActions"]>,
     dt: number,
   ): void {
-    if (hangarBuild?.controller.isBuildToolActive()) {
+    const activeRuntime = activeBuildRuntime();
+    if (activeRuntime) {
       world.character = updateCharacterInStation(
         world.character as StationCharacterState,
         stationFrame,
@@ -458,23 +496,23 @@ export function createGameLoop({
         dt,
         planet.gravityMetersPerSecond2 ?? 9.8,
       );
-      updateHangarBuildTool();
-      const tool = hangarBuild.controller.getContext().toolMode;
+      updateBuildTool(activeRuntime);
+      const tool = activeRuntime.controller.getContext().toolMode;
       world.prompt =
         tool === "place"
           ? `Click to place · ${keyLabel("hangarRotate")} rotate · ${keyLabel("hangarCancel")} cancel · ${keyLabel("hangarBuild")} catalog`
           : tool === "move"
             ? `Click prop, move, click confirm · ${keyLabel("hangarCancel")} cancel · ${keyLabel("hangarBuild")} catalog`
             : `Click prop to pick up · ${keyLabel("hangarCancel")} cancel · ${keyLabel("hangarBuild")} catalog`;
-      if (actions.hangarBuildPressed) hangarBuild.terminal.open();
+      if (actions.hangarBuildPressed) build?.terminal.open(activeRuntime.controller);
       if (actions.hangarRotatePressed) {
-        hangarBuild.controller.rotateGhost(Math.PI / 12);
-        const ghost = hangarBuild.controller.getContext().ghost;
-        if (ghost) hangarBuild.propRenderer.updateGhostTransform(ghost);
+        activeRuntime.controller.rotateGhost(Math.PI / 12);
+        const ghost = activeRuntime.controller.getContext().ghost;
+        if (ghost) activeRuntime.propRenderer.updateGhostTransform(ghost);
       }
       if (actions.hangarCancelPressed) {
-        hangarBuild.controller.cancelTool();
-        void syncHangarPropsVisuals();
+        activeRuntime.controller.cancelTool();
+        void syncBuildPropsVisuals(activeRuntime);
       }
       return;
     }
@@ -495,8 +533,9 @@ export function createGameLoop({
       return;
     }
 
-    if (isInPlayerHangarRoom() && actions.hangarBuildPressed) {
-      hangarBuild?.terminal.open();
+    const currentBuildRuntime = buildRuntimeForCurrentRoom();
+    if (currentBuildRuntime && actions.hangarBuildPressed) {
+      build?.terminal.open(currentBuildRuntime.controller);
     }
 
     const interaction = resolveStationInteraction(
@@ -516,16 +555,9 @@ export function createGameLoop({
             if (bootstrap) {
               try {
                 const response = await setAssignedHangarBay(hangar.index);
-                hangarBuild?.controller.syncBootstrap(
-                  {
-                    assignedHangar: response.assignedHangar,
-                    catalog: response.catalog,
-                    inventory: response.inventory,
-                    placements: response.placements,
-                  },
-                  response.arcBalance,
-                );
-                await syncHangarPropsVisuals();
+                const hangarRuntime = buildRuntimeForArea("hangar");
+                hangarRuntime?.controller.syncBootstrap(response, response.arcBalance);
+                if (hangarRuntime) await syncBuildPropsVisuals(hangarRuntime);
               } catch (error) {
                 console.warn("Failed to persist assigned hangar bay.", error);
               }

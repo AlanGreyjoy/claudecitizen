@@ -681,7 +681,7 @@ export function showAdminScreen(): void {
           <th>Prefab</th>
           <th>Category</th>
           <th>Cost (ARC)</th>
-          <th>Max / hangar</th>
+          <th>Max / space</th>
           <th>Grid</th>
         </tr>
       </thead>
@@ -799,7 +799,7 @@ export function showAdminScreen(): void {
       createField('Category', createTextInput('category', defaults.category)),
       createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
       createField(
-        'Max per hangar',
+        'Max per space',
         createNumberInput('maxPerHangar', defaults.maxPerHangar ?? 0),
       ),
       createField(
@@ -955,7 +955,7 @@ export function showAdminScreen(): void {
       const renderPropStarterSection = (): void => {
         propStarterHost.replaceChildren(
           createField(
-            'Starter hangar props',
+            'Starter props',
             renderStarterEditor(propDefinitions, starterPropIds, (next) => {
               starterPropIds = next;
               renderPropStarterSection();
