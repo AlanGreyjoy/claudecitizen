@@ -181,13 +181,14 @@ export class WorldService {
   disconnect(client: WebSocket): void {
     const session = this.sessions.get(client);
     if (!session) return;
+    const entityInstanceId = session.entity?.instanceId ?? session.instanceId;
+    const hadEntity = this.entities.delete(session.playerId);
     this.sessions.delete(client);
-    this.entities.delete(session.playerId);
     this.logger.info(
       { playerId: session.playerId, instanceId: session.instanceId },
       'World client disconnected',
     );
-    this.broadcastRemove(session.playerId, session.instanceId);
+    if (hadEntity) this.broadcastRemove(session.playerId, entityInstanceId);
   }
 
   broadcastSnapshots(): void {
@@ -242,6 +243,9 @@ export class WorldService {
         return;
       case 'presence:update':
         this.handlePresenceUpdate(session, envelope.data);
+        return;
+      case 'presence:leave':
+        this.handlePresenceLeave(session);
         return;
       case 'instance:transition':
         await this.handleInstanceTransition(session, envelope.data);
@@ -335,6 +339,14 @@ export class WorldService {
     };
     session.entity = entity;
     this.entities.set(session.playerId, entity);
+  }
+
+  private handlePresenceLeave(session: WorldSession): void {
+    const entityInstanceId = session.entity?.instanceId ?? session.instanceId;
+    const hadEntity = this.entities.delete(session.playerId);
+    session.entity = null;
+    session.focusPosition = null;
+    if (hadEntity) this.broadcastRemove(session.playerId, entityInstanceId);
   }
 
   private handleShipRig(session: WorldSession, data: unknown): void {

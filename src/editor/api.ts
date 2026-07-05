@@ -3,7 +3,8 @@ import { parsePrefabDocument, type PrefabDocument } from '../world/prefabs/schem
 /** Client for the dev-only /__editor API provided by the Vite plugin. */
 
 export const EDITOR_ASSET_ROOT = 'editor/assets' as const;
-export type AssetRoot = typeof EDITOR_ASSET_ROOT;
+export const SOURCE_ASSET_ROOT = 'src/assets' as const;
+export type AssetRoot = typeof EDITOR_ASSET_ROOT | typeof SOURCE_ASSET_ROOT;
 
 export interface AssetEntry {
   /** Path relative to the root, forward slashes. */

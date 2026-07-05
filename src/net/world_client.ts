@@ -153,6 +153,7 @@ export interface WorldClient {
   connect: () => Promise<void>;
   getRemoteEntities: (nowMs: number) => NetworkRenderEntity[];
   join: (instanceId: string, stationRoomId?: string | null) => void;
+  leave: () => void;
   publishPresence: (world: WorldState) => void;
   sendChat: (text: string) => void;
   transition: (instanceId: string, stationRoomId?: string | null) => void;
@@ -162,10 +163,17 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
   const store = new RemoteEntityStore();
   let socket: WebSocket | null = null;
   let lastPresenceAt = 0;
+  let leftPresence = false;
 
   function send(t: string, data?: unknown): void {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({ t, data }));
+  }
+
+  function leavePresence(): void {
+    if (leftPresence) return;
+    leftPresence = true;
+    send('presence:leave');
   }
 
   function handleMessage(event: MessageEvent<string>): void {
@@ -207,6 +215,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
 
   return {
     close() {
+      leavePresence();
       socket?.close();
       socket = null;
     },
@@ -215,6 +224,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
         socket = new WebSocket(worldSocketUrl());
         socket.addEventListener('message', handleMessage);
         socket.addEventListener('open', () => {
+          leftPresence = false;
           send('world:join', {
             instanceId: options.bootstrap.spawn.instanceId,
             stationRoomId: options.bootstrap.spawn.stationRoomId,
@@ -233,7 +243,11 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
     join(instanceId: string, stationRoomId?: string | null) {
       send('world:join', { instanceId, stationRoomId: stationRoomId ?? null });
     },
+    leave() {
+      leavePresence();
+    },
     publishPresence(world: WorldState) {
+      if (leftPresence) return;
       const now = performance.now();
       if (now - lastPresenceAt < 50) return;
       lastPresenceAt = now;

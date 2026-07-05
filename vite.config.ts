@@ -6,6 +6,16 @@ import { defineConfig, type Plugin } from 'vite';
 
 const EDITOR_ASSET_ROOT = 'editor/assets';
 const EDITOR_ASSET_URL_PREFIX = '/editor/assets/';
+const SOURCE_ASSET_ROOT = 'src/assets';
+const OPTIONAL_RUNTIME_ASSET_URLS = [
+  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienArmor_01.glb',
+  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienChef_01.gltf',
+  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienCombat_01.gltf',
+  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienRock_01.gltf',
+  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_Soldier_Male_01.glb',
+  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_SpaceSuit_Male_01.glb',
+  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_Strider_Male_01.glb',
+];
 
 interface AssetMount {
   urlPrefix: string;
@@ -122,6 +132,24 @@ async function listPrefabAssetUrls(projectRoot: string): Promise<string[]> {
   return [...urls].sort();
 }
 
+async function listExistingOptionalAssets(
+  projectRoot: string,
+  outDir: string,
+): Promise<ResolvedAsset[]> {
+  const assets: ResolvedAsset[] = [];
+  for (const url of OPTIONAL_RUNTIME_ASSET_URLS) {
+    const asset = resolveAssetUrl(projectRoot, outDir, url);
+    if (!asset) continue;
+    try {
+      const fileStat = await stat(asset.sourcePath);
+      if (fileStat.isFile()) assets.push(asset);
+    } catch {
+      // Optional protected runtime assets are allowed to be absent in public checkouts.
+    }
+  }
+  return assets;
+}
+
 function isRelativeGltfUri(uri: string): boolean {
   return (
     uri.length > 0 &&
@@ -193,9 +221,12 @@ function copyReferencedGameAssets(): Plugin {
       await rm(resolve(root, outDir, 'assets/protected'), { recursive: true, force: true });
       await rm(resolve(root, outDir, EDITOR_ASSET_ROOT), { recursive: true, force: true });
 
-      const queue = (await listPrefabAssetUrls(root))
-        .map((url) => resolveAssetUrl(root, outDir, url))
-        .filter((asset): asset is ResolvedAsset => asset !== null);
+      const queue = [
+        ...(await listPrefabAssetUrls(root))
+          .map((url) => resolveAssetUrl(root, outDir, url))
+          .filter((asset): asset is ResolvedAsset => asset !== null),
+        ...(await listExistingOptionalAssets(root, outDir)),
+      ];
       const seen = new Set<string>();
       const copied = new Set<string>();
       const missing: string[] = [];
@@ -237,6 +268,7 @@ function copyReferencedGameAssets(): Plugin {
  * production build):
  *
  *   GET  /__editor/assets?root=editor/assets             — recursive file listing
+ *   GET  /__editor/assets?root=src/assets                — recursive source asset listing
  *   GET  /__editor/prefabs                               — saved prefab ids
  *   GET  /__editor/prefab?id=<id>                        — prefab JSON
  *   POST /__editor/prefab                                — save prefab JSON
@@ -245,7 +277,7 @@ function copyReferencedGameAssets(): Plugin {
  * bundles them via import.meta.glob.
  */
 function editorDevApi(): Plugin {
-  const ASSET_ROOTS = [EDITOR_ASSET_ROOT];
+  const ASSET_ROOTS = [EDITOR_ASSET_ROOT, SOURCE_ASSET_ROOT];
   const LISTED_EXTENSIONS = new Set([
     '.glb',
     '.gltf',

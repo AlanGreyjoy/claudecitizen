@@ -109,17 +109,19 @@ function collect(
     switch (component.type) {
       case 'walk-volume': {
         // Scene x-range [minX, maxX] flips into station right as [-maxX, -minX].
-        const minX = position.x + component.min.x;
-        const maxX = position.x + component.max.x;
+        // Entity scale is applied so walk volumes on scaled models (e.g. a
+        // hangar GLB with non-uniform scale) match the editor viewport.
+        const minX = position.x + component.min.x * scale.x;
+        const maxX = position.x + component.max.x * scale.x;
         out.rooms.push({
           id: entity.id,
           floorId: component.floorId,
           minRight: -maxX,
           maxRight: -minX,
-          minForward: position.z + component.min.z,
-          maxForward: position.z + component.max.z,
+          minForward: position.z + component.min.z * scale.z,
+          maxForward: position.z + component.max.z * scale.z,
           floorUp: position.y,
-          height: component.height ?? DEFAULT_WALK_VOLUME_HEIGHT,
+          height: (component.height ?? DEFAULT_WALK_VOLUME_HEIGHT) * scale.y,
           ...(component.open && component.open.length > 0 ? { openSides: component.open } : {}),
         });
         break;

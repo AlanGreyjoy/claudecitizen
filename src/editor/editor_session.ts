@@ -15,10 +15,12 @@ import {
 import { injectEditorStyles } from './styles';
 import { parsePrefabDocument, slugifyPrefabName } from '../world/prefabs/schema';
 import { createEditorViewport } from '../render/editor/viewport';
+import { createCharacterAnimationPreviewer } from '../render/editor/character_previewer';
 import { getModelThumbnail } from '../render/editor/thumbnails';
 import type { Vec3 } from '../types';
 
 let started = false;
+type SceneEditorTab = 'scene' | 'character-preview';
 
 function entityNameFromUrl(url: string): string {
   const fileName = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
@@ -41,12 +43,27 @@ export function startEditorSession(): void {
   const toolbarEl = el('div', { className: 'ed-toolbar' });
   const viewportToolbarEl = el('div', { className: 'ed-viewport-toolbar' });
   const hierarchyEl = el('div', { className: 'ed-panel' });
+  const sceneTabSceneBtn = el('button', {
+    className: 'ed-scene-tab is-active',
+    text: 'Scene',
+    on: { click: () => setSceneEditorTab('scene') },
+  });
+  const sceneTabPreviewBtn = el('button', {
+    className: 'ed-scene-tab',
+    text: 'Character Preview',
+    on: { click: () => setSceneEditorTab('character-preview') },
+  });
   const viewportEl = el('div', { className: 'ed-viewport' }, [
     viewportToolbarEl,
     el('div', {
       className: 'ed-viewport-hint',
       text: 'LMB select · re-click drill · RMB sub-mesh: add empty/component · MMB pan · wheel zoom · hold RMB + WASD fly · W/E/R gizmo · F focus · Ctrl+D duplicate · Del delete',
     }),
+  ]);
+  const characterPreviewEl = el('div', { className: 'ed-scene-panel ed-character-preview is-hidden' });
+  const sceneShellEl = el('div', { className: 'ed-scene-shell' }, [
+    el('div', { className: 'ed-scene-tabs' }, [sceneTabSceneBtn, sceneTabPreviewBtn]),
+    el('div', { className: 'ed-scene-body' }, [viewportEl, characterPreviewEl]),
   ]);
   const inspectorEl = el('div', { className: 'ed-panel' });
   const hierarchySplitter = el('div', { className: 'ed-splitter ed-splitter-col' });
@@ -55,7 +72,7 @@ export function startEditorSession(): void {
   const mainEl = el('div', { className: 'ed-main' }, [
     hierarchyEl,
     hierarchySplitter,
-    viewportEl,
+    sceneShellEl,
     inspectorSplitter,
     inspectorEl,
   ]);
@@ -80,6 +97,22 @@ export function startEditorSession(): void {
 
   // --- store + viewport -------------------------------------------------------
   const store = createEditorStore();
+  const characterPreviewer = createCharacterAnimationPreviewer(characterPreviewEl);
+  let sceneEditorTab: SceneEditorTab = 'scene';
+
+  function setSceneEditorTab(tab: SceneEditorTab): void {
+    sceneEditorTab = tab;
+    sceneTabSceneBtn.classList.toggle('is-active', sceneEditorTab === 'scene');
+    sceneTabPreviewBtn.classList.toggle(
+      'is-active',
+      sceneEditorTab === 'character-preview',
+    );
+    viewportEl.classList.toggle('is-hidden', sceneEditorTab !== 'scene');
+    characterPreviewEl.classList.toggle(
+      'is-hidden',
+      sceneEditorTab !== 'character-preview',
+    );
+  }
 
   const viewport = createEditorViewport(viewportEl, store, {
     onDropAsset(url, position) {
@@ -264,7 +297,17 @@ export function startEditorSession(): void {
     setGlbNodeLocalTransform: (entityId, nodeUuid, transform) =>
       viewport.setGlbNodeLocalTransform(entityId, nodeUuid, transform),
   });
-  createProjectPanel(projectEl, { getModelThumbnail });
+  createProjectPanel(projectEl, {
+    getModelThumbnail,
+    onPreviewAnimationSource: async (url) => {
+      setSceneEditorTab('character-preview');
+      await characterPreviewer.loadAnimationSource(url);
+    },
+    onPreviewCharacter: async (url) => {
+      setSceneEditorTab('character-preview');
+      await characterPreviewer.loadCharacter(url);
+    },
+  });
   void refreshPrefabList();
 
   // Round trip from Play preview: /?boot=editor&prefab=<id> reopens the prefab.

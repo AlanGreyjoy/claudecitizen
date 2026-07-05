@@ -630,6 +630,110 @@
           </div>
         </div>
       </div>
+      <div
+        class="sc-haloband"
+        id="haloband"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="haloband-title"
+        aria-modal="true"
+      >
+        <div class="sc-haloband-backdrop"></div>
+        <div class="sc-haloband-bezel">
+          <div class="sc-haloband-screen">
+            <canvas class="sc-haloband-holo" id="haloband-holo" aria-hidden="true"></canvas>
+            <header class="sc-haloband-header">
+              <div class="sc-haloband-brand">
+                <span class="sc-haloband-kicker">Asteron Personal Device</span>
+                <h2 class="sc-haloband-title" id="haloband-title">HaloBand</h2>
+              </div>
+              <div class="sc-haloband-meta">
+                <div class="sc-haloband-balance" id="haloband-balance">
+                  <span class="sc-haloband-balance-label">Balance</span>
+                  <span class="sc-haloband-balance-value" id="haloband-balance-value">—</span>
+                </div>
+                <span class="sc-haloband-version">v0.1</span>
+              </div>
+            </header>
+            <div class="sc-haloband-shell">
+              <nav class="sc-haloband-nav" aria-label="HaloBand apps">
+                <button
+                  class="sc-haloband-nav-btn is-active"
+                  type="button"
+                  data-haloband-tab="comms"
+                  aria-controls="haloband-panel-comms"
+                >
+                  Comms
+                </button>
+                <button
+                  class="sc-haloband-nav-btn"
+                  type="button"
+                  data-haloband-tab="missions"
+                  aria-controls="haloband-panel-missions"
+                >
+                  Missions
+                </button>
+                <button
+                  class="sc-haloband-nav-btn sc-haloband-ship-only is-hidden"
+                  type="button"
+                  data-haloband-tab="ship"
+                  aria-controls="haloband-panel-ship"
+                >
+                  Ship Status
+                </button>
+              </nav>
+              <div class="sc-haloband-main">
+                <section
+                  class="sc-haloband-panel is-active"
+                  id="haloband-panel-comms"
+                  data-haloband-panel="comms"
+                >
+                  <h3 class="sc-haloband-panel-title">Commlink</h3>
+                  <div class="sc-haloband-chat" id="haloband-chat-messages"></div>
+                  <div class="sc-haloband-chat-input-row">
+                    <input
+                      class="sc-haloband-chat-input"
+                      id="haloband-chat-input"
+                      type="text"
+                      placeholder="Send a message..."
+                      autocomplete="off"
+                      maxlength="240"
+                    />
+                    <button
+                      class="sc-title-btn sc-title-btn-secondary"
+                      type="button"
+                      id="haloband-chat-send"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-missions"
+                  data-haloband-panel="missions"
+                >
+                  <h3 class="sc-haloband-panel-title">Contracts</h3>
+                  <p class="sc-haloband-empty" id="haloband-missions-empty">
+                    No active contracts.
+                  </p>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-ship"
+                  data-haloband-panel="ship"
+                >
+                  <h3 class="sc-haloband-panel-title">Vehicle Status</h3>
+                  <div class="sc-haloband-ship" id="haloband-ship-status"></div>
+                </section>
+              </div>
+            </div>
+            <footer class="sc-haloband-footer">
+              <span class="sc-haloband-hint">Press F2 to close</span>
+            </footer>
+          </div>
+        </div>
+      </div>
     </div>
     <script type="module" src="./src/app.ts"></script>
     <noscript>ClaudeCitizen needs JavaScript and WebGL2.</noscript>

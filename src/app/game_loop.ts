@@ -3,7 +3,7 @@ import {
   integrateHoveringShip,
 } from "../flight/flight_body";
 import { regenerateShipShields } from "../flight/ship_instance";
-import { listShipInstances } from "../flight/ship_world";
+import { listShipInstances, removeShipInstance } from "../flight/ship_world";
 import { createPlayerControls } from "../flight/player_controls";
 import type { KeyboardActionId } from "../flight/input_settings";
 import {
@@ -207,6 +207,27 @@ export function createGameLoop({
       );
     }
     onResetPeak();
+  }
+
+  function cleanupForTitleReturn(): void {
+    let clearedHangar = false;
+    for (const instance of listShipInstances()) {
+      const inPrivateHangar =
+        bootstrap !== null && instance.instanceId === bootstrap.spawn.hangarInstanceId;
+      const parkedInHangar =
+        sampleHangarRest(
+          stationFrame,
+          instance.body.position,
+          getShipRestHeightMeters(),
+        ) !== null;
+      if (!inPrivateHangar && !parkedInHangar) continue;
+      removeShipInstance(instance.id);
+      clearedHangar = true;
+    }
+    if (clearedHangar) world.assignedHangar = null;
+    delete window.__claudecitizenWorld;
+    delete window.__claudecitizenDev;
+    window.__claudecitizenRenderStats = null;
   }
 
   function avmsPrompt(): string {
@@ -553,6 +574,7 @@ export function createGameLoop({
             if (!hangar) throw new Error("No hangar bays available.");
             world.prompt = `Ship delivered to Hangar ${hangar.index}`;
             if (bootstrap) {
+              getActiveShip(world).instanceId = bootstrap.spawn.hangarInstanceId;
               try {
                 const response = await setAssignedHangarBay(hangar.index);
                 const hangarRuntime = buildRuntimeForArea("hangar");
@@ -887,6 +909,7 @@ export function createGameLoop({
   }
 
   return {
+    cleanupForTitleReturn,
     resetWorld,
     start,
     stop,

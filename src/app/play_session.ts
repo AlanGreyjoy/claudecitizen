@@ -2,7 +2,7 @@ import { createPlayerControls } from '../flight/player_controls';
 import { createGameLoop, type BuildAreaRuntime } from './game_loop';
 import type { LoadingScreenHandle } from './loading_screen';
 import { restoreTitleScreen } from './title_screen';
-import { createHud } from '../render/effects';
+import { createHud, createHaloBand } from '../render/effects';
 import { createGameMenu } from '../render/effects/hud/game_menu';
 import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
 import { createBuildTerminal } from '../render/effects/hud/build_terminal';
@@ -29,6 +29,7 @@ import { createWorldClient, type WorldClient } from '../net/world_client';
 import type { GameMenuController } from '../render/effects/hud/game_menu';
 import type { AvmsTerminalController } from '../render/effects/hud/avms_terminal';
 import type { BuildTerminalController } from '../render/effects/hud/build_terminal';
+import type { HaloBandController } from '../render/effects/hud/haloband';
 import type { HangarPropRenderer } from '../render/hangar/prop_instances';
 
 function requireElement<T extends HTMLElement>(id: string): T {
@@ -104,6 +105,7 @@ interface PlaySessionCleanup {
   gameMenu: GameMenuController;
   avmsTerminal: AvmsTerminalController;
   buildTerminal: BuildTerminalController | null;
+  haloBand: HaloBandController | null;
   buildPropRenderers: HangarPropRenderer[];
   resize: () => void;
   session: AuthSession | null;
@@ -120,10 +122,13 @@ export function stopPlaySession(): void {
   cleanup.gameMenu.dispose();
   cleanup.avmsTerminal.dispose();
   cleanup.buildTerminal?.dispose();
+  cleanup.haloBand?.dispose();
   for (const renderer of cleanup.buildPropRenderers) renderer.dispose();
   cleanup.gameLoop.stop();
+  cleanup.gameLoop.cleanupForTitleReturn();
   cleanup.controls.dispose();
   cleanup.renderer?.dispose();
+  cleanup.networkClient?.leave();
   cleanup.networkClient?.close();
   cleanup.vegetationControls.dispose();
   window.removeEventListener('resize', cleanup.resize);
@@ -222,6 +227,14 @@ export async function startPlaySession(
   const buildMoveBtn = requireElement<HTMLButtonElement>('build-move-btn');
   const buildDeleteBtn = requireElement<HTMLButtonElement>('build-delete-btn');
   const buildCloseBtn = requireElement<HTMLButtonElement>('build-close-btn');
+  const halobandEl = requireElement<HTMLElement>('haloband');
+  const halobandChatMessagesEl = requireElement<HTMLElement>('haloband-chat-messages');
+  const halobandChatInputEl = requireElement<HTMLInputElement>('haloband-chat-input');
+  const halobandChatSendBtn = requireElement<HTMLButtonElement>('haloband-chat-send');
+  const halobandShipStatusEl = requireElement<HTMLElement>('haloband-ship-status');
+  const halobandBalanceEl = requireElement<HTMLElement>('haloband-balance');
+  const halobandBalanceValueEl = requireElement<HTMLElement>('haloband-balance-value');
+  const halobandHoloCanvasEl = requireElement<HTMLCanvasElement>('haloband-holo');
 
   const seed = 20061;
   const planet = CLAUDECITIZEN_PLANET;
@@ -239,6 +252,7 @@ export async function startPlaySession(
   const vegetationControls = createVegetationControls(vegetationMenuEl, vegetationResetEl, renderer);
 
   let networkClient: WorldClient | null = null;
+  let haloBand: HaloBandController | null = null;
 
   const hud = createHud(
     {
@@ -270,7 +284,10 @@ export async function startPlaySession(
     loading?.setStatus('Opening relay link...');
     networkClient = createWorldClient({
       bootstrap,
-      onChatMessage: (message) => hud.appendChatMessage(message.author, message.text),
+      onChatMessage: (message) => {
+        hud.appendChatMessage(message.author, message.text);
+        haloBand?.appendChatMessage(message.author, message.text);
+      },
       onStatus: (status) => hud.appendChatMessage('NET', status),
     });
     try {
@@ -289,6 +306,27 @@ export async function startPlaySession(
   const controls = createPlayerControls(canvas, {
     onReset: () => gameLoop.resetWorld(),
   });
+
+  // Must be created before the game menu so HaloBand's capture key listener
+  // registers first and can claim Esc before the menu opens.
+  let arcBalance: number | null = bootstrap ? bootstrap.economy.arcBalance : null;
+  haloBand = createHaloBand(
+    {
+      rootEl: halobandEl,
+      chatMessagesEl: halobandChatMessagesEl,
+      chatInputEl: halobandChatInputEl,
+      sendBtnEl: halobandChatSendBtn,
+      shipStatusEl: halobandShipStatusEl,
+      balanceEl: halobandBalanceEl,
+      balanceValueEl: halobandBalanceValueEl,
+      holoCanvasEl: halobandHoloCanvasEl,
+    },
+    {
+      onSendMessage: (text) => networkClient?.sendChat(text),
+      playerControls: controls,
+      getArcBalance: () => arcBalance,
+    },
+  );
 
   const gameMenu = createGameMenu(
     {
@@ -338,6 +376,9 @@ export async function startPlaySession(
         arcBalance: bootstrap.economy.arcBalance,
         onPlacementsChange: (state) => {
           void propRenderer?.setPlacements(state.placements);
+        },
+        onStateChange: (ctx) => {
+          arcBalance = ctx.arcBalance;
         },
       });
       propRenderer = createHangarPropRenderer({
@@ -450,7 +491,10 @@ export async function startPlaySession(
             terminal: buildTerminal,
           }
         : null,
-    onHudUpdate: (params) => hud.update(params),
+    onHudUpdate: (params) => {
+      hud.update(params);
+      haloBand?.update(params);
+    },
     onResetPeak: () => hud.resetPeak(),
     isPaused: () =>
       gameMenu.isPaused() || avmsTerminal.isPaused() || (buildTerminal?.isPaused() ?? false),
@@ -483,6 +527,7 @@ export async function startPlaySession(
     gameMenu,
     avmsTerminal,
     buildTerminal,
+    haloBand,
     buildPropRenderers,
     resize,
     session,

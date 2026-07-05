@@ -99,6 +99,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   let yHeldSinceMs: number | null = null;
   let exitSeatTriggered = false;
   let settings: GameSettings = loadGameSettings();
+  let inputSuppressed = false;
 
   function inputSettings() {
     return settings.input;
@@ -247,6 +248,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   function onKeyChange(event: KeyboardEvent, down: boolean) {
     if (!isHandledKey(event.code)) return;
     event.preventDefault();
+    if (inputSuppressed) return;
     if (down) {
       const wasDown = keys.has(event.code);
       if (isKeyboardCode('reset', event.code)) onReset?.();
@@ -358,7 +360,32 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     return false;
   }
 
+  function setInputSuppressed(next: boolean): void {
+    if (inputSuppressed === next) return;
+    inputSuppressed = next;
+    if (next) {
+      keys.clear();
+      justPressed.clear();
+      deviceActionStates.clear();
+      flightLook.pitch01 = 0;
+      flightLook.yaw01 = 0;
+      resetSeatLookState();
+    }
+  }
+
   function consumeActions() {
+    if (inputSuppressed) {
+      justPressed.clear();
+      return {
+        interactPressed: false,
+        exitSeatPressed: false,
+        jumpPressed: false,
+        hangarBuildPressed: false,
+        hangarRotatePressed: false,
+        hangarCancelPressed: false,
+        hangarDigit: null,
+      };
+    }
     const cycleCameraPressed = consumeDeviceActionPress('cycleCamera');
     const resetPressed = consumeDeviceActionPress('reset');
     if (cycleCameraPressed) toggleCameraView();
@@ -436,6 +463,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       ...buildCharacterInput(keys, orbitLook, keyboardBindings()),
       faceCameraYaw: cameraView === 'first-person',
     };
+    if (inputSuppressed) return input;
     input.moveX = mergeAxis(input.moveX, readProfileAnalog('controller', 'roll'));
     input.moveY = mergeAxis(input.moveY, readProfileAnalog('controller', 'throttle'));
     input.sprint = Boolean(input.sprint || isDeviceActionDown('boost'));
@@ -444,6 +472,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
 
   function sampleFlightInput() {
     const input = buildFlightInput(keys, flightLook, keyboardBindings());
+    if (inputSuppressed) return input;
     for (const profileId of PROFILE_IDS) {
       for (const [control, field] of Object.entries(FLIGHT_INPUT_FIELDS) as [
         FlightAnalogControlId,
@@ -484,6 +513,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     sampleCameraState,
     sampleCharacterInput,
     sampleFlightInput,
+    setInputSuppressed,
     setMode(nextMode: GameMode | 'on-foot' | 'in-ship') {
       // Taking the pilot seat always starts in the cockpit view.
       if (nextMode === 'in-ship' && mode !== 'in-ship') shipCameraView = 'cockpit';

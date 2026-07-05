@@ -45,7 +45,7 @@ Open it from the title screen or deep-link with `http://localhost:4173/?boot=edi
 | **Hierarchy** (left) | Scene tree — click to select, double-click to rename, drag rows to reparent, eye toggles visibility |
 | **Scene View** (center) | Orbit camera (LMB drag orbit, MMB pan, wheel zoom), Unity-style flythrough (hold RMB + WASD, `Q`/`E` down/up, `Shift` fast, wheel adjusts fly speed), transform gizmo, click to select, drag assets in to place them |
 | **Inspector** (right) | Name, transform fields, box primitive / model settings, and gameplay components |
-| **Project** (bottom) | Asset browser over `editor/assets/` with model thumbnails; drag GLB/GLTF cards into the scene |
+| **Project** (bottom) | Merged asset browser over `editor/assets/` and `src/assets/` with model thumbnails; drag GLB/GLTF cards into the scene |
 
 Toolbar: **Move / Rotate / Scale** (`W` / `E` / `R`), local/world space, snap toggle with translate (default `0.25 m`) and rotate (default `15°`) increments (hold `Ctrl` to invert snapping while dragging), `+ Box` / `+ Empty`, undo/redo (`Ctrl+Z` / `Ctrl+Shift+Z`), prefab name + kind, **New / Load / Save** (`Ctrl+S`), **Preview Station / Preview Ship** (per kind), Exit. `F` focuses the selection, `Ctrl+D` duplicates, `Del` deletes.
 
@@ -113,6 +113,16 @@ The ship sits parked on a flat test pad — no planet, station, or flight — so
 
 Prefab JSON only references asset paths, so prefabs are safe to commit even when they point at protected files; public checkouts simply see missing-model placeholders.
 
+### Runtime character avatars
+
+Skinned Unity character exports can live under `src/assets/protected/characters/`. The runtime keeps the tracked UAL mannequin as the default avatar; local exports can be selected explicitly while their skeleton and animation mapping is tested.
+
+Try alternate exports with `?character=ual-mannequin`, `?character=space-suit-male`, `?character=soldier-male`, `?character=strider-male`, `?character=alien-armor`, `?character=alien-chef`, `?character=alien-combat`, or `?character=alien-rock`.
+
+In the editor Project panel, open `protected/characters`, then use a model card's **Character** or **Anims** action to test a mesh against embedded clips or the built-in UAL clip source in the scene view's **Character Preview** tab.
+
+Unity's Mecanim animator controller does not export to GLTF/GLB as a usable browser state machine. The game keeps the state machine in TypeScript (`Idle_Loop`, `Walk_Loop`, `Sprint_Loop`, jump phases) and retargets baked humanoid clips onto the Unity-style skeleton at load time. Export additional Unity animation clips as baked FBX/GLB clips, then add them to the character avatar catalog or map them onto the existing state names.
+
 ## Optional protected assets
 
 Some local development assets are not part of the open-source repo. Put paid or otherwise non-redistributable runtime assets under `editor/assets/protected/`; editor asset files are ignored by git by default. Use `editor/assets/free/` for local assets that are license-safe but still should not be committed automatically.
@@ -171,6 +181,7 @@ Anything included in a Netlify deploy is publicly downloadable by clients. Keep 
 | `F`           | Enter / exit ship, leave / return to pilot seat | Same                  |
 | `V`           | Toggle first / third person                     | Toggle cockpit / external view |
 | `R`           | Reset to landing site                           | Reset to landing site |
+| `F2`          | HaloBand (comms / missions / ship status)       | HaloBand (comms / missions / ship status) |
 
 Use the **Vegetation** panel (top-left) to tune grass, trees, and fog at runtime.
 

@@ -1,5 +1,6 @@
 import {
   EDITOR_ASSET_ROOT,
+  SOURCE_ASSET_ROOT,
   assetUrlFor,
   fetchAssetListing,
   type AssetEntry,
@@ -10,25 +11,47 @@ import { clearChildren, el, showToast } from '../dom';
 
 const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
 const MODEL_EXTENSIONS = ['.glb', '.gltf'];
+const DEFAULT_EXPANDED_FOLDERS = ['', 'protected'];
+const PROJECT_ROOT_LABEL = 'assets';
+const PROJECT_ASSET_ROOTS: readonly AssetRoot[] = [EDITOR_ASSET_ROOT, SOURCE_ASSET_ROOT];
 
 export interface ProjectPanelOptions {
   /** Render a thumbnail data-url for a model asset (provided by render/editor). */
   getModelThumbnail: (url: string) => Promise<string>;
+  onPreviewAnimationSource: (url: string) => void | Promise<void>;
+  onPreviewCharacter: (url: string) => void | Promise<void>;
 }
 
 interface FolderNode {
   name: string;
   path: string;
   children: Map<string, FolderNode>;
-  files: AssetEntry[];
+  files: ProjectAssetEntry[];
 }
+
+type ProjectAssetEntry = AssetEntry & { root: AssetRoot };
 
 function isModelPath(path: string): boolean {
   const lower = path.toLowerCase();
   return MODEL_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 
-function buildFolderTree(entries: AssetEntry[]): FolderNode {
+function emptyNoteForFolder(folderPath: string): string {
+  const fullPath = folderPath ? `${PROJECT_ROOT_LABEL}/${folderPath}` : PROJECT_ROOT_LABEL;
+  return `No GLB / GLTF / image files in ${fullPath}.`;
+}
+
+async function fetchProjectAssetEntries(): Promise<ProjectAssetEntry[]> {
+  const listings = await Promise.all(
+    PROJECT_ASSET_ROOTS.map(async (root) => {
+      const entries = await fetchAssetListing(root);
+      return entries.map((entry): ProjectAssetEntry => ({ ...entry, root }));
+    }),
+  );
+  return listings.flat();
+}
+
+function buildFolderTree(entries: ProjectAssetEntry[]): FolderNode {
   const root: FolderNode = { name: '', path: '', children: new Map(), files: [] };
   const ensureDir = (path: string): FolderNode => {
     if (path === '') return root;
@@ -58,16 +81,15 @@ function buildFolderTree(entries: AssetEntry[]): FolderNode {
 }
 
 export function createProjectPanel(container: HTMLElement, options: ProjectPanelOptions): void {
-  const activeRoot: AssetRoot = EDITOR_ASSET_ROOT;
   let tree: FolderNode = { name: '', path: '', children: new Map(), files: [] };
   let selectedFolder = '';
-  const expanded = new Set<string>(['']);
+  const expanded = new Set<string>(DEFAULT_EXPANDED_FOLDERS);
 
-  const rootTabs = el('div', { className: 'ed-toolbar-group' });
   const refreshBtn = el('button', {
     className: 'ed-btn',
     text: '↻',
-    title: 'Refresh listing',
+    title: 'Refresh assets',
+    attrs: { 'aria-label': 'Refresh assets' },
     on: { click: () => void load() },
   });
   const folderTree = el('div', { className: 'ed-folder-tree' });
@@ -76,7 +98,7 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
   const side = el('div', { className: 'ed-project-side' }, [
     el('div', { className: 'ed-panel-title' }, [
       el('span', { text: 'Project' }),
-      el('div', { className: 'ed-panel-title-actions' }, [rootTabs, refreshBtn]),
+      el('div', { className: 'ed-panel-title-actions' }, [refreshBtn]),
     ]),
     folderTree,
   ]);
@@ -88,25 +110,6 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
     storageKey: 'projectSideWidth',
   });
 
-  function renderRootTabs(): void {
-    clearChildren(rootTabs);
-    ([EDITOR_ASSET_ROOT] as AssetRoot[]).forEach((root) => {
-      rootTabs.append(
-        el('button', {
-          className: `ed-btn${root === activeRoot ? ' is-active' : ''}`,
-          text: 'assets',
-          title: root,
-          on: {
-            click: () => {
-              selectedFolder = '';
-              void load();
-            },
-          },
-        }),
-      );
-    });
-  }
-
   function renderFolderRow(node: FolderNode, depth: number, rows: HTMLElement[]): void {
     const hasChildren = node.children.size > 0;
     const isExpanded = expanded.has(node.path);
@@ -114,6 +117,7 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
       'div',
       {
         className: `ed-folder-row${node.path === selectedFolder ? ' is-selected' : ''}`,
+        attrs: { 'data-folder-path': node.path },
         on: {
           click: () => {
             selectedFolder = node.path;
@@ -128,7 +132,7 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
       },
       [
         el('span', { text: hasChildren ? (isExpanded ? '▾' : '▸') : '·' }),
-        el('span', { text: node.path === '' ? activeRoot : node.name }),
+        el('span', { text: node.path === '' ? PROJECT_ROOT_LABEL : node.name }),
       ],
     );
     row.style.paddingLeft = `${10 + depth * 12}px`;
@@ -156,32 +160,81 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
     return null;
   }
 
-  function fileCard(entry: AssetEntry): HTMLElement {
+  function fileCard(entry: ProjectAssetEntry): HTMLElement {
     const fileName = entry.path.slice(entry.path.lastIndexOf('/') + 1);
-    const url = assetUrlFor(activeRoot, entry.path);
+    const url = assetUrlFor(entry.root, entry.path);
     const isModel = isModelPath(entry.path);
+    const isEmptyFile = entry.size === 0;
+    const sourcePath = `${entry.root}/${entry.path}`;
 
-    const thumb = el('div', { className: 'ed-asset-thumb', text: isModel ? '◇' : '▦' });
-    if (isModel) {
+    const thumb = el('div', {
+      className: `ed-asset-thumb${isEmptyFile ? ' is-warning' : ''}`,
+      text: isEmptyFile ? '!' : isModel ? '◇' : '▦',
+    });
+    if (isModel && !isEmptyFile) {
       void options.getModelThumbnail(url).then((dataUrl) => {
         if (!dataUrl) return;
         clearChildren(thumb);
         thumb.textContent = '';
         thumb.append(el('img', { attrs: { src: dataUrl, alt: fileName } }));
       });
-    } else {
+    } else if (!isEmptyFile) {
       clearChildren(thumb);
       thumb.textContent = '';
       thumb.append(el('img', { attrs: { src: url, alt: fileName, loading: 'lazy' } }));
     }
 
-    const card = el(
+    const cardChildren = [
+      thumb,
+      el('div', { className: 'ed-asset-name', text: fileName }),
+    ];
+    if (isModel) {
+      const loadCharacterBtn = el('button', {
+        className: 'ed-asset-action',
+        text: 'Character',
+        title: isEmptyFile ? 'File is empty' : 'Load in character preview',
+        on: {
+          click: (event) => {
+            event.stopPropagation();
+            if (isEmptyFile) return;
+            void Promise.resolve(options.onPreviewCharacter(url)).catch((error) => {
+              showToast(`Character preview failed: ${(error as Error).message}`, true);
+            });
+          },
+        },
+      });
+      const loadAnimationBtn = el('button', {
+        className: 'ed-asset-action',
+        text: 'Anims',
+        title: isEmptyFile ? 'File is empty' : 'Load animation clips in character preview',
+        on: {
+          click: (event) => {
+            event.stopPropagation();
+            if (isEmptyFile) return;
+            void Promise.resolve(options.onPreviewAnimationSource(url)).catch((error) => {
+              showToast(`Animation preview failed: ${(error as Error).message}`, true);
+            });
+          },
+        },
+      });
+      loadCharacterBtn.disabled = isEmptyFile;
+      loadAnimationBtn.disabled = isEmptyFile;
+      cardChildren.push(
+        el('div', { className: 'ed-asset-actions' }, [loadCharacterBtn, loadAnimationBtn]),
+      );
+    }
+
+    return el(
       'div',
       {
-        className: 'ed-asset-card',
-        title: isModel ? `${entry.path}\nDrag into the scene` : entry.path,
-        attrs: isModel ? { draggable: 'true' } : {},
-        on: isModel
+        className: `ed-asset-card${isEmptyFile ? ' is-unavailable' : ''}`,
+        title: isEmptyFile
+          ? `${sourcePath}\nFile is empty`
+          : isModel
+            ? `${sourcePath}\nDrag into the scene`
+            : sourcePath,
+        attrs: isModel && !isEmptyFile ? { draggable: 'true' } : {},
+        on: isModel && !isEmptyFile
           ? {
               dragstart: (event) => {
                 (event as DragEvent).dataTransfer?.setData(ASSET_DND_TYPE, url);
@@ -190,20 +243,21 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
             }
           : {},
       },
-      [thumb, el('div', { className: 'ed-asset-name', text: fileName })],
+      cardChildren,
     );
-    return card;
   }
 
   function renderGrid(): void {
     clearChildren(grid);
     const folder = findFolder(tree, selectedFolder) ?? tree;
-    const files = [...folder.files].sort((a, b) => a.path.localeCompare(b.path));
+    const files = [...folder.files].sort(
+      (a, b) => a.path.localeCompare(b.path) || a.root.localeCompare(b.root),
+    );
     if (files.length === 0) {
       grid.append(
         el('div', {
           className: 'ed-empty-note',
-          text: 'No GLB / GLTF / image files in this folder. Drop assets under editor/assets/free/ or editor/assets/protected/.',
+          text: emptyNoteForFolder(selectedFolder),
         }),
       );
       return;
@@ -212,9 +266,8 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
   }
 
   async function load(): Promise<void> {
-    renderRootTabs();
     try {
-      const entries = await fetchAssetListing(activeRoot);
+      const entries = await fetchProjectAssetEntries();
       tree = buildFolderTree(entries);
     } catch (error) {
       showToast(`Asset listing failed: ${(error as Error).message}`, true);
