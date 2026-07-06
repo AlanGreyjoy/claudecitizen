@@ -2,12 +2,13 @@ import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
 import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
 import { DEFAULT_SPAWN_SITE } from './landing_sites';
 import type { Planet, Vec3 } from '../types';
+import type { GameplayCollider } from '../player/colliders';
 
 /**
- * Orbital habitat station fixed above the default landing site. All geometry
- * and gameplay bounds share one layout defined in station-local coordinates:
- * right / up / forward meters from the station origin (center of the lobby
- * floor). The same rects drive both walkable collision and rendered walls.
+ * Orbital habitat station fixed above the default landing site. Gameplay uses
+ * station-local coordinates: right / up / forward meters from the station
+ * origin. The player now walks on real collider geometry provided by the active
+ * station prefab; rooms are only used for legacy marker/floor bookkeeping.
  */
 
 export const STATION_ALTITUDE_METERS = 200_000;
@@ -253,6 +254,7 @@ export const HANGARS: HangarSpec[] = [
 export interface StationSpawnPose {
   roomId: string;
   right: number;
+  up: number;
   forward: number;
   face: StationDir2;
 }
@@ -261,6 +263,7 @@ export interface StationSpawnPose {
 export const STATION_SPAWN: StationSpawnPose = {
   roomId: 'hab-room',
   right: -4.4,
+  up: HAB_FLOOR_UP,
   forward: 5.2,
   face: { right: 1, forward: 0 },
 };
@@ -369,6 +372,7 @@ export interface StationElevatorMarker {
   floorId: StationFloorId;
   roomId: string;
   right: number;
+  up: number;
   forward: number;
   radius: number;
   targetFloor: StationFloorId;
@@ -379,6 +383,7 @@ export interface StationInfoMarker {
   id: string;
   floorId: StationFloorId;
   right: number;
+  up: number;
   forward: number;
   radius: number;
   prompt: string;
@@ -388,6 +393,7 @@ export interface StationAvmsMarker {
   id: string;
   floorId: StationFloorId;
   right: number;
+  up: number;
   forward: number;
   radius: number;
 }
@@ -396,6 +402,7 @@ export interface StationLayoutOverride {
   rooms: StationRoom[];
   doorways: StationDoorway[];
   hangars: HangarSpec[];
+  colliders: GameplayCollider[];
   spawn: StationSpawnPose;
   elevatorMarkers: StationElevatorMarker[];
   infoMarkers: StationInfoMarker[];
@@ -406,7 +413,6 @@ let layoutOverride: StationLayoutOverride | null = null;
 
 export function setStationLayoutOverride(override: StationLayoutOverride | null): void {
   layoutOverride = override;
-  walkRectsByFloor.clear();
 }
 
 export function getStationLayoutOverride(): StationLayoutOverride | null {
@@ -419,6 +425,10 @@ export function getStationSpawn(): StationSpawnPose {
 
 export function getStationHangars(): HangarSpec[] {
   return layoutOverride?.hangars ?? HANGARS;
+}
+
+export function getStationColliders(): GameplayCollider[] {
+  return layoutOverride?.colliders ?? [];
 }
 
 export function getStationRoom(roomId: string): StationRoom | null {
@@ -465,71 +475,4 @@ export function sampleHangarRest(
   return null;
 }
 
-export interface StationWalkRect {
-  kind: 'room' | 'doorway';
-  id: string;
-  floorId: StationFloorId;
-  minRight: number;
-  maxRight: number;
-  minForward: number;
-  maxForward: number;
-  floorUp: number;
-}
 
-/** Extra reach past the wall gap so doorway rects bridge both room rects. */
-const DOORWAY_CROSS_OVERLAP = 0.5;
-
-function doorwayWalkRect(doorway: StationDoorway): StationWalkRect {
-  const crossMin = Math.min(doorway.crossFrom, doorway.crossTo) - DOORWAY_CROSS_OVERLAP;
-  const crossMax = Math.max(doorway.crossFrom, doorway.crossTo) + DOORWAY_CROSS_OVERLAP;
-  const alongMin = doorway.alongCenter - doorway.walkWidth / 2;
-  const alongMax = doorway.alongCenter + doorway.walkWidth / 2;
-  if (doorway.crossAxis === 'right') {
-    return {
-      kind: 'doorway',
-      id: doorway.id,
-      floorId: doorway.floorId,
-      minRight: crossMin,
-      maxRight: crossMax,
-      minForward: alongMin,
-      maxForward: alongMax,
-      floorUp: doorway.floorUp,
-    };
-  }
-  return {
-    kind: 'doorway',
-    id: doorway.id,
-    floorId: doorway.floorId,
-    minRight: alongMin,
-    maxRight: alongMax,
-    minForward: crossMin,
-    maxForward: crossMax,
-    floorUp: doorway.floorUp,
-  };
-}
-
-const walkRectsByFloor = new Map<StationFloorId, StationWalkRect[]>();
-
-export function getStationWalkRects(floorId: StationFloorId): StationWalkRect[] {
-  const cached = walkRectsByFloor.get(floorId);
-  if (cached) return cached;
-  const rooms = layoutOverride?.rooms ?? STATION_ROOMS;
-  const doorways = layoutOverride?.doorways ?? STATION_DOORWAYS;
-  const rects: StationWalkRect[] = [
-    ...rooms.filter((room) => room.floorId === floorId).map(
-      (room): StationWalkRect => ({
-        kind: 'room',
-        id: room.id,
-        floorId,
-        minRight: room.minRight,
-        maxRight: room.maxRight,
-        minForward: room.minForward,
-        maxForward: room.maxForward,
-        floorUp: room.floorUp,
-      }),
-    ),
-    ...doorways.filter((doorway) => doorway.floorId === floorId).map(doorwayWalkRect),
-  ];
-  walkRectsByFloor.set(floorId, rects);
-  return rects;
-}

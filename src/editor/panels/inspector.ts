@@ -15,15 +15,14 @@ import {
 } from "../../world/prefabs/component_registry";
 import type { PrefabComponent, ShipZoneGate } from "../../world/prefabs/schema";
 import { SHIP_SEAT_ROLES } from "../../world/prefabs/schema";
-import type { StationFloorId, StationSide } from "../../world/station";
+import type { StationFloorId } from "../../world/station";
+import {
+  collectMaterialRowsForEntity,
+  formatMaterialNumber,
+  type MaterialRow,
+} from "./material_manager";
 
 const FLOOR_OPTIONS: StationFloorId[] = ["hab", "lobby", "hangar"];
-const SIDE_OPTIONS: StationSide[] = [
-  "minRight",
-  "maxRight",
-  "minForward",
-  "maxForward",
-];
 
 export interface InspectorPanelOptions {
   getGlbNodeLocalTransform?: (
@@ -86,6 +85,19 @@ export function createInspectorPanel(
     });
   }
 
+  function colorInput(
+    value: string,
+    onCommit: (next: string) => void,
+  ): HTMLInputElement {
+    return el("input", {
+      className: "ed-input",
+      attrs: { type: "color", value },
+      on: {
+        change: (event) => onCommit((event.target as HTMLInputElement).value),
+      },
+    });
+  }
+
   function selectInput(
     options: readonly string[],
     value: string,
@@ -111,6 +123,7 @@ export function createInspectorPanel(
   let transformInputs: TransformInputs | null = null;
   let glbTransformInputs: TransformInputs | null = null;
   let glbTransformTarget: { entityId: string; nodeUuid: string } | null = null;
+  let materialSectionGeneration = 0;
 
   function commitTransform(entity: EditorEntity): void {
     if (!transformInputs) return;
@@ -185,7 +198,7 @@ export function createInspectorPanel(
       el("h3", { className: "ed-section-title", text: "Mesh Transform" }),
       el("div", {
         className: "ed-empty-note",
-        text: "Local pose on the selected GLB part — use for door hinge preview. Not saved to the prefab; copy rotation into ship-door delta.",
+        text: "Local pose on the selected GLB part. Saved as a prefab node override.",
       }),
     ]);
     const fields: TransformInputs["fields"] = {
@@ -329,6 +342,87 @@ export function createInspectorPanel(
     return section;
   }
 
+  function materialSummaryRow(row: MaterialRow): HTMLElement {
+    const swatch = el("span", {
+      className: "ed-inspector-material-swatch",
+      title: row.values.color,
+    });
+    swatch.style.background = row.values.color;
+    const values = [
+      `M ${formatMaterialNumber(row.values.metalness)}`,
+      `R ${formatMaterialNumber(row.values.roughness)}`,
+      `A ${formatMaterialNumber(row.values.opacity)}`,
+    ];
+    if (row.values.emissiveIntensity > 0) {
+      values.push(`E ${formatMaterialNumber(row.values.emissiveIntensity)}`);
+    }
+    return el("div", { className: "ed-inspector-material-row" }, [
+      swatch,
+      el("div", { className: "ed-inspector-material-copy" }, [
+        el("span", {
+          className: "ed-inspector-material-name",
+          text: row.displayName,
+          title: row.displayName,
+        }),
+        el("span", {
+          className: "ed-inspector-material-meta",
+          text: `${row.source}${row.overridden ? " · override" : ""}`,
+        }),
+      ]),
+      el("span", {
+        className: "ed-inspector-material-values",
+        text: values.join(" · "),
+      }),
+    ]);
+  }
+
+  function materialsSection(entity: EditorEntity): HTMLElement {
+    const sub = store.getSubSelection();
+    const selectedNodeName =
+      sub?.entityId === entity.id
+        ? store.getGlbNodeName(entity.id, sub.nodeUuid)
+        : null;
+    const section = el("div", { className: "ed-section" }, [
+      el("h3", { className: "ed-section-title", text: "Materials" }),
+    ]);
+    const list = el("div", { className: "ed-inspector-material-list" }, [
+      el("div", { className: "ed-empty-note", text: "Loading materials…" }),
+    ]);
+    section.append(list);
+
+    const generation = ++materialSectionGeneration;
+    void collectMaterialRowsForEntity(entity, { nodeName: selectedNodeName })
+      .then((rows) => {
+        if (
+          generation !== materialSectionGeneration ||
+          store.getSelection() !== entity.id
+        ) {
+          return;
+        }
+        clearChildren(list);
+        if (rows.length === 0) {
+          list.append(
+            el("div", { className: "ed-empty-note", text: "No visual material" }),
+          );
+          return;
+        }
+        for (const row of rows) list.append(materialSummaryRow(row));
+      })
+      .catch(() => {
+        if (
+          generation !== materialSectionGeneration ||
+          store.getSelection() !== entity.id
+        ) {
+          return;
+        }
+        clearChildren(list);
+        list.append(
+          el("div", { className: "ed-empty-note", text: "Materials unavailable" }),
+        );
+      });
+    return section;
+  }
+
   function componentFields(
     component: PrefabComponent,
     update: (next: PrefabComponent) => void,
@@ -351,6 +445,12 @@ export function createInspectorPanel(
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Pair id" }),
             textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "On floor" }),
+            selectInput(FLOOR_OPTIONS, component.floorId, (floorId) =>
+              update({ ...component, floorId: floorId as StationFloorId }),
+            ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "To floor" }),
@@ -382,12 +482,27 @@ export function createInspectorPanel(
               1,
             ),
           ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Floor" }),
+            selectInput(
+              FLOOR_OPTIONS,
+              component.floorId ?? "hangar",
+              (floorId) =>
+                update({ ...component, floorId: floorId as StationFloorId }),
+            ),
+          ]),
         ];
       case "interaction":
         return [
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Id" }),
             textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Floor" }),
+            selectInput(FLOOR_OPTIONS, component.floorId, (floorId) =>
+              update({ ...component, floorId: floorId as StationFloorId }),
+            ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Prompt" }),
@@ -409,96 +524,179 @@ export function createInspectorPanel(
             textInput(component.id, (id) => update({ ...component, id })),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Floor" }),
+            selectInput(FLOOR_OPTIONS, component.floorId, (floorId) =>
+              update({ ...component, floorId: floorId as StationFloorId }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Radius" }),
             numberInput(component.radius, (radius) =>
               update({ ...component, radius: Math.max(0.5, radius) }),
             ),
           ]),
         ];
-      case "walk-volume": {
-        const openSet = new Set(component.open ?? []);
+      case "point-light":
         return [
           el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Floor" }),
-            selectInput(FLOOR_OPTIONS, component.floorId, (floorId) =>
-              update({ ...component, floorId: floorId as StationFloorId }),
-            ),
-          ]),
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Min XZ" }),
-            numberInput(component.min.x, (x) =>
-              update({ ...component, min: { ...component.min, x } }),
-            ),
-            numberInput(component.min.z, (z) =>
-              update({ ...component, min: { ...component.min, z } }),
-            ),
-            el("span", {}),
-          ]),
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Max XZ" }),
-            numberInput(component.max.x, (x) =>
-              update({ ...component, max: { ...component.max, x } }),
-            ),
-            numberInput(component.max.z, (z) =>
-              update({ ...component, max: { ...component.max, z } }),
-            ),
-            el("span", {}),
-          ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Height" }),
-            numberInput(component.height ?? 4, (height) =>
-              update({ ...component, height: Math.max(1, height) }),
+            el("span", { className: "ed-field-label", text: "Color" }),
+            colorInput(component.color ?? "#dfeaff", (color) =>
+              update({ ...component, color }),
             ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Open" }),
-            el(
-              "div",
-              {},
-              SIDE_OPTIONS.map((side) =>
+            el("span", { className: "ed-field-label", text: "Intensity" }),
+            numberInput(component.intensity, (intensity) =>
+              update({
+                ...component,
+                intensity: Math.min(5_000, Math.max(0, intensity)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Range" }),
+            numberInput(component.distance, (distance) =>
+              update({
+                ...component,
+                distance: Math.min(500, Math.max(0, distance)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Decay" }),
+            numberInput(component.decay ?? 2, (decay) =>
+              update({
+                ...component,
+                decay: Math.min(4, Math.max(0, decay)),
+              }),
+            ),
+          ]),
+          el("label", { className: "ed-checkbox-row" }, [
+            (() => {
+              const checkbox = el("input", {
+                attrs: { type: "checkbox" },
+                on: {
+                  change: (event) =>
+                    update({
+                      ...component,
+                      castShadow:
+                        (event.target as HTMLInputElement).checked || undefined,
+                    }),
+                },
+              });
+              checkbox.checked = component.castShadow ?? false;
+              return checkbox;
+            })(),
+            el("span", { text: "Cast shadows" }),
+          ]),
+        ];
+      case "area-light":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Color" }),
+            colorInput(component.color ?? "#cfe8ff", (color) =>
+              update({ ...component, color }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Intensity" }),
+            numberInput(component.intensity, (intensity) =>
+              update({
+                ...component,
+                intensity: Math.min(500, Math.max(0, intensity)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row" }, [
+            el("span", { className: "ed-field-label", text: "Size" }),
+            numberInput(component.width, (width) =>
+              update({
+                ...component,
+                width: Math.min(100, Math.max(0.05, width)),
+              }),
+            ),
+            numberInput(component.height, (height) =>
+              update({
+                ...component,
+                height: Math.min(100, Math.max(0.05, height)),
+              }),
+            ),
+            el("span", {}),
+          ]),
+        ];
+      case "collider":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Shape" }),
+            selectInput(["box", "mesh"], component.shape, (shape) => {
+              if (shape === "mesh") {
+                update({
+                  type: "collider",
+                  shape: "mesh",
+                  offset: component.offset,
+                  node: component.node,
+                });
+                return;
+              }
+              update({
+                type: "collider",
+                shape: "box",
+                size:
+                  component.shape === "box"
+                    ? component.size
+                    : { x: 1, y: 1, z: 1 },
+                offset: component.offset,
+                node: component.node,
+              });
+            }),
+          ]),
+          ...(component.shape === "box"
+            ? [
+                el("div", { className: "ed-field-row" }, [
+                  el("span", { className: "ed-field-label", text: "Size" }),
+                  ...(["x", "y", "z"] as const).map((axis) =>
+                    numberInput(component.size[axis], (next) =>
+                      update({
+                        ...component,
+                        size: {
+                          ...component.size,
+                          [axis]: Math.max(0.01, next),
+                        },
+                      }),
+                    ),
+                  ),
+                ]),
+              ]
+            : [
+                el("div", { className: "ed-field-row-wide" }, [
+                  el("span", { className: "ed-field-label", text: "Asset" }),
+                  textInput(component.assetUrl ?? "", (assetUrl) =>
+                    update({
+                      ...component,
+                      assetUrl: assetUrl.trim() || undefined,
+                    }),
+                  ),
+                ]),
                 el("label", { className: "ed-checkbox-row" }, [
                   (() => {
                     const checkbox = el("input", {
                       attrs: { type: "checkbox" },
                       on: {
-                        change: (event) => {
-                          const checked = (event.target as HTMLInputElement)
-                            .checked;
-                          if (checked) openSet.add(side);
-                          else openSet.delete(side);
-                          const open = [...openSet];
+                        change: (event) =>
                           update({
                             ...component,
-                            ...(open.length > 0
-                              ? { open }
-                              : { open: undefined }),
-                          });
-                        },
+                            convex:
+                              (event.target as HTMLInputElement).checked ||
+                              undefined,
+                          }),
                       },
                     });
-                    checkbox.checked = openSet.has(side);
+                    checkbox.checked = component.convex ?? false;
                     return checkbox;
                   })(),
-                  el("span", { text: side }),
+                  el("span", { text: "Convex hull" }),
                 ]),
-              ),
-            ),
-          ]),
-        ];
-      }
-      case "collider":
-        return [
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Size" }),
-            ...(["x", "y", "z"] as const).map((axis) =>
-              numberInput(component.size[axis], (next) =>
-                update({
-                  ...component,
-                  size: { ...component.size, [axis]: Math.max(0.01, next) },
-                }),
-              ),
-            ),
-          ]),
+              ]),
           el("div", { className: "ed-field-row" }, [
             el("span", { className: "ed-field-label", text: "Offset" }),
             ...(["x", "y", "z"] as const).map((axis) =>
@@ -514,6 +712,12 @@ export function createInspectorPanel(
                   },
                 }),
               ),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Node" }),
+            textInput(component.node ?? "", (node) =>
+              update({ ...component, node: node.trim() || undefined }),
             ),
           ]),
         ];
@@ -1197,6 +1401,7 @@ export function createInspectorPanel(
     glbTransformTarget = null;
     const entity = store.getSelectedEntity();
     if (!entity) {
+      materialSectionGeneration += 1;
       body.append(
         el("div", {
           className: "ed-empty-note",
@@ -1237,7 +1442,7 @@ export function createInspectorPanel(
       }
     }
 
-    sections.push(visualSection(entity), componentsSection(entity));
+    sections.push(visualSection(entity), materialsSection(entity), componentsSection(entity));
     body.append(...sections);
   }
 

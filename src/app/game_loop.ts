@@ -69,6 +69,7 @@ import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, t
 import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
 import type { BuildTerminalController } from "../render/effects/hud/build_terminal";
 import type { HangarBuildController } from "../player/hangar_build/build_controller";
+import type { BuildPropColliderRuntime } from "../player/hangar_build/prop_colliders";
 import { buildRoomForArea } from "../player/hangar_build/validation";
 import type { HangarPropRenderer } from "../render/hangar/prop_instances";
 import { pickStationFloorPoint } from "../render/hangar/prop_instances";
@@ -85,12 +86,14 @@ import type { SpikeRenderer } from "../render/main";
 import type { Planet, Vec3 } from "../types";
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
+import { syncDynamicColliders, type StationPhysics } from "../physics/station_physics";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
 export interface BuildAreaRuntime {
   controller: HangarBuildController;
   propRenderer: HangarPropRenderer;
+  propColliders: BuildPropColliderRuntime;
 }
 
 export interface BuildRuntime {
@@ -108,6 +111,7 @@ export interface GameLoopOptions {
   bootstrap?: GameBootstrap | null;
   avmsTerminal?: AvmsTerminalController | null;
   build?: BuildRuntime | null;
+  physics?: StationPhysics | null;
   onHudUpdate: (params: HudUpdateParams) => void;
   onResetPeak: () => void;
   isPaused?: () => boolean;
@@ -123,6 +127,7 @@ export function createGameLoop({
   bootstrap = null,
   avmsTerminal = null,
   build = null,
+  physics = null,
   onHudUpdate,
   onResetPeak,
   isPaused,
@@ -401,8 +406,8 @@ export function createGameLoop({
   function buildAreaForCurrentRoom(): BuildArea | null {
     if (!bootstrap || world.mode !== MODE_IN_STATION) return null;
     const roomId = (world.character as StationCharacterState).stationRoomId;
-    if (roomId === "hab-room") return "apartment";
-    if (roomId.startsWith("hangar-")) return "hangar";
+    if (roomId === "hab" || roomId === "hab-room") return "apartment";
+    if (roomId === "hangar" || roomId.startsWith("hangar-")) return "hangar";
     return null;
   }
 
@@ -419,7 +424,12 @@ export function createGameLoop({
 
   async function syncBuildPropsVisuals(runtime: BuildAreaRuntime): Promise<void> {
     const context = runtime.controller.getContext();
+    const propColliders = runtime.propColliders.getColliders();
+    if (physics) {
+      await syncDynamicColliders(physics, propColliders);
+    }
     await runtime.propRenderer.setPlacements(context.state.placements);
+    await runtime.propColliders.setPlacements(context.state.placements);
     const ghost = context.ghost;
     const definition = context.selectedDefinitionId
       ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
@@ -516,6 +526,7 @@ export function createGameLoop({
         { ...characterInput, jumpPressed: actions.jumpPressed },
         dt,
         planet.gravityMetersPerSecond2 ?? 9.8,
+        physics,
       );
       updateBuildTool(activeRuntime);
       const tool = activeRuntime.controller.getContext().toolMode;
@@ -544,6 +555,7 @@ export function createGameLoop({
       { ...characterInput, jumpPressed: actions.jumpPressed },
       dt,
       planet.gravityMetersPerSecond2 ?? 9.8,
+      physics,
     );
 
     if (tryMountRamp()) return;
@@ -561,6 +573,7 @@ export function createGameLoop({
 
     const interaction = resolveStationInteraction(
       world.character as StationCharacterState,
+      stationFrame,
     );
     world.prompt = stationPrompt(interaction);
     if (!interaction) return;
@@ -650,6 +663,7 @@ export function createGameLoop({
       { ...characterInput, jumpPressed: actions.jumpPressed },
       dt,
       planet.gravityMetersPerSecond2 ?? 9.8,
+      { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) },
     );
     world.character = result.state;
 
@@ -781,7 +795,7 @@ export function createGameLoop({
       } else if (world.mode === MODE_IN_STATION) {
         updateStationMode(characterInput, actions, dt);
       } else if (world.mode === MODE_RIDING_ELEVATOR) {
-        const ride = updateElevatorRide(world, stationFrame, dt);
+        const ride = updateElevatorRide(world, stationFrame, dt, physics);
         world.prompt = ride.destination ? `${ride.destination.label}…` : "";
         if (ride.teleportedNow && ride.destination) {
           controls.setOrbitFacing(stationYawForDir(ride.destination.face));

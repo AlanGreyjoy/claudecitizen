@@ -15,6 +15,10 @@ import {
   WALK_SPEED_METERS_PER_SECOND,
 } from "./character_controller";
 import {
+  resolveCharacterAgainstColliders,
+  type ShipColliderRigState,
+} from "./colliders";
+import {
   getShipLayout,
   type ShipSeatSpec,
   type ShipWalkZone,
@@ -228,6 +232,36 @@ function resolveDeckStep(
     }
   }
   return { local: state.deckLocal, zone: state.deckZone };
+}
+
+function resolveDeckColliderStep(
+  resolved: ResolvedDeckStep,
+  gates: ShipWalkGates,
+  colliderRig: ShipColliderRigState | undefined,
+): ResolvedDeckStep {
+  const colliders = getShipLayout().colliders;
+  if (colliders.length === 0) return resolved;
+  const adjusted = resolveCharacterAgainstColliders({
+    right: resolved.local.right,
+    forward: resolved.local.forward,
+    floorUp: shipFloorUpAt(resolved.local),
+    colliders,
+    rig: colliderRig,
+    isAllowed: (local) =>
+      !insideActiveLadder(local, gates) && findWalkZone(local, gates) !== null,
+  });
+  if (
+    Math.abs(adjusted.right - resolved.local.right) < 1e-6 &&
+    Math.abs(adjusted.forward - resolved.local.forward) < 1e-6
+  ) {
+    return resolved;
+  }
+  const zone = findWalkZone(adjusted, gates);
+  if (!zone) return resolved;
+  return {
+    local: adjusted,
+    zone: zone.passage ? resolved.zone : zone.id,
+  };
 }
 
 function deckCameraForward(ship: FlightBody, cameraYawRadians: number): Vec3 {
@@ -558,6 +592,7 @@ export function updateCharacterOnDeck(
   input: CharacterInput,
   dt: number,
   gravityMetersPerSecond2: number,
+  colliderRig?: ShipColliderRigState,
 ): DeckUpdateResult {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -612,6 +647,7 @@ export function updateCharacterOnDeck(
         } else {
           resolved = { local: state.deckLocal, zone: state.deckZone };
         }
+        resolved = resolveDeckColliderStep(resolved, gates, colliderRig);
         const pose = getDeckWorldPose(ship, resolved.local);
         return { position: pose.position, up: pose.up };
       },
@@ -632,6 +668,7 @@ export function updateCharacterOnDeck(
               : zone.id
             : state.deckZone,
         };
+        resolved = resolveDeckColliderStep(resolved, gates, colliderRig);
         const pose = getDeckWorldPose(ship, resolved.local);
         return { position: pose.position, up: pose.up };
       },

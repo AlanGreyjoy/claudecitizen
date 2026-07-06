@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import {
+  applyPrefabMaterialOverrides,
+  createPrefabLightObject,
   loadPrefabModel,
   createPrimitiveMesh,
 } from "../prefabs/prefab_renderer";
@@ -59,12 +61,6 @@ export interface EditorViewport {
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
 
-const FLOOR_COLORS: Record<string, number> = {
-  hab: 0x8bd8ff,
-  lobby: 0x3fc6ff,
-  hangar: 0xffce6f,
-};
-
 const SHIP_ZONE_COLORS: Record<string, number> = {
   cabin: 0x3fc6ff,
   cockpit: 0x7dffa8,
@@ -84,6 +80,10 @@ export function createEditorViewport(
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.AgXToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a101d);
@@ -92,10 +92,24 @@ export function createEditorViewport(
   const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 10_000);
   camera.position.set(20, 16, 20);
 
-  scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x1a2030, 1.15));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.1);
-  sun.position.set(40, 60, 24);
+  scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x121725, 0.82));
+  const sun = new THREE.DirectionalLight(0xfff3dc, 2.45);
+  sun.position.set(36, 62, 26);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -90;
+  sun.shadow.camera.right = 90;
+  sun.shadow.camera.top = 90;
+  sun.shadow.camera.bottom = -90;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 180;
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.bias = -0.00035;
+  sun.shadow.radius = 2;
   scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x7db8ff, 0.42);
+  fill.position.set(-32, 18, -42);
+  scene.add(fill);
 
   const grid = new THREE.GridHelper(400, 400, 0x33507a, 0x18243c);
   (grid.material as THREE.Material).transparent = true;
@@ -326,14 +340,58 @@ export function createEditorViewport(
     component: PrefabComponent,
   ): THREE.Object3D | null {
     switch (component.type) {
-      case "walk-volume": {
-        const color = FLOOR_COLORS[component.floorId] ?? 0x3fc6ff;
-        return makeZoneBoxHelper(
-          component.min,
-          component.max,
-          component.height ?? 4,
+      case "point-light": {
+        const color = new THREE.Color(component.color ?? "#dfeaff").getHex();
+        const group = new THREE.Group();
+        group.add(createPrefabLightObject(component));
+        const bulb = makeHelperMesh(
+          new THREE.SphereGeometry(0.18, 16, 10),
           color,
+          0.82,
         );
+        const radius = component.distance > 0 ? component.distance : 2;
+        const reach = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 24, 12),
+          color,
+          0.12,
+          true,
+        );
+        group.add(bulb, reach);
+        return group;
+      }
+      case "area-light": {
+        const color = new THREE.Color(component.color ?? "#cfe8ff").getHex();
+        const group = new THREE.Group();
+        group.add(createPrefabLightObject(component));
+        const panel = makeHelperMesh(
+          new THREE.BoxGeometry(component.width, component.height, 0.035),
+          color,
+          0.32,
+        );
+        const outline = makeHelperMesh(
+          new THREE.BoxGeometry(component.width, component.height, 0.04),
+          color,
+          0.7,
+          true,
+        );
+        const directionGeometry = track(new THREE.BufferGeometry());
+        directionGeometry.setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, -Math.max(0.75, component.height * 1.5)),
+        ]);
+        const directionMaterial = track(
+          new THREE.LineBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.85,
+          }),
+        );
+        group.add(
+          panel,
+          outline,
+          new THREE.Line(directionGeometry, directionMaterial),
+        );
+        return group;
       }
       case "spawn-point": {
         const group = new THREE.Group();
@@ -396,6 +454,23 @@ export function createEditorViewport(
         return sphere;
       }
       case "collider": {
+        if (component.shape === "mesh") {
+          const group = new THREE.Group();
+          const geometry = component.convex
+            ? new THREE.IcosahedronGeometry(0.7, 1)
+            : new THREE.BoxGeometry(1.2, 1.2, 1.2);
+          const helper = makeHelperMesh(
+            geometry,
+            component.convex ? 0xffb36b : 0xff7d7d,
+            component.convex ? 0.24 : 0.34,
+            true,
+          );
+          const offset = component.offset;
+          if (offset) helper.position.set(offset.x, offset.y, offset.z);
+          group.add(helper);
+          return group;
+        }
+        if (component.shape !== "box") return null;
         const size = component.size;
         const box = makeHelperMesh(
           new THREE.BoxGeometry(size.x, size.y, size.z),
@@ -711,7 +786,7 @@ export function createEditorViewport(
 
     let hasVisual = false;
     if (entity.primitive) {
-      const mesh = createPrimitiveMesh(entity.primitive);
+      const mesh = createPrimitiveMesh(entity.primitive, entity.materialOverrides);
       track(mesh.geometry);
       track(mesh.material as THREE.Material);
       group.add(mesh);
@@ -731,6 +806,12 @@ export function createEditorViewport(
           if (recenterAsHull) {
             const box = new THREE.Box3().setFromObject(model);
             model.position.sub(box.getCenter(new THREE.Vector3()));
+          }
+          for (const material of applyPrefabMaterialOverrides(
+            model,
+            entity.materialOverrides,
+          )) {
+            track(material);
           }
           tagGlbNodes(model);
           group.add(model);

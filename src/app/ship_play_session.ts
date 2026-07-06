@@ -378,6 +378,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       { ...input, jumpPressed: actions.jumpPressed },
       dt,
       SANDBOX_GRAVITY,
+      { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) },
     );
     character = result.state;
     prompt = "";

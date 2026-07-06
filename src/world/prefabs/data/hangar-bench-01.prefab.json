@@ -53,7 +53,14 @@
         },
         "asset": {
           "url": "/src/assets/protected/props/SM_Prop_Bench_Seat_01.glb"
-        }
+        },
+        "components": [
+          {
+            "type": "collider",
+            "shape": "mesh",
+            "convex": false
+          }
+        ]
       }
     ]
   }

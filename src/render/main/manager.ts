@@ -25,6 +25,7 @@ import { createRemotePresenceRenderer } from './scene/remote_presence';
 import { createStationModel } from './scene/station_model';
 import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene_lighting';
 import { createWebGlRenderer } from './scene/webgl_renderer';
+import { resolveRenderQuality } from './domain/render_quality';
 import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
 import { setFogSettings as applyFogSettings, updateEnvironment } from './update/environment';
 import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun_system';
@@ -53,6 +54,7 @@ export function createSpikeRenderer(
   options?: SpikeRendererOptions,
 ): SpikeRenderer {
   applyRenderQualitySettings();
+  const renderQuality = resolveRenderQuality();
 
   const { rendererMode, renderer } = createWebGlRenderer(canvas);
 
@@ -90,7 +92,10 @@ export function createSpikeRenderer(
 
   const stationFrame = getStationFrame(planet);
   const stationMesh = options?.stationPrefab
-    ? createPrefabStationGroup(options.stationPrefab, tileManager.renderScale)
+    ? createPrefabStationGroup(options.stationPrefab, tileManager.renderScale, {
+        localLightShadowMapSize: renderQuality.localLightShadowMapSize,
+        localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
+      })
     : createStationModel(tileManager.renderScale);
   stationMesh.frustumCulled = false;
   scene.add(stationMesh);
@@ -217,6 +222,8 @@ export function createSpikeRenderer(
       nowSeconds,
       renderScale,
       volumetricEnabled,
+      stationInteriorActive:
+        renderMode === 'in-station' || renderMode === 'riding-elevator',
     });
 
     avatar.update(character, focusBody.position, nowSeconds, firstPersonActive);

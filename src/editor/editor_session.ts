@@ -3,6 +3,7 @@ import { createEditorStore, createEmptyEntity } from './document';
 import { el, showConfirmDialog, showToast } from './dom';
 import { createHierarchyPanel } from './panels/hierarchy';
 import { createInspectorPanel } from './panels/inspector';
+import { createMaterialManagerPanel } from './panels/material_manager';
 import { createProjectPanel } from './panels/project';
 import { createToolbar, type ToolbarGizmoMode } from './panels/toolbar';
 import { fromPrefabDocument, toPrefabDocument } from './serialize';
@@ -20,7 +21,7 @@ import { getModelThumbnail } from '../render/editor/thumbnails';
 import type { Vec3 } from '../types';
 
 let started = false;
-type SceneEditorTab = 'scene' | 'character-preview';
+type SceneEditorTab = 'scene' | 'character-preview' | 'material-manager';
 
 function entityNameFromUrl(url: string): string {
   const fileName = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
@@ -53,6 +54,11 @@ export function startEditorSession(): void {
     text: 'Character Preview',
     on: { click: () => setSceneEditorTab('character-preview') },
   });
+  const sceneTabMaterialBtn = el('button', {
+    className: 'ed-scene-tab',
+    text: 'Material Manager',
+    on: { click: () => setSceneEditorTab('material-manager') },
+  });
   const viewportEl = el('div', { className: 'ed-viewport' }, [
     viewportToolbarEl,
     el('div', {
@@ -61,9 +67,18 @@ export function startEditorSession(): void {
     }),
   ]);
   const characterPreviewEl = el('div', { className: 'ed-scene-panel ed-character-preview is-hidden' });
+  const materialManagerEl = el('div', { className: 'ed-scene-panel ed-material-manager is-hidden' });
   const sceneShellEl = el('div', { className: 'ed-scene-shell' }, [
-    el('div', { className: 'ed-scene-tabs' }, [sceneTabSceneBtn, sceneTabPreviewBtn]),
-    el('div', { className: 'ed-scene-body' }, [viewportEl, characterPreviewEl]),
+    el('div', { className: 'ed-scene-tabs' }, [
+      sceneTabSceneBtn,
+      sceneTabPreviewBtn,
+      sceneTabMaterialBtn,
+    ]),
+    el('div', { className: 'ed-scene-body' }, [
+      viewportEl,
+      characterPreviewEl,
+      materialManagerEl,
+    ]),
   ]);
   const inspectorEl = el('div', { className: 'ed-panel' });
   const hierarchySplitter = el('div', { className: 'ed-splitter ed-splitter-col' });
@@ -107,10 +122,18 @@ export function startEditorSession(): void {
       'is-active',
       sceneEditorTab === 'character-preview',
     );
+    sceneTabMaterialBtn.classList.toggle(
+      'is-active',
+      sceneEditorTab === 'material-manager',
+    );
     viewportEl.classList.toggle('is-hidden', sceneEditorTab !== 'scene');
     characterPreviewEl.classList.toggle(
       'is-hidden',
       sceneEditorTab !== 'character-preview',
+    );
+    materialManagerEl.classList.toggle(
+      'is-hidden',
+      sceneEditorTab !== 'material-manager',
     );
   }
 
@@ -297,6 +320,7 @@ export function startEditorSession(): void {
     setGlbNodeLocalTransform: (entityId, nodeUuid, transform) =>
       viewport.setGlbNodeLocalTransform(entityId, nodeUuid, transform),
   });
+  createMaterialManagerPanel(materialManagerEl, store);
   createProjectPanel(projectEl, {
     getModelThumbnail,
     onPreviewAnimationSource: async (url) => {

@@ -14,9 +14,11 @@ import {
   RenderPass,
   NormalPass,
   BloomEffect,
+  BlendFunction,
   ToneMappingEffect,
   VignetteEffect,
   SMAAEffect,
+  SSAOEffect,
   ToneMappingMode,
 } from 'postprocessing';
 
@@ -30,6 +32,7 @@ export interface ComposerStack {
   spaceSkybox: SpaceSkybox;
   volumetricClouds: ReturnType<typeof createVolumetricCloudManager>;
   starField: ReturnType<typeof createStarField>;
+  ambientOcclusionEnabled: boolean;
   resize: (width: number, height: number, pixelRatio: number) => void;
   dispose: () => void;
 }
@@ -50,10 +53,38 @@ export function createComposerStack(
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  // Normals only feed the aerial-perspective effect; half resolution halves the
-  // cost of what is otherwise a full second render of the entire scene.
-  const normalPass = new NormalPass(scene, camera, { resolutionScale: 0.5 });
+  // Normals feed aerial perspective and, on balanced/high, SSAO contact shadowing.
+  const normalPass = new NormalPass(scene, camera, {
+    resolutionScale: renderQuality.ambientOcclusionEnabled
+      ? Math.max(0.5, renderQuality.ambientOcclusionResolutionScale)
+      : 0.5,
+  });
   composer.addPass(normalPass);
+
+  if (renderQuality.ambientOcclusionEnabled) {
+    const ssaoEffect = new SSAOEffect(camera, normalPass.texture, {
+      blendFunction: BlendFunction.MULTIPLY,
+      samples: renderQuality.ambientOcclusionSamples,
+      rings: 7,
+      radius: 0.16,
+      intensity: renderQuality.ambientOcclusionIntensity,
+      luminanceInfluence: 0.5,
+      bias: 0.018,
+      fade: 0.018,
+      resolutionScale: renderQuality.ambientOcclusionResolutionScale,
+    });
+    // The postprocessing library wires LOG_DEPTH into its DoF and Outline
+    // materials but not SSAO. Without the define the SSAO shader reads
+    // log-encoded depth as raw perspective depth and the occlusion term
+    // collapses to nothing, so set it manually whenever the renderer uses
+    // a logarithmic depth buffer (the planet-scale main-game camera does).
+    if (renderer.capabilities.logarithmicDepthBuffer) {
+      ssaoEffect.ssaoMaterial.defines.LOG_DEPTH = '1';
+      ssaoEffect.ssaoMaterial.needsUpdate = true;
+    }
+    const ssaoPass = new EffectPass(camera, ssaoEffect);
+    composer.addPass(ssaoPass);
+  }
 
   const spaceSkybox = createSpaceSkybox();
   const volumetricClouds = createVolumetricCloudManager(renderer, scene, camera, planet, sun, normalPass);
@@ -132,6 +163,7 @@ export function createComposerStack(
     spaceSkybox,
     volumetricClouds,
     starField,
+    ambientOcclusionEnabled: renderQuality.ambientOcclusionEnabled,
     resize,
     dispose,
   };

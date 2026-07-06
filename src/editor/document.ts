@@ -2,6 +2,7 @@ import { createCommandStack } from './commands';
 import type {
   PrefabComponent,
   PrefabKind,
+  PrefabMaterialOverride,
   PrefabPrimitive,
 } from '../world/prefabs/schema';
 import type { Vec3 } from '../types';
@@ -22,6 +23,8 @@ export interface EditorEntity {
   visible: boolean;
   asset: { url: string; castShadow?: boolean } | null;
   primitive: PrefabPrimitive | null;
+  glbNodeTransforms: GlbNodeTransformOverride[];
+  materialOverrides: PrefabMaterialOverride[];
   components: PrefabComponent[];
   children: EditorEntity[];
 }
@@ -37,6 +40,11 @@ export interface EntityTransform {
   position: Vec3;
   rotation: Vec3;
   scale: Vec3;
+}
+
+export interface GlbNodeTransformOverride {
+  nodeName: string;
+  transform: EntityTransform;
 }
 
 /** Read-only GLB scene graph node cached after model load (not serialized). */
@@ -92,6 +100,8 @@ export function createEmptyEntity(name: string): EditorEntity {
     visible: true,
     asset: null,
     primitive: null,
+    glbNodeTransforms: [],
+    materialOverrides: [],
     components: [],
     children: [],
   };
@@ -221,6 +231,8 @@ export function createEditorStore() {
     for (const key of [...glbNodeOverrides.keys()]) {
       if (key.startsWith(prefix)) glbNodeOverrides.delete(key);
     }
+    const entity = locate(entityId)?.entity;
+    if (entity) entity.glbNodeTransforms = [];
   }
 
   function emitGlbTransform(
@@ -237,11 +249,40 @@ export function createEditorStore() {
     nodeUuid: string,
     transform: EntityTransform,
   ): void {
-    glbNodeOverrides.set(
-      glbOverrideKey(entityId, nodeName),
-      cloneTransform(transform),
-    );
+    const transformCopy = cloneTransform(transform);
+    glbNodeOverrides.set(glbOverrideKey(entityId, nodeName), transformCopy);
+    const entity = locate(entityId)?.entity;
+    if (entity) {
+      const existing = entity.glbNodeTransforms.find(
+        (entry) => entry.nodeName === nodeName,
+      );
+      if (existing) {
+        existing.transform = cloneTransform(transformCopy);
+      } else {
+        entity.glbNodeTransforms.push({
+          nodeName,
+          transform: cloneTransform(transformCopy),
+        });
+      }
+    }
+    markDirty();
     emitGlbTransform(entityId, nodeUuid, nodeName);
+  }
+
+  function rebuildGlbOverridesFromState(): void {
+    glbNodeOverrides.clear();
+    const visit = (entities: EditorEntity[]): void => {
+      for (const entity of entities) {
+        for (const override of entity.glbNodeTransforms) {
+          glbNodeOverrides.set(
+            glbOverrideKey(entity.id, override.nodeName),
+            cloneTransform(override.transform),
+          );
+        }
+        visit(entity.children);
+      }
+    };
+    visit(state.roots);
   }
 
   function notifyGlbNodeTransform(entityId: string, nodeUuid: string): void {
@@ -426,14 +467,43 @@ export function createEditorStore() {
 
   function setAsset(id: string, asset: { url: string; castShadow?: boolean } | null): void {
     const before = locate(id)?.entity.asset ?? null;
+    const beforeOverrides = locate(id)?.entity.materialOverrides ?? [];
+    const beforeOverridesCopy = structuredClone(beforeOverrides);
     patchEntity(
       id,
       'Edit asset',
       (entity) => {
-        entity.asset = asset ? { ...asset } : null;
+        const nextAsset = asset ? { ...asset } : null;
+        entity.asset = nextAsset;
+        if (before?.url !== nextAsset?.url) entity.materialOverrides = [];
       },
       (entity) => {
         entity.asset = before ? { ...before } : null;
+        entity.materialOverrides = structuredClone(beforeOverridesCopy);
+      },
+    );
+  }
+
+  function setMaterialOverride(
+    id: string,
+    material: string,
+    override: PrefabMaterialOverride | null,
+  ): void {
+    const before = locate(id)?.entity.materialOverrides;
+    if (!before) return;
+    const beforeCopy = structuredClone(before);
+    const next = beforeCopy.filter((entry) => entry.material !== material);
+    if (override) next.push(structuredClone(override));
+    next.sort((a, b) => a.material.localeCompare(b.material));
+    if (JSON.stringify(beforeCopy) === JSON.stringify(next)) return;
+    patchEntity(
+      id,
+      `Edit material ${material}`,
+      (entity) => {
+        entity.materialOverrides = structuredClone(next);
+      },
+      (entity) => {
+        entity.materialOverrides = structuredClone(beforeCopy);
       },
     );
   }
@@ -624,7 +694,7 @@ export function createEditorStore() {
     selection = null;
     subSelection = null;
     glbTreesByEntityId.clear();
-    glbNodeOverrides.clear();
+    rebuildGlbOverridesFromState();
     dirty = false;
     history.clear();
     emit({ type: 'document' });
@@ -687,6 +757,7 @@ export function createEditorStore() {
     setVisible,
     setPrimitive,
     setAsset,
+    setMaterialOverride,
     setComponents,
     setTransform,
     beginTransformGesture,

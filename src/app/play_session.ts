@@ -7,6 +7,10 @@ import { createGameMenu } from '../render/effects/hud/game_menu';
 import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
 import { createBuildTerminal } from '../render/effects/hud/build_terminal';
 import { createHangarBuildController } from '../player/hangar_build/build_controller';
+import {
+  createBuildPropColliderRuntime,
+  type BuildPropColliderRuntime,
+} from '../player/hangar_build/prop_colliders';
 import { createHangarPropRenderer } from '../render/hangar/prop_instances';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { createVegetationControls } from '../render/vegetation';
@@ -16,7 +20,14 @@ import { buildRoomForArea } from '../player/hangar_build/validation';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
 import { applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
-import { setStationLayoutOverride } from '../world/station';
+import {
+  getStationColliders,
+  getStationFrame,
+  getStationSpawn,
+  setStationLayoutOverride,
+  stationLocalToWorld,
+} from '../world/station';
+import { createStationPhysics, type StationPhysics } from '../physics/station_physics';
 import type { PrefabDocument } from '../world/prefabs/schema';
 import {
   fetchGameBootstrap,
@@ -40,16 +51,19 @@ function requireElement<T extends HTMLElement>(id: string): T {
   return element as T;
 }
 
+const DEFAULT_STATION_PREFAB_ID = 'demo-station';
+
 /**
- * Dev-only station prefab preview (?stationPrefab=<id>): loads the prefab,
- * activates its gameplay layout, and returns the document for the renderer.
- * The default path (no param, or production) leaves the procedural station
- * untouched.
+ * Loads the station prefab that drives the in-game station layout and
+ * renderer. The default is demo-station; in dev mode, ?stationPrefab=<id>
+ * overrides it for ad-hoc editor previews. Falls back to the procedural
+ * station if the prefab can't be loaded or walked.
  */
-async function resolveStationPrefabPreview(): Promise<PrefabDocument | null> {
-  if (!import.meta.env.DEV) return null;
-  const id = new URLSearchParams(window.location.search).get('stationPrefab');
-  if (!id) return null;
+async function resolveStationPrefab(): Promise<PrefabDocument | null> {
+  const params = new URLSearchParams(window.location.search);
+  const id = import.meta.env.DEV
+    ? params.get('stationPrefab') ?? DEFAULT_STATION_PREFAB_ID
+    : DEFAULT_STATION_PREFAB_ID;
 
   const doc = await loadPrefabDocument(id);
   if (!doc) {
@@ -62,7 +76,7 @@ async function resolveStationPrefabPreview(): Promise<PrefabDocument | null> {
     return null;
   }
   setStationLayoutOverride(layout);
-  console.info(`Station prefab preview active: "${id}".`);
+  console.info(`Station prefab active: "${id}".`);
   return doc;
 }
 
@@ -107,6 +121,8 @@ interface PlaySessionCleanup {
   buildTerminal: BuildTerminalController | null;
   haloBand: HaloBandController | null;
   buildPropRenderers: HangarPropRenderer[];
+  buildPropColliders: BuildPropColliderRuntime[];
+  physics: StationPhysics | null;
   resize: () => void;
   session: AuthSession | null;
   editorReturnButton: HTMLButtonElement | null;
@@ -124,6 +140,8 @@ export function stopPlaySession(): void {
   cleanup.buildTerminal?.dispose();
   cleanup.haloBand?.dispose();
   for (const renderer of cleanup.buildPropRenderers) renderer.dispose();
+  for (const colliders of cleanup.buildPropColliders) colliders.dispose();
+  cleanup.physics?.dispose();
   cleanup.gameLoop.stop();
   cleanup.gameLoop.cleanupForTitleReturn();
   cleanup.controls.dispose();
@@ -165,13 +183,16 @@ export async function startPlaySession(
   // The ship layout must be active before the renderer (hull, doors) and the
   // world state (rig doors) are created.
   await applyDefaultShipPrefab();
-  const stationPrefab = await resolveStationPrefabPreview();
+  const stationPrefab = await resolveStationPrefab();
   loading?.setProgress(0.15);
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
   let editorReturnButton: HTMLButtonElement | null = null;
-  if (stationPrefab) {
-    editorReturnButton = mountEditorReturnButton(stationPrefab.id);
+  if (stationPrefab && import.meta.env.DEV) {
+    const previewId = new URLSearchParams(window.location.search).get('stationPrefab');
+    if (previewId) {
+      editorReturnButton = mountEditorReturnButton(stationPrefab.id);
+    }
   }
 
   const canvas = requireElement<HTMLCanvasElement>('view');
@@ -362,6 +383,7 @@ export async function startPlaySession(
 
   const buildAreas: Partial<Record<BuildArea, BuildAreaRuntime>> = {};
   const buildPropRenderers: HangarPropRenderer[] = [];
+  const buildPropColliders: BuildPropColliderRuntime[] = [];
   let buildTerminal: BuildTerminalController | null = null;
 
   if (bootstrap && renderer) {
@@ -371,11 +393,13 @@ export async function startPlaySession(
       initialState: GameBootstrap['hangar'],
     ): BuildAreaRuntime => {
       let propRenderer: HangarPropRenderer | null = null;
+      const propColliders = createBuildPropColliderRuntime();
       const controller = createHangarBuildController({
         initialState,
         arcBalance: bootstrap.economy.arcBalance,
         onPlacementsChange: (state) => {
           void propRenderer?.setPlacements(state.placements);
+          void propColliders.setPlacements(state.placements);
         },
         onStateChange: (ctx) => {
           arcBalance = ctx.arcBalance;
@@ -385,10 +409,12 @@ export async function startPlaySession(
         rootName,
         stationRoot: renderer.getStationRoot(),
       });
-      const runtime = { controller, propRenderer };
+      const runtime = { controller, propRenderer, propColliders };
       buildAreas[area] = runtime;
       buildPropRenderers.push(propRenderer);
+      buildPropColliders.push(propColliders);
       void propRenderer.setPlacements(initialState.placements);
+      void propColliders.setPlacements(initialState.placements);
       return runtime;
     };
 
@@ -475,6 +501,24 @@ export async function startPlaySession(
 
   loading?.setProgress(0.75);
 
+  let physics: StationPhysics | null = null;
+  try {
+    const stationFrame = getStationFrame(planet);
+    const spawn = getStationSpawn();
+    const spawnPosition = stationLocalToWorld(stationFrame, {
+      right: spawn.right,
+      up: spawn.up,
+      forward: spawn.forward,
+    });
+    physics = await createStationPhysics(
+      stationFrame,
+      spawnPosition,
+      getStationColliders(),
+    );
+  } catch (error) {
+    console.warn('Failed to initialize station physics; falling back to custom walker.', error);
+  }
+
   gameLoop = createGameLoop({
     planet,
     seed,
@@ -491,6 +535,7 @@ export async function startPlaySession(
             terminal: buildTerminal,
           }
         : null,
+    physics,
     onHudUpdate: (params) => {
       hud.update(params);
       haloBand?.update(params);
@@ -529,6 +574,8 @@ export async function startPlaySession(
     buildTerminal,
     haloBand,
     buildPropRenderers,
+    buildPropColliders,
+    physics,
     resize,
     session,
     editorReturnButton,

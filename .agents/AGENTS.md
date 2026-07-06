@@ -3,8 +3,10 @@
 ## Key facts
 
 - **No unit tests anywhere.** `npm run test -w server` exists as a stub but is unused. Unit tests are pointless with AI — they just check water = water.
+- **User owns QA.** Agents should not run tests, browser QA, screenshot checks, dev-server validation, `npm run build`, or `npm run typecheck` during normal implementation work unless Alan explicitly asks for validation. When skipping validation, say what was not run. If Alan explicitly asks for a commit, run `npm run typecheck` first unless he says not to.
+- **Do not start dev servers.** Alan normally already has the Vite and API servers running. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless Alan explicitly asks. If a server is needed for context, check existing ports/processes or ask first.
 - **TypeScript, ESM** at root (`"type": "module"`). Server workspace is **CommonJS**.
-- Build = `tsc --noEmit && vite build` (typecheck first, then bundle). Run `npm run typecheck` before commits.
+- Build = `tsc --noEmit && vite build` (typecheck first, then bundle), but do not run it unless explicitly requested.
 - Dev server on port **4173**: `npm run dev`. Editor only available in dev mode.
 - No GitHub Actions / CI workflows.
 

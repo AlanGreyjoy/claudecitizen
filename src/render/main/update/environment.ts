@@ -48,6 +48,7 @@ export interface EnvironmentUpdateInput {
   nowSeconds: number;
   renderScale: number;
   volumetricEnabled: boolean;
+  stationInteriorActive?: boolean;
 }
 
 export function updateEnvironment(input: EnvironmentUpdateInput): {
@@ -72,6 +73,7 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     nowSeconds,
     renderScale,
     volumetricEnabled,
+    stationInteriorActive = false,
   } = input;
 
   const { ambient, sun } = lighting;
@@ -83,6 +85,7 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     spaceSkybox,
     volumetricClouds,
     starField,
+    ambientOcclusionEnabled,
   } =
     composerStack;
   const { sunDir, daylightFactor, rawDaylight, planetCenter } = sunState;
@@ -124,7 +127,7 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     scene.fog.far = (hazeTopMeters + spanMeters) * renderScale;
   }
 
-  normalPass.setEnabled(volumetricSkyActive);
+  normalPass.setEnabled(volumetricSkyActive || ambientOcclusionEnabled);
   atmospherePass.setEnabled(volumetricSkyActive);
   volumetricFogPass.setEnabled(planetFogActive);
 
@@ -140,6 +143,11 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
   // readable but clearly reads as night instead of a dim day.
   ambient.color.copy(AMBIENT_SKY_NIGHT).lerp(AMBIENT_SKY_DAY, daylightFactor);
   ambient.groundColor.copy(AMBIENT_GROUND_NIGHT).lerp(AMBIENT_GROUND_DAY, daylightFactor);
+  if (stationInteriorActive) {
+    ambient.intensity = Math.max(ambient.intensity, 0.48);
+    ambient.color.lerp(AMBIENT_SKY_DAY, 0.16);
+    ambient.groundColor.lerp(AMBIENT_GROUND_DAY, 0.2);
+  }
 
   starField.update({
     camera,

@@ -7,6 +7,7 @@ import {
 export interface GameSettings {
   input: InputSettings;
   renderQuality: RenderQualityPreset;
+  ambientOcclusion: boolean;
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;
@@ -18,6 +19,7 @@ export const GAME_SETTINGS_CHANGED_EVENT = 'claudecitizen-game-settings-changed'
 const DEFAULT_SETTINGS: GameSettings = {
   input: normalizeInputSettings(undefined),
   renderQuality: 'balanced',
+  ambientOcclusion: true,
   masterVolume: 1,
   sfxVolume: 1,
   musicVolume: 1,
@@ -39,6 +41,10 @@ function normalizeSettings(raw: Partial<GameSettings>): GameSettings {
   return {
     input: normalizeInputSettings(raw.input),
     renderQuality,
+    ambientOcclusion:
+      typeof raw.ambientOcclusion === 'boolean'
+        ? raw.ambientOcclusion
+        : DEFAULT_SETTINGS.ambientOcclusion,
     masterVolume: clampVolume(raw.masterVolume ?? DEFAULT_SETTINGS.masterVolume),
     sfxVolume: clampVolume(raw.sfxVolume ?? DEFAULT_SETTINGS.sfxVolume),
     musicVolume: clampVolume(raw.musicVolume ?? DEFAULT_SETTINGS.musicVolume),
@@ -68,6 +74,11 @@ export function applyRenderQualityAndReload(preset: RenderQualityPreset): void {
   params.set('quality', preset);
   const query = params.toString();
   window.location.href = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+}
+
+export function applyAmbientOcclusionAndReload(enabled: boolean): void {
+  saveGameSettings({ ...loadGameSettings(), ambientOcclusion: enabled });
+  window.location.reload();
 }
 
 export function getStoredRenderQuality(): RenderQualityPreset | null {

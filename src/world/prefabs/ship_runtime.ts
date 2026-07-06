@@ -23,6 +23,11 @@ import {
 import { orientedZoneBounds } from "../../player/ship_zone_oriented";
 import type { PrefabComponent, PrefabDocument, PrefabEntity } from "./schema";
 import type { Vec3 } from "../../types";
+import {
+  type ColliderAnimationBinding,
+  type GameplayCollider,
+} from "../../player/colliders";
+import { buildPrefabColliders } from "./collider_runtime";
 
 /**
  * Derives the ship gameplay layout (walk zones, doors, seats, ramp
@@ -343,6 +348,60 @@ function primaryPilotSeat(seats: ShipSeatSpec[]): ShipSeatSpec | null {
   return seats.find((seat) => seat.role === "pilot") ?? null;
 }
 
+function animationForNode(
+  nodeName: string,
+  doors: ShipDoorSpec[],
+  spec: ShipSpec,
+): ColliderAnimationBinding | undefined {
+  for (const door of doors) {
+    const node = door.nodes.find((entry) => entry.name === nodeName);
+    if (node) {
+      return {
+        kind: "door",
+        doorId: door.id,
+        motion: door.motion,
+        axis: door.axis,
+        delta: node.delta,
+      };
+    }
+  }
+  if (spec.rampHinge?.name === nodeName) {
+    return {
+      kind: "ramp",
+      axis: spec.rampHinge.axis ?? "x",
+      radians: spec.rampHinge.lowerRadians,
+    };
+  }
+  const gear = spec.gearHinges.find((entry) => entry.name === nodeName);
+  if (gear) {
+    return {
+      kind: "gear",
+      axis: gear.axis ?? "x",
+      radians: gear.deployRadians,
+    };
+  }
+  return undefined;
+}
+
+function bindColliderAnimations(
+  colliders: GameplayCollider[],
+  doors: ShipDoorSpec[],
+  spec: ShipSpec,
+  prefabId: string,
+): GameplayCollider[] {
+  return colliders.map((collider) => {
+    if (!collider.node) return collider;
+    const animation = animationForNode(collider.node, doors, spec);
+    if (!animation) {
+      console.warn(
+        `Ship prefab "${prefabId}" collider node "${collider.node}" has no matching door/ramp/gear binding; it remains static.`,
+      );
+      return collider;
+    }
+    return { ...collider, animation };
+  });
+}
+
 /**
  * Builds the ship layout for a ship prefab. Returns null only when the
  * prefab has no ship components at all. An in-progress prefab (e.g. hull
@@ -423,8 +482,16 @@ export function buildShipLayoutFromPrefab(
       }
     : fallback.rampDismountGround;
 
+  const spec = mergeShipSpec(out.spec);
+  const colliders = bindColliderAnimations(
+    buildPrefabColliders(doc),
+    out.doors,
+    spec,
+    doc.id,
+  );
+
   return {
-    spec: mergeShipSpec(out.spec),
+    spec,
     hullUrl: out.hullUrl,
     restHeightMeters: out.restHeight,
     walkZones: out.walkZones,
@@ -435,6 +502,7 @@ export function buildShipLayoutFromPrefab(
     seatStand,
     rampInteracts: out.rampInteracts,
     rampMount: out.rampMount,
+    colliders,
     rampDismountForward,
     rampDismountGround,
   };

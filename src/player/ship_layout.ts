@@ -1,5 +1,6 @@
 import { FLIGHT_CONFIG } from "../flight/flight_config";
 import type { LocalOffset, Vec3 } from "../types";
+import type { GameplayCollider } from "./colliders";
 
 /**
  * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
@@ -156,6 +157,7 @@ export interface ShipLayout {
   seatStand: { right: number; forward: number };
   rampInteracts: ShipRampInteract[];
   rampMount: ShipRampMount | null;
+  colliders: GameplayCollider[];
   /** Walking past this ship-local forward on a ramp zone steps off. */
   rampDismountForward: number;
   /** Ground spot just past the ramp tip for a character stepping off. */
@@ -249,6 +251,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
     maxForward: -8.0,
     clampForward: -8.2,
   },
+  colliders: [],
   rampDismountForward: -8.5,
   rampDismountGround: { right: 0, forward: -9.6 },
 };

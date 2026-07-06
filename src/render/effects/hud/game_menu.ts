@@ -1,4 +1,5 @@
 import {
+  applyAmbientOcclusionAndReload,
   applyRenderQualityAndReload,
   loadGameSettings,
   saveGameSettings,
@@ -128,6 +129,8 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   const qualityInputs = Array.from(
     elements.rootEl.querySelectorAll<HTMLInputElement>('input[name="game-menu-quality"]'),
   );
+  const ambientOcclusionInput =
+    elements.rootEl.querySelector<HTMLInputElement>('#game-menu-ambient-occlusion');
 
   function isCapturingControls(): boolean {
     return keyboardCaptureAction !== null || deviceCapture !== null;
@@ -137,6 +140,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     for (const input of qualityInputs) {
       input.checked = input.value === settings.renderQuality;
     }
+  }
+
+  function syncAmbientOcclusion(): void {
+    if (ambientOcclusionInput) ambientOcclusionInput.checked = settings.ambientOcclusion;
   }
 
   function syncAudioControls(): void {
@@ -167,6 +174,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     if (open) {
       document.exitPointerLock?.();
       syncQualityRadios();
+      syncAmbientOcclusion();
       syncAudioControls();
       renderControlsPanel();
       startTelemetry();
@@ -697,6 +705,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     });
   }
 
+  ambientOcclusionInput?.addEventListener('change', () => {
+    applyAmbientOcclusionAndReload(ambientOcclusionInput.checked);
+  });
+
   elements.masterVolumeEl.addEventListener('input', () => {
     updateAudioSetting('masterVolume', Number.parseInt(elements.masterVolumeEl.value, 10));
   });
@@ -732,6 +744,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   window.addEventListener('keydown', handleKeyDown, true);
 
   syncQualityRadios();
+  syncAmbientOcclusion();
   syncAudioControls();
   renderControlsPanel();
 

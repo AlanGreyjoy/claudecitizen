@@ -253,7 +253,7 @@ export function createToolbar(
     el('button', {
       className: 'ed-btn',
       text: '+ Empty',
-      title: 'Empty entity for markers (spawn, elevator, walk volume, ...)',
+      title: 'Empty entity for markers (spawn, elevator, collider, ...)',
       on: { click: () => actions.onAddEmpty() },
     }),
   ]);

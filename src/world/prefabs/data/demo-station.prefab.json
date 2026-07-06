@@ -31,205 +31,13 @@
     ],
     "children": [
       {
-        "id": "lobby-floor",
-        "name": "Lobby Floor",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -0.2,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 24,
-            "y": 0.4,
-            "z": 16
-          },
-          "color": "#2c333d"
-        }
-      },
-      {
-        "id": "lobby-wall-north",
-        "name": "Lobby Wall N",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": 2,
-            "z": 8.2
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 24.8,
-            "y": 4,
-            "z": 0.4
-          },
-          "color": "#4c5663"
-        }
-      },
-      {
-        "id": "lobby-wall-south",
-        "name": "Lobby Wall S",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": 2,
-            "z": -8.2
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 24.8,
-            "y": 4,
-            "z": 0.4
-          },
-          "color": "#4c5663"
-        }
-      },
-      {
-        "id": "lobby-wall-east",
-        "name": "Lobby Wall E",
-        "transform": {
-          "position": {
-            "x": 12.2,
-            "y": 2,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 0.4,
-            "y": 4,
-            "z": 16
-          },
-          "color": "#4c5663"
-        }
-      },
-      {
-        "id": "lobby-wall-west",
-        "name": "Lobby Wall W",
-        "transform": {
-          "position": {
-            "x": -12.2,
-            "y": 2,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 0.4,
-            "y": 4,
-            "z": 16
-          },
-          "color": "#4c5663"
-        }
-      },
-      {
-        "id": "lobby-volume",
-        "name": "Lobby Walk Volume",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": 0,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "walk-volume",
-            "floorId": "lobby",
-            "min": {
-              "x": -11.6,
-              "z": -7.6
-            },
-            "max": {
-              "x": 11.6,
-              "z": 7.6
-            },
-            "height": 5
-          }
-        ]
-      },
-      {
         "id": "spawn",
         "name": "Spawn Point",
         "transform": {
           "position": {
-            "x": 0,
+            "x": -34.75,
             "y": 0,
-            "z": 4.25
+            "z": 74.5
           },
           "rotation": {
             "x": 0,
@@ -246,75 +54,7 @@
         "components": [
           {
             "type": "spawn-point",
-            "floorId": "lobby"
-          }
-        ]
-      },
-      {
-        "id": "hab-floor",
-        "name": "Hab Deck Floor",
-        "transform": {
-          "position": {
-            "x": -6,
-            "y": 7.8,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 12,
-            "y": 0.4,
-            "z": 10
-          },
-          "color": "#39424e"
-        }
-      },
-      {
-        "id": "hab-volume",
-        "name": "Hab Walk Volume",
-        "transform": {
-          "position": {
-            "x": -6,
-            "y": 8,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "walk-volume",
-            "floorId": "hab",
-            "min": {
-              "x": -5.6,
-              "z": -4.6
-            },
-            "max": {
-              "x": 5.6,
-              "z": 4.6
-            },
-            "height": 3.5
+            "floorId": "hab"
           }
         ]
       },
@@ -323,9 +63,9 @@
         "name": "Lift Pad (Lobby to Hab)",
         "transform": {
           "position": {
-            "x": -10,
-            "y": 0.05,
-            "z": 6
+            "x": -34.75,
+            "y": 0,
+            "z": 81
           },
           "rotation": {
             "x": 0,
@@ -352,7 +92,8 @@
           {
             "type": "elevator",
             "id": "hab-lift",
-            "targetFloor": "hab"
+            "targetFloor": "hab",
+            "floorId": "lobby"
           }
         ]
       },
@@ -361,9 +102,9 @@
         "name": "Lift Pad (Hab to Lobby)",
         "transform": {
           "position": {
-            "x": -10,
-            "y": 8.05,
-            "z": 3
+            "x": -34.75,
+            "y": 0,
+            "z": 77.5
           },
           "rotation": {
             "x": 0,
@@ -390,7 +131,8 @@
           {
             "type": "elevator",
             "id": "hab-lift",
-            "targetFloor": "lobby"
+            "targetFloor": "lobby",
+            "floorId": "hab"
           }
         ]
       },
@@ -399,9 +141,9 @@
         "name": "Lift Pad (Lobby to Hangar)",
         "transform": {
           "position": {
-            "x": 10,
-            "y": 0.05,
-            "z": -6
+            "x": -29.75,
+            "y": 0,
+            "z": 54.75
           },
           "rotation": {
             "x": 0,
@@ -428,45 +170,8 @@
           {
             "type": "elevator",
             "id": "hangar-lift",
-            "targetFloor": "hangar"
-          }
-        ]
-      },
-      {
-        "id": "demo-terminal",
-        "name": "Demo Terminal",
-        "transform": {
-          "position": {
-            "x": 10,
-            "y": 0.7,
-            "z": 6
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 0.8,
-            "y": 1.4,
-            "z": 0.5
-          },
-          "color": "#06131c"
-        },
-        "components": [
-          {
-            "type": "avms-terminal",
-            "id": "demo-terminal",
-            "radius": 2.5
+            "targetFloor": "hangar",
+            "floorId": "lobby"
           }
         ]
       },
@@ -475,15 +180,15 @@
         "name": "SM_Prop_Monitor_06",
         "transform": {
           "position": {
-            "x": -3.75,
+            "x": -50.5,
             "y": 0,
-            "z": -7.25
+            "z": 65.25
           },
           "rotation": {
             "x": 0,
-            "y": 0,
+            "y": 0.707107,
             "z": 0,
-            "w": 1
+            "w": 0.707107
           },
           "scale": {
             "x": 1,
@@ -520,26 +225,27 @@
               {
                 "type": "avms-terminal",
                 "id": "avms-1",
-                "radius": 2.5
+                "radius": 2.5,
+                "floorId": "lobby"
               }
             ]
           }
         ]
       },
       {
-        "id": "e-6d1c2a4e",
-        "name": "SM_Bld_Hanger_01",
+        "id": "e-afb417c1",
+        "name": "SM_Prop_Monitor_06 Copy",
         "transform": {
           "position": {
-            "x": 39.75,
+            "x": -50.5,
             "y": 0,
-            "z": 33.25
+            "z": 63.5
           },
           "rotation": {
             "x": 0,
-            "y": -1,
+            "y": 0.707107,
             "z": 0,
-            "w": 0
+            "w": 0.707107
           },
           "scale": {
             "x": 1,
@@ -548,17 +254,17 @@
           }
         },
         "asset": {
-          "url": "/src/assets/protected/props/SM_Bld_Hanger_01.glb"
+          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
         },
         "children": [
           {
-            "id": "e-638accdf",
-            "name": "Hangar Pad",
+            "id": "e-e5497c00",
+            "name": "AVMS Terminal",
             "transform": {
               "position": {
-                "x": 11.25,
-                "y": 1.25,
-                "z": -3.5
+                "x": 0,
+                "y": 0,
+                "z": 0
               },
               "rotation": {
                 "x": 0,
@@ -574,15 +280,43 @@
             },
             "components": [
               {
-                "type": "hangar-pad",
-                "hangarId": "bay-1",
-                "padIndex": 1
+                "type": "avms-terminal",
+                "id": "avms-1",
+                "radius": 2.5,
+                "floorId": "lobby"
               }
             ]
+          }
+        ]
+      },
+      {
+        "id": "e-283639c5",
+        "name": "SM_Prop_Monitor_06 Copy Copy",
+        "transform": {
+          "position": {
+            "x": -50.5,
+            "y": 0,
+            "z": 62
           },
+          "rotation": {
+            "x": 0,
+            "y": 0.707107,
+            "z": 0,
+            "w": 0.707107
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
+        },
+        "children": [
           {
-            "id": "e-ee609c6f",
-            "name": "Walk Volume",
+            "id": "e-3c83d708",
+            "name": "AVMS Terminal",
             "transform": {
               "position": {
                 "x": 0,
@@ -596,91 +330,55 @@
                 "w": 1
               },
               "scale": {
-                "x": 3.8,
-                "y": 3.4,
-                "z": 2.7
+                "x": 1,
+                "y": 1,
+                "z": 1
               }
             },
             "components": [
               {
-                "type": "walk-volume",
-                "floorId": "hangar",
-                "min": {
-                  "x": -5,
-                  "z": -5
-                },
-                "max": {
-                  "x": 5,
-                  "z": 5
-                },
-                "height": 4
+                "type": "avms-terminal",
+                "id": "avms-1",
+                "radius": 2.5,
+                "floorId": "lobby"
               }
             ]
+          }
+        ]
+      },
+      {
+        "id": "e-ceb83d0e",
+        "name": "demo_station",
+        "transform": {
+          "position": {
+            "x": -42.25,
+            "y": 0,
+            "z": 88.5
           },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/demo_station.glb",
+          "castShadow": true
+        },
+        "nodeOverrides": [
           {
-            "id": "e-27041308",
-            "name": "SM_Prop_Monitor_06",
+            "node": "SM_Bld_Wall_Door_01",
             "transform": {
               "position": {
-                "x": 2.25,
-                "y": 0,
-                "z": 4
-              },
-              "rotation": {
-                "x": 0,
-                "y": -0.707107,
-                "z": 0,
-                "w": 0.707107
-              },
-              "scale": {
-                "x": 1.5,
-                "y": 1.5,
-                "z": 1.5
-              }
-            },
-            "asset": {
-              "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
-            },
-            "children": [
-              {
-                "id": "e-4626d2d5",
-                "name": "AVMS Terminal",
-                "transform": {
-                  "position": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 0
-                  },
-                  "rotation": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 0,
-                    "w": 1
-                  },
-                  "scale": {
-                    "x": 1,
-                    "y": 1,
-                    "z": 1
-                  }
-                },
-                "components": [
-                  {
-                    "type": "avms-terminal",
-                    "id": "avms-1",
-                    "radius": 2.5
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "id": "lift-hangar-to-lobby",
-            "name": "Lift Pad (Hangar to Lobby)",
-            "transform": {
-              "position": {
-                "x": -15,
-                "y": 0.05,
-                "z": 13
+                "x": 1.78033,
+                "y": -0.00456,
+                "z": 0
               },
               "rotation": {
                 "x": 0,
@@ -689,7 +387,112 @@
                 "w": 1
               },
               "scale": {
-                "x": 2.6,
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_Door_02",
+            "transform": {
+              "position": {
+                "x": 3.23008,
+                "y": -0.00456,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Crew_Shower_Door_01",
+            "transform": {
+              "position": {
+                "x": 1.07951,
+                "y": 0.13072,
+                "z": 0.33417
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.000297,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 0.99268
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_Door_06_3",
+            "transform": {
+              "position": {
+                "x": 2.02604,
+                "y": 1.05843,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.018901,
+                "z": 0,
+                "w": 0.999821
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          }
+        ],
+        "materialOverrides": [
+          {
+            "material": "PolygonScifiSpace_Material_01_A",
+            "color": "#ffffff",
+            "emissive": "#808080",
+            "emissiveIntensity": 1,
+            "metalness": 0.18,
+            "roughness": 0.5,
+            "opacity": 1
+          }
+        ],
+        "components": [
+          {
+            "type": "collider",
+            "shape": "mesh",
+            "convex": false
+          }
+        ],
+        "children": [
+          {
+            "id": "lift-hangar-to-lobby",
+            "name": "Lift Pad (Hangar to Lobby)",
+            "transform": {
+              "position": {
+                "x": 12.5,
+                "y": 0.05,
+                "z": -36
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1.1,
                 "y": 1,
                 "z": 0.9
               }
@@ -707,7 +510,100 @@
               {
                 "type": "elevator",
                 "id": "hangar-lift",
-                "targetFloor": "lobby"
+                "targetFloor": "lobby",
+                "floorId": "hangar"
+              }
+            ]
+          },
+          {
+            "id": "e-638accdf",
+            "name": "Hangar Pad",
+            "transform": {
+              "position": {
+                "x": 11.75,
+                "y": 0.75,
+                "z": -54.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "hangar-pad",
+                "hangarId": "bay-1",
+                "padIndex": 1,
+                "floorId": "hangar"
+              }
+            ]
+          },
+          {
+            "id": "e-fbed92bb",
+            "name": "Area Light",
+            "transform": {
+              "position": {
+                "x": 7.5,
+                "y": 4.25,
+                "z": -17.5
+              },
+              "rotation": {
+                "x": -0.707107,
+                "y": 0,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#ffffc8",
+                "intensity": 2,
+                "width": 2.6,
+                "height": 2.55
+              }
+            ]
+          },
+          {
+            "id": "e-b0757027",
+            "name": "Area Light Copy",
+            "transform": {
+              "position": {
+                "x": 7.5,
+                "y": 4.25,
+                "z": -12.5
+              },
+              "rotation": {
+                "x": -0.707107,
+                "y": 0,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#ffffc8",
+                "intensity": 2,
+                "width": 2.6,
+                "height": 2.55
               }
             ]
           }

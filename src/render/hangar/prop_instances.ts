@@ -6,6 +6,7 @@ import {
   type PlacementTransform,
 } from '../../player/hangar_build/validation';
 import {
+  cloneObjectMaterials,
   createPropInstanceGroup,
   loadPrefabModel,
 } from '../prefabs/prefab_renderer';
@@ -86,6 +87,7 @@ export function createHangarPropRenderer(options: HangarPropRendererOptions) {
     if (!doc) return;
 
     const group = createPropInstanceGroup(doc);
+    cloneObjectMaterials(group);
     group.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];

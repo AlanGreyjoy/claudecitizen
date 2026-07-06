@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { configureShipMaterial } from '../../materials/ship_material';
 import {
   DEFAULT_STARHOPPER_GEAR_HINGES,
   DEFAULT_STARHOPPER_RAMP_HINGE,
@@ -11,67 +12,6 @@ const PROTECTED_SHIP_URL =
   '/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
 const FALLBACK_SHIP_URL = new URL('../../../assets/ships/Ship_Large.gltf', import.meta.url).href;
 const SHIP_FORWARD_ALIGNMENT_RADIANS = 0;
-
-function normalizeMaterialName(name: string): string {
-  return name.replace(/_URP$/, '');
-}
-
-function configureShipMaterial(material: THREE.Material | THREE.Material[] | null | undefined): void {
-  if (Array.isArray(material)) {
-    material.forEach(configureShipMaterial);
-    return;
-  }
-  if (!material) return;
-
-  const meshMaterial = material as THREE.MeshStandardMaterial & {
-    emissive?: THREE.Color;
-    map?: THREE.Texture | null;
-    normalMap?: THREE.Texture | null;
-  };
-  if (meshMaterial.map) meshMaterial.map.colorSpace = THREE.SRGBColorSpace;
-  if (meshMaterial.emissiveMap) meshMaterial.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-
-  switch (normalizeMaterialName(material.name)) {
-    // VA_Trimsheet_* materials carry baked textures (see scripts/bake_ship_textures.py)
-    // and must not be overridden here.
-    case 'VA_Glass2':
-    case 'VA_Glass4':
-      meshMaterial.color?.setHex(0x9bc9f5);
-      meshMaterial.metalness = 0;
-      meshMaterial.roughness = 0.08;
-      meshMaterial.opacity = Math.min(meshMaterial.opacity ?? 1, 0.2);
-      meshMaterial.transparent = true;
-      break;
-    case 'VA_Mirror':
-      meshMaterial.color?.setHex(0xc5d1dc);
-      meshMaterial.metalness = 0.86;
-      meshMaterial.roughness = 0.06;
-      break;
-    case 'Light_White_Bright':
-      meshMaterial.color?.setHex(0xffffff);
-      meshMaterial.emissive?.setHex(0xd9e5ff);
-      meshMaterial.emissiveIntensity = 1.2;
-      break;
-    case 'Light_Yellow_Med':
-      meshMaterial.color?.setHex(0xffd5a0);
-      meshMaterial.emissive?.setHex(0xffc27d);
-      meshMaterial.emissiveIntensity = 1.1;
-      break;
-    case 'Light_Blue_Med':
-      meshMaterial.color?.setHex(0x7bb6ff);
-      meshMaterial.emissive?.setHex(0x67b6ff);
-      meshMaterial.emissiveIntensity = 1.1;
-      break;
-    case 'VA_ScreenOff':
-      meshMaterial.color?.setHex(0x09101a);
-      meshMaterial.emissive?.setHex(0x000000);
-      meshMaterial.metalness = 0.02;
-      meshMaterial.roughness = 0.92;
-      break;
-    default:
-      break;
-  }
-}
 
 export interface ShipArticulation {
   /** 0 retracted .. 1 deployed. */

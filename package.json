@@ -33,6 +33,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@dimforge/rapier3d": "^0.19.3",
     "@takram/three-atmosphere": "^0.19.1",
     "@takram/three-clouds": "^0.7.6",
     "@takram/three-geospatial": "^0.9.1",

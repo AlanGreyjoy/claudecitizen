@@ -13,19 +13,20 @@ import {
 } from '../station';
 import type { PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
+import { buildPrefabColliders } from './collider_runtime';
 
 /**
- * Derives gameplay layout (walk rooms, spawn, elevators, hangar pads, info
- * prompts) from a station prefab's components.
+ * Derives gameplay layout (spawn, elevators, hangar pads, info prompts) from a
+ * station prefab's components. The player now walks on real collider geometry,
+ * so this no longer produces walk-volume rooms.
  *
  * Prefab/scene axes map to station-local gameplay axes as right = -x,
  * up = y, forward = z (matching the render group orientation from
- * updateShipPlacement). Walk volumes are axis-aligned in station space;
- * entity rotation is ignored for them.
+ * updateShipPlacement).
  */
 
-const DEFAULT_WALK_VOLUME_HEIGHT = 4;
-const MARKER_RADIUS = 2.4;
+const MARKER_RADIUS = 2.5;
+
 
 interface FlattenedComponents {
   rooms: StationRoom[];
@@ -39,6 +40,7 @@ interface FlattenedComponents {
   elevatorSeeds: {
     pairId: string;
     targetFloor: StationFloorId;
+    floorId: StationFloorId;
     right: number;
     up: number;
     forward: number;
@@ -47,6 +49,7 @@ interface FlattenedComponents {
   hangarSeeds: {
     hangarId: string;
     padIndex: number;
+    floorId: StationFloorId;
     right: number;
     up: number;
     forward: number;
@@ -55,6 +58,7 @@ interface FlattenedComponents {
     id: string;
     prompt: string;
     radius: number;
+    floorId: StationFloorId;
     right: number;
     up: number;
     forward: number;
@@ -62,6 +66,7 @@ interface FlattenedComponents {
   avmsSeeds: {
     id: string;
     radius: number;
+    floorId: StationFloorId;
     right: number;
     up: number;
     forward: number;
@@ -107,25 +112,6 @@ function collect(
 
   for (const component of entity.components ?? []) {
     switch (component.type) {
-      case 'walk-volume': {
-        // Scene x-range [minX, maxX] flips into station right as [-maxX, -minX].
-        // Entity scale is applied so walk volumes on scaled models (e.g. a
-        // hangar GLB with non-uniform scale) match the editor viewport.
-        const minX = position.x + component.min.x * scale.x;
-        const maxX = position.x + component.max.x * scale.x;
-        out.rooms.push({
-          id: entity.id,
-          floorId: component.floorId,
-          minRight: -maxX,
-          maxRight: -minX,
-          minForward: position.z + component.min.z * scale.z,
-          maxForward: position.z + component.max.z * scale.z,
-          floorUp: position.y,
-          height: (component.height ?? DEFAULT_WALK_VOLUME_HEIGHT) * scale.y,
-          ...(component.open && component.open.length > 0 ? { openSides: component.open } : {}),
-        });
-        break;
-      }
       case 'spawn-point':
         out.spawnCandidates.push({
           floorId: component.floorId,
@@ -139,6 +125,7 @@ function collect(
         out.elevatorSeeds.push({
           pairId: component.id,
           targetFloor: component.targetFloor,
+          floorId: component.floorId,
           right,
           up: position.y,
           forward,
@@ -149,6 +136,7 @@ function collect(
         out.hangarSeeds.push({
           hangarId: component.hangarId,
           padIndex: component.padIndex,
+          floorId: component.floorId ?? 'hangar',
           right,
           up: position.y,
           forward,
@@ -159,6 +147,7 @@ function collect(
           id: component.id,
           prompt: component.prompt,
           radius: component.radius,
+          floorId: component.floorId,
           right,
           up: position.y,
           forward,
@@ -168,6 +157,7 @@ function collect(
         out.avmsSeeds.push({
           id: component.id,
           radius: component.radius,
+          floorId: component.floorId,
           right,
           up: position.y,
           forward,
@@ -184,27 +174,13 @@ function collect(
   }
 }
 
-/** Marker containment respects the vertical band of each volume so stacked floors resolve correctly. */
-function roomContaining(
-  rooms: StationRoom[],
-  right: number,
-  up: number,
-  forward: number,
-  floorId?: StationFloorId,
-): StationRoom | null {
-  for (const room of rooms) {
-    if (floorId && room.floorId !== floorId) continue;
-    if (right < room.minRight || right > room.maxRight) continue;
-    if (forward < room.minForward || forward > room.maxForward) continue;
-    if (up < room.floorUp - 1 || up > room.floorUp + room.height) continue;
-    return room;
-  }
-  return null;
-}
-
 /**
- * Builds the gameplay layout override for a station prefab. Returns null when
- * the prefab has no walk volumes (nothing for the character to stand on).
+ * Builds the gameplay layout override for a station prefab. The player now
+ * walks on real collider geometry, so this no longer produces walk-volume rooms.
+ *
+ * Prefab/scene axes map to station-local gameplay axes as right = -x,
+ * up = y, forward = z (matching the render group orientation from
+ * updateShipPlacement).
  */
 export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayoutOverride | null {
   const out: FlattenedComponents = {
@@ -216,55 +192,31 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
     avmsSeeds: [],
   };
   collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
-
-  if (out.rooms.length === 0) {
-    console.warn(`Prefab "${doc.id}" has no walk-volume components; cannot walk this station.`);
-    return null;
-  }
+  const colliders = buildPrefabColliders(doc);
 
   let spawn: StationSpawnPose | null = null;
-  for (const candidate of out.spawnCandidates) {
-    const room = roomContaining(
-      out.rooms,
-      candidate.right,
-      candidate.up,
-      candidate.forward,
-      candidate.floorId,
-    );
-    if (!room) {
-      console.warn(`Prefab "${doc.id}" spawn-point lies outside every walk volume; skipping it.`);
-      continue;
-    }
-    spawn = { roomId: room.id, right: candidate.right, forward: candidate.forward, face: candidate.face };
-    break;
-  }
-  if (!spawn) {
-    const room = out.rooms[0];
+  if (out.spawnCandidates.length > 0) {
+    const candidate = out.spawnCandidates[0];
     spawn = {
-      roomId: room.id,
-      right: (room.minRight + room.maxRight) / 2,
-      forward: (room.minForward + room.maxForward) / 2,
-      face: { right: 0, forward: 1 },
+      roomId: candidate.floorId,
+      right: candidate.right,
+      up: candidate.up,
+      forward: candidate.forward,
+      face: candidate.face,
     };
-    if (out.spawnCandidates.length === 0) {
-      console.warn(`Prefab "${doc.id}" has no spawn-point; spawning at the first walk volume.`);
-    }
+  } else {
+    spawn = { roomId: 'none', right: 0, up: 0, forward: 0, face: { right: 0, forward: 1 } };
+    console.warn(`Prefab "${doc.id}" has no spawn-point; spawning at origin with collider-based floor.`);
   }
 
   const elevatorMarkers: StationElevatorMarker[] = [];
   for (const seed of out.elevatorSeeds) {
-    const room = roomContaining(out.rooms, seed.right, seed.up, seed.forward);
-    if (!room) {
-      console.warn(
-        `Prefab "${doc.id}" elevator "${seed.pairId}" lies outside every walk volume; skipping it.`,
-      );
-      continue;
-    }
     elevatorMarkers.push({
       pairId: seed.pairId,
-      floorId: room.floorId,
-      roomId: room.id,
+      floorId: seed.floorId,
+      roomId: seed.floorId,
       right: seed.right,
+      up: seed.up,
       forward: seed.forward,
       radius: MARKER_RADIUS,
       targetFloor: seed.targetFloor,
@@ -274,18 +226,11 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
 
   const hangars: HangarSpec[] = [];
   for (const seed of out.hangarSeeds) {
-    const room = roomContaining(out.rooms, seed.right, seed.up, seed.forward, 'hangar');
-    if (!room) {
-      console.warn(
-        `Prefab "${doc.id}" hangar-pad "${seed.hangarId}" is not inside a hangar walk volume; skipping it.`,
-      );
-      continue;
-    }
     // hangar-pad markers are placed at pad surface height; the parked ship's
     // rest offset above it comes from the active ship layout at call time.
     hangars.push({
       index: seed.padIndex,
-      roomId: room.id,
+      roomId: seed.floorId,
       centerRight: seed.right,
       lobbyDoorForward: 0,
       padSurfaceLocal: {
@@ -298,12 +243,11 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
 
   const infoMarkers: StationInfoMarker[] = [];
   for (const seed of out.infoSeeds) {
-    const room = roomContaining(out.rooms, seed.right, seed.up, seed.forward);
-    if (!room) continue;
     infoMarkers.push({
       id: seed.id,
-      floorId: room.floorId,
+      floorId: seed.floorId,
       right: seed.right,
+      up: seed.up,
       forward: seed.forward,
       radius: seed.radius,
       prompt: seed.prompt,
@@ -312,12 +256,11 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
 
   const avmsMarkers: StationAvmsMarker[] = [];
   for (const seed of out.avmsSeeds) {
-    const room = roomContaining(out.rooms, seed.right, seed.up, seed.forward);
-    if (!room) continue;
     avmsMarkers.push({
       id: seed.id,
-      floorId: room.floorId,
+      floorId: seed.floorId,
       right: seed.right,
+      up: seed.up,
       forward: seed.forward,
       radius: seed.radius,
     });
@@ -327,6 +270,7 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
     rooms: out.rooms,
     doorways: [],
     hangars,
+    colliders,
     spawn,
     elevatorMarkers,
     infoMarkers,

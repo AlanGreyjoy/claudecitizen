@@ -1,5 +1,6 @@
 import { eulerXYZFromQuat, quatFromEulerXYZ } from '../math/quat';
 import {
+  type PrefabNodeOverride,
   slugifyPrefabName,
   type PrefabDocument,
   type PrefabEntity,
@@ -14,32 +15,72 @@ function round(value: number, decimals = 5): number {
   return Math.round(value * factor) / factor;
 }
 
-function entityToPrefab(entity: EditorEntity): PrefabEntity {
+function transformToPrefab(transform: {
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
+  scale: { x: number; y: number; z: number };
+}) {
   const rotation = quatFromEulerXYZ(
-    entity.rotation.x * DEG_TO_RAD,
-    entity.rotation.y * DEG_TO_RAD,
-    entity.rotation.z * DEG_TO_RAD,
+    transform.rotation.x * DEG_TO_RAD,
+    transform.rotation.y * DEG_TO_RAD,
+    transform.rotation.z * DEG_TO_RAD,
   );
+  return {
+    position: {
+      x: round(transform.position.x),
+      y: round(transform.position.y),
+      z: round(transform.position.z),
+    },
+    rotation: {
+      x: round(rotation.x, 6),
+      y: round(rotation.y, 6),
+      z: round(rotation.z, 6),
+      w: round(rotation.w, 6),
+    },
+    scale: {
+      x: round(transform.scale.x),
+      y: round(transform.scale.y),
+      z: round(transform.scale.z),
+    },
+  };
+}
+
+function transformFromPrefab(transform: PrefabEntity["transform"]) {
+  const euler = eulerXYZFromQuat(transform.rotation);
+  return {
+    position: { ...transform.position },
+    rotation: {
+      x: round(euler.x * RAD_TO_DEG, 3),
+      y: round(euler.y * RAD_TO_DEG, 3),
+      z: round(euler.z * RAD_TO_DEG, 3),
+    },
+    scale: { ...transform.scale },
+  };
+}
+
+function nodeOverrideToPrefab(
+  override: EditorEntity["glbNodeTransforms"][number],
+): PrefabNodeOverride {
+  return {
+    node: override.nodeName,
+    transform: transformToPrefab(override.transform),
+  };
+}
+
+function entityToPrefab(entity: EditorEntity): PrefabEntity {
   const prefabEntity: PrefabEntity = {
     id: entity.id,
     name: entity.name,
-    transform: {
-      position: {
-        x: round(entity.position.x),
-        y: round(entity.position.y),
-        z: round(entity.position.z),
-      },
-      rotation: {
-        x: round(rotation.x, 6),
-        y: round(rotation.y, 6),
-        z: round(rotation.z, 6),
-        w: round(rotation.w, 6),
-      },
-      scale: { x: round(entity.scale.x), y: round(entity.scale.y), z: round(entity.scale.z) },
-    },
+    transform: transformToPrefab(entity),
   };
   if (entity.asset) prefabEntity.asset = { ...entity.asset };
   if (entity.primitive) prefabEntity.primitive = structuredClone(entity.primitive);
+  if (entity.glbNodeTransforms.length > 0) {
+    prefabEntity.nodeOverrides = entity.glbNodeTransforms.map(nodeOverrideToPrefab);
+  }
+  if (entity.materialOverrides.length > 0) {
+    prefabEntity.materialOverrides = structuredClone(entity.materialOverrides);
+  }
   if (entity.components.length > 0) prefabEntity.components = structuredClone(entity.components);
   if (entity.children.length > 0) {
     prefabEntity.children = entity.children.map(entityToPrefab);
@@ -78,18 +119,21 @@ export function toPrefabDocument(state: EditorDocumentState): PrefabDocument {
 }
 
 function entityFromPrefab(prefabEntity: PrefabEntity): EditorEntity {
-  const euler = eulerXYZFromQuat(prefabEntity.transform.rotation);
+  const transform = transformFromPrefab(prefabEntity.transform);
   const entity = createEmptyEntity(prefabEntity.name);
   entity.id = prefabEntity.id;
-  entity.position = { ...prefabEntity.transform.position };
-  entity.rotation = {
-    x: round(euler.x * RAD_TO_DEG, 3),
-    y: round(euler.y * RAD_TO_DEG, 3),
-    z: round(euler.z * RAD_TO_DEG, 3),
-  };
-  entity.scale = { ...prefabEntity.transform.scale };
+  entity.position = transform.position;
+  entity.rotation = transform.rotation;
+  entity.scale = transform.scale;
   entity.asset = prefabEntity.asset ? { ...prefabEntity.asset } : null;
   entity.primitive = prefabEntity.primitive ? structuredClone(prefabEntity.primitive) : null;
+  entity.glbNodeTransforms = (prefabEntity.nodeOverrides ?? []).map((override) => ({
+    nodeName: override.node,
+    transform: transformFromPrefab(override.transform),
+  }));
+  entity.materialOverrides = prefabEntity.materialOverrides
+    ? structuredClone(prefabEntity.materialOverrides)
+    : [];
   entity.components = prefabEntity.components ? structuredClone(prefabEntity.components) : [];
   entity.children = (prefabEntity.children ?? []).map(entityFromPrefab);
   return entity;

@@ -40,7 +40,12 @@ export interface WorldTransition {
 
 export type WorldCharacter = CharacterState &
   Partial<Pick<DeckCharacterState, 'deckLocal' | 'deckZone'>> &
-  Partial<Pick<StationCharacterState, 'stationLocal' | 'stationRoomId'>>;
+  Partial<
+    Pick<
+      StationCharacterState,
+      'stationLocal' | 'stationRoomId' | 'stationVerticalVelocity'
+    >
+  >;
 
 export interface WorldState {
   cameraOrbit: CameraOrbit;

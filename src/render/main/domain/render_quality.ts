@@ -13,6 +13,12 @@ export interface RenderQualitySettings {
   cloudShadowCascades: number;
   cloudShadowMapSize: number;
   aerialPerspectiveShadowSamples: number;
+  ambientOcclusionEnabled: boolean;
+  ambientOcclusionSamples: number;
+  ambientOcclusionResolutionScale: number;
+  ambientOcclusionIntensity: number;
+  localLightShadowsEnabled: boolean;
+  localLightShadowMapSize: number;
   bloomMipmapBlur: boolean;
   grassSampleCount: number;
   treeSampleCount: number;
@@ -36,6 +42,12 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     cloudShadowCascades: 0,
     cloudShadowMapSize: 256,
     aerialPerspectiveShadowSamples: 4,
+    ambientOcclusionEnabled: false,
+    ambientOcclusionSamples: 7,
+    ambientOcclusionResolutionScale: 0.45,
+    ambientOcclusionIntensity: 0.75,
+    localLightShadowsEnabled: false,
+    localLightShadowMapSize: 0,
     bloomMipmapBlur: false,
     grassSampleCount: 120,
     treeSampleCount: 64,
@@ -54,6 +66,12 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     cloudShadowCascades: 1,
     cloudShadowMapSize: 384,
     aerialPerspectiveShadowSamples: 8,
+    ambientOcclusionEnabled: true,
+    ambientOcclusionSamples: 9,
+    ambientOcclusionResolutionScale: 0.65,
+    ambientOcclusionIntensity: 0.92,
+    localLightShadowsEnabled: false,
+    localLightShadowMapSize: 0,
     bloomMipmapBlur: true,
     grassSampleCount: 220,
     treeSampleCount: 120,
@@ -72,6 +90,12 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     cloudShadowCascades: 3,
     cloudShadowMapSize: 512,
     aerialPerspectiveShadowSamples: 16,
+    ambientOcclusionEnabled: true,
+    ambientOcclusionSamples: 16,
+    ambientOcclusionResolutionScale: 0.9,
+    ambientOcclusionIntensity: 1.08,
+    localLightShadowsEnabled: true,
+    localLightShadowMapSize: 256,
     bloomMipmapBlur: true,
     grassSampleCount: 500,
     treeSampleCount: 500,
@@ -103,6 +127,28 @@ function parseQualityPreset(): RenderQualityPreset {
   return 'balanced';
 }
 
+/**
+ * Reads the user's ambient-occlusion toggle from saved game settings. Returns
+ * `undefined` when unset so the active quality preset controls AO by default.
+ */
+function parseAmbientOcclusionOverride(): boolean | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const stored = localStorage.getItem('claudecitizen-game-settings');
+    if (!stored) return undefined;
+    const parsed = JSON.parse(stored) as { ambientOcclusion?: unknown };
+    if (typeof parsed.ambientOcclusion === 'boolean') return parsed.ambientOcclusion;
+  } catch {
+    // Ignore malformed local settings.
+  }
+  return undefined;
+}
+
 export function resolveRenderQuality(): RenderQualitySettings {
-  return { ...QUALITY_PRESETS[parseQualityPreset()] };
+  const settings = { ...QUALITY_PRESETS[parseQualityPreset()] };
+  const ambientOcclusionOverride = parseAmbientOcclusionOverride();
+  if (ambientOcclusionOverride !== undefined) {
+    settings.ambientOcclusionEnabled = ambientOcclusionOverride;
+  }
+  return settings;
 }

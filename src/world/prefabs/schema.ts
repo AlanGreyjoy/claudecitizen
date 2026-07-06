@@ -1,6 +1,6 @@
 import type { Vec3 } from "../../types";
 import type { Quat } from "../../math/quat";
-import type { StationFloorId, StationSide } from "../station";
+import type { StationFloorId } from "../station";
 
 /**
  * Prefab documents are the contract between the editor and the game: a tree
@@ -20,7 +20,7 @@ export type PrefabKind = "station" | "ship" | "site" | "prop";
 
 export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site", "prop"];
 
-/** Horizontal (XZ plane) extent used by walk volumes, in prefab/scene axes. */
+/** Horizontal (XZ plane) extent, in prefab/scene axes. */
 export interface PrefabVec2 {
   x: number;
   z: number;
@@ -30,6 +30,13 @@ export interface PrefabTransform {
   position: Vec3;
   rotation: Quat;
   scale: Vec3;
+}
+
+export interface PrefabNodeOverride {
+  /** GLB node name. Must match a node in this entity's asset scene. */
+  node: string;
+  /** Local transform applied to the named GLB node after the model loads. */
+  transform: PrefabTransform;
 }
 
 export interface PrefabAsset {
@@ -43,6 +50,20 @@ export interface PrefabPrimitive {
   size: Vec3;
   /** CSS hex color, e.g. "#4c5663". */
   color?: string;
+}
+
+/** CSS hex color, e.g. "#dfeaff". */
+export type PrefabColor = string;
+
+export interface PrefabMaterialOverride {
+  /** Three.js material name inside the model, or "__primitive__" for box primitives. */
+  material: string;
+  color?: PrefabColor;
+  emissive?: PrefabColor;
+  emissiveIntensity?: number;
+  metalness?: number;
+  roughness?: number;
+  opacity?: number;
 }
 
 /** Which gate controls a ship walk zone's walkability. */
@@ -62,22 +83,48 @@ export type PrefabComponent =
   | { type: "station-frame" }
   | { type: "prop-frame" }
   | { type: "spawn-point"; floorId: StationFloorId }
-  | { type: "elevator"; id: string; targetFloor: StationFloorId }
-  | { type: "hangar-pad"; hangarId: string; padIndex: number }
-  | { type: "interaction"; id: string; prompt: string; radius: number }
-  | { type: "avms-terminal"; id: string; radius: number }
+  | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
+  | { type: "hangar-pad"; hangarId: string; padIndex: number; floorId?: StationFloorId }
+  | { type: "interaction"; id: string; prompt: string; radius: number; floorId: StationFloorId }
+  | { type: "avms-terminal"; id: string; radius: number; floorId: StationFloorId }
   | {
-      type: "walk-volume";
-      floorId: StationFloorId;
-      /** Local XZ offsets from the entity origin (entity rotation is ignored). */
-      min: PrefabVec2;
-      max: PrefabVec2;
-      /** Interior height in meters (default 4). */
-      height?: number;
-      /** Sides without walls (hangar mouths); station-local side names. */
-      open?: StationSide[];
+      type: "point-light";
+      color?: PrefabColor;
+      /** Three.js point light intensity in editor-scale candela. */
+      intensity: number;
+      /** Maximum reach in prefab meters; 0 means unlimited inverse-square falloff. */
+      distance: number;
+      /** Attenuation exponent. Physically-correct default is 2. */
+      decay?: number;
+      castShadow?: boolean;
     }
-  | { type: "collider"; shape: "box"; size: Vec3; offset?: Vec3 }
+  | {
+      type: "area-light";
+      color?: PrefabColor;
+      /** Three.js rectangular area light luminance. */
+      intensity: number;
+      width: number;
+      height: number;
+    }
+  | {
+      type: "collider";
+      shape: "box";
+      size: Vec3;
+      offset?: Vec3;
+      /** Optional GLB node name whose ship rig motion drives this collider. */
+      node?: string;
+    }
+  | {
+      type: "collider";
+      shape: "mesh";
+      /** Optional proxy GLB; defaults to the owning entity's asset url. */
+      assetUrl?: string;
+      /** Checked = convex hull, unchecked = BVH triangle mesh. */
+      convex?: boolean;
+      offset?: Vec3;
+      /** Optional GLB node to extract and/or follow for ship rig motion. */
+      node?: string;
+    }
   // --- ship components -------------------------------------------------------
   | { type: "ship-frame" }
   /** Static combat and flight tuning for this ship type. */
@@ -184,6 +231,8 @@ export interface PrefabEntity {
   transform: PrefabTransform;
   asset?: PrefabAsset;
   primitive?: PrefabPrimitive;
+  nodeOverrides?: PrefabNodeOverride[];
+  materialOverrides?: PrefabMaterialOverride[];
   components?: PrefabComponent[];
   children?: PrefabEntity[];
 }
@@ -207,12 +256,6 @@ export function slugifyPrefabName(name: string): string {
 }
 
 const STATION_FLOOR_IDS: StationFloorId[] = ["hab", "lobby", "hangar"];
-const STATION_SIDES: StationSide[] = [
-  "minRight",
-  "maxRight",
-  "minForward",
-  "maxForward",
-];
 
 function fail(path: string, message: string): never {
   throw new Error(`Invalid prefab document at ${path}: ${message}`);
@@ -260,6 +303,15 @@ function parseQuat(value: unknown, path: string): Quat {
   };
 }
 
+function parseTransform(value: unknown, path: string): PrefabTransform {
+  if (!isRecord(value)) fail(path, "expected transform object");
+  return {
+    position: parseVec3(value.position, `${path}.position`),
+    rotation: parseQuat(value.rotation, `${path}.rotation`),
+    scale: parseVec3(value.scale, `${path}.scale`),
+  };
+}
+
 function parseFloorId(value: unknown, path: string): StationFloorId {
   if (
     typeof value !== "string" ||
@@ -278,6 +330,63 @@ function parseAssetUrl(value: unknown, path: string): string {
   return url;
 }
 
+function parseColor(value: unknown, path: string): PrefabColor {
+  const color = parseString(value, path, 32);
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) fail(path, "expected CSS hex color");
+  return color;
+}
+
+function parseUnitValue(value: unknown, path: string): number {
+  return Math.min(1, Math.max(0, parseFiniteNumber(value, path)));
+}
+
+function parseOptionalUnitValue(value: unknown, path: string): number | undefined {
+  return value === undefined ? undefined : parseUnitValue(value, path);
+}
+
+function parseOptionalNonNegativeNumber(
+  value: unknown,
+  path: string,
+  max = 50,
+): number | undefined {
+  if (value === undefined) return undefined;
+  return Math.min(max, Math.max(0, parseFiniteNumber(value, path)));
+}
+
+function parseMaterialOverride(
+  value: unknown,
+  path: string,
+): PrefabMaterialOverride {
+  if (!isRecord(value)) fail(path, "expected material override object");
+  return {
+    material: parseString(value.material, `${path}.material`, 128),
+    ...(value.color !== undefined
+      ? { color: parseColor(value.color, `${path}.color`) }
+      : {}),
+    ...(value.emissive !== undefined
+      ? { emissive: parseColor(value.emissive, `${path}.emissive`) }
+      : {}),
+    ...(value.emissiveIntensity !== undefined
+      ? {
+          emissiveIntensity: parseOptionalNonNegativeNumber(
+            value.emissiveIntensity,
+            `${path}.emissiveIntensity`,
+            20,
+          ),
+        }
+      : {}),
+    ...(value.metalness !== undefined
+      ? { metalness: parseOptionalUnitValue(value.metalness, `${path}.metalness`) }
+      : {}),
+    ...(value.roughness !== undefined
+      ? { roughness: parseOptionalUnitValue(value.roughness, `${path}.roughness`) }
+      : {}),
+    ...(value.opacity !== undefined
+      ? { opacity: parseOptionalUnitValue(value.opacity, `${path}.opacity`) }
+      : {}),
+  };
+}
+
 function parseComponent(value: unknown, path: string): PrefabComponent | null {
   if (!isRecord(value)) fail(path, "expected component object");
   const type = value.type;
@@ -293,6 +402,7 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         type,
         id: parseString(value.id, `${path}.id`, 64),
         targetFloor: parseFloorId(value.targetFloor, `${path}.targetFloor`),
+        floorId: parseFloorId(value.floorId, `${path}.floorId`),
       };
     case "hangar-pad":
       return {
@@ -302,6 +412,10 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
           1,
           Math.round(parseFiniteNumber(value.padIndex, `${path}.padIndex`)),
         ),
+        floorId:
+          value.floorId === undefined
+            ? "hangar"
+            : parseFloorId(value.floorId, `${path}.floorId`),
       };
     case "interaction":
       return {
@@ -312,6 +426,7 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
           50,
           Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
         ),
+        floorId: parseFloorId(value.floorId, `${path}.floorId`),
       };
     case "avms-terminal":
       return {
@@ -321,38 +436,84 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
           50,
           Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
         ),
+        floorId: parseFloorId(value.floorId, `${path}.floorId`),
       };
-    case "walk-volume": {
-      const open = Array.isArray(value.open)
-        ? value.open.filter((side): side is StationSide =>
-            STATION_SIDES.includes(side as StationSide),
-          )
-        : undefined;
+    case "point-light":
       return {
         type,
-        floorId: parseFloorId(value.floorId, `${path}.floorId`),
-        min: parseVec2(value.min, `${path}.min`),
-        max: parseVec2(value.max, `${path}.max`),
-        height:
-          value.height === undefined
+        color:
+          value.color === undefined
+            ? undefined
+            : parseColor(value.color, `${path}.color`),
+        intensity: Math.min(
+          5_000,
+          Math.max(0, parseFiniteNumber(value.intensity, `${path}.intensity`)),
+        ),
+        distance: Math.min(
+          500,
+          Math.max(0, parseFiniteNumber(value.distance, `${path}.distance`)),
+        ),
+        decay:
+          value.decay === undefined
             ? undefined
             : Math.min(
-                100,
-                Math.max(1, parseFiniteNumber(value.height, `${path}.height`)),
+                4,
+                Math.max(0, parseFiniteNumber(value.decay, `${path}.decay`)),
               ),
-        ...(open && open.length > 0 ? { open } : {}),
+        castShadow:
+          value.castShadow === undefined ? undefined : Boolean(value.castShadow),
       };
-    }
-    case "collider":
+    case "area-light":
       return {
         type,
-        shape: "box",
-        size: parseVec3(value.size, `${path}.size`),
-        offset:
-          value.offset === undefined
+        color:
+          value.color === undefined
             ? undefined
-            : parseVec3(value.offset, `${path}.offset`),
+            : parseColor(value.color, `${path}.color`),
+        intensity: Math.min(
+          500,
+          Math.max(0, parseFiniteNumber(value.intensity, `${path}.intensity`)),
+        ),
+        width: Math.min(
+          100,
+          Math.max(0.05, parseFiniteNumber(value.width, `${path}.width`)),
+        ),
+        height: Math.min(
+          100,
+          Math.max(0.05, parseFiniteNumber(value.height, `${path}.height`)),
+        ),
       };
+    case "collider": {
+      const shape = value.shape === "mesh" ? "mesh" : "box";
+      const offset =
+        value.offset === undefined
+          ? undefined
+          : parseVec3(value.offset, `${path}.offset`);
+      const node =
+        value.node === undefined
+          ? undefined
+          : parseString(value.node, `${path}.node`, 128);
+      if (shape === "mesh") {
+        return {
+          type,
+          shape,
+          assetUrl:
+            value.assetUrl === undefined
+              ? undefined
+              : parseAssetUrl(value.assetUrl, `${path}.assetUrl`),
+          convex: value.convex === undefined ? undefined : Boolean(value.convex),
+          offset,
+          node,
+        };
+      }
+      return {
+        type,
+        shape,
+        size: parseVec3(value.size, `${path}.size`),
+        offset,
+        node,
+      };
+    }
     case "ship-frame":
       return { type };
     case "ship-stats":
@@ -686,19 +847,10 @@ function parseEntity(
   if (depth > 32) fail(path, "entity tree too deep");
   if (!isRecord(value)) fail(path, "expected entity object");
 
-  const transformValue = value.transform;
-  if (!isRecord(transformValue))
-    fail(`${path}.transform`, "expected transform object");
-  const transform: PrefabTransform = {
-    position: parseVec3(transformValue.position, `${path}.transform.position`),
-    rotation: parseQuat(transformValue.rotation, `${path}.transform.rotation`),
-    scale: parseVec3(transformValue.scale, `${path}.transform.scale`),
-  };
-
   const entity: PrefabEntity = {
     id: parseString(value.id, `${path}.id`, 64),
     name: parseString(value.name, `${path}.name`, 128),
-    transform,
+    transform: parseTransform(value.transform, `${path}.transform`),
   };
 
   if (value.asset !== undefined) {
@@ -724,6 +876,39 @@ function parseEntity(
         ? { color }
         : {}),
     };
+  }
+
+  if (value.nodeOverrides !== undefined) {
+    if (!Array.isArray(value.nodeOverrides)) {
+      fail(`${path}.nodeOverrides`, "expected array");
+    }
+    if (value.nodeOverrides.length > 512) {
+      fail(`${path}.nodeOverrides`, "too many node overrides");
+    }
+    entity.nodeOverrides = value.nodeOverrides.map((override, index) => {
+      if (!isRecord(override)) {
+        fail(`${path}.nodeOverrides[${index}]`, "expected override object");
+      }
+      return {
+        node: parseString(override.node, `${path}.nodeOverrides[${index}].node`, 128),
+        transform: parseTransform(
+          override.transform,
+          `${path}.nodeOverrides[${index}].transform`,
+        ),
+      };
+    });
+  }
+
+  if (value.materialOverrides !== undefined) {
+    if (!Array.isArray(value.materialOverrides)) {
+      fail(`${path}.materialOverrides`, "expected array");
+    }
+    if (value.materialOverrides.length > 512) {
+      fail(`${path}.materialOverrides`, "too many material overrides");
+    }
+    entity.materialOverrides = value.materialOverrides.map((override, index) =>
+      parseMaterialOverride(override, `${path}.materialOverrides[${index}]`),
+    );
   }
 
   if (value.components !== undefined) {

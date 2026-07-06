@@ -64,4 +64,6 @@ ClaudeCitizen is a **real-time web game** (React UI + Three.js/WebGL) targeting 
 - Foot placement uses `sampleFootPlanetSurface()` / `getFootSurfaceSampleLevel()`, not always max LOD
 - Never commit or relocate `protected/` assets
 - No unit tests in this project
+- Alan owns QA. Do not run tests, browser QA, screenshot checks, dev-server validation, `npm run build`, or `npm run typecheck` unless he explicitly asks for validation. If validation is skipped, say so in the handoff. For explicit commit requests, run `npm run typecheck` first unless told not to.
+- Do not start dev servers. Alan normally already has Vite and API servers running. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
 - **If it can freeze the tab or tank server tick rate, fix or bound it before shipping**

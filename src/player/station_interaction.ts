@@ -12,6 +12,7 @@ import {
   lobbyArrivalFromHangar,
   STATION_ANCHORS,
   stationLocalToWorld,
+  worldToStationLocal,
   type ElevatorDestination,
   type HangarSpec,
   type StationAnchor,
@@ -22,6 +23,7 @@ import type { GameBootstrap } from '../net/api';
 import { applyOwnedShipToInstance } from '../world/ships';
 import { getShipRestHeightMeters } from './ship_layout';
 import { characterAtElevatorDestination, type StationCharacterState } from './station_walk';
+import { teleportStationPlayer, type StationPhysics } from '../physics/station_physics';
 import type { Planet } from '../types';
 import { getActiveShip, type WorldState } from './world_state';
 
@@ -60,37 +62,40 @@ function nearAnchor(character: StationCharacterState, anchor: StationAnchor): bo
 /** Prefab-driven stations resolve interactions from placed markers. */
 function resolvePrefabInteraction(
   character: StationCharacterState,
+  frame: StationFrame,
 ): StationInteraction | null {
   const override = getStationLayoutOverride();
   if (!override) return null;
-  const room = getStationRoom(character.stationRoomId);
-  if (!room) return null;
+
+  // Walk volumes are gone; markers carry their own authored height, so use 3D
+  // distance to disambiguate stacked floors.
+  const localUp = worldToStationLocal(frame, character.position).up;
 
   for (const marker of override.elevatorMarkers) {
-    if (marker.floorId !== room.floorId) continue;
     const near =
       Math.hypot(
         character.stationLocal.right - marker.right,
+        localUp - marker.up,
         character.stationLocal.forward - marker.forward,
       ) <= marker.radius;
     if (near) return { kind: 'prefab-elevator', marker };
   }
 
   for (const avms of override.avmsMarkers) {
-    if (avms.floorId !== room.floorId) continue;
     const near =
       Math.hypot(
         character.stationLocal.right - avms.right,
+        localUp - avms.up,
         character.stationLocal.forward - avms.forward,
       ) <= avms.radius;
     if (near) return { kind: 'avms-terminal' };
   }
 
   for (const info of override.infoMarkers) {
-    if (info.floorId !== room.floorId) continue;
     const near =
       Math.hypot(
         character.stationLocal.right - info.right,
+        localUp - info.up,
         character.stationLocal.forward - info.forward,
       ) <= info.radius;
     if (near) return { kind: 'prefab-info', prompt: info.prompt };
@@ -101,8 +106,11 @@ function resolvePrefabInteraction(
 
 export function resolveStationInteraction(
   character: StationCharacterState,
+  frame?: StationFrame,
 ): StationInteraction | null {
-  if (getStationLayoutOverride()) return resolvePrefabInteraction(character);
+  if (getStationLayoutOverride()) {
+    return resolvePrefabInteraction(character, frame ?? getStationFrame({ name: '', radiusMeters: 0 } as Planet));
+  }
 
   const room = getStationRoom(character.stationRoomId);
   if (!room) return null;
@@ -194,6 +202,7 @@ export function updateElevatorRide(
   world: WorldState,
   frame: StationFrame,
   dt: number,
+  physics: StationPhysics | null = null,
 ): ElevatorRideResult {
   const ride = world.stationElevator;
   if (!ride) {
@@ -212,6 +221,10 @@ export function updateElevatorRide(
     ride.teleported = true;
     teleportedNow = true;
     world.character = characterAtElevatorDestination(frame, ride.destination);
+    world.character.stationVerticalVelocity = 0;
+    if (physics) {
+      teleportStationPlayer(physics, frame, world.character.position);
+    }
   }
 
   if (ride.elapsed >= ride.duration) {

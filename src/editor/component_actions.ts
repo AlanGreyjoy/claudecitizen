@@ -1,11 +1,11 @@
-import { createEmptyEntity, type EditorStore } from './document';
+import { createEmptyEntity, type EditorEntity, type EditorStore } from './document';
 import { showToast, type ContextMenuEntry } from './dom';
 import type { ComponentDef } from '../world/prefabs/component_registry';
 import {
   getComponentsForKind,
   searchComponents,
 } from '../world/prefabs/component_registry';
-import type { PrefabComponentType } from '../world/prefabs/schema';
+import type { PrefabComponent, PrefabComponentType } from '../world/prefabs/schema';
 import type { Vec3 } from '../types';
 
 export function collectExistingComponentTypes(store: EditorStore): PrefabComponentType[] {
@@ -50,8 +50,33 @@ export function addComponentFromPalette(
   }
 
   const components = structuredClone(entity.components);
-  components.push(def.createDefault());
+  components.push(createComponentForEntity(def, entity));
   store.setComponents(targetEntityId, components);
+}
+
+function createComponentForEntity(
+  def: ComponentDef,
+  entity: EditorEntity,
+): PrefabComponent {
+  const component = def.createDefault();
+  if (component.type !== 'collider') return component;
+
+  // Default new colliders to fit the entity's visual so authors don't end up
+  // with a useless 1x1x1 box on a wall, prop, or hull model.
+  if (entity.primitive?.shape === 'box') {
+    return {
+      ...component,
+      shape: 'box',
+      size: { ...entity.primitive.size },
+    };
+  }
+  if (entity.asset) {
+    return {
+      ...component,
+      shape: 'mesh',
+    };
+  }
+  return component;
 }
 
 export function addEmptyAtPosition(
