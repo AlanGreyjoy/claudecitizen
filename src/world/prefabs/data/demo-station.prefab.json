@@ -36,7 +36,7 @@
         "transform": {
           "position": {
             "x": -34.75,
-            "y": 0,
+            "y": 0.25,
             "z": 74.5
           },
           "rotation": {
@@ -487,7 +487,7 @@
               },
               "rotation": {
                 "x": 0,
-                "y": -0.016186,
+                "y": -0.016187,
                 "z": 0,
                 "w": 0.999869
               },
@@ -518,6 +518,27 @@
                 "z": 0.99268
               }
             }
+          },
+          {
+            "node": "SM_Bld_Wall_Door_01_5",
+            "transform": {
+              "position": {
+                "x": 2.49999,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
           }
         ],
         "hiddenNodes": [
@@ -537,8 +558,7 @@
         "components": [
           {
             "type": "collider",
-            "shape": "mesh",
-            "convex": false
+            "shape": "mesh"
           }
         ],
         "children": [
@@ -681,6 +701,70 @@
             "transform": {
               "position": {
                 "x": 8.5,
+                "y": 3,
+                "z": -7.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-72a4bc69",
+            "name": "Point Light Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 2.5,
+                "y": 3,
+                "z": -7.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-af7e859e",
+            "name": "Point Light Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": -5.5,
                 "y": 3,
                 "z": -7.5
               },
@@ -1056,6 +1140,53 @@
                 "distance": 5,
                 "decay": 2,
                 "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-59270bc7",
+            "name": "Animation (SM_Bld_Wall_Door_01_5)",
+            "transform": {
+              "position": {
+                "x": 30.25,
+                "y": 0,
+                "z": -7.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "animation",
+                "id": "anim-sm_bld_wall_door_01_5",
+                "name": "SM_Bld_Wall_Door_01_5",
+                "motion": "slide",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "SM_Bld_Wall_Door_01_5",
+                    "delta": 3
+                  }
+                ],
+                "duration": 1
+              },
+              {
+                "type": "interaction",
+                "id": "info-1",
+                "prompt": "Press F to open",
+                "radius": 2,
+                "floorId": "lobby",
+                "interactionType": "animation",
+                "targetAnimationId": "anim-sm_bld_wall_door_01_5"
               }
             ]
           }

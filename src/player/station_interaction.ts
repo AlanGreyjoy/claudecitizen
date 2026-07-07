@@ -46,7 +46,14 @@ export type StationInteraction =
   | { kind: 'hangar-bank' }
   | { kind: 'hangar-lift-up'; hangar: HangarSpec }
   | { kind: 'prefab-elevator'; marker: StationElevatorMarker }
-  | { kind: 'prefab-info'; prompt: string }
+  | {
+      kind: 'prefab-info';
+      prompt: string;
+      id?: string;
+      interactionType?: 'info' | 'animation';
+      targetAnimationId?: string;
+      keyLabel?: string;
+    }
   | { kind: 'avms-terminal' };
 
 function nearAnchor(character: StationCharacterState, anchor: StationAnchor): boolean {
@@ -99,7 +106,16 @@ function resolvePrefabInteraction(
         localUp - info.up,
         character.stationLocal.forward - info.forward,
       ) <= info.radius;
-    if (near) return { kind: 'prefab-info', prompt: info.prompt };
+    if (near) {
+      return {
+        kind: 'prefab-info',
+        prompt: info.prompt,
+        id: info.id,
+        interactionType: info.interactionType,
+        targetAnimationId: info.targetAnimationId,
+        keyLabel: info.keyLabel,
+      };
+    }
   }
 
   return null;

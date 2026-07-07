@@ -320,15 +320,21 @@ export function createToolbar(
     doorButtonsWrap,
   ]);
 
-  function collectShipDoors(): { id: string; label: string; defaultOpen: boolean }[] {
-    const doors: { id: string; label: string; defaultOpen: boolean }[] = [];
+  function collectAnimations(): { id: string; label: string; defaultOpen: boolean }[] {
+    const list: { id: string; label: string; defaultOpen: boolean }[] = [];
     const visit = (entities: EditorEntity[]): void => {
       for (const entity of entities) {
         for (const component of entity.components) {
-          if (component.type === 'ship-door' && !doors.some((door) => door.id === component.id)) {
-            doors.push({
+          if (component.type === 'ship-door' && !list.some((entry) => entry.id === component.id)) {
+            list.push({
               id: component.id,
               label: component.label || component.id,
+              defaultOpen: component.defaultOpen ?? false,
+            });
+          } else if (component.type === 'animation' && !list.some((entry) => entry.id === component.id)) {
+            list.push({
+              id: component.id,
+              label: component.name || component.id,
               defaultOpen: component.defaultOpen ?? false,
             });
           }
@@ -337,24 +343,29 @@ export function createToolbar(
       }
     };
     visit(store.getState().roots);
-    return doors;
+    return list;
   }
 
   function refreshShipPreviewGroup(): void {
     const isShip = store.getState().kind === 'ship';
-    shipGroup.classList.toggle('is-hidden', !isShip);
-    if (!isShip) return;
+    const animations = collectAnimations();
+    const hasAnimations = animations.length > 0;
+
+    shipGroup.classList.toggle('is-hidden', !isShip && !hasAnimations);
+    gearBtn.style.display = isShip ? '' : 'none';
+    rampBtn.style.display = isShip ? '' : 'none';
+
     clearChildren(doorButtonsWrap);
-    for (const door of collectShipDoors()) {
-      const isOpen = shipPreviewState.doorsOpen[door.id] ?? door.defaultOpen;
+    for (const anim of animations) {
+      const isOpen = shipPreviewState.doorsOpen[anim.id] ?? anim.defaultOpen;
       doorButtonsWrap.append(
         el('button', {
           className: `ed-btn${isOpen ? ' is-active' : ''}`,
-          text: door.label,
-          title: `Preview door "${door.id}" open / closed`,
+          text: anim.label,
+          title: `Preview animation "${anim.id}" open / closed`,
           on: {
             click: () => {
-              shipPreviewState.doorsOpen[door.id] = !isOpen;
+              shipPreviewState.doorsOpen[anim.id] = !isOpen;
               refreshShipPreviewGroup();
               emitShipPreview();
             },

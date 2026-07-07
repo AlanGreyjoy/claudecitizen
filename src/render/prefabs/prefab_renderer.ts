@@ -31,6 +31,140 @@ interface BuildEntityOptions {
   lightScale: number;
   localLightShadowMapSize: number;
   localLightShadowsEnabled: boolean;
+  rootGroup?: THREE.Group;
+}
+
+interface BoundAnimationNode {
+  object: THREE.Object3D;
+  basePosition: THREE.Vector3;
+  baseQuaternion: THREE.Quaternion;
+  delta: number;
+}
+
+interface BoundAnimation {
+  id: string;
+  motion: "slide" | "hinge";
+  axis: "x" | "y" | "z";
+  nodes: BoundAnimationNode[];
+}
+
+function setupUpdateAnimations(group: THREE.Group): void {
+  group.userData.boundAnimations = [] as BoundAnimation[];
+  group.userData.pendingAnimations = [] as any[];
+
+  const AXIS_VECTORS = {
+    x: new THREE.Vector3(1, 0, 0),
+    y: new THREE.Vector3(0, 1, 0),
+    z: new THREE.Vector3(0, 0, 1),
+  } as const;
+
+  const rotationScratch = new THREE.Quaternion();
+  const axisScratch = new THREE.Vector3();
+
+  group.userData.updateAnimations = (blends: Record<string, number>) => {
+    // Try to bind any pending animations that are waiting for models to finish loading
+    const pending = group.userData.pendingAnimations as any[] | undefined;
+    if (pending && pending.length > 0) {
+      for (let i = pending.length - 1; i >= 0; i--) {
+        const component = pending[i];
+        bindAnimationComponent(group, group, component);
+      }
+    }
+
+    const bound = group.userData.boundAnimations as BoundAnimation[] | undefined;
+    if (!bound) return;
+    for (const anim of bound) {
+      const open01 = blends[anim.id] ?? 0;
+      for (const node of anim.nodes) {
+        if (anim.motion === "slide") {
+          axisScratch.copy(AXIS_VECTORS[anim.axis]).multiplyScalar(node.delta * open01);
+          node.object.position.copy(node.basePosition).add(axisScratch);
+        } else {
+          rotationScratch.setFromAxisAngle(AXIS_VECTORS[anim.axis], node.delta * open01);
+          node.object.quaternion.copy(node.baseQuaternion).multiply(rotationScratch);
+        }
+      }
+    }
+  };
+}
+
+function bindAnimationComponent(
+  rootGroup: THREE.Group | undefined,
+  targetObject: THREE.Object3D,
+  component: PrefabComponent & { type: "animation" },
+): void {
+  if (!rootGroup) return;
+
+  // Prevent duplicate bindings if already bound
+  const bound = rootGroup.userData.boundAnimations as BoundAnimation[] | undefined;
+  if (bound && bound.some((b) => b.id === component.id)) {
+    return;
+  }
+
+  const boundNodes: BoundAnimationNode[] = [];
+  let allFound = true;
+  for (const nodeSpec of component.nodes) {
+    let object = targetObject.getObjectByName(nodeSpec.name);
+    if (!object) {
+      object = rootGroup.getObjectByName(nodeSpec.name);
+    }
+    if (object) {
+      boundNodes.push({
+        object,
+        basePosition: object.position.clone(),
+        baseQuaternion: object.quaternion.clone(),
+        delta: nodeSpec.delta,
+      });
+    } else {
+      allFound = false;
+    }
+  }
+
+  if (allFound && boundNodes.length > 0) {
+    if (bound) {
+      bound.push({
+        id: component.id,
+        motion: component.motion,
+        axis: component.axis,
+        nodes: boundNodes,
+      });
+    }
+    // Successfully bound! Remove from pending queue if present
+    const pending = rootGroup.userData.pendingAnimations as any[] | undefined;
+    if (pending) {
+      const idx = pending.indexOf(component);
+      if (idx !== -1) {
+        pending.splice(idx, 1);
+      }
+    }
+  } else {
+    // If not all nodes are found, queue in pendingAnimations to retry as models load
+    const pending = rootGroup.userData.pendingAnimations as any[] | undefined;
+    if (pending) {
+      const animComp = component as any;
+      animComp._bindAttempts = (animComp._bindAttempts ?? 0) + 1;
+      
+      if (!pending.includes(component)) {
+        pending.push(component);
+      }
+
+      // Log warning only if it remains unbound after a reasonable delay (e.g. 300 frames)
+      if (animComp._bindAttempts === 300) {
+        console.warn(`Animation node not found after 300 attempts: ${component.nodes.map(n => n.name).join(', ')} under ${targetObject.name} or rootGroup`);
+        const allNames: string[] = [];
+        rootGroup.traverse((child) => {
+          if (child.name) allNames.push(child.name);
+        });
+        console.warn(`Available node names under rootGroup (${rootGroup.name}):`, allNames);
+        
+        // Remove from pending to stop retrying indefinitely
+        const idx = pending.indexOf(component);
+        if (idx !== -1) {
+          pending.splice(idx, 1);
+        }
+      }
+    }
+  }
 }
 
 export interface PrefabLightRenderOptions {
@@ -345,10 +479,28 @@ function buildEntity(
         applyNodeOverrides(model, entity.nodeOverrides);
         applyHiddenNodes(model, entity.hiddenNodes);
         group.add(model);
+
+        const bindAllDescendantAnimations = (curr: PrefabEntity) => {
+          for (const component of curr.components ?? []) {
+            if (component.type === "animation") {
+              bindAnimationComponent(options.rootGroup, model, component);
+            }
+          }
+          for (const child of curr.children ?? []) {
+            bindAllDescendantAnimations(child);
+          }
+        };
+        bindAllDescendantAnimations(entity);
       })
       .catch((error) => {
         console.warn(`Prefab asset failed to load: ${entity.asset?.url}`, error);
       });
+  } else {
+    for (const component of entity.components ?? []) {
+      if (component.type === "animation") {
+        bindAnimationComponent(options.rootGroup, group, component);
+      }
+    }
   }
 
   for (const component of entity.components ?? []) {
@@ -383,10 +535,12 @@ export function createPrefabStationGroup(
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = `prefab:${doc.id}`;
+  setupUpdateAnimations(group);
   group.add(buildEntity(doc.root, {
     lightScale: renderScale,
     localLightShadowMapSize: options.localLightShadowMapSize ?? 0,
     localLightShadowsEnabled: options.localLightShadowsEnabled ?? false,
+    rootGroup: group,
   }));
   group.scale.setScalar(renderScale);
   group.frustumCulled = false;
@@ -397,10 +551,12 @@ export function createPrefabStationGroup(
 export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
   const group = new THREE.Group();
   group.name = `prop:${doc.id}`;
+  setupUpdateAnimations(group);
   group.add(buildEntity(doc.root, {
     lightScale: 1,
     localLightShadowMapSize: 256,
     localLightShadowsEnabled: true,
+    rootGroup: group,
   }));
   group.frustumCulled = false;
   return group;

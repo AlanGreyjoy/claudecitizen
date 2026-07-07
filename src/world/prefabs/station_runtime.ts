@@ -62,6 +62,9 @@ interface FlattenedComponents {
     right: number;
     up: number;
     forward: number;
+    interactionType?: "info" | "animation";
+    targetAnimationId?: string;
+    keyLabel?: string;
   }[];
   avmsSeeds: {
     id: string;
@@ -151,6 +154,9 @@ function collect(
           right,
           up: position.y,
           forward,
+          interactionType: component.interactionType,
+          targetAnimationId: component.targetAnimationId,
+          keyLabel: component.keyLabel,
         });
         break;
       case 'avms-terminal':
@@ -251,6 +257,9 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
       forward: seed.forward,
       radius: seed.radius,
       prompt: seed.prompt,
+      interactionType: seed.interactionType,
+      targetAnimationId: seed.targetAnimationId,
+      keyLabel: seed.keyLabel,
     });
   }
 

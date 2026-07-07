@@ -387,6 +387,9 @@ export interface StationInfoMarker {
   forward: number;
   radius: number;
   prompt: string;
+  interactionType?: "info" | "animation";
+  targetAnimationId?: string;
+  keyLabel?: string;
 }
 
 export interface StationAvmsMarker {

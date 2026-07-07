@@ -492,8 +492,24 @@ export function createInspectorPanel(
             ),
           ]),
         ];
-      case "interaction":
-        return [
+      case "interaction": {
+        const animIds = (() => {
+          const ids: string[] = [];
+          const visit = (entities: EditorEntity[]) => {
+            for (const entity of entities) {
+              for (const comp of entity.components) {
+                if (comp.type === "animation" && comp.id) {
+                  ids.push(comp.id);
+                }
+              }
+              visit(entity.children);
+            }
+          };
+          visit(store.getState().roots);
+          return ids;
+        })();
+
+        const rows = [
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Id" }),
             textInput(component.id, (id) => update({ ...component, id })),
@@ -505,9 +521,35 @@ export function createInspectorPanel(
             ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Type" }),
+            selectInput(["info", "animation"], component.interactionType ?? "info", (val) =>
+              update({ ...component, interactionType: val as "info" | "animation" }),
+            ),
+          ]),
+        ];
+
+        if (component.interactionType === "animation") {
+          rows.push(
+            el("div", { className: "ed-field-row-wide" }, [
+              el("span", { className: "ed-field-label", text: "Target Anim" }),
+              selectInput(["", ...animIds], component.targetAnimationId ?? "", (val) =>
+                update({ ...component, targetAnimationId: val || undefined }),
+              ),
+            ])
+          );
+        }
+
+        rows.push(
+          el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Prompt" }),
             textInput(component.prompt, (prompt) =>
               update({ ...component, prompt }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Key Bind" }),
+            textInput(component.keyLabel ?? "F", (keyLabel) =>
+              update({ ...component, keyLabel: keyLabel.slice(0, 10) }),
             ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
@@ -516,7 +558,112 @@ export function createInspectorPanel(
               update({ ...component, radius: Math.max(0.5, radius) }),
             ),
           ]),
+        );
+        return rows;
+      }
+      case "animation": {
+        const rows: HTMLElement[] = [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Name" }),
+            textInput(component.name, (name) => update({ ...component, name })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Motion" }),
+            selectInput(["slide", "hinge"], component.motion, (motion) =>
+              update({ ...component, motion: motion as "slide" | "hinge" }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Axis" }),
+            selectInput(["x", "y", "z"], component.axis, (axis) =>
+              update({ ...component, axis: axis as "x" | "y" | "z" }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Duration" }),
+            numberInput(component.duration ?? 1.0, (duration) =>
+              update({ ...component, duration: Math.max(0.01, duration) }),
+            ),
+          ]),
+          el("label", { className: "ed-checkbox-row" }, [
+            (() => {
+              const checkbox = el("input", {
+                attrs: { type: "checkbox" },
+                on: {
+                  change: (event) =>
+                    update({
+                      ...component,
+                      defaultOpen:
+                        (event.target as HTMLInputElement).checked || undefined,
+                    }),
+                },
+              });
+              checkbox.checked = component.defaultOpen ?? false;
+              return checkbox;
+            })(),
+            el("span", { text: "Open on spawn" }),
+          ]),
         ];
+
+        component.nodes.forEach((node, nodeIndex) => {
+          rows.push(
+            el("div", { className: "ed-field-row-wide" }, [
+              el("span", {
+                className: "ed-field-label",
+                text: `Node ${nodeIndex + 1}`,
+              }),
+              el("div", { className: "ed-door-node-row" }, [
+                textInput(node.name, (name) => {
+                  const nodes = component.nodes.map((entry, index) =>
+                    index === nodeIndex ? { ...entry, name } : entry,
+                  );
+                  update({ ...component, nodes });
+                }),
+                numberInput(node.delta, (delta) => {
+                  const nodes = component.nodes.map((entry, index) =>
+                    index === nodeIndex ? { ...entry, delta } : entry,
+                  );
+                  update({ ...component, nodes });
+                }),
+                el("button", {
+                  className: "ed-remove-btn",
+                  text: "✕",
+                  title: "Remove node",
+                  on: {
+                    click: () => {
+                      if (component.nodes.length <= 1) return;
+                      const nodes = component.nodes.filter(
+                        (_, index) => index !== nodeIndex,
+                      );
+                      update({ ...component, nodes });
+                    },
+                  },
+                }),
+              ]),
+            ]),
+          );
+        });
+
+        rows.push(
+          el("button", {
+            className: "ed-btn",
+            text: "+ Node",
+            title: "Add another GLB node moved by this animation",
+            on: {
+              click: () =>
+                update({
+                  ...component,
+                  nodes: [...component.nodes, { name: "", delta: 0 }],
+                }),
+            },
+          }),
+        );
+        return rows;
+      }
       case "avms-terminal":
         return [
           el("div", { className: "ed-field-row-wide" }, [
@@ -1483,19 +1630,22 @@ export function createInspectorPanel(
       return;
     }
 
+    const sub = store.getSubSelection();
+    const subNodeName = sub && sub.entityId === entity.id ? store.getGlbNodeName(entity.id, sub.nodeUuid) : null;
+
     const sections: HTMLElement[] = [
       el("div", { className: "ed-section" }, [
         el("div", { className: "ed-field-row-wide" }, [
           el("span", { className: "ed-field-label", text: "Name" }),
-          textInput(entity.name, (name) =>
-            store.renameEntity(entity.id, name.trim() || entity.name),
-          ),
+          subNodeName
+            ? el("span", { className: "ed-field-value-static", text: subNodeName })
+            : textInput(entity.name, (name) =>
+                store.renameEntity(entity.id, name.trim() || entity.name),
+              ),
         ]),
       ]),
       transformSection(entity),
     ];
-
-    const sub = store.getSubSelection();
     if (
       sub?.entityId === entity.id &&
       options.getGlbNodeLocalTransform

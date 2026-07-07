@@ -33,10 +33,17 @@ export function addComponentFromPalette(
   const entity = store.locate(targetEntityId)?.entity;
   if (!entity) return;
 
+  const sub = store.getSubSelection();
+  const subNodeName =
+    sub && sub.entityId === targetEntityId
+      ? store.getGlbNodeName(targetEntityId, sub.nodeUuid)
+      : null;
+
   const hasVisual = Boolean(entity.asset || entity.primitive);
   if (def.marker && hasVisual) {
-    const marker = createEmptyEntity(def.label);
-    marker.components = [def.createDefault()];
+    const markerLabel = subNodeName ? `${def.label} (${subNodeName})` : def.label;
+    const marker = createEmptyEntity(markerLabel);
+    marker.components = [createComponentForEntity(def, entity, subNodeName)];
     if (options?.spawnPosition) {
       marker.position = { ...options.spawnPosition };
     }
@@ -50,15 +57,34 @@ export function addComponentFromPalette(
   }
 
   const components = structuredClone(entity.components);
-  components.push(createComponentForEntity(def, entity));
+  components.push(createComponentForEntity(def, entity, subNodeName));
   store.setComponents(targetEntityId, components);
 }
 
 function createComponentForEntity(
   def: ComponentDef,
   entity: EditorEntity,
+  subNodeName?: string | null,
 ): PrefabComponent {
   const component = def.createDefault();
+  if (component.type === 'animation' && subNodeName) {
+    const idSafe = subNodeName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    return {
+      ...component,
+      id: `anim-${idSafe}`,
+      name: subNodeName,
+      nodes: [{ name: subNodeName, delta: -1 }],
+    };
+  }
+  if (component.type === 'ship-door' && subNodeName) {
+    const idSafe = subNodeName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    return {
+      ...component,
+      id: `door-${idSafe}`,
+      label: subNodeName,
+      nodes: [{ name: subNodeName, delta: -1 }],
+    };
+  }
   if (component.type !== 'collider') return component;
 
   // Default new colliders to fit the entity's visual so authors don't end up

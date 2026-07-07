@@ -121,6 +121,68 @@ export function createHierarchyPanel(
     expandedGlbNodes.add(nodeUuid);
   }
 
+  function doesEntityTargetGlbNode(child: EditorEntity, nodeName: string): boolean {
+    if (child.name.includes(`(${nodeName})`)) {
+      return true;
+    }
+    for (const comp of child.components ?? []) {
+      if (comp.type === 'ship-door' && Array.isArray(comp.nodes)) {
+        for (const n of comp.nodes) {
+          if (n.name === nodeName) return true;
+        }
+      }
+      if (comp.type === 'animation' && Array.isArray(comp.nodes)) {
+        for (const n of comp.nodes) {
+          if (n.name === nodeName) return true;
+        }
+      }
+      if (comp.type === 'collider' && comp.node === nodeName) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function getBoundEntitiesForNode(entityId: string, nodeName: string): EditorEntity[] {
+    const parentEntity = store.locate(entityId)?.entity;
+    if (!parentEntity) return [];
+    return parentEntity.children.filter(child => doesEntityTargetGlbNode(child, nodeName));
+  }
+
+  function getAllGlbNodeNames(tree: GlbNodeRef | null): Set<string> {
+    const names = new Set<string>();
+    if (!tree) return names;
+    const traverse = (node: GlbNodeRef) => {
+      names.add(node.name);
+      for (const child of node.children) traverse(child);
+    };
+    traverse(tree);
+    return names;
+  }
+
+  function isEntityBoundToGlb(child: EditorEntity, glbNodeNames: Set<string>): boolean {
+    for (const comp of child.components ?? []) {
+      if (comp.type === 'ship-door' && Array.isArray(comp.nodes)) {
+        for (const n of comp.nodes) {
+          if (n.name && glbNodeNames.has(n.name)) return true;
+        }
+      }
+      if (comp.type === 'animation' && Array.isArray(comp.nodes)) {
+        for (const n of comp.nodes) {
+          if (n.name && glbNodeNames.has(n.name)) return true;
+        }
+      }
+      if (comp.type === 'collider' && comp.node && glbNodeNames.has(comp.node)) {
+        return true;
+      }
+    }
+    const match = child.name.match(/\(([^)]+)\)$/);
+    if (match && glbNodeNames.has(match[1])) {
+      return true;
+    }
+    return false;
+  }
+
   function renderGlbRow(
     entityId: string,
     node: GlbNodeRef,
@@ -134,7 +196,8 @@ export function createHierarchyPanel(
     const sub = store.getSubSelection();
     const selected =
       sub?.entityId === entityId && sub.nodeUuid === node.uuid;
-    const hasChildren = node.children.length > 0;
+    const bound = getBoundEntitiesForNode(entityId, node.name);
+    const hasChildren = node.children.length > 0 || bound.length > 0;
     const expanded = expandedGlbNodes.has(node.uuid);
 
     const toggle = hasChildren
@@ -188,6 +251,9 @@ export function createHierarchyPanel(
     if (hasChildren && expanded) {
       for (const child of node.children) {
         renderGlbRow(entityId, child, depth + 1, rows, isHidden);
+      }
+      for (const boundEntity of bound) {
+        renderRow(boundEntity, depth + 1, rows);
       }
     }
   }
@@ -339,11 +405,17 @@ export function createHierarchyPanel(
     row.style.paddingLeft = `${10 + depth * 14}px`;
     rows.push(row);
 
-    if (entity.asset && store.getGlbTree(entity.id)) {
+    const glbTree = store.getGlbTree(entity.id);
+    const glbNodeNames = getAllGlbNodeNames(glbTree);
+
+    if (entity.asset && glbTree) {
       renderGlbSubtree(entity, depth + 1, rows);
     }
 
-    for (const child of entity.children) renderRow(child, depth + 1, rows);
+    for (const child of entity.children) {
+      if (isEntityBoundToGlb(child, glbNodeNames)) continue;
+      renderRow(child, depth + 1, rows);
+    }
   }
 
   body.addEventListener('contextmenu', (event) => {

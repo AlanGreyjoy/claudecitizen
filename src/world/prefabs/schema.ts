@@ -85,7 +85,26 @@ export type PrefabComponent =
   | { type: "spawn-point"; floorId: StationFloorId }
   | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
   | { type: "hangar-pad"; hangarId: string; padIndex: number; floorId?: StationFloorId }
-  | { type: "interaction"; id: string; prompt: string; radius: number; floorId: StationFloorId }
+  | {
+      type: "interaction";
+      id: string;
+      prompt: string;
+      radius: number;
+      floorId: StationFloorId;
+      interactionType?: "info" | "animation";
+      targetAnimationId?: string;
+      keyLabel?: string;
+    }
+  | {
+      type: "animation";
+      id: string;
+      name: string;
+      motion: "slide" | "hinge";
+      axis: "x" | "y" | "z";
+      nodes: { name: string; delta: number }[];
+      defaultOpen?: boolean;
+      duration?: number;
+    }
   | { type: "avms-terminal"; id: string; radius: number; floorId: StationFloorId }
   | {
       type: "point-light";
@@ -434,7 +453,11 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
             ? "hangar"
             : parseFloorId(value.floorId, `${path}.floorId`),
       };
-    case "interaction":
+    case "interaction": {
+      const interactionType = value.interactionType;
+      if (interactionType !== undefined && interactionType !== "info" && interactionType !== "animation") {
+        fail(`${path}.interactionType`, 'expected "info" or "animation"');
+      }
       return {
         type,
         id: parseString(value.id, `${path}.id`, 64),
@@ -444,7 +467,65 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
           Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
         ),
         floorId: parseFloorId(value.floorId, `${path}.floorId`),
+        ...(interactionType !== undefined ? { interactionType } : {}),
+        ...(value.targetAnimationId !== undefined
+          ? { targetAnimationId: parseString(value.targetAnimationId, `${path}.targetAnimationId`, 64) }
+          : {}),
+        ...(value.keyLabel !== undefined
+          ? { keyLabel: parseString(value.keyLabel, `${path}.keyLabel`, 10) }
+          : {}),
       };
+    }
+    case "animation": {
+      if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
+        fail(`${path}.nodes`, "expected non-empty array of {name, delta}");
+      }
+      if (value.nodes.length > 8)
+        fail(`${path}.nodes`, "too many animation nodes (max 8)");
+      const motion = value.motion;
+      if (motion !== "slide" && motion !== "hinge") {
+        fail(`${path}.motion`, 'expected "slide" or "hinge"');
+      }
+      const axis = value.axis;
+      if (axis !== "x" && axis !== "y" && axis !== "z") {
+        fail(`${path}.axis`, 'expected "x", "y", or "z"');
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        name: parseString(value.name, `${path}.name`, 64),
+        motion,
+        axis,
+        nodes: value.nodes.map((node, index) => {
+          if (!isRecord(node))
+            fail(`${path}.nodes[${index}]`, "expected {name, delta}");
+          return {
+            name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
+            delta: Math.min(
+              20,
+              Math.max(
+                -20,
+                parseFiniteNumber(node.delta, `${path}.nodes[${index}].delta`),
+              ),
+            ),
+          };
+        }),
+        defaultOpen:
+          value.defaultOpen === undefined
+            ? undefined
+            : Boolean(value.defaultOpen),
+        duration:
+          value.duration === undefined
+            ? undefined
+            : Math.min(
+                60,
+                Math.max(
+                  0.01,
+                  parseFiniteNumber(value.duration, `${path}.duration`),
+                ),
+              ),
+      };
+    }
     case "avms-terminal":
       return {
         type,

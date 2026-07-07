@@ -59,6 +59,7 @@ export interface GlbNodeRef {
 export interface SubSelection {
   entityId: string;
   nodeUuid: string;
+  nodeName: string;
 }
 
 export type EditorEvent =
@@ -184,8 +185,9 @@ export function createEditorStore() {
   }
 
   function setSubSelection(entityId: string, nodeUuid: string): void {
+    const nodeName = resolveGlbNodeName(entityId, nodeUuid) ?? '';
     const prev = subSelection;
-    subSelection = { entityId, nodeUuid };
+    subSelection = { entityId, nodeUuid, nodeName };
     if (selection !== entityId) {
       selection = entityId;
       emit({ type: 'selection', entityId });
@@ -208,9 +210,28 @@ export function createEditorStore() {
     return null;
   }
 
+  function findGlbNodeUuid(tree: GlbNodeRef, nodeName: string): string | null {
+    if (tree.name === nodeName) return tree.uuid;
+    for (const child of tree.children) {
+      const uuid = findGlbNodeUuid(child, nodeName);
+      if (uuid) return uuid;
+    }
+    return null;
+  }
+
   function setGlbTree(entityId: string, tree: GlbNodeRef | null): void {
-    if (tree) glbTreesByEntityId.set(entityId, tree);
-    else glbTreesByEntityId.delete(entityId);
+    if (tree) {
+      glbTreesByEntityId.set(entityId, tree);
+      if (subSelection && subSelection.entityId === entityId && subSelection.nodeName) {
+        const newUuid = findGlbNodeUuid(tree, subSelection.nodeName);
+        if (newUuid && subSelection.nodeUuid !== newUuid) {
+          subSelection.nodeUuid = newUuid;
+          emit({ type: 'sub-selection', entityId, nodeUuid: newUuid });
+        }
+      }
+    } else {
+      glbTreesByEntityId.delete(entityId);
+    }
     emit({ type: 'glb-tree', entityId });
   }
 

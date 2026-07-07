@@ -98,6 +98,22 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Shows a prompt when the player is within the radius.",
   },
   {
+    type: "animation",
+    label: "Animation",
+    kinds: ALL_KINDS,
+    marker: true,
+    createDefault: () => ({
+      type: "animation",
+      id: "anim-1",
+      name: "animation",
+      motion: "slide",
+      axis: "x",
+      nodes: [{ name: "Door", delta: -1 }],
+      duration: 1.0,
+    }),
+    hint: "Authored translation or rotation of GLB nodes inside this prefab.",
+  },
+  {
     type: "avms-terminal",
     label: "AVMS Terminal",
     kinds: ["station"],

@@ -531,6 +531,7 @@ export async function startPlaySession(
     network: networkClient,
     bootstrap,
     avmsTerminal,
+    stationPrefab,
     build:
       buildTerminal
         ? {

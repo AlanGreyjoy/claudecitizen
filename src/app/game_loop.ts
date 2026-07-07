@@ -101,6 +101,8 @@ export interface BuildRuntime {
   terminal: BuildTerminalController;
 }
 
+import type { PrefabDocument, PrefabEntity } from "../world/prefabs/schema";
+
 export interface GameLoopOptions {
   planet: Planet;
   seed: number;
@@ -112,6 +114,7 @@ export interface GameLoopOptions {
   avmsTerminal?: AvmsTerminalController | null;
   build?: BuildRuntime | null;
   physics?: StationPhysics | null;
+  stationPrefab?: PrefabDocument | null;
   onHudUpdate: (params: HudUpdateParams) => void;
   onResetPeak: () => void;
   isPaused?: () => boolean;
@@ -128,6 +131,7 @@ export function createGameLoop({
   avmsTerminal = null,
   build = null,
   physics = null,
+  stationPrefab = null,
   onHudUpdate,
   onResetPeak,
   isPaused,
@@ -136,6 +140,60 @@ export function createGameLoop({
   if (bootstrap?.hangar.assignedHangar) {
     world.assignedHangar = bootstrap.hangar.assignedHangar;
   }
+  // Scan station prefab for animation components
+  const stationAnimationStates: Record<string, { value: number; target: number; rate: number }> = {};
+  if (stationPrefab) {
+    const visit = (entity: PrefabEntity) => {
+      for (const comp of entity.components ?? []) {
+        if (comp.type === 'animation') {
+          const duration = comp.duration ?? 1.0;
+          const rate = duration > 0 ? 1 / duration : 1.5;
+          const isOpen = comp.defaultOpen ?? false;
+          stationAnimationStates[comp.id] = {
+            value: isOpen ? 1 : 0,
+            target: isOpen ? 1 : 0,
+            rate,
+          };
+        }
+      }
+      for (const child of entity.children ?? []) {
+        visit(child);
+      }
+    };
+    visit(stationPrefab.root);
+  }
+
+  function toggleStationAnimation(id: string): void {
+    const anim = stationAnimationStates[id];
+    if (anim) {
+      anim.target = anim.target === 1 ? 0 : 1;
+    }
+  }
+
+  function updateStationAnimations(dt: number): void {
+    let changed = false;
+    for (const anim of Object.values(stationAnimationStates)) {
+      if (anim.value !== anim.target) {
+        if (anim.value < anim.target) {
+          anim.value = Math.min(anim.target, anim.value + anim.rate * dt);
+        } else {
+          anim.value = Math.max(anim.target, anim.value - anim.rate * dt);
+        }
+        changed = true;
+      }
+    }
+    if (changed || dt === 0) {
+      const blends: Record<string, number> = {};
+      for (const [id, anim] of Object.entries(stationAnimationStates)) {
+        blends[id] = anim.value;
+      }
+      renderer?.getStationRoot()?.userData.updateAnimations?.(blends);
+    }
+  }
+
+  // Initial update of animation transforms
+  updateStationAnimations(0);
+
   let lastMs = performance.now();
   let running = false;
   let frameRendererError: unknown = rendererError;
@@ -283,8 +341,21 @@ export function createGameLoop({
           return pressInteractPrompt("elevator to Lobby");
         case "prefab-elevator":
           return pressInteractPrompt(`elevator to ${interaction.marker.targetFloor}`);
-        case "prefab-info":
-          return interaction.prompt;
+        case "prefab-info": {
+          let promptText = interaction.prompt;
+          if (interaction.interactionType === 'animation' && interaction.targetAnimationId) {
+            const animState = stationAnimationStates[interaction.targetAnimationId];
+            const isOpen = animState ? animState.target === 1 : false;
+            if (isOpen) {
+              promptText = promptText.replace(/\bopen\b/ig, (m) => m === 'open' ? 'close' : 'Close');
+            }
+          }
+          const key = interaction.keyLabel ?? 'F';
+          if (key !== 'F') {
+            promptText = promptText.replace(/Press F\b/i, `Press ${key}`);
+          }
+          return promptText;
+        }
       }
     }
     const area = buildAreaForCurrentRoom();
@@ -646,6 +717,18 @@ export function createGameLoop({
       return;
     }
 
+    if (interaction.kind === 'prefab-info') {
+      const key = interaction.keyLabel ?? 'F';
+      const keyCode = `Key${key.toUpperCase()}`;
+      const pressed = actions.wasKeyPressed ? actions.wasKeyPressed(keyCode) : (key === 'F' ? actions.interactPressed : false);
+      if (pressed) {
+        if (interaction.interactionType === 'animation' && interaction.targetAnimationId) {
+          toggleStationAnimation(interaction.targetAnimationId);
+        }
+      }
+      return;
+    }
+
     if (actions.interactPressed) {
       const destination = elevatorDestinationFor(interaction);
       if (destination) {
@@ -834,6 +917,7 @@ export function createGameLoop({
       }
 
       updateShipSystems(dt);
+      updateStationAnimations(dt);
       network?.publishPresence(world);
     }
 

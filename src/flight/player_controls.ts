@@ -110,6 +110,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function isHandledKey(code: string): boolean {
+    if (code.startsWith('Key') || code === 'Space') return true;
     return Object.values(keyboardBindings()).some(
       (binding) => binding.primary === code || binding.secondary === code,
     );
@@ -384,6 +385,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         hangarRotatePressed: false,
         hangarCancelPressed: false,
         hangarDigit: null,
+        wasKeyPressed: (_code: string) => false,
       };
     }
     const cycleCameraPressed = consumeDeviceActionPress('cycleCamera');
@@ -406,6 +408,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       hangarRotatePressed: wasKeyboardActionPressed('hangarRotate'),
       hangarCancelPressed: wasKeyboardActionPressed('hangarCancel'),
       hangarDigit,
+      wasKeyPressed: (code: string) => justPressed.has(code) || (code === 'KeyF' && (wasKeyboardActionPressed('interact') || consumeDeviceActionPress('interact'))),
     };
     justPressed.clear();
     return actions;

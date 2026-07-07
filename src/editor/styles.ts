@@ -1254,6 +1254,17 @@ body.ed-resize-row * {
 .ed-dialog-btn-confirm {
   min-width: 96px;
 }
+
+.ed-field-value-static {
+  font: 500 12px/1.2 var(--sc-mono);
+  color: #8bd8ff;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.16);
+  border: 1px dashed rgba(90, 190, 255, 0.15);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
 `;
 
 let injected = false;

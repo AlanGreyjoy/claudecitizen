@@ -962,40 +962,44 @@ export function createEditorViewport(
     object.position.copy(base.position).add(previewAxis);
   }
 
-  function collectDoorComponents(): Extract<
+  function collectAnimations(): Extract<
     PrefabComponent,
-    { type: "ship-door" }
+    { type: "ship-door" | "animation" }
   >[] {
-    const doors: Extract<PrefabComponent, { type: "ship-door" }>[] = [];
+    const list: Extract<PrefabComponent, { type: "ship-door" | "animation" }>[] = [];
     const visit = (entities: EditorEntity[]): void => {
       for (const entity of entities) {
         for (const component of entity.components) {
-          if (component.type === "ship-door") doors.push(component);
+          if (component.type === "ship-door" || component.type === "animation") {
+            list.push(component);
+          }
         }
         visit(entity.children);
       }
     };
     visit(store.getState().roots);
-    return doors;
+    return list;
   }
 
   function applyShipPreview(): void {
-    if (store.getState().kind !== "ship") return;
-    const gear01 = shipPreview.gearDown ? 1 : 0;
-    for (const hinge of BUILTIN_GEAR_HINGES) {
-      previewHinge(hinge.name, hinge.deployRadians * gear01);
+    const isShip = store.getState().kind === "ship";
+    if (isShip) {
+      const gear01 = shipPreview.gearDown ? 1 : 0;
+      for (const hinge of BUILTIN_GEAR_HINGES) {
+        previewHinge(hinge.name, hinge.deployRadians * gear01);
+      }
+      previewHinge(
+        BUILTIN_RAMP_HINGE.name,
+        BUILTIN_RAMP_HINGE.lowerRadians * (shipPreview.rampDown ? 1 : 0),
+      );
     }
-    previewHinge(
-      BUILTIN_RAMP_HINGE.name,
-      BUILTIN_RAMP_HINGE.lowerRadians * (shipPreview.rampDown ? 1 : 0),
-    );
-    for (const door of collectDoorComponents()) {
-      const open = shipPreview.doorsOpen[door.id] ?? door.defaultOpen ?? false;
+    for (const anim of collectAnimations()) {
+      const open = shipPreview.doorsOpen[anim.id] ?? anim.defaultOpen ?? false;
       const open01 = open ? 1 : 0;
-      for (const node of door.nodes) {
-        if (door.motion === "slide")
-          previewSlide(node.name, node.delta * open01, door.axis);
-        else previewHinge(node.name, node.delta * open01, door.axis);
+      for (const node of anim.nodes) {
+        if (anim.motion === "slide")
+          previewSlide(node.name, node.delta * open01, anim.axis);
+        else previewHinge(node.name, node.delta * open01, anim.axis);
       }
     }
   }
