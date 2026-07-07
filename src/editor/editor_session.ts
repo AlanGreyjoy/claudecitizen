@@ -393,8 +393,13 @@ export function startEditorSession(): void {
         break;
       case 'delete':
       case 'backspace': {
-        const selection = store.getSelection();
-        if (selection) store.deleteEntity(selection);
+        const sub = store.getSubSelection();
+        if (sub) {
+          store.hideGlbNode(sub.entityId, sub.nodeUuid);
+        } else {
+          const selection = store.getSelection();
+          if (selection) store.deleteEntity(selection);
+        }
         break;
       }
       case 'escape':

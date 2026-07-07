@@ -17,6 +17,10 @@ declare global {
       callShip: () => Promise<number>;
       teleportToHangar: (index: number) => void;
       face: (yawRadians: number, pitchRadians?: number) => void;
+      setColorCorrection: (settings: Partial<import('./types').ColorCorrectionSettings>) => void;
+      setSsaoSettings: (settings: Partial<import('./types').SsaoSettings>) => void;
+      setSsaoIntensity: (intensity: number) => void;
+      setSsaoColor: (color: string | null) => void;
     };
     __spikeScene?: import('three').Scene;
     __claudeCitizenCloudDebug?: unknown;

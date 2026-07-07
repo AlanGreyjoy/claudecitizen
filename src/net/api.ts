@@ -76,7 +76,7 @@ export interface HangarPlacementEntry {
 
 export interface HangarBuildState {
   area: BuildArea;
-  assignedHangar: number;
+  assignedHangar: number | null;
   catalog: PropDefinitionEntry[];
   inventory: PlayerPropInventoryEntry[];
   placements: HangarPlacementEntry[];
@@ -296,5 +296,11 @@ export function setAssignedHangarBay(hangarIndex: number): Promise<HangarBuildRe
   return requestJson<HangarBuildResponse>('/game/hangar/assigned-bay', {
     method: 'POST',
     body: JSON.stringify({ hangarIndex }),
+  });
+}
+
+export function resetAssignedHangarBay(): Promise<HangarBuildResponse> {
+  return requestJson<HangarBuildResponse>('/game/hangar/assigned-bay', {
+    method: 'DELETE',
   });
 }

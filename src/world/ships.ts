@@ -109,6 +109,43 @@ export async function applyOwnedShipToInstance(
   setActiveShipPrefabId(owned.prefabId);
 }
 
+/** Ensures the primary player ship instance exists, creating it if necessary. */
+export async function ensurePlayerShipInstance(
+  owned: OwnedShipRecord,
+  playerId: string,
+  hangarInstanceId: string,
+): Promise<void> {
+  await loadShipPrefabLayout(owned.prefabId);
+
+  const instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
+  if (instance) {
+    await applyOwnedShipToInstance(owned, playerId);
+    return;
+  }
+
+  const layout = getShipLayoutForPrefab(owned.prefabId);
+  const body = createFlightBody({ x: 0, y: 0, z: 0 });
+  const created = createShipInstance({
+    id: PLAYER_SHIP_INSTANCE_ID,
+    prefabId: owned.prefabId,
+    layout,
+    body,
+    ownerPlayerId: playerId,
+    instanceId: hangarInstanceId,
+    vitals: { hp: owned.hp, shields: owned.shields },
+  });
+  created.spec = {
+    ...created.spec,
+    maxSpeedMps: owned.maxSpeedMps,
+    throttleAccelMps2: owned.throttleAccelMps2,
+    maxHp: owned.maxHp,
+    maxShields: owned.maxShields,
+    shieldRegenPerSec: owned.shieldRegenPerSec,
+  };
+  registerShipInstance(created);
+  setActiveShipPrefabId(owned.prefabId);
+}
+
 /** Applies server-owned ship records to the local ship instance registry. */
 export async function syncBootstrapShips(
   ships: GameBootstrap["ships"],
@@ -120,32 +157,5 @@ export async function syncBootstrapShips(
   }
   const primary = ships[0];
   if (!primary) return;
-
-  const instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
-  if (instance) {
-    await applyOwnedShipToInstance(primary, playerId);
-    return;
-  }
-
-  const layout = getShipLayoutForPrefab(primary.prefabId);
-  const body = createFlightBody({ x: 0, y: 0, z: 0 });
-  const created = createShipInstance({
-    id: PLAYER_SHIP_INSTANCE_ID,
-    prefabId: primary.prefabId,
-    layout,
-    body,
-    ownerPlayerId: playerId,
-    instanceId: hangarInstanceId,
-    vitals: { hp: primary.hp, shields: primary.shields },
-  });
-  created.spec = {
-    ...created.spec,
-    maxSpeedMps: primary.maxSpeedMps,
-    throttleAccelMps2: primary.throttleAccelMps2,
-    maxHp: primary.maxHp,
-    maxShields: primary.maxShields,
-    shieldRegenPerSec: primary.shieldRegenPerSec,
-  };
-  registerShipInstance(created);
-  setActiveShipPrefabId(primary.prefabId);
+  await ensurePlayerShipInstance(primary, playerId, hangarInstanceId);
 }

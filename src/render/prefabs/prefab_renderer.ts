@@ -46,7 +46,7 @@ export interface PrefabStationRenderOptions {
 
 type PrefabLightComponent = Extract<
   PrefabComponent,
-  { type: 'point-light' | 'area-light' }
+  { type: 'point-light' | 'area-light' | 'spot-light' }
 >;
 
 function ensureRectAreaLightsInitialized(): void {
@@ -61,13 +61,13 @@ function normalizeLightOptions(
   if (typeof options === 'number') {
     return {
       lightScale: options,
-      localLightShadowMapSize: 512,
+      localLightShadowMapSize: 256,
       localLightShadowsEnabled: true,
     };
   }
   return {
     lightScale: options.lightScale ?? 1,
-    localLightShadowMapSize: options.localLightShadowMapSize ?? 512,
+    localLightShadowMapSize: options.localLightShadowMapSize ?? 256,
     localLightShadowsEnabled: options.localLightShadowsEnabled ?? true,
   };
 }
@@ -84,6 +84,23 @@ function configurePointLightShadow(
   const near = Math.max(0.001 * lightScale, shadowDistance * 0.01);
   light.shadow.camera.near = Math.min(near, shadowDistance * 0.5);
   light.shadow.camera.far = Math.max(shadowDistance, light.shadow.camera.near * 2);
+  light.shadow.camera.updateProjectionMatrix();
+  light.shadow.mapSize.set(mapSize, mapSize);
+  light.shadow.bias = -0.00035;
+  light.shadow.radius = 2;
+}
+
+function configureSpotLightShadow(
+  light: THREE.SpotLight,
+  scaledDistance: number,
+  lightScale: number,
+  mapSize: number,
+): void {
+  const shadowDistance = scaledDistance > 0 ? scaledDistance : 500 * lightScale;
+  const near = Math.max(0.001 * lightScale, shadowDistance * 0.01);
+  light.shadow.camera.near = Math.min(near, shadowDistance * 0.5);
+  light.shadow.camera.far = Math.max(shadowDistance, light.shadow.camera.near * 2);
+  light.shadow.camera.fov = THREE.MathUtils.radToDeg(light.angle);
   light.shadow.camera.updateProjectionMatrix();
   light.shadow.mapSize.set(mapSize, mapSize);
   light.shadow.bias = -0.00035;
@@ -189,7 +206,7 @@ export function createPrefabLightObject(
     localLightShadowsEnabled,
   } = normalizeLightOptions(options);
   const color =
-    component.color ?? (component.type === 'point-light' ? '#dfeaff' : '#cfe8ff');
+    component.color ?? (component.type === 'area-light' ? '#cfe8ff' : '#dfeaff');
   if (component.type === 'point-light') {
     const decay = component.decay ?? 2;
     // Three clamps inverse-square attenuation at tiny render-unit distances.
@@ -219,6 +236,44 @@ export function createPrefabLightObject(
         localLightShadowMapSize,
       );
     }
+    light.userData.prefabCastShadow = component.castShadow === true;
+    return light;
+  }
+
+  if (component.type === 'spot-light') {
+    const decay = component.decay ?? 2;
+    const intensityScale = lightScale < 1
+      ? Math.max(
+          Math.pow(lightScale, decay),
+          lightScale * SCALED_POINT_LIGHT_INTENSITY_MULTIPLIER,
+        )
+      : 1;
+    const scaledDistance = component.distance * lightScale;
+    const angle = THREE.MathUtils.degToRad(component.angle ?? 45);
+    const light = new THREE.SpotLight(
+      color,
+      component.intensity * intensityScale,
+      scaledDistance,
+      angle,
+      component.penumbra ?? 0,
+      decay,
+    );
+    // Tie the target to the light so entity rotation aims the beam along -Z.
+    light.target.position.set(0, 0, -1);
+    light.add(light.target);
+    light.castShadow =
+      (component.castShadow ?? false) &&
+      localLightShadowsEnabled &&
+      localLightShadowMapSize > 0;
+    if (light.castShadow) {
+      configureSpotLightShadow(
+        light,
+        scaledDistance,
+        lightScale,
+        localLightShadowMapSize,
+      );
+    }
+    light.userData.prefabCastShadow = component.castShadow === true;
     return light;
   }
 
@@ -253,6 +308,17 @@ function applyNodeOverrides(
   }
 }
 
+function applyHiddenNodes(
+  root: THREE.Object3D,
+  hiddenNodes: readonly string[] | undefined,
+): void {
+  if (!hiddenNodes || hiddenNodes.length === 0) return;
+  for (const nodeName of hiddenNodes) {
+    const object = root.getObjectByName(nodeName);
+    if (object) object.visible = false;
+  }
+}
+
 function buildEntity(
   entity: PrefabEntity,
   options: BuildEntityOptions,
@@ -277,6 +343,7 @@ function buildEntity(
         }
         applyPrefabMaterialOverrides(model, entity.materialOverrides);
         applyNodeOverrides(model, entity.nodeOverrides);
+        applyHiddenNodes(model, entity.hiddenNodes);
         group.add(model);
       })
       .catch((error) => {
@@ -285,7 +352,11 @@ function buildEntity(
   }
 
   for (const component of entity.components ?? []) {
-    if (component.type === 'point-light' || component.type === 'area-light') {
+    if (
+      component.type === 'point-light' ||
+      component.type === 'area-light' ||
+      component.type === 'spot-light'
+    ) {
       group.add(createPrefabLightObject(component, {
         lightScale: options.lightScale,
         localLightShadowMapSize: options.localLightShadowMapSize,
@@ -328,9 +399,58 @@ export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
   group.name = `prop:${doc.id}`;
   group.add(buildEntity(doc.root, {
     lightScale: 1,
-    localLightShadowMapSize: 512,
+    localLightShadowMapSize: 256,
     localLightShadowsEnabled: true,
   }));
   group.frustumCulled = false;
   return group;
+}
+
+/** Collects point and spot lights that were authored with shadow casting enabled. */
+export function collectLocalShadowLights(root: THREE.Object3D): THREE.Light[] {
+  const lights: THREE.Light[] = [];
+  root.traverse((object) => {
+    if (
+      (object instanceof THREE.PointLight || object instanceof THREE.SpotLight) &&
+      object.userData.prefabCastShadow === true
+    ) {
+      lights.push(object);
+    }
+  });
+  return lights;
+}
+
+/**
+ * Distance-based shadow culling for local prefab lights. Only the closest
+ * `maxLights` lights within `maxDistance` keep shadows; the rest are toggled
+ * off to save the per-light shadow map cost.
+ */
+export function updateLocalLightShadowCull(
+  root: THREE.Object3D,
+  cameraPosition: THREE.Vector3,
+  maxDistance: number,
+  maxLights: number,
+): void {
+  let lights = root.userData.localShadowLights as THREE.Light[] | undefined;
+  if (!lights) {
+    lights = collectLocalShadowLights(root);
+    root.userData.localShadowLights = lights;
+  }
+  if (lights.length === 0) return;
+
+  const worldPosition = new THREE.Vector3();
+  const scored = lights
+    .map((light) => {
+      light.getWorldPosition(worldPosition);
+      return { light, distance: worldPosition.distanceTo(cameraPosition) };
+    })
+    .sort((a, b) => a.distance - b.distance);
+
+  for (let i = 0; i < scored.length; i++) {
+    const { light, distance } = scored[i];
+    const wantsShadow = distance <= maxDistance && i < maxLights;
+    if (light.castShadow !== wantsShadow) {
+      light.castShadow = wantsShadow;
+    }
+  }
 }

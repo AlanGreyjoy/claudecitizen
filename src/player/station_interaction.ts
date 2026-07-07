@@ -20,12 +20,13 @@ import {
   type StationFrame,
 } from '../world/station';
 import type { GameBootstrap } from '../net/api';
-import { applyOwnedShipToInstance } from '../world/ships';
+import { applyOwnedShipToInstance, ensurePlayerShipInstance } from '../world/ships';
 import { getShipRestHeightMeters } from './ship_layout';
 import { characterAtElevatorDestination, type StationCharacterState } from './station_walk';
 import { teleportStationPlayer, type StationPhysics } from '../physics/station_physics';
 import type { Planet } from '../types';
-import { getActiveShip, type WorldState } from './world_state';
+import { getShipInstance } from '../flight/ship_world';
+import { PLAYER_SHIP_INSTANCE_ID, getActiveShip, type WorldState } from './world_state';
 
 export const ELEVATOR_RIDE_SECONDS = 2.4;
 export const ELEVATOR_FADE_SECONDS = 0.45;
@@ -239,28 +240,41 @@ export function updateElevatorRide(
 /**
  * Assigns a hangar and parks the player's ship on its pad: engines off,
  * zero velocity, grounded, nose facing the hangar mouth. Returns null when
- * the active station layout has no hangar pads.
+ * the active station layout has no hangar pads. If the ship instance was
+ * stored (removed), it is recreated from the provided record.
  */
 export async function callShipToHangar(
   world: WorldState,
   planet: Planet,
   seed: number,
-  ownedShip?: GameBootstrap['ships'][number],
+  options: {
+    ownedShip?: GameBootstrap['ships'][number];
+    playerId?: string;
+    hangarInstanceId?: string;
+  } = {},
 ): Promise<HangarSpec | null> {
   const hangars = getStationHangars();
   if (hangars.length === 0) return null;
-  if (ownedShip) {
-    const playerId = getActiveShip(world).ownerPlayerId ?? '';
+
+  const instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
+  const { ownedShip, playerId, hangarInstanceId } = options;
+  if (!instance && ownedShip && playerId && hangarInstanceId) {
+    await ensurePlayerShipInstance(ownedShip, playerId, hangarInstanceId);
+  } else if (ownedShip && playerId) {
     await applyOwnedShipToInstance(ownedShip, playerId);
   }
+
   const hangar = hangars[Math.abs(seed) % hangars.length];
-  const instance = getActiveShip(world);
+  const ship = getActiveShip(world);
+  if (hangarInstanceId) {
+    ship.instanceId = hangarInstanceId;
+  }
   const frame = getStationFrame(planet);
   const restLocal = {
     ...hangar.padSurfaceLocal,
     up: hangar.padSurfaceLocal.up + getShipRestHeightMeters(),
   };
-  instance.body = {
+  ship.body = {
     forward: frame.forward,
     grounded: true,
     position: stationLocalToWorld(frame, restLocal),

@@ -1,6 +1,6 @@
 import type { WorldState } from '../../../player/world_state';
 import { MODE_IN_SHIP } from '../../../player/modes';
-import type { Planet, PlanetSurfaceSample, RenderStats, Vec3 } from '../../../types';
+import type { Planet, PlanetSurfaceSample, RenderStats, SsaoSettings, Vec3 } from '../../../types';
 import { createChatPanel } from './chat_panel';
 import { createDebugMenu } from './debug_menu';
 import { createDebugSettings } from './debug_settings';
@@ -48,6 +48,7 @@ export interface HudUpdateParams {
 export interface HudCallbacks {
   onTimeOverrideChange?: (mode: 'auto' | 'day' | 'night') => void;
   onChatSend?: (text: string) => void;
+  onSsaoSettingsChange?: (settings: Partial<SsaoSettings>) => void;
 }
 
 export function createHud(
@@ -65,6 +66,9 @@ export function createHud(
   createDebugMenu(
     { debugBtnEl: elements.debugBtnEl, debugMenuEl: elements.debugMenuEl },
     debugSettings,
+    {
+      onSsaoSettingsChange: callbacks.onSsaoSettingsChange,
+    },
   );
 
   const statsPanel = createStatsPanel({

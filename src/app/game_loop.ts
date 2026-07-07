@@ -3,7 +3,7 @@ import {
   integrateHoveringShip,
 } from "../flight/flight_body";
 import { regenerateShipShields } from "../flight/ship_instance";
-import { listShipInstances, removeShipInstance } from "../flight/ship_world";
+import { getShipInstance, listShipInstances, removeShipInstance } from "../flight/ship_world";
 import { createPlayerControls } from "../flight/player_controls";
 import type { KeyboardActionId } from "../flight/input_settings";
 import {
@@ -65,7 +65,7 @@ import {
   beginStandTransition,
   updateTransition,
 } from "../player/transitions";
-import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, type WorldState } from "../player/world_state";
+import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, PLAYER_SHIP_INSTANCE_ID, type WorldState } from "../player/world_state";
 import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
 import type { BuildTerminalController } from "../render/effects/hud/build_terminal";
 import type { HangarBuildController } from "../player/hangar_build/build_controller";
@@ -79,11 +79,11 @@ import {
   sampleHangarRest,
   worldToStationLocal,
 } from "../world/station";
-import { setAssignedHangarBay } from "../net/api";
+import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleRenderablePlanetSurface } from "../world/planet_surface";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
-import type { Planet, Vec3 } from "../types";
+import type { ColorCorrectionSettings, Planet, SsaoSettings, Vec3 } from "../types";
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 import { syncDynamicColliders, type StationPhysics } from "../physics/station_physics";
@@ -165,18 +165,19 @@ export function createGameLoop({
   }
 
   function hangarDigitPrompt(): string {
-    return `${keyLabel("hangar1")} / ${keyLabel("hangar2")} / ${keyLabel("hangar3")}`;
+    return getStationHangars()
+      .map((hangar) => keyLabel(`hangar${hangar.index}` as KeyboardActionId))
+      .join(' / ');
   }
 
   // Console-only dev shortcuts (mirrors the __spikeScene diagnostic).
   window.__claudecitizenDev = {
     callShip: async () => {
-      const hangar = await callShipToHangar(
-        world,
-        planet,
-        seed,
-        bootstrap?.ships[0],
-      );
+      const hangar = await callShipToHangar(world, planet, seed, {
+        ownedShip: bootstrap?.ships[0],
+        playerId: bootstrap?.player.id,
+        hangarInstanceId: bootstrap?.spawn.hangarInstanceId,
+      });
       return hangar?.index ?? 0;
     },
     teleportToHangar: (index: number) => {
@@ -196,6 +197,11 @@ export function createGameLoop({
     },
     face: (yawRadians: number, pitchRadians?: number) =>
       controls.setOrbitFacing(yawRadians, pitchRadians),
+    setColorCorrection: (settings: Partial<ColorCorrectionSettings>) =>
+      renderer?.setColorCorrectionSettings(settings),
+    setSsaoSettings: (settings: Partial<SsaoSettings>) => renderer?.setSsaoSettings(settings),
+    setSsaoIntensity: (intensity: number) => renderer?.setSsaoSettings({ intensity }),
+    setSsaoColor: (color: string | null) => renderer?.setSsaoColor(color),
   };
 
   function resetWorld(): void {
@@ -236,9 +242,7 @@ export function createGameLoop({
   }
 
   function avmsPrompt(): string {
-    return world.assignedHangar === null
-      ? pressInteractPrompt("AVMS terminal")
-      : `Ship delivered to Hangar ${world.assignedHangar}`;
+    return pressInteractPrompt("AVMS terminal");
   }
 
   function shipsForAvms(): GameBootstrap["ships"] {
@@ -579,11 +583,36 @@ export function createGameLoop({
     if (!interaction) return;
 
     if (interaction.kind === "terminal" || interaction.kind === "avms-terminal") {
-      if (actions.interactPressed && world.assignedHangar === null) {
+      if (actions.interactPressed) {
         avmsTerminal?.open({
           ships: shipsForAvms(),
+          canStore: world.assignedHangar !== null,
+          onStore: async () => {
+            const ship = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
+            if (ship) {
+              ship.instanceId = "stored";
+              ship.body.position = { x: 0, y: -100000, z: 0 };
+              ship.body.velocity = { x: 0, y: 0, z: 0 };
+            }
+            world.assignedHangar = null;
+            world.prompt = "Ship stored.";
+            if (bootstrap) {
+              try {
+                const response = await resetAssignedHangarBay();
+                const hangarRuntime = buildRuntimeForArea("hangar");
+                hangarRuntime?.controller.syncBootstrap(response, response.arcBalance);
+                if (hangarRuntime) await syncBuildPropsVisuals(hangarRuntime);
+              } catch (error) {
+                console.warn("Failed to persist hangar store.", error);
+              }
+            }
+          },
           onDeliver: async (ship) => {
-            const hangar = await callShipToHangar(world, planet, seed, ship);
+            const hangar = await callShipToHangar(world, planet, seed, {
+              ownedShip: ship,
+              playerId: bootstrap?.player.id,
+              hangarInstanceId: bootstrap?.spawn.hangarInstanceId,
+            });
             if (!hangar) throw new Error("No hangar bays available.");
             world.prompt = `Ship delivered to Hangar ${hangar.index}`;
             if (bootstrap) {

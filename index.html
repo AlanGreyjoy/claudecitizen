@@ -165,6 +165,31 @@
             <input type="radio" name="hud-time-override" value="night" data-time-override />
             Force night
           </label>
+          <p class="sc-hud-debug-menu-title sc-hud-debug-menu-subtitle">SSAO Tuning</p>
+          <div class="sc-hud-debug-sliders">
+            <label class="sc-hud-debug-slider">
+              <span class="sc-hud-debug-slider-row">
+                <span>Intensity</span>
+                <span data-ssao-output="intensity">2.50</span>
+              </span>
+              <input type="range" min="0" max="8" step="0.05" value="2.5" data-ssao-key="intensity" />
+            </label>
+            <label class="sc-hud-debug-slider">
+              <span class="sc-hud-debug-slider-row">
+                <span>Radius</span>
+                <span data-ssao-output="aoRadius">0.55m</span>
+              </span>
+              <input type="range" min="0.05" max="3" step="0.05" value="0.55" data-ssao-key="aoRadius" />
+            </label>
+            <label class="sc-hud-debug-slider">
+              <span class="sc-hud-debug-slider-row">
+                <span>Distance Falloff</span>
+                <span data-ssao-output="distanceFalloff">1.00</span>
+              </span>
+              <input type="range" min="0.1" max="5" step="0.05" value="1" data-ssao-key="distanceFalloff" />
+            </label>
+            <button class="sc-hud-debug-reset" type="button" data-ssao-reset>Reset SSAO</button>
+          </div>
         </div>
       </div>
 
@@ -574,6 +599,9 @@
               <div class="sc-avms-actions">
                 <button class="sc-title-btn sc-avms-deliver" type="button" id="avms-deliver-btn">
                   Request Delivery
+                </button>
+                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="avms-store-btn">
+                  Store Ship
                 </button>
                 <button class="sc-title-btn sc-title-btn-secondary" type="button" id="avms-close-btn">
                   Close

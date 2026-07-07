@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { N8AOPostPass } from 'n8ao';
 import type { Planet } from '../../../types';
 import {
   createStarField,
@@ -6,7 +7,9 @@ import {
   VolumetricFogEffect,
 } from '../../effects';
 import { SpeedBlurEffect } from '../effects/speed_blur';
+import { ColorCorrectionEffect } from '../effects/color_correction';
 import { resolveRenderQuality } from '../domain/render_quality';
+import { resolveSsaoSettings } from '../domain/ssao_settings';
 import { createSpaceSkybox, type SpaceSkybox } from './space_skybox';
 import {
   EffectComposer,
@@ -14,21 +17,23 @@ import {
   RenderPass,
   NormalPass,
   BloomEffect,
-  BlendFunction,
   ToneMappingEffect,
   VignetteEffect,
   SMAAEffect,
-  SSAOEffect,
   ToneMappingMode,
 } from 'postprocessing';
 
 export interface ComposerStack {
   composer: EffectComposer;
   normalPass: NormalPass;
+  n8aoPass: N8AOPostPass | null;
+  ssaoBaseIntensity: number;
+  ssaoBaseRadius: number;
   atmospherePass: EffectPass;
   volumetricFogPass: EffectPass;
   volumetricFogEffect: VolumetricFogEffect;
   speedBlurEffect: SpeedBlurEffect;
+  colorCorrectionEffect: ColorCorrectionEffect;
   spaceSkybox: SpaceSkybox;
   volumetricClouds: ReturnType<typeof createVolumetricCloudManager>;
   starField: ReturnType<typeof createStarField>;
@@ -37,12 +42,40 @@ export interface ComposerStack {
   dispose: () => void;
 }
 
+function resolveN8AOQualityMode(samples: number): 'Performance' | 'Low' | 'Medium' | 'High' | 'Ultra' {
+  if (samples <= 8) return 'Performance';
+  if (samples <= 16) return 'Low';
+  if (samples <= 32) return 'Medium';
+  if (samples <= 64) return 'High';
+  return 'Ultra';
+}
+
+function disposeN8AOPass(pass: N8AOPostPass | null): void {
+  if (!pass) return;
+  // N8AOPostPass does not expose a dispose method, so release its
+  // render targets and full-screen triangle materials explicitly.
+  pass.writeTargetInternal?.dispose();
+  pass.readTargetInternal?.dispose();
+  pass.outputTargetInternal?.dispose();
+  pass.accumulationRenderTarget?.dispose();
+  pass.depthDownsampleTarget?.dispose();
+  pass.transparencyRenderTargetDWFalse?.dispose();
+  pass.transparencyRenderTargetDWTrue?.dispose();
+  pass.effectShaderQuad?.dispose();
+  pass.poissonBlurQuad?.dispose();
+  pass.effectCompositerQuad?.dispose();
+  pass.copyQuad?.dispose();
+  pass.accumulationQuad?.dispose();
+  pass.depthCopyPass?.dispose();
+}
+
 export function createComposerStack(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   planet: Planet,
   sun: THREE.DirectionalLight,
+  renderScale: number,
 ): ComposerStack {
   const renderQuality = resolveRenderQuality();
   const composer = new EffectComposer(renderer, {
@@ -53,37 +86,28 @@ export function createComposerStack(
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  // Normals feed aerial perspective and, on balanced/high, SSAO contact shadowing.
+  // Normals feed aerial perspective; N8AO reconstructs normals from depth itself.
   const normalPass = new NormalPass(scene, camera, {
-    resolutionScale: renderQuality.ambientOcclusionEnabled
-      ? Math.max(0.5, renderQuality.ambientOcclusionResolutionScale)
-      : 0.5,
+    resolutionScale: 0.5,
   });
   composer.addPass(normalPass);
 
+  const ssaoSettings = resolveSsaoSettings(renderQuality.ambientOcclusionIntensity);
+  let ssaoBaseRadius = ssaoSettings.aoRadius;
+  let ssaoBaseIntensity = ssaoSettings.intensity;
+  let n8aoPass: N8AOPostPass | null = null;
   if (renderQuality.ambientOcclusionEnabled) {
-    const ssaoEffect = new SSAOEffect(camera, normalPass.texture, {
-      blendFunction: BlendFunction.MULTIPLY,
-      samples: renderQuality.ambientOcclusionSamples,
-      rings: 7,
-      radius: 0.16,
-      intensity: renderQuality.ambientOcclusionIntensity,
-      luminanceInfluence: 0.5,
-      bias: 0.018,
-      fade: 0.018,
-      resolutionScale: renderQuality.ambientOcclusionResolutionScale,
-    });
-    // The postprocessing library wires LOG_DEPTH into its DoF and Outline
-    // materials but not SSAO. Without the define the SSAO shader reads
-    // log-encoded depth as raw perspective depth and the occlusion term
-    // collapses to nothing, so set it manually whenever the renderer uses
-    // a logarithmic depth buffer (the planet-scale main-game camera does).
-    if (renderer.capabilities.logarithmicDepthBuffer) {
-      ssaoEffect.ssaoMaterial.defines.LOG_DEPTH = '1';
-      ssaoEffect.ssaoMaterial.needsUpdate = true;
-    }
-    const ssaoPass = new EffectPass(camera, ssaoEffect);
-    composer.addPass(ssaoPass);
+    n8aoPass = new N8AOPostPass(scene, camera, 1, 1);
+    n8aoPass.configuration.aoRadius = ssaoBaseRadius * renderScale;
+    n8aoPass.configuration.intensity = ssaoBaseIntensity;
+    n8aoPass.configuration.distanceFalloff = ssaoSettings.distanceFalloff;
+    n8aoPass.configuration.gammaCorrection = false;
+    n8aoPass.configuration.colorMultiply = true;
+    n8aoPass.configuration.halfRes = renderQuality.ambientOcclusionResolutionScale <= 0.5;
+    n8aoPass.configuration.depthAwareUpsampling = true;
+    n8aoPass.configuration.transparencyAware = false;
+    n8aoPass.setQualityMode(resolveN8AOQualityMode(renderQuality.ambientOcclusionSamples));
+    composer.addPass(n8aoPass);
   }
 
   const spaceSkybox = createSpaceSkybox();
@@ -125,11 +149,17 @@ export function createComposerStack(
   const toneMappingEffect = new ToneMappingEffect({
     mode: ToneMappingMode.AGX,
   });
+  const colorCorrectionEffect = new ColorCorrectionEffect();
   const vignetteEffect = new VignetteEffect({
     darkness: 0.28,
     offset: 0.3,
   });
-  const lensPass = new EffectPass(camera, toneMappingEffect, vignetteEffect);
+  const lensPass = new EffectPass(
+    camera,
+    toneMappingEffect,
+    colorCorrectionEffect,
+    vignetteEffect,
+  );
   composer.addPass(lensPass);
 
   if (renderQuality.useSmaa) {
@@ -144,22 +174,28 @@ export function createComposerStack(
   function resize(width: number, height: number, pixelRatio: number): void {
     composer.setSize(width, height);
     normalPass.setSize(width * pixelRatio, height * pixelRatio);
+    n8aoPass?.setSize(width * pixelRatio, height * pixelRatio);
   }
 
   function dispose(): void {
     spaceSkybox.dispose();
     starField.dispose();
     volumetricClouds.dispose();
+    disposeN8AOPass(n8aoPass);
     composer.dispose();
   }
 
   return {
     composer,
     normalPass,
+    n8aoPass,
+    ssaoBaseIntensity,
+    ssaoBaseRadius,
     atmospherePass,
     volumetricFogPass,
     volumetricFogEffect,
     speedBlurEffect,
+    colorCorrectionEffect,
     spaceSkybox,
     volumetricClouds,
     starField,

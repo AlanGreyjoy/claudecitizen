@@ -107,6 +107,21 @@ export type PrefabComponent =
       height: number;
     }
   | {
+      type: "spot-light";
+      color?: PrefabColor;
+      /** Three.js spot light intensity in editor-scale candela. */
+      intensity: number;
+      /** Maximum reach in prefab meters. */
+      distance: number;
+      /** Attenuation exponent. Physically-correct default is 2. */
+      decay?: number;
+      /** Cone angle in degrees. Default 45. */
+      angle?: number;
+      /** Soft edge ratio, 0..1. Default 0. */
+      penumbra?: number;
+      castShadow?: boolean;
+    }
+  | {
       type: "collider";
       shape: "box";
       size: Vec3;
@@ -232,6 +247,8 @@ export interface PrefabEntity {
   asset?: PrefabAsset;
   primitive?: PrefabPrimitive;
   nodeOverrides?: PrefabNodeOverride[];
+  /** Names of GLB nodes that should be hidden (deleted) for this entity. */
+  hiddenNodes?: string[];
   materialOverrides?: PrefabMaterialOverride[];
   components?: PrefabComponent[];
   children?: PrefabEntity[];
@@ -482,6 +499,45 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
           100,
           Math.max(0.05, parseFiniteNumber(value.height, `${path}.height`)),
         ),
+      };
+    case "spot-light":
+      return {
+        type,
+        color:
+          value.color === undefined
+            ? undefined
+            : parseColor(value.color, `${path}.color`),
+        intensity: Math.min(
+          5_000,
+          Math.max(0, parseFiniteNumber(value.intensity, `${path}.intensity`)),
+        ),
+        distance: Math.min(
+          500,
+          Math.max(0, parseFiniteNumber(value.distance, `${path}.distance`)),
+        ),
+        decay:
+          value.decay === undefined
+            ? undefined
+            : Math.min(
+                4,
+                Math.max(0, parseFiniteNumber(value.decay, `${path}.decay`)),
+              ),
+        angle:
+          value.angle === undefined
+            ? undefined
+            : Math.min(
+                90,
+                Math.max(0, parseFiniteNumber(value.angle, `${path}.angle`)),
+              ),
+        penumbra:
+          value.penumbra === undefined
+            ? undefined
+            : Math.min(
+                1,
+                Math.max(0, parseFiniteNumber(value.penumbra, `${path}.penumbra`)),
+              ),
+        castShadow:
+          value.castShadow === undefined ? undefined : Boolean(value.castShadow),
       };
     case "collider": {
       const shape = value.shape === "mesh" ? "mesh" : "box";
@@ -897,6 +953,18 @@ function parseEntity(
         ),
       };
     });
+  }
+
+  if (value.hiddenNodes !== undefined) {
+    if (!Array.isArray(value.hiddenNodes)) {
+      fail(`${path}.hiddenNodes`, "expected array");
+    }
+    if (value.hiddenNodes.length > 512) {
+      fail(`${path}.hiddenNodes`, "too many hidden nodes");
+    }
+    entity.hiddenNodes = value.hiddenNodes.map((node, index) =>
+      parseString(node, `${path}.hiddenNodes[${index}]`, 128),
+    );
   }
 
   if (value.materialOverrides !== undefined) {

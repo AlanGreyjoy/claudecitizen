@@ -37,6 +37,7 @@
     "@takram/three-atmosphere": "^0.19.1",
     "@takram/three-clouds": "^0.7.6",
     "@takram/three-geospatial": "^0.9.1",
+    "n8ao": "^1.10.3",
     "postprocessing": "^6.39.2",
     "simplex-noise": "^4.0.3",
     "three": "^0.180.0",

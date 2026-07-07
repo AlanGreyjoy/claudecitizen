@@ -231,6 +231,7 @@ export async function startPlaySession(
   const avmsDetailShieldValueEl = requireElement<HTMLElement>('avms-detail-shield-value');
   const avmsStatusEl = requireElement<HTMLElement>('avms-status');
   const avmsDeliverBtn = requireElement<HTMLButtonElement>('avms-deliver-btn');
+  const avmsStoreBtn = requireElement<HTMLButtonElement>('avms-store-btn');
   const avmsCloseBtn = requireElement<HTMLButtonElement>('avms-close-btn');
   const buildTerminalEl = requireElement<HTMLElement>('build-terminal');
   const buildKickerEl = requireElement<HTMLElement>('build-kicker');
@@ -298,6 +299,7 @@ export async function startPlaySession(
     {
       onChatSend: (text) => networkClient?.sendChat(text),
       onTimeOverrideChange: (mode) => renderer?.setTimeOverride(mode),
+      onSsaoSettingsChange: (settings) => renderer?.setSsaoSettings(settings),
     },
   );
 
@@ -378,6 +380,7 @@ export async function startPlaySession(
     detailShieldValueEl: avmsDetailShieldValueEl,
     statusEl: avmsStatusEl,
     deliverBtnEl: avmsDeliverBtn,
+    storeBtnEl: avmsStoreBtn,
     closeBtnEl: avmsCloseBtn,
   });
 

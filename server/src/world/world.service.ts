@@ -4,6 +4,7 @@ import type { IncomingMessage } from 'node:http';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { WebSocket } from 'ws';
 import { AuthService } from '../auth/auth.service';
+import { GameHangarService } from '../game/game.hangar.service';
 import { GameService } from '../game/game.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -132,6 +133,7 @@ export class WorldService {
   constructor(
     @Inject(AuthService) private readonly auth: AuthService,
     @Inject(GameService) private readonly game: GameService,
+    @Inject(GameHangarService) private readonly hangar: GameHangarService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(RedisService) private readonly redis: RedisService,
     @InjectPinoLogger(WorldService.name) private readonly logger: PinoLogger,
@@ -189,6 +191,11 @@ export class WorldService {
       'World client disconnected',
     );
     if (hadEntity) this.broadcastRemove(session.playerId, entityInstanceId);
+    void this.hangar
+      .resetAssignedHangar(session.playerId)
+      .catch((error) =>
+        this.logger.warn({ playerId: session.playerId, error }, 'Failed to reset assigned hangar'),
+      );
   }
 
   broadcastSnapshots(): void {

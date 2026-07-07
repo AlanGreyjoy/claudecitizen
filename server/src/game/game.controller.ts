@@ -180,4 +180,12 @@ export class GameController {
     await this.hangar.setAssignedHangar(playerId, Math.round(hangarIndex));
     return this.hangar.getBuildState(playerId, 'hangar');
   }
+
+  @Delete('hangar/assigned-bay')
+  @UseGuards(HttpAuthGuard)
+  async resetAssignedBay(@Req() req: AuthenticatedRequest) {
+    const playerId = await this.requirePlayerId(req.user!.sub);
+    await this.hangar.resetAssignedHangar(playerId);
+    return this.hangar.getBuildState(playerId, 'hangar');
+  }
 }

@@ -76,9 +76,11 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     stationInteriorActive = false,
   } = input;
 
-  const { ambient, sun } = lighting;
   const {
     normalPass,
+    n8aoPass,
+    ssaoBaseIntensity,
+    ssaoBaseRadius,
     atmospherePass,
     volumetricFogPass,
     volumetricFogEffect,
@@ -86,8 +88,8 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     volumetricClouds,
     starField,
     ambientOcclusionEnabled,
-  } =
-    composerStack;
+  } = composerStack;
+  const { ambient, sun } = lighting;
   const { sunDir, daylightFactor, rawDaylight, planetCenter } = sunState;
 
   volumetricClouds.update(dt, altitudeMeters, volumetricEnabled);
@@ -147,6 +149,16 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     ambient.intensity = Math.max(ambient.intensity, 0.48);
     ambient.color.lerp(AMBIENT_SKY_DAY, 0.16);
     ambient.groundColor.lerp(AMBIENT_GROUND_DAY, 0.2);
+    // Station interiors have flat slabs and lots of local fill light, which
+    // make raw SSAO read noisy and overdrawn. Keep it tighter than the outdoor
+    // preset so it reads as contact shadowing instead of a black outline pass.
+    if (n8aoPass) {
+      n8aoPass.configuration.intensity = ssaoBaseIntensity;
+      n8aoPass.configuration.aoRadius = ssaoBaseRadius * renderScale * 0.6;
+    }
+  } else if (n8aoPass) {
+    n8aoPass.configuration.intensity = ssaoBaseIntensity;
+    n8aoPass.configuration.aoRadius = ssaoBaseRadius * renderScale;
   }
 
   starField.update({

@@ -1,4 +1,11 @@
-import type { FogSettings, RenderStats, SpikeRenderWorld, VegetationSettings } from '../../../types';
+import type {
+  ColorCorrectionSettings,
+  FogSettings,
+  RenderStats,
+  SpikeRenderWorld,
+  SsaoSettings,
+  VegetationSettings,
+} from '../../../types';
 
 export type RendererMode = 'log-depth' | 'default-depth' | 'compatibility';
 
@@ -12,6 +19,10 @@ export interface SpikeRenderer {
   resize: (width: number, height: number) => void;
   setVegetationSettings: (nextSettings: Partial<VegetationSettings>) => void;
   setFogSettings: (settings: FogSettings) => void;
+  setColorCorrectionSettings: (settings: Partial<ColorCorrectionSettings>) => void;
+  setSsaoSettings: (settings: Partial<SsaoSettings>) => void;
+  setSsaoIntensity: (intensity: number) => void;
+  setSsaoColor: (color: string | null) => void;
   setTimeOverride: (mode: TimeOverride) => void;
   getStationRoot: () => import('three').Object3D;
   getCamera: () => import('three').Camera;

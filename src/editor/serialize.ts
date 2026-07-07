@@ -78,6 +78,9 @@ function entityToPrefab(entity: EditorEntity): PrefabEntity {
   if (entity.glbNodeTransforms.length > 0) {
     prefabEntity.nodeOverrides = entity.glbNodeTransforms.map(nodeOverrideToPrefab);
   }
+  if (entity.glbNodeHidden.length > 0) {
+    prefabEntity.hiddenNodes = [...entity.glbNodeHidden];
+  }
   if (entity.materialOverrides.length > 0) {
     prefabEntity.materialOverrides = structuredClone(entity.materialOverrides);
   }
@@ -131,6 +134,7 @@ function entityFromPrefab(prefabEntity: PrefabEntity): EditorEntity {
     nodeName: override.node,
     transform: transformFromPrefab(override.transform),
   }));
+  entity.glbNodeHidden = prefabEntity.hiddenNodes ? [...prefabEntity.hiddenNodes] : [];
   entity.materialOverrides = prefabEntity.materialOverrides
     ? structuredClone(prefabEntity.materialOverrides)
     : [];

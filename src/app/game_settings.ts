@@ -63,7 +63,14 @@ export function loadGameSettings(): GameSettings {
 
 export function saveGameSettings(settings: GameSettings): GameSettings {
   const next = normalizeSettings(settings);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  let stored: Record<string, unknown> = {};
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) stored = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    // Ignore malformed local settings.
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...stored, ...next }));
   window.dispatchEvent(new CustomEvent<GameSettings>(GAME_SETTINGS_CHANGED_EVENT, { detail: next }));
   return next;
 }

@@ -98,13 +98,17 @@ export function createHierarchyPanel(
     const getPosition =
       options.getGlbNodePrefabPosition ??
       (() => null);
-    return buildGlbAuthoringMenu(
-      store,
-      entityId,
-      node.uuid,
-      getPosition,
-      node.name,
-    );
+    return [
+      ...buildGlbAuthoringMenu(
+        store,
+        entityId,
+        node.uuid,
+        getPosition,
+        node.name,
+      ),
+      'sep',
+      { label: 'Delete', action: () => store.hideGlbNode(entityId, node.uuid) },
+    ];
   }
 
   function ensureGlbExpanded(entityId: string, nodeUuid?: string | null): void {
@@ -122,7 +126,11 @@ export function createHierarchyPanel(
     node: GlbNodeRef,
     depth: number,
     rows: HTMLElement[],
+    parentHidden = false,
   ): void {
+    const isHidden = parentHidden || store.isGlbNodeHidden(entityId, node.name);
+    if (isHidden) return;
+
     const sub = store.getSubSelection();
     const selected =
       sub?.entityId === entityId && sub.nodeUuid === node.uuid;
@@ -179,7 +187,7 @@ export function createHierarchyPanel(
 
     if (hasChildren && expanded) {
       for (const child of node.children) {
-        renderGlbRow(entityId, child, depth + 1, rows);
+        renderGlbRow(entityId, child, depth + 1, rows, isHidden);
       }
     }
   }
@@ -387,6 +395,7 @@ export function createHierarchyPanel(
       event.type === 'selection' ||
       event.type === 'sub-selection' ||
       event.type === 'glb-tree' ||
+      event.type === 'glb-visibility' ||
       event.type === 'entity'
     ) {
       if (event.type === 'sub-selection' && event.entityId && event.nodeUuid) {

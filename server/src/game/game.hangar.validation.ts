@@ -135,10 +135,11 @@ export function isInsideBuildRoom(
 
 export function overlapsShipPad(
   point: StationLocalPoint,
-  hangarIndex: number,
+  hangarIndex: number | null | undefined,
   footprint = DEFAULT_PROP_FOOTPRINT,
 ): boolean {
-  const pad = HANGAR_PADS.find((entry) => entry.index === hangarIndex);
+  const resolved = hangarIndex === 1 || hangarIndex === 2 || hangarIndex === 3 ? hangarIndex : 2;
+  const pad = HANGAR_PADS.find((entry) => entry.index === resolved);
   if (!pad) return false;
   const limit = HANGAR_PAD_HALF_METERS + footprint + PAD_CLEARANCE_MARGIN;
   return (
@@ -162,7 +163,7 @@ export function boxesOverlap(
 export function validatePlacementTransform(params: {
   area: BuildArea;
   transform: PlacementTransform;
-  hangarIndex: number;
+  hangarIndex: number | null | undefined;
   definition: {
     allowRotateY: boolean;
     snapGridM: number | null;

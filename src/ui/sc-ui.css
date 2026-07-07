@@ -221,7 +221,9 @@ body {
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
-  min-width: 220px;
+  width: min(340px, calc(100vw - 36px));
+  max-height: min(72vh, 680px);
+  overflow-y: auto;
   padding: 10px 12px;
   border: 1px solid var(--line);
   background: rgba(6, 12, 26, 0.94);
@@ -270,6 +272,49 @@ body {
 
 .sc-hud-debug-option input {
   accent-color: var(--accent);
+}
+
+.sc-hud-debug-sliders {
+  display: grid;
+  gap: 8px;
+}
+
+.sc-hud-debug-slider {
+  display: grid;
+  gap: 4px;
+  font: 500 13px/1.15 var(--sc-font);
+  color: var(--text);
+}
+
+.sc-hud-debug-slider-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sc-hud-debug-slider-row span:last-child {
+  color: var(--accent-2);
+  font: 700 12px/1 var(--sc-font);
+  letter-spacing: 0.06em;
+}
+
+.sc-hud-debug-slider input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.sc-hud-debug-reset {
+  justify-self: start;
+  margin-top: 2px;
+  border: 1px solid rgba(255, 206, 111, 0.45);
+  background: rgba(255, 206, 111, 0.08);
+  color: var(--accent-2);
+  font: 700 12px/1 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 10px;
+  cursor: pointer;
 }
 
 .sc-hud-tutorial {

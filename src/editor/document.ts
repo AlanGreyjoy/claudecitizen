@@ -24,6 +24,8 @@ export interface EditorEntity {
   asset: { url: string; castShadow?: boolean } | null;
   primitive: PrefabPrimitive | null;
   glbNodeTransforms: GlbNodeTransformOverride[];
+  /** Names of GLB nodes hidden (deleted) for this entity instance. */
+  glbNodeHidden: string[];
   materialOverrides: PrefabMaterialOverride[];
   components: PrefabComponent[];
   children: EditorEntity[];
@@ -67,6 +69,7 @@ export type EditorEvent =
   | { type: 'sub-selection'; entityId: string | null; nodeUuid: string | null }
   | { type: 'glb-tree'; entityId: string }
   | { type: 'glb-transform'; entityId: string; nodeUuid: string; nodeName: string }
+  | { type: 'glb-visibility'; entityId: string; nodeName: string }
   | { type: 'document' }
   | { type: 'history' };
 
@@ -101,6 +104,7 @@ export function createEmptyEntity(name: string): EditorEntity {
     asset: null,
     primitive: null,
     glbNodeTransforms: [],
+    glbNodeHidden: [],
     materialOverrides: [],
     components: [],
     children: [],
@@ -289,6 +293,62 @@ export function createEditorStore() {
     const nodeName = resolveGlbNodeName(entityId, nodeUuid);
     if (!nodeName) return;
     emitGlbTransform(entityId, nodeUuid, nodeName);
+  }
+
+  function hideGlbNode(entityId: string, nodeUuid: string): void {
+    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
+    if (!nodeName) return;
+    const entity = locate(entityId)?.entity;
+    if (!entity || entity.glbNodeHidden.includes(nodeName)) return;
+
+    const clearSubSelection =
+      subSelection?.entityId === entityId && subSelection?.nodeUuid === nodeUuid;
+
+    history.execute({
+      label: `Delete mesh ${nodeName}`,
+      do() {
+        const target = locate(entityId)?.entity;
+        if (!target || target.glbNodeHidden.includes(nodeName)) return;
+        target.glbNodeHidden.push(nodeName);
+        markDirty();
+        if (clearSubSelection) {
+          subSelection = null;
+          emit({ type: 'sub-selection', entityId, nodeUuid: null });
+        }
+        emit({ type: 'glb-visibility', entityId, nodeName });
+      },
+      undo() {
+        const target = locate(entityId)?.entity;
+        if (!target) return;
+        target.glbNodeHidden = target.glbNodeHidden.filter((n) => n !== nodeName);
+        emit({ type: 'glb-visibility', entityId, nodeName });
+      },
+    });
+  }
+
+  function showGlbNode(entityId: string, nodeName: string): void {
+    const entity = locate(entityId)?.entity;
+    if (!entity || !entity.glbNodeHidden.includes(nodeName)) return;
+    history.execute({
+      label: `Restore mesh ${nodeName}`,
+      do() {
+        const target = locate(entityId)?.entity;
+        if (!target) return;
+        target.glbNodeHidden = target.glbNodeHidden.filter((n) => n !== nodeName);
+        markDirty();
+        emit({ type: 'glb-visibility', entityId, nodeName });
+      },
+      undo() {
+        const target = locate(entityId)?.entity;
+        if (!target || target.glbNodeHidden.includes(nodeName)) return;
+        target.glbNodeHidden.push(nodeName);
+        emit({ type: 'glb-visibility', entityId, nodeName });
+      },
+    });
+  }
+
+  function isGlbNodeHidden(entityId: string, nodeName: string): boolean {
+    return locate(entityId)?.entity.glbNodeHidden.includes(nodeName) ?? false;
   }
 
   function insertEntity(entity: EditorEntity, parentId: string | null, index?: number): void {
@@ -738,6 +798,9 @@ export function createEditorStore() {
       }
       return overrides;
     },
+    getGlbHiddenNodes: (entityId: string) =>
+      locate(entityId)?.entity.glbNodeHidden.slice() ?? [],
+    isGlbNodeHidden,
     getSelectedEntity: () => (selection ? locate(selection)?.entity ?? null : null),
     isDirty: () => dirty,
     markSaved: () => {
@@ -749,6 +812,8 @@ export function createEditorStore() {
     setGlbTree,
     clearGlbTrees,
     notifyGlbNodeTransform,
+    hideGlbNode,
+    showGlbNode,
     addEntity,
     deleteEntity,
     duplicateEntity,

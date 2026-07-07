@@ -16,6 +16,29 @@ export interface FogSettings {
   noiseStrength: number;
 }
 
+export interface ColorCorrectionSettings {
+  enabled: boolean;
+  /** Additive brightness offset, typically -1..1. Default 0. */
+  brightness: number;
+  /** Contrast multiplier, typically 0..2. Default 1. */
+  contrast: number;
+  /** Saturation multiplier, typically 0..2. Default 1. */
+  saturation: number;
+  /** Hue rotation in radians, any real value. Default 0. */
+  hue: number;
+  /** Gamma correction, typically 0.1..3. Default 1. */
+  gamma: number;
+}
+
+export interface SsaoSettings {
+  /** N8AO intensity (pow exponent). 0 disables, 2 is soft, 5 is strong. */
+  intensity: number;
+  /** World-space AO radius in meters. Scaled by the renderer's renderScale. */
+  aoRadius: number;
+  /** Distance falloff ratio. 0.1 is tight, 1.0 is default, 5.0 is very soft. */
+  distanceFalloff: number;
+}
+
 export interface RenderableSurfaceCacheStats {
   entries: number;
   evictions: number;

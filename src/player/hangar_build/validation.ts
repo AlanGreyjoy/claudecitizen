@@ -2,6 +2,7 @@ import {
   HANGAR_FLOOR_UP,
   HANGAR_PAD_HALF_METERS,
   HANGARS,
+  getStationHangars,
   getStationRoom,
   STATION_ROOMS,
   type StationRoom,
@@ -23,8 +24,13 @@ const PAD_CLEARANCE_MARGIN = 0.5;
 
 const APARTMENT_ROOM_ID = 'hab-room';
 
+function defaultHangarIndex(): number {
+  const hangars = getStationHangars();
+  return hangars.length > 0 ? hangars[0]!.index : 2;
+}
+
 export function hangarRoomForIndex(index: number | null | undefined): StationRoom {
-  const resolved = index === 1 || index === 2 || index === 3 ? index : 2;
+  const resolved = index === 1 || index === 2 || index === 3 ? index : defaultHangarIndex();
   const hangar = HANGARS.find((entry) => entry.index === resolved) ?? HANGARS[1]!;
   return STATION_ROOMS.find((room) => room.id === hangar.roomId) ?? STATION_ROOMS[0]!;
 }
@@ -48,7 +54,7 @@ export function snapTransform(
   transform: PlacementTransform,
   snapGridM: number | null | undefined,
   area: BuildArea,
-  hangarIndex: number,
+  hangarIndex: number | null | undefined,
 ): PlacementTransform {
   const room = buildRoomForArea(area, hangarIndex);
   return {
@@ -85,10 +91,11 @@ export function isInsideHangarRoom(
 
 export function overlapsShipPad(
   point: StationLocalPoint,
-  hangarIndex: number,
+  hangarIndex: number | null | undefined,
   footprint = DEFAULT_PROP_FOOTPRINT,
 ): boolean {
-  const hangar = HANGARS.find((entry) => entry.index === hangarIndex);
+  const resolved = hangarIndex === 1 || hangarIndex === 2 || hangarIndex === 3 ? hangarIndex : defaultHangarIndex();
+  const hangar = HANGARS.find((entry) => entry.index === resolved);
   if (!hangar) return false;
   const limit = HANGAR_PAD_HALF_METERS + footprint + PAD_CLEARANCE_MARGIN;
   return (
@@ -112,7 +119,7 @@ export function boxesOverlap(
 export function validateClientPlacement(params: {
   area: BuildArea;
   transform: PlacementTransform;
-  hangarIndex: number;
+  hangarIndex: number | null | undefined;
   allowRotateY: boolean;
   snapGridM: number | null;
   existingPlacements: PlacementTransform[];

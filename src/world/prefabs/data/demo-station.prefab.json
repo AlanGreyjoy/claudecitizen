@@ -455,7 +455,73 @@
                 "z": 1
               }
             }
+          },
+          {
+            "node": "SM_Veh_Sweepo_01_(1)",
+            "transform": {
+              "position": {
+                "x": 7,
+                "y": 0,
+                "z": -16.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.374752,
+                "z": 0,
+                "w": 0.927125
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_Door_06_2",
+            "transform": {
+              "position": {
+                "x": 2.02604,
+                "y": 1.05843,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.016186,
+                "z": 0,
+                "w": 0.999869
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Crew_Toilet_Door_01_2",
+            "transform": {
+              "position": {
+                "x": 0.40007,
+                "y": 0.13072,
+                "z": 0.33417
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.002059,
+                "z": 0,
+                "w": 0.999998
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 0.99268
+              }
+            }
           }
+        ],
+        "hiddenNodes": [
+          "SM_Veh_Sweepo_01_(1)"
         ],
         "materialOverrides": [
           {
@@ -546,19 +612,19 @@
             ]
           },
           {
-            "id": "e-fbed92bb",
-            "name": "Area Light",
+            "id": "e-cbb5cde3",
+            "name": "Point Light",
             "transform": {
               "position": {
                 "x": 7.5,
-                "y": 4.25,
+                "y": 3.25,
                 "z": -17.5
               },
               "rotation": {
-                "x": -0.707107,
+                "x": 0,
                 "y": 0,
                 "z": 0,
-                "w": 0.707107
+                "w": 1
               },
               "scale": {
                 "x": 1,
@@ -568,28 +634,29 @@
             },
             "components": [
               {
-                "type": "area-light",
+                "type": "point-light",
                 "color": "#ffffc8",
-                "intensity": 2,
-                "width": 2.6,
-                "height": 2.55
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
               }
             ]
           },
           {
-            "id": "e-b0757027",
-            "name": "Area Light Copy",
+            "id": "e-3cf81b26",
+            "name": "Point Light Copy",
             "transform": {
               "position": {
                 "x": 7.5,
-                "y": 4.25,
-                "z": -12.5
+                "y": 3.25,
+                "z": -12.75
               },
               "rotation": {
-                "x": -0.707107,
+                "x": 0,
                 "y": 0,
                 "z": 0,
-                "w": 0.707107
+                "w": 1
               },
               "scale": {
                 "x": 1,
@@ -599,11 +666,396 @@
             },
             "components": [
               {
-                "type": "area-light",
+                "type": "point-light",
                 "color": "#ffffc8",
-                "intensity": 2,
-                "width": 2.6,
-                "height": 2.55
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-a9bf6d3b",
+            "name": "Point Light Copy Copy",
+            "transform": {
+              "position": {
+                "x": 8.5,
+                "y": 3,
+                "z": -7.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-9fdf0a57",
+            "name": "Point Light Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 18.25,
+                "y": 3,
+                "z": -7.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-c3dd6865",
+            "name": "Point Light Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 27.5,
+                "y": 3,
+                "z": -7.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-36a73e29",
+            "name": "Point Light Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 27.5,
+                "y": 3,
+                "z": 0.75
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-6729ec13",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 27.5,
+                "y": 3,
+                "z": 5.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-8b5a9700",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 27.5,
+                "y": 4.5,
+                "z": 12.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-6ac89041",
+            "name": "Point Light Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 27.5,
+                "y": 3,
+                "z": -15.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-bbb65cf0",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 27.5,
+                "y": 3,
+                "z": -22
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-16518279",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 20,
+                "y": 3,
+                "z": -25.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-6a9dfee4",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 20,
+                "y": 3,
+                "z": -13.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-f77f3513",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 20,
+                "y": 3,
+                "z": -18.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-275e0863",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 27.5,
+                "y": 3,
+                "z": -32.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
               }
             ]
           }

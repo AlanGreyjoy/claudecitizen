@@ -42,11 +42,11 @@ export interface HangarPlacementDto {
 
 export interface HangarBuildStateDto {
   area: BuildArea;
-  assignedHangar: number;
+  assignedHangar: number | null;
+  arcBalance: number;
   catalog: PropDefinitionDto[];
   inventory: PlayerPropInventoryDto[];
   placements: HangarPlacementDto[];
-  arcBalance: number;
 }
 
 @Injectable()
@@ -73,7 +73,7 @@ export class GameHangarService {
 
     return {
       area,
-      assignedHangar: player.assignedHangar ?? 2,
+      assignedHangar: player.assignedHangar ?? null,
       arcBalance: player.arcBalance,
       catalog: catalog.map((entry) => this.asPropDefinitionDto(entry)),
       inventory: inventoryRows.map((entry) => ({
@@ -136,6 +136,9 @@ export class GameHangarService {
     await this.prisma.$transaction(async (tx) => {
       const player = await tx.player.findUnique({ where: { id: playerId } });
       if (!player) throw new NotFoundException('Player not found.');
+      if (area === 'hangar' && player.assignedHangar === null) {
+        throw new BadRequestException('Deliver your ship to a hangar bay before placing props.');
+      }
 
       const definition = await tx.propDefinition.findUnique({
         where: { id: propDefinitionId },
@@ -208,6 +211,9 @@ export class GameHangarService {
     await this.prisma.$transaction(async (tx) => {
       const player = await tx.player.findUnique({ where: { id: playerId } });
       if (!player) throw new NotFoundException('Player not found.');
+      if (area === 'hangar' && player.assignedHangar === null) {
+        throw new BadRequestException('Deliver your ship to a hangar bay before moving props.');
+      }
 
       const placement = await tx.hangarPlacement.findFirst({
         where: { id: placementId, playerId, area },
@@ -279,6 +285,13 @@ export class GameHangarService {
     await this.prisma.player.update({
       where: { id: playerId },
       data: { assignedHangar: hangarIndex },
+    });
+  }
+
+  async resetAssignedHangar(playerId: string): Promise<void> {
+    await this.prisma.player.update({
+      where: { id: playerId },
+      data: { assignedHangar: null },
     });
   }
 

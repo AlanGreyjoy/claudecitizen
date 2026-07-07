@@ -1,4 +1,11 @@
 import * as THREE from "three";
+import { N8AOPostPass } from "n8ao";
+import {
+  EffectComposer,
+  EffectPass,
+  RenderPass,
+  SMAAEffect,
+} from "postprocessing";
 import { createPlayerControls } from "../flight/player_controls";
 import {
   FIRST_PERSON_PITCH_LIMIT,
@@ -47,6 +54,7 @@ import {
   updateShipRig,
 } from "../player/ship_rig";
 import { createCharacterAvatar } from "../player/avatar";
+import { resolveRenderQuality } from "../render/main/domain/render_quality";
 import { createShipModel } from "../render/main/scene/ship_model";
 import { updateShipPlacement } from "../render/main/update/sun_system";
 import { loadPrefabDocument } from "../world/prefabs/loader";
@@ -233,6 +241,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   const interactPromptEl = requireElement<HTMLElement>("interact-prompt");
 
   // --- scene --------------------------------------------------------------------
+  const renderQuality = resolveRenderQuality();
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -246,6 +255,39 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 2_000);
   camera.position.set(14, 8, 14);
   const cameraTarget = new THREE.Vector3();
+
+  const composer = new EffectComposer(renderer, {
+    frameBufferType: THREE.HalfFloatType,
+    multisampling: 0,
+  });
+  composer.addPass(new RenderPass(scene, camera));
+  let n8aoPass: N8AOPostPass | null = null;
+  if (renderQuality.ambientOcclusionEnabled) {
+    n8aoPass = new N8AOPostPass(scene, camera, 1, 1);
+    n8aoPass.configuration.aoRadius = 0.2;
+    n8aoPass.configuration.intensity = renderQuality.ambientOcclusionIntensity * 1.35;
+    n8aoPass.configuration.distanceFalloff = 1.0;
+    n8aoPass.configuration.gammaCorrection = false;
+    n8aoPass.configuration.colorMultiply = true;
+    n8aoPass.configuration.halfRes = renderQuality.ambientOcclusionResolutionScale <= 0.5;
+    n8aoPass.configuration.depthAwareUpsampling = true;
+    n8aoPass.configuration.transparencyAware = false;
+    n8aoPass.setQualityMode(
+      renderQuality.ambientOcclusionSamples <= 8
+        ? "Performance"
+        : renderQuality.ambientOcclusionSamples <= 16
+          ? "Low"
+          : renderQuality.ambientOcclusionSamples <= 32
+            ? "Medium"
+            : renderQuality.ambientOcclusionSamples <= 64
+              ? "High"
+              : "Ultra",
+    );
+    composer.addPass(n8aoPass);
+  }
+  if (renderQuality.useSmaa) {
+    composer.addPass(new EffectPass(camera, new SMAAEffect()));
+  }
 
   scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x1a2030, 1.0));
   const sun = new THREE.DirectionalLight(0xfff2df, 2.2);
@@ -672,9 +714,13 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   }
 
   function resize(): void {
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    renderer.setSize(width, height, false);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    composer.setSize(width, height);
+    n8aoPass?.setSize(width * renderer.getPixelRatio(), height * renderer.getPixelRatio());
   }
   window.addEventListener("resize", resize);
   resize();
@@ -725,7 +771,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     );
 
     updateCamera(dt);
-    renderer.render(scene, camera);
+    composer.render(dt);
 
     interactPromptEl.textContent = prompt;
     interactPromptEl.classList.toggle("is-visible", prompt.length > 0);

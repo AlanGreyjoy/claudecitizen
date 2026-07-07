@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Planet, RenderStats, SpikeRenderWorld } from '../../types';
+import type { Planet, RenderStats, SpikeRenderWorld, SsaoSettings } from '../../types';
 import { normalize } from '../../math/vec3';
 import { createCharacterAvatar } from '../../player/avatar';
 import { createCloudShell, createPlanetLakeWaterManager } from '../effects';
@@ -16,7 +16,10 @@ import { DAY_LENGTH_SECONDS } from './domain/constants';
 import type { RenderMode, SpikeRenderer, TimeOverride } from './domain/types';
 import { getStationFrame } from '../../world/station';
 import { getShipLayout } from '../../player/ship_layout';
-import { createPrefabStationGroup } from '../prefabs/prefab_renderer';
+import {
+  createPrefabStationGroup,
+  updateLocalLightShadowCull,
+} from '../prefabs/prefab_renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
 import { createComposerStack } from './scene/composer_stack';
@@ -26,6 +29,10 @@ import { createStationModel } from './scene/station_model';
 import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene_lighting';
 import { createWebGlRenderer } from './scene/webgl_renderer';
 import { resolveRenderQuality } from './domain/render_quality';
+import {
+  resolveColorCorrectionSettings,
+  saveColorCorrectionSettings,
+} from './domain/color_correction';
 import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
 import { setFogSettings as applyFogSettings, updateEnvironment } from './update/environment';
 import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun_system';
@@ -82,7 +89,15 @@ export function createSpikeRenderer(
   );
   const cloudShell = createCloudShell(scene, planet, seed, tileManager.renderScale);
 
-  const composerStack = createComposerStack(renderer, scene, camera, planet, lighting.sun);
+  const composerStack = createComposerStack(
+    renderer,
+    scene,
+    camera,
+    planet,
+    lighting.sun,
+    tileManager.renderScale,
+  );
+  composerStack.colorCorrectionEffect.setSettings(resolveColorCorrectionSettings());
 
   const atmosphereMesh = buildAtmosphereMesh(planet, tileManager.renderScale);
   scene.add(atmosphereMesh);
@@ -249,6 +264,12 @@ export function createSpikeRenderer(
       { frame: stationFrame, roomId: world.stationRoomId ?? null },
     );
     updateSpeedBlur(composerStack.speedBlurEffect, world);
+    updateLocalLightShadowCull(
+      stationMesh,
+      camera.position,
+      80 * renderScale,
+      2,
+    );
 
     composerStack.composer.render(dt);
 
@@ -261,6 +282,22 @@ export function createSpikeRenderer(
     return renderStats;
   }
 
+  function applySsaoSettings(settings: Partial<SsaoSettings>): void {
+    const n8aoPass = composerStack.n8aoPass;
+    if (!n8aoPass) return;
+    if (settings.intensity !== undefined) {
+      composerStack.ssaoBaseIntensity = settings.intensity;
+      n8aoPass.configuration.intensity = settings.intensity;
+    }
+    if (settings.aoRadius !== undefined) {
+      composerStack.ssaoBaseRadius = settings.aoRadius;
+      n8aoPass.configuration.aoRadius = settings.aoRadius * tileManager.renderScale;
+    }
+    if (settings.distanceFalloff !== undefined) {
+      n8aoPass.configuration.distanceFalloff = settings.distanceFalloff;
+    }
+  }
+
   return {
     rendererMode,
     render,
@@ -270,6 +307,23 @@ export function createSpikeRenderer(
     },
     setFogSettings(settings) {
       applyFogSettings(composerStack.volumetricFogEffect, settings);
+    },
+    setColorCorrectionSettings(settings) {
+      composerStack.colorCorrectionEffect.setSettings(settings);
+      saveColorCorrectionSettings(settings);
+    },
+    setSsaoSettings(settings: Partial<SsaoSettings>) {
+      applySsaoSettings(settings);
+    },
+    setSsaoIntensity(intensity) {
+      applySsaoSettings({ intensity });
+    },
+    setSsaoColor(color) {
+      if (composerStack.n8aoPass) {
+        composerStack.n8aoPass.configuration.color = color === null
+          ? new THREE.Color(0, 0, 0)
+          : new THREE.Color(color);
+      }
     },
     setTimeOverride(mode) {
       timeOverride = mode;

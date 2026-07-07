@@ -13,12 +13,15 @@ export interface AvmsTerminalElements {
   detailShieldValueEl: HTMLElement;
   statusEl: HTMLElement;
   deliverBtnEl: HTMLButtonElement;
+  storeBtnEl: HTMLButtonElement;
   closeBtnEl: HTMLButtonElement;
 }
 
 export interface AvmsOpenOptions {
   ships: AvmsShipRecord[];
   onDeliver: (ship: AvmsShipRecord) => Promise<void>;
+  canStore: boolean;
+  onStore: () => Promise<void>;
 }
 
 function formatPercent(current: number, max: number): string {
@@ -36,7 +39,10 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
   let ships: AvmsShipRecord[] = [];
   let selectedIndex = 0;
   let delivering = false;
+  let storing = false;
+  let canStore = false;
   let onDeliver: AvmsOpenOptions['onDeliver'] | null = null;
+  let onStore: AvmsOpenOptions['onStore'] | null = null;
 
   function renderShipList(): void {
     elements.shipListEl.replaceChildren();
@@ -115,34 +121,64 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       document.exitPointerLock?.();
       renderShipList();
       renderDetail();
-      setStatus('Select a vehicle and request hangar delivery.');
-      elements.deliverBtnEl.disabled = ships.length === 0 || delivering;
+      setStatus(canStore ? 'Select a vehicle, request delivery, or store the current ship.' : 'Select a vehicle and request hangar delivery.');
+      elements.deliverBtnEl.disabled = ships.length === 0 || delivering || storing;
+      elements.storeBtnEl.disabled = !canStore || delivering || storing;
       elements.closeBtnEl.focus();
       return;
     }
     delivering = false;
+    storing = false;
+    canStore = false;
     onDeliver = null;
+    onStore = null;
     elements.rootEl.blur();
   }
 
   async function handleDeliver(): Promise<void> {
     const ship = ships[selectedIndex];
-    if (!ship || delivering || !onDeliver) return;
+    if (!ship || delivering || storing || !onDeliver) return;
     delivering = true;
     elements.deliverBtnEl.disabled = true;
+    elements.storeBtnEl.disabled = true;
     setStatus('Dispatching vehicle to hangar bay…');
     try {
       await onDeliver(ship);
       setOpen(false);
     } catch (error) {
       delivering = false;
-      elements.deliverBtnEl.disabled = false;
+      elements.deliverBtnEl.disabled = ships.length === 0;
+      elements.storeBtnEl.disabled = !canStore;
       setStatus(error instanceof Error ? error.message : 'Delivery failed.');
+    }
+  }
+
+  async function handleStore(): Promise<void> {
+    if (storing || delivering || !onStore || !canStore) return;
+    storing = true;
+    elements.deliverBtnEl.disabled = true;
+    elements.storeBtnEl.disabled = true;
+    setStatus('Storing current vehicle…');
+    try {
+      await onStore();
+      storing = false;
+      canStore = false;
+      elements.deliverBtnEl.disabled = ships.length === 0;
+      elements.storeBtnEl.disabled = true;
+      setStatus('Ship stored. Select a vehicle and request delivery.');
+    } catch (error) {
+      storing = false;
+      elements.deliverBtnEl.disabled = ships.length === 0;
+      elements.storeBtnEl.disabled = !canStore;
+      setStatus(error instanceof Error ? error.message : 'Store failed.');
     }
   }
 
   elements.deliverBtnEl.addEventListener('click', () => {
     void handleDeliver();
+  });
+  elements.storeBtnEl.addEventListener('click', () => {
+    void handleStore();
   });
   elements.closeBtnEl.addEventListener('click', () => setOpen(false));
 
@@ -172,7 +208,10 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       ships = options.ships;
       selectedIndex = 0;
       delivering = false;
+      storing = false;
+      canStore = options.canStore;
       onDeliver = options.onDeliver;
+      onStore = options.onStore;
       setOpen(true);
     },
   };

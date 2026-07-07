@@ -393,6 +393,30 @@ export function createEditorViewport(
         );
         return group;
       }
+      case "spot-light": {
+        const color = new THREE.Color(component.color ?? "#dfeaff").getHex();
+        const group = new THREE.Group();
+        group.add(createPrefabLightObject(component));
+        const bulb = makeHelperMesh(
+          new THREE.SphereGeometry(0.18, 16, 10),
+          color,
+          0.82,
+        );
+        const angle = THREE.MathUtils.degToRad(component.angle ?? 45);
+        const range = component.distance > 0 ? component.distance : 24;
+        const coneGeometry = track(new THREE.ConeGeometry(
+          Math.tan(angle) * range,
+          range,
+          24,
+          1,
+          true,
+        ));
+        coneGeometry.translate(0, -range / 2, 0);
+        coneGeometry.rotateX(-Math.PI / 2);
+        const cone = makeHelperMesh(coneGeometry, color, 0.14, true);
+        group.add(bulb, cone);
+        return group;
+      }
       case "spawn-point": {
         const group = new THREE.Group();
         const cone = makeHelperMesh(
@@ -760,6 +784,15 @@ export function createEditorViewport(
     }
   }
 
+  function applyHiddenNodesForEntity(entityId: string): void {
+    const entityGroup = objectsById.get(entityId);
+    if (!entityGroup) return;
+    for (const nodeName of store.getGlbHiddenNodes(entityId)) {
+      const node = findGlbNodeByName(entityGroup, nodeName);
+      if (node) node.visible = false;
+    }
+  }
+
   function buildGlbNodeRef(object: THREE.Object3D): GlbNodeRef {
     return {
       uuid: object.uuid,
@@ -817,6 +850,7 @@ export function createEditorViewport(
           group.add(model);
           store.setGlbTree(entity.id, buildGlbNodeRef(model));
           applyGlbOverridesForEntity(entity.id);
+          applyHiddenNodesForEntity(entity.id);
           applyShipPreview();
         })
         .catch(() => {
@@ -1356,6 +1390,10 @@ export function createEditorViewport(
       if (override) {
         applyGlbOverrideToNode(event.entityId, event.nodeName, override);
       }
+      return;
+    }
+    if (event.type === "glb-visibility") {
+      applyHiddenNodesForEntity(event.entityId);
       return;
     }
     if (event.type === "history") {

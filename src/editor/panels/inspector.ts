@@ -624,6 +624,78 @@ export function createInspectorPanel(
             el("span", {}),
           ]),
         ];
+      case "spot-light":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Color" }),
+            colorInput(component.color ?? "#dfeaff", (color) =>
+              update({ ...component, color }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Intensity" }),
+            numberInput(component.intensity, (intensity) =>
+              update({
+                ...component,
+                intensity: Math.min(5_000, Math.max(0, intensity)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Range" }),
+            numberInput(component.distance, (distance) =>
+              update({
+                ...component,
+                distance: Math.min(500, Math.max(0, distance)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Decay" }),
+            numberInput(component.decay ?? 2, (decay) =>
+              update({
+                ...component,
+                decay: Math.min(4, Math.max(0, decay)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Angle" }),
+            numberInput(component.angle ?? 45, (angle) =>
+              update({
+                ...component,
+                angle: Math.min(90, Math.max(0, angle)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Penumbra" }),
+            numberInput(component.penumbra ?? 0, (penumbra) =>
+              update({
+                ...component,
+                penumbra: Math.min(1, Math.max(0, penumbra)),
+              }),
+            ),
+          ]),
+          el("label", { className: "ed-checkbox-row" }, [
+            (() => {
+              const checkbox = el("input", {
+                attrs: { type: "checkbox" },
+                on: {
+                  change: (event) =>
+                    update({
+                      ...component,
+                      castShadow:
+                        (event.target as HTMLInputElement).checked || undefined,
+                    }),
+                },
+              });
+              checkbox.checked = component.castShadow ?? false;
+              return checkbox;
+            })(),
+            el("span", { text: "Cast shadows" }),
+          ]),
+        ];
       case "collider":
         return [
           el("div", { className: "ed-field-row-wide" }, [

@@ -2,6 +2,7 @@ import type { GameBootstrap } from './api';
 import { worldSocketUrl } from './api';
 import type { WorldState } from '../player/world_state';
 import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/world_state';
+import { getShipInstance } from '../flight/ship_world';
 import { MODE_IN_SHIP } from '../player/modes';
 import type { CharacterRenderState, NetworkLod, NetworkRenderEntity, NetworkShipBody, NetworkShipRig, Vec3 } from '../types';
 
@@ -251,6 +252,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
       const now = performance.now();
       if (now - lastPresenceAt < 50) return;
       lastPresenceAt = now;
+      const shipInstance = getShipInstance(world.activeShipId);
       send('presence:update', {
         mode: world.mode,
         character:
@@ -262,25 +264,29 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
                 position: world.character.position,
                 up: world.character.up,
               },
-        ship: {
-          ...getActiveShipBody(world),
-          shipId: world.activeShipId,
-          prefabId: getActiveShip(world).prefabId,
-          hp: getActiveShip(world).vitals.hp,
-          shields: getActiveShip(world).vitals.shields,
-          maxHp: getActiveShip(world).spec.maxHp,
-          maxShields: getActiveShip(world).spec.maxShields,
-        },
-        shipRig: {
-          gear01: getActiveShipRig(world).gear01,
-          ramp01: getActiveShipRig(world).ramp01,
-          doors: Object.fromEntries(
-            Object.entries(getActiveShipRig(world).doors).map(([id, door]) => [
-              id,
-              door.open01,
-            ]),
-          ),
-        },
+        ship: shipInstance
+          ? {
+              ...getActiveShipBody(world),
+              shipId: world.activeShipId,
+              prefabId: getActiveShip(world).prefabId,
+              hp: getActiveShip(world).vitals.hp,
+              shields: getActiveShip(world).vitals.shields,
+              maxHp: getActiveShip(world).spec.maxHp,
+              maxShields: getActiveShip(world).spec.maxShields,
+            }
+          : null,
+        shipRig: shipInstance
+          ? {
+              gear01: getActiveShipRig(world).gear01,
+              ramp01: getActiveShipRig(world).ramp01,
+              doors: Object.fromEntries(
+                Object.entries(getActiveShipRig(world).doors).map(([id, door]) => [
+                  id,
+                  door.open01,
+                ]),
+              ),
+            }
+          : null,
         stationRoomId: world.character.stationRoomId ?? null,
         shipZoneId: world.character.deckZone ?? null,
       });

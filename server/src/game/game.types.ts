@@ -45,7 +45,7 @@ export interface HangarPlacementDto {
 
 export interface HangarBuildStateDto {
   area: BuildArea;
-  assignedHangar: number;
+  assignedHangar: number | null;
   catalog: PropDefinitionDto[];
   inventory: PlayerPropInventoryDto[];
   placements: HangarPlacementDto[];

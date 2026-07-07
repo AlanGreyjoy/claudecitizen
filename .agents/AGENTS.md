@@ -18,6 +18,30 @@
 | `server/` | Nest.js API (`@claudecitizen/server`) | CommonJS | NestJS, Prisma, Postgres, Redis |
 | `editor/assets/` | Local editor asset library (gitignored) | — | — |
 
+## Editor (dev-only)
+
+The in-browser prefab editor is only available under `npm run dev`. It assembles prefabs from entities, GLB assets, primitives, and gameplay components.
+
+| Path | Role |
+|------|------|
+| `src/editor/` | Editor business logic: document store, panels, commands, serialization |
+| `src/editor/document.ts` | `EditorEntity` model, `EditorStore`, selection, GLB overrides |
+| `src/editor/panels/hierarchy.ts` | Scene tree / outliner |
+| `src/editor/panels/inspector.ts` | Entity properties & component editor |
+| `src/editor/panels/project.ts` | Asset browser |
+| `src/editor/serialize.ts` | Convert editor state to/from `PrefabDocument` |
+| `src/render/editor/viewport.ts` | Three.js editor viewport |
+| `src/world/prefabs/schema.ts` | Canonical prefab JSON schema |
+| `src/render/prefabs/prefab_renderer.ts` | Runtime prefab rendering |
+
+### GLB node overrides and deletions
+
+Editor-side transform overrides (`glbNodeTransforms`) and deleted nodes (`glbNodeHidden`) are persisted by **GLB node name**, not by Three.js UUID. This means:
+
+- Node names are assumed unique within a model. If two nodes share a name, overrides/deletions apply to the first match.
+- Hierarchy selections use UUIDs for the current session, but resolve to names before persisting.
+- To add a new GLB-node-level operation: resolve the selected UUID→name via `store.getGlbNodeName()`, mutate the entity in `document.ts`, round-trip it through `serialize.ts`, and apply it in both `src/render/editor/viewport.ts` and `src/render/prefabs/prefab_renderer.ts`.
+
 ## Server dev setup
 
 ```bash
