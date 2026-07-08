@@ -7,6 +7,7 @@ import { createDebugSettings } from './debug_settings';
 import { createFpsCounter } from './fps_counter';
 import { createMinimap } from './minimap';
 import { createStatsPanel } from './stats_panel';
+import { createFlightReticle } from './flight_reticle';
 
 export interface HudElements {
   fpsEl: HTMLElement;
@@ -24,6 +25,7 @@ export interface HudElements {
   controlsEl: HTMLElement;
   interactPromptEl: HTMLElement;
   screenFadeEl: HTMLElement;
+  flightReticleEl: HTMLElement;
 }
 
 export interface HudUpdateParams {
@@ -76,6 +78,7 @@ export function createHud(
     readoutsEl: elements.readoutsEl,
     statusEl: elements.statusEl,
   });
+  const flightReticle = createFlightReticle({ rootEl: elements.flightReticleEl });
 
   debugSettings.subscribe((settings) => {
     debugSettings.applyVisibility({
@@ -97,6 +100,12 @@ export function createHud(
     elements.interactPromptEl.classList.toggle('is-visible', prompt.length > 0);
     elements.screenFadeEl.style.opacity = String(params.world.screenFade ?? 0);
 
+    flightReticle.update({
+      mode: params.world.mode,
+      flightMode: params.world.flightMode,
+      quantum: params.world.quantum,
+    });
+
     const showCharacter = params.world.mode !== MODE_IN_SHIP;
     minimap.update({
       planet: params.planet,
@@ -108,6 +117,8 @@ export function createHud(
       characterPosition: params.characterPosition,
       showCharacter,
       nowMs: params.nowMs,
+      flightMode: params.world.flightMode,
+      quantumPhase: params.world.quantum.phase,
     });
 
     if (debugSettings.getSettings().showStatsPanel) {

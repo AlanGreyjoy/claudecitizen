@@ -13,6 +13,7 @@ import {
   updateSmoothZoom,
 } from '../flight/camera_zoom';
 import { buildCharacterInput, buildFlightInput } from '../flight/control_mix';
+import { QUANTUM_ENGAGE_HOLD_SECONDS } from '../flight/quantum_travel';
 import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character_controller';
 import {
   getKeyboardBindingCodes,
@@ -29,6 +30,7 @@ import {
 } from '../flight/input_settings';
 
 const EXIT_SEAT_HOLD_SECONDS = 0.5;
+const FLIGHT_MODE_TAP_THRESHOLD_SECONDS = 0.25;
 const SEAT_LOOK_SNAP_HALF_LIFE_SECONDS = 0.35;
 const SEAT_LOOK_YAW_SENSITIVITY = 0.0035;
 const SEAT_LOOK_PITCH_SENSITIVITY = 0.0028;
@@ -100,6 +102,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   let shipCameraView: ShipCameraView = 'cockpit';
   let yHeldSinceMs: number | null = null;
   let exitSeatTriggered = false;
+  let uHeldSinceMs: number | null = null;
+  let quantumEngageTriggered = false;
+  let cycleFlightModePressed = false;
   let settings: GameSettings = loadGameSettings();
   let inputSuppressed = false;
 
@@ -230,6 +235,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     seatLook.targetYawRadians = 0;
     yHeldSinceMs = null;
     exitSeatTriggered = false;
+    uHeldSinceMs = null;
+    quantumEngageTriggered = false;
+    cycleFlightModePressed = false;
   }
 
   function isSeatLookActive(): boolean {
@@ -260,6 +268,14 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       if (!wasDown && isKeyboardCode('cycleCamera', event.code)) toggleCameraView();
       if (
         !wasDown &&
+        isKeyboardCode('cycleFlightMode', event.code) &&
+        mode === 'in-ship'
+      ) {
+        uHeldSinceMs = performance.now();
+        quantumEngageTriggered = false;
+      }
+      if (
+        !wasDown &&
         ONE_SHOT_KEYBOARD_ACTIONS.some((action) => isKeyboardCode(action, event.code))
       ) {
         // The default F binding is hold-only while seated; tap-F interact stays for deck/doors/ramp.
@@ -270,7 +286,21 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       keys.add(event.code);
       return;
     }
+    if (
+      isKeyboardCode('cycleFlightMode', event.code) &&
+      uHeldSinceMs !== null &&
+      mode === 'in-ship'
+    ) {
+      const heldSeconds = (performance.now() - uHeldSinceMs) / 1000;
+      if (heldSeconds < FLIGHT_MODE_TAP_THRESHOLD_SECONDS) {
+        cycleFlightModePressed = true;
+      }
+    }
     keys.delete(event.code);
+    if (isKeyboardCode('cycleFlightMode', event.code)) {
+      uHeldSinceMs = null;
+      quantumEngageTriggered = false;
+    }
   }
 
   function onMouseMove(event: MouseEvent) {
@@ -346,6 +376,25 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('click', onCanvasClick);
 
+  function updateQuantumEngageHold(): boolean {
+    if (mode !== 'in-ship' || !isKeyboardActionDown('cycleFlightMode')) {
+      uHeldSinceMs = null;
+      quantumEngageTriggered = false;
+      return false;
+    }
+    if (uHeldSinceMs === null) {
+      uHeldSinceMs = performance.now();
+      quantumEngageTriggered = false;
+    }
+    if (quantumEngageTriggered) return false;
+    const heldSeconds = (performance.now() - uHeldSinceMs) / 1000;
+    if (heldSeconds >= QUANTUM_ENGAGE_HOLD_SECONDS) {
+      quantumEngageTriggered = true;
+      return true;
+    }
+    return false;
+  }
+
   function updateExitSeatHold(): boolean {
     if (mode !== 'in-ship' || !isExitSeatHeld()) {
       yHeldSinceMs = null;
@@ -389,6 +438,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         hangarRotatePressed: false,
         hangarCancelPressed: false,
         hangarDigit: null,
+        cycleFlightModePressed: false,
+        quantumEngagePressed: false,
         wasKeyPressed: () => false,
       };
     }
@@ -406,6 +457,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
           : null;
     const interactPressed = wasKeyboardActionPressed('interact') || consumeDeviceActionPress('interact');
     const justPressedSnapshot = new Set(justPressed);
+    const cycleFlightModeTap = cycleFlightModePressed;
+    cycleFlightModePressed = false;
     const actions = {
       interactPressed,
       exitSeatPressed: updateExitSeatHold(),
@@ -414,6 +467,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       hangarRotatePressed: wasKeyboardActionPressed('hangarRotate'),
       hangarCancelPressed: wasKeyboardActionPressed('hangarCancel'),
       hangarDigit,
+      cycleFlightModePressed: cycleFlightModeTap,
+      quantumEngagePressed: updateQuantumEngageHold(),
       wasKeyPressed: (code: string) => justPressedSnapshot.has(code) || (code === 'KeyF' && interactPressed),
     };
     justPressed.clear();

@@ -436,6 +436,7 @@ export function createInspectorPanel(
     switch (component.type) {
       case "station-frame":
       case "prop-frame":
+      case "item-frame":
         return [];
       case "spawn-point":
         return [

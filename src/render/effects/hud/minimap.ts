@@ -6,6 +6,13 @@ import {
 } from '../../../world/coordinates';
 import { resolveLandingSite } from '../../../world/landing_sites';
 import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
+import {
+  destinationWorldPosition,
+  getQuantumDestination,
+  SPIKE_QUANTUM_DESTINATION_ID,
+} from '../../../world/quantum_destinations';
+import type { ShipFlightMode } from '../../../flight/flight_modes';
+import type { QuantumPhase } from '../../../flight/quantum_travel';
 import type { Biome, Planet, Vec3 } from '../../../types';
 
 const GRID_SIZE = 48;
@@ -23,6 +30,8 @@ export interface MinimapUpdateParams {
   characterPosition: Vec3;
   showCharacter: boolean;
   nowMs: number;
+  flightMode?: ShipFlightMode;
+  quantumPhase?: QuantumPhase;
 }
 
 function biomeColor(biome: Biome): string {
@@ -240,6 +249,31 @@ export function createMinimap(canvas: HTMLCanvasElement, planet: Planet, seed: n
     ctx.fillText('N', nx - Math.sin(heading) * 12, ny + Math.cos(heading) * 12);
   }
 
+  function drawDestinationMarker(
+    localEast: number,
+    localNorth: number,
+    focusEast: number,
+    focusNorth: number,
+    dimmed: boolean,
+  ): void {
+    const px = ((localEast - focusEast) / RANGE_METERS) * mapScale();
+    const py = -((localNorth - focusNorth) / RANGE_METERS) * mapScale();
+    const half = displaySize / 2;
+    if (Math.abs(px) > half + 8 || Math.abs(py) > half + 8) return;
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = dimmed ? 'rgba(60, 150, 190, 0.45)' : 'rgba(90, 230, 255, 0.95)';
+    ctx.strokeStyle = dimmed ? 'rgba(120, 200, 240, 0.35)' : 'rgba(210, 250, 255, 0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.rect(-5, -5, 10, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function update({
     focusPosition,
     focusForward,
@@ -248,6 +282,8 @@ export function createMinimap(canvas: HTMLCanvasElement, planet: Planet, seed: n
     characterPosition,
     showCharacter,
     nowMs,
+    flightMode,
+    quantumPhase,
   }: MinimapUpdateParams): void {
     resize();
     if (displaySize <= 0) return;
@@ -302,6 +338,21 @@ export function createMinimap(canvas: HTMLCanvasElement, planet: Planet, seed: n
         'rgba(139, 216, 255, 0.95)',
         'rgba(220, 240, 255, 0.9)',
       );
+    }
+
+    if (flightMode === 'nav') {
+      const destination = getQuantumDestination(planet, seed, SPIKE_QUANTUM_DESTINATION_ID);
+      if (destination) {
+        const destPosition = destinationWorldPosition(planet, seed, destination);
+        const destLocal = worldToLocalEastNorth(destPosition, origin, east, north);
+        drawDestinationMarker(
+          destLocal.east,
+          destLocal.north,
+          focusLocal.east,
+          focusLocal.north,
+          quantumPhase !== 'idle' && quantumPhase !== undefined,
+        );
+      }
     }
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';

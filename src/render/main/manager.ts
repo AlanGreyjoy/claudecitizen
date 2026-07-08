@@ -36,6 +36,13 @@ import {
 import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
 import { setFogSettings as applyFogSettings, updateEnvironment } from './update/environment';
 import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun_system';
+import { createQuantumBubble } from '../effects/quantum_bubble';
+import { evaluateQuantumEligibility, createQuantumTravelState } from '../../flight/quantum_travel';
+import {
+  destinationWorldPosition,
+  getQuantumDestination,
+  SPIKE_QUANTUM_DESTINATION_ID,
+} from '../../world/quantum_destinations';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 
@@ -117,6 +124,7 @@ export function createSpikeRenderer(
 
   const avatar = createCharacterAvatar(scene, tileManager.renderScale);
   const remotePresence = createRemotePresenceRenderer(scene, tileManager.renderScale);
+  const quantumBubble = createQuantumBubble(scene, tileManager.renderScale);
 
   let lastTime = 0;
   let timeOverride: TimeOverride = 'auto';
@@ -214,6 +222,35 @@ export function createSpikeRenderer(
       focusBody.position,
       renderScale,
     );
+    quantumBubble.attachToShip(shipRenderPool.getActiveGroup());
+    const quantumState = world.quantum ?? createQuantumTravelState();
+    const spikeDestination = getQuantumDestination(planet, seed, SPIKE_QUANTUM_DESTINATION_ID);
+    const destinationPosition = spikeDestination
+      ? destinationWorldPosition(planet, seed, spikeDestination)
+      : null;
+    let destinationHighlighted = false;
+    if (
+      destinationPosition &&
+      world.flightMode === 'nav' &&
+      quantumState.phase === 'idle'
+    ) {
+      const eligibility = evaluateQuantumEligibility({
+        body: ship,
+        flightMode: world.flightMode ?? 'traverse',
+        quantum: quantumState,
+        planet,
+        seed,
+      });
+      destinationHighlighted = eligibility.ok;
+    }
+    quantumBubble.update({
+      quantum: quantumState,
+      flightMode: world.flightMode ?? 'traverse',
+      focusPosition: focusBody.position,
+      destinationPosition,
+      destinationHighlighted,
+      timeSeconds: nowSeconds,
+    });
     updateShipPlacement(
       stationMesh,
       { position: stationFrame.origin, up: stationFrame.up, forward: stationFrame.forward },
@@ -339,6 +376,7 @@ export function createSpikeRenderer(
       lakeWaterManager.dispose();
       vegetationManager.dispose();
       remotePresence.dispose();
+      quantumBubble.dispose();
       avatar.dispose();
       shipRenderPool.dispose();
       tileManager.dispose();

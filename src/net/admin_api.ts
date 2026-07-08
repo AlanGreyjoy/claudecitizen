@@ -98,8 +98,36 @@ export interface GameSettings {
   startingArcBalance: number;
   starterShipDefinitionIds: string[];
   starterPropDefinitionIds: string[];
+  starterItemDefinitionIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ItemDefinition {
+  id: string;
+  name: string;
+  description: string;
+  itemType: string;
+  subType: string;
+  prefabId: string | null;
+  iconUrl: string | null;
+  stackMax: number;
+  costArc: number;
+  rarity: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ItemDefinitionInput {
+  name: string;
+  description: string;
+  itemType: string;
+  subType: string;
+  prefabId: string | null;
+  iconUrl: string | null;
+  stackMax: number;
+  costArc: number;
+  rarity: string;
 }
 
 export interface PropDefinition {
@@ -237,6 +265,7 @@ export function updateGameSettings(body: {
   startingArcBalance: number;
   starterShipDefinitionIds: string[];
   starterPropDefinitionIds: string[];
+  starterItemDefinitionIds: string[];
 }): Promise<GameSettings> {
   return requestAdminJson<GameSettings>('/admin/settings', {
     method: 'PUT',
@@ -262,5 +291,32 @@ export function updatePropDefinition(
   return requestAdminJson<PropDefinition>(`/admin/props/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
+  });
+}
+
+export function listItemDefinitions(): Promise<ItemDefinition[]> {
+  return requestAdminJson<ItemDefinition[]>('/admin/items', { method: 'GET' });
+}
+
+export function createItemDefinition(body: ItemDefinitionInput): Promise<ItemDefinition> {
+  return requestAdminJson<ItemDefinition>('/admin/items', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateItemDefinition(
+  id: string,
+  body: Partial<ItemDefinitionInput>,
+): Promise<ItemDefinition> {
+  return requestAdminJson<ItemDefinition>(`/admin/items/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteItemDefinition(id: string): Promise<void> {
+  return requestAdminJson<void>(`/admin/items/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   });
 }

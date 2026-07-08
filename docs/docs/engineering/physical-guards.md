@@ -210,7 +210,7 @@ flowchart TB
 | `sampleFootPlanetSurface()` vs raycast | AGENTS.md | Correct API choice |
 | Station door animation → collider → F-key | AGENTS.md | Multi-file behavioral trace |
 | Protected assets / no secrets in client | AGENTS.md | Security process |
-| No unit tests; Alan owns QA | AGENTS.md | Workflow, not code structure |
+| No unit tests; user owns QA | AGENTS.md | Workflow, not code structure |
 | Do not start dev servers | AGENTS.md | Agent behavior |
 
 ### How physical + semantic guards reinforce AI coding
@@ -222,7 +222,7 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-  participant Human as Alan / contributor
+  participant Human as Contributor
   participant Agent as AI agent
   participant Semantic as AGENTS.md + .mdc rules
   participant ESLint as eslint.config.js

@@ -2,9 +2,16 @@ import {
   integrateFlightBody,
   integrateHoveringShip,
 } from "../flight/flight_body";
+import { cycleFlightMode } from "../flight/flight_modes";
+import {
+  advanceQuantumTravel,
+  buildNavPrompt,
+  evaluateQuantumEligibility,
+  tryBeginQuantumTravel,
+} from "../flight/quantum_travel";
 import { regenerateShipShields } from "../flight/ship_instance";
 import { getShipInstance, listShipInstances, removeShipInstance } from "../flight/ship_world";
-import { createPlayerControls } from "./player_controls";
+import { type createPlayerControls } from "./player_controls";
 import type { KeyboardActionId } from "../flight/input_settings";
 import {
   MODE_IN_SHIP,
@@ -902,20 +909,81 @@ export function createGameLoop({
         }
       } else if (world.mode === MODE_IN_SHIP) {
         const instance = getActiveShip(world);
-        instance.body = integrateFlightBody(
-          instance.body,
-          controls.sampleFlightInput(),
-          dt,
-          planet,
-          seed,
-          {
-            maxSpeedMps: instance.spec.maxSpeedMps,
-            throttleAccelMps2: instance.spec.throttleAccelMps2,
-          },
-        );
-        world.prompt = `${holdPrompt("seatLook", "look around")} · ${holdPrompt("exitSeat", "get up")}`;
-        if (actions.exitSeatPressed) {
+
+        if (actions.cycleFlightModePressed && world.quantum.phase === "idle") {
+          world.flightMode = cycleFlightMode(world.flightMode);
+        }
+
+        if (actions.quantumEngagePressed && world.quantum.phase === "idle") {
+          const eligibility = evaluateQuantumEligibility({
+            body: instance.body,
+            flightMode: world.flightMode,
+            quantum: world.quantum,
+            planet,
+            seed,
+          });
+          if (eligibility.ok) {
+            world.quantum = tryBeginQuantumTravel(
+              world.quantum,
+              instance.body,
+              planet,
+              seed,
+              eligibility.destinationId,
+            );
+          }
+        }
+
+        if (world.quantum.phase !== "idle") {
+          const quantumResult = advanceQuantumTravel(
+            instance.body,
+            world.quantum,
+            dt,
+            planet,
+            seed,
+          );
+          instance.body = quantumResult.body;
+          world.quantum = quantumResult.quantum;
+          world.screenFade = quantumResult.screenFade;
+          world.prompt =
+            world.quantum.phase === "spooling"
+              ? "Spooling…"
+              : world.quantum.phase === "traveling"
+                ? "Quantum travel"
+                : "Drop out";
+        } else {
+          const flightInput = controls.sampleFlightInput();
+          if (world.flightMode === "nav") {
+            flightInput.throttle01 = (flightInput.throttle01 ?? 0) * 0.5;
+          }
+          instance.body = integrateFlightBody(
+            instance.body,
+            flightInput,
+            dt,
+            planet,
+            seed,
+            {
+              maxSpeedMps: instance.spec.maxSpeedMps,
+              throttleAccelMps2: instance.spec.throttleAccelMps2,
+            },
+          );
+          if (world.flightMode === "nav") {
+            world.prompt = buildNavPrompt({
+              body: instance.body,
+              flightMode: world.flightMode,
+              quantum: world.quantum,
+              planet,
+              seed,
+            });
+          } else {
+            world.prompt = `${holdPrompt("seatLook", "look around")} · ${holdPrompt("exitSeat", "get up")}`;
+          }
+        }
+
+        if (actions.exitSeatPressed && world.quantum.phase === "idle") {
           beginStandTransition(world);
+        }
+        if (world.quantum.phase === "idle" && world.screenFade > 0) {
+          world.screenFade = Math.max(0, world.screenFade - dt * 4);
         }
       } else if (world.mode === MODE_ON_SHIP_DECK) {
         updateDeckMode(characterInput, actions, dt);
@@ -1002,6 +1070,8 @@ export function createGameLoop({
           shipZoneId: world.character.deckZone ?? null,
           stationRoomId: world.character.stationRoomId ?? null,
           timeSeconds: nowMs / 1000,
+          flightMode: world.flightMode,
+          quantum: world.quantum,
         }) ?? null;
     } catch (error) {
       console.error("ClaudeCitizen render frame failed.", error);

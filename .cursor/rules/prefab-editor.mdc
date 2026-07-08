@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Prefab Editor (dev-only)
 
-Dev server port **4173** (`npm run dev`). Open via title-screen **Editor** or `?boot=editor`. Alan runs servers — do not start `npm run dev` unless asked.
+Dev server port **4173** (`npm run dev`). Open via title-screen **Editor** or `?boot=editor`. Dev servers are normally already running — do not start `npm run dev` unless asked.
 
 ## Architecture
 

@@ -35,7 +35,8 @@ Play the latest build in your browser:
 
 - [Quick start](/quick-start) — run the game locally
 - [Play](/play) — controls and quality presets
-- [Prefab editor](/editor) — dev-only station and ship authoring
+- [CC Editor](/cc-editor) — dev-only world builder and prefab authoring
+- [Admin App](/admin-app) — operator console for catalog, users, and game settings
 - [Assets](/assets) — protected models, Synty packs, character avatars
 - [Roadmap](/roadmap) — living feature checklist
 - [Engineering](/engineering) — stack, DDD, planet math, and design principles

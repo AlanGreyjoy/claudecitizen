@@ -28,6 +28,7 @@ import {
 } from '../world/station';
 import { createStationPhysics, type StationPhysics } from '../physics/station_physics';
 import type { PrefabDocument } from '../world/prefabs/schema';
+import type { InventoryState } from '../player/inventory/types';
 import {
   fetchGameBootstrap,
   getSession,
@@ -210,6 +211,7 @@ export async function startPlaySession(
   const statusEl = requireElement<HTMLElement>('status');
   const controlsEl = requireElement<HTMLElement>('hud-controls');
   const interactPromptEl = requireElement<HTMLElement>('interact-prompt');
+  const flightReticleEl = requireElement<HTMLElement>('flight-reticle');
   const screenFadeEl = requireElement<HTMLElement>('screen-fade');
   const gameMenuEl = requireElement<HTMLElement>('game-menu');
   const gameMenuResumeBtn = requireElement<HTMLButtonElement>('game-menu-resume-btn');
@@ -253,6 +255,9 @@ export async function startPlaySession(
   const halobandChatInputEl = requireElement<HTMLInputElement>('haloband-chat-input');
   const halobandChatSendBtn = requireElement<HTMLButtonElement>('haloband-chat-send');
   const halobandShipStatusEl = requireElement<HTMLElement>('haloband-ship-status');
+  const halobandInventoryFiltersEl = requireElement<HTMLElement>('haloband-inventory-filters');
+  const halobandInventoryGridEl = requireElement<HTMLElement>('haloband-inventory-grid');
+  const halobandInventoryDetailEl = requireElement<HTMLElement>('haloband-inventory-detail');
   const halobandBalanceEl = requireElement<HTMLElement>('haloband-balance');
   const halobandBalanceValueEl = requireElement<HTMLElement>('haloband-balance-value');
   const halobandHoloCanvasEl = requireElement<HTMLCanvasElement>('haloband-holo');
@@ -291,6 +296,7 @@ export async function startPlaySession(
       statusEl,
       controlsEl,
       interactPromptEl,
+      flightReticleEl,
       screenFadeEl,
     },
     planet,
@@ -332,6 +338,9 @@ export async function startPlaySession(
   // Must be created before the game menu so HaloBand's capture key listener
   // registers first and can claim Esc before the menu opens.
   let arcBalance: number | null = bootstrap ? bootstrap.economy.arcBalance : null;
+  let inventoryState: InventoryState | null = bootstrap
+    ? (bootstrap.inventory as InventoryState)
+    : null;
   haloBand = createHaloBand(
     {
       rootEl: halobandEl,
@@ -339,6 +348,9 @@ export async function startPlaySession(
       chatInputEl: halobandChatInputEl,
       sendBtnEl: halobandChatSendBtn,
       shipStatusEl: halobandShipStatusEl,
+      inventoryFiltersEl: halobandInventoryFiltersEl,
+      inventoryGridEl: halobandInventoryGridEl,
+      inventoryDetailEl: halobandInventoryDetailEl,
       balanceEl: halobandBalanceEl,
       balanceValueEl: halobandBalanceValueEl,
       holoCanvasEl: halobandHoloCanvasEl,
@@ -347,6 +359,7 @@ export async function startPlaySession(
       onSendMessage: (text) => networkClient?.sendChat(text),
       playerControls: controls,
       getArcBalance: () => arcBalance,
+      getInventory: () => inventoryState,
     },
   );
 

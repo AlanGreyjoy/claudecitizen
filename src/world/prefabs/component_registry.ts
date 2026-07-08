@@ -29,8 +29,9 @@ export interface ComponentDef {
   hint?: string;
 }
 
-const ALL_KINDS: PrefabKind[] = ["station", "ship", "site", "prop"];
+const ALL_KINDS: PrefabKind[] = ["station", "ship", "site", "prop", "item"];
 const PROP_KINDS: PrefabKind[] = ["prop"];
+const ITEM_KINDS: PrefabKind[] = ["item"];
 
 export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
@@ -48,6 +49,14 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     singleton: true,
     createDefault: () => ({ type: "prop-frame" }),
     hint: "Marks the prop origin used when placed in a hangar.",
+  },
+  {
+    type: "item-frame",
+    label: "Item Frame",
+    kinds: ITEM_KINDS,
+    singleton: true,
+    createDefault: () => ({ type: "item-frame" }),
+    hint: "Marks the item origin used for world pickup or drop visuals.",
   },
   {
     type: "spawn-point",
@@ -175,7 +184,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "collider",
     label: "Collider",
-    kinds: ["station", "ship", "site", "prop"],
+    kinds: ["station", "ship", "site", "prop", "item"],
     createDefault: () => ({
       type: "collider",
       shape: "box",

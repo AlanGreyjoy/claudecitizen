@@ -18,6 +18,17 @@ const GAME_SETTINGS_ID = 'singleton';
 const DEFAULT_STARTING_ARC_BALANCE = 25_000;
 const DEFAULT_STARTER_PREFAB_ID = 'phobos-starhopper';
 
+export const ITEM_TYPES = [
+  'consumable',
+  'weapon',
+  'armor',
+  'clothing',
+  'material',
+  'misc',
+] as const;
+
+export type ItemType = (typeof ITEM_TYPES)[number];
+
 type CatalogDb = Prisma.TransactionClient | PrismaService;
 
 @Injectable()
@@ -94,6 +105,7 @@ export class GameCatalogService {
     startingArcBalance: number;
     starterShipDefinitionIds: string[];
     starterPropDefinitionIds: string[];
+    starterItemDefinitionIds: string[];
   }) {
     if (input.starterShipDefinitionIds.length === 0) {
       throw new BadRequestException('Choose at least one starter ship.');
@@ -110,6 +122,14 @@ export class GameCatalogService {
       });
       if (propCount !== input.starterPropDefinitionIds.length) {
         throw new BadRequestException('Game settings reference unknown prop definitions.');
+      }
+    }
+    if (input.starterItemDefinitionIds.length > 0) {
+      const itemCount = await this.prisma.itemDefinition.count({
+        where: { id: { in: input.starterItemDefinitionIds } },
+      });
+      if (itemCount !== input.starterItemDefinitionIds.length) {
+        throw new BadRequestException('Game settings reference unknown item definitions.');
       }
     }
     return this.prisma.gameSettings.upsert({
@@ -190,6 +210,26 @@ export class GameCatalogService {
             playerId: user.player!.id,
             propDefinitionId: definition.id,
             quantity: 3,
+          },
+          update: {},
+        });
+      }
+
+      const starterItemDefinitions = await tx.itemDefinition.findMany({
+        where: { id: { in: settings.starterItemDefinitionIds } },
+      });
+      for (const definition of starterItemDefinitions) {
+        await tx.playerItem.upsert({
+          where: {
+            playerId_itemDefinitionId: {
+              playerId: user.player!.id,
+              itemDefinitionId: definition.id,
+            },
+          },
+          create: {
+            playerId: user.player!.id,
+            itemDefinitionId: definition.id,
+            quantity: 1,
           },
           update: {},
         });
@@ -304,6 +344,104 @@ export class GameCatalogService {
         error.code === 'P2025'
       ) {
         throw new NotFoundException(`Prop definition "${id}" not found.`);
+      }
+      throw error;
+    }
+  }
+
+  async listItemDefinitions() {
+    return this.prisma.itemDefinition.findMany({
+      orderBy: [{ itemType: 'asc' }, { name: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  asItemDefinitionDto(entry: {
+    id: string;
+    name: string;
+    description: string;
+    itemType: string;
+    subType: string;
+    prefabId: string | null;
+    iconUrl: string | null;
+    stackMax: number;
+    costArc: number;
+    rarity: string;
+  }) {
+    return {
+      id: entry.id,
+      name: entry.name,
+      description: entry.description,
+      itemType: entry.itemType,
+      subType: entry.subType,
+      prefabId: entry.prefabId,
+      iconUrl: entry.iconUrl,
+      stackMax: entry.stackMax,
+      costArc: entry.costArc,
+      rarity: entry.rarity,
+    };
+  }
+
+  async createItemDefinition(input: {
+    name: string;
+    description: string;
+    itemType: ItemType;
+    subType: string;
+    prefabId: string | null;
+    iconUrl: string | null;
+    stackMax: number;
+    costArc: number;
+    rarity: string;
+  }) {
+    return this.prisma.itemDefinition.create({ data: input });
+  }
+
+  async updateItemDefinition(
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      itemType?: ItemType;
+      subType?: string;
+      prefabId?: string | null;
+      iconUrl?: string | null;
+      stackMax?: number;
+      costArc?: number;
+      rarity?: string;
+    },
+  ) {
+    try {
+      return await this.prisma.itemDefinition.update({ where: { id }, data: input });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Item definition "${id}" not found.`);
+      }
+      throw error;
+    }
+  }
+
+  async deleteItemDefinition(id: string): Promise<void> {
+    const owned = await this.prisma.playerItem.count({
+      where: { itemDefinitionId: id, quantity: { gt: 0 } },
+    });
+    if (owned > 0) {
+      throw new BadRequestException(
+        'Cannot delete an item definition while players still hold copies.',
+      );
+    }
+    try {
+      await this.prisma.$transaction([
+        this.prisma.playerItem.deleteMany({ where: { itemDefinitionId: id } }),
+        this.prisma.itemDefinition.delete({ where: { id } }),
+      ]);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Item definition "${id}" not found.`);
       }
       throw error;
     }

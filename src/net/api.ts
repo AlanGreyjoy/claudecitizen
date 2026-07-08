@@ -40,6 +40,7 @@ export interface GameBootstrap {
   }[];
   hangar: HangarBuildState;
   apartment: HangarBuildState;
+  inventory: InventoryState;
   featureFlags: {
     nativeWebSocketPresence: boolean;
     serverAuthoritativePhysics: boolean;
@@ -80,6 +81,29 @@ export interface HangarBuildState {
   catalog: PropDefinitionEntry[];
   inventory: PlayerPropInventoryEntry[];
   placements: HangarPlacementEntry[];
+}
+
+export interface ItemDefinitionEntry {
+  id: string;
+  name: string;
+  description: string;
+  itemType: string;
+  subType: string;
+  prefabId: string | null;
+  iconUrl: string | null;
+  stackMax: number;
+  costArc: number;
+  rarity: string;
+}
+
+export interface PlayerItemEntry {
+  itemDefinitionId: string;
+  quantity: number;
+}
+
+export interface InventoryState {
+  catalog: ItemDefinitionEntry[];
+  items: PlayerItemEntry[];
 }
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';

@@ -91,8 +91,8 @@ const config: Config = {
               to: '/play',
             },
             {
-              label: 'Prefab editor',
-              to: '/editor',
+              label: 'CC Editor',
+              to: '/cc-editor',
             },
             {
               label: 'Roadmap',

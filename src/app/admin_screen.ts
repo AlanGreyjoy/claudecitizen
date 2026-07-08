@@ -4,18 +4,24 @@ import {
   adminLogout,
   createShipDefinition,
   createPropDefinition,
+  createItemDefinition,
+  deleteItemDefinition,
   getAdminSession,
   getAdminUser,
   getGameSettings,
   listAdminUsers,
+  listItemDefinitions,
   listPropDefinitions,
   listShipDefinitions,
   updateGameSettings,
+  updateItemDefinition,
   updatePropDefinition,
   updateShipDefinition,
   type AdminSession,
   type AdminUserDetail,
   type AdminUserSummary,
+  type ItemDefinition,
+  type ItemDefinitionInput,
   type PropDefinition,
   type PropDefinitionInput,
   type ShipDefinition,
@@ -23,8 +29,10 @@ import {
 } from '../net/admin_api';
 import { listShipPrefabOptions, type ShipPrefabOption } from '../world/prefabs/list_ship_prefabs';
 import { listPropPrefabOptions, type PropPrefabOption } from '../world/prefabs/list_prop_prefabs';
+import { listItemPrefabOptions, type ItemPrefabOption } from '../world/prefabs/list_item_prefabs';
+import { ITEM_TYPES } from '../player/inventory/types';
 
-type AdminTab = 'users' | 'ships' | 'props' | 'settings';
+type AdminTab = 'users' | 'ships' | 'props' | 'items' | 'settings';
 type AdminScene =
   | 'login'
   | 'users'
@@ -33,7 +41,21 @@ type AdminScene =
   | 'ship-form'
   | 'props'
   | 'prop-form'
+  | 'items'
+  | 'item-form'
   | 'settings';
+
+const DEFAULT_ITEM_FORM: ItemDefinitionInput = {
+  name: '',
+  description: '',
+  itemType: 'consumable',
+  subType: 'generic',
+  prefabId: null,
+  iconUrl: null,
+  stackMax: 99,
+  costArc: 0,
+  rarity: 'common',
+};
 
 const DEFAULT_PROP_FORM: PropDefinitionInput = {
   name: '',
@@ -68,16 +90,14 @@ function createButton(label: string, variant: 'primary' | 'secondary' = 'primary
   const button = document.createElement('button');
   button.type = 'button';
   button.className =
-    variant === 'primary' ? 'sc-title-btn' : 'sc-title-btn sc-title-btn-secondary';
+    variant === 'primary' ? 'sc-admin-btn' : 'sc-admin-btn sc-admin-btn-secondary';
   button.textContent = label;
   return button;
 }
 
 function createSmallButton(label: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'sc-admin-nav-btn';
-  button.textContent = label;
+  const button = createButton(label, 'secondary');
+  button.classList.add('sc-admin-btn-small');
   return button;
 }
 
@@ -163,6 +183,87 @@ function formatArc(value: number | null | undefined): string {
   return `${value.toLocaleString()} ARC`;
 }
 
+function normalizeSearchQuery(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+function truncateText(text: string, maxLen = 24): string {
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen - 1)}…`;
+}
+
+function createTruncatedCell(text: string, maxLen = 24, mono = false): HTMLTableCellElement {
+  const td = document.createElement('td');
+  td.className = mono ? 'sc-admin-cell-truncate sc-admin-cell-mono' : 'sc-admin-cell-truncate';
+  td.textContent = truncateText(text, maxLen);
+  if (text.length > maxLen) td.title = text;
+  return td;
+}
+
+function createSearchInput(placeholder: string, onQuery: (query: string) => void): HTMLInputElement {
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.className = 'sc-admin-search';
+  input.placeholder = placeholder;
+  input.addEventListener('input', () => onQuery(input.value));
+  return input;
+}
+
+function createPageHeader(
+  title: string,
+  subtitle?: string,
+  actions?: HTMLElement[],
+): HTMLElement {
+  const header = document.createElement('header');
+  header.className = 'sc-admin-page-header';
+
+  const textWrap = document.createElement('div');
+  const heading = document.createElement('h1');
+  heading.textContent = title;
+  textWrap.append(heading);
+
+  if (subtitle) {
+    const meta = document.createElement('p');
+    meta.textContent = subtitle;
+    textWrap.append(meta);
+  }
+
+  header.append(textWrap);
+
+  if (actions && actions.length > 0) {
+    const actionsWrap = document.createElement('div');
+    actionsWrap.className = 'sc-admin-page-header-actions';
+    actionsWrap.append(...actions);
+    header.append(actionsWrap);
+  }
+
+  return header;
+}
+
+function createToolbar(...nodes: HTMLElement[]): HTMLElement {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'sc-admin-toolbar';
+  toolbar.append(...nodes);
+  return toolbar;
+}
+
+function wrapInCard(content: HTMLElement): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'sc-admin-card';
+  card.append(content);
+  return card;
+}
+
+function isTabActive(tab: AdminTab, currentTab: AdminTab, currentScene: AdminScene): boolean {
+  return (
+    currentTab === tab &&
+    currentScene !== 'user-detail' &&
+    currentScene !== 'ship-form' &&
+    currentScene !== 'prop-form' &&
+    currentScene !== 'item-form'
+  );
+}
+
 export function showAdminScreen(): void {
   const screen = requireElement<HTMLElement>('admin-screen');
   const shell = requireElement<HTMLElement>('admin-shell');
@@ -174,8 +275,10 @@ export function showAdminScreen(): void {
   let currentScene: AdminScene = 'login';
   let shipPrefabs: ShipPrefabOption[] = [];
   let propPrefabs: PropPrefabOption[] = [];
+  let itemPrefabs: ItemPrefabOption[] = [];
   let editingShipId: string | null = null;
   let editingPropId: string | null = null;
+  let editingItemId: string | null = null;
   let selectedUserId: string | null = null;
 
   function setStatus(message: string, isError = false): void {
@@ -185,44 +288,73 @@ export function showAdminScreen(): void {
     status.classList.toggle('is-error', isError);
   }
 
-  function renderHeader(): void {
-    const existing = shell.querySelector('.sc-admin-header');
-    if (existing) existing.remove();
+  function ensureLayout(): void {
+    if (shell.querySelector('.sc-admin-layout')) return;
 
-    if (!session) return;
+    shell.replaceChildren();
+    const layout = document.createElement('div');
+    layout.className = 'sc-admin-layout';
 
-    const header = document.createElement('header');
-    header.className = 'sc-admin-header';
+    const sidebar = document.createElement('aside');
+    sidebar.className = 'sc-admin-sidebar';
 
-    const title = document.createElement('h1');
-    title.className = 'sc-admin-title';
-    title.textContent = 'Admin';
+    const main = document.createElement('main');
+    main.className = 'sc-admin-main';
+
+    const content = document.createElement('div');
+    content.className = 'sc-admin-content';
+
+    main.append(content);
+    layout.append(sidebar, main);
+    shell.append(layout);
+  }
+
+  function renderSidebar(): void {
+    const sidebar = shell.querySelector('.sc-admin-sidebar');
+    if (!sidebar || !session) return;
+
+    sidebar.replaceChildren();
+
+    const brand = document.createElement('div');
+    brand.className = 'sc-admin-sidebar-brand';
+    brand.textContent = 'ClaudeCitizen';
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'sc-admin-sidebar-subtitle';
+    subtitle.textContent = 'Admin';
 
     const nav = document.createElement('nav');
-    nav.className = 'sc-admin-nav';
+    nav.className = 'sc-admin-sidebar-nav';
     nav.setAttribute('aria-label', 'Admin sections');
 
     const tabs: Array<{ id: AdminTab; label: string }> = [
       { id: 'users', label: 'Users' },
       { id: 'ships', label: 'Ships' },
       { id: 'props', label: 'Props' },
+      { id: 'items', label: 'Items' },
       { id: 'settings', label: 'Game Settings' },
     ];
 
     for (const tab of tabs) {
-      const button = createSmallButton(tab.label);
-      button.classList.toggle('is-active', currentTab === tab.id && currentScene !== 'user-detail' && currentScene !== 'ship-form' && currentScene !== 'prop-form');
-      button.addEventListener('click', () => {
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'sc-admin-sidebar-link';
+      link.textContent = tab.label;
+      link.classList.toggle('is-active', isTabActive(tab.id, currentTab, currentScene));
+      link.addEventListener('click', () => {
         currentTab = tab.id;
         if (tab.id === 'users') void showUsers();
         else if (tab.id === 'ships') void showShips();
         else if (tab.id === 'props') void showProps();
+        else if (tab.id === 'items') void showItems();
         else void showSettings();
       });
-      nav.append(button);
+      nav.append(link);
     }
 
-    const logoutBtn = createSmallButton('Log out');
+    const footer = document.createElement('div');
+    footer.className = 'sc-admin-sidebar-footer';
+    const logoutBtn = createButton('Log out', 'secondary');
     logoutBtn.addEventListener('click', () => {
       setStatus('Signing out...');
       adminLogout()
@@ -232,42 +364,38 @@ export function showAdminScreen(): void {
           renderLogin();
         });
     });
+    footer.append(logoutBtn);
 
-    header.append(title, nav, logoutBtn);
-    shell.prepend(header);
+    sidebar.append(brand, subtitle, nav, footer);
   }
 
   function renderShell(nodes: Node[], scene: AdminScene, tab: AdminTab = currentTab): void {
     currentScene = scene;
     currentTab = tab;
 
-    if (!shell.querySelector('.sc-admin-content')) {
-      shell.replaceChildren();
-    }
-
-    renderHeader();
+    ensureLayout();
+    renderSidebar();
 
     const content = shell.querySelector('.sc-admin-content');
     if (content) {
       content.replaceChildren(...nodes);
-      return;
     }
-
-    const contentWrap = document.createElement('div');
-    contentWrap.className = 'sc-admin-content';
-    contentWrap.append(...nodes);
-    shell.append(contentWrap);
   }
 
   function renderLogin(message = ''): void {
     session = null;
     shell.replaceChildren();
 
-    const form = document.createElement('form');
-    form.className = 'sc-title-auth-form sc-admin-form';
+    const loginWrap = document.createElement('div');
+    loginWrap.className = 'sc-admin-login-wrap';
 
-    const title = document.createElement('p');
-    title.className = 'sc-title-auth-title';
+    const card = document.createElement('div');
+    card.className = 'sc-admin-login';
+
+    const form = document.createElement('form');
+    form.className = 'sc-admin-form';
+
+    const title = document.createElement('h1');
     title.textContent = 'Admin Login';
 
     const email = createTextInput('email', 'admin@claude-citizen.com');
@@ -280,7 +408,6 @@ export function showAdminScreen(): void {
     password.type = 'password';
     password.required = true;
     password.setAttribute('autocomplete', 'current-password');
-    password.className = 'sc-title-auth-input';
 
     const submit = createButton('Sign in');
     submit.type = 'submit';
@@ -295,7 +422,8 @@ export function showAdminScreen(): void {
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      setStatus('Authenticating...');
+      const status = form.querySelector<HTMLElement>('[data-admin-status]');
+      if (status) status.textContent = 'Authenticating...';
       adminLogin(formValue(form, 'email'), formValue(form, 'password'))
         .then((nextSession) => {
           session = nextSession;
@@ -310,8 +438,10 @@ export function showAdminScreen(): void {
         });
     });
 
+    card.append(form);
+    loginWrap.append(card);
+    shell.append(loginWrap);
     currentScene = 'login';
-    shell.replaceChildren(form);
   }
 
   function renderUsersTable(users: AdminUserSummary[]): HTMLElement {
@@ -335,38 +465,81 @@ export function showAdminScreen(): void {
     `;
 
     const body = document.createElement('tbody');
-    for (const user of users) {
+
+    if (users.length === 0) {
       const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${user.username}</td>
-        <td>${user.email ?? '—'}</td>
-        <td>${user.displayName}</td>
-        <td>${user.player ? formatArc(user.player.arcBalance) : '—'}</td>
-        <td>${user.player?.shipCount ?? 0}</td>
-        <td>${formatDate(user.player?.starterLoadoutGrantedAt ?? null)}</td>
-      `;
-      row.addEventListener('click', () => {
-        selectedUserId = user.id;
-        void showUserDetail(user.id);
-      });
+      row.className = 'is-static';
+      const cell = document.createElement('td');
+      cell.colSpan = 6;
+      cell.className = 'sc-admin-empty';
+      cell.textContent = 'No users match your search.';
+      row.append(cell);
       body.append(row);
+    } else {
+      for (const user of users) {
+        const row = document.createElement('tr');
+        row.append(
+          createTruncatedCell(user.username, 28, true),
+          createTruncatedCell(user.email ?? '—', 32),
+          createTruncatedCell(user.displayName, 24),
+        );
+        const arcCell = document.createElement('td');
+        arcCell.textContent = user.player ? formatArc(user.player.arcBalance) : '—';
+        const shipsCell = document.createElement('td');
+        shipsCell.textContent = String(user.player?.shipCount ?? 0);
+        const grantCell = document.createElement('td');
+        grantCell.textContent = formatDate(user.player?.starterLoadoutGrantedAt ?? null);
+        row.append(arcCell, shipsCell, grantCell);
+        row.addEventListener('click', () => {
+          selectedUserId = user.id;
+          void showUserDetail(user.id);
+        });
+        body.append(row);
+      }
     }
+
     table.append(body);
     wrap.append(table);
     return wrap;
+  }
+
+  function buildUsersListView(allUsers: AdminUserSummary[]): HTMLElement[] {
+    let query = '';
+    const tableHost = document.createElement('div');
+
+    const refresh = (): void => {
+      const normalized = normalizeSearchQuery(query);
+      const filtered = normalized
+        ? allUsers.filter(
+            (user) =>
+              user.username.toLowerCase().includes(normalized) ||
+              user.displayName.toLowerCase().includes(normalized) ||
+              (user.email?.toLowerCase().includes(normalized) ?? false),
+          )
+        : allUsers;
+      tableHost.replaceChildren(renderUsersTable(filtered));
+    };
+
+    const search = createSearchInput('Search users…', (value) => {
+      query = value;
+      refresh();
+    });
+
+    refresh();
+
+    return [
+      createPageHeader('Users', `${allUsers.length} account${allUsers.length === 1 ? '' : 's'} — read only`),
+      createToolbar(search),
+      wrapInCard(tableHost),
+      renderMessage(''),
+    ];
   }
 
   async function showUsers(): Promise<void> {
     renderShell([renderMessage('Loading users...')], 'users', 'users');
     try {
       const users = await listAdminUsers();
-      const title = document.createElement('h2');
-      title.className = 'sc-admin-section-title';
-      title.textContent = 'Users';
-      const meta = document.createElement('p');
-      meta.className = 'sc-admin-meta';
-      meta.textContent = `${users.length} account${users.length === 1 ? '' : 's'} — read only`;
-      renderShell([title, meta, renderUsersTable(users), renderMessage('')], 'users', 'users');
+      renderShell(buildUsersListView(users), 'users', 'users');
     } catch (error) {
       if (error instanceof AdminAuthError) {
         renderLogin(error.message);
@@ -374,6 +547,7 @@ export function showAdminScreen(): void {
       }
       renderShell(
         [
+          createPageHeader('Users'),
           renderMessage(error instanceof Error ? error.message : 'Failed to load users.', true),
         ],
         'users',
@@ -382,13 +556,19 @@ export function showAdminScreen(): void {
     }
   }
 
-  function renderDetailItem(label: string, value: string): HTMLElement {
+  function renderDetailItem(label: string, value: string, truncate = false): HTMLElement {
     const item = document.createElement('div');
     item.className = 'sc-admin-detail-item';
     const dt = document.createElement('dt');
     dt.textContent = label;
     const dd = document.createElement('dd');
-    dd.textContent = value;
+    if (truncate && value.length > 36) {
+      dd.textContent = truncateText(value, 36);
+      dd.title = value;
+      dd.className = 'sc-admin-cell-mono';
+    } else {
+      dd.textContent = value;
+    }
     item.append(dt, dd);
     return item;
   }
@@ -402,26 +582,24 @@ export function showAdminScreen(): void {
       void showUsers();
     });
 
-    const title = document.createElement('h2');
-    title.className = 'sc-admin-section-title';
-    title.textContent = user.displayName;
+    const header = createPageHeader(user.displayName, user.email ?? undefined, [back]);
 
     const grid = document.createElement('dl');
     grid.className = 'sc-admin-detail-grid';
     grid.append(
-      renderDetailItem('Username', user.username),
+      renderDetailItem('Username', user.username, true),
       renderDetailItem('Email', user.email ?? '—'),
-      renderDetailItem('User ID', user.id),
+      renderDetailItem('User ID', user.id, true),
       renderDetailItem('Created', formatDate(user.createdAt)),
     );
 
     if (user.player) {
       grid.append(
-        renderDetailItem('Player handle', user.player.handle),
+        renderDetailItem('Player handle', user.player.handle, true),
         renderDetailItem('Asteron Reserve Credits (ARC)', formatArc(user.player.arcBalance)),
         renderDetailItem('Starter grant', formatDate(user.player.starterLoadoutGrantedAt)),
-        renderDetailItem('Current instance', user.player.currentInstanceId),
-        renderDetailItem('Current room', user.player.currentRoomId),
+        renderDetailItem('Current instance', user.player.currentInstanceId ?? '—', true),
+        renderDetailItem('Current room', user.player.currentRoomId ?? '—', true),
       );
     }
 
@@ -434,7 +612,7 @@ export function showAdminScreen(): void {
 
     if (!user.player || user.player.ships.length === 0) {
       const empty = document.createElement('p');
-      empty.className = 'sc-admin-meta';
+      empty.className = 'sc-admin-empty';
       empty.textContent = 'No owned ships.';
       shipsWrap.append(empty);
     } else {
@@ -455,20 +633,26 @@ export function showAdminScreen(): void {
       for (const ship of user.player.ships) {
         const row = document.createElement('tr');
         row.className = 'is-static';
-        row.innerHTML = `
-          <td>${ship.displayName}</td>
-          <td>${ship.prefabId}</td>
-          <td>${ship.shipDefinition?.name ?? '—'}</td>
-          <td>${ship.hp.toFixed(0)} / ${ship.maxHp.toFixed(0)}</td>
-          <td>${ship.shields.toFixed(0)} / ${ship.maxShields.toFixed(0)}</td>
-        `;
+        const nameCell = document.createElement('td');
+        nameCell.textContent = ship.displayName;
+        row.append(
+          nameCell,
+          createTruncatedCell(ship.prefabId, 24, true),
+        );
+        const defCell = document.createElement('td');
+        defCell.textContent = ship.shipDefinition?.name ?? '—';
+        const hpCell = document.createElement('td');
+        hpCell.textContent = `${ship.hp.toFixed(0)} / ${ship.maxHp.toFixed(0)}`;
+        const shieldCell = document.createElement('td');
+        shieldCell.textContent = `${ship.shields.toFixed(0)} / ${ship.maxShields.toFixed(0)}`;
+        row.append(defCell, hpCell, shieldCell);
         body.append(row);
       }
       table.append(body);
       shipsWrap.append(table);
     }
 
-    fragment.append(back, title, grid, shipsTitle, shipsWrap, renderMessage(''));
+    fragment.append(header, wrapInCard(grid), shipsTitle, wrapInCard(shipsWrap), renderMessage(''));
     return fragment;
   }
 
@@ -484,6 +668,7 @@ export function showAdminScreen(): void {
       }
       renderShell(
         [
+          createPageHeader('User detail'),
           renderMessage(error instanceof Error ? error.message : 'Failed to load user.', true),
         ],
         'user-detail',
@@ -513,51 +698,91 @@ export function showAdminScreen(): void {
     `;
 
     const body = document.createElement('tbody');
-    for (const ship of ships) {
+
+    if (ships.length === 0) {
       const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${ship.name}</td>
-        <td>${ship.prefabId}</td>
-        <td>${ship.costArc.toLocaleString()}</td>
-        <td>${ship.maxHp}</td>
-        <td>${ship.maxShields}</td>
-        <td>${ship.maxSpeedMps}</td>
-        <td>${ship.throttleAccelMps2}</td>
-      `;
-      row.addEventListener('click', () => {
-        editingShipId = ship.id;
-        void showShipForm(ship);
-      });
+      row.className = 'is-static';
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.className = 'sc-admin-empty';
+      cell.textContent = 'No ship definitions match your search.';
+      row.append(cell);
       body.append(row);
+    } else {
+      for (const ship of ships) {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = ship.name;
+        row.append(nameCell, createTruncatedCell(ship.prefabId, 24, true));
+        const costCell = document.createElement('td');
+        costCell.textContent = ship.costArc.toLocaleString();
+        const hpCell = document.createElement('td');
+        hpCell.textContent = String(ship.maxHp);
+        const shieldCell = document.createElement('td');
+        shieldCell.textContent = String(ship.maxShields);
+        const speedCell = document.createElement('td');
+        speedCell.textContent = String(ship.maxSpeedMps);
+        const accelCell = document.createElement('td');
+        accelCell.textContent = String(ship.throttleAccelMps2);
+        row.append(costCell, hpCell, shieldCell, speedCell, accelCell);
+        row.addEventListener('click', () => {
+          editingShipId = ship.id;
+          void showShipForm(ship);
+        });
+        body.append(row);
+      }
     }
+
     table.append(body);
     wrap.append(table);
     return wrap;
+  }
+
+  function buildShipsListView(allShips: ShipDefinition[]): HTMLElement[] {
+    let query = '';
+    const tableHost = document.createElement('div');
+
+    const refresh = (): void => {
+      const normalized = normalizeSearchQuery(query);
+      const filtered = normalized
+        ? allShips.filter(
+            (ship) =>
+              ship.name.toLowerCase().includes(normalized) ||
+              ship.prefabId.toLowerCase().includes(normalized),
+          )
+        : allShips;
+      tableHost.replaceChildren(renderShipsTable(filtered));
+    };
+
+    const createBtn = createButton('Create ship definition');
+    createBtn.addEventListener('click', () => {
+      editingShipId = null;
+      void showShipForm();
+    });
+
+    const search = createSearchInput('Search ships…', (value) => {
+      query = value;
+      refresh();
+    });
+
+    refresh();
+
+    return [
+      createPageHeader(
+        'Ship definitions',
+        `${allShips.length} definition${allShips.length === 1 ? '' : 's'}`,
+      ),
+      createToolbar(search, createBtn),
+      wrapInCard(tableHost),
+      renderMessage(''),
+    ];
   }
 
   async function showShips(): Promise<void> {
     renderShell([renderMessage('Loading ship catalog...')], 'ships', 'ships');
     try {
       const ships = await listShipDefinitions();
-      const title = document.createElement('h2');
-      title.className = 'sc-admin-section-title';
-      title.textContent = 'Ship definitions';
-
-      const createBtn = createButton('Create ship definition');
-      createBtn.addEventListener('click', () => {
-        editingShipId = null;
-        void showShipForm();
-      });
-
-      const actions = document.createElement('div');
-      actions.className = 'sc-admin-actions';
-      actions.append(createBtn);
-
-      renderShell(
-        [title, actions, renderShipsTable(ships), renderMessage('')],
-        'ships',
-        'ships',
-      );
+      renderShell(buildShipsListView(ships), 'ships', 'ships');
     } catch (error) {
       if (error instanceof AdminAuthError) {
         renderLogin(error.message);
@@ -565,6 +790,7 @@ export function showAdminScreen(): void {
       }
       renderShell(
         [
+          createPageHeader('Ship definitions'),
           renderMessage(error instanceof Error ? error.message : 'Failed to load ships.', true),
         ],
         'ships',
@@ -612,18 +838,19 @@ export function showAdminScreen(): void {
     const form = document.createElement('form');
     form.className = 'sc-admin-form sc-admin-form-wide';
 
-    const title = document.createElement('h2');
-    title.className = 'sc-admin-section-title';
-    title.textContent = existing ? 'Edit ship definition' : 'Create ship definition';
-
     const back = createButton('Back to ships', 'secondary');
     back.addEventListener('click', () => {
       editingShipId = null;
       void showShips();
     });
 
+    const header = createPageHeader(
+      existing ? 'Edit ship definition' : 'Create ship definition',
+      existing?.name,
+      [back],
+    );
+
     form.append(
-      title,
       createField('Name', createTextInput('name', defaults.name)),
       createField('Description', createTextArea('description', defaults.description)),
       createField(
@@ -666,7 +893,7 @@ export function showAdminScreen(): void {
         });
     });
 
-    renderShell([back, form], 'ship-form', 'ships');
+    renderShell([header, wrapInCard(form)], 'ship-form', 'ships');
   }
 
   function renderPropsTable(props: PropDefinition[]): HTMLElement {
@@ -687,50 +914,100 @@ export function showAdminScreen(): void {
       </thead>
     `;
     const body = document.createElement('tbody');
-    for (const prop of props) {
+
+    if (props.length === 0) {
       const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${prop.name}</td>
-        <td>${prop.prefabId}</td>
-        <td>${prop.category}</td>
-        <td>${prop.costArc.toLocaleString()}</td>
-        <td>${prop.maxPerHangar ?? '—'}</td>
-        <td>${prop.snapGridM ?? 'free'}</td>
-      `;
-      row.addEventListener('click', () => {
-        editingPropId = prop.id;
-        void showPropForm(prop);
-      });
+      row.className = 'is-static';
+      const cell = document.createElement('td');
+      cell.colSpan = 6;
+      cell.className = 'sc-admin-empty';
+      cell.textContent = 'No prop definitions match your search.';
+      row.append(cell);
       body.append(row);
+    } else {
+      for (const prop of props) {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = prop.name;
+        row.append(nameCell, createTruncatedCell(prop.prefabId, 24, true));
+        const categoryCell = document.createElement('td');
+        categoryCell.textContent = prop.category;
+        const costCell = document.createElement('td');
+        costCell.textContent = prop.costArc.toLocaleString();
+        const maxCell = document.createElement('td');
+        maxCell.textContent = prop.maxPerHangar !== null ? String(prop.maxPerHangar) : '—';
+        const gridCell = document.createElement('td');
+        gridCell.textContent = prop.snapGridM !== null ? String(prop.snapGridM) : 'free';
+        row.append(categoryCell, costCell, maxCell, gridCell);
+        row.addEventListener('click', () => {
+          editingPropId = prop.id;
+          void showPropForm(prop);
+        });
+        body.append(row);
+      }
     }
+
     table.append(body);
     wrap.append(table);
     return wrap;
+  }
+
+  function buildPropsListView(allProps: PropDefinition[]): HTMLElement[] {
+    let query = '';
+    const tableHost = document.createElement('div');
+
+    const refresh = (): void => {
+      const normalized = normalizeSearchQuery(query);
+      const filtered = normalized
+        ? allProps.filter(
+            (prop) =>
+              prop.name.toLowerCase().includes(normalized) ||
+              prop.prefabId.toLowerCase().includes(normalized) ||
+              prop.category.toLowerCase().includes(normalized),
+          )
+        : allProps;
+      tableHost.replaceChildren(renderPropsTable(filtered));
+    };
+
+    const createBtn = createButton('Create prop definition');
+    createBtn.addEventListener('click', () => {
+      editingPropId = null;
+      void showPropForm();
+    });
+
+    const search = createSearchInput('Search props…', (value) => {
+      query = value;
+      refresh();
+    });
+
+    refresh();
+
+    return [
+      createPageHeader(
+        'Prop definitions',
+        `${allProps.length} definition${allProps.length === 1 ? '' : 's'}`,
+      ),
+      createToolbar(search, createBtn),
+      wrapInCard(tableHost),
+      renderMessage(''),
+    ];
   }
 
   async function showProps(): Promise<void> {
     renderShell([renderMessage('Loading prop catalog...')], 'props', 'props');
     try {
       const props = await listPropDefinitions();
-      const title = document.createElement('h2');
-      title.className = 'sc-admin-section-title';
-      title.textContent = 'Prop definitions';
-      const createBtn = createButton('Create prop definition');
-      createBtn.addEventListener('click', () => {
-        editingPropId = null;
-        void showPropForm();
-      });
-      const actions = document.createElement('div');
-      actions.className = 'sc-admin-actions';
-      actions.append(createBtn);
-      renderShell([title, actions, renderPropsTable(props), renderMessage('')], 'props', 'props');
+      renderShell(buildPropsListView(props), 'props', 'props');
     } catch (error) {
       if (error instanceof AdminAuthError) {
         renderLogin(error.message);
         return;
       }
       renderShell(
-        [renderMessage(error instanceof Error ? error.message : 'Failed to load props.', true)],
+        [
+          createPageHeader('Prop definitions'),
+          renderMessage(error instanceof Error ? error.message : 'Failed to load props.', true),
+        ],
         'props',
         'props',
       );
@@ -775,17 +1052,19 @@ export function showAdminScreen(): void {
 
     const form = document.createElement('form');
     form.className = 'sc-admin-form sc-admin-form-wide';
-    const title = document.createElement('h2');
-    title.className = 'sc-admin-section-title';
-    title.textContent = existing ? 'Edit prop definition' : 'Create prop definition';
     const back = createButton('Back to props', 'secondary');
     back.addEventListener('click', () => {
       editingPropId = null;
       void showProps();
     });
 
+    const header = createPageHeader(
+      existing ? 'Edit prop definition' : 'Create prop definition',
+      existing?.name,
+      [back],
+    );
+
     form.append(
-      title,
       createField('Name', createTextInput('name', defaults.name)),
       createField('Description', createTextArea('description', defaults.description)),
       createField(
@@ -843,7 +1122,260 @@ export function showAdminScreen(): void {
         });
     });
 
-    renderShell([back, form], 'prop-form', 'props');
+    renderShell([header, wrapInCard(form)], 'prop-form', 'props');
+  }
+
+  function renderItemsTable(items: ItemDefinition[]): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'sc-admin-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'sc-admin-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Sub-type</th>
+          <th>Prefab</th>
+          <th>Icon</th>
+          <th>Stack max</th>
+          <th>Rarity</th>
+        </tr>
+      </thead>
+    `;
+    const body = document.createElement('tbody');
+
+    if (items.length === 0) {
+      const row = document.createElement('tr');
+      row.className = 'is-static';
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.className = 'sc-admin-empty';
+      cell.textContent = 'No item definitions match your search.';
+      row.append(cell);
+      body.append(row);
+    } else {
+      for (const item of items) {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = item.name;
+        const typeCell = document.createElement('td');
+        typeCell.textContent = item.itemType;
+        const subTypeCell = document.createElement('td');
+        subTypeCell.textContent = item.subType;
+        row.append(nameCell, typeCell, subTypeCell);
+        if (item.prefabId) {
+          row.append(createTruncatedCell(item.prefabId, 20, true));
+        } else {
+          const emptyPrefab = document.createElement('td');
+          emptyPrefab.textContent = '—';
+          row.append(emptyPrefab);
+        }
+        const iconCell = document.createElement('td');
+        iconCell.textContent = item.iconUrl ? 'yes' : '—';
+        const stackCell = document.createElement('td');
+        stackCell.textContent = String(item.stackMax);
+        const rarityCell = document.createElement('td');
+        rarityCell.textContent = item.rarity;
+        row.append(iconCell, stackCell, rarityCell);
+        row.addEventListener('click', () => {
+          editingItemId = item.id;
+          void showItemForm(item);
+        });
+        body.append(row);
+      }
+    }
+
+    table.append(body);
+    wrap.append(table);
+    return wrap;
+  }
+
+  function buildItemsListView(allItems: ItemDefinition[]): HTMLElement[] {
+    let query = '';
+    const tableHost = document.createElement('div');
+
+    const refresh = (): void => {
+      const normalized = normalizeSearchQuery(query);
+      const filtered = normalized
+        ? allItems.filter(
+            (item) =>
+              item.name.toLowerCase().includes(normalized) ||
+              item.itemType.toLowerCase().includes(normalized) ||
+              item.subType.toLowerCase().includes(normalized) ||
+              (item.prefabId?.toLowerCase().includes(normalized) ?? false),
+          )
+        : allItems;
+      tableHost.replaceChildren(renderItemsTable(filtered));
+    };
+
+    const createBtn = createButton('Create item definition');
+    createBtn.addEventListener('click', () => {
+      editingItemId = null;
+      void showItemForm();
+    });
+
+    const search = createSearchInput('Search items…', (value) => {
+      query = value;
+      refresh();
+    });
+
+    refresh();
+
+    return [
+      createPageHeader(
+        'Item definitions',
+        `${allItems.length} definition${allItems.length === 1 ? '' : 's'}`,
+      ),
+      createToolbar(search, createBtn),
+      wrapInCard(tableHost),
+      renderMessage(''),
+    ];
+  }
+
+  async function showItems(): Promise<void> {
+    renderShell([renderMessage('Loading item catalog...')], 'items', 'items');
+    try {
+      const items = await listItemDefinitions();
+      renderShell(buildItemsListView(items), 'items', 'items');
+    } catch (error) {
+      if (error instanceof AdminAuthError) {
+        renderLogin(error.message);
+        return;
+      }
+      renderShell(
+        [
+          createPageHeader('Item definitions'),
+          renderMessage(error instanceof Error ? error.message : 'Failed to load items.', true),
+        ],
+        'items',
+        'items',
+      );
+    }
+  }
+
+  async function ensureItemPrefabs(): Promise<ItemPrefabOption[]> {
+    if (itemPrefabs.length > 0) return itemPrefabs;
+    itemPrefabs = await listItemPrefabOptions();
+    return itemPrefabs;
+  }
+
+  function readItemForm(form: HTMLFormElement): ItemDefinitionInput {
+    const prefabRaw = formValue(form, 'prefabId');
+    const iconRaw = formValue(form, 'iconUrl');
+    return {
+      name: formValue(form, 'name'),
+      description: formValue(form, 'description'),
+      itemType: formValue(form, 'itemType') || 'misc',
+      subType: formValue(form, 'subType') || 'generic',
+      prefabId: prefabRaw ? prefabRaw : null,
+      iconUrl: iconRaw ? iconRaw : null,
+      stackMax: Math.round(formNumber(form, 'stackMax')),
+      costArc: Math.round(formNumber(form, 'costArc')),
+      rarity: formValue(form, 'rarity') || 'common',
+    };
+  }
+
+  async function showItemForm(existing?: ItemDefinition): Promise<void> {
+    const prefabs = await ensureItemPrefabs();
+    const defaults = existing
+      ? {
+          name: existing.name,
+          description: existing.description,
+          itemType: existing.itemType,
+          subType: existing.subType,
+          prefabId: existing.prefabId,
+          iconUrl: existing.iconUrl,
+          stackMax: existing.stackMax,
+          costArc: existing.costArc,
+          rarity: existing.rarity,
+        }
+      : { ...DEFAULT_ITEM_FORM };
+
+    const form = document.createElement('form');
+    form.className = 'sc-admin-form sc-admin-form-wide';
+    const back = createButton('Back to items', 'secondary');
+    back.addEventListener('click', () => {
+      editingItemId = null;
+      void showItems();
+    });
+
+    const header = createPageHeader(
+      existing ? 'Edit item definition' : 'Create item definition',
+      existing?.name,
+      [back],
+    );
+
+    const prefabOptions = [
+      { value: '', label: 'None (icon only)' },
+      ...prefabs.map((prefab) => ({ value: prefab.id, label: `${prefab.label} (${prefab.id})` })),
+    ];
+
+    form.append(
+      createField('Name', createTextInput('name', defaults.name)),
+      createField('Description', createTextArea('description', defaults.description)),
+      createField(
+        'Item type',
+        createSelect(
+          'itemType',
+          ITEM_TYPES.map((type) => ({ value: type, label: type })),
+          defaults.itemType,
+        ),
+      ),
+      createField('Sub-type', createTextInput('subType', defaults.subType)),
+      createField(
+        'Item prefab',
+        createSelect('prefabId', prefabOptions, defaults.prefabId ?? ''),
+      ),
+      createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),
+      createField('Stack max', createNumberInput('stackMax', defaults.stackMax)),
+      createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
+      createField('Rarity', createTextInput('rarity', defaults.rarity)),
+    );
+
+    const save = createButton(existing ? 'Save changes' : 'Create definition');
+    save.type = 'submit';
+    const actions = document.createElement('div');
+    actions.className = 'sc-admin-actions';
+    actions.append(save);
+
+    if (existing) {
+      const deleteBtn = createButton('Delete definition', 'secondary');
+      deleteBtn.addEventListener('click', () => {
+        if (!window.confirm(`Delete item "${existing.name}"? This cannot be undone.`)) return;
+        setStatus('Deleting item definition...');
+        deleteItemDefinition(existing.id)
+          .then(() => {
+            editingItemId = null;
+            void showItems();
+          })
+          .catch((error) => {
+            setStatus(error instanceof Error ? error.message : 'Delete failed.', true);
+          });
+      });
+      actions.append(deleteBtn);
+    }
+
+    form.append(actions, renderMessage(''));
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      setStatus('Saving item definition...');
+      const payload = readItemForm(form);
+      const request = existing
+        ? updateItemDefinition(existing.id, payload)
+        : createItemDefinition(payload);
+      request
+        .then(() => {
+          editingItemId = null;
+          void showItems();
+        })
+        .catch((error) => {
+          setStatus(error instanceof Error ? error.message : 'Save failed.', true);
+        });
+    });
+
+    renderShell([header, wrapInCard(form)], 'item-form', 'items');
   }
 
   function renderStarterEditor(
@@ -917,20 +1449,23 @@ export function showAdminScreen(): void {
   async function showSettings(): Promise<void> {
     renderShell([renderMessage('Loading game settings...')], 'settings', 'settings');
     try {
-      const [settings, definitions, propDefinitions] = await Promise.all([
+      const [settings, definitions, propDefinitions, itemDefinitions] = await Promise.all([
         getGameSettings(),
         listShipDefinitions(),
         listPropDefinitions(),
+        listItemDefinitions(),
       ]);
 
       let starterIds = [...settings.starterShipDefinitionIds];
       let starterPropIds = [...settings.starterPropDefinitionIds];
+      let starterItemIds = [...settings.starterItemDefinitionIds];
       const form = document.createElement('form');
       form.className = 'sc-admin-form sc-admin-form-wide';
 
-      const title = document.createElement('h2');
-      title.className = 'sc-admin-section-title';
-      title.textContent = 'Game settings';
+      const header = createPageHeader(
+        'Game settings',
+        'Configure starting balances and starter loadouts for new players',
+      );
 
       const arcField = createField(
         'Starting Asteron Reserve Credits (ARC)',
@@ -965,13 +1500,27 @@ export function showAdminScreen(): void {
       };
       renderPropStarterSection();
 
+      const itemStarterHost = document.createElement('div');
+      const renderItemStarterSection = (): void => {
+        itemStarterHost.replaceChildren(
+          createField(
+            'Starter items',
+            renderStarterEditor(itemDefinitions, starterItemIds, (next) => {
+              starterItemIds = next;
+              renderItemStarterSection();
+            }),
+          ),
+        );
+      };
+      renderItemStarterSection();
+
       const save = createButton('Save settings');
       save.type = 'submit';
       const actions = document.createElement('div');
       actions.className = 'sc-admin-actions';
       actions.append(save);
 
-      form.append(title, arcField, starterHost, propStarterHost, actions, renderMessage(''));
+      form.append(arcField, starterHost, propStarterHost, itemStarterHost, actions, renderMessage(''));
       form.addEventListener('submit', (event) => {
         event.preventDefault();
         setStatus('Saving settings...');
@@ -979,6 +1528,7 @@ export function showAdminScreen(): void {
           startingArcBalance: Math.round(formNumber(form, 'startingArcBalance')),
           starterShipDefinitionIds: starterIds,
           starterPropDefinitionIds: starterPropIds,
+          starterItemDefinitionIds: starterItemIds,
         })
           .then(() => {
             setStatus('Settings saved.');
@@ -988,7 +1538,7 @@ export function showAdminScreen(): void {
           });
       });
 
-      renderShell([form], 'settings', 'settings');
+      renderShell([header, wrapInCard(form)], 'settings', 'settings');
     } catch (error) {
       if (error instanceof AdminAuthError) {
         renderLogin(error.message);
@@ -996,6 +1546,7 @@ export function showAdminScreen(): void {
       }
       renderShell(
         [
+          createPageHeader('Game settings'),
           renderMessage(error instanceof Error ? error.message : 'Failed to load settings.', true),
         ],
         'settings',
@@ -1004,7 +1555,13 @@ export function showAdminScreen(): void {
     }
   }
 
-  shell.replaceChildren(renderMessage('Checking admin session...'));
+  const loginWrap = document.createElement('div');
+  loginWrap.className = 'sc-admin-login-wrap';
+  const loadingCard = document.createElement('div');
+  loadingCard.className = 'sc-admin-login';
+  loadingCard.append(renderMessage('Checking admin session...'));
+  loginWrap.append(loadingCard);
+  shell.replaceChildren(loginWrap);
   getAdminSession()
     .then((existing) => {
       if (existing) {
@@ -1026,8 +1583,17 @@ export function showAdminScreen(): void {
               else void showProps();
             })
             .catch(() => void showProps());
+        } else if (editingItemId) {
+          listItemDefinitions()
+            .then((items) => {
+              const item = items.find((entry) => entry.id === editingItemId);
+              if (item) void showItemForm(item);
+              else void showItems();
+            })
+            .catch(() => void showItems());
         } else if (currentTab === 'ships') void showShips();
         else if (currentTab === 'props') void showProps();
+        else if (currentTab === 'items') void showItems();
         else if (currentTab === 'settings') void showSettings();
         else void showUsers();
         return;

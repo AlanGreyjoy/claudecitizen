@@ -6,6 +6,7 @@ import {
 } from './game.catalog.helpers';
 import { GameCatalogService } from './game.catalog.service';
 import { GameHangarService } from './game.hangar.service';
+import { GameInventoryService } from './game.inventory.service';
 import type { GameBootstrapDto } from './game.types';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class GameService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(GameCatalogService) private readonly catalog: GameCatalogService,
     @Inject(GameHangarService) private readonly hangar: GameHangarService,
+    @Inject(GameInventoryService) private readonly inventory: GameInventoryService,
   ) {}
 
   async bootstrapForUser(userId: string): Promise<GameBootstrapDto> {
@@ -55,9 +57,10 @@ export class GameService {
     const apartmentInstanceId = `apartment:${user.player.id}`;
     const hangarInstanceId = `hangar:${user.player.id}`;
     const currentInstanceId = user.player.currentInstanceId || apartmentInstanceId;
-    const [hangarState, apartmentState] = await Promise.all([
+    const [hangarState, apartmentState, inventoryState] = await Promise.all([
       this.hangar.getBuildState(user.player.id, 'hangar'),
       this.hangar.getBuildState(user.player.id, 'apartment'),
+      this.inventory.getInventoryState(user.player.id),
     ]);
 
     return {
@@ -111,6 +114,7 @@ export class GameService {
         inventory: apartmentState.inventory,
         placements: apartmentState.placements,
       },
+      inventory: inventoryState,
       featureFlags: {
         nativeWebSocketPresence: true,
         serverAuthoritativePhysics: false,

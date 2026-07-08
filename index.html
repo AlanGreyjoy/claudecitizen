@@ -52,9 +52,7 @@
       </p>
     </div>
     <div id="admin-screen" class="sc-admin-screen is-hidden">
-      <div class="sc-admin-core">
-        <div id="admin-shell"></div>
-      </div>
+      <div id="admin-shell"></div>
     </div>
     <div id="loading-screen" class="sc-loading-screen is-hidden">
       <div class="sc-loading-core">
@@ -406,12 +404,19 @@
           <div><kbd>F</kbd> interact / enter / exit</div>
           <div><kbd>1</kbd>-<kbd>3</kbd> hangar elevator</div>
           <div><kbd>V</kbd> first / third person, cockpit / external</div>
+          <div><kbd>U</kbd> tap flight mode · hold (Nav) quantum</div>
           <div><kbd>R</kbd> reset</div>
         </div>
         <div class="prompt" id="prompt"></div>
         <div class="status" id="status"></div>
       </section>
       <div class="sc-interact-prompt" id="interact-prompt" aria-live="polite"></div>
+      <div id="flight-reticle" class="sc-flight-reticle" aria-hidden="true">
+        <div class="sc-flight-reticle-ring"></div>
+        <div class="sc-flight-reticle-brackets"></div>
+        <div class="sc-flight-reticle-arms"></div>
+        <div class="sc-flight-reticle-core"></div>
+      </div>
       <div class="sc-screen-fade" id="screen-fade"></div>
       <div
         class="sc-game-menu"
@@ -710,6 +715,14 @@
                   Missions
                 </button>
                 <button
+                  class="sc-haloband-nav-btn"
+                  type="button"
+                  data-haloband-tab="inventory"
+                  aria-controls="haloband-panel-inventory"
+                >
+                  Inventory
+                </button>
+                <button
                   class="sc-haloband-nav-btn sc-haloband-ship-only is-hidden"
                   type="button"
                   data-haloband-tab="ship"
@@ -753,6 +766,18 @@
                   <p class="sc-haloband-empty" id="haloband-missions-empty">
                     No active contracts.
                   </p>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-inventory"
+                  data-haloband-panel="inventory"
+                >
+                  <h3 class="sc-haloband-panel-title">Inventory</h3>
+                  <div class="sc-haloband-inventory-filters" id="haloband-inventory-filters"></div>
+                  <div class="sc-haloband-inventory-body">
+                    <div class="sc-haloband-inventory-grid" id="haloband-inventory-grid"></div>
+                    <div class="sc-haloband-inventory-detail" id="haloband-inventory-detail"></div>
+                  </div>
                 </section>
                 <section
                   class="sc-haloband-panel"

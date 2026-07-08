@@ -16,9 +16,9 @@ import type { StationFloorId } from "../station";
  * station-local gameplay axes as: right = -x, up = y, forward = z.
  */
 
-export type PrefabKind = "station" | "ship" | "site" | "prop";
+export type PrefabKind = "station" | "ship" | "site" | "prop" | "item";
 
-export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site", "prop"];
+export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site", "prop", "item"];
 
 /** Horizontal (XZ plane) extent, in prefab/scene axes. */
 export interface PrefabVec2 {
@@ -84,6 +84,7 @@ export const SHIP_SEAT_ROLES: ShipSeatRole[] = [
 export type PrefabComponent =
   | { type: "station-frame" }
   | { type: "prop-frame" }
+  | { type: "item-frame" }
   | { type: "spawn-point"; floorId: StationFloorId }
   | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
   | { type: "hangar-pad"; hangarId: string; padIndex: number; floorId?: StationFloorId }
@@ -434,6 +435,8 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
     case "station-frame":
       return { type };
     case "prop-frame":
+      return { type };
+    case "item-frame":
       return { type };
     case "spawn-point":
       return { type, floorId: parseFloorId(value.floorId, `${path}.floorId`) };

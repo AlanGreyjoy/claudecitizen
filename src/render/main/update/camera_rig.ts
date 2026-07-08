@@ -341,7 +341,17 @@ export function updateSpeedBlur(
   speedBlurEffect: { setStrength: (value: number) => void },
   world: SpikeRenderWorld,
 ): void {
-  const { character = null, mode = 'in-ship', ship } = world;
+  const { character = null, mode = 'in-ship', ship, quantum } = world;
+  if (quantum?.phase === 'traveling') {
+    speedBlurEffect.setStrength(0.08);
+    return;
+  }
+  if (quantum?.phase === 'spooling') {
+    const spoolT = quantum.spoolElapsed / Math.max(quantum.spoolDuration, 0.001);
+    speedBlurEffect.setStrength(spoolT * 0.03);
+    return;
+  }
+
   const focusVelocity =
     mode === 'in-ship'
       ? ship.velocity

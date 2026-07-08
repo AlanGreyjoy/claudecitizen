@@ -51,6 +51,29 @@ export interface HangarBuildStateDto {
   placements: HangarPlacementDto[];
 }
 
+export interface ItemDefinitionDto {
+  id: string;
+  name: string;
+  description: string;
+  itemType: string;
+  subType: string;
+  prefabId: string | null;
+  iconUrl: string | null;
+  stackMax: number;
+  costArc: number;
+  rarity: string;
+}
+
+export interface PlayerItemDto {
+  itemDefinitionId: string;
+  quantity: number;
+}
+
+export interface InventoryStateDto {
+  catalog: ItemDefinitionDto[];
+  items: PlayerItemDto[];
+}
+
 export interface GameBootstrapDto {
   player: PublicPlayerProfile;
   economy: {
@@ -65,6 +88,7 @@ export interface GameBootstrapDto {
   ships: OwnedShipDto[];
   hangar: HangarBuildStateDto;
   apartment: HangarBuildStateDto;
+  inventory: InventoryStateDto;
   featureFlags: {
     nativeWebSocketPresence: true;
     serverAuthoritativePhysics: false;

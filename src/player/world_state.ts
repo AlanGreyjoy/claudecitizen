@@ -27,6 +27,11 @@ import {
   getShipLayoutForPrefab,
 } from './ship_layout';
 import { DEFAULT_SHIP_PREFAB_ID } from '../world/ships';
+import type { ShipFlightMode } from '../flight/flight_modes';
+import {
+  createQuantumTravelState,
+  type QuantumTravelState,
+} from '../flight/quantum_travel';
 
 export type TransitionType = 'sit' | 'stand';
 
@@ -64,6 +69,9 @@ export interface WorldState {
   stationElevator: StationElevatorRide | null;
   /** 0..1 black overlay opacity used for elevator rides. */
   screenFade: number;
+  /** Piloting sub-mode: traverse, combat, or nav (quantum). */
+  flightMode: ShipFlightMode;
+  quantum: QuantumTravelState;
 }
 
 export const PLAYER_SHIP_INSTANCE_ID = 'player-ship-primary';
@@ -117,5 +125,7 @@ export function createWorldState(planet: Planet, seed: number): WorldState {
     assignedHangar: null,
     stationElevator: null,
     screenFade: 0,
+    flightMode: 'traverse',
+    quantum: createQuantumTravelState(),
   };
 }

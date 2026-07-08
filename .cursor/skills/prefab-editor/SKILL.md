@@ -5,7 +5,7 @@ description: Navigate and debug the ClaudeCitizen in-browser prefab editor — s
 
 # Prefab Editor
 
-Dev-only in-browser editor for station/ship/site/prop prefabs. Alan runs `npm run dev` (port 4173); open via title-screen **Editor** or `?boot=editor`.
+Dev-only in-browser editor for station/ship/site/prop prefabs. Requires `npm run dev` (port 4173); open via title-screen **Editor** or `?boot=editor`.
 
 ## Layout
 

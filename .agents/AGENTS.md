@@ -3,8 +3,9 @@
 ## Key facts
 
 - **No unit tests anywhere.** `npm run test -w server` exists as a stub but is unused. Unit tests are pointless with AI — they just check water = water.
-- **User owns QA.** Agents should not run tests, browser QA, screenshot checks, dev-server validation, `npm run build`, or `npm run typecheck` during normal implementation work unless Alan explicitly asks for validation. When skipping validation, say what was not run. If Alan explicitly asks for a commit, run `npm run typecheck` first unless he says not to.
-- **Do not start dev servers.** Alan normally already has the Vite and API servers running. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless Alan explicitly asks. If a server is needed for context, check existing ports/processes or ask first.
+- **User owns QA.** Agents should not run tests, browser QA, screenshot checks, dev-server validation, `npm run build`, `npm run typecheck`, or `npm run lint` during normal implementation work unless explicitly asked for validation. When skipping validation, say what was not run. At the end of a multi-file feature or spike, run `npm run lint` and fix any **errors** (and trivial warnings in touched files when practical). For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
+- **Prisma migrations.** Agents may run `npm run prisma:generate` after schema changes. Agents may run `npm run prisma:migrate` or `npm run prisma:deploy` when applying schema changes — Alan has authorized this. If the migration SQL file already exists under `server/prisma/migrations/`, prefer `npm run prisma:deploy` (applies pending migrations, no interactive prompt). When creating a new migration via `prisma migrate dev`, pass `--name <slug>` (e.g. `npm run prisma:migrate -w server -- --name add_items`) so the command does not hang waiting for input.
+- **Do not start dev servers.** Vite and API servers are normally already running locally. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
 - **TypeScript, ESM** at root (`"type": "module"`). Server workspace is **CommonJS**.
 - Build = `tsc --noEmit && vite build` (typecheck first, then bundle), but do not run it unless explicitly requested.
 - Dev server on port **4173**: `npm run dev`. Editor only available in dev mode.
@@ -71,9 +72,9 @@ Editor-side transform overrides (`glbNodeTransforms`) and deleted nodes (`glbNod
 ```bash
 npm run dev:infra     # docker compose up -d postgres redis mailpit
 npm run dev:server    # tsx watch src/main.ts (Nest.js, port 3000)
-npm run prisma:generate   # prisma generate
-npm run prisma:migrate    # prisma migrate dev
-npm run prisma:deploy     # prisma migrate deploy
+npm run prisma:generate   # prisma generate — agents may run after schema edits
+npm run prisma:migrate    # prisma migrate dev — agents may run; use --name <slug> to avoid prompts
+npm run prisma:deploy     # prisma migrate deploy — agents may run to apply committed migrations
 ```
 
 Server env template: `server/.env.example`. JWT secrets, DB URLs, etc. live there.

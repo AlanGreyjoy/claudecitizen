@@ -27,13 +27,6 @@
     "components": [
       {
         "type": "ship-frame"
-      },
-      {
-        "type": "ship-stats",
-        "maxSpeedMps": 100,
-        "maxHp": 1000,
-        "maxShields": 500,
-        "shieldRegenPerSec": 25
       }
     ],
     "children": [
@@ -61,6 +54,50 @@
         "asset": {
           "url": "/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb"
         },
+        "nodeOverrides": [
+          {
+            "node": "Ramp_2",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Ramp_1",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          }
+        ],
         "components": [
           {
             "type": "ship-hull",

@@ -157,4 +157,7 @@ export interface SpikeRenderWorld {
   shipRig?: { gear01: number; ramp01: number; doors: Record<string, number> };
   /** Remote players/ships received from the native WebSocket presence service. */
   networkEntities?: NetworkRenderEntity[];
+  /** Piloting sub-mode for ship HUD / quantum VFX. */
+  flightMode?: import('../flight/flight_modes').ShipFlightMode;
+  quantum?: import('../flight/quantum_travel').QuantumTravelState;
 }

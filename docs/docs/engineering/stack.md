@@ -98,7 +98,7 @@ sequenceDiagram
 
 | Tool | When | Notes |
 | --- | --- | --- |
-| **Prefab editor** | `npm run dev` only | Unity-style hierarchy, inspector, scene view |
+| **CC Editor** | `npm run dev` only | World builder — hierarchy, inspector, scene view, prefab authoring |
 | **Quality presets** | `?quality=performance\|balanced\|high` | Render budget tuning |
 | **Headless demo** | `npm run demo` | Scripted orbit / landing spike |
 

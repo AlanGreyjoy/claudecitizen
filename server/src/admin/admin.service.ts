@@ -9,7 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EnvService } from '../shared/env.service';
-import { GameCatalogService } from '../game/game.catalog.service';
+import { GameCatalogService, type ItemType } from '../game/game.catalog.service';
 import type { AdminSessionDto, AdminSessionPayload } from './admin.types';
 
 const ADMIN_COOKIE_MS = 12 * 60 * 60 * 1000;
@@ -229,6 +229,7 @@ export class AdminService {
     startingArcBalance: number;
     starterShipDefinitionIds: string[];
     starterPropDefinitionIds: string[];
+    starterItemDefinitionIds: string[];
   }) {
     return this.catalog.updateSettings(input);
   }
@@ -264,5 +265,50 @@ export class AdminService {
     },
   ) {
     return this.catalog.updatePropDefinition(id, input);
+  }
+
+  async listItemDefinitions() {
+    return this.catalog.listItemDefinitions();
+  }
+
+  async createItemDefinition(input: {
+    name: string;
+    description: string;
+    itemType: string;
+    subType: string;
+    prefabId: string | null;
+    iconUrl: string | null;
+    stackMax: number;
+    costArc: number;
+    rarity: string;
+  }) {
+    return this.catalog.createItemDefinition({
+      ...input,
+      itemType: input.itemType as ItemType,
+    });
+  }
+
+  async updateItemDefinition(
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      itemType?: string;
+      subType?: string;
+      prefabId?: string | null;
+      iconUrl?: string | null;
+      stackMax?: number;
+      costArc?: number;
+      rarity?: string;
+    },
+  ) {
+    return this.catalog.updateItemDefinition(id, {
+      ...input,
+      itemType: input.itemType as ItemType | undefined,
+    });
+  }
+
+  async deleteItemDefinition(id: string) {
+    return this.catalog.deleteItemDefinition(id);
   }
 }

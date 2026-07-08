@@ -11,8 +11,16 @@ import {
   MODE_ON_SHIP_DECK,
 } from '../../../player/modes';
 import { getActiveShip, type WorldState } from '../../../player/world_state';
+import {
+  findItemDefinition,
+  itemsByType,
+  type InventoryState,
+  type ItemDefinition,
+  type ItemType,
+} from '../../../player/inventory/types';
 import type { GameMode, PlanetSurfaceSample } from '../../../types';
 import { createHalobandHolo } from './haloband_holo';
+import { paintItemIcon } from './item_icon';
 
 export interface HaloBandElements {
   rootEl: HTMLElement;
@@ -20,6 +28,9 @@ export interface HaloBandElements {
   chatInputEl: HTMLInputElement;
   sendBtnEl: HTMLButtonElement;
   shipStatusEl: HTMLElement;
+  inventoryFiltersEl: HTMLElement;
+  inventoryGridEl: HTMLElement;
+  inventoryDetailEl: HTMLElement;
   balanceEl: HTMLElement;
   balanceValueEl: HTMLElement;
   holoCanvasEl: HTMLCanvasElement;
@@ -35,9 +46,22 @@ export interface HaloBandCallbacks {
   playerControls: { setInputSuppressed: (value: boolean) => void };
   /** Returns the player's current ARC balance, or null when offline / unavailable. */
   getArcBalance: () => number | null;
+  /** Returns portable inventory state, or null when offline / unavailable. */
+  getInventory: () => InventoryState | null;
 }
 
-type HaloBandTab = 'comms' | 'missions' | 'ship';
+type HaloBandTab = 'comms' | 'missions' | 'inventory' | 'ship';
+
+type InventoryFilter = 'all' | ItemType;
+
+const INVENTORY_FILTERS: Array<{ id: InventoryFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'consumable', label: 'Consumables' },
+  { id: 'clothing', label: 'Clothing' },
+  { id: 'weapon', label: 'Weapons' },
+  { id: 'armor', label: 'Armor' },
+  { id: 'material', label: 'Materials' },
+];
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -113,6 +137,9 @@ export function createHaloBand(elements: HaloBandElements, callbacks: HaloBandCa
   let latestParams: HaloBandUpdateParams | null = null;
   let haloBandCodes: readonly string[] = [];
   let lastRenderedBalance: number | null | undefined;
+  let inventoryFilter: InventoryFilter = 'all';
+  let selectedItemId: string | null = null;
+  let inventoryFiltersBuilt = false;
 
   const holo = createHalobandHolo(elements.holoCanvasEl);
 
@@ -192,6 +219,126 @@ export function createHaloBand(elements: HaloBandElements, callbacks: HaloBandCa
     host.append(vitals, systems);
   }
 
+  function ensureInventoryFilters(): void {
+    if (inventoryFiltersBuilt) return;
+    inventoryFiltersBuilt = true;
+    elements.inventoryFiltersEl.replaceChildren();
+    for (const filter of INVENTORY_FILTERS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'sc-haloband-inventory-filter';
+      button.dataset.inventoryFilter = filter.id;
+      button.textContent = filter.label;
+      button.classList.toggle('is-active', filter.id === inventoryFilter);
+      button.addEventListener('click', () => {
+        inventoryFilter = filter.id;
+        for (const chip of elements.inventoryFiltersEl.querySelectorAll<HTMLButtonElement>(
+          '.sc-haloband-inventory-filter',
+        )) {
+          chip.classList.toggle('is-active', chip.dataset.inventoryFilter === inventoryFilter);
+        }
+        renderInventory();
+      });
+      elements.inventoryFiltersEl.append(button);
+    }
+  }
+
+  function renderInventoryDetail(definition: ItemDefinition, quantity: number): void {
+    const host = elements.inventoryDetailEl;
+    host.replaceChildren();
+
+    const icon = document.createElement('div');
+    icon.className = 'sc-haloband-inventory-detail-icon';
+    paintItemIcon(icon, definition);
+
+    const name = document.createElement('h4');
+    name.className = 'sc-haloband-inventory-detail-name';
+    name.textContent = definition.name;
+
+    const meta = document.createElement('p');
+    meta.className = 'sc-haloband-inventory-detail-meta';
+    meta.textContent = `${definition.itemType} · ${definition.subType} · ${definition.rarity}`;
+
+    const qty = document.createElement('p');
+    qty.className = 'sc-haloband-inventory-detail-qty';
+    qty.textContent = `Quantity: ${quantity.toLocaleString()} / ${definition.stackMax.toLocaleString()}`;
+
+    const description = document.createElement('p');
+    description.className = 'sc-haloband-inventory-detail-desc';
+    description.textContent = definition.description;
+
+    host.append(icon, name, meta, qty, description);
+  }
+
+  function renderInventory(): void {
+    ensureInventoryFilters();
+    const inventory = callbacks.getInventory();
+    const grid = elements.inventoryGridEl;
+    grid.replaceChildren();
+
+    if (!inventory) {
+      const empty = document.createElement('p');
+      empty.className = 'sc-haloband-empty';
+      empty.textContent = 'Inventory unavailable offline.';
+      grid.append(empty);
+      elements.inventoryDetailEl.replaceChildren();
+      return;
+    }
+
+    const stacks = itemsByType(inventory, inventoryFilter === 'all' ? null : inventoryFilter);
+    if (stacks.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'sc-haloband-empty';
+      empty.textContent = 'No items in this category.';
+      grid.append(empty);
+      elements.inventoryDetailEl.replaceChildren();
+      selectedItemId = null;
+      return;
+    }
+
+    if (!selectedItemId || !stacks.some((stack) => stack.itemDefinitionId === selectedItemId)) {
+      selectedItemId = stacks[0]?.itemDefinitionId ?? null;
+    }
+
+    for (const stack of stacks) {
+      const definition = findItemDefinition(inventory.catalog, stack.itemDefinitionId);
+      if (!definition) continue;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'sc-haloband-inventory-slot';
+      button.classList.toggle('is-selected', stack.itemDefinitionId === selectedItemId);
+      button.title = definition.name;
+
+      const icon = document.createElement('div');
+      icon.className = 'sc-haloband-inventory-slot-icon';
+      paintItemIcon(icon, definition);
+
+      const qty = document.createElement('span');
+      qty.className = 'sc-haloband-inventory-slot-qty';
+      qty.textContent = stack.quantity > 1 ? String(stack.quantity) : '';
+
+      button.append(icon, qty);
+      button.addEventListener('click', () => {
+        selectedItemId = stack.itemDefinitionId;
+        renderInventory();
+      });
+      grid.append(button);
+    }
+
+    const selected = selectedItemId
+      ? stacks.find((stack) => stack.itemDefinitionId === selectedItemId)
+      : null;
+    const selectedDefinition = selected
+      ? findItemDefinition(inventory.catalog, selected.itemDefinitionId)
+      : null;
+    if (selected && selectedDefinition) {
+      renderInventoryDetail(selectedDefinition, selected.quantity);
+    } else {
+      elements.inventoryDetailEl.replaceChildren();
+    }
+  }
+
   function updateShipTabVisibility(): void {
     const mode = latestParams?.world.mode ?? null;
     const visible = mode ? isShipMode(mode) : false;
@@ -210,6 +357,7 @@ export function createHaloBand(elements: HaloBandElements, callbacks: HaloBandCa
       panel.classList.toggle('is-active', panel.dataset.halobandPanel === tab);
     }
     if (tab === 'ship') renderShipStatus();
+    if (tab === 'inventory') renderInventory();
   }
 
   function setOpen(next: boolean): void {
@@ -265,6 +413,7 @@ export function createHaloBand(elements: HaloBandElements, callbacks: HaloBandCa
     renderBalance();
     if (modeChanged) updateShipTabVisibility();
     if (activeTab === 'ship' && isShipTabVisible()) renderShipStatus();
+    if (activeTab === 'inventory') renderInventory();
   }
 
   for (const button of navButtons) {

@@ -12,6 +12,7 @@ import {
 } from '../../../player/modes';
 import type { WorldState } from '../../../player/world_state';
 import { getActiveShip, getActiveShipBody } from '../../../player/world_state';
+import { flightModeLabel } from '../../../flight/flight_modes';
 import type { Planet, PlanetSurfaceSample, RenderStats, Vec3 } from '../../../types';
 
 export interface StatsPanelElements {
@@ -92,6 +93,12 @@ export function createStatsPanel(elements: StatsPanelElements) {
 
     elements.readoutsEl.innerHTML = [
       ['Mode', modeLabel(world.mode)],
+      ...(world.mode === MODE_IN_SHIP
+        ? ([
+            ['Flight', flightModeLabel(world.flightMode)],
+            ['QT', world.quantum.phase === 'idle' ? 'Ready' : world.quantum.phase],
+          ] as [string, string][])
+        : []),
       ['Altitude', `${Math.round(focusSurface.altitudeMeters).toLocaleString()} m`],
       ['Speed', `${Math.round(speed).toLocaleString()} m/s`],
       ['Vertical', `${Math.round(verticalSpeed).toLocaleString()} m/s`],
@@ -158,6 +165,9 @@ export function createStatsPanel(elements: StatsPanelElements) {
         elements.statusEl.textContent =
           'Third-person traversal is active. Orbit the camera with the mouse and walk the terrain toward the ship. Press V for first person.';
       }
+    } else if (world.mode === MODE_IN_SHIP && world.flightMode === 'nav' && world.quantum.phase === 'idle') {
+      elements.statusEl.textContent =
+        'Nav mode. Tap U to cycle flight modes. Leave the atmosphere, align toward Asteron OP-1, then hold U for 2 seconds to quantum travel.';
     } else if (shipSurface.altitudeMeters < 20) {
       elements.statusEl.textContent =
         speed < 50

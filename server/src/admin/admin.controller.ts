@@ -14,6 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { ITEM_TYPES } from '../game/game.catalog.service';
 import { EnvService } from '../shared/env.service';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
@@ -42,6 +43,21 @@ function requirePrefabId(value: string): string {
     throw new Error('Prefab id is invalid.');
   }
   return value;
+}
+
+function readNullableString(body: unknown, key: string): string | null | undefined {
+  if (typeof body !== 'object' || body === null || !(key in body)) return undefined;
+  const value = (body as Record<string, unknown>)[key];
+  if (value === null) return null;
+  return typeof value === 'string' ? value.trim() : undefined;
+}
+
+function requireItemType(value: string): (typeof ITEM_TYPES)[number] {
+  const trimmed = value.trim();
+  if (!(ITEM_TYPES as readonly string[]).includes(trimmed)) {
+    throw new Error('Item type is invalid.');
+  }
+  return trimmed as (typeof ITEM_TYPES)[number];
 }
 
 function requireText(value: string, label: string, maxLength: number): string {
@@ -164,6 +180,7 @@ function parseSettingsUpdate(body: unknown) {
     ),
     starterShipDefinitionIds: readStringArray(body, 'starterShipDefinitionIds'),
     starterPropDefinitionIds: readStringArray(body, 'starterPropDefinitionIds'),
+    starterItemDefinitionIds: readStringArray(body, 'starterItemDefinitionIds'),
   };
 }
 
@@ -224,6 +241,81 @@ function parsePropDefinitionPatch(body: unknown) {
     const snapGridM = readFiniteNumber(body, 'snapGridM');
     next.snapGridM = snapGridM === null ? null : requireFloat(snapGridM, 'Snap grid', 0.1, 4);
   }
+
+  return next;
+}
+
+function parseItemDefinitionCreate(body: unknown) {
+  const prefabRaw = readNullableString(body, 'prefabId');
+  const iconRaw = readNullableString(body, 'iconUrl');
+  return {
+    name: requireText(readString(body, 'name'), 'Name', 80),
+    description: requireText(readString(body, 'description'), 'Description', 2_000),
+    itemType: requireItemType(readString(body, 'itemType') || 'misc'),
+    subType: requireText(readString(body, 'subType') || 'generic', 'Sub-type', 40),
+    prefabId:
+      prefabRaw === undefined || prefabRaw === null || prefabRaw === ''
+        ? null
+        : requirePrefabId(prefabRaw),
+    iconUrl:
+      iconRaw === undefined || iconRaw === null || iconRaw === ''
+        ? null
+        : iconRaw.slice(0, 512),
+    stackMax: requireInteger(readFiniteNumber(body, 'stackMax') ?? 99, 'Stack max', 1, 9_999),
+    costArc: requireInteger(readFiniteNumber(body, 'costArc') ?? 0, 'Cost', 0, 2_000_000_000),
+    rarity: requireText(readString(body, 'rarity') || 'common', 'Rarity', 24),
+  };
+}
+
+function parseItemDefinitionPatch(body: unknown) {
+  const next: {
+    name?: string;
+    description?: string;
+    itemType?: (typeof ITEM_TYPES)[number];
+    subType?: string;
+    prefabId?: string | null;
+    iconUrl?: string | null;
+    stackMax?: number;
+    costArc?: number;
+    rarity?: string;
+  } = {};
+
+  const name = readOptionalString(body, 'name');
+  if (name !== undefined) next.name = requireText(name, 'Name', 80);
+
+  const description = readOptionalString(body, 'description');
+  if (description !== undefined) next.description = requireText(description, 'Description', 2_000);
+
+  const itemType = readOptionalString(body, 'itemType');
+  if (itemType !== undefined) next.itemType = requireItemType(itemType);
+
+  const subType = readOptionalString(body, 'subType');
+  if (subType !== undefined) next.subType = requireText(subType, 'Sub-type', 40);
+
+  if (typeof body === 'object' && body !== null && 'prefabId' in body) {
+    const prefabId = readNullableString(body, 'prefabId');
+    next.prefabId =
+      prefabId === undefined || prefabId === null || prefabId === ''
+        ? null
+        : requirePrefabId(prefabId);
+  }
+
+  if (typeof body === 'object' && body !== null && 'iconUrl' in body) {
+    const iconUrl = readNullableString(body, 'iconUrl');
+    next.iconUrl =
+      iconUrl === undefined || iconUrl === null || iconUrl === ''
+        ? null
+        : iconUrl.slice(0, 512);
+  }
+
+  const stackMax = readFiniteNumber(body, 'stackMax');
+  if (stackMax !== null) next.stackMax = requireInteger(stackMax, 'Stack max', 1, 9_999);
+
+  const costArc = readFiniteNumber(body, 'costArc');
+  if (costArc !== null) next.costArc = requireInteger(costArc, 'Cost', 0, 2_000_000_000);
+
+  const rarity = readOptionalString(body, 'rarity');
+  if (rarity !== undefined) next.rarity = requireText(rarity, 'Rarity', 24);
 
   return next;
 }
@@ -349,6 +441,50 @@ export class AdminController {
     } catch (error) {
       throw new BadRequestException(
         error instanceof Error ? error.message : 'Prop definition update is invalid.',
+      );
+    }
+  }
+
+  @Get('items')
+  @UseGuards(AdminGuard)
+  async listItems() {
+    return this.admin.listItemDefinitions();
+  }
+
+  @Post('items')
+  @UseGuards(AdminGuard)
+  async createItem(@Body() body: unknown) {
+    try {
+      return this.admin.createItemDefinition(parseItemDefinitionCreate(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Item definition is invalid.',
+      );
+    }
+  }
+
+  @Patch('items/:id')
+  @UseGuards(AdminGuard)
+  async updateItem(@Param('id') id: string, @Body() body: unknown) {
+    try {
+      return this.admin.updateItemDefinition(id, parseItemDefinitionPatch(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Item definition update is invalid.',
+      );
+    }
+  }
+
+  @Delete('items/:id')
+  @HttpCode(204)
+  @UseGuards(AdminGuard)
+  async deleteItem(@Param('id') id: string) {
+    try {
+      await this.admin.deleteItemDefinition(id);
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Item definition delete failed.',
       );
     }
   }

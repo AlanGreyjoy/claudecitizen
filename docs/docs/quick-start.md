@@ -21,13 +21,23 @@ npm run dev
 
 Open [http://localhost:4173](http://localhost:4173). You get a title screen with **Play**; dev builds also show **Editor**. Click the canvas to lock the mouse.
 
-## Dev editor
+## CC Editor
 
-The in-browser prefab editor is only available under `npm run dev`. See the [Prefab editor](/editor) guide for panels, components, and preview URLs.
+The in-browser world builder and prefab author is only available under `npm run dev`. See the [CC Editor](/cc-editor) docs for panels, prefab kinds, and preview URLs.
 
 ```text
 http://localhost:4173/?boot=editor
 ```
+
+## Admin App
+
+The operator console for the Nest.js backend (users, ship/prop/item catalogs, game settings) loads via:
+
+```text
+http://localhost:4173/?boot=admin
+```
+
+Requires `npm run dev:infra`, `npm run dev:server`, and admin credentials in `server/.env`. See the [Admin App](/admin-app) docs.
 
 ## Commands
 
