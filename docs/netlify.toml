@@ -1,0 +1,3 @@
+[build]
+  command = "cd .. && npm install && npm run docs:build"
+  publish = "build"
