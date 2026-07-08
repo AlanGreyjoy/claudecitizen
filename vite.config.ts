@@ -269,7 +269,7 @@ function copyReferencedGameAssets(): Plugin {
  *
  *   GET  /__editor/assets?root=editor/assets             — recursive file listing
  *   GET  /__editor/assets?root=src/assets                — recursive source asset listing
- *   GET  /__editor/prefabs                               — saved prefab ids
+ *   GET  /__editor/prefabs                               — saved prefab metadata (id, kind, name)
  *   GET  /__editor/prefab?id=<id>                        — prefab JSON
  *   POST /__editor/prefab                                — save prefab JSON
  *
@@ -298,6 +298,7 @@ function editorDevApi(): Plugin {
     ['.webp', 'image/webp'],
   ]);
   const PREFAB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  const PREFAB_KINDS = new Set(['station', 'ship', 'site', 'prop', 'item']);
   const MAX_LISTING_ENTRIES = 20_000;
   const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
@@ -436,16 +437,27 @@ function editorDevApi(): Plugin {
   }
 
   async function handleListPrefabs(res: ServerResponse): Promise<void> {
-    let ids: string[] = [];
+    const prefabs: { id: string; kind: string; name: string }[] = [];
     try {
-      ids = (await readdir(prefabDataDir()))
-        .filter((name) => name.endsWith('.prefab.json'))
-        .map((name) => name.replace('.prefab.json', ''))
-        .sort();
+      const filenames = (await readdir(prefabDataDir())).filter((name) => name.endsWith('.prefab.json'));
+      for (const filename of filenames) {
+        const id = filename.replace('.prefab.json', '');
+        try {
+          const contents = await readFile(join(prefabDataDir(), filename), 'utf8');
+          const doc = JSON.parse(contents) as { kind?: unknown; name?: unknown };
+          const kind =
+            typeof doc.kind === 'string' && PREFAB_KINDS.has(doc.kind) ? doc.kind : 'station';
+          const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.trim() : id;
+          prefabs.push({ id, kind, name });
+        } catch {
+          prefabs.push({ id, kind: 'station', name: id });
+        }
+      }
     } catch {
       // Missing data dir means no prefabs yet.
     }
-    sendJson(res, 200, { prefabs: ids });
+    prefabs.sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+    sendJson(res, 200, { prefabs });
   }
 
   async function handleGetPrefab(url: URL, res: ServerResponse): Promise<void> {

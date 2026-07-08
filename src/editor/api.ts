@@ -1,4 +1,10 @@
-import { parsePrefabDocument, type PrefabDocument } from '../world/prefabs/schema';
+import { parsePrefabDocument, type PrefabDocument, type PrefabKind } from '../world/prefabs/schema';
+
+export interface PrefabListEntry {
+  id: string;
+  kind: PrefabKind;
+  name: string;
+}
 
 /** Client for the dev-only /__editor API provided by the Vite plugin. */
 
@@ -31,8 +37,8 @@ export async function fetchAssetListing(root: AssetRoot): Promise<AssetEntry[]> 
   return payload.entries;
 }
 
-export async function fetchPrefabList(): Promise<string[]> {
-  const payload = await requestJson<{ prefabs: string[] }>('/__editor/prefabs');
+export async function fetchPrefabList(): Promise<PrefabListEntry[]> {
+  const payload = await requestJson<{ prefabs: PrefabListEntry[] }>('/__editor/prefabs');
   return payload.prefabs;
 }
 

@@ -18,6 +18,14 @@ This project is **100% vibe coded** — built iteratively with AI-assisted devel
 
 ![ClaudeCitizen gameplay screenshot](/img/screenshot.png)
 
+## CC Editor
+
+The dev-only **CC Editor** is a Unity-style in-browser world builder for stations, ships, props, and gameplay markers. Drag GLBs into the scene, tune colliders and components in the inspector, and save prefabs as JSON the game loads at runtime.
+
+![CC Editor layout](/img/editor-screenshot.png)
+
+See the [CC Editor overview](/cc-editor) for the full authoring guide.
+
 ## Live play test
 
 Play the latest build in your browser:

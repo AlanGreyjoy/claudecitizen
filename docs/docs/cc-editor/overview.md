@@ -12,7 +12,7 @@ Production builds strip all editor code. The editor is only available under `npm
 
 ![CC Editor layout](/img/editor-screenshot.png)
 
-The screenshot shows the Unity-style layout: hierarchy, scene view, inspector, and project browser. Here a ship model is being placed inside a station prefab with colliders and gameplay markers.
+The screenshot shows the Unity-style layout: hierarchy, scene view, inspector, and project browser. Here a station corridor is being assembled from modular GLB pieces with colliders and transform gizmos.
 
 ## Builder + prefab author
 

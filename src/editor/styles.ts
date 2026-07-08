@@ -186,6 +186,64 @@ const EDITOR_CSS = `
   display: block;
 }
 
+.ed-open-flyout {
+  min-width: 260px;
+  padding: 0;
+}
+
+.ed-open-search-wrap {
+  padding: 6px 8px 4px;
+}
+
+.ed-open-search {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.ed-open-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  border-top: 1px solid rgba(90, 190, 255, 0.12);
+  border-bottom: 1px solid rgba(90, 190, 255, 0.16);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.ed-open-tabs.is-hidden {
+  display: none;
+}
+
+.ed-open-tab {
+  border: none;
+  border-right: 1px solid rgba(90, 190, 255, 0.12);
+  background: transparent;
+  color: var(--muted);
+  font: 700 9px/1 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.ed-open-tab:hover,
+.ed-open-tab.is-active {
+  background: rgba(139, 216, 255, 0.1);
+  color: var(--accent);
+}
+
+.ed-open-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.ed-open-empty {
+  padding: 10px 12px;
+  color: var(--muted);
+  font: 500 11px/1.4 var(--sc-font);
+}
+
 .ed-menubar-doc {
   display: flex;
   align-items: center;

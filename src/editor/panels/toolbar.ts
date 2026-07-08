@@ -1,4 +1,5 @@
 import { clearChildren, el } from '../dom';
+import type { PrefabListEntry } from '../api';
 import { slugifyPrefabName, PREFAB_KINDS, type PrefabKind } from '../../world/prefabs/schema';
 import type { EditorEntity, EditorStore } from '../document';
 
@@ -27,7 +28,7 @@ export interface ToolbarActions {
 
 export interface ToolbarHandle {
   setGizmoMode: (mode: ToolbarGizmoMode) => void;
-  setPrefabOptions: (ids: string[]) => void;
+  setPrefabOptions: (entries: PrefabListEntry[]) => void;
 }
 
 type MenuAction = {
@@ -38,7 +39,146 @@ type MenuAction = {
   accent?: boolean;
 };
 
-type MenuEntry = MenuAction | 'sep' | { heading: string } | { submenu: string; items: MenuAction[] | (() => MenuAction[]) };
+type MenuPanelContext = { menubar: HTMLElement };
+
+type OpenPrefabPanel = HTMLElement & { rerender?: () => void; focusSearch?: () => void };
+
+type MenuEntry =
+  | MenuAction
+  | 'sep'
+  | { heading: string }
+  | { submenu: string; items: MenuAction[] | (() => MenuAction[]) }
+  | { submenu: string; panel: (ctx: MenuPanelContext) => OpenPrefabPanel };
+
+function defaultActiveKind(prefabs: PrefabListEntry[]): PrefabKind {
+  return PREFAB_KINDS.find((kind) => prefabs.some((entry) => entry.kind === kind)) ?? 'station';
+}
+
+function createOpenPrefabPanel(
+  getPrefabs: () => PrefabListEntry[],
+  onSelect: (id: string) => void,
+): OpenPrefabPanel {
+  let activeKind = defaultActiveKind(getPrefabs());
+  let searchQuery = '';
+
+  const panel = el('div', { className: 'ed-open-panel' }) as OpenPrefabPanel;
+  const tabsWrap = el('div', { className: 'ed-open-tabs' });
+  const listWrap = el('div', { className: 'ed-open-list' });
+
+  const searchInput = el('input', {
+    className: 'ed-input ed-open-search',
+    attrs: { type: 'text', placeholder: 'Search prefabs…' },
+    on: {
+      input: () => {
+        searchQuery = searchInput.value.trim().toLowerCase();
+        renderTabs();
+        renderList();
+      },
+      keydown: (event) => event.stopPropagation(),
+    },
+  });
+
+  function prefabsForDisplay(): PrefabListEntry[] {
+    const prefabs = getPrefabs();
+    if (searchQuery) {
+      return prefabs.filter(
+        (entry) =>
+          entry.id.toLowerCase().includes(searchQuery) ||
+          entry.name.toLowerCase().includes(searchQuery),
+      );
+    }
+    return prefabs.filter((entry) => entry.kind === activeKind);
+  }
+
+  function kindsToShow(): PrefabKind[] {
+    const prefabs = getPrefabs();
+    return PREFAB_KINDS.filter((kind) => prefabs.some((entry) => entry.kind === kind));
+  }
+
+  function renderTabs(): void {
+    clearChildren(tabsWrap);
+    const kinds = kindsToShow();
+    tabsWrap.classList.toggle('is-hidden', kinds.length <= 1);
+    for (const kind of kinds) {
+      tabsWrap.append(
+        el('button', {
+          className: `ed-open-tab${!searchQuery && kind === activeKind ? ' is-active' : ''}`,
+          text: kind,
+          on: {
+            click: (event) => {
+              event.stopPropagation();
+              activeKind = kind;
+              searchQuery = '';
+              searchInput.value = '';
+              renderTabs();
+              renderList();
+            },
+          },
+        }),
+      );
+    }
+  }
+
+  function renderList(): void {
+    clearChildren(listWrap);
+    const prefabs = getPrefabs();
+    if (prefabs.length === 0) {
+      listWrap.append(el('div', { className: 'ed-open-empty', text: 'No saved prefabs' }));
+      return;
+    }
+
+    const visible = prefabsForDisplay();
+    if (visible.length === 0) {
+      listWrap.append(
+        el('div', {
+          className: 'ed-open-empty',
+          text: searchQuery ? 'No matches' : `No ${activeKind} prefabs`,
+        }),
+      );
+      return;
+    }
+
+    for (const entry of visible) {
+      const label = entry.name !== entry.id ? entry.name : entry.id;
+      listWrap.append(
+        el(
+          'button',
+          {
+            className: 'ed-menu-item',
+            on: {
+              click: (event) => {
+                event.stopPropagation();
+                onSelect(entry.id);
+              },
+            },
+          },
+          [el('span', { className: 'ed-menu-item-label', text: label })],
+        ),
+      );
+    }
+  }
+
+  function render(): void {
+    const prefabs = getPrefabs();
+    if (!prefabs.some((entry) => entry.kind === activeKind)) {
+      activeKind = defaultActiveKind(prefabs);
+      searchQuery = '';
+      searchInput.value = '';
+    }
+    renderTabs();
+    renderList();
+  }
+
+  panel.append(
+    el('div', { className: 'ed-open-search-wrap' }, [searchInput]),
+    tabsWrap,
+    listWrap,
+  );
+  panel.rerender = render;
+  panel.focusSearch = () => searchInput.focus();
+  render();
+  return panel;
+}
 
 function closeAllMenus(menubar: HTMLElement): void {
   for (const menu of menubar.querySelectorAll('.ed-menu.is-open')) {
@@ -102,8 +242,20 @@ function createMenuDropdown(
           el('span', { className: 'ed-menu-item-label', text: entry.submenu }),
           el('span', { className: 'ed-menu-item-shortcut', text: '▸' }),
         ]);
-        const flyout = createMenuDropdown(entry.items, menubar, refreshDisabled);
-        flyout.classList.add('ed-menu-flyout');
+
+        let panelEl: OpenPrefabPanel | undefined;
+        let flyout: HTMLElement;
+
+        if ('panel' in entry) {
+          flyout = el('div', { className: 'ed-menu-dropdown ed-menu-flyout ed-open-flyout' });
+          panelEl = entry.panel({ menubar });
+          flyout.append(panelEl);
+          (flyout as HTMLElement & { rerender?: () => void }).rerender = () => panelEl?.rerender?.();
+        } else {
+          flyout = createMenuDropdown(entry.items, menubar, refreshDisabled);
+          flyout.classList.add('ed-menu-flyout');
+        }
+
         submenuWrap.append(trigger, flyout);
         trigger.addEventListener('click', (event) => {
           event.stopPropagation();
@@ -111,7 +263,10 @@ function createMenuDropdown(
           for (const node of submenuWrap.parentElement?.querySelectorAll('.ed-menu-submenu') ?? []) {
             node.classList.remove('is-open');
           }
-          if (!wasOpen) submenuWrap.classList.add('is-open');
+          if (!wasOpen) {
+            submenuWrap.classList.add('is-open');
+            panelEl?.focusSearch?.();
+          }
         });
         dropdown.append(submenuWrap);
         continue;
@@ -377,7 +532,7 @@ export function createToolbar(
   refreshShipPreviewGroup();
 
   // -- document menubar --
-  let prefabIds: string[] = [];
+  let prefabOptions: PrefabListEntry[] = [];
 
   const nameInput = el('input', {
     className: 'ed-input ed-menubar-name',
@@ -426,13 +581,14 @@ export function createToolbar(
           { label: 'New', action: () => actions.onNew() },
           {
             submenu: 'Open',
-            items: () =>
-              prefabIds.length === 0
-                ? [{ label: 'No saved prefabs', disabled: () => true }]
-                : prefabIds.map((id) => ({
-                    label: id,
-                    action: () => actions.onLoad(id),
-                  })),
+            panel: ({ menubar }) =>
+              createOpenPrefabPanel(
+                () => prefabOptions,
+                (id) => {
+                  actions.onLoad(id);
+                  closeAllMenus(menubar);
+                },
+              ),
           },
           'sep',
           { label: 'Save', shortcut: 'Ctrl+S', accent: true, action: () => actions.onSave() },
@@ -573,8 +729,8 @@ export function createToolbar(
 
   return {
     setGizmoMode: (mode) => setGizmoMode(mode, false),
-    setPrefabOptions(ids) {
-      prefabIds = ids;
+    setPrefabOptions(entries) {
+      prefabOptions = entries;
       rerenderMenus(menubar);
     },
   };
