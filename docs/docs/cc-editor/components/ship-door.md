@@ -18,7 +18,7 @@ Open/close door bound to GLB nodes. Entity position is the interact spot. **Ship
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `id` | string | `"door-1"` | Unique within prefab; walk zones gate on it |
-| `label` | string | `"door"` | Display name in prompts ("Press F — open {label}") |
+| `label` | string | `"door"` | Display name in prompts ("Press F — open &#123;label&#125;") |
 | `motion` | `"slide"` \| `"hinge"` | `"slide"` | Translation vs rotation |
 | `axis` | `"x"` \| `"y"` \| `"z"` | `"x"` | Node-local axis |
 | `nodes` | `{ name, delta }[]` | — | GLB names + signed open delta |
