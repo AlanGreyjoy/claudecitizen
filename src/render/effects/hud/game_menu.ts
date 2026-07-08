@@ -1,10 +1,11 @@
 import {
   applyAmbientOcclusionAndReload,
+  applyMotionBlurAndReload,
   applyRenderQualityAndReload,
   loadGameSettings,
   saveGameSettings,
   type GameSettings,
-} from '../../../app/game_settings';
+} from '../../../settings/game_settings';
 import {
   createDefaultInputSettings,
   DEVICE_BUTTON_ACTIONS,
@@ -131,6 +132,8 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   );
   const ambientOcclusionInput =
     elements.rootEl.querySelector<HTMLInputElement>('#game-menu-ambient-occlusion');
+  const motionBlurInput =
+    elements.rootEl.querySelector<HTMLInputElement>('#game-menu-motion-blur');
 
   function isCapturingControls(): boolean {
     return keyboardCaptureAction !== null || deviceCapture !== null;
@@ -144,6 +147,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
 
   function syncAmbientOcclusion(): void {
     if (ambientOcclusionInput) ambientOcclusionInput.checked = settings.ambientOcclusion;
+  }
+
+  function syncMotionBlur(): void {
+    if (motionBlurInput) motionBlurInput.checked = settings.motionBlur;
   }
 
   function syncAudioControls(): void {
@@ -175,6 +182,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
       document.exitPointerLock?.();
       syncQualityRadios();
       syncAmbientOcclusion();
+      syncMotionBlur();
       syncAudioControls();
       renderControlsPanel();
       startTelemetry();
@@ -709,6 +717,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     applyAmbientOcclusionAndReload(ambientOcclusionInput.checked);
   });
 
+  motionBlurInput?.addEventListener('change', () => {
+    applyMotionBlurAndReload(motionBlurInput.checked);
+  });
+
   elements.masterVolumeEl.addEventListener('input', () => {
     updateAudioSetting('masterVolume', Number.parseInt(elements.masterVolumeEl.value, 10));
   });
@@ -745,6 +757,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
 
   syncQualityRadios();
   syncAmbientOcclusion();
+  syncMotionBlur();
   syncAudioControls();
   renderControlsPanel();
 

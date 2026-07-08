@@ -739,7 +739,7 @@ export function resolveCharacterAgainstColliders(
   const original = { right, forward };
 
   for (let iteration = 0; iteration < 3; iteration += 1) {
-    let totalPush = new THREE.Vector3();
+    const totalPush = new THREE.Vector3();
     let pushCount = 0;
     let nullCount = 0;
     for (const height of CAPSULE_SAMPLE_HEIGHTS) {

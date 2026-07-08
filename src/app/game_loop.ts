@@ -4,7 +4,7 @@ import {
 } from "../flight/flight_body";
 import { regenerateShipShields } from "../flight/ship_instance";
 import { getShipInstance, listShipInstances, removeShipInstance } from "../flight/ship_world";
-import { createPlayerControls } from "../flight/player_controls";
+import { createPlayerControls } from "./player_controls";
 import type { KeyboardActionId } from "../flight/input_settings";
 import {
   MODE_IN_SHIP,
@@ -46,7 +46,7 @@ import {
   isRampUsable,
   updateShipRig,
 } from "../player/ship_rig";
-import { DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD } from "../player/colliders";
+import { DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD } from "../physics/colliders";
 import {
   beginElevatorRide,
   callShipToHangar,

@@ -24,6 +24,39 @@ export interface AddComponentOptions {
   spawnPosition?: Vec3;
 }
 
+export function addColliderToEntities(store: EditorStore, entityIds: string[]): void {
+  const colliderDef = allComponentsForKind(store).find((def) => def.type === 'collider');
+  if (!colliderDef) {
+    showToast('Collider component is unavailable for this prefab kind.', true);
+    return;
+  }
+
+  let added = 0;
+  let skipped = 0;
+
+  for (const entityId of entityIds) {
+    const entity = store.locate(entityId)?.entity;
+    if (!entity) continue;
+    if (entity.components.some((component) => component.type === 'collider')) {
+      skipped += 1;
+      continue;
+    }
+    const component = createComponentForEntity(colliderDef, entity, null);
+    store.setComponents(entityId, [...entity.components, component]);
+    added += 1;
+  }
+
+  if (added === 0 && skipped > 0) {
+    showToast(`All ${skipped} selected entities already have colliders.`, true);
+    return;
+  }
+  if (skipped > 0) {
+    showToast(`Added collider to ${added} entities (${skipped} already had one).`);
+    return;
+  }
+  showToast(`Added collider to ${added} ${added === 1 ? 'entity' : 'entities'}.`);
+}
+
 export function addComponentFromPalette(
   store: EditorStore,
   targetEntityId: string,
@@ -78,6 +111,7 @@ export function addComponentFromPalette(
   if (def.marker && hasVisual) {
     const markerLabel = subNodeName ? `${def.label} (${subNodeName})` : def.label;
     const marker = createEmptyEntity(markerLabel);
+    if (subNodeName) marker.glbAnchor = subNodeName;
     marker.components = [createComponentForEntity(def, entity, subNodeName)];
     if (options?.spawnPosition) {
       marker.position = { ...options.spawnPosition };
@@ -155,9 +189,11 @@ export function addEmptyAtPosition(
   parentEntityId: string,
   position: Vec3,
   name = 'Empty',
+  glbAnchor?: string | null,
 ): void {
   const entity = createEmptyEntity(name);
   entity.position = { ...position };
+  if (glbAnchor) entity.glbAnchor = glbAnchor;
   store.addEntity(entity, parentEntityId);
 }
 
@@ -235,7 +271,7 @@ export function buildGlbAuthoringMenu(
           showToast('Mesh position unavailable — model may still be loading.', true);
           return;
         }
-        addEmptyAtPosition(store, entityId, position);
+        addEmptyAtPosition(store, entityId, position, 'Empty', nodeName ?? null);
       },
     },
     'sep',

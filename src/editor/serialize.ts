@@ -91,6 +91,7 @@ function entityToPrefab(entity: EditorEntity): PrefabEntity {
     prefabEntity.materialOverrides = structuredClone(entity.materialOverrides);
   }
   if (entity.components.length > 0) prefabEntity.components = structuredClone(entity.components);
+  if (entity.glbAnchor) prefabEntity.glbAnchor = entity.glbAnchor;
   if (entity.children.length > 0) {
     prefabEntity.children = entity.children.map(entityToPrefab);
   }
@@ -146,6 +147,7 @@ function entityFromPrefab(prefabEntity: PrefabEntity): EditorEntity {
     ? structuredClone(prefabEntity.materialOverrides)
     : [];
   entity.components = prefabEntity.components ? structuredClone(prefabEntity.components) : [];
+  entity.glbAnchor = prefabEntity.glbAnchor;
   entity.children = (prefabEntity.children ?? []).map(entityFromPrefab);
   return entity;
 }

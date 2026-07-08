@@ -1,7 +1,7 @@
 import {
   GAME_SETTINGS_CHANGED_EVENT,
   loadGameSettings,
-} from '../../../app/game_settings';
+} from '../../../settings/game_settings';
 import { getKeyboardBindingCodes } from '../../../flight/input_settings';
 import { length } from '../../../math/vec3';
 import {

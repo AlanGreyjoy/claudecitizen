@@ -7,6 +7,7 @@ import {
   VolumetricFogEffect,
 } from '../../effects';
 import { SpeedBlurEffect } from '../effects/speed_blur';
+import { MotionBlurEffect } from '../effects/motion_blur';
 import { ColorCorrectionEffect } from '../effects/color_correction';
 import { resolveRenderQuality } from '../domain/render_quality';
 import { resolveSsaoSettings } from '../domain/ssao_settings';
@@ -33,6 +34,7 @@ export interface ComposerStack {
   volumetricFogPass: EffectPass;
   volumetricFogEffect: VolumetricFogEffect;
   speedBlurEffect: SpeedBlurEffect;
+  motionBlurEffect: MotionBlurEffect;
   colorCorrectionEffect: ColorCorrectionEffect;
   spaceSkybox: SpaceSkybox;
   volumetricClouds: ReturnType<typeof createVolumetricCloudManager>;
@@ -93,8 +95,8 @@ export function createComposerStack(
   composer.addPass(normalPass);
 
   const ssaoSettings = resolveSsaoSettings(renderQuality.ambientOcclusionIntensity);
-  let ssaoBaseRadius = ssaoSettings.aoRadius;
-  let ssaoBaseIntensity = ssaoSettings.intensity;
+  const ssaoBaseRadius = ssaoSettings.aoRadius;
+  const ssaoBaseIntensity = ssaoSettings.intensity;
   let n8aoPass: N8AOPostPass | null = null;
   if (renderQuality.ambientOcclusionEnabled) {
     n8aoPass = new N8AOPostPass(scene, camera, 1, 1);
@@ -142,6 +144,14 @@ export function createComposerStack(
   const speedBlurEffect = new SpeedBlurEffect();
   const speedBlurPass = new EffectPass(camera, speedBlurEffect);
   composer.addPass(speedBlurPass);
+
+  const motionBlurEffect = new MotionBlurEffect(camera, renderScale, {
+    useLogarithmicDepth: renderer.capabilities.logarithmicDepthBuffer,
+    samples: renderQuality.motionBlurSamples,
+  });
+  const motionBlurPass = new EffectPass(camera, motionBlurEffect);
+  motionBlurPass.setEnabled(renderQuality.motionBlurEnabled);
+  composer.addPass(motionBlurPass);
 
   // AgX has a much softer shoulder than ACES: shadows keep detail instead of
   // crushing to black and highlights desaturate gently. Exposure compensation
@@ -195,6 +205,7 @@ export function createComposerStack(
     volumetricFogPass,
     volumetricFogEffect,
     speedBlurEffect,
+    motionBlurEffect,
     colorCorrectionEffect,
     spaceSkybox,
     volumetricClouds,

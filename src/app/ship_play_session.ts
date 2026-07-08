@@ -6,7 +6,7 @@ import {
   RenderPass,
   SMAAEffect,
 } from "postprocessing";
-import { createPlayerControls } from "../flight/player_controls";
+import { createPlayerControls } from "./player_controls";
 import {
   FIRST_PERSON_PITCH_LIMIT,
   integrateCharacterLocomotion,
@@ -53,7 +53,7 @@ import {
   isRampUsable,
   updateShipRig,
 } from "../player/ship_rig";
-import { createCharacterAvatar } from "../player/avatar";
+import { createCharacterAvatar } from "../render/main/scene/character_avatar";
 import { resolveRenderQuality } from "../render/main/domain/render_quality";
 import { createShipModel } from "../render/main/scene/ship_model";
 import { updateShipPlacement } from "../render/main/update/sun_system";
@@ -96,6 +96,18 @@ function requireElement<T extends HTMLElement>(id: string): T {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function smoothVector(
+  current: THREE.Vector3,
+  target: THREE.Vector3,
+  dt: number,
+  halfLife: number,
+): void {
+  if (dt <= 0) return;
+  const smoothness = Math.LN2 / halfLife;
+  const blend = 1 - Math.exp(-smoothness * dt);
+  current.lerp(target, blend);
 }
 
 function smoothstep01(value: number): number {
@@ -681,6 +693,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       );
       camera.up.set(0, 1, 0);
       camera.lookAt(cameraTarget);
+
+      camera.userData.smoothedPos = null;
+      camera.userData.smoothedTarget = null;
       return;
     }
 
@@ -699,16 +714,40 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const rigOffsets = firstPerson
       ? resolveFirstPersonCameraRig(orbit)
       : resolveCharacterCameraRig(orbit, cameraState.zoomDistance);
-    camera.position.set(
+
+    const desiredPos = new THREE.Vector3(
       character.position.x + rigOffsets.positionOffset.x,
       character.position.y + rigOffsets.positionOffset.y,
       character.position.z + rigOffsets.positionOffset.z,
     );
-    cameraTarget.set(
+    const desiredTarget = new THREE.Vector3(
       character.position.x + rigOffsets.targetOffset.x,
       character.position.y + rigOffsets.targetOffset.y,
       character.position.z + rigOffsets.targetOffset.z,
     );
+
+    if (!camera.userData.smoothedPos) {
+      camera.userData.smoothedPos = new THREE.Vector3().copy(desiredPos);
+    }
+
+    if (firstPerson) {
+      smoothVector(camera.userData.smoothedPos, desiredPos, dt, 0.05);
+      camera.position.copy(camera.userData.smoothedPos);
+
+      // Keep look direction instantaneous to avoid mouse latency
+      const lookDir = new THREE.Vector3(orbit.forward.x, orbit.forward.y, orbit.forward.z);
+      cameraTarget.copy(camera.position).addScaledVector(lookDir, 10);
+      camera.userData.smoothedTarget = null;
+    } else {
+      if (!camera.userData.smoothedTarget) {
+        camera.userData.smoothedTarget = new THREE.Vector3().copy(desiredTarget);
+      }
+      smoothVector(camera.userData.smoothedPos, desiredPos, dt, 0.05);
+      smoothVector(camera.userData.smoothedTarget, desiredTarget, dt, 0.04);
+      camera.position.copy(camera.userData.smoothedPos);
+      cameraTarget.copy(camera.userData.smoothedTarget);
+    }
+
     camera.up.set(0, 1, 0);
     camera.lookAt(cameraTarget);
   }

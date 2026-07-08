@@ -6,6 +6,7 @@ import {
 } from "../document";
 import type { Vec3 } from "../../types";
 import {
+  addColliderToEntities,
   addComponentFromPalette,
   collectExistingComponentTypes,
 } from "../component_actions";
@@ -1136,7 +1137,8 @@ export function createInspectorPanel(
               component.variant ?? "stairs",
               (next) => {
                 if (next === "ladder") {
-                  const { stepCount: _removed, ...rest } = component;
+                  const { stepCount, ...rest } = component;
+                  void stepCount;
                   update({ ...rest, variant: "ladder" });
                 } else {
                   update({
@@ -1647,6 +1649,37 @@ export function createInspectorPanel(
     transformInputs = null;
     glbTransformInputs = null;
     glbTransformTarget = null;
+
+    const selectedIds = store.getSelectedIds();
+    if (selectedIds.length > 1) {
+      materialSectionGeneration += 1;
+      body.append(
+        el("div", { className: "ed-section" }, [
+          el("div", {
+            className: "ed-empty-note",
+            text: `${selectedIds.length} entities selected`,
+          }),
+          el("div", { className: "ed-bulk-actions" }, [
+            el("button", {
+              className: "ed-btn",
+              text: "Add Collider to All",
+              on: {
+                click: () => addColliderToEntities(store, selectedIds),
+              },
+            }),
+            el("button", {
+              className: "ed-btn",
+              text: "Group in Empty",
+              on: {
+                click: () => store.groupSelectedInEmpty(),
+              },
+            }),
+          ]),
+        ]),
+      );
+      return;
+    }
+
     const entity = store.getSelectedEntity();
     if (!entity) {
       materialSectionGeneration += 1;

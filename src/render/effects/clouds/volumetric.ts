@@ -54,7 +54,7 @@ export interface VolumetricCloudManager {
   resize: (width: number, height: number) => void;
 }
 
-function loadStbnTexture(_renderer: THREE.WebGLRenderer): Promise<THREE.Data3DTexture> {
+function loadStbnTexture(): Promise<THREE.Data3DTexture> {
   return new Promise((resolve, reject) => {
     const loader = new STBNLoader();
     loader.setCrossOrigin('anonymous');
@@ -209,7 +209,7 @@ export function createVolumetricCloudManager(
   let cachedTextures: PrecomputedTextures | null = null;
   const initPromise = Promise.all([
     texturesGenerator.update(atmosphere),
-    loadStbnTexture(renderer),
+    loadStbnTexture(),
   ])
     .then(([textures, stbnTexture]) => {
       cachedTextures = textures;
@@ -228,7 +228,9 @@ export function createVolumetricCloudManager(
 
   const sunDirection = new THREE.Vector3();
 
-  function resize(_width: number, _height: number): void {
+  function resize(width: number, height: number): void {
+    void width;
+    void height;
     // Resize operations are now managed by the central composer in render/main
   }
 

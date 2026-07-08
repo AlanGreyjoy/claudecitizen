@@ -28,7 +28,7 @@ export interface HangarBuildControllerOptions {
 }
 
 export function createHangarBuildController(options: HangarBuildControllerOptions) {
-  let context = createHangarBuildContext(options.initialState, options.arcBalance);
+  const context = createHangarBuildContext(options.initialState, options.arcBalance);
   let catalogOpen = false;
   let pointerNdc = { x: 0, y: 0 };
 

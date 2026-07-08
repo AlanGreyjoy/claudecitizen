@@ -2,7 +2,7 @@ import {
   GAME_SETTINGS_CHANGED_EVENT,
   loadGameSettings,
   type GameSettings,
-} from '../app/game_settings';
+} from '../settings/game_settings';
 import type { CameraView, FlightInput, GameMode, ShipCameraView } from '../types';
 import {
   applyShipWheelZoom,
@@ -11,8 +11,8 @@ import {
   DEFAULT_SHIP_CAMERA_ZOOM,
   normalizeWheelDelta,
   updateSmoothZoom,
-} from './camera_zoom';
-import { buildCharacterInput, buildFlightInput } from './control_mix';
+} from '../flight/camera_zoom';
+import { buildCharacterInput, buildFlightInput } from '../flight/control_mix';
 import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character_controller';
 import {
   getKeyboardBindingCodes,
@@ -26,7 +26,7 @@ import {
   type DeviceProfileId,
   type FlightAnalogControlId,
   type KeyboardActionId,
-} from './input_settings';
+} from '../flight/input_settings';
 
 const EXIT_SEAT_HOLD_SECONDS = 0.5;
 const SEAT_LOOK_SNAP_HALF_LIFE_SECONDS = 0.35;
@@ -82,10 +82,12 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   const justPressed = new Set<string>();
   const deviceActionStates = new Map<string, boolean>();
   const flightLook = { pitch01: 0, yaw01: 0 };
-  const seatLook = { pitchRadians: 0, yawRadians: 0 };
+  const seatLook = { pitchRadians: 0, yawRadians: 0, targetPitchRadians: 0, targetYawRadians: 0 };
   const orbitLook = {
     pitchRadians: -0.35,
     yawRadians: 0,
+    targetPitchRadians: -0.35,
+    targetYawRadians: 0,
     zoomDistance: DEFAULT_CAMERA_ZOOM,
     targetZoomDistance: DEFAULT_CAMERA_ZOOM,
   };
@@ -224,6 +226,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   function resetSeatLookState(): void {
     seatLook.pitchRadians = 0;
     seatLook.yawRadians = 0;
+    seatLook.targetPitchRadians = 0;
+    seatLook.targetYawRadians = 0;
     yHeldSinceMs = null;
     exitSeatTriggered = false;
   }
@@ -277,9 +281,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     const pitchSign = mouseKeyboard.invertMouseY ? 1 : -1;
     if (mode === 'in-ship') {
       if (isSeatLookActive()) {
-        seatLook.yawRadians -= event.movementX * SEAT_LOOK_YAW_SENSITIVITY * lookSensitivity;
-        seatLook.pitchRadians = clampPitch(
-          seatLook.pitchRadians +
+        seatLook.targetYawRadians -= event.movementX * SEAT_LOOK_YAW_SENSITIVITY * lookSensitivity;
+        seatLook.targetPitchRadians = clampPitch(
+          seatLook.targetPitchRadians +
             event.movementY * pitchSign * SEAT_LOOK_PITCH_SENSITIVITY * lookSensitivity,
           FIRST_PERSON_PITCH_LIMIT,
         );
@@ -292,12 +296,12 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       return;
     }
     const pitchLimit = cameraView === 'first-person' ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
-    orbitLook.yawRadians -= event.movementX * 0.0035 * lookSensitivity;
-    orbitLook.pitchRadians = Math.max(
+    orbitLook.targetYawRadians -= event.movementX * 0.0035 * lookSensitivity;
+    orbitLook.targetPitchRadians = Math.max(
       -pitchLimit,
       Math.min(
         pitchLimit,
-        orbitLook.pitchRadians + event.movementY * pitchSign * 0.0028 * lookSensitivity,
+        orbitLook.targetPitchRadians + event.movementY * pitchSign * 0.0028 * lookSensitivity,
       ),
     );
   }
@@ -385,7 +389,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         hangarRotatePressed: false,
         hangarCancelPressed: false,
         hangarDigit: null,
-        wasKeyPressed: (_code: string) => false,
+        wasKeyPressed: () => false,
       };
     }
     const cycleCameraPressed = consumeDeviceActionPress('cycleCamera');
@@ -422,9 +426,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     const pitch = readProfileAnalog('controller', 'pitch');
     if (yaw === 0 && pitch === 0) return;
     const pitchLimit = cameraView === 'first-person' ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
-    orbitLook.yawRadians -= yaw * ORBIT_GAMEPAD_YAW_RATE * dt;
-    orbitLook.pitchRadians = clampPitch(
-      orbitLook.pitchRadians + pitch * ORBIT_GAMEPAD_PITCH_RATE * dt,
+    orbitLook.targetYawRadians -= yaw * ORBIT_GAMEPAD_YAW_RATE * dt;
+    orbitLook.targetPitchRadians = clampPitch(
+      orbitLook.targetPitchRadians + pitch * ORBIT_GAMEPAD_PITCH_RATE * dt,
       pitchLimit,
     );
   }
@@ -435,8 +439,16 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     const decay = Math.exp((-dt * Math.LN2) / SEAT_LOOK_SNAP_HALF_LIFE_SECONDS);
     seatLook.yawRadians *= decay;
     seatLook.pitchRadians *= decay;
-    if (Math.abs(seatLook.yawRadians) < 0.001) seatLook.yawRadians = 0;
-    if (Math.abs(seatLook.pitchRadians) < 0.001) seatLook.pitchRadians = 0;
+    seatLook.targetYawRadians = seatLook.yawRadians;
+    seatLook.targetPitchRadians = seatLook.pitchRadians;
+    if (Math.abs(seatLook.yawRadians) < 0.001) {
+      seatLook.yawRadians = 0;
+      seatLook.targetYawRadians = 0;
+    }
+    if (Math.abs(seatLook.pitchRadians) < 0.001) {
+      seatLook.pitchRadians = 0;
+      seatLook.targetPitchRadians = 0;
+    }
   }
 
   function sampleCameraState(dt = 0) {
@@ -452,6 +464,23 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     );
     updateContinuousDeviceLook(dt);
     updateSeatLookSnap(dt);
+
+    if (dt > 0) {
+      const mouseSmoothness = 35;
+      const blend = 1 - Math.exp(-mouseSmoothness * dt);
+
+      let diffYaw = orbitLook.targetYawRadians - orbitLook.yawRadians;
+      diffYaw = Math.atan2(Math.sin(diffYaw), Math.cos(diffYaw));
+      orbitLook.yawRadians += diffYaw * blend;
+
+      orbitLook.pitchRadians += (orbitLook.targetPitchRadians - orbitLook.pitchRadians) * blend;
+
+      if (isSeatLookActive()) {
+        seatLook.yawRadians += (seatLook.targetYawRadians - seatLook.yawRadians) * blend;
+        seatLook.pitchRadians += (seatLook.targetPitchRadians - seatLook.pitchRadians) * blend;
+      }
+    }
+
     return {
       cameraView,
       pitchRadians: orbitLook.pitchRadians,
@@ -536,6 +565,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         -ORBIT_PITCH_LIMIT,
         Math.min(ORBIT_PITCH_LIMIT, pitchRadians),
       );
+      orbitLook.targetYawRadians = orbitLook.yawRadians;
+      orbitLook.targetPitchRadians = orbitLook.pitchRadians;
     },
   };
 }

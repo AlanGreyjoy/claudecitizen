@@ -8,6 +8,43 @@ const EDITOR_CSS = `
   color: var(--text);
   font: 13px/1.35 var(--sc-font);
   user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 216, 255, 0.38) rgba(90, 190, 255, 0.05);
+}
+
+#editor-root * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 216, 255, 0.38) rgba(90, 190, 255, 0.05);
+}
+
+#editor-root ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+#editor-root ::-webkit-scrollbar-track {
+  background: rgba(90, 190, 255, 0.04);
+}
+
+#editor-root ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(139, 216, 255, 0.24);
+  background-clip: padding-box;
+}
+
+#editor-root ::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 216, 255, 0.48);
+  background-clip: padding-box;
+}
+
+#editor-root ::-webkit-scrollbar-thumb:active {
+  background: rgba(139, 216, 255, 0.62);
+  background-clip: padding-box;
+}
+
+#editor-root ::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .ed-toolbar {
@@ -211,6 +248,13 @@ const EDITOR_CSS = `
 .ed-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+.ed-bulk-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .ed-label {
@@ -490,6 +534,44 @@ body.ed-resize-row * {
 }
 
 /* Hierarchy */
+.ed-hierarchy-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(90, 190, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.ed-hierarchy-search-input {
+  width: 100%;
+  padding: 4px 22px 4px 6px;
+  font-size: 11px;
+  border-radius: 2px;
+  border-color: rgba(90, 190, 255, 0.15);
+}
+
+.ed-hierarchy-search-clear {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  display: none;
+  line-height: 1;
+}
+
+.ed-hierarchy-search-clear.is-visible {
+  display: block;
+}
+
+.ed-hierarchy-search-clear:hover {
+  color: var(--accent);
+}
+
 .ed-tree {
   padding: 6px 0;
 }
@@ -510,6 +592,11 @@ body.ed-resize-row * {
 .ed-tree-row.is-selected {
   background: rgba(139, 216, 255, 0.16);
   border-color: rgba(139, 216, 255, 0.35);
+}
+
+.ed-tree-row.is-in-selection {
+  background: rgba(139, 216, 255, 0.1);
+  border-color: rgba(139, 216, 255, 0.2);
 }
 
 .ed-tree-row.is-drop-target {

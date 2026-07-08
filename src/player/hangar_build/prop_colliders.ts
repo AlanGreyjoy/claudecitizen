@@ -2,10 +2,10 @@ import {
   cloneColliderWithTransform,
   placementMatrix,
   type GameplayCollider,
-} from "../colliders";
+} from "../../physics/colliders";
 import type { HangarPlacementEntry } from "../../net/api";
 import { loadPrefabDocument } from "../../world/prefabs/loader";
-import { buildPrefabColliders } from "../../world/prefabs/collider_runtime";
+import { buildPrefabColliders } from "../../physics/prefab_colliders";
 
 export function createBuildPropColliderRuntime() {
   const prefabColliders = new Map<string, Promise<GameplayCollider[]>>();

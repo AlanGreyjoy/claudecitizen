@@ -1,4 +1,4 @@
-import { createPlayerControls } from '../flight/player_controls';
+import { createPlayerControls } from './player_controls';
 import { createGameLoop, type BuildAreaRuntime } from './game_loop';
 import type { LoadingScreenHandle } from './loading_screen';
 import { restoreTitleScreen } from './title_screen';
@@ -11,11 +11,10 @@ import {
   createBuildPropColliderRuntime,
   type BuildPropColliderRuntime,
 } from '../player/hangar_build/prop_colliders';
-import { createHangarPropRenderer } from '../render/hangar/prop_instances';
+import { createHangarPropRenderer, pickStationFloorPoint } from '../render/hangar/prop_instances';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { createVegetationControls } from '../render/vegetation';
 import { CLAUDECITIZEN_PLANET } from '../world/planet';
-import { pickStationFloorPoint } from '../render/hangar/prop_instances';
 import { buildRoomForArea } from '../player/hangar_build/validation';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
@@ -324,10 +323,10 @@ export async function startPlaySession(
     hud.appendChatMessage('SYS', 'Offline dev session.');
   }
 
-  let gameLoop: ReturnType<typeof createGameLoop>;
+  const loopRef: { loop?: ReturnType<typeof createGameLoop> } = {};
 
   const controls = createPlayerControls(canvas, {
-    onReset: () => gameLoop.resetWorld(),
+    onReset: () => loopRef.loop?.resetWorld(),
   });
 
   // Must be created before the game menu so HaloBand's capture key listener
@@ -522,7 +521,7 @@ export async function startPlaySession(
     console.warn('Failed to initialize station physics; falling back to custom walker.', error);
   }
 
-  gameLoop = createGameLoop({
+  const gameLoop = createGameLoop({
     planet,
     seed,
     controls,
@@ -548,6 +547,8 @@ export async function startPlaySession(
     isPaused: () =>
       gameMenu.isPaused() || avmsTerminal.isPaused() || (buildTerminal?.isPaused() ?? false),
   });
+
+  loopRef.loop = gameLoop;
 
   if (bootstrap) {
     await syncBootstrapShips(

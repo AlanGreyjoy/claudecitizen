@@ -28,6 +28,8 @@ export interface EditorEntity {
   glbNodeHidden: string[];
   materialOverrides: PrefabMaterialOverride[];
   components: PrefabComponent[];
+  /** GLB node name this entity is parented under in the hierarchy outliner. */
+  glbAnchor?: string;
   children: EditorEntity[];
 }
 
@@ -63,11 +65,13 @@ export interface SubSelection {
   nodeName: string;
 }
 
+export type EntitySelectionMode = 'replace' | 'toggle' | 'range';
+
 export type EditorEvent =
   | { type: 'structure' }
   | { type: 'transform'; entityId: string }
   | { type: 'entity'; entityId: string }
-  | { type: 'selection'; entityId: string | null }
+  | { type: 'selection'; entityId: string | null; selectedIds: string[] }
   | { type: 'sub-selection'; entityId: string | null; nodeUuid: string | null }
   | { type: 'glb-tree'; entityId: string }
   | { type: 'glb-transform'; entityId: string; nodeUuid: string; nodeName: string }
@@ -128,6 +132,7 @@ export function createEditorStore() {
     roots: [],
   };
   let selection: string | null = null;
+  let selectedIds = new Set<string>();
   let subSelection: SubSelection | null = null;
   const glbTreesByEntityId = new Map<string, GlbNodeRef>();
   const glbNodeOverrides = new Map<string, EntityTransform>();
@@ -172,27 +177,140 @@ export function createEditorStore() {
     return false;
   }
 
-  function setSelection(id: string | null): void {
-    const selectionChanged = selection !== id;
+  function pruneSelectedIds(): void {
+    for (const id of [...selectedIds]) {
+      if (!locate(id)) selectedIds.delete(id);
+    }
+    if (selection && !selectedIds.has(selection)) {
+      selection = selectedIds.size > 0 ? [...selectedIds].at(-1)! : null;
+    }
+    if (selectedIds.size === 0) selection = null;
+  }
+
+  function selectionSetsEqual(a: Set<string>, b: Set<string>): boolean {
+    if (a.size !== b.size) return false;
+    for (const id of a) {
+      if (!b.has(id)) return false;
+    }
+    return true;
+  }
+
+  function emitSelection(): void {
+    emit({
+      type: 'selection',
+      entityId: selection,
+      selectedIds: [...selectedIds],
+    });
+  }
+
+  function removeIdsFromSelection(ids: Iterable<string>): void {
+    let changed = false;
+    for (const id of ids) {
+      if (selectedIds.delete(id)) changed = true;
+    }
+    if (!changed) return;
+    if (selection && !selectedIds.has(selection)) {
+      selection = selectedIds.size > 0 ? [...selectedIds].at(-1)! : null;
+    }
+    emitSelection();
+  }
+
+  function clearSelection(): void {
+    const hadSelection = selectedIds.size > 0 || selection !== null;
+    const hadSub = subSelection !== null;
+    selection = null;
+    selectedIds = new Set();
+    subSelection = null;
+    if (hadSelection) emitSelection();
+    if (hadSub) {
+      emit({ type: 'sub-selection', entityId: null, nodeUuid: null });
+    }
+  }
+
+  function setEntitySelection(
+    id: string | null,
+    mode: EntitySelectionMode = 'replace',
+    rangeAnchorId?: string,
+    visibleOrder?: readonly string[],
+  ): void {
+    if (id === null) {
+      clearSelection();
+      return;
+    }
+
     const hadSub = subSelection !== null;
     subSelection = null;
-    if (selectionChanged) {
+
+    const prevPrimary = selection;
+    const prevSelected = new Set(selectedIds);
+    let nextSelected = new Set(selectedIds);
+
+    if (mode === 'replace') {
+      nextSelected = new Set([id]);
       selection = id;
-      emit({ type: 'selection', entityId: id });
+    } else if (mode === 'toggle') {
+      if (nextSelected.has(id)) {
+        nextSelected.delete(id);
+        if (selection === id) {
+          selection = nextSelected.size > 0 ? [...nextSelected].at(-1)! : null;
+        }
+      } else {
+        nextSelected.add(id);
+        selection = id;
+      }
+    } else if (mode === 'range') {
+      const anchor = rangeAnchorId ?? selection;
+      if (!anchor || !visibleOrder || visibleOrder.length === 0) {
+        nextSelected = new Set([id]);
+      } else {
+        const anchorIndex = visibleOrder.indexOf(anchor);
+        const clickIndex = visibleOrder.indexOf(id);
+        if (anchorIndex === -1 || clickIndex === -1) {
+          nextSelected.add(id);
+        } else {
+          const start = Math.min(anchorIndex, clickIndex);
+          const end = Math.max(anchorIndex, clickIndex);
+          for (let index = start; index <= end; index += 1) {
+            nextSelected.add(visibleOrder[index]);
+          }
+        }
+      }
+      selection = id;
     }
+
+    for (const selectedId of [...nextSelected]) {
+      if (!locate(selectedId)) nextSelected.delete(selectedId);
+    }
+    if (selection && !nextSelected.has(selection)) {
+      selection = nextSelected.size > 0 ? [...nextSelected].at(-1)! : null;
+    }
+    if (nextSelected.size === 0) selection = null;
+
+    const selectionChanged =
+      prevPrimary !== selection || !selectionSetsEqual(prevSelected, nextSelected);
+    selectedIds = nextSelected;
+
+    if (selectionChanged) emitSelection();
     if (hadSub) {
-      emit({ type: 'sub-selection', entityId: id, nodeUuid: null });
+      emit({ type: 'sub-selection', entityId: selection, nodeUuid: null });
     }
+  }
+
+  function setSelection(id: string | null): void {
+    setEntitySelection(id, 'replace');
   }
 
   function setSubSelection(entityId: string, nodeUuid: string): void {
     const nodeName = resolveGlbNodeName(entityId, nodeUuid) ?? '';
     const prev = subSelection;
     subSelection = { entityId, nodeUuid, nodeName };
-    if (selection !== entityId) {
-      selection = entityId;
-      emit({ type: 'selection', entityId });
-    }
+    const prevPrimary = selection;
+    const prevSelected = new Set(selectedIds);
+    selection = entityId;
+    selectedIds = new Set([entityId]);
+    const selectionChanged =
+      prevPrimary !== selection || !selectionSetsEqual(prevSelected, selectedIds);
+    if (selectionChanged) emitSelection();
     if (
       !prev ||
       prev.entityId !== entityId ||
@@ -462,7 +580,7 @@ export function createEditorStore() {
       },
       undo() {
         detachEntity(entity.id);
-        if (selection === entity.id) setSelection(null);
+        removeIdsFromSelection([entity.id]);
         emit({ type: 'structure' });
       },
     });
@@ -471,74 +589,194 @@ export function createEditorStore() {
   }
 
   function deleteEntity(id: string): void {
-    const location = locate(id);
-    if (!location) return;
-    const { entity } = location;
-    const parentId = location.parent?.id ?? null;
-    const index = location.index;
+    deleteEntities([id]);
+  }
+
+  function deleteEntities(ids: string[]): void {
+    const unique = [...new Set(ids)].filter((id) => locate(id));
+    if (unique.length === 0) return;
+
+    const snapshots = unique.map((id) => {
+      const location = locate(id)!;
+      return {
+        entity: structuredClone(location.entity),
+        parentId: location.parent?.id ?? null,
+        index: location.index,
+      };
+    });
+
+    const label =
+      unique.length === 1
+        ? `Delete ${snapshots[0].entity.name}`
+        : `Delete ${unique.length} entities`;
+
     history.execute({
-      label: `Delete ${entity.name}`,
+      label,
       do() {
-        detachEntity(id);
-        clearGlbOverridesForEntity(id);
-        if (selection === id) setSelection(null);
+        for (const id of unique) {
+          detachEntity(id);
+          clearGlbOverridesForEntity(id);
+        }
+        removeIdsFromSelection(unique);
         markDirty();
         emit({ type: 'structure' });
       },
       undo() {
-        insertEntity(entity, parentId, index);
+        for (const snapshot of snapshots) {
+          insertEntity(snapshot.entity, snapshot.parentId, snapshot.index);
+        }
         emit({ type: 'structure' });
       },
     });
   }
 
   function duplicateEntity(id: string): string | null {
-    const location = locate(id);
-    if (!location) return null;
-    const copy = structuredClone(location.entity);
-    regenerateIds(copy);
-    copy.name = `${copy.name} Copy`;
-    copy.position = { ...copy.position, x: copy.position.x + 1 };
-    const parentId = location.parent?.id ?? null;
+    const results = duplicateEntities([id]);
+    return results[0] ?? null;
+  }
+
+  function duplicateEntities(ids: string[]): string[] {
+    const unique = [...new Set(ids)].filter((id) => locate(id));
+    if (unique.length === 0) return [];
+
+    const snapshots = unique.map((id, offset) => {
+      const location = locate(id)!;
+      const copy = structuredClone(location.entity);
+      regenerateIds(copy);
+      copy.name = `${copy.name} Copy`;
+      copy.position = { ...copy.position, x: copy.position.x + 1 + offset * 0.25 };
+      return {
+        copy,
+        parentId: location.parent?.id ?? null,
+        index: location.index + 1,
+      };
+    });
+
+    const label =
+      unique.length === 1
+        ? `Duplicate ${locate(unique[0])!.entity.name}`
+        : `Duplicate ${unique.length} entities`;
+
     history.execute({
-      label: `Duplicate ${location.entity.name}`,
+      label,
       do() {
-        insertEntity(copy, parentId, location.index + 1);
+        for (const snapshot of snapshots) {
+          insertEntity(snapshot.copy, snapshot.parentId, snapshot.index);
+        }
         markDirty();
         emit({ type: 'structure' });
       },
       undo() {
-        detachEntity(copy.id);
-        if (selection === copy.id) setSelection(null);
+        for (const snapshot of snapshots) {
+          detachEntity(snapshot.copy.id);
+          removeIdsFromSelection([snapshot.copy.id]);
+        }
         emit({ type: 'structure' });
       },
     });
-    setSelection(copy.id);
-    return copy.id;
+
+    const copyIds = snapshots.map((snapshot) => snapshot.copy.id);
+    selection = copyIds[copyIds.length - 1] ?? null;
+    selectedIds = new Set(copyIds);
+    subSelection = null;
+    emitSelection();
+    return copyIds;
   }
 
   function reparentEntity(id: string, newParentId: string | null): void {
-    if (id === newParentId) return;
-    if (newParentId && isDescendant(id, newParentId)) return;
-    const location = locate(id);
-    if (!location) return;
-    const oldParentId = location.parent?.id ?? null;
-    if (oldParentId === newParentId) return;
-    const oldIndex = location.index;
+    reparentEntities([id], newParentId);
+  }
+
+  function reparentEntities(ids: string[], newParentId: string | null): void {
+    const validIds = ids.filter((id) => {
+      if (id === newParentId) return false;
+      if (newParentId && isDescendant(id, newParentId)) return false;
+      const location = locate(id);
+      if (!location) return false;
+      const oldParentId = location.parent?.id ?? null;
+      return oldParentId !== newParentId;
+    });
+    if (validIds.length === 0) return;
+
+    const snapshots = validIds.map((id) => {
+      const location = locate(id)!;
+      return {
+        id,
+        parentId: location.parent?.id ?? null,
+        index: location.index,
+      };
+    });
+
+    const label =
+      validIds.length === 1
+        ? `Move ${locate(validIds[0])!.entity.name}`
+        : `Move ${validIds.length} entities`;
+
     history.execute({
-      label: `Move ${location.entity.name}`,
+      label,
       do() {
-        const detached = detachEntity(id);
-        if (detached) insertEntity(detached.entity, newParentId);
+        for (const id of validIds) {
+          const detached = detachEntity(id);
+          if (detached) insertEntity(detached.entity, newParentId);
+        }
         markDirty();
         emit({ type: 'structure' });
       },
       undo() {
-        const detached = detachEntity(id);
-        if (detached) insertEntity(detached.entity, oldParentId, oldIndex);
+        for (let index = snapshots.length - 1; index >= 0; index -= 1) {
+          const snapshot = snapshots[index];
+          const detached = detachEntity(snapshot.id);
+          if (detached) insertEntity(detached.entity, snapshot.parentId, snapshot.index);
+        }
         emit({ type: 'structure' });
       },
     });
+  }
+
+  function groupSelectedInEmpty(): string | null {
+    pruneSelectedIds();
+    const ids = [...selectedIds];
+    if (ids.length === 0) return null;
+
+    const parents = ids.map((id) => locate(id)?.parent?.id ?? null);
+    const sharedParent = parents.every((parent) => parent === parents[0])
+      ? parents[0]
+      : null;
+
+    const empty = createEmptyEntity('Empty');
+    const entitySnapshots = ids.map((id) => {
+      const location = locate(id)!;
+      return {
+        id,
+        parentId: location.parent?.id ?? null,
+        index: location.index,
+      };
+    });
+
+    history.execute({
+      label: `Group ${ids.length} entities`,
+      do() {
+        insertEntity(empty, sharedParent);
+        for (const id of ids) {
+          const detached = detachEntity(id);
+          if (detached) insertEntity(detached.entity, empty.id);
+        }
+        markDirty();
+        emit({ type: 'structure' });
+      },
+      undo() {
+        for (let index = entitySnapshots.length - 1; index >= 0; index -= 1) {
+          const snapshot = entitySnapshots[index];
+          const detached = detachEntity(snapshot.id);
+          if (detached) insertEntity(detached.entity, snapshot.parentId, snapshot.index);
+        }
+        detachEntity(empty.id);
+        emit({ type: 'structure' });
+      },
+    });
+
+    setSelection(empty.id);
+    return empty.id;
   }
 
   function patchEntity(
@@ -823,6 +1061,7 @@ export function createEditorStore() {
   function newDocument(): void {
     state = { prefabId: '', prefabName: 'Untitled Prefab', kind: 'station', roots: [] };
     selection = null;
+    selectedIds = new Set();
     subSelection = null;
     glbTreesByEntityId.clear();
     glbNodeOverrides.clear();
@@ -830,12 +1069,13 @@ export function createEditorStore() {
     history.clear();
     emit({ type: 'document' });
     emit({ type: 'structure' });
-    emit({ type: 'selection', entityId: null });
+    emit({ type: 'selection', entityId: null, selectedIds: [] });
   }
 
   function loadDocument(next: EditorDocumentState): void {
     state = next;
     selection = null;
+    selectedIds = new Set();
     subSelection = null;
     glbTreesByEntityId.clear();
     rebuildGlbOverridesFromState();
@@ -843,7 +1083,7 @@ export function createEditorStore() {
     history.clear();
     emit({ type: 'document' });
     emit({ type: 'structure' });
-    emit({ type: 'selection', entityId: null });
+    emit({ type: 'selection', entityId: null, selectedIds: [] });
   }
 
   function setPrefabMeta(meta: Partial<Pick<EditorDocumentState, 'prefabId' | 'prefabName' | 'kind'>>): void {
@@ -859,6 +1099,8 @@ export function createEditorStore() {
     },
     getState: () => state,
     getSelection: () => selection,
+    getSelectedIds: () => [...selectedIds],
+    isEntitySelected: (id: string) => selectedIds.has(id),
     getSubSelection: () => subSelection,
     getGlbTree: (entityId: string) => glbTreesByEntityId.get(entityId) ?? null,
     getGlbNodeName: (entityId: string, nodeUuid: string) => {
@@ -892,6 +1134,8 @@ export function createEditorStore() {
     },
     locate,
     setSelection,
+    setEntitySelection,
+    clearSelection,
     setSubSelection,
     setGlbTree,
     clearGlbTrees,
@@ -900,8 +1144,12 @@ export function createEditorStore() {
     showGlbNode,
     addEntity,
     deleteEntity,
+    deleteEntities,
     duplicateEntity,
+    duplicateEntities,
     reparentEntity,
+    reparentEntities,
+    groupSelectedInEmpty,
     renameEntity,
     setVisible,
     setPrimitive,

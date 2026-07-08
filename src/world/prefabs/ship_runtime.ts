@@ -26,8 +26,8 @@ import type { Vec3 } from "../../types";
 import {
   type ColliderAnimationBinding,
   type GameplayCollider,
-} from "../../player/colliders";
-import { buildPrefabColliders } from "./collider_runtime";
+} from "../../physics/colliders";
+import { buildPrefabColliders } from "../../physics/prefab_colliders";
 
 /**
  * Derives the ship gameplay layout (walk zones, doors, seats, ramp

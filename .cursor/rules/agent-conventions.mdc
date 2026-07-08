@@ -56,7 +56,7 @@ ClaudeCitizen is a **real-time web game** (React UI + Three.js/WebGL) targeting 
 - New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `render/`)
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Assets / build / secrets → see AGENTS.md "Security"
-- Editor / prefab / GLB node operations → see AGENTS.md "Editor (dev-only)"
+- Editor / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (dev-only)"
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 
 ## Key reminders

@@ -2,7 +2,7 @@ import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
 import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
 import { DEFAULT_SPAWN_SITE } from './landing_sites';
 import type { Planet, Vec3 } from '../types';
-import type { GameplayCollider } from '../player/colliders';
+import type { GameplayCollider } from '../physics/colliders';
 
 /**
  * Orbital habitat station fixed above the default landing site. Gameplay uses

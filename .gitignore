@@ -60,3 +60,7 @@ src/assets/protected/**
 
 # Local Netlify folder
 .netlify
+
+# Docusaurus docs site
+docs/build/
+docs/.docusaurus/

@@ -23,6 +23,8 @@ export interface RenderQualitySettings {
   grassSampleCount: number;
   treeSampleCount: number;
   vegetationTileDistanceMeters: number;
+  motionBlurEnabled: boolean;
+  motionBlurSamples: number;
 }
 
 const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
@@ -52,6 +54,8 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     grassSampleCount: 120,
     treeSampleCount: 64,
     vegetationTileDistanceMeters: 32_000,
+    motionBlurEnabled: false,
+    motionBlurSamples: 4,
   },
   balanced: {
     preset: 'balanced',
@@ -76,6 +80,8 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     grassSampleCount: 220,
     treeSampleCount: 120,
     vegetationTileDistanceMeters: 48_000,
+    motionBlurEnabled: true,
+    motionBlurSamples: 8,
   },
   high: {
     preset: 'high',
@@ -100,6 +106,8 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     grassSampleCount: 500,
     treeSampleCount: 500,
     vegetationTileDistanceMeters: 72_000,
+    motionBlurEnabled: true,
+    motionBlurSamples: 16,
   },
 };
 
@@ -144,11 +152,28 @@ function parseAmbientOcclusionOverride(): boolean | undefined {
   return undefined;
 }
 
+function parseMotionBlurOverride(): boolean | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const stored = localStorage.getItem('claudecitizen-game-settings');
+    if (!stored) return undefined;
+    const parsed = JSON.parse(stored) as { motionBlur?: unknown };
+    if (typeof parsed.motionBlur === 'boolean') return parsed.motionBlur;
+  } catch {
+    // Ignore malformed local settings.
+  }
+  return undefined;
+}
+
 export function resolveRenderQuality(): RenderQualitySettings {
   const settings = { ...QUALITY_PRESETS[parseQualityPreset()] };
   const ambientOcclusionOverride = parseAmbientOcclusionOverride();
   if (ambientOcclusionOverride !== undefined) {
     settings.ambientOcclusionEnabled = ambientOcclusionOverride;
+  }
+  const motionBlurOverride = parseMotionBlurOverride();
+  if (motionBlurOverride !== undefined) {
+    settings.motionBlurEnabled = motionBlurOverride;
   }
   return settings;
 }

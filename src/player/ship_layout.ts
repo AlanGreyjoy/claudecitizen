@@ -1,6 +1,6 @@
 import { FLIGHT_CONFIG } from "../flight/flight_config";
 import type { LocalOffset, Vec3 } from "../types";
-import type { GameplayCollider } from "./colliders";
+import type { GameplayCollider } from "../physics/colliders";
 
 /**
  * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in

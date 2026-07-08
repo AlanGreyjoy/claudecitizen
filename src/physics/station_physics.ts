@@ -1,5 +1,5 @@
 import * as RAPIER from "@dimforge/rapier3d";
-import type { GameplayCollider } from "../player/colliders";
+import type { GameplayCollider } from "./colliders";
 import type { StationFrame } from "../world/station";
 import { stationLocalToWorld, worldToStationLocal } from "../world/station";
 import type { Vec3 } from "../types";

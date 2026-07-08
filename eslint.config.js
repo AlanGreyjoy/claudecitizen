@@ -1,0 +1,301 @@
+import eslint from '@eslint/js';
+import importX from 'eslint-plugin-import-x';
+import sonarjs from 'eslint-plugin-sonarjs';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+const DOMAIN_FILES = [
+  'src/math/**/*.ts',
+  'src/world/**/*.ts',
+  'src/flight/**/*.ts',
+  'src/player/**/*.ts',
+];
+
+const DOMAIN_IMPORT_RESTRICTIONS = [
+  'error',
+  {
+    paths: [
+      {
+        name: 'three',
+        message:
+          'Domain code must not import Three.js. Keep rendering and scene objects in render/.',
+      },
+      {
+        name: 'three-mesh-bvh',
+        message:
+          'Domain code must not import mesh/BVH helpers. Keep geometry work in render/.',
+      },
+      {
+        name: 'postprocessing',
+        message: 'Domain code must not import postprocessing. Keep effects in render/.',
+      },
+      {
+        name: '@dimforge/rapier3d',
+        message:
+          'Physics engine bindings belong in physics/ or app wiring — not in pure domain modules.',
+      },
+    ],
+    patterns: [
+      {
+        group: ['**/render/**', '**/editor/**'],
+        message:
+          'Domain code must not import render/ or editor/. Presentation and dev tools stay at the edge.',
+      },
+    ],
+  },
+];
+
+const DOMAIN_GLOBAL_RESTRICTIONS = [
+  'error',
+  {
+    name: 'document',
+    message: 'Domain code must not touch the DOM. Use render/ or app/ for browser APIs.',
+  },
+  {
+    name: 'window',
+    message: 'Domain code must not touch the DOM. Use render/ or app/ for browser APIs.',
+  },
+  {
+    name: 'HTMLElement',
+    message: 'Domain code must not reference DOM types. Use render/ or app/ for UI.',
+  },
+];
+
+export default tseslint.config(
+  {
+    ignores: [
+      'dist/**',
+      'server/dist/**',
+      'node_modules/**',
+      'vendor/**',
+      'docs/**',
+      'false/**',
+      '**/*.d.ts',
+      'scripts/**/*.mjs',
+      'vite.config.ts',
+    ],
+  },
+
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+
+  {
+    rules: {
+      // Handled by TypeScript. Avoid false positives on .mjs scripts and build output.
+      'no-undef': 'off',
+    },
+  },
+
+  {
+    files: ['src/**/*.ts', 'scripts/**/*.ts'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.es2022,
+      },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      'import-x/resolver': {
+        typescript: {
+          alwaysTryTypes: true,
+          project: ['./tsconfig.json'],
+        },
+        node: {
+          extensions: ['.js', '.ts', '.mjs'],
+        },
+      },
+    },
+  },
+
+  {
+    files: ['server/src/**/*.ts'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        ...globals.es2022,
+      },
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      'import-x/resolver': {
+        typescript: {
+          alwaysTryTypes: true,
+          project: ['./server/tsconfig.json'],
+        },
+        node: {
+          extensions: ['.js', '.ts'],
+        },
+      },
+    },
+  },
+
+  {
+    files: ['src/**/*.ts', 'scripts/**/*.ts', 'server/src/**/*.ts'],
+    plugins: {
+      sonarjs,
+      'import-x': importX,
+    },
+    rules: {
+      // TypeScript owns undefined-name checking.
+
+      // --- DRY ---
+      'import-x/no-duplicates': 'error',
+      'sonarjs/no-identical-functions': 'warn',
+      'sonarjs/no-all-duplicated-branches': 'warn',
+      'sonarjs/no-duplicate-string': ['warn', { threshold: 5 }],
+
+      // --- SRP / complexity ---
+      complexity: ['warn', { max: 15 }],
+      'max-depth': ['warn', { max: 4 }],
+      'max-params': ['warn', { max: 5 }],
+      'max-lines-per-function': [
+        'warn',
+        { max: 120, skipBlankLines: true, skipComments: true },
+      ],
+      'sonarjs/cognitive-complexity': ['warn', 15],
+
+      // --- SOLID (what ESLint can reasonably enforce) ---
+      '@typescript-eslint/no-extraneous-class': 'warn',
+      '@typescript-eslint/consistent-type-imports': [
+        'warn',
+        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+      ],
+      'import-x/no-cycle': ['warn', { maxDepth: 4 }],
+      'class-methods-use-this': [
+        'warn',
+        {
+          exceptMethods: [
+            'canActivate',
+            'canDeactivate',
+            'transform',
+            'intercept',
+          ],
+        },
+      ],
+
+      '@typescript-eslint/no-empty-function': [
+        'warn',
+        { allow: ['decoratedFunctions'] },
+      ],
+    },
+  },
+
+  // DDD: pure domain layers must stay free of presentation and platform APIs.
+  {
+    files: DOMAIN_FILES,
+    rules: {
+      'no-restricted-imports': DOMAIN_IMPORT_RESTRICTIONS,
+      'no-restricted-globals': DOMAIN_GLOBAL_RESTRICTIONS,
+    },
+  },
+
+  // DDD: render reads domain state but should not depend on app orchestration.
+  {
+    files: ['src/render/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/app/**'],
+              message:
+                'render/ must not import app/. Dependency flows app → render → domain.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // DDD + SRP: app/bootstrap wires modules; keep domain logic out of giant orchestrators.
+  {
+    files: ['src/app/**/*.ts'],
+    rules: {
+      'max-lines': [
+        'warn',
+        { max: 900, skipBlankLines: true, skipComments: true },
+      ],
+      'sonarjs/cognitive-complexity': ['warn', 20],
+    },
+  },
+
+  // Nest: thin controllers, services own persistence and domain work (DIP).
+  {
+    files: ['server/src/**/*.controller.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'warn',
+        {
+          paths: [
+            {
+              name: '@prisma/client',
+              message:
+                'Controllers should delegate to services instead of using Prisma directly.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/prisma/**'],
+              message:
+                'Controllers should delegate to services instead of reaching into Prisma.',
+            },
+          ],
+        },
+      ],
+      'max-lines-per-function': [
+        'warn',
+        { max: 40, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
+
+  {
+    files: ['server/src/**/*.service.ts', 'server/src/**/*.guard.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/*.controller', '**/*.controller.ts'],
+              message:
+                'Services and guards must not import controllers. Keep dependency direction inward.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Scripts and specs are utilities — lighter architectural enforcement.
+  {
+    files: ['scripts/**/*.ts', 'server/src/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
+      'no-restricted-globals': 'off',
+      'max-lines-per-function': 'off',
+      'sonarjs/cognitive-complexity': 'off',
+      complexity: 'off',
+    },
+  },
+
+  // Legacy CJS in a few tooling paths; prefer ESM in new code.
+  {
+    files: ['src/**/*.ts', 'scripts/**/*.ts', 'server/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'warn',
+    },
+  },
+);

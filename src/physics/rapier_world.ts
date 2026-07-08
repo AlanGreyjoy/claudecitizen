@@ -4,7 +4,7 @@ import {
   loadMeshAsset,
   type GameplayCollider,
   type MeshGameplayCollider,
-} from "../player/colliders";
+} from "./colliders";
 
 /**
  * Thin wrapper around a Rapier physics world.

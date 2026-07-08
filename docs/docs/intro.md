@@ -1,0 +1,41 @@
+---
+slug: /
+sidebar_position: 1
+title: Introduction
+---
+
+# ClaudeCitizen
+
+![ClaudeCitizen banner](/img/banner-with-logo.png)
+
+A browser-based space sandbox inspired by Star Citizen — procedural planets, ship flight, on-foot exploration, and seamless surface-to-orbit transitions. Built with TypeScript, Vite, and Three.js.
+
+The homeworld is **Asteron**: Earth-scale radius, deterministic terrain, lakes, vegetation, volumetric clouds, and a full atmospheric shell.
+
+This project is **100% vibe coded** — built iteratively with AI-assisted development rather than a formal spec. It is a passion sandbox, not a production product.
+
+**Work in progress.** Phase 1 is FPS weapons and character-controller updates — see the [roadmap](/roadmap).
+
+![ClaudeCitizen gameplay screenshot](/img/screenshot.png)
+
+## Live play test
+
+Play the latest build in your browser:
+
+**[https://claudecitizen.netlify.app/](https://claudecitizen.netlify.app/)**
+
+## What's in the box
+
+- **Procedural planet** — cube-sphere tiles, height sampling, landing sites, lake water
+- **Flight** — inertial ship body with radial gravity, drag, and hover assist near the pad
+- **Player** — third-person character, ship boarding animations, walkable ship deck
+- **Rendering** — tiled terrain meshing (Web Worker), instanced vegetation, star field, Takram atmosphere/clouds, volumetric fog, post-processing
+
+## Next steps
+
+- [Quick start](/quick-start) — run the game locally
+- [Play](/play) — controls and quality presets
+- [Prefab editor](/editor) — dev-only station and ship authoring
+- [Assets](/assets) — protected models, Synty packs, character avatars
+- [Roadmap](/roadmap) — living feature checklist
+- [Engineering](/engineering) — stack, DDD, planet math, and design principles

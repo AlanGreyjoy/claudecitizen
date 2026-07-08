@@ -63,7 +63,7 @@ export function startEditorSession(): void {
     viewportToolbarEl,
     el('div', {
       className: 'ed-viewport-hint',
-      text: 'LMB select · re-click drill · RMB sub-mesh: add empty/component · MMB pan · wheel zoom · hold RMB + WASD fly · W/E/R gizmo · F focus · Ctrl+D duplicate · Del delete',
+      text: 'LMB select · Ctrl+click multi · re-click drill · RMB sub-mesh: add empty/component · MMB pan · wheel zoom · hold RMB + WASD fly · W/E/R gizmo · F focus · Ctrl+D duplicate · Del delete',
     }),
   ]);
   const characterPreviewEl = el('div', { className: 'ed-scene-panel ed-character-preview is-hidden' });
@@ -369,8 +369,8 @@ export function startEditorSession(): void {
         void saveCurrent();
       } else if (key === 'd') {
         event.preventDefault();
-        const selection = store.getSelection();
-        if (selection) store.duplicateEntity(selection);
+        const selectedIds = store.getSelectedIds();
+        if (selectedIds.length > 0) store.duplicateEntities(selectedIds);
       } else if (key === 'z') {
         event.preventDefault();
         if (event.shiftKey) store.redo();
@@ -401,13 +401,13 @@ export function startEditorSession(): void {
         if (sub) {
           store.hideGlbNode(sub.entityId, sub.nodeUuid);
         } else {
-          const selection = store.getSelection();
-          if (selection) store.deleteEntity(selection);
+          const selectedIds = store.getSelectedIds();
+          if (selectedIds.length > 0) store.deleteEntities(selectedIds);
         }
         break;
       }
       case 'escape':
-        store.setSelection(null);
+        store.clearSelection();
         break;
     }
   });

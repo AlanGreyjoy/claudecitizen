@@ -17,7 +17,7 @@ import {
 import {
   resolveCharacterAgainstColliders,
   type ShipColliderRigState,
-} from "./colliders";
+} from "../physics/colliders";
 import {
   getShipLayout,
   type ShipSeatSpec,

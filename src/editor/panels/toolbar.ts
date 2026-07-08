@@ -413,10 +413,12 @@ export function createToolbar(
     modeChip.classList.toggle('is-hidden', store.getState().kind !== 'ship');
   }
 
-  let menubar: HTMLElement;
-  const refreshMenuState = (): void => refreshMenuDisabled(menubar);
+  const menubarHolder: { menubar?: HTMLElement } = {};
+  const refreshMenuState = (): void => {
+    if (menubarHolder.menubar) refreshMenuDisabled(menubarHolder.menubar);
+  };
 
-  menubar = createMenubar(
+  const menubar = createMenubar(
     [
       {
         label: 'File',
@@ -458,19 +460,19 @@ export function createToolbar(
             label: 'Duplicate',
             shortcut: 'Ctrl+D',
             action: () => {
-              const selection = store.getSelection();
-              if (selection) store.duplicateEntity(selection);
+              const selectedIds = store.getSelectedIds();
+              if (selectedIds.length > 0) store.duplicateEntities(selectedIds);
             },
-            disabled: () => !store.getSelection(),
+            disabled: () => store.getSelectedIds().length === 0,
           },
           {
             label: 'Delete',
             shortcut: 'Del',
             action: () => {
-              const selection = store.getSelection();
-              if (selection) store.deleteEntity(selection);
+              const selectedIds = store.getSelectedIds();
+              if (selectedIds.length > 0) store.deleteEntities(selectedIds);
             },
-            disabled: () => !store.getSelection(),
+            disabled: () => store.getSelectedIds().length === 0,
           },
         ],
       },
@@ -512,6 +514,7 @@ export function createToolbar(
     ],
     refreshMenuState,
   );
+  menubarHolder.menubar = menubar;
 
   const docStrip = el('div', { className: 'ed-menubar-doc' }, [
     el('span', { className: 'ed-label', text: 'Prefab' }),

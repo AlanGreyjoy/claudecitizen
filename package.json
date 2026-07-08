@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "server"
+    "server",
+    "docs"
   ],
   "scripts": {
     "build": "npm run build:web",
@@ -24,13 +25,24 @@
     "prisma:generate": "npm run prisma:generate -w server",
     "prisma:migrate": "npm run prisma:migrate -w server",
     "serve": "vite --host 0.0.0.0 --port 4173",
-    "typecheck": "tsc --noEmit && npm run typecheck -w server"
+    "typecheck": "tsc --noEmit && npm run typecheck -w server",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "docs:dev": "npm run start -w docs",
+    "docs:build": "npm run build -w docs"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^26.0.1",
     "@types/three": "^0.180.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^3.10.1",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "globals": "^17.7.0",
     "tsx": "^4.20.3",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@dimforge/rapier3d": "^0.19.3",

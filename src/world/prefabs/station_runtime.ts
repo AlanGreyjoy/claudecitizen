@@ -13,8 +13,8 @@ import {
 } from '../station';
 import type { PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
-import { buildPrefabColliders } from './collider_runtime';
-import type { ColliderAnimationBinding, GameplayCollider } from '../../player/colliders';
+import { buildPrefabColliders } from '../../physics/prefab_colliders';
+import type { ColliderAnimationBinding, GameplayCollider } from '../../physics/colliders';
 
 /**
  * Derives gameplay layout (spawn, elevators, hangar pads, info prompts) from a

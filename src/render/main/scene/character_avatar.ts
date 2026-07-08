@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { createCharacterAvatarInstance } from '../render/main/scene/character_avatar_model';
-import type { CharacterRenderState, Vec3 } from '../types';
+import { createCharacterAvatarInstance } from './character_avatar_model';
+import type { CharacterRenderState, Vec3 } from '../../../types';
 
 interface CharacterAvatar {
   dispose: () => void;

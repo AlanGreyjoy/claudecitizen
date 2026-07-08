@@ -1,12 +1,33 @@
 import { clearChildren, el, showContextMenu, type ContextMenuEntry } from '../dom';
+import { entityBoundToAnyGlbNode, entityTargetsGlbNode } from '../glb_binding';
 import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../document';
 import {
+  addColliderToEntities,
   buildEntityComponentsSubmenu,
   buildGlbAuthoringMenu,
 } from '../component_actions';
 import type { Vec3 } from '../../types';
 
 const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
+
+function parseDraggedEntityIds(data: string): string[] {
+  if (!data) return [];
+  try {
+    const parsed = JSON.parse(data) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((id): id is string => typeof id === 'string');
+    }
+  } catch {
+    // Legacy single-id payload.
+  }
+  return [data];
+}
+
+function idsToReparent(draggedIds: string[], store: EditorStore): string[] {
+  if (draggedIds.length === 0) return [];
+  const primary = draggedIds[0];
+  return store.isEntitySelected(primary) ? store.getSelectedIds() : draggedIds;
+}
 
 export interface HierarchyPanelOptions {
   getGlbNodePrefabPosition?: (entityId: string, nodeUuid: string) => Vec3 | null;
@@ -38,17 +59,74 @@ export function createHierarchyPanel(
   options: HierarchyPanelOptions = {},
 ): void {
   const body = el('div', { className: 'ed-panel-body' });
+  let renaming: string | null = null;
+  const expandedGlbEntities = new Set<string>();
+  const expandedGlbNodes = new Set<string>();
+  let searchQuery = '';
+  let visibleEntityIds: string[] = [];
+  let rangeAnchorId: string | null = null;
+
+  const searchInput = el('input', {
+    className: 'ed-input ed-hierarchy-search-input',
+    attrs: {
+      type: 'text',
+      placeholder: 'Search...',
+      spellcheck: 'false',
+      autocomplete: 'off',
+    },
+    on: {
+      input: (event) => {
+        searchQuery = (event.target as HTMLInputElement).value.toLowerCase().trim();
+        if (searchQuery) {
+          clearBtn.classList.add('is-visible');
+        } else {
+          clearBtn.classList.remove('is-visible');
+        }
+        render();
+      },
+      keydown: (event) => {
+        const key = (event as KeyboardEvent).key;
+        if (key === 'Escape') {
+          const input = event.target as HTMLInputElement;
+          input.value = '';
+          searchQuery = '';
+          clearBtn.classList.remove('is-visible');
+          input.blur();
+          render();
+        }
+        event.stopPropagation();
+      },
+    },
+  }) as HTMLInputElement;
+
+  const clearBtn = el('button', {
+    className: 'ed-hierarchy-search-clear',
+    text: '×',
+    title: 'Clear search',
+    on: {
+      click: () => {
+        searchInput.value = '';
+        searchQuery = '';
+        clearBtn.classList.remove('is-visible');
+        searchInput.focus();
+        render();
+      },
+    },
+  });
+
+  const searchContainer = el('div', { className: 'ed-hierarchy-search' }, [
+    searchInput,
+    clearBtn,
+  ]);
+
   container.append(
     el('div', { className: 'ed-panel-title' }, [
       el('span', { text: 'Hierarchy' }),
       el('span', { className: 'ed-label', text: 'drag to reparent' }),
     ]),
+    searchContainer,
     body,
   );
-
-  let renaming: string | null = null;
-  const expandedGlbEntities = new Set<string>();
-  const expandedGlbNodes = new Set<string>();
 
   function beginRename(entityId: string): void {
     renaming = entityId;
@@ -77,7 +155,53 @@ export function createHierarchyPanel(
     return () => options.getGlbNodePrefabPosition!(sub.entityId, sub.nodeUuid);
   }
 
+  function handleEntityClick(event: MouseEvent, entityId: string): void {
+    if (event.shiftKey) {
+      store.setEntitySelection(
+        entityId,
+        'range',
+        rangeAnchorId ?? undefined,
+        visibleEntityIds,
+      );
+    } else if (event.ctrlKey || event.metaKey) {
+      store.setEntitySelection(entityId, 'toggle');
+      rangeAnchorId = entityId;
+      return;
+    } else {
+      store.setEntitySelection(entityId, 'replace');
+    }
+    rangeAnchorId = entityId;
+  }
+
   function entityMenuEntries(entity: EditorEntity): ContextMenuEntry[] {
+    const selectedIds = store.getSelectedIds();
+    const multi = selectedIds.length > 1 && store.isEntitySelected(entity.id);
+
+    if (multi) {
+      const allVisible = selectedIds.every(
+        (id) => store.locate(id)?.entity.visible ?? true,
+      );
+      return [
+        { label: 'Group in Empty', action: () => store.groupSelectedInEmpty() },
+        {
+          label: 'Add Collider',
+          action: () => addColliderToEntities(store, selectedIds),
+        },
+        'sep',
+        { label: 'Duplicate', action: () => store.duplicateEntities(selectedIds) },
+        {
+          label: allVisible ? 'Hide' : 'Show',
+          action: () => {
+            for (const id of selectedIds) {
+              store.setVisible(id, !allVisible);
+            }
+          },
+        },
+        'sep',
+        { label: 'Delete', action: () => store.deleteEntities(selectedIds) },
+      ];
+    }
+
     return [
       { label: 'Add Child Empty', action: () => addEmptyTo(entity.id) },
       { label: 'Add Child Box', action: () => addBoxTo(entity.id) },
@@ -127,25 +251,7 @@ export function createHierarchyPanel(
   }
 
   function doesEntityTargetGlbNode(child: EditorEntity, nodeName: string): boolean {
-    if (child.name.includes(`(${nodeName})`)) {
-      return true;
-    }
-    for (const comp of child.components ?? []) {
-      if (comp.type === 'ship-door' && Array.isArray(comp.nodes)) {
-        for (const n of comp.nodes) {
-          if (n.name === nodeName) return true;
-        }
-      }
-      if (comp.type === 'animation' && Array.isArray(comp.nodes)) {
-        for (const n of comp.nodes) {
-          if (n.name === nodeName) return true;
-        }
-      }
-      if (comp.type === 'collider' && comp.node === nodeName) {
-        return true;
-      }
-    }
-    return false;
+    return entityTargetsGlbNode(child, nodeName);
   }
 
   function getBoundEntitiesForNode(entityId: string, nodeName: string): EditorEntity[] {
@@ -175,25 +281,62 @@ export function createHierarchyPanel(
   }
 
   function isEntityBoundToGlb(child: EditorEntity, glbNodeNames: Set<string>): boolean {
-    for (const comp of child.components ?? []) {
-      if (comp.type === 'ship-door' && Array.isArray(comp.nodes)) {
-        for (const n of comp.nodes) {
-          if (n.name && glbNodeNames.has(n.name)) return true;
-        }
-      }
-      if (comp.type === 'animation' && Array.isArray(comp.nodes)) {
-        for (const n of comp.nodes) {
-          if (n.name && glbNodeNames.has(n.name)) return true;
-        }
-      }
-      if (comp.type === 'collider' && comp.node && glbNodeNames.has(comp.node)) {
-        return true;
-      }
+    return entityBoundToAnyGlbNode(child, glbNodeNames);
+  }
+
+  function entityMatches(entity: EditorEntity, query: string): boolean {
+    if (!query) return true;
+    return entity.name.toLowerCase().includes(query);
+  }
+
+  function glbNodeMatches(node: GlbNodeRef, query: string): boolean {
+    if (!query) return true;
+    return node.name.toLowerCase().includes(query);
+  }
+
+  function glbSubtreeHasMatch(entityId: string, node: GlbNodeRef, query: string): boolean {
+    if (glbNodeMatches(node, query)) return true;
+
+    const bound = getBoundEntitiesForNode(entityId, node.name);
+    for (const boundEntity of bound) {
+      if (entitySubtreeHasMatch(boundEntity, query)) return true;
     }
-    const match = child.name.match(/\(([^)]+)\)$/);
-    if (match && glbNodeNames.has(match[1])) {
+
+    for (const child of node.children) {
+      if (glbSubtreeHasMatch(entityId, child, query)) return true;
+    }
+
+    return false;
+  }
+
+  function entitySubtreeHasMatch(entity: EditorEntity, query: string): boolean {
+    if (entityMatches(entity, query)) return true;
+
+    const glbTree = store.getGlbTree(entity.id);
+    const glbNodeNames = getAllGlbNodeNames(glbTree);
+
+    if (glbTree && glbSubtreeHasMatch(entity.id, glbTree, query)) {
       return true;
     }
+
+    for (const child of entity.children) {
+      if (isEntityBoundToGlb(child, glbNodeNames)) continue;
+      if (entitySubtreeHasMatch(child, query)) return true;
+    }
+
+    return false;
+  }
+
+  function glbSubtreeHasDescendantMatch(entityId: string, node: GlbNodeRef, query: string): boolean {
+    const bound = getBoundEntitiesForNode(entityId, node.name);
+    for (const boundEntity of bound) {
+      if (entitySubtreeHasMatch(boundEntity, query)) return true;
+    }
+
+    for (const child of node.children) {
+      if (glbSubtreeHasMatch(entityId, child, query)) return true;
+    }
+
     return false;
   }
 
@@ -213,7 +356,10 @@ export function createHierarchyPanel(
     const bound = getBoundEntitiesForNode(entityId, node.name);
     const nodeBadge = getNodeOverrideComponentBadge(entityId, node.name);
     const hasChildren = node.children.length > 0 || bound.length > 0;
-    const expanded = expandedGlbNodes.has(node.uuid);
+    let expanded = expandedGlbNodes.has(node.uuid);
+    if (searchQuery && glbSubtreeHasDescendantMatch(entityId, node, searchQuery)) {
+      expanded = true;
+    }
 
     const toggle = hasChildren
       ? el('button', {
@@ -266,10 +412,14 @@ export function createHierarchyPanel(
 
     if (hasChildren && expanded) {
       for (const child of node.children) {
-        renderGlbRow(entityId, child, depth + 1, rows, isHidden);
+        if (!searchQuery || glbSubtreeHasMatch(entityId, child, searchQuery)) {
+          renderGlbRow(entityId, child, depth + 1, rows, isHidden);
+        }
       }
       for (const boundEntity of bound) {
-        renderRow(boundEntity, depth + 1, rows);
+        if (!searchQuery || entitySubtreeHasMatch(boundEntity, searchQuery)) {
+          renderRow(boundEntity, depth + 1, rows);
+        }
       }
     }
   }
@@ -283,11 +433,14 @@ export function createHierarchyPanel(
     if (!tree) return;
 
     const sub = store.getSubSelection();
-    if (sub?.entityId === entity.id || store.getSelection() === entity.id) {
+    if (sub?.entityId === entity.id || store.isEntitySelected(entity.id)) {
       ensureGlbExpanded(entity.id, sub?.nodeUuid ?? null);
     }
 
-    const expanded = expandedGlbEntities.has(entity.id);
+    let expanded = expandedGlbEntities.has(entity.id);
+    if (searchQuery && glbSubtreeHasDescendantMatch(entity.id, tree, searchQuery)) {
+      expanded = true;
+    }
     const toggle = el('button', {
       className: `ed-tree-chevron ed-tree-chevron-asset${expanded ? ' is-expanded' : ''}`,
       text: expanded ? '▾' : '▸',
@@ -332,8 +485,11 @@ export function createHierarchyPanel(
   }
 
   function renderRow(entity: EditorEntity, depth: number, rows: HTMLElement[]): void {
+    visibleEntityIds.push(entity.id);
+
     const selection = store.getSelection();
     const sub = store.getSubSelection();
+    const inSelection = store.isEntitySelected(entity.id);
     const selected = selection === entity.id && !sub;
     const parentSelected =
       selection === entity.id && Boolean(sub) && sub?.entityId === entity.id;
@@ -369,20 +525,27 @@ export function createHierarchyPanel(
     const row = el(
       'div',
       {
-        className: `ed-tree-row${selected ? ' is-selected' : ''}${parentSelected ? ' is-parent-selected' : ''}`,
+        className: `ed-tree-row${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}${parentSelected ? ' is-parent-selected' : ''}`,
         attrs: { draggable: 'true', 'data-entity-id': entity.id },
         on: {
-          click: () => store.setSelection(entity.id),
+          click: (event) => handleEntityClick(event as MouseEvent, entity.id),
           dblclick: () => beginRename(entity.id),
           contextmenu: (event) => {
             event.preventDefault();
             event.stopPropagation();
-            store.setSelection(entity.id);
+            if (!store.isEntitySelected(entity.id)) {
+              store.setSelection(entity.id);
+              rangeAnchorId = entity.id;
+            }
             const mouse = event as MouseEvent;
             showContextMenu(mouse.clientX, mouse.clientY, entityMenuEntries(entity));
           },
           dragstart: (event) => {
-            (event as DragEvent).dataTransfer?.setData(ENTITY_DND_TYPE, entity.id);
+            const dragEvent = event as DragEvent;
+            const ids = store.isEntitySelected(entity.id)
+              ? store.getSelectedIds()
+              : [entity.id];
+            dragEvent.dataTransfer?.setData(ENTITY_DND_TYPE, JSON.stringify(ids));
           },
           dragover: (event) => {
             const dragEvent = event as DragEvent;
@@ -394,11 +557,16 @@ export function createHierarchyPanel(
           drop: (event) => {
             const dragEvent = event as DragEvent;
             row.classList.remove('is-drop-target');
-            const draggedId = dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE);
-            if (!draggedId || draggedId === entity.id) return;
+            const draggedIds = parseDraggedEntityIds(
+              dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE) ?? '',
+            );
+            const idsToMove = idsToReparent(draggedIds, store).filter(
+              (id) => id !== entity.id,
+            );
+            if (idsToMove.length === 0) return;
             dragEvent.preventDefault();
             dragEvent.stopPropagation();
-            store.reparentEntity(draggedId, entity.id);
+            store.reparentEntities(idsToMove, entity.id);
           },
         },
       },
@@ -425,11 +593,14 @@ export function createHierarchyPanel(
     const glbNodeNames = getAllGlbNodeNames(glbTree);
 
     if (entity.asset && glbTree) {
-      renderGlbSubtree(entity, depth + 1, rows);
+      if (!searchQuery || glbSubtreeHasMatch(entity.id, glbTree, searchQuery)) {
+        renderGlbSubtree(entity, depth + 1, rows);
+      }
     }
 
     for (const child of entity.children) {
       if (isEntityBoundToGlb(child, glbNodeNames)) continue;
+      if (searchQuery && !entitySubtreeHasMatch(child, searchQuery)) continue;
       renderRow(child, depth + 1, rows);
     }
   }
@@ -444,6 +615,7 @@ export function createHierarchyPanel(
 
   function render(): void {
     clearChildren(body);
+    visibleEntityIds = [];
     const roots = store.getState().roots;
     if (roots.length === 0) {
       body.append(
@@ -463,15 +635,30 @@ export function createHierarchyPanel(
         },
         drop: (event) => {
           const dragEvent = event as DragEvent;
-          const draggedId = dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE);
-          if (!draggedId) return;
+          const draggedIds = parseDraggedEntityIds(
+            dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE) ?? '',
+          );
+          const idsToMove = idsToReparent(draggedIds, store);
+          if (idsToMove.length === 0) return;
           dragEvent.preventDefault();
-          store.reparentEntity(draggedId, null);
+          store.reparentEntities(idsToMove, null);
         },
       },
     });
     const rows: HTMLElement[] = [];
-    for (const entity of roots) renderRow(entity, 0, rows);
+    for (const entity of roots) {
+      if (searchQuery && !entitySubtreeHasMatch(entity, searchQuery)) continue;
+      renderRow(entity, 0, rows);
+    }
+    if (searchQuery && rows.length === 0) {
+      body.append(
+        el('div', {
+          className: 'ed-empty-note',
+          text: `No entities match "${searchQuery}"`,
+        }),
+      );
+      return;
+    }
     tree.append(...rows);
     body.append(tree);
   }

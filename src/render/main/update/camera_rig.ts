@@ -142,6 +142,20 @@ function clampOffsetToShipZone(
   );
 }
 
+function smoothVector(
+  current: THREE.Vector3,
+  target: THREE.Vector3,
+  dt: number,
+  halfLife: number,
+): void {
+  if (dt <= 0) return;
+  const smoothness = Math.LN2 / halfLife;
+  const blend = 1 - Math.exp(-smoothness * dt);
+  current.lerp(target, blend);
+}
+
+const FIRST_PERSON_LOOK_DISTANCE_METERS = 10;
+
 export function updateCameraRig(
   camera: THREE.PerspectiveCamera,
   cameraTarget: THREE.Vector3,
@@ -152,6 +166,7 @@ export function updateCameraRig(
   shipForward: Vec3,
   firstPersonActive = false,
   station: StationCameraContext | null = null,
+  dt = 0.016,
 ): void {
   const {
     cameraOrbit = { pitchRadians: -0.35, yawRadians: 0, zoomDistance: 7.4 },
@@ -162,11 +177,17 @@ export function updateCameraRig(
   const stationActive =
     station !== null && (mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR);
 
+  const focusPosition = mode === 'in-ship' || !character ? world.ship.position : character.position;
+  const focusVec = new THREE.Vector3(focusPosition.x, focusPosition.y, focusPosition.z);
+
   if (mode === 'in-ship' || !character) {
     if ((world.shipCameraView ?? 'cockpit') === 'cockpit') {
       // Cockpit first person: rigidly attached to the ship frame and snapped
       // every frame — smoothing here would drag the eye through the canopy
       // whenever the ship rotates. The ship (render focus) sits at the origin.
+      camera.userData.smoothedWorldPos = null;
+      camera.userData.smoothedWorldTarget = null;
+
       const shipRight = normalize(cross(shipForward, shipUp));
       const pilotEye = getPilotEyeLocal();
       const eye = add(
@@ -196,23 +217,31 @@ export function updateCameraRig(
       const zoom = shipCameraZoom ?? 1.0;
       const cameraBackMeters = (58 + altitudeFactor * 180) * zoom;
       const cameraUpMeters = (9 + altitudeFactor * 136) * zoom;
-      const cameraOffset = new THREE.Vector3(
-        (-shipForward.x * cameraBackMeters + shipUp.x * cameraUpMeters) * renderScale,
-        (-shipForward.y * cameraBackMeters + shipUp.y * cameraUpMeters) * renderScale,
-        (-shipForward.z * cameraBackMeters + shipUp.z * cameraUpMeters) * renderScale,
+      const desiredCameraOffset = new THREE.Vector3(
+        -shipForward.x * cameraBackMeters + shipUp.x * cameraUpMeters,
+        -shipForward.y * cameraBackMeters + shipUp.y * cameraUpMeters,
+        -shipForward.z * cameraBackMeters + shipUp.z * cameraUpMeters,
       );
-      camera.position.lerp(cameraOffset, 0.12);
-      cameraTarget.lerp(
-        new THREE.Vector3(
-          (shipForward.x * (170 + altitudeFactor * 340) + shipUp.x * (-6 + altitudeFactor * 52)) *
-            renderScale,
-          (shipForward.y * (170 + altitudeFactor * 340) + shipUp.y * (-6 + altitudeFactor * 52)) *
-            renderScale,
-          (shipForward.z * (170 + altitudeFactor * 340) + shipUp.z * (-6 + altitudeFactor * 52)) *
-            renderScale,
-        ),
-        0.16,
+      const desiredTargetOffset = new THREE.Vector3(
+        shipForward.x * (170 + altitudeFactor * 340) + shipUp.x * (-6 + altitudeFactor * 52),
+        shipForward.y * (170 + altitudeFactor * 340) + shipUp.y * (-6 + altitudeFactor * 52),
+        shipForward.z * (170 + altitudeFactor * 340) + shipUp.z * (-6 + altitudeFactor * 52),
       );
+
+      const desiredWorldPos = new THREE.Vector3().copy(focusVec).add(desiredCameraOffset);
+      const desiredWorldTarget = new THREE.Vector3().copy(focusVec).add(desiredTargetOffset);
+
+      if (!camera.userData.smoothedWorldPos) {
+        camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
+        camera.userData.smoothedWorldTarget = new THREE.Vector3().copy(desiredWorldTarget);
+      }
+
+      // Smooth cockpit external camera in world space
+      smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.06);
+      smoothVector(camera.userData.smoothedWorldTarget, desiredWorldTarget, dt, 0.04);
+
+      camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
+      cameraTarget.copy(camera.userData.smoothedWorldTarget).sub(focusVec).multiplyScalar(renderScale);
     }
     camera.up.copy(v3(shipUp));
   } else {
@@ -240,19 +269,28 @@ export function updateCameraRig(
               cameraOrbit.pitchRadians,
               pitchLimit,
             );
+
     if (firstPersonActive) {
-      // First person snaps every frame: smoothing here would add mouse-look latency.
       const rig = resolveFirstPersonCameraRig(orbit);
-      camera.position.set(
-        rig.positionOffset.x * renderScale,
-        rig.positionOffset.y * renderScale,
-        rig.positionOffset.z * renderScale,
+      const desiredWorldPos = new THREE.Vector3(
+        focusPosition.x + rig.positionOffset.x,
+        focusPosition.y + rig.positionOffset.y,
+        focusPosition.z + rig.positionOffset.z,
       );
-      cameraTarget.set(
-        rig.targetOffset.x * renderScale,
-        rig.targetOffset.y * renderScale,
-        rig.targetOffset.z * renderScale,
-      );
+
+      if (!camera.userData.smoothedWorldPos) {
+        camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
+      }
+
+      // Smooth first-person camera position in world space to iron out physics/terrain bumps
+      smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
+
+      camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
+
+      // Keep look direction instantaneous to avoid mouse latency
+      const lookDir = new THREE.Vector3(orbit.forward.x, orbit.forward.y, orbit.forward.z);
+      cameraTarget.copy(camera.position).addScaledVector(lookDir, FIRST_PERSON_LOOK_DISTANCE_METERS * renderScale);
+      camera.userData.smoothedWorldTarget = null;
     } else {
       const zoomDistance = cameraOrbit.zoomDistance ?? 7.4;
       const rig = resolveCharacterCameraRig(orbit, zoomDistance);
@@ -268,20 +306,29 @@ export function updateCameraRig(
           shipForward,
         );
       }
-      const cameraOffset = new THREE.Vector3(
-        positionOffset.x * renderScale,
-        positionOffset.y * renderScale,
-        positionOffset.z * renderScale,
+
+      const desiredWorldPos = new THREE.Vector3(
+        focusPosition.x + positionOffset.x,
+        focusPosition.y + positionOffset.y,
+        focusPosition.z + positionOffset.z,
       );
-      camera.position.lerp(cameraOffset, 0.18);
-      cameraTarget.lerp(
-        new THREE.Vector3(
-          rig.targetOffset.x * renderScale,
-          rig.targetOffset.y * renderScale,
-          rig.targetOffset.z * renderScale,
-        ),
-        0.24,
+      const desiredWorldTarget = new THREE.Vector3(
+        focusPosition.x + rig.targetOffset.x,
+        focusPosition.y + rig.targetOffset.y,
+        focusPosition.z + rig.targetOffset.z,
       );
+
+      if (!camera.userData.smoothedWorldPos || !camera.userData.smoothedWorldTarget) {
+        camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
+        camera.userData.smoothedWorldTarget = new THREE.Vector3().copy(desiredWorldTarget);
+      }
+
+      // Smooth third-person camera position and target in world space
+      smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
+      smoothVector(camera.userData.smoothedWorldTarget, desiredWorldTarget, dt, 0.04);
+
+      camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
+      cameraTarget.copy(camera.userData.smoothedWorldTarget).sub(focusVec).multiplyScalar(renderScale);
     }
     camera.up.copy(v3(orbit.up));
   }

@@ -48,9 +48,16 @@ interface BoundAnimation {
   nodes: BoundAnimationNode[];
 }
 
+type AnimationPrefabComponent = PrefabComponent & {
+  type: "animation";
+  _bindAttempts?: number;
+};
+
+const animationBindAttempts = new WeakMap<AnimationPrefabComponent, number>();
+
 function setupUpdateAnimations(group: THREE.Group): void {
   group.userData.boundAnimations = [] as BoundAnimation[];
-  group.userData.pendingAnimations = [] as any[];
+  group.userData.pendingAnimations = [] as AnimationPrefabComponent[];
 
   const AXIS_VECTORS = {
     x: new THREE.Vector3(1, 0, 0),
@@ -63,7 +70,7 @@ function setupUpdateAnimations(group: THREE.Group): void {
 
   group.userData.updateAnimations = (blends: Record<string, number>) => {
     // Try to bind any pending animations that are waiting for models to finish loading
-    const pending = group.userData.pendingAnimations as any[] | undefined;
+    const pending = group.userData.pendingAnimations as AnimationPrefabComponent[] | undefined;
     if (pending && pending.length > 0) {
       for (let i = pending.length - 1; i >= 0; i--) {
         const component = pending[i];
@@ -91,7 +98,7 @@ function setupUpdateAnimations(group: THREE.Group): void {
 function bindAnimationComponent(
   rootGroup: THREE.Group | undefined,
   targetObject: THREE.Object3D,
-  component: PrefabComponent & { type: "animation" },
+  component: AnimationPrefabComponent,
 ): void {
   if (!rootGroup) return;
 
@@ -131,7 +138,7 @@ function bindAnimationComponent(
       });
     }
     // Successfully bound! Remove from pending queue if present
-    const pending = rootGroup.userData.pendingAnimations as any[] | undefined;
+    const pending = rootGroup.userData.pendingAnimations as AnimationPrefabComponent[] | undefined;
     if (pending) {
       const idx = pending.indexOf(component);
       if (idx !== -1) {
@@ -140,17 +147,17 @@ function bindAnimationComponent(
     }
   } else {
     // If not all nodes are found, queue in pendingAnimations to retry as models load
-    const pending = rootGroup.userData.pendingAnimations as any[] | undefined;
+    const pending = rootGroup.userData.pendingAnimations as AnimationPrefabComponent[] | undefined;
     if (pending) {
-      const animComp = component as any;
-      animComp._bindAttempts = (animComp._bindAttempts ?? 0) + 1;
-      
+      const attempts = (animationBindAttempts.get(component) ?? 0) + 1;
+      animationBindAttempts.set(component, attempts);
+
       if (!pending.includes(component)) {
         pending.push(component);
       }
 
       // Log warning only if it remains unbound after a reasonable delay (e.g. 300 frames)
-      if (animComp._bindAttempts === 300) {
+      if (attempts === 300) {
         console.warn(`Animation node not found after 300 attempts: ${component.nodes.map(n => n.name).join(', ')} under ${targetObject.name} or rootGroup`);
         const allNames: string[] = [];
         rootGroup.traverse((child) => {

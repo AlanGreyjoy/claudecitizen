@@ -781,7 +781,7 @@ export function createEditorViewport(
     const node = findGlbNodeByName(entityGroup, nodeName);
     if (!node) return;
     applyTransformToObject3D(node, transform);
-    selectionBox?.update();
+    selectionBoxes.forEach((box) => box.update());
   }
 
   function applyGlbOverridesForEntity(entityId: string): void {
@@ -1022,7 +1022,9 @@ export function createEditorViewport(
 
   // ---- selection ---------------------------------------------------------
 
-  let selectionBox: THREE.BoxHelper | null = null;
+  const PRIMARY_BOX_COLOR = 0x8bd8ff;
+  const SECONDARY_BOX_COLOR = 0x5a9cb8;
+  let selectionBoxes: THREE.BoxHelper[] = [];
   let drillDepth = 0;
   let lastDrillEntityId: string | null = null;
   let lastDrillScreen: { x: number; y: number } | null = null;
@@ -1065,21 +1067,34 @@ export function createEditorViewport(
     return entityObject;
   }
 
+  function clearSelectionBoxes(): void {
+    for (const box of selectionBoxes) {
+      scene.remove(box);
+      box.geometry.dispose();
+      (box.material as THREE.Material).dispose();
+    }
+    selectionBoxes = [];
+  }
+
   function syncSelectionHighlight(): void {
     const entityId = store.getSelection();
     gizmo.detach();
-    if (selectionBox) {
-      scene.remove(selectionBox);
-      selectionBox.geometry.dispose();
-      (selectionBox.material as THREE.Material).dispose();
-      selectionBox = null;
+    clearSelectionBoxes();
+    const selectedIds = store.getSelectedIds();
+    if (selectedIds.length === 0) return;
+
+    for (const selectedId of selectedIds) {
+      const object = objectsById.get(selectedId);
+      if (!object) continue;
+      const color = selectedId === entityId ? PRIMARY_BOX_COLOR : SECONDARY_BOX_COLOR;
+      const box = new THREE.BoxHelper(object, color);
+      scene.add(box);
+      selectionBoxes.push(box);
     }
-    if (!entityId) return;
+
     const target = getGizmoTarget();
     if (!target) return;
     gizmo.attach(target);
-    selectionBox = new THREE.BoxHelper(target, 0x8bd8ff);
-    scene.add(selectionBox);
   }
 
   const raycaster = new THREE.Raycaster();
@@ -1241,11 +1256,20 @@ export function createEditorViewport(
       drillDepth = 0;
       lastDrillEntityId = null;
       lastDrillScreen = null;
-      store.setSelection(null);
+      store.clearSelection();
       return;
     }
 
     const { entityId, path } = pick;
+    const modifierToggle = event.ctrlKey || event.metaKey;
+    if (modifierToggle) {
+      drillDepth = 0;
+      lastDrillEntityId = entityId;
+      lastDrillScreen = clickAt;
+      store.setEntitySelection(entityId, 'toggle');
+      return;
+    }
+
     const sameEntity = entityId === lastDrillEntityId;
     const sameSpot =
       sameEntity &&
@@ -1324,7 +1348,7 @@ export function createEditorViewport(
         },
         scale: { x: object.scale.x, y: object.scale.y, z: object.scale.z },
       });
-      selectionBox?.update();
+      selectionBoxes.forEach((box) => box.update());
       return;
     }
     if (!draggingEntityId) return;
@@ -1464,10 +1488,26 @@ export function createEditorViewport(
   // ---- focus / resize / loop ------------------------------------------------
 
   function focusSelection(): void {
-    const target = getGizmoTarget();
     const box = new THREE.Box3();
-    if (target) {
-      box.setFromObject(target);
+    const selectedIds = store.getSelectedIds();
+    const sub = store.getSubSelection();
+
+    if (sub && selectedIds.length <= 1) {
+      const target = getGizmoTarget();
+      if (target) {
+        box.setFromObject(target);
+      }
+    } else if (selectedIds.length > 0) {
+      let hasContent = false;
+      for (const selectedId of selectedIds) {
+        const object = objectsById.get(selectedId);
+        if (!object) continue;
+        box.expandByObject(object);
+        hasContent = true;
+      }
+      if (!hasContent && entityRoot.children.length > 0) {
+        box.setFromObject(entityRoot);
+      }
     } else if (entityRoot.children.length > 0) {
       box.setFromObject(entityRoot);
     } else {
@@ -1505,7 +1545,7 @@ export function createEditorViewport(
     // so it must not run while the flythrough owns the camera.
     if (flying) updateFly(dt);
     else orbit.update();
-    selectionBox?.update();
+    selectionBoxes.forEach((box) => box.update());
     renderer.render(scene, camera);
   }
   animate();

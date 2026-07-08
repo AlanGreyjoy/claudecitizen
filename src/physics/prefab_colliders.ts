@@ -3,13 +3,13 @@ import {
   type GameplayCollider,
   loadNodeWorldMatrices,
   sceneMatrixToGameplayMatrix,
-} from "../../player/colliders";
+} from "./colliders";
 import type {
   PrefabComponent,
   PrefabDocument,
   PrefabEntity,
   PrefabTransform,
-} from "./schema";
+} from "../world/prefabs/schema";
 
 function transformMatrix(transform: PrefabTransform): THREE.Matrix4 {
   return new THREE.Matrix4().compose(

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Planet, RenderStats, SpikeRenderWorld, SsaoSettings } from '../../types';
 import { normalize } from '../../math/vec3';
-import { createCharacterAvatar } from '../../player/avatar';
+import { createCharacterAvatar } from './scene/character_avatar';
 import { createCloudShell, createPlanetLakeWaterManager } from '../effects';
 import { createPlanetTileManager } from '../planet_tiles';
 import { createPlanetVegetationManager, normalizeVegetationSettings } from '../vegetation';
@@ -153,7 +153,7 @@ export function createSpikeRenderer(
     const firstPersonActive =
       cameraView === 'first-person' &&
       character != null &&
-      (mode === 'on-foot' || mode === 'on-ship-deck' || mode === 'in-station');
+      (mode === 'on-foot' || mode === 'on-ship-deck' || mode === 'in-station' || mode === 'riding-elevator');
 
     const renderMode = mode as RenderMode;
     const dt = Math.max(0.0001, Math.min(nowSeconds - lastTime, 0.1));
@@ -262,8 +262,14 @@ export function createSpikeRenderer(
       shipForward,
       firstPersonActive,
       { frame: stationFrame, roomId: world.stationRoomId ?? null },
+      dt,
     );
     updateSpeedBlur(composerStack.speedBlurEffect, world);
+    composerStack.motionBlurEffect.updateCamera(
+      camera,
+      new THREE.Vector3(focusBody.position.x, focusBody.position.y, focusBody.position.z),
+      renderScale,
+    );
     updateLocalLightShadowCull(
       stationMesh,
       camera.position,

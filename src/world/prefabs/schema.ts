@@ -272,6 +272,8 @@ export interface PrefabEntity {
   hiddenNodes?: string[];
   materialOverrides?: PrefabMaterialOverride[];
   components?: PrefabComponent[];
+  /** GLB node name under the asset entity's model tree that owns this child. */
+  glbAnchor?: string;
   children?: PrefabEntity[];
 }
 
@@ -1084,6 +1086,10 @@ function parseEntity(
       )
       .filter((component): component is PrefabComponent => component !== null);
     if (components.length > 0) entity.components = components;
+  }
+
+  if (value.glbAnchor !== undefined) {
+    entity.glbAnchor = parseString(value.glbAnchor, `${path}.glbAnchor`, 128);
   }
 
   if (value.children !== undefined) {

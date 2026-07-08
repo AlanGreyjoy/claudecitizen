@@ -8,6 +8,7 @@ export interface GameSettings {
   input: InputSettings;
   renderQuality: RenderQualityPreset;
   ambientOcclusion: boolean;
+  motionBlur: boolean;
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;
@@ -20,6 +21,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   input: normalizeInputSettings(undefined),
   renderQuality: 'balanced',
   ambientOcclusion: true,
+  motionBlur: true,
   masterVolume: 1,
   sfxVolume: 1,
   musicVolume: 1,
@@ -45,6 +47,10 @@ function normalizeSettings(raw: Partial<GameSettings>): GameSettings {
       typeof raw.ambientOcclusion === 'boolean'
         ? raw.ambientOcclusion
         : DEFAULT_SETTINGS.ambientOcclusion,
+    motionBlur:
+      typeof raw.motionBlur === 'boolean'
+        ? raw.motionBlur
+        : DEFAULT_SETTINGS.motionBlur,
     masterVolume: clampVolume(raw.masterVolume ?? DEFAULT_SETTINGS.masterVolume),
     sfxVolume: clampVolume(raw.sfxVolume ?? DEFAULT_SETTINGS.sfxVolume),
     musicVolume: clampVolume(raw.musicVolume ?? DEFAULT_SETTINGS.musicVolume),
@@ -85,6 +91,11 @@ export function applyRenderQualityAndReload(preset: RenderQualityPreset): void {
 
 export function applyAmbientOcclusionAndReload(enabled: boolean): void {
   saveGameSettings({ ...loadGameSettings(), ambientOcclusion: enabled });
+  window.location.reload();
+}
+
+export function applyMotionBlurAndReload(enabled: boolean): void {
+  saveGameSettings({ ...loadGameSettings(), motionBlur: enabled });
   window.location.reload();
 }
 

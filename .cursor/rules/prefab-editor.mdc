@@ -1,0 +1,62 @@
+---
+description: In-browser prefab editor — selection, GLB nodes, components, hierarchy binding
+globs: src/editor/**,src/render/editor/**
+alwaysApply: false
+---
+
+# Prefab Editor (dev-only)
+
+Dev server port **4173** (`npm run dev`). Open via title-screen **Editor** or `?boot=editor`. Alan runs servers — do not start `npm run dev` unless asked.
+
+## Architecture
+
+```
+document.ts (EditorStore) → serialize.ts → world/prefabs/schema.ts
+panels/ (DOM UI)            render/editor/viewport.ts (Three.js)
+component_actions.ts        world/prefabs/component_registry.ts
+glb_binding.ts              render/prefabs/prefab_renderer.ts (runtime)
+```
+
+Editor logic stays in `src/editor/`. Three.js viewport in `src/render/editor/`. Prefab JSON contract in `world/prefabs/`.
+
+## Selection model
+
+- **Entity selection** — LMB viewport or hierarchy row. Clears GLB sub-selection.
+- **GLB sub-selection** — viewport drill-down (LMB same spot), or click a node in the hierarchy GLB tree. Required for node-scoped inspector fields and **Add Component to Node**.
+- GLB overrides persist by **node name**, not UUID. Resolve via `store.getGlbNodeName()` before save.
+
+## Adding components (`component_actions.ts`)
+
+| Entry point | Path |
+|-------------|------|
+| Inspector combobox | `inspector.ts` |
+| RMB entity → Components | `hierarchy.ts` |
+| RMB GLB node → Add Component to Node | `hierarchy.ts` / `viewport.ts` |
+
+**Where data lands:**
+- `marker: true` on a visual entity → **child empty** at node position; set `glbAnchor`.
+- Collider + GLB sub-selection → `glbNodeTransforms[].components` (node override).
+- Otherwise → `entity.components`.
+
+Palette filtered by prefab **kind**; **singleton** types are once-per-document.
+
+## GLB hierarchy binding (critical)
+
+GLB nodes are **not** entities. Child empties/markers nest under a GLB node in the outliner only when bound:
+
+- **Preferred:** `entity.glbAnchor = "<exact GLB node name>"` (serialized on `PrefabEntity.glbAnchor`).
+- **Legacy:** `Name (GlbNodeName)` suffix — parsed by `glbAnchorFromEntityName()` in `glb_binding.ts`.
+- **Never** use regex `\(([^)]+)\)$` for binding — breaks names like `Foo_(3)`.
+
+Hierarchy uses `entityTargetsGlbNode` / `entityBoundToAnyGlbNode` from `glb_binding.ts`. When adding from a GLB context menu, always set `glbAnchor` on the new entity.
+
+## Common edits
+
+| Task | Files |
+|------|-------|
+| New component type | `schema.ts`, `component_registry.ts`, `inspector.ts` |
+| Add-component / context menus | `component_actions.ts`, `hierarchy.ts`, `viewport.ts` |
+| Node overrides | `document.ts`, `serialize.ts`, `viewport.ts`, `prefab_renderer.ts` |
+| GLB binding bugs | `glb_binding.ts`, console + `node scripts/inspect_glb.mjs` |
+
+Deeper workflows: `.cursor/skills/prefab-editor/SKILL.md`. Runtime door/animation wiring: `.agents/AGENTS.md`.
