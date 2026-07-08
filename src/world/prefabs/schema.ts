@@ -35,8 +35,10 @@ export interface PrefabTransform {
 export interface PrefabNodeOverride {
   /** GLB node name. Must match a node in this entity's asset scene. */
   node: string;
-  /** Local transform applied to the named GLB node after the model loads. */
-  transform: PrefabTransform;
+  /** Local transform applied to the named GLB node. Omit to keep the GLB-authored transform. */
+  transform?: PrefabTransform;
+  /** Components attached to this GLB node (e.g. box colliders sized to the node). */
+  components?: PrefabComponent[];
 }
 
 export interface PrefabAsset {
@@ -1026,13 +1028,26 @@ function parseEntity(
       if (!isRecord(override)) {
         fail(`${path}.nodeOverrides[${index}]`, "expected override object");
       }
-      return {
+      const parsed: PrefabNodeOverride = {
         node: parseString(override.node, `${path}.nodeOverrides[${index}].node`, 128),
-        transform: parseTransform(
+      };
+      if (override.transform !== undefined) {
+        parsed.transform = parseTransform(
           override.transform,
           `${path}.nodeOverrides[${index}].transform`,
-        ),
-      };
+        );
+      }
+      if (override.components !== undefined) {
+        if (!Array.isArray(override.components))
+          fail(`${path}.nodeOverrides[${index}].components`, "expected array");
+        const components = override.components
+          .map((component, ci) =>
+            parseComponent(component, `${path}.nodeOverrides[${index}].components[${ci}]`),
+          )
+          .filter((component): component is PrefabComponent => component !== null);
+        if (components.length > 0) parsed.components = components;
+      }
+      return parsed;
     });
   }
 

@@ -389,17 +389,29 @@ function bindColliderAnimations(
   spec: ShipSpec,
   prefabId: string,
 ): GameplayCollider[] {
-  return colliders.map((collider) => {
+  const boundNodes = new Set<string>();
+  const result = colliders.map((collider) => {
     if (!collider.node) return collider;
     const animation = animationForNode(collider.node, doors, spec);
-    if (!animation) {
-      console.warn(
-        `Ship prefab "${prefabId}" collider node "${collider.node}" has no matching door/ramp/gear binding; it remains static.`,
-      );
-      return collider;
-    }
+    if (!animation) return collider;
+    boundNodes.add(collider.node);
     return { ...collider, animation };
   });
+  // A door with no bound collider animates visually but its collider stays
+  // enabled (the custom collision resolver never moves it), so the player
+  // can't walk through. Warn once per unbound door. A collider with no
+  // matching node is simply a static hull/floor collider — that is normal and
+  // not warned about.
+  for (const door of doors) {
+    if (!door.nodes.some((n) => boundNodes.has(n.name))) {
+      console.warn(
+        `Ship prefab "${prefabId}" door "${door.id}" has no collider bound to node(s) ${door.nodes
+          .map((n) => `"${n.name}"`)
+          .join(", ")}; the door will animate visually but its collider stays enabled (player can't walk through).`,
+      );
+    }
+  }
+  return result;
 }
 
 /**
@@ -409,9 +421,9 @@ function bindColliderAnimations(
  * authored ship; deck walking simply stays unavailable until zones exist.
  * Missing primary pilot seat falls back to the built-in Starhopper anchors.
  */
-export function buildShipLayoutFromPrefab(
+export async function buildShipLayoutFromPrefab(
   doc: PrefabDocument,
-): ShipLayout | null {
+): Promise<ShipLayout | null> {
   const out: CollectedShip = {
     hullUrl: null,
     restHeight: null,
@@ -484,7 +496,7 @@ export function buildShipLayoutFromPrefab(
 
   const spec = mergeShipSpec(out.spec);
   const colliders = bindColliderAnimations(
-    buildPrefabColliders(doc),
+    await buildPrefabColliders(doc),
     out.doors,
     spec,
     doc.id,

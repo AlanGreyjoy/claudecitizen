@@ -10,6 +10,7 @@ const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
 
 export interface HierarchyPanelOptions {
   getGlbNodePrefabPosition?: (entityId: string, nodeUuid: string) => Vec3 | null;
+  getGlbNodeBounds?: (entityId: string, nodeUuid: string) => { min: Vec3; max: Vec3 } | null;
 }
 
 function componentBadge(entity: EditorEntity): string | null {
@@ -98,12 +99,16 @@ export function createHierarchyPanel(
     const getPosition =
       options.getGlbNodePrefabPosition ??
       (() => null);
+    const getBounds =
+      options.getGlbNodeBounds ??
+      (() => null);
     return [
       ...buildGlbAuthoringMenu(
         store,
         entityId,
         node.uuid,
         getPosition,
+        getBounds,
         node.name,
       ),
       'sep',
@@ -147,6 +152,15 @@ export function createHierarchyPanel(
     const parentEntity = store.locate(entityId)?.entity;
     if (!parentEntity) return [];
     return parentEntity.children.filter(child => doesEntityTargetGlbNode(child, nodeName));
+  }
+
+  function getNodeOverrideComponentBadge(entityId: string, nodeName: string): string | null {
+    const entity = store.locate(entityId)?.entity;
+    if (!entity) return null;
+    const override = entity.glbNodeTransforms.find((o) => o.nodeName === nodeName);
+    if (!override || override.components.length === 0) return null;
+    if (override.components.length === 1) return override.components[0].type;
+    return `${override.components.length} components`;
   }
 
   function getAllGlbNodeNames(tree: GlbNodeRef | null): Set<string> {
@@ -197,6 +211,7 @@ export function createHierarchyPanel(
     const selected =
       sub?.entityId === entityId && sub.nodeUuid === node.uuid;
     const bound = getBoundEntitiesForNode(entityId, node.name);
+    const nodeBadge = getNodeOverrideComponentBadge(entityId, node.name);
     const hasChildren = node.children.length > 0 || bound.length > 0;
     const expanded = expandedGlbNodes.has(node.uuid);
 
@@ -243,6 +258,7 @@ export function createHierarchyPanel(
           text: node.name,
           title: node.name,
         }),
+        ...(nodeBadge ? [el('span', { className: 'ed-tree-badge', text: nodeBadge })] : []),
       ],
     );
     row.style.paddingLeft = `${10 + depth * 14}px`;

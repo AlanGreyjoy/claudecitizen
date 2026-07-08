@@ -7,6 +7,15 @@ import type { PrefabNodeOverride } from "../world/prefabs/schema";
 
 export const CHARACTER_COLLIDER_RADIUS_METERS = 0.42;
 
+/** GLTFLoader sanitizes node names (spaces -> underscores) via PropertyBinding.sanitizeNodeName.
+ *  We must match that when looking up nodes by name. */
+function sanitizeNodeName(name: string): string {
+  return name.replace(/\s/g, '_');
+}
+
+/** When a door's open blend crosses this, its collider is skipped/disabled entirely. */
+export const DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD = 0.85;
+
 const CAPSULE_SAMPLE_HEIGHTS = [0.25, 0.95, 1.55] as const;
 const SCENE_TO_GAMEPLAY = new THREE.Matrix4().makeScale(-1, 1, 1);
 const gltfLoader = new GLTFLoader();
@@ -237,7 +246,8 @@ function applyNodeOverrides(
 ): void {
   if (!overrides) return;
   for (const override of overrides) {
-    const object = root.getObjectByName(override.node);
+    if (!override.transform) continue;
+    const object = root.getObjectByName(sanitizeNodeName(override.node));
     if (!object) continue;
     const { position, rotation, scale } = override.transform;
     object.position.set(position.x, position.y, position.z);
@@ -292,7 +302,7 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
         const scene = gltf.scene;
         applyNodeOverrides(scene, collider.nodeOverrides);
         scene.updateMatrixWorld(true);
-        const root = collider.node ? scene.getObjectByName(collider.node) : scene;
+        const root = collider.node ? scene.getObjectByName(sanitizeNodeName(collider.node)) : scene;
         if (!root) {
           console.warn(
             `Collider node "${collider.node}" not found in ${collider.assetUrl}.`,
@@ -538,11 +548,21 @@ function meshPush(
   );
 }
 
+function isDoorColliderOpen(
+  collider: GameplayCollider,
+  rig: ShipColliderRigState | undefined,
+): boolean {
+  if (!collider.animation || collider.animation.kind !== "door" || !rig) return false;
+  const open01 = rig.doors?.[collider.animation.doorId] ?? 0;
+  return open01 >= DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD;
+}
+
 function colliderPush(
   collider: GameplayCollider,
   sample: THREE.Vector3,
   rig: ShipColliderRigState | undefined,
 ): THREE.Vector3 | null {
+  if (isDoorColliderOpen(collider, rig)) return null;
   if (collider.kind === "box") {
     return boxPush(collider, sample, animatedLocalToSpace(collider, rig));
   }
@@ -551,6 +571,52 @@ function colliderPush(
 
 export function sceneMatrixToGameplayMatrix(sceneMatrix: THREE.Matrix4): THREE.Matrix4 {
   return SCENE_TO_GAMEPLAY.clone().multiply(sceneMatrix);
+}
+
+const nodeWorldMatrixCache = new Map<string, Promise<Map<string, THREE.Matrix4>>>();
+
+function nodeMatrixCacheKey(
+  assetUrl: string,
+  overrides: readonly PrefabNodeOverride[] | undefined,
+): string {
+  return JSON.stringify({ url: assetUrl, overrides: overrides ?? [] });
+}
+
+/**
+ * Loads a GLB once, applies node overrides, and returns the world matrices of
+ * all named nodes in a single pass. Used by collider_runtime to position box
+ * colliders attached to GLB nodes via node-override components.
+ */
+export async function loadNodeWorldMatrices(
+  assetUrl: string,
+  nodeNames: readonly string[],
+  nodeOverrides?: readonly PrefabNodeOverride[],
+): Promise<Map<string, THREE.Matrix4>> {
+  if (nodeNames.length === 0) return new Map();
+  const key = nodeMatrixCacheKey(assetUrl, nodeOverrides);
+  let pending = nodeWorldMatrixCache.get(key);
+  if (!pending) {
+    pending = gltfLoader
+      .loadAsync(assetUrl)
+      .then((gltf) => {
+        const scene = gltf.scene;
+        applyNodeOverrides(scene, nodeOverrides);
+        scene.updateMatrixWorld(true);
+        const out = new Map<string, THREE.Matrix4>();
+        for (const name of nodeNames) {
+          const node = scene.getObjectByName(sanitizeNodeName(name));
+          if (node) out.set(name, node.matrixWorld.clone());
+        }
+        return out;
+      })
+      .catch((error) => {
+        console.warn(`Failed to load GLB for node matrices: ${assetUrl}`, error);
+        nodeWorldMatrixCache.delete(key);
+        return new Map();
+      });
+    nodeWorldMatrixCache.set(key, pending);
+  }
+  return pending;
 }
 
 export function cloneColliderWithTransform(
@@ -630,6 +696,7 @@ function colliderGroundHeight(
   sample: THREE.Vector3,
   rig: ShipColliderRigState | undefined,
 ): number | null {
+  if (isDoorColliderOpen(collider, rig)) return null;
   if (collider.kind === "box") {
     return boxGroundHeight(collider, sample, animatedLocalToSpace(collider, rig));
   }

@@ -70,7 +70,7 @@ async function resolveStationPrefab(): Promise<PrefabDocument | null> {
     console.warn(`Station prefab "${id}" not found; using the procedural station.`);
     return null;
   }
-  const layout = buildStationLayoutFromPrefab(doc);
+  const layout = await buildStationLayoutFromPrefab(doc);
   if (!layout) {
     console.warn(`Station prefab "${id}" is not walkable; using the procedural station.`);
     return null;

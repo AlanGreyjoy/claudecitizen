@@ -57,8 +57,17 @@
         "components": [
           {
             "type": "collider",
-            "shape": "mesh",
-            "convex": false
+            "shape": "box",
+            "size": {
+              "x": 2.2,
+              "y": 0.5,
+              "z": 0.7
+            },
+            "offset": {
+              "x": 0,
+              "y": 0.25,
+              "z": 0
+            }
           }
         ]
       }

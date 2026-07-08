@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import {
   type GameplayCollider,
+  loadNodeWorldMatrices,
   sceneMatrixToGameplayMatrix,
 } from "../../player/colliders";
 import type {
@@ -38,18 +39,19 @@ function offsetMatrix(offset: { x: number; y: number; z: number } | undefined): 
 function bakeCollider(
   component: Extract<PrefabComponent, { type: "collider" }>,
   entity: PrefabEntity,
-  entitySceneMatrix: THREE.Matrix4,
+  baseSceneMatrix: THREE.Matrix4,
   id: string,
+  defaultNode?: string,
 ): GameplayCollider | null {
   const baseLocalToSpace = sceneMatrixToGameplayMatrix(
-    entitySceneMatrix.clone().multiply(offsetMatrix(component.offset)),
+    baseSceneMatrix.clone().multiply(offsetMatrix(component.offset)),
   );
 
   if (component.shape === "box") {
     return {
       id,
       kind: "box",
-      node: component.node,
+      node: component.node ?? defaultNode,
       halfSize: {
         x: component.size.x / 2,
         y: component.size.y / 2,
@@ -72,17 +74,17 @@ function bakeCollider(
     kind: "mesh",
     assetUrl,
     convex: component.convex ?? false,
-    node: component.node,
+    node: component.node ?? defaultNode,
     nodeOverrides: entity.nodeOverrides,
     baseLocalToSpace,
   };
 }
 
-function collect(
+async function collect(
   entity: PrefabEntity,
   parentSceneMatrix: THREE.Matrix4,
   out: GameplayCollider[],
-): void {
+): Promise<void> {
   const entitySceneMatrix = parentSceneMatrix
     .clone()
     .multiply(transformMatrix(entity.transform));
@@ -99,13 +101,45 @@ function collect(
     if (collider) out.push(collider);
   }
 
+  if (entity.asset?.url && entity.nodeOverrides) {
+    const nodesWithColliders = entity.nodeOverrides.filter(
+      (o) => o.components?.some((c) => c.type === "collider"),
+    );
+    if (nodesWithColliders.length > 0) {
+      const nodeNames = nodesWithColliders.map((o) => o.node);
+      const matrices = await loadNodeWorldMatrices(
+        entity.asset.url,
+        nodeNames,
+        entity.nodeOverrides,
+      );
+      for (const override of nodesWithColliders) {
+        const nodeWorldMatrix = matrices.get(override.node);
+        if (!nodeWorldMatrix) continue;
+        const nodeSceneMatrix = entitySceneMatrix.clone().multiply(nodeWorldMatrix);
+        let nodeColliderIndex = 0;
+        for (const component of override.components!) {
+          if (component.type !== "collider") continue;
+          const collider = bakeCollider(
+            component,
+            entity,
+            nodeSceneMatrix,
+            `${entity.id}:${override.node}:collider-${nodeColliderIndex}`,
+            override.node,
+          );
+          nodeColliderIndex += 1;
+          if (collider) out.push(collider);
+        }
+      }
+    }
+  }
+
   for (const child of entity.children ?? []) {
-    collect(child, entitySceneMatrix, out);
+    await collect(child, entitySceneMatrix, out);
   }
 }
 
-export function buildPrefabColliders(doc: PrefabDocument): GameplayCollider[] {
+export async function buildPrefabColliders(doc: PrefabDocument): Promise<GameplayCollider[]> {
   const colliders: GameplayCollider[] = [];
-  collect(doc.root, new THREE.Matrix4(), colliders);
+  await collect(doc.root, new THREE.Matrix4(), colliders);
   return colliders;
 }

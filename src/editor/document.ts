@@ -46,7 +46,8 @@ export interface EntityTransform {
 
 export interface GlbNodeTransformOverride {
   nodeName: string;
-  transform: EntityTransform;
+  transform?: EntityTransform;
+  components: PrefabComponent[];
 }
 
 /** Read-only GLB scene graph node cached after model load (not serialized). */
@@ -287,6 +288,7 @@ export function createEditorStore() {
         entity.glbNodeTransforms.push({
           nodeName,
           transform: cloneTransform(transformCopy),
+          components: [],
         });
       }
     }
@@ -294,11 +296,72 @@ export function createEditorStore() {
     emitGlbTransform(entityId, nodeUuid, nodeName);
   }
 
+  function setNodeOverrideComponents(
+    entityId: string,
+    nodeName: string,
+    components: PrefabComponent[],
+  ): void {
+    const entity = locate(entityId)?.entity;
+    if (!entity) return;
+    const before = entity.glbNodeTransforms.find(
+      (entry) => entry.nodeName === nodeName,
+    )?.components ?? [];
+    const beforeCopy = structuredClone(before);
+    const nextCopy = structuredClone(components);
+    history.execute({
+      label: `Edit node ${nodeName} components`,
+      do() {
+        const target = locate(entityId)?.entity;
+        if (!target) return;
+        const override = target.glbNodeTransforms.find(
+          (entry) => entry.nodeName === nodeName,
+        );
+        if (!override) {
+          target.glbNodeTransforms.push({
+            nodeName,
+            components: structuredClone(nextCopy),
+          });
+        } else {
+          override.components = structuredClone(nextCopy);
+        }
+        markDirty();
+        emit({ type: 'entity', entityId });
+      },
+      undo() {
+        const target = locate(entityId)?.entity;
+        if (!target) return;
+        const override = target.glbNodeTransforms.find(
+          (entry) => entry.nodeName === nodeName,
+        );
+        if (override) {
+          override.components = structuredClone(beforeCopy);
+          if (override.components.length === 0 && !override.transform) {
+            target.glbNodeTransforms = target.glbNodeTransforms.filter((o) => o.nodeName !== nodeName);
+          }
+        }
+        emit({ type: 'entity', entityId });
+      },
+    });
+  }
+
+  function getNodeOverrideComponents(
+    entityId: string,
+    nodeName: string,
+  ): PrefabComponent[] {
+    const entity = locate(entityId)?.entity;
+    if (!entity) return [];
+    const override = entity.glbNodeTransforms.find(
+      (entry) => entry.nodeName === nodeName,
+    );
+    return override ? override.components : [];
+  }
+
   function rebuildGlbOverridesFromState(): void {
     glbNodeOverrides.clear();
     const visit = (entities: EditorEntity[]): void => {
       for (const entity of entities) {
         for (const override of entity.glbNodeTransforms) {
+          if (!override.transform) continue;
           glbNodeOverrides.set(
             glbOverrideKey(entity.id, override.nodeName),
             cloneTransform(override.transform),
@@ -845,6 +908,8 @@ export function createEditorStore() {
     setAsset,
     setMaterialOverride,
     setComponents,
+    setNodeOverrideComponents,
+    getNodeOverrideComponents,
     setTransform,
     beginTransformGesture,
     previewTransform,

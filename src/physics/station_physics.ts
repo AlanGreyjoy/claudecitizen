@@ -10,7 +10,6 @@ import {
   createRapierWorld,
   removeCollider,
   removeStaticColliders,
-  syncStaticColliders,
   type RapierWorldHandle,
 } from "./rapier_world";
 
@@ -18,6 +17,8 @@ export interface StationPhysics {
   world: RAPIER.World;
   player: RapierWorldHandle;
   dynamicColliders: RAPIER.Collider[];
+  /** Disable (or re-enable) every static collider bound to the given animation/door id. */
+  setDoorColliderEnabled(doorId: string, enabled: boolean): void;
   dispose(): void;
 }
 
@@ -33,12 +34,32 @@ export async function createStationPhysics(
     y: local.up,
     z: local.forward,
   });
-  const staticColliders = await syncStaticColliders(world, colliders);
+
+  // Bake static colliders and track which ones are bound to a door animation
+  // so the game loop can toggle them when the door opens/closes.
+  const staticColliders: RAPIER.Collider[] = [];
+  const doorColliderHandles = new Map<string, RAPIER.Collider[]>();
+  for (const collider of colliders) {
+    const rapierCollider = await addCollider(world, collider);
+    if (!rapierCollider) continue;
+    staticColliders.push(rapierCollider);
+    if (collider.animation?.kind === "door") {
+      const doorId = collider.animation.doorId;
+      const list = doorColliderHandles.get(doorId) ?? [];
+      list.push(rapierCollider);
+      doorColliderHandles.set(doorId, list);
+    }
+  }
 
   const physics: StationPhysics = {
     world,
     player,
     dynamicColliders: [],
+    setDoorColliderEnabled(doorId: string, enabled: boolean) {
+      const handles = doorColliderHandles.get(doorId);
+      if (!handles) return;
+      for (const collider of handles) collider.setEnabled(enabled);
+    },
     dispose() {
       for (const collider of physics.dynamicColliders) {
         removeCollider(world, collider);

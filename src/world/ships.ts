@@ -42,7 +42,7 @@ export async function loadShipPrefabLayout(
     console.warn(`Prefab "${prefabId}" is not a ship prefab.`);
     return null;
   }
-  const layout = buildShipLayoutFromPrefab(doc);
+  const layout = await buildShipLayoutFromPrefab(doc);
   if (!layout) return null;
   registerShipLayoutForPrefab(prefabId, layout);
   return layout;

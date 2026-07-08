@@ -400,15 +400,17 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         : wasKeyboardActionPressed('hangar3') || consumeDeviceActionPress('hangar3')
           ? 3
           : null;
+    const interactPressed = wasKeyboardActionPressed('interact') || consumeDeviceActionPress('interact');
+    const justPressedSnapshot = new Set(justPressed);
     const actions = {
-      interactPressed: wasKeyboardActionPressed('interact') || consumeDeviceActionPress('interact'),
+      interactPressed,
       exitSeatPressed: updateExitSeatHold(),
       jumpPressed: wasKeyboardActionPressed('jump') || consumeDeviceActionPress('jump'),
       hangarBuildPressed: wasKeyboardActionPressed('hangarBuild'),
       hangarRotatePressed: wasKeyboardActionPressed('hangarRotate'),
       hangarCancelPressed: wasKeyboardActionPressed('hangarCancel'),
       hangarDigit,
-      wasKeyPressed: (code: string) => justPressed.has(code) || (code === 'KeyF' && (wasKeyboardActionPressed('interact') || consumeDeviceActionPress('interact'))),
+      wasKeyPressed: (code: string) => justPressedSnapshot.has(code) || (code === 'KeyF' && interactPressed),
     };
     justPressed.clear();
     return actions;

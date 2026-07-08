@@ -143,7 +143,7 @@
           "position": {
             "x": -29.75,
             "y": 0,
-            "z": 54.75
+            "z": 55
           },
           "rotation": {
             "x": 0,
@@ -538,6 +538,3823 @@
                 "y": 1,
                 "z": 1
               }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.60986638,
+                  "y": 3.05859089,
+                  "z": 0.18863677969999998
+                },
+                "offset": {
+                  "x": 0,
+                  "y": 1.4423761350000002,
+                  "z": -7.152499999982243e-7
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(29)",
+            "transform": {
+              "position": {
+                "x": 30,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Wall_04_Alt_(2)",
+            "transform": {
+              "position": {
+                "x": 30,
+                "y": 0,
+                "z": -20
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_Glass_04_Alt_2",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_04_Alt_(3)",
+            "transform": {
+              "position": {
+                "x": 30,
+                "y": 0,
+                "z": -5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_01_(11)",
+            "transform": {
+              "position": {
+                "x": 10,
+                "y": 0,
+                "z": 10
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Floor_09_(6)",
+            "transform": {
+              "position": {
+                "x": 5,
+                "y": 0,
+                "z": -15
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.00000190418579,
+                  "y": 0.214143127,
+                  "z": 5.00000048
+                },
+                "offset": {
+                  "x": 2.499998567907105,
+                  "y": -0.0997378975,
+                  "z": 2.50000024
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Lift_Wall_01_(1)",
+            "transform": {
+              "position": {
+                "x": -10,
+                "y": 5,
+                "z": -30
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Floor_09_(7)",
+            "transform": {
+              "position": {
+                "x": 5,
+                "y": 0,
+                "z": -20
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.00000190418579,
+                  "y": 0.214143127,
+                  "z": 5.00000048
+                },
+                "offset": {
+                  "x": 2.499998567907105,
+                  "y": -0.0997378975,
+                  "z": 2.50000024
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(12)",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": -5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.23715129540000002,
+                  "z": 5.00000143051147
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.0642049613,
+                  "z": 2.499999284744265
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 4.999999523162842,
+                  "y": 0.2372247275,
+                  "z": 5.000005523162842
+                },
+                "offset": {
+                  "x": 2.500000238418579,
+                  "y": -0.08819705224999999,
+                  "z": 2.500003238418579
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(15)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.23715129540000002,
+                  "z": 5.00000143051147
+                },
+                "offset": {
+                  "x": 2.500000000000014,
+                  "y": -0.0642049613,
+                  "z": 2.499999284744265
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_HangerFloor_01",
+            "transform": {
+              "position": {
+                "x": -20,
+                "y": 0,
+                "z": -15.05697
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 40.02766,
+                  "y": 1.11,
+                  "z": 30.00000190734863
+                },
+                "offset": {
+                  "x": 20.01383,
+                  "y": -0.5,
+                  "z": 14.999999046325685
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hatch_Door_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.525,
+                  "y": 0.5,
+                  "z": 1.525
+                },
+                "offset": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0.82
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hatch_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.085,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hatch_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.085,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(32)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(31)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(30)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(33)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(29)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(34)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(28)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(27)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(26)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(25)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(24)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(23)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(22)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(21)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(20)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_09_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.1,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_09_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.1,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_09_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.1,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_09_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.1,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_09_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.1,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_09",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.1,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(12)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_01_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_End_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 0.169
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -0.01
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_01_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_01_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_01_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_07_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Walkway_02_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.818,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.25,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Walkway_02_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.818,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.25,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_07_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_07_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Walkway_02_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.818,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.25,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_End_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 0.169
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -0.01
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Hand_Rail_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.476,
+                  "y": 1.265,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": -0.294,
+                  "y": 0.632,
+                  "z": -1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(31)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(30)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(28)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(10)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(27)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(26)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(25)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(24)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(23)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(22)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(21)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(20)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(19)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Bridge_Floor_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 17.697,
+                  "y": 1.011,
+                  "z": 14.528
+                },
+                "offset": {
+                  "x": 7.5,
+                  "y": -0.624,
+                  "z": 7.259
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(10)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(16)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(17)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(12)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(18)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(10)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_010_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.083,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_Walkway_Endcap_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.818,
+                  "y": 0.5,
+                  "z": 0.444
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.25,
+                  "z": 0.163
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_011_(32)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.064,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(15)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(16)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(17)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(18)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(12)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_08_(19)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(15)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_05",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.007,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.496,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_05_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.007,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.496,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(17)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(19)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(18)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(21)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(20)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_04",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_04_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_04_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_04_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_04_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_04_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.077,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(12)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(10)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(16)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(17)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(15)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(19)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_04_(18)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.098,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(10)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_02_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.094,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_Small_03_(10)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.5,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.092,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Floor_07_(16)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.5,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.088,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Hydroponics_UpperFloor_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 4,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 16.151,
+                  "y": 3.995,
+                  "z": 16.146
+                },
+                "offset": {
+                  "x": 2.22,
+                  "y": 2.002,
+                  "z": 2.158
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Hydroponics_BaseFloor_01",
+            "transform": {
+              "position": {
+                "x": -25,
+                "y": 0,
+                "z": -5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh",
+                "offset": {
+                  "x": 2.079,
+                  "y": 1.965,
+                  "z": 2.043
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Wall_Doorframe_02_(2)",
+            "transform": {
+              "position": {
+                "x": 30,
+                "y": 0,
+                "z": -5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000003,
+                  "y": 5,
+                  "z": 0.871060132
+                },
+                "offset": {
+                  "x": 2.5000015,
+                  "y": 1.5,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Hanger_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": -50
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Hydroponics_Ladder_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": -4.00456,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
             }
           }
         ],
@@ -555,12 +4372,6 @@
             "opacity": 1
           }
         ],
-        "components": [
-          {
-            "type": "collider",
-            "shape": "mesh"
-          }
-        ],
         "children": [
           {
             "id": "lift-hangar-to-lobby",
@@ -569,7 +4380,7 @@
               "position": {
                 "x": 12.5,
                 "y": 0.05,
-                "z": -36
+                "z": -37
               },
               "rotation": {
                 "x": 0,
@@ -792,6 +4603,70 @@
             ]
           },
           {
+            "id": "e-55069330",
+            "name": "Point Light Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": -5,
+                "y": 2.5,
+                "z": -15
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5.5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-bb225e11",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": -5,
+                "y": 2.5,
+                "z": -25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5.6,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
             "id": "e-9fdf0a57",
             "name": "Point Light Copy Copy Copy",
             "transform": {
@@ -850,8 +4725,7 @@
                 "color": "#ffffc8",
                 "intensity": 28,
                 "distance": 5,
-                "decay": 2,
-                "castShadow": false
+                "decay": 2
               }
             ]
           },
@@ -990,7 +4864,7 @@
               "position": {
                 "x": 27.5,
                 "y": 3,
-                "z": -22
+                "z": -22.5
               },
               "rotation": {
                 "x": 0,
@@ -1020,9 +4894,41 @@
             "name": "Point Light Copy Copy Copy Copy Copy Copy Copy",
             "transform": {
               "position": {
-                "x": 20,
+                "x": 17.5,
                 "y": 3,
-                "z": -25.5
+                "z": -28
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-b2b350b0",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 17.5,
+                "y": 3,
+                "z": -22.75
               },
               "rotation": {
                 "x": 0,
@@ -1052,9 +4958,105 @@
             "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy",
             "transform": {
               "position": {
-                "x": 20,
+                "x": 22.5,
                 "y": 3,
-                "z": -13.25
+                "z": -12.75
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-69123889",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 22.5,
+                "y": 3,
+                "z": -18
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-13988b3b",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 17.5,
+                "y": 3,
+                "z": -18
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-4b4afa95",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 17.5,
+                "y": 3,
+                "z": -12.75
               },
               "rotation": {
                 "x": 0,
@@ -1084,9 +5086,41 @@
             "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy",
             "transform": {
               "position": {
-                "x": 20,
+                "x": 22.5,
                 "y": 3,
-                "z": -18.5
+                "z": -28
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-0220f0b5",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 22.5,
+                "y": 3,
+                "z": -22.75
               },
               "rotation": {
                 "x": 0,
@@ -1117,6 +5151,166 @@
             "transform": {
               "position": {
                 "x": 27.5,
+                "y": 3,
+                "z": -32.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-4f362c07",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 12.5,
+                "y": 3,
+                "z": -32.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-61c745c8",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 3.75,
+                "y": 3,
+                "z": -32.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-8ddece3e",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": -5,
+                "y": 3,
+                "z": -32.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-55dc7c49",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": -13.25,
+                "y": 3,
+                "z": -32.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "point-light",
+                "color": "#ffffc8",
+                "intensity": 28,
+                "distance": 5,
+                "decay": 2,
+                "castShadow": false
+              }
+            ]
+          },
+          {
+            "id": "e-97467e5f",
+            "name": "Point Light Copy Copy Copy Copy Copy Copy Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": 21.5,
                 "y": 3,
                 "z": -32.5
               },
@@ -1187,6 +5381,99 @@
                 "floorId": "lobby",
                 "interactionType": "animation",
                 "targetAnimationId": "anim-sm_bld_wall_door_01_5"
+              }
+            ]
+          },
+          {
+            "id": "e-a81b8cbf",
+            "name": "Area Light (SM_Bld_Hydroponics_BaseFloor_01)",
+            "transform": {
+              "position": {
+                "x": -22.25,
+                "y": 5.14209,
+                "z": -10.31176
+              },
+              "rotation": {
+                "x": -0.707107,
+                "y": 0,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#cfe8ff",
+                "intensity": 5,
+                "width": 1.4,
+                "height": 0.65
+              }
+            ]
+          },
+          {
+            "id": "e-857008ca",
+            "name": "Area Light (SM_Bld_Hydroponics_BaseFloor_01) Copy",
+            "transform": {
+              "position": {
+                "x": -17.04769,
+                "y": 5.14209,
+                "z": -8.17291
+              },
+              "rotation": {
+                "x": -0.650131,
+                "y": -0.278083,
+                "z": -0.278083,
+                "w": 0.650131
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#cfe8ff",
+                "intensity": 5,
+                "width": 1.4,
+                "height": 0.65
+              }
+            ]
+          },
+          {
+            "id": "e-c3ca9811",
+            "name": "Area Light (SM_Bld_Hydroponics_BaseFloor_01) Copy",
+            "transform": {
+              "position": {
+                "x": -19.5,
+                "y": 5.11925,
+                "z": -9.75
+              },
+              "rotation": {
+                "x": -0.693064,
+                "y": -0.140222,
+                "z": -0.140222,
+                "w": 0.693064
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#cfe8ff",
+                "intensity": 5,
+                "width": 1.4,
+                "height": 0.65
               }
             ]
           }

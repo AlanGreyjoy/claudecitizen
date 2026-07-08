@@ -4,6 +4,7 @@ import {
   type EditorStore,
   type EntityTransform,
 } from "../document";
+import type { Vec3 } from "../../types";
 import {
   addComponentFromPalette,
   collectExistingComponentTypes,
@@ -34,6 +35,10 @@ export interface InspectorPanelOptions {
     nodeUuid: string,
     transform: Partial<EntityTransform>,
   ) => void;
+  getGlbNodeBounds?: (
+    entityId: string,
+    nodeUuid: string,
+  ) => { min: Vec3; max: Vec3 } | null;
 }
 
 export function createInspectorPanel(
@@ -1458,7 +1463,12 @@ export function createInspectorPanel(
     }
 
     function addComponent(def: ComponentDef): void {
-      addComponentFromPalette(store, entity.id, def);
+      const sub = store.getSubSelection();
+      const nodeBounds =
+        sub && sub.entityId === entity.id && options.getGlbNodeBounds
+          ? () => options.getGlbNodeBounds!(entity.id, sub.nodeUuid)
+          : undefined;
+      addComponentFromPalette(store, entity.id, def, nodeBounds ? { getNodeBounds: nodeBounds } : undefined);
     }
 
     /** Moves the highlight without rebuilding the list (rebuilding under the
@@ -1562,11 +1572,30 @@ export function createInspectorPanel(
       el("h3", { className: "ed-section-title", text: "Components" }),
     ]);
 
-    entity.components.forEach((component, index) => {
+    const sub = store.getSubSelection();
+    const subNodeName =
+      sub && sub.entityId === entity.id
+        ? store.getGlbNodeName(entity.id, sub.nodeUuid)
+        : null;
+
+    const isNodeContext = Boolean(subNodeName && entity.asset);
+    const components = isNodeContext
+      ? store.getNodeOverrideComponents(entity.id, subNodeName!)
+      : entity.components;
+
+    const setComponents = (next: PrefabComponent[]): void => {
+      if (isNodeContext) {
+        store.setNodeOverrideComponents(entity.id, subNodeName!, next);
+      } else {
+        store.setComponents(entity.id, next);
+      }
+    };
+
+    components.forEach((component, index) => {
       const update = (next: PrefabComponent): void => {
-        const components = structuredClone(entity.components);
-        components[index] = next;
-        store.setComponents(entity.id, components);
+        const list = structuredClone(components);
+        list[index] = next;
+        setComponents(list);
       };
       const bodyEl = el(
         "div",
@@ -1593,9 +1622,9 @@ export function createInspectorPanel(
               title: "Remove component",
               on: {
                 click: () => {
-                  const components = structuredClone(entity.components);
-                  components.splice(index, 1);
-                  store.setComponents(entity.id, components);
+                  const list = structuredClone(components);
+                  list.splice(index, 1);
+                  setComponents(list);
                 },
               },
             }),

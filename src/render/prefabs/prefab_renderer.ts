@@ -104,9 +104,10 @@ function bindAnimationComponent(
   const boundNodes: BoundAnimationNode[] = [];
   let allFound = true;
   for (const nodeSpec of component.nodes) {
-    let object = targetObject.getObjectByName(nodeSpec.name);
+    const safeName = sanitizeNodeName(nodeSpec.name);
+    let object = targetObject.getObjectByName(safeName);
     if (!object) {
-      object = rootGroup.getObjectByName(nodeSpec.name);
+      object = rootGroup.getObjectByName(safeName);
     }
     if (object) {
       boundNodes.push({
@@ -243,8 +244,10 @@ function configureSpotLightShadow(
 
 function prepareModelMaterials(root: THREE.Object3D): void {
   root.traverse((object) => {
-    object.frustumCulled = false;
-    if (!(object instanceof THREE.Mesh)) return;
+    if (!(object instanceof THREE.Mesh)) {
+      object.frustumCulled = false;
+      return;
+    }
     object.castShadow = true;
     object.receiveShadow = true;
     configureShipMaterial(object.material);
@@ -427,13 +430,18 @@ function applyEntityTransform(object: THREE.Object3D, entity: PrefabEntity): voi
   object.scale.set(scale.x, scale.y, scale.z);
 }
 
+function sanitizeNodeName(name: string): string {
+  return name.replace(/\s/g, '_');
+}
+
 function applyNodeOverrides(
   root: THREE.Object3D,
   overrides: readonly PrefabNodeOverride[] | undefined,
 ): void {
   if (!overrides || overrides.length === 0) return;
   for (const override of overrides) {
-    const object = root.getObjectByName(override.node);
+    if (!override.transform) continue;
+    const object = root.getObjectByName(sanitizeNodeName(override.node));
     if (!object) continue;
     const { position, rotation, scale } = override.transform;
     object.position.set(position.x, position.y, position.z);
@@ -448,7 +456,7 @@ function applyHiddenNodes(
 ): void {
   if (!hiddenNodes || hiddenNodes.length === 0) return;
   for (const nodeName of hiddenNodes) {
-    const object = root.getObjectByName(nodeName);
+    const object = root.getObjectByName(sanitizeNodeName(nodeName));
     if (object) object.visible = false;
   }
 }

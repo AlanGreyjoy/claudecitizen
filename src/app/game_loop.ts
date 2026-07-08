@@ -46,6 +46,7 @@ import {
   isRampUsable,
   updateShipRig,
 } from "../player/ship_rig";
+import { DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD } from "../player/colliders";
 import {
   beginElevatorRide,
   callShipToHangar,
@@ -170,6 +171,10 @@ export function createGameLoop({
     }
   }
 
+  // Tracks the last setEnabled state per animation id so we only toggle Rapier
+  // colliders on threshold crossings, not every frame.
+  const doorColliderEnabled: Record<string, boolean> = {};
+
   function updateStationAnimations(dt: number): void {
     let changed = false;
     for (const anim of Object.values(stationAnimationStates)) {
@@ -189,9 +194,19 @@ export function createGameLoop({
       }
       renderer?.getStationRoot()?.userData.updateAnimations?.(blends);
     }
+    // Toggle Rapier colliders on/off as doors cross the open threshold.
+    if (physics) {
+      for (const [id, anim] of Object.entries(stationAnimationStates)) {
+        const shouldEnable = anim.value < DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD;
+        if (doorColliderEnabled[id] !== shouldEnable) {
+          doorColliderEnabled[id] = shouldEnable;
+          physics.setDoorColliderEnabled(id, shouldEnable);
+        }
+      }
+    }
   }
 
-  // Initial update of animation transforms
+  // Initial update of animation transforms + collider enabled states
   updateStationAnimations(0);
 
   let lastMs = performance.now();

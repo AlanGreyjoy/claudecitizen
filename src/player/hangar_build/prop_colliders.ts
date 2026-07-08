@@ -15,8 +15,8 @@ export function createBuildPropColliderRuntime() {
   function loadPrefabColliders(prefabId: string): Promise<GameplayCollider[]> {
     let pending = prefabColliders.get(prefabId);
     if (!pending) {
-      pending = loadPrefabDocument(prefabId).then((doc) =>
-        doc ? buildPrefabColliders(doc) : [],
+      pending = loadPrefabDocument(prefabId).then(async (doc) =>
+        doc ? await buildPrefabColliders(doc) : [],
       );
       prefabColliders.set(prefabId, pending);
     }

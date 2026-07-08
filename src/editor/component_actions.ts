@@ -28,7 +28,9 @@ export function addComponentFromPalette(
   store: EditorStore,
   targetEntityId: string,
   def: ComponentDef,
-  options?: AddComponentOptions,
+  options?: AddComponentOptions & {
+    getNodeBounds?: () => { min: Vec3; max: Vec3 } | null;
+  },
 ): void {
   const entity = store.locate(targetEntityId)?.entity;
   if (!entity) return;
@@ -38,6 +40,39 @@ export function addComponentFromPalette(
     sub && sub.entityId === targetEntityId
       ? store.getGlbNodeName(targetEntityId, sub.nodeUuid)
       : null;
+
+  // When a GLB node is sub-selected and the component is a collider, attach
+  // it to the node override rather than the entity or a child marker.
+  if (
+    subNodeName &&
+    !def.marker &&
+    def.type === 'collider' &&
+    entity.asset
+  ) {
+    const existing = store.getNodeOverrideComponents(targetEntityId, subNodeName);
+    const component = createComponentForEntity(def, entity, subNodeName);
+    // Auto-size the box collider to the node's mesh bounds
+    if (component.type === 'collider' && component.shape === 'box') {
+      const bounds = options?.getNodeBounds?.();
+      if (bounds) {
+        const size = {
+          x: Math.abs(bounds.max.x - bounds.min.x),
+          y: Math.abs(bounds.max.y - bounds.min.y),
+          z: Math.abs(bounds.max.z - bounds.min.z),
+        };
+        const offset = {
+          x: (bounds.min.x + bounds.max.x) / 2,
+          y: (bounds.min.y + bounds.max.y) / 2,
+          z: (bounds.min.z + bounds.max.z) / 2,
+        };
+        component.size = size;
+        component.offset = offset;
+      }
+    }
+    store.setNodeOverrideComponents(targetEntityId, subNodeName, [...existing, component]);
+    showToast(`Added "${def.label}" to node ${subNodeName}.`);
+    return;
+  }
 
   const hasVisual = Boolean(entity.asset || entity.primitive);
   if (def.marker && hasVisual) {
@@ -86,6 +121,16 @@ function createComponentForEntity(
     };
   }
   if (component.type !== 'collider') return component;
+
+  // When a GLB node is sub-selected, default to a box collider (not mesh)
+  // since the collider is attached to a specific node.
+  if (subNodeName) {
+    return {
+      ...component,
+      shape: 'box',
+      size: { x: 1, y: 1, z: 1 },
+    };
+  }
 
   // Default new colliders to fit the entity's visual so authors don't end up
   // with a useless 1x1x1 box on a wall, prop, or hull model.
@@ -144,6 +189,7 @@ export function buildComponentsSubmenu(
   options?: {
     markerOnly?: boolean;
     getSpawnPosition?: () => Vec3 | null;
+    getNodeBounds?: () => { min: Vec3; max: Vec3 } | null;
   },
 ): ContextMenuEntry[] {
   const palette = componentPaletteForContext(store, {
@@ -157,11 +203,14 @@ export function buildComponentsSubmenu(
     disabled: !isComponentAvailable(store, def),
     action: () => {
       const spawnPosition = options?.getSpawnPosition?.() ?? undefined;
+      const nodeBounds = options?.getNodeBounds?.() ?? undefined;
       addComponentFromPalette(
         store,
         targetEntityId,
         def,
-        spawnPosition ? { spawnPosition } : undefined,
+        spawnPosition || nodeBounds
+          ? { spawnPosition: spawnPosition ?? undefined, getNodeBounds: options?.getNodeBounds }
+          : undefined,
       );
     },
   }));
@@ -172,9 +221,11 @@ export function buildGlbAuthoringMenu(
   entityId: string,
   nodeUuid: string,
   getSpawnPosition: (entityId: string, nodeUuid: string) => Vec3 | null,
+  getNodeBounds: (entityId: string, nodeUuid: string) => { min: Vec3; max: Vec3 } | null,
   nodeName?: string | null,
 ): ContextMenuEntry[] {
   const getPos = () => getSpawnPosition(entityId, nodeUuid);
+  const getBounds = () => getNodeBounds(entityId, nodeUuid);
   const entries: ContextMenuEntry[] = [
     {
       label: 'Add Empty Here',
@@ -189,10 +240,10 @@ export function buildGlbAuthoringMenu(
     },
     'sep',
     {
-      label: 'Components',
+      label: 'Add Component to Node',
       children: buildComponentsSubmenu(store, entityId, {
-        markerOnly: true,
         getSpawnPosition: getPos,
+        getNodeBounds: getBounds,
       }),
     },
   ];

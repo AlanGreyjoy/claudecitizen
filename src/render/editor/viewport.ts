@@ -44,6 +44,7 @@ export interface EditorViewport {
   setShipPreview: (state: ShipPreviewState) => void;
   focusSelection: () => void;
   getGlbNodePrefabPosition: (entityId: string, nodeUuid: string) => Vec3 | null;
+  getGlbNodeBounds: (entityId: string, nodeUuid: string) => { min: Vec3; max: Vec3 } | null;
   getGlbNodeLocalTransform: (
     entityId: string,
     nodeUuid: string,
@@ -240,6 +241,7 @@ export function createEditorViewport(
         sub.entityId,
         sub.nodeUuid,
         getGlbNodePrefabPosition,
+        getGlbNodeBounds,
         nodeName,
       ),
     );
@@ -758,11 +760,15 @@ export function createEditorViewport(
     object.scale.set(transform.scale.x, transform.scale.y, transform.scale.z);
   }
 
+  function sanitizeNodeName(name: string): string {
+    return name.replace(/\s/g, '_');
+  }
+
   function findGlbNodeByName(
     entityGroup: THREE.Object3D,
     nodeName: string,
   ): THREE.Object3D | null {
-    return entityGroup.getObjectByName(nodeName) ?? null;
+    return entityGroup.getObjectByName(sanitizeNodeName(nodeName)) ?? null;
   }
 
   function applyGlbOverrideToNode(
@@ -780,6 +786,7 @@ export function createEditorViewport(
 
   function applyGlbOverridesForEntity(entityId: string): void {
     for (const entry of store.getGlbOverridesForEntity(entityId)) {
+      if (!entry.transform) continue;
       applyGlbOverrideToNode(entityId, entry.nodeName, entry.transform);
     }
   }
@@ -851,6 +858,15 @@ export function createEditorViewport(
           store.setGlbTree(entity.id, buildGlbNodeRef(model));
           applyGlbOverridesForEntity(entity.id);
           applyHiddenNodesForEntity(entity.id);
+          for (const override of entity.glbNodeTransforms) {
+            if (override.components.length === 0) continue;
+            const targetNode = model.getObjectByName(sanitizeNodeName(override.nodeName));
+            if (!targetNode) continue;
+            for (const component of override.components) {
+              const helper = buildComponentHelper(component);
+              if (helper) targetNode.add(helper);
+            }
+          }
           applyShipPreview();
         })
         .catch(() => {
@@ -1161,6 +1177,46 @@ export function createEditorViewport(
       x: localPositionScratch.x,
       y: localPositionScratch.y,
       z: localPositionScratch.z,
+    };
+  }
+
+  function getGlbNodeBounds(
+    entityId: string,
+    nodeUuid: string,
+  ): { min: Vec3; max: Vec3 } | null {
+    const entityGroup = objectsById.get(entityId);
+    if (!entityGroup) return null;
+    entityGroup.updateMatrixWorld(true);
+    const node = findObjectByUuid(entityGroup, nodeUuid);
+    if (!node) return null;
+    const box = new THREE.Box3();
+    let hasMesh = false;
+    node.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const geo = child.geometry;
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      const meshBox = geo.boundingBox.clone();
+      // Transform mesh-local bbox into the target node's local space
+      const toNodeLocal = node.matrixWorld.clone().invert().multiply(child.matrixWorld);
+      const corners = [
+        new THREE.Vector3(meshBox.min.x, meshBox.min.y, meshBox.min.z),
+        new THREE.Vector3(meshBox.max.x, meshBox.min.y, meshBox.min.z),
+        new THREE.Vector3(meshBox.min.x, meshBox.max.y, meshBox.min.z),
+        new THREE.Vector3(meshBox.max.x, meshBox.max.y, meshBox.min.z),
+        new THREE.Vector3(meshBox.min.x, meshBox.min.y, meshBox.max.z),
+        new THREE.Vector3(meshBox.max.x, meshBox.min.y, meshBox.max.z),
+        new THREE.Vector3(meshBox.min.x, meshBox.max.y, meshBox.max.z),
+        new THREE.Vector3(meshBox.max.x, meshBox.max.y, meshBox.max.z),
+      ].map((v) => v.applyMatrix4(toNodeLocal));
+      for (const c of corners) {
+        if (!hasMesh) { box.min.copy(c); box.max.copy(c); hasMesh = true; }
+        else box.expandByPoint(c);
+      }
+    });
+    if (!hasMesh) return null;
+    return {
+      min: { x: box.min.x, y: box.min.y, z: box.min.z },
+      max: { x: box.max.x, y: box.max.y, z: box.max.z },
     };
   }
 
@@ -1475,6 +1531,7 @@ export function createEditorViewport(
     },
     focusSelection,
     getGlbNodePrefabPosition,
+    getGlbNodeBounds,
     getGlbNodeLocalTransform,
     setGlbNodeLocalTransform,
     isFlying: () => flying,

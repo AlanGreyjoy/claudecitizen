@@ -206,7 +206,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       `Prefab "${prefabId}" is kind "${doc.kind}", not ship; using the built-in layout.`,
     );
   } else {
-    const layout = buildShipLayoutFromPrefab(doc);
+    const layout = await buildShipLayoutFromPrefab(doc);
     if (layout) {
       setShipLayoutOverride(layout);
       prefabApplied = true;

@@ -313,12 +313,16 @@ export function startEditorSession(): void {
   createHierarchyPanel(hierarchyEl, store, {
     getGlbNodePrefabPosition: (entityId, nodeUuid) =>
       viewport.getGlbNodePrefabPosition(entityId, nodeUuid),
+    getGlbNodeBounds: (entityId, nodeUuid) =>
+      viewport.getGlbNodeBounds(entityId, nodeUuid),
   });
   createInspectorPanel(inspectorEl, store, {
     getGlbNodeLocalTransform: (entityId, nodeUuid) =>
       viewport.getGlbNodeLocalTransform(entityId, nodeUuid),
     setGlbNodeLocalTransform: (entityId, nodeUuid, transform) =>
       viewport.setGlbNodeLocalTransform(entityId, nodeUuid, transform),
+    getGlbNodeBounds: (entityId, nodeUuid) =>
+      viewport.getGlbNodeBounds(entityId, nodeUuid),
   });
   createMaterialManagerPanel(materialManagerEl, store);
   createProjectPanel(projectEl, {

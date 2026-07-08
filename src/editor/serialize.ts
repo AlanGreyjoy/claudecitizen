@@ -61,10 +61,16 @@ function transformFromPrefab(transform: PrefabEntity["transform"]) {
 function nodeOverrideToPrefab(
   override: EditorEntity["glbNodeTransforms"][number],
 ): PrefabNodeOverride {
-  return {
+  const out: PrefabNodeOverride = {
     node: override.nodeName,
-    transform: transformToPrefab(override.transform),
   };
+  if (override.transform) {
+    out.transform = transformToPrefab(override.transform);
+  }
+  if (override.components.length > 0) {
+    out.components = structuredClone(override.components);
+  }
+  return out;
 }
 
 function entityToPrefab(entity: EditorEntity): PrefabEntity {
@@ -132,7 +138,8 @@ function entityFromPrefab(prefabEntity: PrefabEntity): EditorEntity {
   entity.primitive = prefabEntity.primitive ? structuredClone(prefabEntity.primitive) : null;
   entity.glbNodeTransforms = (prefabEntity.nodeOverrides ?? []).map((override) => ({
     nodeName: override.node,
-    transform: transformFromPrefab(override.transform),
+    transform: override.transform ? transformFromPrefab(override.transform) : undefined,
+    components: override.components ? structuredClone(override.components) : [],
   }));
   entity.glbNodeHidden = prefabEntity.hiddenNodes ? [...prefabEntity.hiddenNodes] : [];
   entity.materialOverrides = prefabEntity.materialOverrides

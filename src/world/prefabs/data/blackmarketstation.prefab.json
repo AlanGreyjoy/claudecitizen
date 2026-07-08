@@ -1,0 +1,109 @@
+{
+  "id": "blackmarketstation",
+  "name": "BlackMarketStation",
+  "version": 1,
+  "kind": "station",
+  "root": {
+    "id": "root",
+    "name": "BlackMarketStation",
+    "transform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "components": [
+      {
+        "type": "station-frame"
+      }
+    ],
+    "children": [
+      {
+        "id": "e-e65ba447",
+        "name": "BlackMarketStation",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/space-stations/BlackMarketStation.glb"
+        },
+        "nodeOverrides": [
+          {
+            "node": "SM_Bld_Platform_Large_02_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e-fb7af436",
+        "name": "Empty",
+        "transform": {
+          "position": {
+            "x": 14.5,
+            "y": 2.25,
+            "z": 52.25
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "spawn-point",
+            "floorId": "hab"
+          }
+        ]
+      }
+    ]
+  }
+}

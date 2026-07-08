@@ -14,6 +14,7 @@ import {
 import type { PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
 import { buildPrefabColliders } from './collider_runtime';
+import type { ColliderAnimationBinding, GameplayCollider } from '../../player/colliders';
 
 /**
  * Derives gameplay layout (spawn, elevators, hangar pads, info prompts) from a
@@ -73,6 +74,12 @@ interface FlattenedComponents {
     right: number;
     up: number;
     forward: number;
+  }[];
+  animationSpecs: {
+    id: string;
+    motion: "slide" | "hinge";
+    axis: "x" | "y" | "z";
+    nodes: { name: string; delta: number }[];
   }[];
 }
 
@@ -169,6 +176,14 @@ function collect(
           forward,
         });
         break;
+      case 'animation':
+        out.animationSpecs.push({
+          id: component.id,
+          motion: component.motion,
+          axis: component.axis,
+          nodes: component.nodes,
+        });
+        break;
       case 'station-frame':
       case 'collider':
         break;
@@ -181,6 +196,54 @@ function collect(
 }
 
 /**
+ * Attaches an animation binding to each collider whose `node` names an
+ * animation-driven GLB node, so the game loop can disable the collider when the
+ * door is open. A collider with no matching node is simply a static collider
+ * (floors, walls, handrails) — that is the normal case and is not warned about.
+ *
+ * The real "door won't work" signal is the inverse: an `animation` component
+ * with *no* collider bound to it. Such a door animates visually but its collider
+ * stays enabled (see `station_physics.ts` `setDoorColliderEnabled` no-op), so the
+ * player can't walk through. That case is warned about once per animation.
+ */
+function bindStationColliderAnimations(
+  colliders: GameplayCollider[],
+  animations: FlattenedComponents["animationSpecs"],
+  prefabId: string,
+): GameplayCollider[] {
+  if (animations.length === 0) return colliders;
+  const boundAnimationIds = new Set<string>();
+  const result = colliders.map((collider) => {
+    if (!collider.node) return collider;
+    for (const anim of animations) {
+      const node = anim.nodes.find((entry) => entry.name === collider.node);
+      if (node) {
+        boundAnimationIds.add(anim.id);
+        const animation: ColliderAnimationBinding = {
+          kind: "door",
+          doorId: anim.id,
+          motion: anim.motion,
+          axis: anim.axis,
+          delta: node.delta,
+        };
+        return { ...collider, animation };
+      }
+    }
+    return collider;
+  });
+  for (const anim of animations) {
+    if (!boundAnimationIds.has(anim.id)) {
+      console.warn(
+        `Station prefab "${prefabId}" animation "${anim.id}" has no collider bound to node(s) ${anim.nodes
+          .map((n) => `"${n.name}"`)
+          .join(", ")}; the door will animate visually but its collider stays enabled (player can't walk through).`,
+      );
+    }
+  }
+  return result;
+}
+
+/**
  * Builds the gameplay layout override for a station prefab. The player now
  * walks on real collider geometry, so this no longer produces walk-volume rooms.
  *
@@ -188,7 +251,7 @@ function collect(
  * up = y, forward = z (matching the render group orientation from
  * updateShipPlacement).
  */
-export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayoutOverride | null {
+export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise<StationLayoutOverride | null> {
   const out: FlattenedComponents = {
     rooms: [],
     spawnCandidates: [],
@@ -196,9 +259,14 @@ export function buildStationLayoutFromPrefab(doc: PrefabDocument): StationLayout
     hangarSeeds: [],
     infoSeeds: [],
     avmsSeeds: [],
+    animationSpecs: [],
   };
   collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
-  const colliders = buildPrefabColliders(doc);
+  const colliders = bindStationColliderAnimations(
+    await buildPrefabColliders(doc),
+    out.animationSpecs,
+    doc.id,
+  );
 
   let spawn: StationSpawnPose | null = null;
   if (out.spawnCandidates.length > 0) {
