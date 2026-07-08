@@ -29,12 +29,12 @@ Configure the docs site in the Netlify UI:
 
 | Setting | Value |
 | --- | --- |
-| Base directory | *(leave empty — repo root)* |
-| Package directory | `docs` |
+| Base directory | `docs` |
+| Package directory | *(leave empty)* |
 | Build command | *(from [`netlify.toml`](./netlify.toml))* |
-| Publish directory | `docs/build` |
+| Publish directory | `build` |
 | Node version | 22 (optional, in Site settings → Environment) |
 
-Set **Package directory** to `docs` so Netlify reads [`docs/netlify.toml`](./netlify.toml) instead of the root game [`netlify.toml`](../netlify.toml) (`dist/`). The build still runs from the repo root (`npm` workspaces), so do not set Base directory to `docs`.
+**Base directory must be `docs`** so Netlify reads [`docs/netlify.toml`](./netlify.toml) instead of the root game [`netlify.toml`](../netlify.toml). The build steps up to the repo root for `npm install` and `docs:build`, then publishes `docs/build`.
 
 Netlify will assign a URL like `https://<random-name>.netlify.app`. Update `url` in [`docusaurus.config.ts`](./docusaurus.config.ts) once you know the final hostname.
