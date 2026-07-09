@@ -13,6 +13,8 @@ import {
   MODE_RIDING_ELEVATOR,
 } from '../../../player/modes';
 import { getShipWalkZone } from '../../../player/ship_deck';
+import { getShipLayout, usesColliderDeck } from '../../../player/ship_layout';
+import type { ShipCameraBounds } from '../../../player/ship_layout';
 import { getPilotEyeLocal } from '../../../player/ship_interaction';
 import {
   getStationRoom,
@@ -95,10 +97,33 @@ function clampOffsetToRoom(
   );
 }
 
+function resolveCameraClampVolume(
+  shipZoneId: string | null | undefined,
+): ShipCameraBounds | null {
+  if (!shipZoneId) return null;
+  if (usesColliderDeck()) {
+    return (
+      getShipLayout().cameraBounds.find((bound) => bound.id === shipZoneId) ??
+      null
+    );
+  }
+  const zone = getShipWalkZone(shipZoneId);
+  if (!zone) return null;
+  return {
+    id: zone.id,
+    minRight: zone.minRight,
+    maxRight: zone.maxRight,
+    minForward: zone.minForward,
+    maxForward: zone.maxForward,
+    floorUp: Math.min(zone.floorUp, zone.slopeMinUp ?? zone.floorUp),
+    ceilingUp: zone.ceilingUp,
+    openToOutside: zone.gate === 'ramp',
+  };
+}
+
 /**
- * Keeps the third-person camera inside the ship interior zone (cabin or
- * cockpit) the character occupies, so it never pokes through the hull.
- * The ramp zone is open to the outside and skips clamping.
+ * Keeps the third-person camera inside the ship interior zone the character
+ * occupies, so it never pokes through the hull. Ramp volumes skip clamping.
  */
 function clampOffsetToShipZone(
   offset: Vec3,
@@ -107,9 +132,8 @@ function clampOffsetToShipZone(
   shipUp: Vec3,
   shipForward: Vec3,
 ): Vec3 {
-  const zone = world.shipZoneId ? getShipWalkZone(world.shipZoneId) : null;
-  // Ramp-gated zones are open to the outside and skip clamping.
-  if (!zone || zone.gate === 'ramp') return offset;
+  const zone = resolveCameraClampVolume(world.shipZoneId);
+  if (!zone || zone.openToOutside) return offset;
   const up = normalize(shipUp);
   const planarForward = normalize(sub(shipForward, scale(up, dot(shipForward, up))));
   const right = normalize(cross(planarForward, up));
@@ -120,7 +144,7 @@ function clampOffsetToShipZone(
     forward: dot(delta, planarForward),
   };
   const inset = 0.25;
-  const floorUp = Math.min(zone.floorUp, zone.slopeMinUp ?? zone.floorUp);
+  const floorUp = zone.floorUp;
   const camRight = clampValue(
     charLocal.right + dot(offset, right),
     zone.minRight + inset,

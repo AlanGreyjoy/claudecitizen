@@ -435,6 +435,13 @@ body.ed-resize-row * {
   font-size: 11px;
 }
 
+.ed-panel-title .ed-hierarchy-filter-select {
+  max-width: 132px;
+  padding: 2px 4px;
+  font: 600 10px/1.2 var(--sc-font);
+  letter-spacing: 0.04em;
+}
+
 .ed-panel-body {
   flex: 1;
   overflow: auto;
@@ -796,6 +803,18 @@ body.ed-resize-row * {
   gap: 4px;
   align-items: center;
   margin-bottom: 6px;
+}
+
+.ed-field-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+.ed-field-controls .ed-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .ed-field-label {

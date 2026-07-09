@@ -51,10 +51,11 @@ Behavior depends on component def (`marker` flag) and current selection:
 | Situation | Result |
 |-----------|--------|
 | **Marker** component on entity with visual (GLB/primitive) | New **child marker entity** at GLB node world position (or entity origin). Name may include `(NodeName)`. Position with gizmo. |
-| **Collider** + GLB node sub-selected | Stored on **node override** (`glbNodeTransforms[].components`). Auto box-sized from mesh bounds when available. |
+| **Collider** + GLB node sub-selected | Stored on **node override** (`nodeOverrides[].components`). Defaults to `shape: "mesh"` (BVH). |
 | **Animation** or **ship-door** + GLB node sub-selected | Added as marker child **or** entity component with `nodes` pre-filled from node name and generated `id`. |
 | **Non-marker** on entity (no node sub-selection) | Appended to `entity.components`. |
-| **Collider** on entity with GLB (no node) | Defaults to `shape: "mesh"`. Box primitive → box sized to primitive. |
+| **Collider** on ship hull with **ship-controller** (no sub-node) | Hidden from palette — sub-select a GLB node first. |
+| **Collider** on other entity with GLB (no node) | Defaults to `shape: "mesh"`. Box primitive → box sized to primitive. |
 
 **Marker components** (spawn-point, interaction, ship-door, animation, walk zones, lights, etc.) are spatial — they live on empty child entities, not on the hull mesh entity itself.
 

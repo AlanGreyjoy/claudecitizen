@@ -1,4 +1,5 @@
 import { clearChildren, el } from "../dom";
+import { ASSET_DND_TYPE } from "../api";
 import {
   type EditorEntity,
   type EditorStore,
@@ -9,6 +10,7 @@ import {
   addColliderToEntities,
   addComponentFromPalette,
   collectExistingComponentTypes,
+  shouldHideShipHullCollider,
 } from "../component_actions";
 import {
   getComponentDef,
@@ -89,6 +91,37 @@ export function createInspectorPanel(
         keydown: (event) => event.stopPropagation(),
       },
     });
+  }
+
+  function assetUrlField(
+    label: string,
+    value: string | undefined,
+    onCommit: (next: string | undefined) => void,
+  ): HTMLElement {
+    const input = textInput(value ?? "", (next) => onCommit(next.trim() || undefined));
+    input.addEventListener("dragover", (event) => event.preventDefault());
+    input.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const url =
+        event.dataTransfer?.getData(ASSET_DND_TYPE) ||
+        event.dataTransfer?.getData("text/plain");
+      if (url?.startsWith("/")) onCommit(url);
+    });
+    const controls = el("div", { className: "ed-field-controls" }, [
+      input,
+      el("button", {
+        className: "ed-btn",
+        text: "Clear",
+        title: "Remove assigned asset",
+        on: {
+          click: () => onCommit(undefined),
+        },
+      }),
+    ]);
+    return el("div", { className: "ed-field-row-wide" }, [
+      el("span", { className: "ed-field-label", text: label }),
+      controls,
+    ]);
   }
 
   function colorInput(
@@ -432,6 +465,7 @@ export function createInspectorPanel(
   function componentFields(
     component: PrefabComponent,
     update: (next: PrefabComponent) => void,
+    fieldOptions?: { hideColliderNodeField?: boolean },
   ): HTMLElement[] {
     switch (component.type) {
       case "station-frame":
@@ -565,6 +599,12 @@ export function createInspectorPanel(
               update({ ...component, radius: Math.max(0.5, radius) }),
             ),
           ]),
+          assetUrlField("Proximity SFX", component.proximitySoundUrl, (proximitySoundUrl) =>
+            update({ ...component, proximitySoundUrl }),
+          ),
+          assetUrlField("Interact SFX", component.interactSoundUrl, (interactSoundUrl) =>
+            update({ ...component, interactSoundUrl }),
+          ),
         );
         return rows;
       }
@@ -940,15 +980,121 @@ export function createInspectorPanel(
               ),
             ),
           ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Node" }),
-            textInput(component.node ?? "", (node) =>
-              update({ ...component, node: node.trim() || undefined }),
-            ),
-          ]),
+          ...(fieldOptions?.hideColliderNodeField
+            ? []
+            : [
+                el("div", { className: "ed-field-row-wide" }, [
+                  el("span", { className: "ed-field-label", text: "Node" }),
+                  textInput(component.node ?? "", (node) =>
+                    update({ ...component, node: node.trim() || undefined }),
+                  ),
+                ]),
+              ]),
         ];
       case "ship-frame":
         return [];
+      case "ship-controller": {
+        const entityIds = (() => {
+          const ids: string[] = [];
+          const visit = (entities: EditorEntity[]) => {
+            for (const entity of entities) {
+              ids.push(entity.id);
+              visit(entity.children);
+            }
+          };
+          visit(store.getState().roots);
+          return ids;
+        })();
+        const entityPicker = (
+          value: string | undefined,
+          onPick: (next: string | undefined) => void,
+        ) =>
+          selectInput(["", ...entityIds], value ?? "", (val) =>
+            onPick(val || undefined),
+          );
+        const stats = component.stats ?? {};
+        const gear = component.gear ?? { nodes: [] };
+        const ramp = component.ramp ?? {
+          hinge: { node: "RampParent", lowerRadians: -0.85 },
+        };
+        const rows: HTMLElement[] = [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Rest ht" }),
+            numberInput(component.restHeight ?? 0, (next) =>
+              update({
+                ...component,
+                restHeight:
+                  next <= 0 ? undefined : Math.min(50, Math.max(0.2, next)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-section-label", text: "Stats" }),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max spd" }),
+            numberInput(stats.maxSpeedMps ?? 100, (maxSpeedMps) =>
+              update({
+                ...component,
+                stats: { ...stats, maxSpeedMps: Math.min(500, Math.max(5, maxSpeedMps)) },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max HP" }),
+            numberInput(stats.maxHp ?? 1000, (maxHp) =>
+              update({
+                ...component,
+                stats: { ...stats, maxHp: Math.min(100_000, Math.max(1, maxHp)) },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-section-label", text: "Ramp" }),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Hinge" }),
+            textInput(ramp.hinge?.node ?? "RampParent", (node) =>
+              update({
+                ...component,
+                ramp: {
+                  ...ramp,
+                  hinge: { ...ramp.hinge, node, lowerRadians: ramp.hinge?.lowerRadians ?? -0.85 },
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Lower °" }),
+            numberInput(ramp.hinge?.lowerRadians ?? -0.85, (lowerRadians) =>
+              update({
+                ...component,
+                ramp: {
+                  ...ramp,
+                  hinge: {
+                    node: ramp.hinge?.node ?? "RampParent",
+                    lowerRadians: Math.min(10, Math.max(-10, lowerRadians)),
+                    axis: ramp.hinge?.axis,
+                  },
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Out btn" }),
+            entityPicker(ramp.outsideInteractId, (outsideInteractId) =>
+              update({ ...component, ramp: { ...ramp, outsideInteractId } }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Deck btn" }),
+            entityPicker(ramp.deckInteractId, (deckInteractId) =>
+              update({ ...component, ramp: { ...ramp, deckInteractId } }),
+            ),
+          ]),
+          el("div", {
+            className: "ed-empty-note",
+            text: `${gear.nodes.length} gear hinge(s), ${(component.doors ?? []).length} door(s), ${(component.seats ?? []).length} seat(s). Edit arrays in prefab JSON for now.`,
+          }),
+        ];
+        return rows;
+      }
       case "ship-stats":
         return [
           el("div", { className: "ed-field-row-wide" }, [
@@ -1493,6 +1639,9 @@ export function createInspectorPanel(
         store.getState().kind,
         existingTypes(),
       );
+      if (shouldHideShipHullCollider(store, entity)) {
+        results = results.filter((def) => def.type !== "collider");
+      }
       highlighted = Math.min(highlighted, Math.max(0, results.length - 1));
       if (results.length === 0) {
         list.append(
@@ -1586,6 +1735,18 @@ export function createInspectorPanel(
       ? store.getNodeOverrideComponents(entity.id, subNodeName!)
       : entity.components;
 
+    if (
+      !isNodeContext &&
+      shouldHideShipHullCollider(store, entity)
+    ) {
+      section.append(
+        el("div", {
+          className: "ed-empty-note",
+          text: "Select a GLB node (RampParent, interior floors, doors…) to add walk colliders.",
+        }),
+      );
+    }
+
     const setComponents = (next: PrefabComponent[]): void => {
       if (isNodeContext) {
         store.setNodeOverrideComponents(entity.id, subNodeName!, next);
@@ -1603,7 +1764,9 @@ export function createInspectorPanel(
       const bodyEl = el(
         "div",
         { className: "ed-component-body" },
-        componentFields(component, update),
+        componentFields(component, update, {
+          hideColliderNodeField: isNodeContext && component.type === "collider",
+        }),
       );
       const hint =
         component.type === "ship-stairs" && component.variant === "ladder"

@@ -4,9 +4,8 @@ import type { GameplayCollider } from "../physics/colliders";
 
 /**
  * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
- * ship-local right/up/forward meters. The default layout carries the Phobos
- * Starhopper values measured from the model rig; a ship prefab can replace
- * it via setShipLayoutOverride (see world/prefabs/ship_runtime.ts).
+ * ship-local right/up/forward meters. Prefab authoring via ship-controller
+ * and GLB node colliders replaces the empty default stub.
  */
 
 /** Hinge binding for landing gear articulation (GLB node + deploy angle). */
@@ -136,6 +135,21 @@ export interface ShipSeatSpec {
   interactRadius: number;
 }
 
+export interface ShipCameraBounds {
+  id: string;
+  minRight: number;
+  maxRight: number;
+  minForward: number;
+  maxForward: number;
+  /** Floor at maxForward (ship/deck end of the volume). */
+  floorUp: number;
+  /** Floor at minForward when the volume slopes (e.g. ramp to the pad). */
+  slopeMinUp?: number;
+  ceilingUp: number;
+  /** Ramp volumes open to the outside skip interior camera clamping. */
+  openToOutside?: boolean;
+}
+
 export interface ShipLayout {
   /** Combat, speed, and articulation tuning baked from ship-stats / gear / ramp. */
   spec: ShipSpec;
@@ -162,98 +176,29 @@ export interface ShipLayout {
   rampDismountForward: number;
   /** Ground spot just past the ramp tip for a character stepping off. */
   rampDismountGround: { right: number; forward: number };
+  /** Interior camera clamp volumes (collider-deck ships). */
+  cameraBounds: ShipCameraBounds[];
+  /** Optional authored deck spawn from ship-controller.deckSpawnEntityId. */
+  deckSpawn?: { right: number; forward: number };
 }
 
-/** Phobos Starhopper layout, measured from the model rig. */
+/** Minimal fallback when a ship prefab is missing or not yet loaded. */
 export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   spec: DEFAULT_SHIP_SPEC,
   hullUrl: null,
   restHeightMeters: 3.16,
-  walkZones: [
-    {
-      id: "cabin",
-      minRight: -2.35,
-      maxRight: 2.35,
-      minForward: -6.6,
-      maxForward: 2.62,
-      floorUp: -1.42,
-      ceilingUp: 1.66,
-    },
-    {
-      id: "cockpit",
-      minRight: -1.65,
-      maxRight: 1.65,
-      minForward: 2.83,
-      maxForward: 7.1,
-      floorUp: -0.97,
-      ceilingUp: 1.66,
-    },
-    {
-      id: "cockpit-door",
-      minRight: -0.85,
-      maxRight: 0.85,
-      minForward: 2.42,
-      maxForward: 3.03,
-      floorUp: -0.97,
-      slopeMinUp: -1.42,
-      ceilingUp: 1.66,
-      gate: { doorId: "cockpit" },
-      passage: true,
-    },
-    {
-      id: "ramp",
-      minRight: -1.05,
-      maxRight: 1.05,
-      minForward: -8.55,
-      maxForward: -6.4,
-      floorUp: -1.42,
-      slopeMinUp: -3.14,
-      ceilingUp: 1.66,
-      gate: "ramp",
-    },
-  ],
-  doors: [
-    {
-      id: "cockpit",
-      label: "cockpit",
-      motion: "slide",
-      axis: "x",
-      nodes: [
-        { name: "CockpitDoor_L", delta: -1 },
-        { name: "CockpitDoor_R", delta: 1 },
-      ],
-      interact: { right: 0, up: 0, forward: 2.72 },
-      radius: 1.55,
-      defaultOpen: false,
-    },
-  ],
-  seats: [
-    {
-      id: "pilot-seat",
-      role: "pilot",
-      seat: { right: 0, up: -0.62, forward: 6.05 },
-      eye: { right: 0, up: 0.25, forward: 6.3 },
-      stand: { right: 0, forward: 4.5 },
-      interactRadius: 1.45,
-    },
-  ],
+  walkZones: [],
+  doors: [],
+  seats: [],
   pilotSeat: { right: 0, up: -0.62, forward: 6.05 },
   pilotEye: { right: 0, up: 0.25, forward: 6.3 },
   seatStand: { right: 0, forward: 4.5 },
-  rampInteracts: [
-    { placement: "outside", right: 0, forward: -9.7, radius: 3.0 },
-    { placement: "deck", right: 0, forward: -5.7, radius: 1.7 },
-  ],
-  rampMount: {
-    minRight: -1.05,
-    maxRight: 1.05,
-    minForward: -8.8,
-    maxForward: -8.0,
-    clampForward: -8.2,
-  },
+  rampInteracts: [],
+  rampMount: null,
   colliders: [],
-  rampDismountForward: -8.5,
-  rampDismountGround: { right: 0, forward: -9.6 },
+  rampDismountForward: -Infinity,
+  rampDismountGround: { right: 0, forward: 0 },
+  cameraBounds: [],
 };
 
 let override: ShipLayout | null = null;
@@ -309,4 +254,10 @@ export function getShipRestHeightMeters(): number {
     DEFAULT_SHIP_LAYOUT.restHeightMeters ??
     3.16
   );
+}
+
+/** True when deck walking uses collider geometry instead of walk zones. */
+export function usesColliderDeck(): boolean {
+  const layout = getShipLayout();
+  return layout.walkZones.length === 0 && layout.colliders.length > 0;
 }

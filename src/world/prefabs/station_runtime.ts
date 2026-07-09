@@ -14,7 +14,12 @@ import {
 import type { PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
 import { buildPrefabColliders } from '../../physics/prefab_colliders';
-import type { ColliderAnimationBinding, GameplayCollider } from '../../physics/colliders';
+import {
+  type ColliderAnimationBinding,
+  type GameplayCollider,
+  preloadMeshColliders,
+  validateMeshColliders,
+} from '../../physics/colliders';
 
 /**
  * Derives gameplay layout (spawn, elevators, hangar pads, info prompts) from a
@@ -164,6 +169,8 @@ function collect(
           interactionType: component.interactionType,
           targetAnimationId: component.targetAnimationId,
           keyLabel: component.keyLabel,
+          proximitySoundUrl: component.proximitySoundUrl,
+          interactSoundUrl: component.interactSoundUrl,
         });
         break;
       case 'avms-terminal':
@@ -267,6 +274,8 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     out.animationSpecs,
     doc.id,
   );
+  await preloadMeshColliders(colliders);
+  validateMeshColliders(colliders);
 
   let spawn: StationSpawnPose | null = null;
   if (out.spawnCandidates.length > 0) {

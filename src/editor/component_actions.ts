@@ -156,13 +156,11 @@ function createComponentForEntity(
   }
   if (component.type !== 'collider') return component;
 
-  // When a GLB node is sub-selected, default to a box collider (not mesh)
-  // since the collider is attached to a specific node.
+  // Mesh colliders on GLB sub-nodes use BVH (convex off) for accurate walk surfaces.
   if (subNodeName) {
     return {
       ...component,
-      shape: 'box',
-      size: { x: 1, y: 1, z: 1 },
+      shape: 'mesh',
     };
   }
 
@@ -197,13 +195,32 @@ export function addEmptyAtPosition(
   store.addEntity(entity, parentEntityId);
 }
 
+export function shouldHideShipHullCollider(
+  store: EditorStore,
+  entity: EditorEntity,
+): boolean {
+  if (store.getState().kind !== 'ship') return false;
+  const sub = store.getSubSelection();
+  if (sub && sub.entityId === entity.id) return false;
+  return (
+    Boolean(entity.asset) &&
+    entity.components.some((component) => component.type === 'ship-controller')
+  );
+}
+
 export function componentPaletteForContext(
   store: EditorStore,
-  options?: { markerOnly?: boolean },
+  options?: { markerOnly?: boolean; targetEntityId?: string },
 ): ComponentDef[] {
   const existing = collectExistingComponentTypes(store);
-  const palette = searchComponents('', store.getState().kind, existing);
-  if (options?.markerOnly) return palette.filter((def) => def.marker);
+  let palette = searchComponents('', store.getState().kind, existing);
+  if (options?.markerOnly) palette = palette.filter((def) => def.marker);
+  if (options?.targetEntityId) {
+    const entity = store.locate(options.targetEntityId)?.entity;
+    if (entity && shouldHideShipHullCollider(store, entity)) {
+      palette = palette.filter((def) => def.type !== 'collider');
+    }
+  }
   return palette;
 }
 
@@ -230,6 +247,7 @@ export function buildComponentsSubmenu(
 ): ContextMenuEntry[] {
   const palette = componentPaletteForContext(store, {
     markerOnly: options?.markerOnly,
+    targetEntityId,
   });
   if (palette.length === 0) {
     return [{ label: 'No components', disabled: true }];

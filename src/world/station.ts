@@ -390,6 +390,8 @@ export interface StationInfoMarker {
   interactionType?: "info" | "animation";
   targetAnimationId?: string;
   keyLabel?: string;
+  proximitySoundUrl?: string;
+  interactSoundUrl?: string;
 }
 
 export interface StationAvmsMarker {

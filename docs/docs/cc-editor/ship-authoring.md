@@ -1,7 +1,7 @@
 ---
 sidebar_position: 8
 title: Ship authoring
-description: Ship Editor mode — hull, walk zones, doors, seats, ramp, and gear.
+description: Ship Editor mode — hull controller, colliders, doors, seats, ramp, and gear.
 ---
 
 # Ship authoring
@@ -24,87 +24,37 @@ Dragging a GLB from a path containing `/ships/` prompts:
 
 > Create as ship prefab?
 
-Confirming switches kind to `ship`, suggests the model name as the prefab id, and tags the entity with `ship-hull` (if no hull exists yet). The hull entity is moved to **0, 0, 0**.
+Confirming switches kind to `ship`, suggests the model name as the prefab id, and tags the hull entity with **ship-controller** (if no hull exists yet). The hull entity is moved to **0, 0, 0**.
 
 ## Core ship components
 
-### ship-hull (singleton)
+### ship-controller (singleton on hull)
 
-Marks which entity's GLB is the flyable hull. **One per prefab**, positioned at the origin.
+One wiring panel on the hull GLB entity. See [Ship controller](./components/ship-controller).
 
-Optional `restHeight` — parked height above ground in meters. When unset, previews rest the hull's lowest point on the pad automatically.
+- **stats**, **gear**, **ramp**, **doors[]**, **seats[]**
+- Child empties referenced by **entity id** for interact spots (ramp buttons, door panel, pilot seat)
+- **cameraBounds[]** for interior third-person camera clamping
 
-### ship-stats (singleton)
+### collider (on GLB nodes)
 
-Combat and flight tuning on the root (alongside `ship-frame`):
+Deck walking uses mesh colliders on individual GLB nodes — not on the hull entity root.
 
-- `maxSpeedMps`, `maxHp`, `maxShields`, `shieldRegenPerSec`
+- Drill into the hull GLB and **sub-select** a node (e.g. `RampParent`, interior floor meshes, `CockpitDoor_L`)
+- Add **Collider** → defaults to `shape: "mesh"` on that node's override
+- Animated parts (ramp, doors) pick up rig motion automatically when the node name matches **ship-controller** bindings
 
-These can also be overridden by server-side ship definitions in the [Admin App](/admin-app/ship-definitions).
+The hull entity with **ship-controller** should not carry walk colliders; the editor hides **Collider** from the hull palette until a GLB node is sub-selected.
 
-### ship-gear (singleton)
+No walk zones required on new ships.
 
-Landing gear hinge bindings — GLB `nodes` with `deployRadians` per leg. Omit to use Starhopper defaults.
+### ship-frame (singleton on root)
 
-Preview with the toolbar **Gear** toggle.
-
-### ship-ramp (singleton)
-
-Boarding ramp hinge — `node`, `lowerRadians`, optional axis. Omit for Starhopper defaults.
-
-Preview with the toolbar **Ramp** toggle.
-
-### ship-walk-zone
-
-Walkable deck volume as a local **XZ rectangle**; entity **Y** sets floor height.
-
-| Field | Meaning |
-| --- | --- |
-| `zoneId` | Unique room id (`cabin`, `cockpit`, …) |
-| `min` / `max` | Local XZ bounds |
-| `height` | Camera containment above floor (default 3.1 m) |
-| `slopeMinUp` | Floor delta at min-Z edge for ramps |
-| `gate` | `"ramp"` or `{ doorId }` — zone only walkable when gate is open |
-| `passage` | Doorway connector between rooms |
-
-Rotate the marker entity to tilt ramps and passages.
-
-### ship-door
-
-Articulated door bound to GLB nodes:
-
-- `motion`: `slide` (meters) or `hinge` (radians)
-- `nodes[]`: GLB names + signed open delta
-- Entity position = F-interact spot
-- `radius` = interact distance
-
-Walk zones can `gate` on a door id. Preview open/close from the viewport toolbar.
-
-### pilot-seat
-
-Seat marker — set `role` to `pilot` for flight controls.
-
-| Field | Meaning |
-| --- | --- |
-| `eye` | Cockpit camera offset from seat |
-| `stand` | Stand-up position offset (XZ) |
-| `interactRadius` | F-key interact range |
-
-### ship-stairs / ship-ladder
-
-Vertical movement between decks:
-
-- **stairs** variant — discrete treads with `stepCount` and `riseUp`
-- **ladder** variant — smooth climb; press F at foot/head
-
-### ramp-interact + ramp-mount
-
-- **ramp-interact** — prompt to raise/lower ramp (`outside` at ground or `deck` panel)
-- **ramp-mount** (singleton) — ground XZ strip where walking in steps onto the lowered ramp
+Marks the prefab origin the flight body anchors to (auto-added on save).
 
 ## GLB node names
 
-Door, gear, and ramp bindings reference **exact GLB node names**.
+Door, gear, and ramp bindings in **ship-controller** reference **exact GLB node names**.
 
 Find names via:
 
@@ -121,14 +71,12 @@ window.__claudecitizenShipModel.listNodeNames()
 ## Authoring workflow
 
 1. Drop or place the hull GLB — confirm ship prefab creation
-2. Verify hull at origin with `ship-hull`
-3. Add `ship-stats`, `ship-gear`, `ship-ramp` on root
-4. Place `ship-walk-zone` markers for each deck room
-5. Add `ship-door` markers at doorways; bind GLB nodes
-6. Place `pilot-seat` in the cockpit (`role: "pilot"`)
-7. Add `ramp-interact` (outside) and `ramp-mount` at the boarding area
-8. Add colliders on hull details that should block the character
-9. Save and **Preview Ship**
+2. Verify hull at origin with **ship-controller** only on the hull entity
+3. Tune ramp hinge **lowerRadians**, gear nodes, stats in the controller
+4. Place child empties for ramp buttons, door interact, pilot seat — wire their entity ids in the controller
+5. Drill into the GLB → sub-select walk surfaces and doors → add **mesh** colliders per node (`RampParent`, interior floors, `CockpitDoor_L` / `CockpitDoor_R`, …)
+6. Set **cameraBounds** in the controller for interior camera clamp and ramp dismount detection (not walk floors — those are mesh colliders on GLB nodes)
+7. Save and **Preview Ship**
 
 ## Ship sandbox
 
@@ -138,13 +86,18 @@ http://localhost:4173/?shipPrefab=<prefab-id>
 
 Isolated flat pad — no planet or station. Verify:
 
-- Walk all deck zones
-- Board via ramp (`F` to toggle ramp in sandbox)
+- Walk all deck collider floors
+- Board via lowered ramp (step onto ramp collider)
+- Toggle ramp with **F** at outside/deck interact spots
 - Open/close every door
-- Take the pilot seat (cockpit camera from `pilot-seat.eye`)
+- Take the pilot seat (cockpit camera from seat `eye` offset)
 - Toggle landing gear (**G** in sandbox)
 
 **Back to Editor** returns to `/?boot=editor&prefab=<id>`.
+
+## Legacy prefabs
+
+Older ships may still use scattered components (`ship-walk-zone`, `ship-door`, …). The runtime still parses them until migrated to **ship-controller**.
 
 ## Fallback behavior
 

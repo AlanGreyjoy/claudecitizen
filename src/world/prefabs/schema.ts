@@ -97,6 +97,8 @@ export type PrefabComponent =
       interactionType?: "info" | "animation";
       targetAnimationId?: string;
       keyLabel?: string;
+      proximitySoundUrl?: string;
+      interactSoundUrl?: string;
     }
   | {
       type: "animation";
@@ -164,6 +166,70 @@ export type PrefabComponent =
     }
   // --- ship components -------------------------------------------------------
   | { type: "ship-frame" }
+  /**
+   * Singleton ship wiring on the hull entity: stats, articulation, doors,
+   * seats, ramp interacts, camera bounds, and deck spawn. Child empties are
+   * referenced by entity id for gizmo placement.
+   */
+  | {
+      type: "ship-controller";
+      restHeight?: number;
+      stats?: {
+        maxSpeedMps?: number;
+        maxHp?: number;
+        maxShields?: number;
+        shieldRegenPerSec?: number;
+      };
+      gear?: {
+        nodes: { name: string; deployRadians: number; axis?: "x" | "y" | "z" }[];
+      };
+      ramp?: {
+        hinge: { node: string; lowerRadians: number; axis?: "x" | "y" | "z" };
+        outsideInteractId?: string;
+        outsideRadius?: number;
+        deckInteractId?: string;
+        deckRadius?: number;
+        /** Ship-local forward past which a character on the ramp steps off. */
+        dismountForward?: number;
+        /** Ground spot past the ramp tip when stepping off. */
+        dismountGround?: PrefabVec2;
+      };
+      doors?: {
+        id: string;
+        label: string;
+        motion: "slide" | "hinge";
+        axis: "x" | "y" | "z";
+        nodes: { name: string; delta: number }[];
+        interactEntityId: string;
+        radius?: number;
+        defaultOpen?: boolean;
+      }[];
+      seats?: {
+        role?: ShipSeatRole;
+        entityId: string;
+        eye?: Vec3;
+        stand?: PrefabVec2;
+        interactRadius?: number;
+      }[];
+      deckSpawnEntityId?: string;
+      ladders?: {
+        id: string;
+        min: PrefabVec2;
+        max: PrefabVec2;
+        riseUp: number;
+        stepCount?: number;
+      }[];
+      cameraBounds?: {
+        id?: string;
+        min: PrefabVec2;
+        max: PrefabVec2;
+        floorUp: number;
+        slopeMinUp?: number;
+        ceilingUp: number;
+        /** Ramp volumes open to the outside skip interior camera clamping. */
+        openToOutside?: boolean;
+      }[];
+    }
   /** Static combat and flight tuning for this ship type. */
   | {
       type: "ship-stats";
@@ -481,6 +547,12 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         ...(value.keyLabel !== undefined
           ? { keyLabel: parseString(value.keyLabel, `${path}.keyLabel`, 10) }
           : {}),
+        ...(value.proximitySoundUrl !== undefined
+          ? { proximitySoundUrl: parseAssetUrl(value.proximitySoundUrl, `${path}.proximitySoundUrl`) }
+          : {}),
+        ...(value.interactSoundUrl !== undefined
+          ? { interactSoundUrl: parseAssetUrl(value.interactSoundUrl, `${path}.interactSoundUrl`) }
+          : {}),
       };
     }
     case "animation": {
@@ -660,6 +732,424 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
     }
     case "ship-frame":
       return { type };
+    case "ship-controller": {
+      const parseHingeAxis = (
+        raw: unknown,
+        path: string,
+      ): "x" | "y" | "z" | undefined => {
+        if (raw === undefined) return undefined;
+        if (raw === "x" || raw === "y" || raw === "z") return raw;
+        fail(path, 'expected "x", "y", or "z"');
+      };
+      const parseGearNodes = (raw: unknown, path: string) => {
+        if (!Array.isArray(raw) || raw.length === 0) {
+          fail(path, "expected non-empty array of gear hinges");
+        }
+        if (raw.length > 12) fail(path, "too many gear nodes (max 12)");
+        return raw.map((node, index) => {
+          if (!isRecord(node))
+            fail(`${path}[${index}]`, "expected {name, deployRadians}");
+          return {
+            name: parseString(node.name, `${path}[${index}].name`, 128),
+            deployRadians: Math.min(
+              10,
+              Math.max(
+                -10,
+                parseFiniteNumber(
+                  node.deployRadians,
+                  `${path}[${index}].deployRadians`,
+                ),
+              ),
+            ),
+            axis: parseHingeAxis(node.axis, `${path}[${index}].axis`),
+          };
+        });
+      };
+      const parseDoorNodes = (raw: unknown, path: string) => {
+        if (!Array.isArray(raw) || raw.length === 0) {
+          fail(path, "expected non-empty array of {name, delta}");
+        }
+        if (raw.length > 8) fail(path, "too many door nodes (max 8)");
+        return raw.map((node, index) => {
+          if (!isRecord(node))
+            fail(`${path}[${index}]`, "expected {name, delta}");
+          return {
+            name: parseString(node.name, `${path}[${index}].name`, 128),
+            delta: Math.min(
+              20,
+              Math.max(
+                -20,
+                parseFiniteNumber(node.delta, `${path}[${index}].delta`),
+              ),
+            ),
+          };
+        });
+      };
+      const doors =
+        value.doors === undefined
+          ? undefined
+          : (Array.isArray(value.doors) ? value.doors : fail(`${path}.doors`, "expected array")).map(
+              (door, index) => {
+                if (!isRecord(door))
+                  fail(`${path}.doors[${index}]`, "expected door object");
+                const motion = door.motion;
+                if (motion !== "slide" && motion !== "hinge") {
+                  fail(`${path}.doors[${index}].motion`, 'expected "slide" or "hinge"');
+                }
+                const axis = door.axis;
+                if (axis !== "x" && axis !== "y" && axis !== "z") {
+                  fail(`${path}.doors[${index}].axis`, 'expected "x", "y", or "z"');
+                }
+                return {
+                  id: parseString(door.id, `${path}.doors[${index}].id`, 64),
+                  label: parseString(door.label, `${path}.doors[${index}].label`, 64),
+                  motion: motion as "slide" | "hinge",
+                  axis: axis as "x" | "y" | "z",
+                  nodes: parseDoorNodes(door.nodes, `${path}.doors[${index}].nodes`),
+                  interactEntityId: parseString(
+                    door.interactEntityId,
+                    `${path}.doors[${index}].interactEntityId`,
+                    128,
+                  ),
+                  radius:
+                    door.radius === undefined
+                      ? undefined
+                      : Math.min(
+                          20,
+                          Math.max(
+                            0.5,
+                            parseFiniteNumber(
+                              door.radius,
+                              `${path}.doors[${index}].radius`,
+                            ),
+                          ),
+                        ),
+                  defaultOpen:
+                    door.defaultOpen === undefined
+                      ? undefined
+                      : Boolean(door.defaultOpen),
+                };
+              },
+            );
+      const seats =
+        value.seats === undefined
+          ? undefined
+          : (Array.isArray(value.seats) ? value.seats : fail(`${path}.seats`, "expected array")).map(
+              (seat, index) => {
+                if (!isRecord(seat))
+                  fail(`${path}.seats[${index}]`, "expected seat object");
+                const roleRaw = seat.role;
+                const role =
+                  roleRaw === undefined
+                    ? undefined
+                    : SHIP_SEAT_ROLES.includes(roleRaw as ShipSeatRole)
+                      ? (roleRaw as ShipSeatRole)
+                      : fail(
+                          `${path}.seats[${index}].role`,
+                          `expected one of: ${SHIP_SEAT_ROLES.join(", ")}`,
+                        );
+                return {
+                  role,
+                  entityId: parseString(
+                    seat.entityId,
+                    `${path}.seats[${index}].entityId`,
+                    128,
+                  ),
+                  eye:
+                    seat.eye === undefined
+                      ? undefined
+                      : parseVec3(seat.eye, `${path}.seats[${index}].eye`),
+                  stand:
+                    seat.stand === undefined
+                      ? undefined
+                      : parseVec2(seat.stand, `${path}.seats[${index}].stand`),
+                  interactRadius:
+                    seat.interactRadius === undefined
+                      ? undefined
+                      : Math.min(
+                          10,
+                          Math.max(
+                            0.5,
+                            parseFiniteNumber(
+                              seat.interactRadius,
+                              `${path}.seats[${index}].interactRadius`,
+                            ),
+                          ),
+                        ),
+                };
+              },
+            );
+      const ladders =
+        value.ladders === undefined
+          ? undefined
+          : (Array.isArray(value.ladders)
+              ? value.ladders
+              : fail(`${path}.ladders`, "expected array")
+            ).map((ladder, index) => {
+              if (!isRecord(ladder))
+                fail(`${path}.ladders[${index}]`, "expected ladder object");
+              return {
+                id: parseString(ladder.id, `${path}.ladders[${index}].id`, 64),
+                min: parseVec2(ladder.min, `${path}.ladders[${index}].min`),
+                max: parseVec2(ladder.max, `${path}.ladders[${index}].max`),
+                riseUp: Math.min(
+                  20,
+                  Math.max(
+                    0.05,
+                    parseFiniteNumber(
+                      ladder.riseUp,
+                      `${path}.ladders[${index}].riseUp`,
+                    ),
+                  ),
+                ),
+                stepCount:
+                  ladder.stepCount === undefined
+                    ? undefined
+                    : Math.min(
+                        64,
+                        Math.max(
+                          1,
+                          Math.floor(
+                            parseFiniteNumber(
+                              ladder.stepCount,
+                              `${path}.ladders[${index}].stepCount`,
+                            ),
+                          ),
+                        ),
+                      ),
+              };
+            });
+      const cameraBounds =
+        value.cameraBounds === undefined
+          ? undefined
+          : (Array.isArray(value.cameraBounds)
+              ? value.cameraBounds
+              : fail(`${path}.cameraBounds`, "expected array")
+            ).map((bound, index) => {
+              if (!isRecord(bound))
+                fail(`${path}.cameraBounds[${index}]`, "expected bounds object");
+              return {
+                id:
+                  bound.id === undefined
+                    ? undefined
+                    : parseString(bound.id, `${path}.cameraBounds[${index}].id`, 64),
+                min: parseVec2(bound.min, `${path}.cameraBounds[${index}].min`),
+                max: parseVec2(bound.max, `${path}.cameraBounds[${index}].max`),
+                floorUp: Math.min(
+                  20,
+                  Math.max(
+                    -20,
+                    parseFiniteNumber(
+                      bound.floorUp,
+                      `${path}.cameraBounds[${index}].floorUp`,
+                    ),
+                  ),
+                ),
+                slopeMinUp:
+                  bound.slopeMinUp === undefined
+                    ? undefined
+                    : Math.min(
+                        20,
+                        Math.max(
+                          -20,
+                          parseFiniteNumber(
+                            bound.slopeMinUp,
+                            `${path}.cameraBounds[${index}].slopeMinUp`,
+                          ),
+                        ),
+                      ),
+                ceilingUp: Math.min(
+                  20,
+                  Math.max(
+                    -20,
+                    parseFiniteNumber(
+                      bound.ceilingUp,
+                      `${path}.cameraBounds[${index}].ceilingUp`,
+                    ),
+                  ),
+                ),
+                openToOutside:
+                  bound.openToOutside === undefined
+                    ? undefined
+                    : Boolean(bound.openToOutside),
+              };
+            });
+      let ramp:
+        | {
+            hinge: {
+              node: string;
+              lowerRadians: number;
+              axis?: "x" | "y" | "z";
+            };
+            outsideInteractId?: string;
+            outsideRadius?: number;
+            deckInteractId?: string;
+            deckRadius?: number;
+            dismountForward?: number;
+            dismountGround?: PrefabVec2;
+          }
+        | undefined;
+      if (value.ramp !== undefined) {
+        if (!isRecord(value.ramp)) fail(`${path}.ramp`, "expected ramp object");
+        if (!isRecord(value.ramp.hinge))
+          fail(`${path}.ramp.hinge`, "expected hinge object");
+        ramp = {
+          hinge: {
+            node: parseString(value.ramp.hinge.node, `${path}.ramp.hinge.node`, 128),
+            lowerRadians: Math.min(
+              10,
+              Math.max(
+                -10,
+                parseFiniteNumber(
+                  value.ramp.hinge.lowerRadians,
+                  `${path}.ramp.hinge.lowerRadians`,
+                ),
+              ),
+            ),
+            axis: parseHingeAxis(value.ramp.hinge.axis, `${path}.ramp.hinge.axis`),
+          },
+          outsideInteractId:
+            value.ramp.outsideInteractId === undefined
+              ? undefined
+              : parseString(
+                  value.ramp.outsideInteractId,
+                  `${path}.ramp.outsideInteractId`,
+                  128,
+                ),
+          outsideRadius:
+            value.ramp.outsideRadius === undefined
+              ? undefined
+              : Math.min(
+                  20,
+                  Math.max(
+                    0.5,
+                    parseFiniteNumber(
+                      value.ramp.outsideRadius,
+                      `${path}.ramp.outsideRadius`,
+                    ),
+                  ),
+                ),
+          deckInteractId:
+            value.ramp.deckInteractId === undefined
+              ? undefined
+              : parseString(
+                  value.ramp.deckInteractId,
+                  `${path}.ramp.deckInteractId`,
+                  128,
+                ),
+          deckRadius:
+            value.ramp.deckRadius === undefined
+              ? undefined
+              : Math.min(
+                  20,
+                  Math.max(
+                    0.5,
+                    parseFiniteNumber(
+                      value.ramp.deckRadius,
+                      `${path}.ramp.deckRadius`,
+                    ),
+                  ),
+                ),
+          dismountForward:
+            value.ramp.dismountForward === undefined
+              ? undefined
+              : parseFiniteNumber(
+                  value.ramp.dismountForward,
+                  `${path}.ramp.dismountForward`,
+                ),
+          dismountGround:
+            value.ramp.dismountGround === undefined
+              ? undefined
+              : parseVec2(
+                  value.ramp.dismountGround,
+                  `${path}.ramp.dismountGround`,
+                ),
+        };
+      }
+      return {
+        type,
+        restHeight:
+          value.restHeight === undefined
+            ? undefined
+            : Math.min(
+                50,
+                Math.max(
+                  0.2,
+                  parseFiniteNumber(value.restHeight, `${path}.restHeight`),
+                ),
+              ),
+        stats:
+          value.stats === undefined || !isRecord(value.stats)
+            ? undefined
+            : {
+                maxSpeedMps:
+                  value.stats.maxSpeedMps === undefined
+                    ? undefined
+                    : Math.min(
+                        500,
+                        Math.max(
+                          5,
+                          parseFiniteNumber(
+                            value.stats.maxSpeedMps,
+                            `${path}.stats.maxSpeedMps`,
+                          ),
+                        ),
+                      ),
+                maxHp:
+                  value.stats.maxHp === undefined
+                    ? undefined
+                    : Math.min(
+                        100_000,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.maxHp,
+                            `${path}.stats.maxHp`,
+                          ),
+                        ),
+                      ),
+                maxShields:
+                  value.stats.maxShields === undefined
+                    ? undefined
+                    : Math.min(
+                        100_000,
+                        Math.max(
+                          0,
+                          parseFiniteNumber(
+                            value.stats.maxShields,
+                            `${path}.stats.maxShields`,
+                          ),
+                        ),
+                      ),
+                shieldRegenPerSec:
+                  value.stats.shieldRegenPerSec === undefined
+                    ? undefined
+                    : Math.min(
+                        10_000,
+                        Math.max(
+                          0,
+                          parseFiniteNumber(
+                            value.stats.shieldRegenPerSec,
+                            `${path}.stats.shieldRegenPerSec`,
+                          ),
+                        ),
+                      ),
+              },
+        gear:
+          value.gear === undefined || !isRecord(value.gear)
+            ? undefined
+            : { nodes: parseGearNodes(value.gear.nodes, `${path}.gear.nodes`) },
+        ramp,
+        doors,
+        seats,
+        deckSpawnEntityId:
+          value.deckSpawnEntityId === undefined
+            ? undefined
+            : parseString(value.deckSpawnEntityId, `${path}.deckSpawnEntityId`, 128),
+        ladders,
+        cameraBounds,
+      };
+    }
     case "ship-stats":
       return {
         type,

@@ -719,6 +719,7 @@ export function createEditorViewport(
       case "ship-stats":
       case "ship-gear":
       case "ship-ramp":
+      case "ship-controller":
         return null;
     }
     return null;
@@ -838,7 +839,8 @@ export function createEditorViewport(
       // The game recenters the flyable hull on its bounding-box center
       // (ship_model.ts), so mirror that here or zones drift from the mesh.
       const recenterAsHull = entity.components.some(
-        (component) => component.type === "ship-hull",
+        (component) =>
+          component.type === "ship-hull" || component.type === "ship-controller",
       );
       void loadPrefabModel(url)
         .then((model) => {
@@ -978,10 +980,43 @@ export function createEditorViewport(
     object.position.copy(base.position).add(previewAxis);
   }
 
-  function collectAnimations(): Extract<
+  function findShipController(): Extract<
     PrefabComponent,
-    { type: "ship-door" | "animation" }
-  >[] {
+    { type: "ship-controller" }
+  > | null {
+    const visit = (entities: EditorEntity[]): Extract<
+      PrefabComponent,
+      { type: "ship-controller" }
+    > | null => {
+      for (const entity of entities) {
+        for (const component of entity.components) {
+          if (component.type === "ship-controller") return component;
+        }
+        const child = visit(entity.children);
+        if (child) return child;
+      }
+      return null;
+    };
+    return visit(store.getState().roots);
+  }
+
+  function collectAnimations(): Array<{
+    id: string;
+    motion: "slide" | "hinge";
+    axis: "x" | "y" | "z";
+    nodes: { name: string; delta: number }[];
+    defaultOpen?: boolean;
+  }> {
+    const controller = findShipController();
+    if (controller) {
+      return (controller.doors ?? []).map((door) => ({
+        id: door.id,
+        motion: door.motion,
+        axis: door.axis,
+        nodes: door.nodes,
+        defaultOpen: door.defaultOpen,
+      }));
+    }
     const list: Extract<PrefabComponent, { type: "ship-door" | "animation" }>[] = [];
     const visit = (entities: EditorEntity[]): void => {
       for (const entity of entities) {
@@ -994,19 +1029,43 @@ export function createEditorViewport(
       }
     };
     visit(store.getState().roots);
-    return list;
+    return list.map((anim) => ({
+      id: anim.id,
+      motion: anim.motion,
+      axis: anim.axis,
+      nodes: anim.nodes,
+      defaultOpen: anim.defaultOpen,
+    }));
   }
 
   function applyShipPreview(): void {
     const isShip = store.getState().kind === "ship";
     if (isShip) {
+      const controller = findShipController();
       const gear01 = shipPreview.gearDown ? 1 : 0;
-      for (const hinge of BUILTIN_GEAR_HINGES) {
-        previewHinge(hinge.name, hinge.deployRadians * gear01);
+      const gearHinges =
+        controller?.gear?.nodes ??
+        BUILTIN_GEAR_HINGES.map((hinge) => ({
+          name: hinge.name,
+          deployRadians: hinge.deployRadians,
+          axis: hinge.axis,
+        }));
+      for (const hinge of gearHinges) {
+        previewHinge(
+          hinge.name,
+          hinge.deployRadians * gear01,
+          hinge.axis ?? "x",
+        );
       }
+      const rampHinge = controller?.ramp?.hinge ?? {
+        node: BUILTIN_RAMP_HINGE.name,
+        lowerRadians: BUILTIN_RAMP_HINGE.lowerRadians,
+        axis: BUILTIN_RAMP_HINGE.axis,
+      };
       previewHinge(
-        BUILTIN_RAMP_HINGE.name,
-        BUILTIN_RAMP_HINGE.lowerRadians * (shipPreview.rampDown ? 1 : 0),
+        rampHinge.node,
+        rampHinge.lowerRadians * (shipPreview.rampDown ? 1 : 0),
+        rampHinge.axis ?? "x",
       );
     }
     for (const anim of collectAnimations()) {

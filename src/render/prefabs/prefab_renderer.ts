@@ -441,13 +441,34 @@ function sanitizeNodeName(name: string): string {
   return name.replace(/\s/g, '_');
 }
 
+function isIdentityPrefabTransform(transform: {
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number };
+  scale: { x: number; y: number; z: number };
+}): boolean {
+  const eps = 1e-6;
+  const { position: p, rotation: r, scale: s } = transform;
+  return (
+    Math.abs(p.x) < eps &&
+    Math.abs(p.y) < eps &&
+    Math.abs(p.z) < eps &&
+    Math.abs(r.x) < eps &&
+    Math.abs(r.y) < eps &&
+    Math.abs(r.z) < eps &&
+    Math.abs(r.w - 1) < eps &&
+    Math.abs(s.x - 1) < eps &&
+    Math.abs(s.y - 1) < eps &&
+    Math.abs(s.z - 1) < eps
+  );
+}
+
 function applyNodeOverrides(
   root: THREE.Object3D,
   overrides: readonly PrefabNodeOverride[] | undefined,
 ): void {
   if (!overrides || overrides.length === 0) return;
   for (const override of overrides) {
-    if (!override.transform) continue;
+    if (!override.transform || isIdentityPrefabTransform(override.transform)) continue;
     const object = root.getObjectByName(sanitizeNodeName(override.node));
     if (!object) continue;
     const { position, rotation, scale } = override.transform;

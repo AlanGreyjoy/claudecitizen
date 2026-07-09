@@ -27,7 +27,7 @@ Renderer search order: `targetObject.getObjectByName(name)` then `rootGroup.getO
 | Symptom | Check |
 |---------|-------|
 | Empty from GLB context menu appears at asset root, not under node | Entity needs `glbAnchor` set to the GLB node name (or legacy `Name (NodeName)` suffix). `isEntityBoundToGlb` skips flat listing when bound. Node names with parentheses (e.g. `Foo_(3)`) require `glbAnchor` — the old regex tail parser broke on those. |
-| Added collider but it's on wrong entity | Was a GLB node sub-selected? Colliders attach to **node override**, not entity, when sub-selected. |
+| Added collider but it's on wrong entity | Was a GLB node sub-selected? Ship colliders belong on **node overrides**, not the hull entity with ship-controller. |
 | Added interaction/door but can't find it | Marker components spawn a **child entity** — look under parent in hierarchy or under the GLB node row. |
 | Singleton greyed out in palette | Only one per **document** (e.g. `ship-frame`, `station-frame`). |
 | Component missing from palette | Prefab kind mismatch — ship-only types won't appear on station prefabs. |
@@ -78,8 +78,9 @@ See `.agents/AGENTS.md` **Animation → collider → interaction wiring**.
 | Ship deck | Custom capsule resolver | `colliders.ts`, `ship_deck.ts` |
 
 - Station animated doors: collider must be **bound** to animation state, not just placed at door location.
-- Ship mesh colliders on hull: `shape: "mesh"` on entity; node colliders: `shape: "box"` on node override.
-- Editor auto-sizes box colliders from `getGlbNodeBounds()` when adding via node context.
+- Ship deck walking: mesh colliders on **GLB node overrides** (`RampParent`, floors, doors). Hull entity keeps **ship-controller** only.
+- Animated ramp/door colliders bind via node name in `bindColliderAnimations` (`ship_runtime.ts`).
+- Editor defaults node colliders to `shape: "mesh"` (BVH). Convex hull optional for ramps.
 
 ## Quick validation checklist
 

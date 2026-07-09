@@ -6,6 +6,8 @@ import {
   buildEntityComponentsSubmenu,
   buildGlbAuthoringMenu,
 } from '../component_actions';
+import { getComponentDef } from '../../world/prefabs/component_registry';
+import type { PrefabComponentType } from '../../world/prefabs/schema';
 import type { Vec3 } from '../../types';
 
 const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
@@ -53,6 +55,26 @@ function collectExpandUuids(
   return null;
 }
 
+function collectGlbNodeUuids(node: GlbNodeRef, out: Set<string>): void {
+  out.add(node.uuid);
+  for (const child of node.children) {
+    collectGlbNodeUuids(child, out);
+  }
+}
+
+function collectUsedComponentTypes(roots: readonly EditorEntity[]): string[] {
+  const types = new Set<string>();
+  const walk = (entity: EditorEntity): void => {
+    for (const component of entity.components) types.add(component.type);
+    for (const override of entity.glbNodeTransforms) {
+      for (const component of override.components) types.add(component.type);
+    }
+    for (const child of entity.children) walk(child);
+  };
+  for (const root of roots) walk(root);
+  return [...types].sort((a, b) => a.localeCompare(b));
+}
+
 export function createHierarchyPanel(
   container: HTMLElement,
   store: EditorStore,
@@ -63,6 +85,7 @@ export function createHierarchyPanel(
   const expandedGlbEntities = new Set<string>();
   const expandedGlbNodes = new Set<string>();
   let searchQuery = '';
+  let componentFilter = '';
   let visibleEntityIds: string[] = [];
   let rangeAnchorId: string | null = null;
 
@@ -82,6 +105,7 @@ export function createHierarchyPanel(
         } else {
           clearBtn.classList.remove('is-visible');
         }
+        autoExpandForFilters();
         render();
       },
       keydown: (event) => {
@@ -92,6 +116,7 @@ export function createHierarchyPanel(
           searchQuery = '';
           clearBtn.classList.remove('is-visible');
           input.blur();
+          autoExpandForFilters();
           render();
         }
         event.stopPropagation();
@@ -109,6 +134,7 @@ export function createHierarchyPanel(
         searchQuery = '';
         clearBtn.classList.remove('is-visible');
         searchInput.focus();
+        autoExpandForFilters();
         render();
       },
     },
@@ -119,10 +145,92 @@ export function createHierarchyPanel(
     clearBtn,
   ]);
 
+  function expandAll(): void {
+    function walkEntity(entity: EditorEntity): void {
+      const glbTree = store.getGlbTree(entity.id);
+      if (entity.asset && glbTree) {
+        expandedGlbEntities.add(entity.id);
+        collectGlbNodeUuids(glbTree, expandedGlbNodes);
+      }
+      for (const child of entity.children) {
+        walkEntity(child);
+      }
+    }
+    for (const root of store.getState().roots) {
+      walkEntity(root);
+    }
+    render();
+  }
+
+  function collapseAll(): void {
+    expandedGlbEntities.clear();
+    expandedGlbNodes.clear();
+    const sub = store.getSubSelection();
+    if (sub?.entityId) {
+      store.setEntitySelection(sub.entityId, 'replace');
+    }
+    render();
+  }
+
+  const expandAllBtn = el('button', {
+    className: 'ed-btn',
+    text: '⊞',
+    title: 'Expand all',
+    attrs: { 'aria-label': 'Expand all' },
+    on: { click: () => expandAll() },
+  });
+
+  const collapseAllBtn = el('button', {
+    className: 'ed-btn',
+    text: '⊟',
+    title: 'Collapse all',
+    attrs: { 'aria-label': 'Collapse all' },
+    on: { click: () => collapseAll() },
+  });
+
+  const componentFilterSelect = el('select', {
+    className: 'ed-select ed-hierarchy-filter-select',
+    title: 'Filter by component',
+    attrs: { 'aria-label': 'Filter by component' },
+    on: {
+      change: (event) => {
+        componentFilter = (event.target as HTMLSelectElement).value;
+        autoExpandForFilters();
+        render();
+      },
+    },
+  }) as HTMLSelectElement;
+
+  function refreshComponentFilterOptions(): void {
+    const usedTypes = collectUsedComponentTypes(store.getState().roots);
+    const previous = componentFilter;
+    clearChildren(componentFilterSelect);
+    componentFilterSelect.append(
+      el('option', { text: 'All components', attrs: { value: '' } }),
+    );
+    for (const type of usedTypes) {
+      const label = getComponentDef(type as PrefabComponentType)?.label ?? type;
+      componentFilterSelect.append(
+        el('option', { text: label, attrs: { value: type } }),
+      );
+    }
+    if (previous && usedTypes.includes(previous)) {
+      componentFilterSelect.value = previous;
+    } else {
+      componentFilter = '';
+      componentFilterSelect.value = '';
+    }
+    componentFilterSelect.disabled = usedTypes.length === 0;
+  }
+
   container.append(
     el('div', { className: 'ed-panel-title' }, [
       el('span', { text: 'Hierarchy' }),
-      el('span', { className: 'ed-label', text: 'drag to reparent' }),
+      el('div', { className: 'ed-panel-title-actions' }, [
+        expandAllBtn,
+        collapseAllBtn,
+        componentFilterSelect,
+      ]),
     ]),
     searchContainer,
     body,
@@ -250,6 +358,66 @@ export function createHierarchyPanel(
     expandedGlbNodes.add(nodeUuid);
   }
 
+  function nodeIsSelfOrDescendant(node: GlbNodeRef, targetUuid: string): boolean {
+    if (node.uuid === targetUuid) return true;
+    for (const child of node.children) {
+      if (nodeIsSelfOrDescendant(child, targetUuid)) return true;
+    }
+    return false;
+  }
+
+  function glbNodeIsAncestorOrSelf(
+    root: GlbNodeRef,
+    ancestorUuid: string,
+    targetUuid: string,
+  ): boolean {
+    if (root.uuid === ancestorUuid) {
+      return nodeIsSelfOrDescendant(root, targetUuid);
+    }
+    for (const child of root.children) {
+      if (glbNodeIsAncestorOrSelf(child, ancestorUuid, targetUuid)) return true;
+    }
+    return false;
+  }
+
+  function clearSubSelectionIfWithin(entityId: string, collapsedNodeUuid: string): void {
+    const sub = store.getSubSelection();
+    if (!sub || sub.entityId !== entityId || !sub.nodeUuid) return;
+    const tree = store.getGlbTree(entityId);
+    if (!tree) return;
+    if (glbNodeIsAncestorOrSelf(tree, collapsedNodeUuid, sub.nodeUuid)) {
+      store.setEntitySelection(entityId, 'replace');
+    }
+  }
+
+  function clearSubSelectionIfWithinEntity(entityId: string): void {
+    const sub = store.getSubSelection();
+    if (sub?.entityId === entityId) {
+      store.setEntitySelection(entityId, 'replace');
+    }
+  }
+
+  function autoExpandForFilters(): void {
+    if (!hasActiveFilters()) return;
+    const walkEntity = (entity: EditorEntity): void => {
+      const glbTree = store.getGlbTree(entity.id);
+      if (entity.asset && glbTree && glbSubtreeHasDescendantMatch(entity.id, glbTree)) {
+        expandedGlbEntities.add(entity.id);
+      }
+      if (glbTree) {
+        const expandGlb = (node: GlbNodeRef): void => {
+          if (glbSubtreeHasDescendantMatch(entity.id, node)) {
+            expandedGlbNodes.add(node.uuid);
+          }
+          for (const child of node.children) expandGlb(child);
+        };
+        expandGlb(glbTree);
+      }
+      for (const child of entity.children) walkEntity(child);
+    };
+    for (const root of store.getState().roots) walkEntity(root);
+  }
+
   function doesEntityTargetGlbNode(child: EditorEntity, nodeName: string): boolean {
     return entityTargetsGlbNode(child, nodeName);
   }
@@ -284,57 +452,68 @@ export function createHierarchyPanel(
     return entityBoundToAnyGlbNode(child, glbNodeNames);
   }
 
-  function entityMatches(entity: EditorEntity, query: string): boolean {
-    if (!query) return true;
-    return entity.name.toLowerCase().includes(query);
+  function hasActiveFilters(): boolean {
+    return Boolean(searchQuery || componentFilter);
   }
 
-  function glbNodeMatches(node: GlbNodeRef, query: string): boolean {
-    if (!query) return true;
-    return node.name.toLowerCase().includes(query);
+  function entityPassesFilters(entity: EditorEntity): boolean {
+    const nameOk = !searchQuery || entity.name.toLowerCase().includes(searchQuery);
+    const componentOk =
+      !componentFilter || entity.components.some((component) => component.type === componentFilter);
+    return nameOk && componentOk;
   }
 
-  function glbSubtreeHasMatch(entityId: string, node: GlbNodeRef, query: string): boolean {
-    if (glbNodeMatches(node, query)) return true;
+  function glbNodePassesFilters(entityId: string, node: GlbNodeRef): boolean {
+    const nameOk = !searchQuery || node.name.toLowerCase().includes(searchQuery);
+    if (!componentFilter) return nameOk;
+    const entity = store.locate(entityId)?.entity;
+    const override = entity?.glbNodeTransforms.find((entry) => entry.nodeName === node.name);
+    const componentOk =
+      override?.components.some((component) => component.type === componentFilter) ?? false;
+    return nameOk && componentOk;
+  }
+
+  function glbSubtreeHasMatch(entityId: string, node: GlbNodeRef): boolean {
+    if (glbNodePassesFilters(entityId, node)) return true;
 
     const bound = getBoundEntitiesForNode(entityId, node.name);
     for (const boundEntity of bound) {
-      if (entitySubtreeHasMatch(boundEntity, query)) return true;
+      if (entitySubtreeHasMatch(boundEntity)) return true;
     }
 
     for (const child of node.children) {
-      if (glbSubtreeHasMatch(entityId, child, query)) return true;
+      if (glbSubtreeHasMatch(entityId, child)) return true;
     }
 
     return false;
   }
 
-  function entitySubtreeHasMatch(entity: EditorEntity, query: string): boolean {
-    if (entityMatches(entity, query)) return true;
+  function entitySubtreeHasMatch(entity: EditorEntity): boolean {
+    if (entityPassesFilters(entity)) return true;
 
     const glbTree = store.getGlbTree(entity.id);
     const glbNodeNames = getAllGlbNodeNames(glbTree);
 
-    if (glbTree && glbSubtreeHasMatch(entity.id, glbTree, query)) {
+    if (glbTree && glbSubtreeHasMatch(entity.id, glbTree)) {
       return true;
     }
 
     for (const child of entity.children) {
       if (isEntityBoundToGlb(child, glbNodeNames)) continue;
-      if (entitySubtreeHasMatch(child, query)) return true;
+      if (entitySubtreeHasMatch(child)) return true;
     }
 
     return false;
   }
 
-  function glbSubtreeHasDescendantMatch(entityId: string, node: GlbNodeRef, query: string): boolean {
+  function glbSubtreeHasDescendantMatch(entityId: string, node: GlbNodeRef): boolean {
     const bound = getBoundEntitiesForNode(entityId, node.name);
     for (const boundEntity of bound) {
-      if (entitySubtreeHasMatch(boundEntity, query)) return true;
+      if (entitySubtreeHasMatch(boundEntity)) return true;
     }
 
     for (const child of node.children) {
-      if (glbSubtreeHasMatch(entityId, child, query)) return true;
+      if (glbSubtreeHasMatch(entityId, child)) return true;
     }
 
     return false;
@@ -356,10 +535,7 @@ export function createHierarchyPanel(
     const bound = getBoundEntitiesForNode(entityId, node.name);
     const nodeBadge = getNodeOverrideComponentBadge(entityId, node.name);
     const hasChildren = node.children.length > 0 || bound.length > 0;
-    let expanded = expandedGlbNodes.has(node.uuid);
-    if (searchQuery && glbSubtreeHasDescendantMatch(entityId, node, searchQuery)) {
-      expanded = true;
-    }
+    const expanded = expandedGlbNodes.has(node.uuid);
 
     const toggle = hasChildren
       ? el('button', {
@@ -369,8 +545,12 @@ export function createHierarchyPanel(
           on: {
             click: (event) => {
               event.stopPropagation();
-              if (expanded) expandedGlbNodes.delete(node.uuid);
-              else expandedGlbNodes.add(node.uuid);
+              if (expandedGlbNodes.has(node.uuid)) {
+                expandedGlbNodes.delete(node.uuid);
+                clearSubSelectionIfWithin(entityId, node.uuid);
+              } else {
+                expandedGlbNodes.add(node.uuid);
+              }
               render();
             },
           },
@@ -412,12 +592,12 @@ export function createHierarchyPanel(
 
     if (hasChildren && expanded) {
       for (const child of node.children) {
-        if (!searchQuery || glbSubtreeHasMatch(entityId, child, searchQuery)) {
+        if (!hasActiveFilters() || glbSubtreeHasMatch(entityId, child)) {
           renderGlbRow(entityId, child, depth + 1, rows, isHidden);
         }
       }
       for (const boundEntity of bound) {
-        if (!searchQuery || entitySubtreeHasMatch(boundEntity, searchQuery)) {
+        if (!hasActiveFilters() || entitySubtreeHasMatch(boundEntity)) {
           renderRow(boundEntity, depth + 1, rows);
         }
       }
@@ -432,15 +612,7 @@ export function createHierarchyPanel(
     const tree = store.getGlbTree(entity.id);
     if (!tree) return;
 
-    const sub = store.getSubSelection();
-    if (sub?.entityId === entity.id || store.isEntitySelected(entity.id)) {
-      ensureGlbExpanded(entity.id, sub?.nodeUuid ?? null);
-    }
-
-    let expanded = expandedGlbEntities.has(entity.id);
-    if (searchQuery && glbSubtreeHasDescendantMatch(entity.id, tree, searchQuery)) {
-      expanded = true;
-    }
+    const expanded = expandedGlbEntities.has(entity.id);
     const toggle = el('button', {
       className: `ed-tree-chevron ed-tree-chevron-asset${expanded ? ' is-expanded' : ''}`,
       text: expanded ? '▾' : '▸',
@@ -448,8 +620,12 @@ export function createHierarchyPanel(
       on: {
         click: (event) => {
           event.stopPropagation();
-          if (expanded) expandedGlbEntities.delete(entity.id);
-          else expandedGlbEntities.add(entity.id);
+          if (expandedGlbEntities.has(entity.id)) {
+            expandedGlbEntities.delete(entity.id);
+            clearSubSelectionIfWithinEntity(entity.id);
+          } else {
+            expandedGlbEntities.add(entity.id);
+          }
           render();
         },
       },
@@ -462,8 +638,12 @@ export function createHierarchyPanel(
         on: {
           click: (event) => {
             event.stopPropagation();
-            if (expanded) expandedGlbEntities.delete(entity.id);
-            else expandedGlbEntities.add(entity.id);
+            if (expandedGlbEntities.has(entity.id)) {
+              expandedGlbEntities.delete(entity.id);
+              clearSubSelectionIfWithinEntity(entity.id);
+            } else {
+              expandedGlbEntities.add(entity.id);
+            }
             render();
           },
         },
@@ -593,14 +773,14 @@ export function createHierarchyPanel(
     const glbNodeNames = getAllGlbNodeNames(glbTree);
 
     if (entity.asset && glbTree) {
-      if (!searchQuery || glbSubtreeHasMatch(entity.id, glbTree, searchQuery)) {
+      if (!hasActiveFilters() || glbSubtreeHasMatch(entity.id, glbTree)) {
         renderGlbSubtree(entity, depth + 1, rows);
       }
     }
 
     for (const child of entity.children) {
       if (isEntityBoundToGlb(child, glbNodeNames)) continue;
-      if (searchQuery && !entitySubtreeHasMatch(child, searchQuery)) continue;
+      if (hasActiveFilters() && !entitySubtreeHasMatch(child)) continue;
       renderRow(child, depth + 1, rows);
     }
   }
@@ -614,6 +794,7 @@ export function createHierarchyPanel(
   });
 
   function render(): void {
+    refreshComponentFilterOptions();
     clearChildren(body);
     visibleEntityIds = [];
     const roots = store.getState().roots;
@@ -647,14 +828,20 @@ export function createHierarchyPanel(
     });
     const rows: HTMLElement[] = [];
     for (const entity of roots) {
-      if (searchQuery && !entitySubtreeHasMatch(entity, searchQuery)) continue;
+      if (hasActiveFilters() && !entitySubtreeHasMatch(entity)) continue;
       renderRow(entity, 0, rows);
     }
-    if (searchQuery && rows.length === 0) {
+    if (hasActiveFilters() && rows.length === 0) {
+      const filterParts: string[] = [];
+      if (searchQuery) filterParts.push(`search "${searchQuery}"`);
+      if (componentFilter) {
+        const label = getComponentDef(componentFilter as PrefabComponentType)?.label ?? componentFilter;
+        filterParts.push(`component "${label}"`);
+      }
       body.append(
         el('div', {
           className: 'ed-empty-note',
-          text: `No entities match "${searchQuery}"`,
+          text: `No entities match ${filterParts.join(' and ')}`,
         }),
       );
       return;
@@ -679,5 +866,10 @@ export function createHierarchyPanel(
       render();
     }
   });
+  const initialSub = store.getSubSelection();
+  if (initialSub?.entityId && initialSub.nodeUuid) {
+    ensureGlbExpanded(initialSub.entityId, initialSub.nodeUuid);
+  }
+  autoExpandForFilters();
   render();
 }

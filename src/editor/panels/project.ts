@@ -1,4 +1,5 @@
 import {
+  ASSET_DND_TYPE,
   EDITOR_ASSET_ROOT,
   SOURCE_ASSET_ROOT,
   assetUrlFor,
@@ -9,8 +10,8 @@ import {
 import { attachColumnSplitter, PANEL_SIZE_BOUNDS } from '../panel_resize';
 import { clearChildren, el, showToast } from '../dom';
 
-const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
 const MODEL_EXTENSIONS = ['.glb', '.gltf'];
+const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.m4a'];
 const DEFAULT_EXPANDED_FOLDERS = ['', 'protected'];
 const PROJECT_ROOT_LABEL = 'assets';
 const PROJECT_ASSET_ROOTS: readonly AssetRoot[] = [EDITOR_ASSET_ROOT, SOURCE_ASSET_ROOT];
@@ -36,9 +37,18 @@ function isModelPath(path: string): boolean {
   return MODEL_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 
+function isAudioPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return AUDIO_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
+function isDraggableAssetPath(path: string): boolean {
+  return isModelPath(path) || isAudioPath(path);
+}
+
 function emptyNoteForFolder(folderPath: string): string {
   const fullPath = folderPath ? `${PROJECT_ROOT_LABEL}/${folderPath}` : PROJECT_ROOT_LABEL;
-  return `No GLB / GLTF / image files in ${fullPath}.`;
+  return `No GLB / GLTF / image / audio files in ${fullPath}.`;
 }
 
 async function fetchProjectAssetEntries(): Promise<ProjectAssetEntry[]> {
@@ -164,12 +174,14 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
     const fileName = entry.path.slice(entry.path.lastIndexOf('/') + 1);
     const url = assetUrlFor(entry.root, entry.path);
     const isModel = isModelPath(entry.path);
+    const isAudio = isAudioPath(entry.path);
+    const isDraggable = isDraggableAssetPath(entry.path);
     const isEmptyFile = entry.size === 0;
     const sourcePath = `${entry.root}/${entry.path}`;
 
     const thumb = el('div', {
       className: `ed-asset-thumb${isEmptyFile ? ' is-warning' : ''}`,
-      text: isEmptyFile ? '!' : isModel ? '◇' : '▦',
+      text: isEmptyFile ? '!' : isModel ? '◇' : isAudio ? '♪' : '▦',
     });
     if (isModel && !isEmptyFile) {
       void options.getModelThumbnail(url).then((dataUrl) => {
@@ -178,7 +190,7 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
         thumb.textContent = '';
         thumb.append(el('img', { attrs: { src: dataUrl, alt: fileName } }));
       });
-    } else if (!isEmptyFile) {
+    } else if (!isEmptyFile && !isAudio) {
       clearChildren(thumb);
       thumb.textContent = '';
       thumb.append(el('img', { attrs: { src: url, alt: fileName, loading: 'lazy' } }));
@@ -232,9 +244,11 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
           ? `${sourcePath}\nFile is empty`
           : isModel
             ? `${sourcePath}\nDrag into the scene`
-            : sourcePath,
-        attrs: isModel && !isEmptyFile ? { draggable: 'true' } : {},
-        on: isModel && !isEmptyFile
+            : isAudio
+              ? `${sourcePath}\nDrag to assign`
+              : sourcePath,
+        attrs: isDraggable && !isEmptyFile ? { draggable: 'true' } : {},
+        on: isDraggable && !isEmptyFile
           ? {
               dragstart: (event) => {
                 (event as DragEvent).dataTransfer?.setData(ASSET_DND_TYPE, url);

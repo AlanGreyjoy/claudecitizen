@@ -19,8 +19,8 @@ import {
 import {
   createDeckCharacterState,
   getDefaultDeckSpawnLocal,
-  getShipWalkZone,
   getShipWalkZones,
+  isOnShipRampDeck,
   nearestDoor,
   nearestSeat,
   nearRampPanel,
@@ -36,6 +36,7 @@ import {
   getShipLayout,
   getShipRestHeightMeters,
   setShipLayoutOverride,
+  usesColliderDeck,
 } from "../player/ship_layout";
 import {
   createTransitionPose,
@@ -43,6 +44,7 @@ import {
   getRampDismountGroundLocal,
   localOffsetToWorld,
   nearShipRampOutside,
+  sampleRampBoarding,
   sampleRampMount,
 } from "../player/ship_interaction";
 import { getLeavePilotStandPose } from "../player/ship_deck";
@@ -227,11 +229,13 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   }
   // Deck spawning needs authored walk zones (or the built-in ship when the
   // prefab is missing entirely); otherwise start on the pad beside the ship.
-  const walkable = (prefabApplied || !doc) && getShipWalkZones().length > 0;
+  const walkable =
+    (prefabApplied || !doc) &&
+    (getShipWalkZones().length > 0 || usesColliderDeck());
   const hint = walkable
     ? "Ship sandbox — WASD walk · F interact · V camera · G gear · Esc unlock mouse"
     : prefabApplied
-      ? "Hull loaded — add ship-walk-zone components (and a pilot-seat) in the editor to walk the deck"
+      ? "Hull loaded — add a ship-controller with deck colliders (or ship-walk-zones) to walk the interior"
       : 'Ship prefab not applied (kind must be "ship") — showing the built-in ship';
 
   // --- DOM --------------------------------------------------------------------
@@ -381,8 +385,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   rig.ramp01 = 1;
 
   let mode: SandboxMode = walkable ? "deck" : "ground";
+  const spawnRig = { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) };
   let character: CharacterState | DeckCharacterState = walkable
-    ? createDeckCharacterState(ship, getDefaultDeckSpawnLocal())
+    ? createDeckCharacterState(ship, getDefaultDeckSpawnLocal(), undefined, spawnRig)
     : groundCharacterAt({ x: 12, y: 0, z: -16 }, { x: -0.5, y: 0, z: 0.65 });
   let prompt = "";
   let transition: {
@@ -506,8 +511,16 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       return;
     }
 
-    const standingOnRamp =
-      getShipWalkZone(result.state.deckZone)?.gate === "ramp";
+    const colliderRig = {
+      gear01: rig.gear01,
+      ramp01: rig.ramp01,
+      doors: doorBlends(rig),
+    };
+    const standingOnRamp = isOnShipRampDeck(
+      deckLocal,
+      result.state.deckZone,
+      colliderRig,
+    );
     if (nearRampPanel(deckLocal) && !standingOnRamp) {
       prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
       if (actions.interactPressed) rig.rampDown = !rig.rampDown;
@@ -617,9 +630,15 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
     // Walking into the lowered ramp's foot steps aboard.
     if (walkable && isRampUsable(rig)) {
-      const mount = sampleRampMount(character, ship);
+      const mount = usesColliderDeck()
+        ? sampleRampBoarding(character, ship, rig)
+        : sampleRampMount(character, ship);
       if (mount) {
-        character = createDeckCharacterState(ship, mount);
+        character = createDeckCharacterState(ship, mount, undefined, {
+          gear01: rig.gear01,
+          ramp01: rig.ramp01,
+          doors: doorBlends(rig),
+        });
         mode = "deck";
         return;
       }

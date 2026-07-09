@@ -4303,12 +4303,7 @@
             "components": [
               {
                 "type": "collider",
-                "shape": "mesh",
-                "offset": {
-                  "x": 2.079,
-                  "y": 1.965,
-                  "z": 2.043
-                }
+                "shape": "mesh"
               }
             ]
           },
@@ -4473,6 +4468,33 @@
                 "z": 1
               }
             }
+          },
+          {
+            "node": "SM_Prop_Bed_01",
+            "transform": {
+              "position": {
+                "x": 7.5,
+                "y": 0,
+                "z": -18.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
           }
         ],
         "hiddenNodes": [

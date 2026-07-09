@@ -174,15 +174,20 @@ export function startEditorSession(): void {
     }
     store.setPrefabMeta(meta);
     markAsHullIfFirst(entityId);
-    showToast('Ship Editor mode — add walk zones, doors, and a pilot seat, then Preview Ship.');
+    showToast('Ship Editor mode — add a ship-controller on the hull, deck colliders, then Preview Ship.');
   }
 
-  /** Tags the entity with ship-hull when no other entity claims it yet. */
+  /** Tags the hull entity with ship-controller when no other hull claims it yet. */
   function markAsHullIfFirst(entityId: string): void {
     let hullExists = false;
     const visit = (list: ReturnType<typeof store.getState>['roots']): void => {
       for (const entity of list) {
-        if (entity.components.some((component) => component.type === 'ship-hull')) {
+        if (
+          entity.components.some(
+            (component) =>
+              component.type === 'ship-controller' || component.type === 'ship-hull',
+          )
+        ) {
           hullExists = true;
           return;
         }
@@ -200,7 +205,34 @@ export function startEditorSession(): void {
       rotation: { ...entity.rotation },
       scale: { ...entity.scale },
     });
-    store.setComponents(entityId, [...entity.components, { type: 'ship-hull' }]);
+    store.setComponents(entityId, [
+      ...entity.components.filter(
+        (component) => component.type !== 'ship-hull',
+      ),
+      {
+        type: 'ship-controller',
+        restHeight: 3.16,
+        stats: {
+          maxSpeedMps: 100,
+          maxHp: 1000,
+          maxShields: 500,
+          shieldRegenPerSec: 25,
+        },
+        gear: {
+          nodes: [
+            { name: 'LandingGear_BackLeft', deployRadians: -0.55 },
+            { name: 'LandingGear_BackRight', deployRadians: -0.55 },
+            { name: 'LandingLeg_Front', deployRadians: 1.4 },
+          ],
+        },
+        ramp: {
+          hinge: { node: 'RampParent', lowerRadians: -0.85 },
+        },
+        doors: [],
+        seats: [],
+        cameraBounds: [],
+      },
+    ]);
   }
 
   function addBox(): void {

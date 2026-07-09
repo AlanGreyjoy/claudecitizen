@@ -1,5 +1,10 @@
 import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
-import { getShipLayout } from './ship_layout';
+import {
+  sampleColliderGroundHeight,
+  type ShipColliderRigState,
+} from '../physics/colliders';
+import { getShipLayout, getShipRestHeightMeters, usesColliderDeck } from './ship_layout';
+import { isRampUsable, doorBlends, type ShipRigState } from './ship_rig';
 import type {
   CharacterState,
   FlightBody,
@@ -69,8 +74,8 @@ export function isShipParked(ship: FlightBody): boolean {
 }
 
 /** Feet near the ground plane under a parked ship (rejects other station floors). */
-function atShipGroundLevel(localUp: number): boolean {
-  return Math.abs(localUp + 3.2) <= 2.4;
+export function atShipGroundLevel(localUp: number): boolean {
+  return Math.abs(localUp + getShipRestHeightMeters()) <= 2.4;
 }
 
 /** Near an outside ramp button while standing on the ground. */
@@ -88,8 +93,36 @@ export function nearShipRampOutside(
 }
 
 /**
- * Ship-local 2D spot to start deck-walking from when a character on the
- * ground walks into the foot of the lowered ramp, or null when outside it.
+ * Ship-local 2D spot to start deck-walking when a grounded character steps
+ * onto the lowered ramp collider, or null when outside it.
+ */
+export function sampleRampBoarding(
+  character: Pick<CharacterState, 'position'>,
+  ship: FlightBody,
+  rig: ShipRigState,
+): { right: number; forward: number } | null {
+  if (!usesColliderDeck() || !isRampUsable(rig)) return null;
+  const local = worldToShipLocal(ship, character.position);
+  if (!atShipGroundLevel(local.up)) return null;
+  const colliderRig: ShipColliderRigState = {
+    gear01: rig.gear01,
+    ramp01: rig.ramp01,
+    doors: doorBlends(rig),
+  };
+  const floor = sampleColliderGroundHeight(
+    local.right,
+    local.up + 4,
+    local.forward,
+    getShipLayout().colliders,
+    colliderRig,
+  );
+  if (floor === null) return null;
+  if (Math.abs(local.up - floor) > 0.65) return null;
+  return { right: local.right, forward: local.forward };
+}
+
+/**
+ * @deprecated Collider-deck ships use sampleRampBoarding instead.
  */
 export function sampleRampMount(
   character: Pick<CharacterState, 'position'>,

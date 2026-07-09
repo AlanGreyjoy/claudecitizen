@@ -20,10 +20,9 @@ import { loadPrefabDocument } from "./prefabs/loader";
 import { buildShipLayoutFromPrefab } from "./prefabs/ship_runtime";
 
 /**
- * The player ship is a ship prefab: hull model, walk zones, doors, pilot
- * seat, and ramp anchors all come from its components. The hardcoded
- * Starhopper layout in player/ship_layout.ts remains the fallback when the
- * prefab is missing or unusable.
+ * The player ship is a ship prefab: hull model, colliders, doors, pilot
+ * seat, and ramp anchors all come from its components. The empty stub in
+ * player/ship_layout.ts is only used before a prefab layout is loaded.
  */
 export const DEFAULT_SHIP_PREFAB_ID = "phobos-starhopper";
 
@@ -51,10 +50,14 @@ export async function loadShipPrefabLayout(
 /** Loads the default ship prefab and activates its gameplay layout. */
 export async function applyDefaultShipPrefab(): Promise<void> {
   const layout = await loadShipPrefabLayout(DEFAULT_SHIP_PREFAB_ID);
-  if (!layout || layout.walkZones.length === 0) {
+  const deckReady =
+    layout &&
+    (layout.walkZones.length > 0 ||
+      (layout.walkZones.length === 0 && layout.colliders.length > 0));
+  if (!deckReady) {
     if (layout) {
       console.warn(
-        `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" has no walk zones; using the built-in layout.`,
+        `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" has no walk zones or deck colliders; using the built-in layout.`,
       );
     } else {
       console.warn(

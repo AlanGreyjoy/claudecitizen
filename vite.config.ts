@@ -107,7 +107,17 @@ function collectPrefabAssetUrls(value: unknown, urls: Set<string>): void {
     const url = (asset as Record<string, unknown>).url;
     if (typeof url === 'string') urls.add(url);
   }
-  for (const child of Object.values(record)) collectPrefabAssetUrls(child, urls);
+  for (const [key, child] of Object.entries(record)) {
+    if (
+      typeof child === 'string' &&
+      key.endsWith('SoundUrl') &&
+      child.startsWith('/')
+    ) {
+      urls.add(child);
+      continue;
+    }
+    collectPrefabAssetUrls(child, urls);
+  }
 }
 
 async function listPrefabAssetUrls(projectRoot: string): Promise<string[]> {
@@ -286,6 +296,10 @@ function editorDevApi(): Plugin {
     '.jpeg',
     '.webp',
     '.bmp',
+    '.ogg',
+    '.mp3',
+    '.wav',
+    '.m4a',
   ]);
   const MIME_TYPES = new Map<string, string>([
     ['.bin', 'application/octet-stream'],
@@ -294,7 +308,11 @@ function editorDevApi(): Plugin {
     ['.gltf', 'model/gltf+json'],
     ['.jpeg', 'image/jpeg'],
     ['.jpg', 'image/jpeg'],
+    ['.m4a', 'audio/mp4'],
+    ['.mp3', 'audio/mpeg'],
+    ['.ogg', 'audio/ogg'],
     ['.png', 'image/png'],
+    ['.wav', 'audio/wav'],
     ['.webp', 'image/webp'],
   ]);
   const PREFAB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;

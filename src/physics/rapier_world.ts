@@ -2,8 +2,10 @@ import * as RAPIER from "@dimforge/rapier3d";
 import * as THREE from "three";
 import {
   loadMeshAsset,
+  resolveColliderWorldMatrix,
   type GameplayCollider,
   type MeshGameplayCollider,
+  type ShipColliderRigState,
 } from "./colliders";
 
 /**
@@ -132,12 +134,12 @@ function extractTrimeshData(
 async function createMeshCollider(
   world: RAPIER.World,
   collider: MeshGameplayCollider,
-  translation: RAPIER.Vector3,
-  rotation: RAPIER.Quaternion,
-  scale: THREE.Vector3,
+  rig?: ShipColliderRigState,
 ): Promise<RAPIER.Collider | null> {
   const asset = await loadMeshAsset(collider);
   if (!asset) return null;
+  const worldMatrix = resolveColliderWorldMatrix(collider, rig);
+  const { translation, rotation, scale } = gameplayMatrixToRapier(worldMatrix);
   const { vertices, indices } = extractTrimeshData(asset.geometry, scale);
   const bodyDesc = RAPIER.RigidBodyDesc.fixed()
     .setTranslation(translation.x, translation.y, translation.z)
@@ -153,11 +155,10 @@ export async function addCollider(
   world: RAPIER.World,
   collider: GameplayCollider,
 ): Promise<RAPIER.Collider | null> {
-  const { translation, rotation, scale } = gameplayMatrixToRapier(
-    collider.baseLocalToSpace,
-  );
-
   if (collider.kind === "box") {
+    const { translation, rotation, scale } = gameplayMatrixToRapier(
+      collider.baseLocalToSpace,
+    );
     const bodyDesc = RAPIER.RigidBodyDesc.fixed()
       .setTranslation(translation.x, translation.y, translation.z)
       .setRotation(rotation);
@@ -172,7 +173,7 @@ export async function addCollider(
     return world.createCollider(colliderDesc, body);
   }
 
-  return createMeshCollider(world, collider, translation, rotation, scale);
+  return createMeshCollider(world, collider);
 }
 
 export function removeCollider(

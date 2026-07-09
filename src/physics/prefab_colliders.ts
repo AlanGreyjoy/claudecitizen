@@ -42,6 +42,7 @@ function bakeCollider(
   baseSceneMatrix: THREE.Matrix4,
   id: string,
   defaultNode?: string,
+  recenterHull = false,
 ): GameplayCollider | null {
   const baseLocalToSpace = sceneMatrixToGameplayMatrix(
     baseSceneMatrix.clone().multiply(offsetMatrix(component.offset)),
@@ -77,6 +78,7 @@ function bakeCollider(
     node: component.node ?? defaultNode,
     nodeOverrides: entity.nodeOverrides,
     baseLocalToSpace,
+    recenterHull,
   };
 }
 
@@ -88,6 +90,9 @@ async function collect(
   const entitySceneMatrix = parentSceneMatrix
     .clone()
     .multiply(transformMatrix(entity.transform));
+  const isShipHull =
+    entity.components?.some((component) => component.type === "ship-controller") ??
+    false;
   let colliderIndex = 0;
   for (const component of entity.components ?? []) {
     if (component.type !== "collider") continue;
@@ -96,6 +101,8 @@ async function collect(
       entity,
       entitySceneMatrix,
       `${entity.id}:collider-${colliderIndex}`,
+      undefined,
+      isShipHull,
     );
     colliderIndex += 1;
     if (collider) out.push(collider);
@@ -111,6 +118,7 @@ async function collect(
         entity.asset.url,
         nodeNames,
         entity.nodeOverrides,
+        isShipHull,
       );
       for (const override of nodesWithColliders) {
         const nodeWorldMatrix = matrices.get(override.node);
@@ -125,6 +133,7 @@ async function collect(
             nodeSceneMatrix,
             `${entity.id}:${override.node}:collider-${nodeColliderIndex}`,
             override.node,
+            isShipHull,
           );
           nodeColliderIndex += 1;
           if (collider) out.push(collider);

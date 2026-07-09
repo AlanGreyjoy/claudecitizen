@@ -68,16 +68,8 @@ Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship
 | Component | Summary |
 | --- | --- |
 | [Ship frame](./ship-frame) | Flight body anchor (auto on save) |
-| [Ship hull](./ship-hull) | Marks the flyable GLB model |
-| [Ship stats](./ship-stats) | Max speed, HP, shields, regen |
-| [Ship gear](./ship-gear) | Landing gear hinge bindings |
-| [Ship ramp](./ship-ramp) | Boarding ramp hinge |
-| [Ship walk zone](./ship-walk-zone) | Walkable deck volume |
-| [Ship door](./ship-door) | Articulated door with F-key interact |
-| [Pilot seat](./pilot-seat) | Seat pose and cockpit camera |
-| [Ship stairs / ladder](./ship-stairs) | Vertical movement between decks |
-| [Ramp interact](./ramp-interact) | Raise/lower ramp prompt |
-| [Ramp mount](./ramp-mount) | Ground strip to step onto lowered ramp |
+| [Ship controller](./ship-controller) | Singleton hull wiring — stats, gear, ramp, doors, seats |
+| [Collider](./collider) | Deck floors, ramp, doors, hull blocking |
 
 → Workflow details in [Ship authoring](../ship-authoring)
 

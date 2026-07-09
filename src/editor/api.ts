@@ -8,6 +8,9 @@ export interface PrefabListEntry {
 
 /** Client for the dev-only /__editor API provided by the Vite plugin. */
 
+/** Drag-and-drop MIME type for Project panel asset cards. */
+export const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
+
 export const EDITOR_ASSET_ROOT = 'editor/assets' as const;
 export const SOURCE_ASSET_ROOT = 'src/assets' as const;
 export type AssetRoot = typeof EDITOR_ASSET_ROOT | typeof SOURCE_ASSET_ROOT;

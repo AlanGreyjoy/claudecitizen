@@ -10,6 +10,7 @@ import {
   DEFAULT_SHIP_SPEC,
   DEFAULT_STARHOPPER_GEAR_HINGES,
   DEFAULT_STARHOPPER_RAMP_HINGE,
+  type ShipCameraBounds,
   type ShipDoorSpec,
   type ShipGearHingeSpec,
   type ShipLayout,
@@ -26,6 +27,8 @@ import type { Vec3 } from "../../types";
 import {
   type ColliderAnimationBinding,
   type GameplayCollider,
+  preloadMeshColliders,
+  validateMeshColliders,
 } from "../../physics/colliders";
 import { buildPrefabColliders } from "../../physics/prefab_colliders";
 
@@ -45,12 +48,8 @@ const DEFAULT_RAMP_OUTSIDE_RADIUS = 3.0;
 const DEFAULT_RAMP_DECK_RADIUS = 1.7;
 const DEFAULT_CHAIR_RADIUS = 1.45;
 const DEFAULT_STAIR_STEPS = 4;
-/** Dismount line sits just above the ramp zone's tail edge. */
-const RAMP_DISMOUNT_INSET_METERS = 0.05;
 /** Mount clamp keeps a fresh mount above the dismount line. */
 const RAMP_MOUNT_CLAMP_METERS = 0.6;
-/** Ground step-off spot past the ramp tail edge. */
-const RAMP_GROUND_OFFSET_METERS = 1.05;
 
 interface CollectedShip {
   hullUrl: string | null;
@@ -61,6 +60,239 @@ interface CollectedShip {
   seats: ShipSeatSpec[];
   rampInteracts: ShipRampInteract[];
   rampMount: ShipRampMount | null;
+  cameraBounds: ShipCameraBounds[];
+  rampDismountForward: number | null;
+  rampDismountGround: { right: number; forward: number } | null;
+  deckSpawn: { right: number; forward: number } | null;
+  hasController: boolean;
+}
+
+interface EntityWorldTransform {
+  position: Vec3;
+  rotation: Quat;
+  scale: Vec3;
+}
+
+function buildEntityTransformMap(
+  entity: PrefabEntity,
+  parentPosition: Vec3,
+  parentRotation: Quat,
+  parentScale: Vec3,
+  out: Map<string, EntityWorldTransform>,
+): void {
+  const scaledLocal = vec3(
+    entity.transform.position.x * parentScale.x,
+    entity.transform.position.y * parentScale.y,
+    entity.transform.position.z * parentScale.z,
+  );
+  const rotated = rotateVec3ByQuat(scaledLocal, parentRotation);
+  const position = vec3(
+    parentPosition.x + rotated.x,
+    parentPosition.y + rotated.y,
+    parentPosition.z + rotated.z,
+  );
+  const rotation = mulQuat(parentRotation, entity.transform.rotation);
+  const scale = vec3(
+    parentScale.x * entity.transform.scale.x,
+    parentScale.y * entity.transform.scale.y,
+    parentScale.z * entity.transform.scale.z,
+  );
+  out.set(entity.id, { position, rotation, scale });
+  for (const child of entity.children ?? []) {
+    buildEntityTransformMap(child, position, rotation, scale, out);
+  }
+}
+
+function resolveEntityShipPoint(
+  entityId: string,
+  transforms: Map<string, EntityWorldTransform>,
+): { right: number; up: number; forward: number } | null {
+  const transform = transforms.get(entityId);
+  if (!transform) return null;
+  return sceneToShipPoint(transform.position);
+}
+
+function findHullEntityWithController(
+  entity: PrefabEntity,
+): { entity: PrefabEntity; controller: Extract<PrefabComponent, { type: "ship-controller" }> } | null {
+  for (const component of entity.components ?? []) {
+    if (component.type === "ship-controller" && entity.asset) {
+      return { entity, controller: component };
+    }
+  }
+  for (const child of entity.children ?? []) {
+    const found = findHullEntityWithController(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+function bakeFromShipController(
+  hull: PrefabEntity,
+  controller: Extract<PrefabComponent, { type: "ship-controller" }>,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  out.hasController = true;
+  out.hullUrl = hull.asset?.url ?? null;
+  if (controller.restHeight !== undefined) out.restHeight = controller.restHeight;
+  if (controller.stats?.maxSpeedMps !== undefined)
+    out.spec.maxSpeedMps = controller.stats.maxSpeedMps;
+  if (controller.stats?.maxHp !== undefined) out.spec.maxHp = controller.stats.maxHp;
+  if (controller.stats?.maxShields !== undefined)
+    out.spec.maxShields = controller.stats.maxShields;
+  if (controller.stats?.shieldRegenPerSec !== undefined)
+    out.spec.shieldRegenPerSec = controller.stats.shieldRegenPerSec;
+
+  if (controller.gear?.nodes?.length) {
+    out.spec.gearHinges = controller.gear.nodes.map(
+      (node): ShipGearHingeSpec => ({
+        name: node.name,
+        deployRadians: node.deployRadians,
+        ...(node.axis ? { axis: node.axis } : {}),
+      }),
+    );
+  }
+  if (controller.ramp?.hinge) {
+    out.spec.rampHinge = {
+      name: controller.ramp.hinge.node,
+      lowerRadians: controller.ramp.hinge.lowerRadians,
+      ...(controller.ramp.hinge.axis ? { axis: controller.ramp.hinge.axis } : {}),
+    };
+    if (controller.ramp.outsideInteractId) {
+      const point = resolveEntityShipPoint(
+        controller.ramp.outsideInteractId,
+        transforms,
+      );
+      if (point) {
+        out.rampInteracts.push({
+          placement: "outside",
+          right: point.right,
+          forward: point.forward,
+          radius: controller.ramp.outsideRadius ?? DEFAULT_RAMP_OUTSIDE_RADIUS,
+        });
+      } else {
+        console.warn(
+          `Ship controller ramp.outsideInteractId "${controller.ramp.outsideInteractId}" not found.`,
+        );
+      }
+    }
+    if (controller.ramp.deckInteractId) {
+      const point = resolveEntityShipPoint(
+        controller.ramp.deckInteractId,
+        transforms,
+      );
+      if (point) {
+        out.rampInteracts.push({
+          placement: "deck",
+          right: point.right,
+          forward: point.forward,
+          radius: controller.ramp.deckRadius ?? DEFAULT_RAMP_DECK_RADIUS,
+        });
+      } else {
+        console.warn(
+          `Ship controller ramp.deckInteractId "${controller.ramp.deckInteractId}" not found.`,
+        );
+      }
+    }
+    if (controller.ramp.dismountForward !== undefined) {
+      out.rampDismountForward = controller.ramp.dismountForward;
+    }
+    if (controller.ramp.dismountGround) {
+      out.rampDismountGround = {
+        right: -controller.ramp.dismountGround.x,
+        forward: controller.ramp.dismountGround.z,
+      };
+    }
+  }
+
+  for (const door of controller.doors ?? []) {
+    const interact = resolveEntityShipPoint(door.interactEntityId, transforms);
+    if (!interact) {
+      console.warn(
+        `Ship controller door "${door.id}" interactEntityId "${door.interactEntityId}" not found.`,
+      );
+      continue;
+    }
+    out.doors.push({
+      id: door.id,
+      label: door.label,
+      motion: door.motion,
+      axis: door.axis,
+      nodes: door.nodes.map((node) => ({ ...node })),
+      interact: {
+        right: interact.right,
+        up: interact.up,
+        forward: interact.forward,
+      },
+      radius: door.radius ?? DEFAULT_DOOR_RADIUS,
+      defaultOpen: door.defaultOpen ?? false,
+    });
+  }
+
+  for (const seat of controller.seats ?? []) {
+    const point = resolveEntityShipPoint(seat.entityId, transforms);
+    if (!point) {
+      console.warn(
+        `Ship controller seat entityId "${seat.entityId}" not found.`,
+      );
+      continue;
+    }
+    const eye = seat.eye ?? { x: 0, y: 0.87, z: 0.25 };
+    const stand = seat.stand ?? { x: 0, z: -1.55 };
+    const transform = transforms.get(seat.entityId);
+    const position = transform?.position ?? vec3(0, 0, 0);
+    out.seats.push({
+      id: seat.entityId,
+      role: seat.role ?? "passenger",
+      seat: { right: point.right, up: point.up, forward: point.forward },
+      eye: {
+        right: -(position.x + eye.x),
+        up: position.y + eye.y,
+        forward: position.z + eye.z,
+      },
+      stand: {
+        right: -(position.x + stand.x),
+        forward: position.z + stand.z,
+      },
+      interactRadius: seat.interactRadius ?? DEFAULT_CHAIR_RADIUS,
+    });
+  }
+
+  if (controller.deckSpawnEntityId) {
+    const point = resolveEntityShipPoint(controller.deckSpawnEntityId, transforms);
+    if (point) {
+      out.deckSpawn = { right: point.right, forward: point.forward };
+    }
+  }
+
+  for (const ladder of controller.ladders ?? []) {
+    pushWalkZone(out, {
+      id: ladder.id,
+      minRight: -ladder.max.x,
+      maxRight: -ladder.min.x,
+      minForward: ladder.min.z,
+      maxForward: ladder.max.z,
+      floorUp: ladder.riseUp,
+      slopeMinUp: 0,
+      ladder: true,
+      ceilingUp: ladder.riseUp + DEFAULT_ZONE_HEIGHT,
+    });
+  }
+
+  for (const bound of controller.cameraBounds ?? []) {
+    out.cameraBounds.push({
+      id: bound.id ?? "camera",
+      minRight: -bound.max.x,
+      maxRight: -bound.min.x,
+      minForward: bound.min.z,
+      maxForward: bound.max.z,
+      floorUp: bound.floorUp,
+      ...(bound.slopeMinUp !== undefined ? { slopeMinUp: bound.slopeMinUp } : {}),
+      ceilingUp: bound.ceilingUp,
+      ...(bound.openToOutside ? { openToOutside: true } : {}),
+    });
+  }
 }
 
 function mergeShipSpec(partial: Partial<ShipSpec>): ShipSpec {
@@ -424,6 +656,15 @@ function bindColliderAnimations(
 export async function buildShipLayoutFromPrefab(
   doc: PrefabDocument,
 ): Promise<ShipLayout | null> {
+  const transforms = new Map<string, EntityWorldTransform>();
+  buildEntityTransformMap(
+    doc.root,
+    vec3(0, 0, 0),
+    quatIdentity(),
+    vec3(1, 1, 1),
+    transforms,
+  );
+
   const out: CollectedShip = {
     hullUrl: null,
     restHeight: null,
@@ -433,10 +674,27 @@ export async function buildShipLayoutFromPrefab(
     seats: [],
     rampInteracts: [],
     rampMount: null,
+    cameraBounds: [],
+    rampDismountForward: null,
+    rampDismountGround: null,
+    deckSpawn: null,
+    hasController: false,
   };
-  collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
+
+  const hullWithController = findHullEntityWithController(doc.root);
+  if (hullWithController) {
+    bakeFromShipController(
+      hullWithController.entity,
+      hullWithController.controller,
+      transforms,
+      out,
+    );
+  } else {
+    collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
+  }
 
   const hasShipContent =
+    out.hasController ||
     out.hullUrl !== null ||
     out.walkZones.length > 0 ||
     out.doors.length > 0 ||
@@ -450,14 +708,16 @@ export async function buildShipLayoutFromPrefab(
     );
     return null;
   }
-  if (out.walkZones.length === 0) {
+  if (!out.hasController && out.walkZones.length === 0) {
     console.warn(
       `Ship prefab "${doc.id}" has no ship-walk-zone or ship-stairs components; the deck is not walkable yet.`,
     );
+  } else if (out.hasController && out.walkZones.length === 0) {
+    // Collider-deck ships rely on hull colliders instead of walk zones.
   }
   if (!out.hullUrl) {
     console.warn(
-      `Ship prefab "${doc.id}" has no ship-hull component on a model entity; using the built-in hull.`,
+      `Ship prefab "${doc.id}" has no hull GLB on the ship-controller / ship-hull entity; using the built-in hull.`,
     );
   }
 
@@ -483,16 +743,10 @@ export async function buildShipLayoutFromPrefab(
   const pilotEye = pilot?.eye ?? fallback.pilotEye;
   const seatStand = pilot?.stand ?? fallback.seatStand;
 
-  const rampZone = out.walkZones.find((zone) => zone.gate === "ramp") ?? null;
-  const rampDismountForward = rampZone
-    ? rampZone.minForward + RAMP_DISMOUNT_INSET_METERS
-    : fallback.rampDismountForward;
-  const rampDismountGround = rampZone
-    ? {
-        right: (rampZone.minRight + rampZone.maxRight) / 2,
-        forward: rampZone.minForward - RAMP_GROUND_OFFSET_METERS,
-      }
-    : fallback.rampDismountGround;
+  const rampDismountForward =
+    out.rampDismountForward ?? -Infinity;
+  const rampDismountGround =
+    out.rampDismountGround ?? { right: 0, forward: 0 };
 
   const spec = mergeShipSpec(out.spec);
   const colliders = bindColliderAnimations(
@@ -501,6 +755,13 @@ export async function buildShipLayoutFromPrefab(
     spec,
     doc.id,
   );
+  await preloadMeshColliders(colliders);
+  validateMeshColliders(colliders);
+  if (out.hasController && out.walkZones.length === 0 && colliders.length === 0) {
+    console.warn(
+      `Ship prefab "${doc.id}" uses ship-controller but has no deck colliders; the interior is not walkable yet.`,
+    );
+  }
 
   return {
     spec,
@@ -517,5 +778,7 @@ export async function buildShipLayoutFromPrefab(
     colliders,
     rampDismountForward,
     rampDismountGround,
+    cameraBounds: out.cameraBounds,
+    deckSpawn: out.deckSpawn ?? undefined,
   };
 }

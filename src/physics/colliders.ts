@@ -56,6 +56,8 @@ export interface MeshGameplayCollider extends ColliderBase {
   assetUrl: string;
   convex: boolean;
   nodeOverrides?: PrefabNodeOverride[];
+  /** Match ship_model.ts bbox recenter so colliders align with ship-local gameplay coords. */
+  recenterHull?: boolean;
 }
 
 export type GameplayCollider = BoxGameplayCollider | MeshGameplayCollider;
@@ -65,8 +67,9 @@ export interface MeshColliderAsset {
   bvh: MeshBVH;
   convexHull?: ConvexHull;
   bounds: THREE.Box3;
-  nodeToRoot: THREE.Matrix4;
-  nodeParentToRoot: THREE.Matrix4;
+  /** Node matrixWorld at bake (GLB scene space). */
+  restNodeWorld: THREE.Matrix4;
+  parentWorldAtBake: THREE.Matrix4;
   nodeBasePosition: THREE.Vector3;
   nodeBaseQuaternion: THREE.Quaternion;
   nodeBaseScale: THREE.Vector3;
@@ -240,13 +243,34 @@ function boxPush(
   return normal.multiplyScalar(CHARACTER_COLLIDER_RADIUS_METERS + sample.distanceTo(facePoint));
 }
 
+function isIdentityPrefabTransform(transform: {
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number };
+  scale: { x: number; y: number; z: number };
+}): boolean {
+  const eps = 1e-6;
+  const { position: p, rotation: r, scale: s } = transform;
+  return (
+    Math.abs(p.x) < eps &&
+    Math.abs(p.y) < eps &&
+    Math.abs(p.z) < eps &&
+    Math.abs(r.x) < eps &&
+    Math.abs(r.y) < eps &&
+    Math.abs(r.z) < eps &&
+    Math.abs(r.w - 1) < eps &&
+    Math.abs(s.x - 1) < eps &&
+    Math.abs(s.y - 1) < eps &&
+    Math.abs(s.z - 1) < eps
+  );
+}
+
 function applyNodeOverrides(
   root: THREE.Object3D,
   overrides: readonly PrefabNodeOverride[] | undefined,
 ): void {
   if (!overrides) return;
   for (const override of overrides) {
-    if (!override.transform) continue;
+    if (!override.transform || isIdentityPrefabTransform(override.transform)) continue;
     const object = root.getObjectByName(sanitizeNodeName(override.node));
     if (!object) continue;
     const { position, rotation, scale } = override.transform;
@@ -278,13 +302,33 @@ function meshCacheKey(
   node: string | undefined,
   convex: boolean,
   overrides: readonly PrefabNodeOverride[] | undefined,
+  recenterHull: boolean,
 ): string {
   return JSON.stringify({
     url,
     node: node ?? "",
     convex,
     overrides: overrides ?? [],
+    recenterHull,
   });
+}
+
+/** Mirrors ship_model.ts / editor viewport hull recentering. */
+function recenterGltfSceneRoot(scene: THREE.Object3D): void {
+  const box = new THREE.Box3().setFromObject(scene);
+  const center = box.getCenter(new THREE.Vector3());
+  scene.position.sub(center);
+  scene.updateMatrixWorld(true);
+}
+
+function prepareGltfScene(
+  scene: THREE.Object3D,
+  overrides: readonly PrefabNodeOverride[] | undefined,
+  recenterHull: boolean,
+): void {
+  applyNodeOverrides(scene, overrides);
+  scene.updateMatrixWorld(true);
+  if (recenterHull) recenterGltfSceneRoot(scene);
 }
 
 export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<MeshColliderAsset | null> {
@@ -293,6 +337,7 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
     collider.node,
     collider.convex,
     collider.nodeOverrides,
+    collider.recenterHull ?? false,
   );
   let pending = meshAssetCache.get(key);
   if (!pending) {
@@ -300,8 +345,7 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
       .loadAsync(collider.assetUrl)
       .then((gltf) => {
         const scene = gltf.scene;
-        applyNodeOverrides(scene, collider.nodeOverrides);
-        scene.updateMatrixWorld(true);
+        prepareGltfScene(scene, collider.nodeOverrides, collider.recenterHull ?? false);
         const root = collider.node ? scene.getObjectByName(sanitizeNodeName(collider.node)) : scene;
         if (!root) {
           console.warn(
@@ -311,17 +355,14 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
           return null;
         }
 
-        const sceneToRoot = scene.matrixWorld.clone().invert();
         const assetLocalFromWorld = collider.node
           ? root.matrixWorld.clone().invert()
-          : sceneToRoot;
-        const nodeParentToRoot =
+          : scene.matrixWorld.clone().invert();
+        const parentWorldAtBake =
           collider.node && root.parent
-            ? sceneToRoot.clone().multiply(root.parent.matrixWorld)
+            ? root.parent.matrixWorld.clone()
             : new THREE.Matrix4();
-        const nodeToRoot = collider.node
-          ? sceneToRoot.clone().multiply(root.matrixWorld)
-          : new THREE.Matrix4();
+        const restNodeWorld = root.matrixWorld.clone();
         const vertices: number[] = [];
         root.traverse((object) => {
           if (!(object instanceof THREE.Mesh)) return;
@@ -353,8 +394,8 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
             ? new ConvexHull().setFromPoints(points)
             : undefined,
           bounds: geometry.boundingBox?.clone() ?? new THREE.Box3(),
-          nodeToRoot,
-          nodeParentToRoot,
+          restNodeWorld,
+          parentWorldAtBake,
           nodeBasePosition: root.position.clone(),
           nodeBaseQuaternion: root.quaternion.clone(),
           nodeBaseScale: root.scale.clone(),
@@ -373,12 +414,36 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
   return pending;
 }
 
+/** Preloads BVH geometry for every mesh collider in a layout. */
+export async function preloadMeshColliders(
+  colliders: readonly GameplayCollider[],
+): Promise<void> {
+  const meshColliders = colliders.filter(
+    (collider): collider is MeshGameplayCollider => collider.kind === "mesh",
+  );
+  await Promise.all(meshColliders.map((collider) => loadMeshAsset(collider)));
+}
+
+/** Warns when a mesh collider failed to bake (missing node, empty mesh, load error). */
+export function validateMeshColliders(colliders: readonly GameplayCollider[]): void {
+  for (const collider of colliders) {
+    if (collider.kind !== "mesh") continue;
+    const asset = getMeshAsset(collider);
+    if (asset) continue;
+    const nodeLabel = collider.node ? ` node="${collider.node}"` : "";
+    console.warn(
+      `Mesh collider "${collider.id}"${nodeLabel} failed to bake from ${collider.assetUrl}.`,
+    );
+  }
+}
+
 function getMeshAsset(collider: MeshGameplayCollider): MeshColliderAsset | null {
   const key = meshCacheKey(
     collider.assetUrl,
     collider.node,
     collider.convex,
     collider.nodeOverrides,
+    collider.recenterHull ?? false,
   );
   if (meshAssetReady.has(key)) return meshAssetReady.get(key) ?? null;
   if (!meshAssetCache.has(key)) {
@@ -411,17 +476,17 @@ function transformDirection(
     .normalize();
 }
 
-function animatedNodeToRoot(
+function animatedNodeWorldMatrix(
   asset: MeshColliderAsset,
   animation: ColliderAnimationBinding | undefined,
   rig: ShipColliderRigState | undefined,
 ): THREE.Matrix4 {
-  if (!animation || !rig) return asset.nodeToRoot;
+  if (!animation || !rig) return asset.restNodeWorld.clone();
 
   const localMatrix = new THREE.Matrix4();
   if (animation.kind === "door") {
     const open01 = rig.doors?.[animation.doorId] ?? 0;
-    if (Math.abs(open01) < 1e-6) return asset.nodeToRoot;
+    if (Math.abs(open01) < 1e-6) return asset.restNodeWorld.clone();
     if (animation.motion === "slide") {
       const position = asset.nodeBasePosition
         .clone()
@@ -431,7 +496,7 @@ function animatedNodeToRoot(
         asset.nodeBaseQuaternion,
         asset.nodeBaseScale,
       );
-      return asset.nodeParentToRoot.clone().multiply(localMatrix);
+      return asset.parentWorldAtBake.clone().multiply(localMatrix);
     }
     const rotation = new THREE.Quaternion().setFromAxisAngle(
       AXIS_VECTORS[animation.axis],
@@ -442,11 +507,11 @@ function animatedNodeToRoot(
       asset.nodeBaseQuaternion.clone().multiply(rotation),
       asset.nodeBaseScale,
     );
-    return asset.nodeParentToRoot.clone().multiply(localMatrix);
+    return asset.parentWorldAtBake.clone().multiply(localMatrix);
   }
 
   const blend = animation.kind === "ramp" ? (rig.ramp01 ?? 0) : (rig.gear01 ?? 0);
-  if (Math.abs(blend) < 1e-6) return asset.nodeToRoot;
+  if (Math.abs(blend) < 1e-6) return asset.restNodeWorld.clone();
   const rotation = new THREE.Quaternion().setFromAxisAngle(
     AXIS_VECTORS[animation.axis],
     animation.radians * blend,
@@ -456,18 +521,30 @@ function animatedNodeToRoot(
     asset.nodeBaseQuaternion.clone().multiply(rotation),
     asset.nodeBaseScale,
   );
-  return asset.nodeParentToRoot.clone().multiply(localMatrix);
+  return asset.parentWorldAtBake.clone().multiply(localMatrix);
 }
 
-function meshLocalToSpace(
-  collider: MeshGameplayCollider,
-  asset: MeshColliderAsset,
-  baseLocalToSpace: THREE.Matrix4,
-  rig: ShipColliderRigState | undefined,
+/** Full gameplay-space matrix for a collider (box or mesh, static or rig-driven). */
+export function resolveColliderWorldMatrix(
+  collider: GameplayCollider,
+  rig?: ShipColliderRigState,
 ): THREE.Matrix4 {
-  return baseLocalToSpace
+  if (collider.kind === "box") {
+    return animatedLocalToSpace(collider, rig);
+  }
+
+  if (!collider.animation || !rig) {
+    return collider.baseLocalToSpace;
+  }
+
+  const asset = getMeshAsset(collider);
+  if (!asset) return collider.baseLocalToSpace;
+
+  const animatedNodeWorld = animatedNodeWorldMatrix(asset, collider.animation, rig);
+  return collider.baseLocalToSpace
     .clone()
-    .multiply(animatedNodeToRoot(asset, collider.animation, rig));
+    .multiply(asset.restNodeWorld.clone().invert())
+    .multiply(animatedNodeWorld);
 }
 
 function convexPush(
@@ -496,12 +573,11 @@ function convexPush(
 function meshPush(
   collider: MeshGameplayCollider,
   sample: THREE.Vector3,
-  baseLocalToSpace: THREE.Matrix4,
   rig: ShipColliderRigState | undefined,
 ): THREE.Vector3 | null {
   const asset = getMeshAsset(collider);
   if (!asset) return null;
-  const localToSpace = meshLocalToSpace(collider, asset, baseLocalToSpace, rig);
+  const localToSpace = resolveColliderWorldMatrix(collider, rig);
   const worldBounds = transformedAabb(
     asset.bounds,
     localToSpace,
@@ -557,16 +633,33 @@ function isDoorColliderOpen(
   return open01 >= DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD;
 }
 
+function isRampColliderActive(
+  collider: GameplayCollider,
+  rig: ShipColliderRigState | undefined,
+): boolean {
+  if (!collider.animation || collider.animation.kind !== "ramp") return true;
+  return (rig?.ramp01 ?? 0) >= DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD;
+}
+
+function colliderBlocksCharacter(
+  collider: GameplayCollider,
+  rig: ShipColliderRigState | undefined,
+): boolean {
+  if (isDoorColliderOpen(collider, rig)) return false;
+  if (!isRampColliderActive(collider, rig)) return false;
+  return true;
+}
+
 function colliderPush(
   collider: GameplayCollider,
   sample: THREE.Vector3,
   rig: ShipColliderRigState | undefined,
 ): THREE.Vector3 | null {
-  if (isDoorColliderOpen(collider, rig)) return null;
+  if (!colliderBlocksCharacter(collider, rig)) return null;
   if (collider.kind === "box") {
     return boxPush(collider, sample, animatedLocalToSpace(collider, rig));
   }
-  return meshPush(collider, sample, collider.baseLocalToSpace, rig);
+  return meshPush(collider, sample, rig);
 }
 
 export function sceneMatrixToGameplayMatrix(sceneMatrix: THREE.Matrix4): THREE.Matrix4 {
@@ -578,8 +671,9 @@ const nodeWorldMatrixCache = new Map<string, Promise<Map<string, THREE.Matrix4>>
 function nodeMatrixCacheKey(
   assetUrl: string,
   overrides: readonly PrefabNodeOverride[] | undefined,
+  recenterHull: boolean,
 ): string {
-  return JSON.stringify({ url: assetUrl, overrides: overrides ?? [] });
+  return JSON.stringify({ url: assetUrl, overrides: overrides ?? [], recenterHull });
 }
 
 /**
@@ -591,17 +685,17 @@ export async function loadNodeWorldMatrices(
   assetUrl: string,
   nodeNames: readonly string[],
   nodeOverrides?: readonly PrefabNodeOverride[],
+  recenterHull = false,
 ): Promise<Map<string, THREE.Matrix4>> {
   if (nodeNames.length === 0) return new Map();
-  const key = nodeMatrixCacheKey(assetUrl, nodeOverrides);
+  const key = nodeMatrixCacheKey(assetUrl, nodeOverrides, recenterHull);
   let pending = nodeWorldMatrixCache.get(key);
   if (!pending) {
     pending = gltfLoader
       .loadAsync(assetUrl)
       .then((gltf) => {
         const scene = gltf.scene;
-        applyNodeOverrides(scene, nodeOverrides);
-        scene.updateMatrixWorld(true);
+        prepareGltfScene(scene, nodeOverrides, recenterHull);
         const out = new Map<string, THREE.Matrix4>();
         for (const name of nodeNames) {
           const node = scene.getObjectByName(sanitizeNodeName(name));
@@ -669,15 +763,16 @@ function boxGroundHeight(
   return topSpace.y <= sample.y ? topSpace.y : null;
 }
 
+const WALKABLE_SURFACE_MIN_UP = 0.5;
+
 function meshGroundHeight(
   collider: MeshGameplayCollider,
   sample: THREE.Vector3,
-  baseLocalToSpace: THREE.Matrix4,
   rig: ShipColliderRigState | undefined,
 ): number | null {
   const asset = getMeshAsset(collider);
   if (!asset) return null;
-  const localToSpace = meshLocalToSpace(collider, asset, baseLocalToSpace, rig);
+  const localToSpace = resolveColliderWorldMatrix(collider, rig);
   const spaceToLocal = localToSpace.clone().invert();
   const localOrigin = sample.clone().applyMatrix4(spaceToLocal);
   const direction = new THREE.Vector3(0, -1, 0)
@@ -685,10 +780,18 @@ function meshGroundHeight(
     .sub(new THREE.Vector3().applyMatrix4(spaceToLocal))
     .normalize();
   const ray = new THREE.Ray(localOrigin, direction);
-  const hit = asset.bvh.raycastFirst(ray, THREE.DoubleSide);
-  if (!hit) return null;
-  const hitSpace = hit.point.clone().applyMatrix4(localToSpace);
-  return hitSpace.y;
+  const intersections = asset.bvh.raycast(ray, THREE.FrontSide);
+  let best: number | null = null;
+  for (const hit of intersections) {
+    if (hit.faceIndex === undefined || hit.faceIndex === null) continue;
+    const localNormal = triangleNormal(asset.geometry, hit.faceIndex);
+    const worldNormal = transformDirection(localNormal, localToSpace);
+    if (worldNormal.y < WALKABLE_SURFACE_MIN_UP) continue;
+    const hitSpace = hit.point.clone().applyMatrix4(localToSpace);
+    if (hitSpace.y > sample.y) continue;
+    if (best === null || hitSpace.y > best) best = hitSpace.y;
+  }
+  return best;
 }
 
 function colliderGroundHeight(
@@ -696,11 +799,11 @@ function colliderGroundHeight(
   sample: THREE.Vector3,
   rig: ShipColliderRigState | undefined,
 ): number | null {
-  if (isDoorColliderOpen(collider, rig)) return null;
+  if (!colliderBlocksCharacter(collider, rig)) return null;
   if (collider.kind === "box") {
     return boxGroundHeight(collider, sample, animatedLocalToSpace(collider, rig));
   }
-  return meshGroundHeight(collider, sample, collider.baseLocalToSpace, rig);
+  return meshGroundHeight(collider, sample, rig);
 }
 
 /**
@@ -727,6 +830,28 @@ export function sampleColliderGroundHeight(
   return best;
 }
 
+/** Ground height from colliders with a specific rig animation (e.g. ramp mesh only). */
+export function sampleColliderGroundHeightForAnimation(
+  right: number,
+  up: number,
+  forward: number,
+  colliders: readonly GameplayCollider[],
+  kind: ColliderAnimationBinding["kind"],
+  rig?: ShipColliderRigState,
+): number | null {
+  if (colliders.length === 0) return null;
+  const sample = new THREE.Vector3(right, up, forward);
+  let best: number | null = null;
+  for (const collider of colliders) {
+    if (collider.animation?.kind !== kind) continue;
+    const height = colliderGroundHeight(collider, sample, rig);
+    if (height === null) continue;
+    if (height > up) continue;
+    if (best === null || height > best) best = height;
+  }
+  return best;
+}
+
 export function resolveCharacterAgainstColliders(
   params: ResolveCollisionParams,
 ): { right: number; forward: number } {
@@ -736,36 +861,18 @@ export function resolveCharacterAgainstColliders(
 
   let right = params.right;
   let forward = params.forward;
-  const original = { right, forward };
 
   for (let iteration = 0; iteration < 3; iteration += 1) {
     const totalPush = new THREE.Vector3();
-    let pushCount = 0;
-    let nullCount = 0;
     for (const height of CAPSULE_SAMPLE_HEIGHTS) {
       const sample = new THREE.Vector3(right, params.floorUp + height, forward);
       for (const collider of params.colliders) {
         const push = colliderPush(collider, sample, params.rig);
-        if (!push) {
-          nullCount += 1;
-          continue;
-        }
+        if (!push) continue;
         push.y = 0;
         if (horizontalLength(push) < 1e-5) continue;
         totalPush.add(push);
-        pushCount += 1;
       }
-    }
-
-    if (iteration === 0 && pushCount === 0 && nullCount > 0) {
-      console.debug(
-        `[collider] pos=(${right.toFixed(2)},${forward.toFixed(2)}) floor=${params.floorUp} colliders=${params.colliders.length} nullCount=${nullCount} — no horizontal push from any collider`,
-        params.colliders.map((c) => ({
-          id: c.id,
-          kind: c.kind,
-          ...(c.kind === 'box' ? { halfSize: c.halfSize } : { assetUrl: c.assetUrl }),
-        })),
-      );
     }
 
     totalPush.y = 0;
@@ -780,16 +887,38 @@ export function resolveCharacterAgainstColliders(
       forward: forward + totalPush.z,
     };
     if (params.isAllowed && !params.isAllowed(candidate)) {
-      console.debug(
-        `[collider] push=(${totalPush.x.toFixed(3)},${totalPush.z.toFixed(3)}) REJECTED by isAllowed at (${candidate.right.toFixed(2)},${candidate.forward.toFixed(2)})`,
-      );
-      return original;
+      break;
     }
     right = candidate.right;
     forward = candidate.forward;
   }
 
   return { right, forward };
+}
+
+/** Max horizontal push magnitude needed to clear collider penetration at a deck point. */
+export function colliderPenetrationPushMagnitude(
+  params: Pick<
+    ResolveCollisionParams,
+    "right" | "forward" | "floorUp" | "colliders" | "rig"
+  >,
+): number {
+  if (params.colliders.length === 0) return 0;
+  let maxLen = 0;
+  for (const height of CAPSULE_SAMPLE_HEIGHTS) {
+    const sample = new THREE.Vector3(
+      params.right,
+      params.floorUp + height,
+      params.forward,
+    );
+    for (const collider of params.colliders) {
+      const push = colliderPush(collider, sample, params.rig);
+      if (!push) continue;
+      push.y = 0;
+      maxLen = Math.max(maxLen, horizontalLength(push));
+    }
+  }
+  return maxLen;
 }
 
 export function colliderDebugCenter(collider: GameplayCollider): Vec3 {

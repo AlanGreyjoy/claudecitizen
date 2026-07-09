@@ -53,6 +53,8 @@ export type StationInteraction =
       interactionType?: 'info' | 'animation';
       targetAnimationId?: string;
       keyLabel?: string;
+      proximitySoundUrl?: string;
+      interactSoundUrl?: string;
     }
   | { kind: 'avms-terminal' };
 
@@ -114,6 +116,8 @@ function resolvePrefabInteraction(
         interactionType: info.interactionType,
         targetAnimationId: info.targetAnimationId,
         keyLabel: info.keyLabel,
+        proximitySoundUrl: info.proximitySoundUrl,
+        interactSoundUrl: info.interactSoundUrl,
       };
     }
   }

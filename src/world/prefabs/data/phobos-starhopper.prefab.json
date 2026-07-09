@@ -56,7 +56,55 @@
         },
         "nodeOverrides": [
           {
-            "node": "Ramp_2",
+            "node": "Phobos_Starhopper_Interior",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": -0.707107,
+                "y": 0,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "ExtBody",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "ExtDecal_Opaque",
             "transform": {
               "position": {
                 "x": 0,
@@ -77,7 +125,7 @@
             }
           },
           {
-            "node": "Ramp_1",
+            "node": "ExtDecal_Transp",
             "transform": {
               "position": {
                 "x": 0,
@@ -96,167 +144,647 @@
                 "z": 1
               }
             }
+          },
+          {
+            "node": "ExtEngineGlow_L",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 6.33399,
+                "z": -0.12533
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Windows",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "StorageBox1",
+            "transform": {
+              "position": {
+                "x": 1.67933,
+                "y": 1.9145,
+                "z": -0.85006
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Int_Walls",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Int_Walls",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "Int_Walls_2",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Front_LandingArm",
+            "transform": {
+              "position": {
+                "x": -0.00474,
+                "y": 1.95563,
+                "z": -0.13251
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Front_Foot",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": -2.163,
+                "z": 0.121
+              },
+              "rotation": {
+                "x": -0.652442,
+                "y": 0,
+                "z": 0,
+                "w": 0.757838
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Back_Foot_1",
+            "transform": {
+              "position": {
+                "x": 0.07384,
+                "y": -0.67809,
+                "z": -0.74039
+              },
+              "rotation": {
+                "x": 0.241311,
+                "y": 0.143861,
+                "z": 0.035876,
+                "w": 0.959055
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Back_Foot",
+            "transform": {
+              "position": {
+                "x": 0.07384,
+                "y": -0.67809,
+                "z": -0.74039
+              },
+              "rotation": {
+                "x": 0.235884,
+                "y": 0.144062,
+                "z": 0.035062,
+                "w": 0.960404
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Back_Arm",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 1.62794,
+                "z": 0.24627
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Phobos_Starhopper_LandingGearBack",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": -0.707107,
+                "y": 0,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "RampParent",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": -1.21591,
+                "z": -3.12457
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "CockpitDoor_L",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh",
+                "convex": true
+              }
+            ]
+          },
+          {
+            "node": "CockpitDoor_R",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh",
+                "convex": true
+              }
+            ]
+          },
+          {
+            "node": "LandingLeg_Front",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": -3.06827,
+                "z": 7.91636
+              },
+              "rotation": {
+                "x": 0.644217,
+                "y": 0,
+                "z": 0,
+                "w": 0.764843
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Cockpit",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "Light_CockpitCeiling",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Cockpit_2",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "CockpitWindowInterior",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "PilotSeat_1",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "PilotSeat_2",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "PilotSeat_3",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Int_Walls_1",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
           }
         ],
         "components": [
           {
-            "type": "ship-hull",
-            "restHeight": 3.16
-          }
-        ]
-      },
-      {
-        "id": "zone-cabin",
-        "name": "Cabin Zone",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -1.42,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cabin",
-            "min": {
-              "x": -2.35,
-              "z": -6.6
+            "type": "ship-controller",
+            "restHeight": 3.16,
+            "stats": {
+              "maxSpeedMps": 100,
+              "maxHp": 1000,
+              "maxShields": 500,
+              "shieldRegenPerSec": 25
             },
-            "max": {
-              "x": 2.35,
-              "z": 2.62
+            "gear": {
+              "nodes": [
+                {
+                  "name": "LandingGear_BackLeft",
+                  "deployRadians": -0.55
+                },
+                {
+                  "name": "LandingGear_BackRight",
+                  "deployRadians": -0.55
+                },
+                {
+                  "name": "LandingLeg_Front",
+                  "deployRadians": 1.4
+                }
+              ]
             },
-            "height": 3.08
-          }
-        ]
-      },
-      {
-        "id": "zone-cockpit",
-        "name": "Cockpit Zone",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -0.97,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cockpit",
-            "min": {
-              "x": -1.65,
-              "z": 2.83
+            "ramp": {
+              "hinge": {
+                "node": "RampParent",
+                "lowerRadians": -1.05
+              },
+              "outsideInteractId": "ramp-button-outside",
+              "outsideRadius": 3,
+              "deckInteractId": "ramp-panel-deck",
+              "deckRadius": 1.7,
+              "dismountForward": -8.5,
+              "dismountGround": {
+                "x": 0,
+                "z": -9.6
+              }
             },
-            "max": {
-              "x": 1.65,
-              "z": 7.1
-            },
-            "height": 2.63
-          }
-        ]
-      },
-      {
-        "id": "zone-cockpit-door",
-        "name": "Cockpit Doorway",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -0.97,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cockpit-door",
-            "min": {
-              "x": -0.85,
-              "z": 2.42
-            },
-            "max": {
-              "x": 0.85,
-              "z": 3.03
-            },
-            "height": 2.63,
-            "slopeMinUp": -0.45,
-            "gate": {
-              "doorId": "cockpit"
-            },
-            "passage": true
-          }
-        ]
-      },
-      {
-        "id": "zone-ramp",
-        "name": "Ramp Zone",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -1.42,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "ramp",
-            "min": {
-              "x": -1.05,
-              "z": -8.55
-            },
-            "max": {
-              "x": 1.05,
-              "z": -6.4
-            },
-            "height": 3.08,
-            "slopeMinUp": -1.72,
-            "gate": "ramp"
+            "doors": [
+              {
+                "id": "cockpit",
+                "label": "cockpit",
+                "motion": "slide",
+                "axis": "x",
+                "nodes": [
+                  {
+                    "name": "CockpitDoor_L",
+                    "delta": -1
+                  },
+                  {
+                    "name": "CockpitDoor_R",
+                    "delta": 1
+                  }
+                ],
+                "interactEntityId": "door-cockpit",
+                "radius": 1.55
+              }
+            ],
+            "seats": [
+              {
+                "role": "pilot",
+                "entityId": "pilot-seat",
+                "eye": {
+                  "x": 0,
+                  "y": 0.87,
+                  "z": 0.25
+                },
+                "stand": {
+                  "x": 0,
+                  "z": -1.55
+                },
+                "interactRadius": 1.45
+              }
+            ],
+            "deckSpawnEntityId": "pilot-seat",
+            "cameraBounds": [
+              {
+                "id": "cabin",
+                "min": {
+                  "x": -2.35,
+                  "z": -6.6
+                },
+                "max": {
+                  "x": 2.35,
+                  "z": 2.62
+                },
+                "floorUp": -1.42,
+                "ceilingUp": 1.66
+              },
+              {
+                "id": "cockpit",
+                "min": {
+                  "x": -1.65,
+                  "z": 2.83
+                },
+                "max": {
+                  "x": 1.65,
+                  "z": 7.1
+                },
+                "floorUp": -0.97,
+                "ceilingUp": 1.66
+              },
+              {
+                "id": "ramp",
+                "min": {
+                  "x": -1.05,
+                  "z": -8.55
+                },
+                "max": {
+                  "x": 1.05,
+                  "z": -6.4
+                },
+                "floorUp": -1.42,
+                "slopeMinUp": -3.14,
+                "ceilingUp": 1.66,
+                "openToOutside": true
+              }
+            ]
           }
         ]
       },
@@ -280,27 +808,7 @@
             "y": 1,
             "z": 1
           }
-        },
-        "components": [
-          {
-            "type": "ship-door",
-            "id": "cockpit",
-            "label": "cockpit",
-            "motion": "slide",
-            "axis": "x",
-            "nodes": [
-              {
-                "name": "CockpitDoor_L",
-                "delta": -1
-              },
-              {
-                "name": "CockpitDoor_R",
-                "delta": 1
-              }
-            ],
-            "radius": 1.55
-          }
-        ]
+        }
       },
       {
         "id": "pilot-seat",
@@ -308,8 +816,8 @@
         "transform": {
           "position": {
             "x": 0,
-            "y": -0.62,
-            "z": 6.05
+            "y": -1,
+            "z": 6
           },
           "rotation": {
             "x": 0,
@@ -322,23 +830,7 @@
             "y": 1,
             "z": 1
           }
-        },
-        "components": [
-          {
-            "type": "pilot-seat",
-            "role": "pilot",
-            "eye": {
-              "x": 0,
-              "y": 0.87,
-              "z": 0.25
-            },
-            "stand": {
-              "x": 0,
-              "z": -1.55
-            },
-            "interactRadius": 1.45
-          }
-        ]
+        }
       },
       {
         "id": "ramp-button-outside",
@@ -360,14 +852,7 @@
             "y": 1,
             "z": 1
           }
-        },
-        "components": [
-          {
-            "type": "ramp-interact",
-            "placement": "outside",
-            "radius": 3
-          }
-        ]
+        }
       },
       {
         "id": "ramp-panel-deck",
@@ -389,49 +874,7 @@
             "y": 1,
             "z": 1
           }
-        },
-        "components": [
-          {
-            "type": "ramp-interact",
-            "placement": "deck",
-            "radius": 1.7
-          }
-        ]
-      },
-      {
-        "id": "ramp-mount",
-        "name": "Ramp Mount",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -3,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ramp-mount",
-            "min": {
-              "x": -1.05,
-              "z": -8.8
-            },
-            "max": {
-              "x": 1.05,
-              "z": -8
-            }
-          }
-        ]
+        }
       }
     ]
   }

@@ -26,8 +26,8 @@ import {
 } from "../player/character_controller";
 import {
   createDeckCharacterState,
-  getShipWalkZone,
   getShipWalkZones,
+  isOnShipRampDeck,
   nearestDoor,
   nearestSeat,
   nearRampPanel,
@@ -39,12 +39,13 @@ import {
   type DeckCharacterState,
   type DeckLocal,
 } from "../player/ship_deck";
-import { getShipLayout, getShipRestHeightMeters } from "../player/ship_layout";
+import { getShipLayout, getShipRestHeightMeters, usesColliderDeck } from "../player/ship_layout";
 import {
   getRampDismountGroundLocal,
   isShipParked,
   localOffsetToWorld,
   nearShipRampOutside,
+  sampleRampBoarding,
   sampleRampMount,
 } from "../player/ship_interaction";
 import {
@@ -54,6 +55,7 @@ import {
   updateShipRig,
 } from "../player/ship_rig";
 import { DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD } from "../physics/colliders";
+import { playSfx } from "../audio/sfx";
 import {
   beginElevatorRide,
   callShipToHangar,
@@ -170,6 +172,7 @@ export function createGameLoop({
     };
     visit(stationPrefab.root);
   }
+  let lastNearbyPrefabInfoId: string | null = null;
 
   function toggleStationAnimation(id: string): void {
     const anim = stationAnimationStates[id];
@@ -446,9 +449,15 @@ export function createGameLoop({
     const ship = getActiveShipBody(world);
     const rig = getActiveShipRig(world);
     if (!isShipParked(ship) || !isRampUsable(rig)) return false;
-    const mount = sampleRampMount(world.character, ship);
+    const mount = usesColliderDeck()
+      ? sampleRampBoarding(world.character, ship, rig)
+      : sampleRampMount(world.character, ship);
     if (!mount) return false;
-    world.character = createDeckCharacterState(ship, mount);
+    world.character = createDeckCharacterState(ship, mount, undefined, {
+      gear01: rig.gear01,
+      ramp01: rig.ramp01,
+      doors: doorBlends(rig),
+    });
     world.mode = MODE_ON_SHIP_DECK;
     world.prompt = "";
     return true;
@@ -672,6 +681,14 @@ export function createGameLoop({
       world.character as StationCharacterState,
       stationFrame,
     );
+    if (interaction?.kind === "prefab-info" && interaction.id) {
+      if (interaction.id !== lastNearbyPrefabInfoId) {
+        lastNearbyPrefabInfoId = interaction.id;
+        if (interaction.proximitySoundUrl) playSfx(interaction.proximitySoundUrl);
+      }
+    } else {
+      lastNearbyPrefabInfoId = null;
+    }
     world.prompt = stationPrompt(interaction);
     if (!interaction) return;
 
@@ -747,6 +764,7 @@ export function createGameLoop({
         if (interaction.interactionType === 'animation' && interaction.targetAnimationId) {
           toggleStationAnimation(interaction.targetAnimationId);
         }
+        if (interaction.interactSoundUrl) playSfx(interaction.interactSoundUrl);
       }
       return;
     }
@@ -856,8 +874,16 @@ export function createGameLoop({
       return;
     }
 
-    const standingOnRamp =
-      getShipWalkZone(result.state.deckZone)?.gate === "ramp";
+    const colliderRig = {
+      gear01: rig.gear01,
+      ramp01: rig.ramp01,
+      doors: doorBlends(rig),
+    };
+    const standingOnRamp = isOnShipRampDeck(
+      deckLocal,
+      result.state.deckZone,
+      colliderRig,
+    );
     if (parked && nearRampPanel(deckLocal) && !standingOnRamp) {
       world.prompt = rig.rampDown
         ? pressInteractPrompt("raise ramp")
