@@ -26,6 +26,7 @@ export function createShipRenderPool(scene: THREE.Scene, renderScale: number): S
     const layout = getShipLayoutForPrefab(ship.prefabId);
     handle = createShipModel(renderScale, {
       hullUrl: layout.hullUrl,
+      hullNodeOverrides: layout.hullNodeOverrides,
       doors: layout.doors.map((door) => ({
         id: door.id,
         motion: door.motion,

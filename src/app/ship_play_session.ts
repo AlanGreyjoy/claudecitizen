@@ -38,6 +38,7 @@ import {
   setShipLayoutOverride,
   usesColliderDeck,
 } from "../player/ship_layout";
+import { sampleColliderGroundHeight } from "../physics/colliders";
 import {
   createTransitionPose,
   getPilotSeatAnchor,
@@ -341,6 +342,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   const layout = getShipLayout();
   const shipModel = createShipModel(1, {
     hullUrl: layout.hullUrl,
+    hullNodeOverrides: layout.hullNodeOverrides,
     doors: layout.doors.map((door) => ({
       id: door.id,
       motion: door.motion,
@@ -386,8 +388,23 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   let mode: SandboxMode = walkable ? "deck" : "ground";
   const spawnRig = { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) };
+  if (walkable && usesColliderDeck()) {
+    const spawn = getDefaultDeckSpawnLocal(spawnRig);
+    const spawnFloor = sampleColliderGroundHeight(
+      spawn.right,
+      2.25,
+      spawn.forward,
+      layout.colliders,
+      spawnRig,
+    );
+    console.info(
+      `Ship sandbox: ${layout.colliders.length} deck colliders; spawn floor at (${spawn.right.toFixed(2)}, ${spawn.forward.toFixed(2)}): ${
+        spawnFloor === null ? "none — check hull node overrides / colliders" : spawnFloor.toFixed(2)
+      }`,
+    );
+  }
   let character: CharacterState | DeckCharacterState = walkable
-    ? createDeckCharacterState(ship, getDefaultDeckSpawnLocal(), undefined, spawnRig)
+    ? createDeckCharacterState(ship, getDefaultDeckSpawnLocal(spawnRig), undefined, spawnRig)
     : groundCharacterAt({ x: 12, y: 0, z: -16 }, { x: -0.5, y: 0, z: 0.65 });
   let prompt = "";
   let transition: {
@@ -442,7 +459,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     character = result.state;
     prompt = "";
 
-    if (result.dismounted) {
+    if (result.dismounted || result.fellOffDeck) {
       const spot = getRampDismountGroundLocal();
       const world = localOffsetToWorld(ship, { ...spot, up: 0 });
       character = groundCharacterAt(world, scale(ship.forward, -1));

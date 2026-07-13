@@ -54,6 +54,7 @@ public/assets/protected/**
 src/assets/protected/**
 !src/assets/protected/
 !src/assets/protected/README.md
+!src/assets/protected/characters/synty_sidekick/README.md
 
 # Supabase (when added)
 .supabase/

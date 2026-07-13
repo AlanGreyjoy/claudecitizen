@@ -321,7 +321,8 @@ function recenterGltfSceneRoot(scene: THREE.Object3D): void {
   scene.updateMatrixWorld(true);
 }
 
-function prepareGltfScene(
+/** Applies prefab node overrides and optional hull recenter (shared by render + colliders). */
+export function prepareShipHullGltf(
   scene: THREE.Object3D,
   overrides: readonly PrefabNodeOverride[] | undefined,
   recenterHull: boolean,
@@ -345,7 +346,7 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
       .loadAsync(collider.assetUrl)
       .then((gltf) => {
         const scene = gltf.scene;
-        prepareGltfScene(scene, collider.nodeOverrides, collider.recenterHull ?? false);
+        prepareShipHullGltf(scene, collider.nodeOverrides, collider.recenterHull ?? false);
         const root = collider.node ? scene.getObjectByName(sanitizeNodeName(collider.node)) : scene;
         if (!root) {
           console.warn(
@@ -695,7 +696,7 @@ export async function loadNodeWorldMatrices(
       .loadAsync(assetUrl)
       .then((gltf) => {
         const scene = gltf.scene;
-        prepareGltfScene(scene, nodeOverrides, recenterHull);
+        prepareShipHullGltf(scene, nodeOverrides, recenterHull);
         const out = new Map<string, THREE.Matrix4>();
         for (const name of nodeNames) {
           const node = scene.getObjectByName(sanitizeNodeName(name));

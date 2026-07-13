@@ -61,6 +61,8 @@ export interface DeckLocal {
 export interface DeckCharacterState extends CharacterState {
   deckLocal: DeckLocal;
   deckZone: ShipZoneId;
+  /** Consecutive frames airborne with no deck collider below (collider-deck ships). */
+  airborneOffDeckFrames?: number;
 }
 
 const TURN_SPEED = 10;
@@ -71,6 +73,55 @@ const COLLIDER_STEP_HEIGHT_METERS = 0.55;
 const COLLIDER_GROUND_PROBE_MARGIN = 0.75;
 /** Fallback probe height when character ship-local up is unknown. */
 const COLLIDER_GROUND_PROBE_FALLBACK_UP = 1.5;
+/** Airborne frames below deck before auto-dismount (collider-deck ships). */
+const AIRBORNE_OFF_DECK_DISMOUNT_FRAMES = 6;
+
+function probeColliderDeckFloor(
+  local: DeckLocal,
+  rig?: ShipColliderRigState,
+  probeUp?: number,
+): number | null {
+  return sampleColliderGroundHeight(
+    local.right,
+    colliderProbeUp(probeUp),
+    local.forward,
+    getShipLayout().colliders,
+    rig,
+  );
+}
+
+function lowestCameraBoundFloor(): number {
+  const bounds = getShipLayout().cameraBounds;
+  if (bounds.length === 0) return -Infinity;
+  let lowest = Infinity;
+  for (const bound of bounds) {
+    const floor =
+      bound.slopeMinUp !== undefined
+        ? Math.min(bound.floorUp, bound.slopeMinUp)
+        : bound.floorUp;
+    if (floor < lowest) lowest = floor;
+  }
+  return lowest;
+}
+
+function deckSpawnCandidates(): DeckLocal[] {
+  const layout = getShipLayout();
+  const candidates: DeckLocal[] = [];
+  if (layout.deckSpawn) candidates.push({ ...layout.deckSpawn });
+  const pilot = layout.seats.find((seat) => seat.role === "pilot");
+  if (pilot) {
+    candidates.push({ right: pilot.stand.right, forward: pilot.stand.forward });
+  }
+  for (const bound of layout.cameraBounds) {
+    if (bound.openToOutside) continue;
+    candidates.push({
+      right: (bound.minRight + bound.maxRight) / 2,
+      forward: (bound.minForward + bound.maxForward) / 2,
+    });
+  }
+  candidates.push({ right: 0, forward: 0 });
+  return candidates;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -592,20 +643,24 @@ export function createDeckCharacterState(
   zone?: ShipZoneId,
   colliderRig?: ShipColliderRigState,
 ): DeckCharacterState {
-  const layout = getShipLayout();
-  const spot = local ?? layout.seatStand;
-  const pose = getDeckWorldPose(ship, spot, colliderRig);
+  const spot = local ?? getDefaultDeckSpawnLocal(colliderRig);
+  const floor = usesColliderDeck()
+    ? probeColliderDeckFloor(spot, colliderRig)
+    : null;
+  const grounded = !usesColliderDeck() || floor !== null;
+  const pose = getDeckWorldPose(ship, spot, colliderRig, floor ?? undefined);
   return {
     animation: "Idle_Loop",
     deckLocal: { ...spot },
     deckZone: zone ?? findZoneIdAt(spot),
     forward: pose.forward,
-    grounded: true,
-    jumpPhase: "grounded",
+    grounded,
+    jumpPhase: grounded ? "grounded" : "jump-loop",
     jumpPhaseTime: 0,
     position: pose.position,
     up: pose.up,
     velocity: vec3(0, 0, 0),
+    airborneOffDeckFrames: 0,
   };
 }
 
@@ -631,14 +686,23 @@ function findZoneIdAt(local: DeckLocal): ShipZoneId {
  * a spawn outside every zone would freeze the character (steps only resolve
  * into containing zones).
  */
-export function getDefaultDeckSpawnLocal(): DeckLocal {
+export function getDefaultDeckSpawnLocal(
+  rig?: ShipColliderRigState,
+): DeckLocal {
   const layout = getShipLayout();
-  if (layout.deckSpawn) return { ...layout.deckSpawn };
   if (usesColliderDeck()) {
-    const pilot = layout.seats.find((seat) => seat.role === "pilot");
-    if (pilot) return { right: pilot.stand.right, forward: pilot.stand.forward };
-    return { right: 0, forward: 0 };
+    const seen = new Set<string>();
+    for (const candidate of deckSpawnCandidates()) {
+      const key = `${candidate.right},${candidate.forward}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!rig || probeColliderDeckFloor(candidate, rig) !== null) {
+        return candidate;
+      }
+    }
+    return deckSpawnCandidates()[0] ?? { right: 0, forward: 0 };
   }
+  if (layout.deckSpawn) return { ...layout.deckSpawn };
   const pilot = layout.seats.find((seat) => seat.role === "pilot");
   const stand = pilot?.stand ?? layout.seatStand;
   const zones = layout.walkZones;
@@ -852,6 +916,8 @@ export interface DeckUpdateResult {
   state: DeckCharacterState;
   /** Set when the character walked off the bottom of the lowered ramp. */
   dismounted: boolean;
+  /** Set when the character fell off the collider deck with no landing surface. */
+  fellOffDeck: boolean;
 }
 
 export function updateCharacterOnDeck(
@@ -1005,8 +1071,28 @@ export function updateCharacterOnDeck(
       (motion.grounded &&
         resolved.local.forward <= layout.rampDismountForward));
 
+  const lowestInteriorFloor = lowestCameraBoundFloor();
+  const offColliderDeck =
+    usesColliderDeck() &&
+    !motion.grounded &&
+    (finalFeetLocalUp < lowestInteriorFloor - 0.35 ||
+      (atShipGroundLevel(finalFeetLocalUp) &&
+        !canStandOnCollider(
+          resolved.local,
+          null,
+          colliderRig,
+          finalFeetLocalUp,
+        )));
+  const airborneOffDeckFrames = offColliderDeck
+    ? (state.airborneOffDeckFrames ?? 0) + 1
+    : 0;
+  const fellOffDeck =
+    usesColliderDeck() &&
+    airborneOffDeckFrames >= AIRBORNE_OFF_DECK_DISMOUNT_FRAMES;
+
   return {
     dismounted,
+    fellOffDeck,
     state: {
       animation: motion.animation,
       deckLocal: resolved.local,
@@ -1018,6 +1104,7 @@ export function updateCharacterOnDeck(
       position: motion.position,
       up: motion.up,
       velocity: motion.velocity,
+      airborneOffDeckFrames,
     },
   };
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { prepareShipHullGltf } from '../../../physics/colliders';
 import { configureShipMaterial } from '../../materials/ship_material';
 import {
   DEFAULT_STARHOPPER_GEAR_HINGES,
@@ -7,6 +8,7 @@ import {
   type ShipGearHingeSpec,
   type ShipRampHingeSpec,
 } from '../../../player/ship_layout';
+import type { PrefabNodeOverride } from '../../../world/prefabs/schema';
 
 const PROTECTED_SHIP_URL =
   '/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
@@ -33,6 +35,8 @@ export interface ShipDoorBinding {
 export interface ShipModelOptions {
   /** Prefab hull GLB url; defaults to the built-in Phobos Starhopper. */
   hullUrl?: string | null;
+  /** Prefab hull node overrides — must match collider bake. */
+  hullNodeOverrides?: PrefabNodeOverride[];
   /** Prefab-authored doors; defaults to the Starhopper cockpit slide pair. */
   doors?: ShipDoorBinding[];
   /** Prefab-authored landing gear hinges. */
@@ -139,9 +143,7 @@ export function createShipModel(
   const group = new THREE.Group();
 
   const loader = new GLTFLoader();
-  const bbox = new THREE.Box3();
-  const center = new THREE.Vector3();
-
+  const hullNodeOverrides = options?.hullNodeOverrides;
   const doorBindings = options?.doors ?? DEFAULT_SHIP_DOOR_BINDINGS;
   const gearSpecs = options?.gearHinges ?? DEFAULT_STARHOPPER_GEAR_HINGES;
   const rampSpec = options?.rampHinge ?? DEFAULT_STARHOPPER_RAMP_HINGE;
@@ -229,9 +231,7 @@ export function createShipModel(
             object.receiveShadow = true;
           }
         });
-        bbox.setFromObject(sceneRoot);
-        bbox.getCenter(center);
-        sceneRoot.position.sub(center);
+        prepareShipHullGltf(sceneRoot, hullNodeOverrides, true);
         group.add(sceneRoot);
 
         bindArticulation(sceneRoot);

@@ -14,6 +14,7 @@ import type { AuthSession } from '../net/api';
  *   ?boot=editor            — jump into the editor (dev only)
  *   ?stationPrefab=<id>     — jump into the game previewing a station prefab
  *   ?shipPrefab=<id>        — jump into the ship sandbox for a ship prefab (dev only)
+ *   ?boot=sidekickPreview   — Sidekick modular character preview (dev only)
  */
 function startPlayWithLoading(options: { requireAuth: boolean; session?: AuthSession | null }): void {
   const loading = showLoadingScreen();
@@ -51,6 +52,12 @@ export function bootstrap(): void {
     import('./ship_play_session')
       .then((module) => module.startShipPlaySession(shipPrefabId))
       .catch((error) => console.error('ClaudeCitizen ship sandbox failed to load.', error));
+    return;
+  }
+  if (boot === 'sidekickPreview' && import.meta.env.DEV) {
+    import('./sidekick_preview_session')
+      .then((module) => module.startSidekickPreviewSession())
+      .catch((error) => console.error('ClaudeCitizen Sidekick preview failed to load.', error));
     return;
   }
   if ((boot === 'play' || params.has('stationPrefab')) && import.meta.env.DEV) {

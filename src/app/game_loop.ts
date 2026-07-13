@@ -819,7 +819,7 @@ export function createGameLoop({
     );
     world.character = result.state;
 
-    if (result.dismounted) {
+    if (result.dismounted || result.fellOffDeck) {
       dismountToGround();
       return;
     }

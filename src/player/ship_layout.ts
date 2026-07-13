@@ -1,6 +1,7 @@
 import { FLIGHT_CONFIG } from "../flight/flight_config";
 import type { LocalOffset, Vec3 } from "../types";
 import type { GameplayCollider } from "../physics/colliders";
+import type { PrefabNodeOverride } from "../world/prefabs/schema";
 
 /**
  * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
@@ -155,6 +156,8 @@ export interface ShipLayout {
   spec: ShipSpec;
   /** GLB url for the flyable hull; null = built-in Phobos Starhopper. */
   hullUrl: string | null;
+  /** Hull GLB node overrides — must match collider bake for aligned render. */
+  hullNodeOverrides?: PrefabNodeOverride[];
   /**
    * Ship origin height above the ground when parked on gear, in meters.
    * null = unauthored; previews measure the hull and rest it on the pad.

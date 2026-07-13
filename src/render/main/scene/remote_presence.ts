@@ -62,6 +62,7 @@ function createRemoteShipHandle(prefabId: string, renderScale: number): ShipMode
   const layout = getShipLayoutForPrefab(prefabId);
   const handle = createShipModel(renderScale, {
     hullUrl: layout.hullUrl,
+    hullNodeOverrides: layout.hullNodeOverrides,
     doors: layout.doors.map((door) => ({
       id: door.id,
       motion: door.motion,

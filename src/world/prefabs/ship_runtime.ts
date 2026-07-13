@@ -22,7 +22,7 @@ import {
   type ShipWalkZoneOriented,
 } from "../../player/ship_layout";
 import { orientedZoneBounds } from "../../player/ship_zone_oriented";
-import type { PrefabComponent, PrefabDocument, PrefabEntity } from "./schema";
+import type { PrefabComponent, PrefabDocument, PrefabEntity, PrefabNodeOverride } from "./schema";
 import type { Vec3 } from "../../types";
 import {
   type ColliderAnimationBinding,
@@ -53,6 +53,7 @@ const RAMP_MOUNT_CLAMP_METERS = 0.6;
 
 interface CollectedShip {
   hullUrl: string | null;
+  hullNodeOverrides: PrefabNodeOverride[] | null;
   restHeight: number | null;
   spec: Partial<ShipSpec>;
   walkZones: ShipWalkZone[];
@@ -135,6 +136,7 @@ function bakeFromShipController(
 ): void {
   out.hasController = true;
   out.hullUrl = hull.asset?.url ?? null;
+  out.hullNodeOverrides = hull.nodeOverrides ? [...hull.nodeOverrides] : null;
   if (controller.restHeight !== undefined) out.restHeight = controller.restHeight;
   if (controller.stats?.maxSpeedMps !== undefined)
     out.spec.maxSpeedMps = controller.stats.maxSpeedMps;
@@ -667,6 +669,7 @@ export async function buildShipLayoutFromPrefab(
 
   const out: CollectedShip = {
     hullUrl: null,
+    hullNodeOverrides: null,
     restHeight: null,
     spec: {},
     walkZones: [],
@@ -766,6 +769,7 @@ export async function buildShipLayoutFromPrefab(
   return {
     spec,
     hullUrl: out.hullUrl,
+    hullNodeOverrides: out.hullNodeOverrides ?? undefined,
     restHeightMeters: out.restHeight,
     walkZones: out.walkZones,
     doors: out.doors,

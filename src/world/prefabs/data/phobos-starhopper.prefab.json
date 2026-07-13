@@ -77,33 +77,6 @@
             }
           },
           {
-            "node": "ExtBody",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "collider",
-                "shape": "mesh"
-              }
-            ]
-          },
-          {
             "node": "ExtDecal_Opaque",
             "transform": {
               "position": {
@@ -210,45 +183,6 @@
           },
           {
             "node": "Int_Walls",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
-          },
-          {
-            "node": "Int_Walls",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
             "components": [
               {
                 "type": "collider",
@@ -258,24 +192,12 @@
           },
           {
             "node": "Int_Walls_2",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
               }
-            }
+            ]
           },
           {
             "node": "Front_LandingArm",
@@ -422,7 +344,13 @@
                 "y": 1,
                 "z": 1
               }
-            }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
           },
           {
             "node": "CockpitDoor_L",
