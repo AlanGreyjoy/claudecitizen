@@ -26,12 +26,22 @@ type CreatorTab = 'presets' | 'parts' | 'body' | 'colors' | 'diagnostics';
 
 export interface SidekickCreatorUiHooks {
   getAvatarDiagnostics: () => SidekickAvatarDiagnostics | null;
+  onAnimationChange?: (clipName: string) => void;
+  onAnimationRestart?: () => void;
 }
 
 export interface SidekickCreatorUi {
   root: HTMLElement;
   setStatus: (message: string, isError?: boolean) => void;
+  setAnimations: (clipNames: readonly string[], activeClipName?: string) => void;
+  setActiveAnimation: (clipName: string) => void;
   refreshDiagnostics: () => void;
+  dispose: () => void;
+}
+
+export interface SidekickAnimationPicker {
+  setAnimations: (clipNames: readonly string[], activeClipName?: string) => void;
+  setActiveAnimation: (clipName: string) => void;
   dispose: () => void;
 }
 
@@ -60,6 +70,41 @@ function option(value: string, label: string, selected = false): HTMLOptionEleme
   node.value = value;
   node.selected = selected;
   return node;
+}
+
+export function createSidekickAnimationPicker(
+  onAnimationChange: (clipName: string) => void,
+): SidekickAnimationPicker {
+  const root = element('div', 'sidekick-preview-animation-picker');
+  root.dataset.testid = 'preview-animation-picker';
+  const label = element('label', undefined, 'Active animation');
+  const select = element('select', 'sidekick-select');
+  select.id = 'sidekick-preview-animation-select';
+  select.dataset.testid = 'preview-animation-select';
+  label.htmlFor = select.id;
+  select.append(option('', 'Loading animations…'));
+  select.disabled = true;
+  select.addEventListener('change', () => onAnimationChange(select.value));
+  root.append(label, select);
+  document.body.append(root);
+
+  return {
+    setAnimations: (clipNames, activeClipName) => {
+      select.replaceChildren(...clipNames.map((clipName) => option(
+        clipName,
+        clipName.replaceAll('_', ' '),
+        clipName === activeClipName,
+      )));
+      select.disabled = clipNames.length === 0;
+      if (activeClipName && clipNames.includes(activeClipName))
+        select.value = activeClipName;
+    },
+    setActiveAnimation: (clipName) => {
+      if ([...select.options].some((candidate) => candidate.value === clipName))
+        select.value = clipName;
+    },
+    dispose: () => root.remove(),
+  };
 }
 
 const COLOR_GROUP_LABELS: Record<number, string> = {
@@ -99,6 +144,32 @@ export function createSidekickCreatorUi(
   let currentState = store.getState();
   let statusMessage = 'Ready';
   let statusIsError = false;
+  let animationClipNames: string[] = [];
+  let activeAnimationName = '';
+
+  const renderAnimationControls = (host: HTMLElement): void => {
+    const section = element('section', 'sidekick-section');
+    section.append(element('h2', undefined, 'Preview animation'));
+    const row = element('div', 'sidekick-animation-row');
+    const select = element('select', 'sidekick-select');
+    select.dataset.testid = 'animation-select';
+    if (animationClipNames.length === 0) {
+      select.append(option('', 'Loading animation library…'));
+      select.disabled = true;
+    } else {
+      for (const clipName of animationClipNames)
+        select.append(option(clipName, clipName.replaceAll('_', ' '), clipName === activeAnimationName));
+      select.addEventListener('change', () => {
+        activeAnimationName = select.value;
+        hooks.onAnimationChange?.(select.value);
+      });
+    }
+    const restart = button('↻', 'Restart preview animation', () => hooks.onAnimationRestart?.(), 'animation-restart');
+    restart.disabled = animationClipNames.length === 0;
+    row.append(select, restart);
+    section.append(row);
+    host.append(section);
+  };
 
   const renderFilters = (host: HTMLElement, state: SidekickCreatorState): void => {
     const installedPartIds = new Set(getInstalledParts(catalog).map((part) => part.id));
@@ -135,6 +206,7 @@ export function createSidekickCreatorUi(
   };
 
   const renderPresetTab = (state: SidekickCreatorState): void => {
+    renderAnimationControls(content);
     const speciesSection = element('section', 'sidekick-section');
     speciesSection.append(element('h2', undefined, 'Species'));
     const speciesSelect = element('select', 'sidekick-select');
@@ -516,6 +588,19 @@ export function createSidekickCreatorUi(
   return {
     root,
     setStatus,
+    setAnimations: (clipNames, activeClipName) => {
+      animationClipNames = [...clipNames];
+      activeAnimationName = activeClipName && animationClipNames.includes(activeClipName)
+        ? activeClipName
+        : animationClipNames[0] ?? '';
+      if (activeTab === 'presets') render();
+    },
+    setActiveAnimation: (clipName) => {
+      if (!animationClipNames.includes(clipName)) return;
+      activeAnimationName = clipName;
+      const select = root.querySelector<HTMLSelectElement>('[data-testid="animation-select"]');
+      if (select) select.value = clipName;
+    },
     refreshDiagnostics: () => {
       if (activeTab === 'diagnostics') render();
     },

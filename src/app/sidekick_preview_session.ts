@@ -8,7 +8,7 @@ import {
   loadSidekickCatalog,
 } from '../player/character_creator/sidekick_catalog';
 import { createSidekickCreatorStore } from '../player/character_creator/sidekick_creator_store';
-import { createSidekickCreatorUi } from './sidekick_creator_ui';
+import { createSidekickAnimationPicker, createSidekickCreatorUi } from './sidekick_creator_ui';
 import { assembleSidekickCharacter } from '../render/characters/sidekick/assemble_avatar';
 import {
   canRetargetUalToUnityHumanoid,
@@ -19,6 +19,10 @@ import {
 
 const loader = new GLTFLoader();
 const meshBoundsScratch = new THREE.Box3();
+
+function isLoopingPreviewClip(clipName: string): boolean {
+  return clipName.includes('_Loop') || clipName.endsWith('_Idle');
+}
 
 /**
  * Fit from authored geometry bounds instead of Box3.setFromObject's skinned
@@ -131,9 +135,40 @@ export async function startSidekickPreviewSession(): Promise<void> {
   const store = createSidekickCreatorStore(catalog, definition);
 
   let avatar: Awaited<ReturnType<typeof assembleSidekickCharacter>> | null = null;
+  let mixer: THREE.AnimationMixer | null = null;
+  let activeAction: THREE.AnimationAction | null = null;
+  let activeClipName = '';
+  const animationClips = new Map<string, THREE.AnimationClip>();
+  let syncAnimationControls: (clipName: string) => void = () => undefined;
+
+  const playAnimation = (clipName: string, fadeSeconds = 0.2): void => {
+    const clip = animationClips.get(clipName);
+    if (!mixer || !clip) return;
+    const nextAction = mixer.clipAction(clip);
+    const loops = isLoopingPreviewClip(clipName);
+    nextAction.clampWhenFinished = !loops;
+    nextAction.setLoop(loops ? THREE.LoopRepeat : THREE.LoopOnce, loops ? Infinity : 1);
+    activeClipName = clipName;
+    syncAnimationControls(clipName);
+    if (activeAction === nextAction) {
+      nextAction.reset().play();
+      return;
+    }
+    nextAction.reset().fadeIn(fadeSeconds).play();
+    activeAction?.fadeOut(fadeSeconds);
+    activeAction = nextAction;
+  };
+
   const creatorUi = createSidekickCreatorUi(catalog, store, {
     getAvatarDiagnostics: () => avatar?.getDiagnostics() ?? null,
+    onAnimationChange: (clipName) => playAnimation(clipName),
+    onAnimationRestart: () => playAnimation(activeClipName, 0),
   });
+  const animationPicker = createSidekickAnimationPicker((clipName) => playAnimation(clipName));
+  syncAnimationControls = (clipName) => {
+    creatorUi.setActiveAnimation(clipName);
+    animationPicker.setActiveAnimation(clipName);
+  };
   creatorUi.setStatus('Assembling character…');
 
   avatar = await assembleSidekickCharacter(catalog, definition);
@@ -170,7 +205,6 @@ export async function startSidekickPreviewSession(): Promise<void> {
     });
   });
 
-  let mixer: THREE.AnimationMixer | null = null;
   try {
     const animationLibrary = await loadAnimationLibrary();
     if (canRetargetUalToUnityHumanoid(avatar.root, animationLibrary.scene)) {
@@ -182,8 +216,15 @@ export async function startSidekickPreviewSession(): Promise<void> {
       const idle = clips.find((clip) => clip.name === 'Idle_Loop') ?? clips[0];
       if (idle) {
         mixer = new THREE.AnimationMixer(findFirstSkinnedMesh(avatar.root) ?? avatar.root);
-        mixer.clipAction(idle).play();
+        for (const clip of clips)
+          animationClips.set(clip.name, clip);
+        const clipNames = clips.map((clip) => clip.name);
+        creatorUi.setAnimations(clipNames, idle.name);
+        animationPicker.setAnimations(clipNames, idle.name);
+        playAnimation(idle.name, 0);
       }
+    } else {
+      creatorUi.setStatus('Animation library rig is incompatible with this character.', true);
     }
   } catch (error) {
     console.warn('Sidekick preview: animation retarget skipped.', error);
@@ -223,6 +264,7 @@ export async function startSidekickPreviewSession(): Promise<void> {
     unsubscribeStore();
     window.removeEventListener('resize', onResize);
     creatorUi.dispose();
+    animationPicker.dispose();
     avatar?.dispose();
     scene.environment = null;
     environmentTarget.dispose();

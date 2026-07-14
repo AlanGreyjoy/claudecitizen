@@ -26,11 +26,125 @@ import {
   SIDEKICK_MIN_ROUGHNESS,
 } from '../src/render/characters/sidekick/materials';
 import { sanitizeSidekickMorphInfluences } from '../src/render/characters/sidekick/load_part';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {
+  buildUalBoneMap,
+  findFirstSkinnedMesh,
+  retargetUnityHumanoidAnimations,
+} from '../src/render/characters/unity_humanoid_retarget';
 
 const catalog = JSON.parse(readFileSync(
   new URL('../src/assets/protected/characters/synty_sidekick/manifest.json', import.meta.url),
   'utf8',
 )) as SidekickCatalog;
+
+test('UAL bone mapping supports both Unity and exported Sidekick names', () => {
+  const targetBones = ['root', 'pelvis', 'head', 'Hips'].map((name) => {
+    const bone = new THREE.Bone();
+    bone.name = name;
+    return bone;
+  });
+  const sourceBones = ['root', 'pelvis', 'Head'].map((name) => {
+    const bone = new THREE.Bone();
+    bone.name = name;
+    return bone;
+  });
+
+  const names = buildUalBoneMap(targetBones, sourceBones);
+  assert.equal(names.root, 'root');
+  assert.equal(names.pelvis, 'pelvis');
+  assert.equal(names.head, 'Head');
+  assert.equal(names.Hips, 'pelvis');
+});
+
+test('UAL retargeting preserves Sidekick child offsets and hierarchy order', async () => {
+  class TestProgressEvent extends Event {
+    readonly lengthComputable: boolean;
+    readonly loaded: number;
+    readonly total: number;
+
+    constructor(type: string, init: ProgressEventInit = {}) {
+      super(type);
+      this.lengthComputable = init.lengthComputable ?? false;
+      this.loaded = init.loaded ?? 0;
+      this.total = init.total ?? 0;
+    }
+  }
+  Object.defineProperty(globalThis, 'ProgressEvent', {
+    configurable: true,
+    value: TestProgressEvent,
+  });
+  const loadFixture = async (url: URL) => {
+    const bytes = readFileSync(url);
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer;
+    return new GLTFLoader().parseAsync(buffer, '');
+  };
+  const [target, source] = await Promise.all([
+    loadFixture(new URL(
+      '../src/assets/protected/characters/synty_sidekick/parts/humn/SK_HUMN_BASE_01_10TORS_HU01.glb',
+      import.meta.url,
+    )),
+    loadFixture(new URL(
+      '../src/assets/universal-animation-library-1/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb',
+      import.meta.url,
+    )),
+  ]);
+  const sourceClip = source.animations.find((clip) => clip.name === 'Idle_Loop');
+  assert.ok(sourceClip);
+  const [targetClip] = retargetUnityHumanoidAnimations(target.scene, source.scene, [sourceClip]);
+  assert.ok(targetClip);
+  assert.ok(targetClip.tracks.every((track) => Array.from(track.values).every(Number.isFinite)));
+  assert.deepEqual(
+    targetClip.tracks
+      .filter((track) => track.name.endsWith('.position'))
+      .map((track) => track.name)
+      .sort(),
+    ['.bones[pelvis].position', '.bones[root].position'],
+  );
+
+  const sourceMesh = findFirstSkinnedMesh(source.scene);
+  const targetMesh = findFirstSkinnedMesh(target.scene);
+  assert.ok(sourceMesh);
+  assert.ok(targetMesh);
+  const sourceMixer = new THREE.AnimationMixer(source.scene);
+  const targetMixer = new THREE.AnimationMixer(targetMesh);
+  sourceMixer.clipAction(sourceClip).play();
+  targetMixer.clipAction(targetClip).play();
+  sourceMixer.setTime(0.65);
+  targetMixer.setTime(0.65);
+  source.scene.updateMatrixWorld(true);
+  target.scene.updateMatrixWorld(true);
+
+  const direction = (skeleton: THREE.Skeleton, from: string, to: string) => {
+    const start = skeleton.getBoneByName(from);
+    const end = skeleton.getBoneByName(to);
+    assert.ok(start);
+    assert.ok(end);
+    return end.getWorldPosition(new THREE.Vector3())
+      .sub(start.getWorldPosition(new THREE.Vector3()))
+      .normalize();
+  };
+  for (const [from, to] of [
+    ['upperarm_l', 'lowerarm_l'],
+    ['lowerarm_l', 'hand_l'],
+    ['upperarm_r', 'lowerarm_r'],
+    ['lowerarm_r', 'hand_r'],
+    ['thigh_l', 'calf_l'],
+    ['calf_l', 'foot_l'],
+    ['thigh_r', 'calf_r'],
+    ['calf_r', 'foot_r'],
+  ]) {
+    const errorDegrees = THREE.MathUtils.radToDeg(
+      direction(sourceMesh.skeleton, from, to)
+        .angleTo(direction(targetMesh.skeleton, from, to)),
+    );
+    assert.ok(errorDegrees < 8, `${from}->${to} differs by ${errorDegrees.toFixed(2)}°`);
+  }
+});
 const human = catalog.species.find((species) => species.name === 'Human');
 if (!human) throw new Error('Human species fixture missing.');
 
