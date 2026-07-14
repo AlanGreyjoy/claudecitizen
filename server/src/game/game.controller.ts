@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -18,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GameHangarService } from './game.hangar.service';
 import { GameService } from './game.service';
 import type { BuildArea } from './game.hangar.validation';
+import { parsePlayerCharacterAppearance } from './game.character';
 
 function readString(body: unknown, key: string): string {
   if (typeof body !== 'object' || body === null) return '';
@@ -63,6 +65,26 @@ export class GameController {
   @UseGuards(HttpAuthGuard)
   async bootstrap(@Req() req: AuthenticatedRequest) {
     return this.game.bootstrapForUser(req.user!.sub);
+  }
+
+  @Put('character')
+  @UseGuards(HttpAuthGuard)
+  async saveCharacter(@Req() req: AuthenticatedRequest, @Body() body: unknown) {
+    let appearance;
+    try {
+      appearance = parsePlayerCharacterAppearance(body);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid character appearance.',
+      );
+    }
+    const playerId = await this.requirePlayerId(req.user!.sub);
+    const player = await this.prisma.player.update({
+      where: { id: playerId },
+      data: { characterAppearance: { ...appearance } },
+      select: { characterAppearance: true },
+    });
+    return parsePlayerCharacterAppearance(player.characterAppearance);
   }
 
   @Get('hangar/build')

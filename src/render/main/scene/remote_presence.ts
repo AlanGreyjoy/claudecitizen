@@ -6,6 +6,10 @@ import {
   type CharacterAvatarInstance,
 } from './character_avatar_model';
 import { createShipModel, type ShipModelHandle } from './ship_model';
+import {
+  playerCharacterAppearanceKey,
+  type PlayerCharacterAppearanceV1,
+} from '../../../player/character_creator/player_character_appearance';
 
 interface RemotePresenceHandle {
   dispose: () => void;
@@ -15,6 +19,7 @@ interface RemotePresenceHandle {
 interface RemoteObject {
   root: THREE.Group;
   avatar: CharacterAvatarInstance;
+  avatarAppearanceKey: string;
   shipHandle: ShipModelHandle | null;
   shipPrefabId: string | null;
   marker: THREE.Mesh;
@@ -96,11 +101,19 @@ function ensureRemoteShip(
   return handle;
 }
 
-function createRemoteObject(displayName: string, renderScale: number): RemoteObject {
+function appearanceKey(appearance: PlayerCharacterAppearanceV1 | null): string {
+  return appearance ? playerCharacterAppearanceKey(appearance) : 'legacy';
+}
+
+function createRemoteObject(
+  displayName: string,
+  renderScale: number,
+  appearance: PlayerCharacterAppearanceV1 | null,
+): RemoteObject {
   const root = new THREE.Group();
   root.frustumCulled = false;
 
-  const avatar = createCharacterAvatarInstance(renderScale);
+  const avatar = createCharacterAvatarInstance(renderScale, appearance);
 
   const marker = new THREE.Mesh(
     new THREE.OctahedronGeometry(0.7 * renderScale),
@@ -128,12 +141,28 @@ function createRemoteObject(displayName: string, renderScale: number): RemoteObj
   return {
     root,
     avatar,
+    avatarAppearanceKey: appearanceKey(appearance),
     shipHandle: null,
     shipPrefabId: null,
     marker,
     label,
     labelTexture,
   };
+}
+
+function ensureRemoteAvatar(
+  remote: RemoteObject,
+  appearance: PlayerCharacterAppearanceV1 | null,
+  renderScale: number,
+): CharacterAvatarInstance {
+  const key = appearanceKey(appearance);
+  if (remote.avatarAppearanceKey === key) return remote.avatar;
+  remote.root.remove(remote.avatar.root);
+  remote.avatar.dispose();
+  remote.avatar = createCharacterAvatarInstance(renderScale, appearance);
+  remote.avatarAppearanceKey = key;
+  remote.root.add(remote.avatar.root);
+  return remote.avatar;
 }
 
 function disposeRemoteObject(object: RemoteObject): void {
@@ -194,7 +223,11 @@ export function createRemotePresenceRenderer(
   function getRemote(entity: NetworkRenderEntity): RemoteObject {
     const existing = remotes.get(entity.id);
     if (existing) return existing;
-    const created = createRemoteObject(entity.displayName, renderScale);
+    const created = createRemoteObject(
+      entity.displayName,
+      renderScale,
+      entity.characterAppearance,
+    );
     remotes.set(entity.id, created);
     scene.add(created.root);
     return created;
@@ -210,11 +243,14 @@ export function createRemotePresenceRenderer(
       live.add(entity.id);
       const remote = getRemote(entity);
       const isMarker = entity.lod === 'marker';
+      const avatar = isMarker
+        ? remote.avatar
+        : ensureRemoteAvatar(remote, entity.characterAppearance, renderScale);
       const body = entity.mode === 'in-ship' ? entity.ship : entity.character;
       const shipVisible = !isMarker && entity.mode === 'in-ship' && entity.ship !== null;
       const avatarVisible = !isMarker && !shipVisible && entity.character !== null;
 
-      remote.avatar.root.visible = avatarVisible;
+      avatar.root.visible = avatarVisible;
       if (remote.shipHandle) {
         remote.shipHandle.group.visible = shipVisible;
       }
@@ -222,8 +258,8 @@ export function createRemotePresenceRenderer(
       remote.label.visible = !isMarker;
 
       if (avatarVisible && entity.character) {
-        remote.avatar.setAnimation(entity.character.animation);
-        remote.avatar.updateMixer(nowSeconds);
+        avatar.setAnimation(entity.character.animation);
+        avatar.updateMixer(nowSeconds);
       }
 
       if (shipVisible && entity.ship) {

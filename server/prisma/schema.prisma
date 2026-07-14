@@ -29,6 +29,7 @@ model Player {
   currentRoomId     String   @default("hab-room")
   assignedHangar    Int?
   arcBalance        Int      @default(0)
+  characterAppearance Json?
   starterLoadoutGrantedAt DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

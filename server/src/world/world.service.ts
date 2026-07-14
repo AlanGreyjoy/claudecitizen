@@ -27,12 +27,14 @@ import type {
   SnapshotEntityDto,
   Vec3Dto,
 } from './world.types';
+import type { PlayerCharacterAppearanceV1 } from '../game/game.character';
 
 interface WorldSession {
   client: WebSocket;
   userId: string;
   playerId: string;
   displayName: string;
+  characterAppearance: PlayerCharacterAppearanceV1 | null;
   instanceId: string;
   stationRoomId: string | null;
   focusPosition: Vec3Dto | null;
@@ -97,7 +99,7 @@ function distance(a: Vec3Dto, b: Vec3Dto): number {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-function compactEntity(entity: NetworkEntityState, lod: NetworkLod): SnapshotEntityDto {
+export function compactEntity(entity: NetworkEntityState, lod: NetworkLod): SnapshotEntityDto {
   const markerPosition = entityFocusPosition(entity) ?? { x: 0, y: 0, z: 0 };
   if (lod === 'marker') {
     return {
@@ -115,6 +117,7 @@ function compactEntity(entity: NetworkEntityState, lod: NetworkLod): SnapshotEnt
     displayName: entity.displayName,
     lod,
     mode: entity.mode,
+    characterAppearance: entity.characterAppearance,
     character: entity.character,
     ship: entity.ship,
     shipRig: lod === 'full' ? entity.shipRig : null,
@@ -151,6 +154,7 @@ export class WorldService {
         userId: payload.sub,
         playerId: bootstrap.player.id,
         displayName: bootstrap.player.displayName,
+        characterAppearance: bootstrap.player.characterAppearance,
         instanceId: bootstrap.spawn.instanceId,
         stationRoomId: bootstrap.spawn.stationRoomId,
         focusPosition: null,
@@ -335,6 +339,7 @@ export class WorldService {
       id: session.playerId,
       playerId: session.playerId,
       displayName: session.displayName,
+      characterAppearance: session.characterAppearance,
       instanceId: session.instanceId,
       mode: update.mode,
       character: update.character ?? null,

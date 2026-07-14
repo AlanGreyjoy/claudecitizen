@@ -1,3 +1,5 @@
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+
 export interface AuthSession {
   user: {
     id: string;
@@ -15,7 +17,9 @@ export interface AuthSession {
 export type BuildArea = 'hangar' | 'apartment';
 
 export interface GameBootstrap {
-  player: AuthSession['player'];
+  player: AuthSession['player'] & {
+    characterAppearance: PlayerCharacterAppearanceV1 | null;
+  };
   economy: {
     arcBalance: number;
   };
@@ -205,6 +209,15 @@ export function discordStartUrl(): string {
 
 export function fetchGameBootstrap(): Promise<GameBootstrap> {
   return requestJson<GameBootstrap>('/game/bootstrap', { method: 'GET' });
+}
+
+export function savePlayerCharacter(
+  appearance: PlayerCharacterAppearanceV1,
+): Promise<PlayerCharacterAppearanceV1> {
+  return requestJson<PlayerCharacterAppearanceV1>('/game/character', {
+    method: 'PUT',
+    body: JSON.stringify(appearance),
+  });
 }
 
 export interface HangarBuildResponse extends HangarBuildState {

@@ -8,6 +8,7 @@ import { GameCatalogService } from './game.catalog.service';
 import { GameHangarService } from './game.hangar.service';
 import { GameInventoryService } from './game.inventory.service';
 import type { GameBootstrapDto } from './game.types';
+import { parseStoredPlayerCharacterAppearance } from './game.character';
 
 @Injectable()
 export class GameService {
@@ -68,6 +69,9 @@ export class GameService {
         id: user.player.id,
         handle: user.player.handle,
         displayName: user.player.displayName,
+        characterAppearance: parseStoredPlayerCharacterAppearance(
+          user.player.characterAppearance,
+        ),
       },
       economy: {
         arcBalance: user.player.arcBalance,

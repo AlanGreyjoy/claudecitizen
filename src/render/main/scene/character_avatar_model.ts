@@ -9,6 +9,8 @@ import {
   retargetUnityHumanoidAnimations,
   UNIVERSAL_ANIMATION_LIBRARY_URL,
 } from '../../characters/unity_humanoid_retarget';
+import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
+import { createSidekickGameplayAvatar } from '../../characters/sidekick/gameplay_avatar';
 
 const UAL_AVATAR_URL = UNIVERSAL_ANIMATION_LIBRARY_URL;
 const PROTECTED_CHARACTER_URL_PREFIX = '/src/assets/protected/characters/';
@@ -236,7 +238,7 @@ function loadAvatarAsset(): Promise<AvatarAsset> {
   return avatarAssetPromise;
 }
 
-export function createCharacterAvatarInstance(renderScale: number): CharacterAvatarInstance {
+function createLegacyCharacterAvatarInstance(renderScale: number): CharacterAvatarInstance {
   const root = new THREE.Group();
   const modelOffset = new THREE.Group();
   root.frustumCulled = false;
@@ -350,4 +352,18 @@ export function createCharacterAvatarInstance(renderScale: number): CharacterAva
     setPose,
     updateMixer,
   };
+}
+
+export function createCharacterAvatarInstance(
+  renderScale: number,
+  appearance: PlayerCharacterAppearanceV1 | null = null,
+): CharacterAvatarInstance {
+  if (appearance) {
+    return createSidekickGameplayAvatar(
+      renderScale,
+      appearance,
+      () => createLegacyCharacterAvatarInstance(renderScale),
+    );
+  }
+  return createLegacyCharacterAvatarInstance(renderScale);
 }

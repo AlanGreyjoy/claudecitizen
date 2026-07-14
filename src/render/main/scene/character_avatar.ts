@@ -1,6 +1,7 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import { createCharacterAvatarInstance } from './character_avatar_model';
 import type { CharacterRenderState, Vec3 } from '../../../types';
+import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
 
 interface CharacterAvatar {
   dispose: () => void;
@@ -12,8 +13,12 @@ interface CharacterAvatar {
   ) => void;
 }
 
-export function createCharacterAvatar(scene: THREE.Scene, renderScale: number): CharacterAvatar {
-  const instance = createCharacterAvatarInstance(renderScale);
+export function createCharacterAvatar(
+  scene: THREE.Scene,
+  renderScale: number,
+  appearance: PlayerCharacterAppearanceV1 | null = null,
+): CharacterAvatar {
+  const instance = createCharacterAvatarInstance(renderScale, appearance);
   instance.root.visible = false;
   scene.add(instance.root);
 

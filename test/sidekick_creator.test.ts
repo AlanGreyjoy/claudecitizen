@@ -26,6 +26,11 @@ import {
   SIDEKICK_MIN_ROUGHNESS,
 } from '../src/render/characters/sidekick/materials';
 import { sanitizeSidekickMorphInfluences } from '../src/render/characters/sidekick/load_part';
+import {
+  buildPlayerSidekickDefinition,
+  DEFAULT_PLAYER_CHARACTER_APPEARANCE,
+} from '../src/player/character_creator/player_character_appearance';
+import { resolveSnapshotCharacterAppearance } from '../src/net/remote_appearance';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
@@ -239,6 +244,63 @@ test('body values map to source morphs and atlas cells use Unity UV coordinates'
     },
   ), { r: 120, g: 90, b: 60 });
   assert.deepEqual(sanitizeSidekickMorphInfluences([Number.NaN, 0.5, Infinity, -Infinity]), [0, 0.5, 0, 0]);
+});
+
+test('player appearance maps paired features while keeping base clothing fixed', () => {
+  const base = buildDefaultDefinition(catalog, human);
+  const type1 = buildPlayerSidekickDefinition(catalog, {
+    ...DEFAULT_PLAYER_CHARACTER_APPEARANCE,
+    headVariant: 2,
+    hairVariant: 10,
+    eyebrowVariant: 7,
+    earVariant: 8,
+    noseVariant: 11,
+    facialHairVariant: 4,
+    bodySizeValue: -100,
+    muscleValue: 100,
+  });
+  assert.match(getDefinitionPartName(type1, CharacterPartType.Head) ?? '', /_BASE_02_/);
+  assert.match(getDefinitionPartName(type1, CharacterPartType.Hair) ?? '', /_BASE_10_/);
+  assert.match(getDefinitionPartName(type1, CharacterPartType.EyebrowLeft) ?? '', /_BASE_07_/);
+  assert.match(getDefinitionPartName(type1, CharacterPartType.EyebrowRight) ?? '', /_BASE_07_/);
+  assert.match(getDefinitionPartName(type1, CharacterPartType.EarLeft) ?? '', /_BASE_08_/);
+  assert.match(getDefinitionPartName(type1, CharacterPartType.EarRight) ?? '', /_BASE_08_/);
+  assert.match(getDefinitionPartName(type1, CharacterPartType.Nose) ?? '', /_BASE_11_/);
+  assert.match(getDefinitionPartName(type1, CharacterPartType.FacialHair) ?? '', /_BASE_04_/);
+  assert.equal(getDefinitionPartName(type1, CharacterPartType.Wrap), null);
+  assert.deepEqual(type1.blendShapes, {
+    bodyTypeValue: -100,
+    bodySizeValue: -100,
+    muscleValue: 100,
+  });
+  for (const type of [
+    CharacterPartType.Torso,
+    CharacterPartType.ArmUpperLeft,
+    CharacterPartType.ArmUpperRight,
+    CharacterPartType.Hips,
+    CharacterPartType.LegLeft,
+    CharacterPartType.LegRight,
+    CharacterPartType.FootLeft,
+    CharacterPartType.FootRight,
+  ]) {
+    assert.equal(getDefinitionPartName(type1, type), getDefinitionPartName(base, type));
+  }
+  assert.deepEqual(type1.colorRows, base.colorRows);
+
+  const type2 = buildPlayerSidekickDefinition(catalog, {
+    ...DEFAULT_PLAYER_CHARACTER_APPEARANCE,
+    type: 2,
+    facialHairVariant: null,
+  });
+  assert.equal(type2.blendShapes.bodyTypeValue, 100);
+  assert.match(getDefinitionPartName(type2, CharacterPartType.Wrap) ?? '', /_BASE_01_/);
+  assert.equal(getDefinitionPartName(type2, CharacterPartType.FacialHair), null);
+});
+
+test('marker snapshots retain a previously received remote appearance', () => {
+  const appearance = { ...DEFAULT_PLAYER_CHARACTER_APPEARANCE, hairVariant: 6 };
+  assert.deepEqual(resolveSnapshotCharacterAppearance('marker', undefined, appearance), appearance);
+  assert.equal(resolveSnapshotCharacterAppearance('full', null, appearance), null);
 });
 
 test('rapid async selections accept only the latest generation', async () => {

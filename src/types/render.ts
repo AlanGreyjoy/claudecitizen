@@ -8,6 +8,7 @@ import type {
 } from './character';
 import type { FlightBody } from './flight';
 import type { Vec3 } from './math';
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
 
 export interface FogSettings {
   density: number;
@@ -123,6 +124,7 @@ export interface NetworkRenderEntity {
   id: string;
   playerId: string;
   displayName: string;
+  characterAppearance: PlayerCharacterAppearanceV1 | null;
   lod: NetworkLod;
   mode: GameMode | string;
   character: CharacterRenderState | null;

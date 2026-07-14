@@ -1,7 +1,8 @@
 import { showLoadingScreen } from './loading_screen';
-import { showTitleScreen } from './title_screen';
+import { restoreTitleScreen, showTitleScreen } from './title_screen';
 import { startPlaySession } from './play_session';
-import type { AuthSession } from '../net/api';
+import { fetchGameBootstrap, type AuthSession } from '../net/api';
+import { showCharacterCreationScreen } from './character_creation_screen';
 
 /**
  * Boot dispatcher.
@@ -15,13 +16,50 @@ import type { AuthSession } from '../net/api';
  *   ?stationPrefab=<id>     — jump into the game previewing a station prefab
  *   ?shipPrefab=<id>        — jump into the ship sandbox for a ship prefab (dev only)
  *   ?boot=sidekickPreview   — Sidekick modular character preview (dev only)
+ *   ?boot=characterCreator  — Player character creation UI preview (dev only)
  */
 function startPlayWithLoading(options: { requireAuth: boolean; session?: AuthSession | null }): void {
   const loading = showLoadingScreen();
-  void startPlaySession(loading, options).catch((error) => {
+  let activeLoading = loading;
+  const start = async (): Promise<void> => {
+    if (!options.requireAuth) {
+      await startPlaySession(loading, options);
+      return;
+    }
+    const session = options.session;
+    if (!session) {
+      await startPlaySession(loading, options);
+      return;
+    }
+    loading.setStatus('Loading citizen record...');
+    const gameBootstrap = await fetchGameBootstrap();
+    if (!gameBootstrap.player.characterAppearance) {
+      loading.hide();
+      const appearance = await showCharacterCreationScreen();
+      if (!appearance) {
+        restoreTitleScreen(session);
+        return;
+      }
+      gameBootstrap.player.characterAppearance = appearance;
+      const resumedLoading = showLoadingScreen();
+      activeLoading = resumedLoading;
+      await startPlaySession(resumedLoading, {
+        requireAuth: true,
+        session,
+        bootstrap: gameBootstrap,
+      });
+      return;
+    }
+    await startPlaySession(loading, {
+      requireAuth: true,
+      session,
+      bootstrap: gameBootstrap,
+    });
+  };
+  void start().catch((error) => {
     console.error('ClaudeCitizen play session failed to start.', error);
-    loading.hide();
-    document.getElementById('title-screen')?.classList.remove('is-hidden');
+    activeLoading.hide();
+    restoreTitleScreen(options.session);
   });
 }
 
@@ -58,6 +96,10 @@ export function bootstrap(): void {
     import('./sidekick_preview_session')
       .then((module) => module.startSidekickPreviewSession())
       .catch((error) => console.error('ClaudeCitizen Sidekick preview failed to load.', error));
+    return;
+  }
+  if (boot === 'characterCreator' && import.meta.env.DEV) {
+    void showCharacterCreationScreen();
     return;
   }
   if ((boot === 'play' || params.has('stationPrefab')) && import.meta.env.DEV) {

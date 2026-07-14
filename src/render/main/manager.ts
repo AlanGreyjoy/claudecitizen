@@ -43,6 +43,7 @@ import {
   getQuantumDestination,
   SPIKE_QUANTUM_DESTINATION_ID,
 } from '../../world/quantum_destinations';
+import type { PlayerCharacterAppearanceV1 } from '../../player/character_creator/player_character_appearance';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 
@@ -59,6 +60,7 @@ function resolveDayNightInfluence(altitudeMeters: number, atmosphereHeightMeters
 export interface SpikeRendererOptions {
   /** Dev preview: render this prefab as the orbital station instead of the procedural model. */
   stationPrefab?: PrefabDocument | null;
+  characterAppearance?: PlayerCharacterAppearanceV1 | null;
 }
 
 export function createSpikeRenderer(
@@ -122,7 +124,11 @@ export function createSpikeRenderer(
   stationMesh.frustumCulled = false;
   scene.add(stationMesh);
 
-  const avatar = createCharacterAvatar(scene, tileManager.renderScale);
+  const avatar = createCharacterAvatar(
+    scene,
+    tileManager.renderScale,
+    options?.characterAppearance ?? null,
+  );
   const remotePresence = createRemotePresenceRenderer(scene, tileManager.renderScale);
   const quantumBubble = createQuantumBubble(scene, tileManager.renderScale);
 

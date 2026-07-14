@@ -13,6 +13,7 @@ function entity(overrides: Partial<NetworkEntityState>): NetworkEntityState {
     id: 'p2',
     playerId: 'p2',
     displayName: 'Pilot Two',
+    characterAppearance: null,
     instanceId: 'station:public',
     mode: 'in-station',
     character: {

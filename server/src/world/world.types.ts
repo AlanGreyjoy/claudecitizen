@@ -1,3 +1,5 @@
+import type { PlayerCharacterAppearanceV1 } from '../game/game.character';
+
 export interface Vec3Dto {
   x: number;
   y: number;
@@ -46,6 +48,7 @@ export interface NetworkEntityState {
   id: string;
   playerId: string;
   displayName: string;
+  characterAppearance: PlayerCharacterAppearanceV1 | null;
   instanceId: string;
   mode: string;
   character: NetworkCharacterDto | null;
@@ -62,6 +65,7 @@ export interface SnapshotEntityDto {
   displayName: string;
   lod: NetworkLod;
   mode: string;
+  characterAppearance?: PlayerCharacterAppearanceV1 | null;
   character?: NetworkCharacterDto | null;
   ship?: NetworkShipDto | null;
   shipRig?: ShipRigDto | null;

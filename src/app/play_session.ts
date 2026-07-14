@@ -158,6 +158,7 @@ export function stopPlaySession(): void {
 export interface StartPlaySessionOptions {
   requireAuth?: boolean;
   session?: AuthSession | null;
+  bootstrap?: GameBootstrap;
 }
 
 export async function startPlaySession(
@@ -168,14 +169,16 @@ export async function startPlaySession(
 
   const requireAuth = options.requireAuth ?? true;
   let session: AuthSession | null = options.session ?? null;
-  let bootstrap: GameBootstrap | null = null;
+  let bootstrap: GameBootstrap | null = options.bootstrap ?? null;
 
   if (requireAuth) {
     loading?.setStatus('Checking credentials...');
     session = session ?? (await getSession());
     if (!session) throw new Error('Login required.');
-    loading?.setStatus('Loading citizen record...');
-    bootstrap = await fetchGameBootstrap();
+    if (!bootstrap) {
+      loading?.setStatus('Loading citizen record...');
+      bootstrap = await fetchGameBootstrap();
+    }
   }
 
   started = true;
@@ -268,7 +271,10 @@ export async function startPlaySession(
   let renderer: SpikeRenderer | null = null;
   let rendererError: unknown = null;
   try {
-    renderer = createSpikeRenderer(canvas, planet, seed, { stationPrefab });
+    renderer = createSpikeRenderer(canvas, planet, seed, {
+      stationPrefab,
+      characterAppearance: bootstrap?.player.characterAppearance ?? null,
+    });
   } catch (error) {
     rendererError = error;
     console.error('ClaudeCitizen renderer init failed.', error);

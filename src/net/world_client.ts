@@ -5,6 +5,8 @@ import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/wo
 import { getShipInstance } from '../flight/ship_world';
 import { MODE_IN_SHIP } from '../player/modes';
 import type { CharacterRenderState, NetworkLod, NetworkRenderEntity, NetworkShipBody, NetworkShipRig, Vec3 } from '../types';
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import { resolveSnapshotCharacterAppearance } from './remote_appearance';
 
 export interface NetworkChatMessage {
   id: string;
@@ -24,6 +26,7 @@ interface SnapshotEntityWire {
   id: string;
   playerId: string;
   displayName: string;
+  characterAppearance?: PlayerCharacterAppearanceV1 | null;
   lod: NetworkLod;
   mode: string;
   character?: CharacterRenderState | null;
@@ -59,6 +62,7 @@ function toRenderEntity(wire: SnapshotEntityWire): NetworkRenderEntity {
     id: wire.id,
     playerId: wire.playerId,
     displayName: wire.displayName,
+    characterAppearance: wire.characterAppearance ?? null,
     lod: wire.lod,
     mode: wire.mode,
     character: wire.character ?? null,
@@ -98,8 +102,13 @@ class RemoteEntityStore {
     const liveIds = new Set<string>();
     for (const wire of snapshot.entities) {
       liveIds.add(wire.id);
-      const next = toRenderEntity(wire);
       const list = this.samples.get(wire.id) ?? [];
+      const next = toRenderEntity(wire);
+      next.characterAppearance = resolveSnapshotCharacterAppearance(
+        wire.lod,
+        wire.characterAppearance,
+        list[list.length - 1]?.entity.characterAppearance ?? null,
+      );
       list.push({ at: receivedAt, entity: next });
       while (list.length > 3) list.shift();
       this.samples.set(wire.id, list);

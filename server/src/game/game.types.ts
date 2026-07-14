@@ -1,5 +1,6 @@
 import type { PublicPlayerProfile } from '../auth/auth.types';
 import type { BuildArea } from './game.hangar.validation';
+import type { PlayerCharacterAppearanceV1 } from './game.character';
 
 export interface OwnedShipDto {
   id: string;
@@ -75,7 +76,9 @@ export interface InventoryStateDto {
 }
 
 export interface GameBootstrapDto {
-  player: PublicPlayerProfile;
+  player: PublicPlayerProfile & {
+    characterAppearance: PlayerCharacterAppearanceV1 | null;
+  };
   economy: {
     arcBalance: number;
   };
