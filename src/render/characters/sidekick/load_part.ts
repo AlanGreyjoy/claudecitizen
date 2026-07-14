@@ -38,10 +38,86 @@ function patchSkinnedMeshNormalizeSkinWeights(): void {
 
 patchSkinnedMeshNormalizeSkinWeights();
 
+export function sanitizeSidekickMorphInfluences(
+  weights: readonly number[],
+): number[] {
+  return weights.map((weight) => Number.isFinite(weight) ? weight : 0);
+}
+
 function loadGltf(url: string): Promise<GLTF> {
   return new Promise((resolve, reject) => {
     loader.load(url, resolve, undefined, reject);
   });
+}
+
+function cloneBoneSubtree(source: THREE.Object3D): THREE.Bone {
+  const bone = new THREE.Bone();
+  bone.name = source.name;
+  bone.position.copy(source.position);
+  bone.quaternion.copy(source.quaternion);
+  bone.scale.copy(source.scale);
+  bone.userData = { ...source.userData };
+  for (const child of source.children) {
+    if (child instanceof THREE.Mesh)
+      continue;
+    bone.add(cloneBoneSubtree(child));
+  }
+  return bone;
+}
+
+function findDescendantBoneByName(parent: THREE.Object3D, name: string): THREE.Bone | null {
+  for (const child of parent.children) {
+    if (child.name === name && child instanceof THREE.Bone)
+      return child;
+    const nested = findDescendantBoneByName(child, name);
+    if (nested)
+      return nested;
+  }
+  return null;
+}
+
+function rebuildBoneMap(boneMap: Map<string, THREE.Bone>, skeletonRoot: THREE.Bone): void {
+  boneMap.clear();
+  for (const [name, bone] of buildBoneNameMap(skeletonRoot))
+    boneMap.set(name, bone);
+}
+
+/**
+ * Port of Combiner.JoinAdditionalBonesToBoneArray: part meshes (hair, cloth, etc.)
+ * often carry extra bones not present on the base rig. Graft those subtrees under
+ * the matching parent in the shared skeleton so skin weights stay valid.
+ */
+export function graftAdditionalBones(
+  sourceBones: readonly THREE.Bone[],
+  boneMap: Map<string, THREE.Bone>,
+  skeletonRoot: THREE.Bone,
+): void {
+  let grafted = false;
+
+  for (const sourceBone of sourceBones) {
+    if (boneMap.has(sourceBone.name))
+      continue;
+
+    const parentName = sourceBone.parent?.name;
+    if (!parentName)
+      continue;
+
+    const sharedParent = boneMap.get(parentName);
+    if (!sharedParent)
+      continue;
+
+    if (findDescendantBoneByName(sharedParent, sourceBone.name))
+      continue;
+
+    sharedParent.add(cloneBoneSubtree(sourceBone));
+    grafted = true;
+  }
+
+  if (!grafted)
+    return;
+
+  skeletonRoot.updateMatrixWorld(true);
+  rebuildBoneMap(boneMap, skeletonRoot);
 }
 
 export function remapSkinnedMesh(
@@ -49,6 +125,8 @@ export function remapSkinnedMesh(
   boneMap: Map<string, THREE.Bone>,
   fallbackBone: THREE.Bone,
 ): THREE.SkinnedMesh {
+  graftAdditionalBones(sourceMesh.skeleton.bones, boneMap, fallbackBone);
+
   const remappedBones = sourceMesh.skeleton.bones.map((bone) => {
     const mapped = boneMap.get(bone.name);
     if (!mapped)
@@ -63,8 +141,15 @@ export function remapSkinnedMesh(
   mesh.bind(skeleton, sourceMesh.bindMatrix);
   mesh.skeleton = skeleton;
   mesh.frustumCulled = false;
-  if (sourceMesh.morphTargetInfluences)
-    mesh.morphTargetInfluences = [...sourceMesh.morphTargetInfluences];
+  if (sourceMesh.morphTargetInfluences) {
+    // Older Sidekick GLBs may contain UnityGLTF's invalid string "NaN" as a
+    // default morph weight. GLTFLoader carries that through as NaN, causing
+    // the entire skinned mesh (most visibly the head) to disappear. Creator
+    // state applies finite body values immediately after this neutralization.
+    mesh.morphTargetInfluences = sanitizeSidekickMorphInfluences(
+      sourceMesh.morphTargetInfluences,
+    );
+  }
   if (sourceMesh.morphTargetDictionary)
     mesh.morphTargetDictionary = { ...sourceMesh.morphTargetDictionary };
   mesh.updateMatrixWorld(true);
@@ -135,8 +220,10 @@ export async function loadBaseRigScene(baseModelUrl: string): Promise<THREE.Obje
   return gltf.scene;
 }
 
-export function hideBaseRenderMeshes(_baseScene: THREE.Object3D): void {
-  // Base rig export should be skeleton-only; kept for callers that still load legacy GLBs.
+export function hideBaseRenderMeshes(baseScene: THREE.Object3D): void {
+  // Base rig export should be skeleton-only; keep legacy render nodes visible
+  // here because older exports may still contain meshes that callers expect.
+  baseScene.visible = true;
 }
 
 export function getSharedSkeletonRoot(baseScene: THREE.Object3D): THREE.Bone {

@@ -1,0 +1,116 @@
+.sidekick-creator {
+  --sk-bg: rgba(8, 14, 27, 0.95);
+  --sk-panel: rgba(19, 30, 48, 0.92);
+  --sk-border: rgba(128, 199, 240, 0.24);
+  --sk-accent: #79d1ff;
+  position: fixed;
+  inset: 16px auto 16px 16px;
+  z-index: 40;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  width: min(520px, calc(100vw - 32px));
+  color: #edf6ff;
+  background: var(--sk-bg);
+  border: 1px solid var(--sk-border);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(14px);
+  font: 600 14px/1.3 Rajdhani, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.sidekick-creator.is-collapsed {
+  inset: auto auto 16px 16px;
+  width: 290px;
+  grid-template-rows: auto auto;
+}
+
+.sidekick-creator.is-collapsed > :not(.sidekick-creator__header):not(.sidekick-status) { display: none; }
+
+.sidekick-creator__header,
+.sidekick-section__title,
+.sidekick-slider__title,
+.sidekick-slider__legend,
+.sidekick-inline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidekick-creator__header { padding: 14px 16px 10px; }
+.sidekick-creator__header h1 { margin: 0; font-size: 21px; letter-spacing: .04em; }
+.sidekick-creator__header p { margin: 2px 0 0; color: #8fa6bf; font-size: 12px; text-transform: uppercase; letter-spacing: .16em; }
+.sidekick-creator__collapse { min-width: 34px; }
+
+.sidekick-status {
+  padding: 7px 16px;
+  color: #b8c9db;
+  background: rgba(52, 91, 126, .18);
+  border-block: 1px solid var(--sk-border);
+  font-size: 12px;
+}
+.sidekick-status.is-error { color: #ffb5b5; background: rgba(155, 45, 45, .24); }
+
+.sidekick-tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--sk-border); }
+.sidekick-tabs .sidekick-button { border: 0; border-radius: 0; padding: 10px 5px; color: #9cb0c5; background: transparent; }
+.sidekick-tabs .sidekick-button.is-active { color: #fff; background: rgba(92, 177, 226, .15); box-shadow: inset 0 -2px var(--sk-accent); }
+
+.sidekick-content { overflow: auto; padding: 12px; scrollbar-color: #45627d transparent; }
+.sidekick-section { margin: 0 0 12px; padding: 12px; border: 1px solid var(--sk-border); border-radius: 10px; background: var(--sk-panel); }
+.sidekick-section h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: .05em; }
+.sidekick-section__title h2 { margin: 0; }
+.sidekick-section__title { margin-bottom: 10px; }
+
+.sidekick-button,
+.sidekick-select {
+  min-height: 30px;
+  color: #ecf7ff;
+  border: 1px solid rgba(130, 205, 247, .36);
+  border-radius: 6px;
+  background: rgba(28, 46, 70, .96);
+  font: inherit;
+}
+.sidekick-button { padding: 4px 9px; cursor: pointer; }
+.sidekick-button:hover, .sidekick-button:focus-visible { border-color: var(--sk-accent); background: rgba(48, 84, 116, .96); }
+.sidekick-button.is-active { color: var(--sk-accent); border-color: var(--sk-accent); }
+.sidekick-select { min-width: 0; width: 100%; padding: 4px 7px; }
+.sidekick-select:disabled { opacity: .45; }
+
+.sidekick-randomize .sidekick-button { width: 100%; min-height: 42px; border-color: var(--sk-accent); font-size: 16px; }
+.sidekick-preset-row { display: grid; grid-template-columns: 100px minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 8px; }
+.sidekick-preset-row__label { color: #b7c6d6; }
+
+.sidekick-filter-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.sidekick-chip { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--sk-border); border-radius: 999px; background: rgba(8, 17, 31, .5); cursor: pointer; }
+.sidekick-chip:has(input:checked) { color: #fff; border-color: var(--sk-accent); background: rgba(58, 132, 176, .25); }
+
+.sidekick-parts-group { padding: 0; overflow: hidden; }
+.sidekick-parts-group > .sidekick-section__title { padding: 11px 12px; margin: 0; background: rgba(49, 75, 103, .42); }
+.sidekick-part-row { position: relative; display: grid; grid-template-columns: 118px repeat(5, 32px) minmax(150px, 1fr) 34px; gap: 5px; align-items: center; padding: 7px 10px; border-top: 1px solid rgba(128, 199, 240, .11); }
+.sidekick-part-row__label { color: #b8c8d9; font-size: 12px; }
+.sidekick-part-row .sidekick-button { width: 32px; padding: 2px; }
+.sidekick-part-row__thumb { width: 30px; height: 30px; object-fit: contain; border-radius: 4px; }
+
+.sidekick-body { display: grid; gap: 18px; }
+.sidekick-slider { display: grid; gap: 7px; }
+.sidekick-slider__title output { min-width: 44px; padding: 2px 6px; text-align: right; border-radius: 5px; background: #080e19; color: var(--sk-accent); }
+.sidekick-slider input { width: 100%; accent-color: var(--sk-accent); }
+.sidekick-slider__legend { color: #8fa3b7; font-size: 12px; }
+
+.sidekick-color-row { display: grid; grid-template-columns: minmax(130px, 1fr) 54px 78px; align-items: center; gap: 8px; min-height: 34px; border-top: 1px solid rgba(128, 199, 240, .08); }
+.sidekick-color-row input { width: 50px; height: 26px; padding: 0; border: 1px solid var(--sk-border); background: transparent; }
+.sidekick-color-row code { color: #9db0c5; font-size: 11px; }
+
+.sidekick-diagnostic-grid { display: grid; grid-template-columns: 145px minmax(0, 1fr); gap: 5px 10px; margin: 0; }
+.sidekick-diagnostic-grid dt { color: #8fa3b7; }
+.sidekick-diagnostic-grid dd { margin: 0; overflow-wrap: anywhere; }
+.sidekick-diagnostics pre { max-height: 180px; overflow: auto; padding: 8px; background: #070d18; }
+.sidekick-definition-json { box-sizing: border-box; width: 100%; min-height: 260px; margin-bottom: 8px; padding: 10px; color: #c8e5f8; border: 1px solid var(--sk-border); border-radius: 7px; background: #070d18; font: 11px/1.45 ui-monospace, monospace; resize: vertical; }
+.sidekick-footer { padding: 8px 14px; color: #7890a8; border-top: 1px solid var(--sk-border); font-size: 11px; text-align: right; }
+
+@media (max-width: 760px) {
+  .sidekick-creator { inset: auto 8px 8px; width: auto; height: min(62vh, 680px); }
+  .sidekick-part-row { grid-template-columns: 100px repeat(5, 30px) minmax(135px, 1fr) 34px; min-width: 510px; }
+  .sidekick-tabs .sidekick-button { font-size: 12px; }
+}

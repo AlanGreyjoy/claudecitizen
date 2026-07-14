@@ -28,6 +28,7 @@
     "typecheck": "tsc --noEmit && npm run typecheck -w server",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "test:sidekick": "tsx --test test/sidekick_creator.test.ts",
     "docs:dev": "npm run start -w docs",
     "docs:build": "npm run build -w docs"
   },

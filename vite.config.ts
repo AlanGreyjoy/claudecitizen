@@ -8,6 +8,7 @@ const EDITOR_ASSET_ROOT = 'editor/assets';
 const EDITOR_ASSET_URL_PREFIX = '/editor/assets/';
 const SOURCE_ASSET_ROOT = 'src/assets';
 const OPTIONAL_RUNTIME_ASSET_URLS = [
+  '/src/assets/protected/characters/synty_sidekick/manifest.json',
   '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienArmor_01.glb',
   '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienChef_01.gltf',
   '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienCombat_01.gltf',
@@ -214,6 +215,83 @@ async function enqueueGltfDependencies(
   }
 }
 
+async function enqueueSidekickJsonDependencies(
+  asset: ResolvedAsset,
+  queue: ResolvedAsset[],
+  missing: string[],
+): Promise<void> {
+  const isSidekickManifest = asset.sourcePath.endsWith('/characters/synty_sidekick/manifest.json');
+  const isSidekickMaterialConfig = asset.sourcePath.endsWith('/characters/synty_sidekick/materials/base-material.json');
+  if (!isSidekickManifest && !isSidekickMaterialConfig)
+    return;
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(await readFile(asset.sourcePath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  const relativePaths: string[] = [];
+  if (isSidekickManifest) {
+    const assets = parsed.assets as Record<string, unknown> | undefined;
+    for (const key of ['baseModelUrl', 'materialConfigUrl', 'availabilityReportUrl']) {
+      if (typeof assets?.[key] === 'string')
+        relativePaths.push(assets[key] as string);
+    }
+    if (Array.isArray(assets?.textureUrls)) {
+      for (const textureUrl of assets.textureUrls) {
+        if (typeof textureUrl === 'string')
+          relativePaths.push(textureUrl);
+      }
+    }
+    if (Array.isArray(parsed.parts)) {
+      for (const part of parsed.parts) {
+        if (!part || typeof part !== 'object') continue;
+        const entry = part as Record<string, unknown>;
+        for (const key of ['meshUrl', 'thumbnailUrl']) {
+          if (typeof entry[key] === 'string')
+            relativePaths.push(entry[key] as string);
+        }
+      }
+    }
+    if (Array.isArray(parsed.partImages)) {
+      for (const partImage of parsed.partImages) {
+        if (!partImage || typeof partImage !== 'object') continue;
+        const thumbnailUrl = (partImage as Record<string, unknown>).thumbnailUrl;
+        if (typeof thumbnailUrl === 'string')
+          relativePaths.push(thumbnailUrl);
+      }
+    }
+  } else if (parsed.maps && typeof parsed.maps === 'object') {
+    for (const textureUrl of Object.values(parsed.maps as Record<string, unknown>)) {
+      if (typeof textureUrl === 'string')
+        relativePaths.push(textureUrl);
+    }
+  }
+
+  const assetBaseDirectory = isSidekickMaterialConfig
+    ? resolve(dirname(asset.sourcePath), '..')
+    : dirname(asset.sourcePath);
+  const outputBaseDirectory = isSidekickMaterialConfig
+    ? resolve(dirname(asset.outputPath), '..')
+    : dirname(asset.outputPath);
+  for (const relativePath of relativePaths) {
+    const sourcePath = resolve(assetBaseDirectory, relativePath);
+    const outputPath = resolve(outputBaseDirectory, relativePath);
+    if (!isInsidePath(sourcePath, asset.sourceRoot) || !isInsidePath(outputPath, asset.outputRoot)) {
+      missing.push(`${sourcePath} (escaped asset root)`);
+      continue;
+    }
+    queue.push({
+      sourcePath,
+      outputPath,
+      sourceRoot: asset.sourceRoot,
+      outputRoot: asset.outputRoot,
+    });
+  }
+}
+
 function copyReferencedGameAssets(): Plugin {
   let root = process.cwd();
   let outDir = 'dist';
@@ -259,6 +337,7 @@ function copyReferencedGameAssets(): Plugin {
         await copyFile(asset.sourcePath, asset.outputPath);
         copied.add(asset.sourcePath);
         await enqueueGltfDependencies(asset, queue, missing);
+        await enqueueSidekickJsonDependencies(asset, queue, missing);
       }
 
       if (copied.size > 0) {
