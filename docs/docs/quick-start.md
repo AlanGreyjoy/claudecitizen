@@ -81,7 +81,7 @@ src/
 editor/
   assets/             Local editor asset library (free/protected)
 scripts/              Dev utilities and the orbit demo
-.agents/AGENTS.md     Architecture and agent conventions
+AGENTS.md             Architecture and agent conventions
 ```
 
 Domain rules live in `world/`, `flight/`, and `player/`. Rendering reads from those modules but does not own simulation state. See [Engineering](/engineering) for the full dependency map.

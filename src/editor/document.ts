@@ -52,6 +52,12 @@ export interface GlbNodeTransformOverride {
   components: PrefabComponent[];
 }
 
+export interface NodeOverrideComponentsEdit {
+  entityId: string;
+  nodeName: string;
+  components: PrefabComponent[];
+}
+
 /** Read-only GLB scene graph node cached after model load (not serialized). */
 export interface GlbNodeRef {
   uuid: string;
@@ -414,52 +420,83 @@ export function createEditorStore() {
     emitGlbTransform(entityId, nodeUuid, nodeName);
   }
 
+  function setNodeOverrideComponentsBatch(
+    edits: NodeOverrideComponentsEdit[],
+    label = 'Edit node components',
+  ): void {
+    const unique = new Map<string, NodeOverrideComponentsEdit>();
+    for (const edit of edits) {
+      if (!locate(edit.entityId)) continue;
+      unique.set(`${edit.entityId}::${edit.nodeName}`, {
+        ...edit,
+        components: structuredClone(edit.components),
+      });
+    }
+    if (unique.size === 0) return;
+    const changes = [...unique.values()].map((edit) => ({
+      ...edit,
+      before:
+        structuredClone(
+          locate(edit.entityId)?.entity.glbNodeTransforms.find(
+            (entry) => entry.nodeName === edit.nodeName,
+          )?.components ?? [],
+        ),
+    }));
+
+    const apply = (
+      entityId: string,
+      nodeName: string,
+      components: PrefabComponent[],
+    ): void => {
+      const target = locate(entityId)?.entity;
+      if (!target) return;
+      const override = target.glbNodeTransforms.find(
+        (entry) => entry.nodeName === nodeName,
+      );
+      if (!override) {
+        if (components.length > 0) {
+          target.glbNodeTransforms.push({
+            nodeName,
+            components: structuredClone(components),
+          });
+        }
+        return;
+      }
+      override.components = structuredClone(components);
+      if (override.components.length === 0 && !override.transform) {
+        target.glbNodeTransforms = target.glbNodeTransforms.filter(
+          (entry) => entry.nodeName !== nodeName,
+        );
+      }
+    };
+
+    history.execute({
+      label,
+      do() {
+        for (const change of changes) {
+          apply(change.entityId, change.nodeName, change.components);
+        }
+        markDirty();
+        emit({ type: 'document' });
+      },
+      undo() {
+        for (const change of changes) {
+          apply(change.entityId, change.nodeName, change.before);
+        }
+        emit({ type: 'document' });
+      },
+    });
+  }
+
   function setNodeOverrideComponents(
     entityId: string,
     nodeName: string,
     components: PrefabComponent[],
   ): void {
-    const entity = locate(entityId)?.entity;
-    if (!entity) return;
-    const before = entity.glbNodeTransforms.find(
-      (entry) => entry.nodeName === nodeName,
-    )?.components ?? [];
-    const beforeCopy = structuredClone(before);
-    const nextCopy = structuredClone(components);
-    history.execute({
-      label: `Edit node ${nodeName} components`,
-      do() {
-        const target = locate(entityId)?.entity;
-        if (!target) return;
-        const override = target.glbNodeTransforms.find(
-          (entry) => entry.nodeName === nodeName,
-        );
-        if (!override) {
-          target.glbNodeTransforms.push({
-            nodeName,
-            components: structuredClone(nextCopy),
-          });
-        } else {
-          override.components = structuredClone(nextCopy);
-        }
-        markDirty();
-        emit({ type: 'entity', entityId });
-      },
-      undo() {
-        const target = locate(entityId)?.entity;
-        if (!target) return;
-        const override = target.glbNodeTransforms.find(
-          (entry) => entry.nodeName === nodeName,
-        );
-        if (override) {
-          override.components = structuredClone(beforeCopy);
-          if (override.components.length === 0 && !override.transform) {
-            target.glbNodeTransforms = target.glbNodeTransforms.filter((o) => o.nodeName !== nodeName);
-          }
-        }
-        emit({ type: 'entity', entityId });
-      },
-    });
+    setNodeOverrideComponentsBatch(
+      [{ entityId, nodeName, components }],
+      `Edit node ${nodeName} components`,
+    );
   }
 
   function getNodeOverrideComponents(
@@ -639,12 +676,11 @@ export function createEditorStore() {
     const unique = [...new Set(ids)].filter((id) => locate(id));
     if (unique.length === 0) return [];
 
-    const snapshots = unique.map((id, offset) => {
+    const snapshots = unique.map((id) => {
       const location = locate(id)!;
       const copy = structuredClone(location.entity);
       regenerateIds(copy);
       copy.name = `${copy.name} Copy`;
-      copy.position = { ...copy.position, x: copy.position.x + 1 + offset * 0.25 };
       return {
         copy,
         parentId: location.parent?.id ?? null,
@@ -1157,6 +1193,7 @@ export function createEditorStore() {
     setMaterialOverride,
     setComponents,
     setNodeOverrideComponents,
+    setNodeOverrideComponentsBatch,
     getNodeOverrideComponents,
     setTransform,
     beginTransformGesture,

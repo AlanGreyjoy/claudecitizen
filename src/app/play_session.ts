@@ -344,7 +344,7 @@ export async function startPlaySession(
   // Must be created before the game menu so HaloBand's capture key listener
   // registers first and can claim Esc before the menu opens.
   let arcBalance: number | null = bootstrap ? bootstrap.economy.arcBalance : null;
-  let inventoryState: InventoryState | null = bootstrap
+  const inventoryState: InventoryState | null = bootstrap
     ? (bootstrap.inventory as InventoryState)
     : null;
   haloBand = createHaloBand(

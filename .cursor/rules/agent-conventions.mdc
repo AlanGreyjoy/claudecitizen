@@ -7,7 +7,7 @@ alwaysApply: true
 
 Before architectural or cross-cutting changes, read the project's agent docs:
 
-1. `.agents/AGENTS.md` (primary)
+1. `AGENTS.md` (primary)
 2. `claude.md` at repo root, if present
 3. `agents.md` at repo root, if present
 

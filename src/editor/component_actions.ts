@@ -24,6 +24,35 @@ export interface AddComponentOptions {
   spawnPosition?: Vec3;
 }
 
+export interface NodeBounds {
+  min: Vec3;
+  max: Vec3;
+}
+
+export function fitBoxColliderToBounds(bounds: NodeBounds): {
+  size: Vec3;
+  offset: Vec3;
+} {
+  return {
+    size: {
+      x: Math.max(0.01, Math.abs(bounds.max.x - bounds.min.x)),
+      y: Math.max(0.01, Math.abs(bounds.max.y - bounds.min.y)),
+      z: Math.max(0.01, Math.abs(bounds.max.z - bounds.min.z)),
+    },
+    offset: {
+      x: (bounds.min.x + bounds.max.x) / 2,
+      y: (bounds.min.y + bounds.max.y) / 2,
+      z: (bounds.min.z + bounds.max.z) / 2,
+    },
+  };
+}
+
+export interface GlbNodeColliderTarget {
+  entityId: string;
+  nodeUuid: string;
+  nodeName: string;
+}
+
 export function addColliderToEntities(store: EditorStore, entityIds: string[]): void {
   const colliderDef = allComponentsForKind(store).find((def) => def.type === 'collider');
   if (!colliderDef) {
@@ -57,12 +86,75 @@ export function addColliderToEntities(store: EditorStore, entityIds: string[]): 
   showToast(`Added collider to ${added} ${added === 1 ? 'entity' : 'entities'}.`);
 }
 
+export function addColliderToGlbNodes(
+  store: EditorStore,
+  targets: GlbNodeColliderTarget[],
+  getNodeBounds?: (entityId: string, nodeUuid: string) => NodeBounds | null,
+): void {
+  const colliderDef = allComponentsForKind(store).find((def) => def.type === 'collider');
+  if (!colliderDef) {
+    showToast('Collider component is unavailable for this prefab kind.', true);
+    return;
+  }
+
+  const uniqueTargets = new Map<string, GlbNodeColliderTarget>();
+  for (const target of targets) {
+    uniqueTargets.set(`${target.entityId}::${target.nodeName}`, target);
+  }
+
+  const edits: Parameters<EditorStore['setNodeOverrideComponentsBatch']>[0] = [];
+  let skipped = 0;
+  for (const target of uniqueTargets.values()) {
+    const entity = store.locate(target.entityId)?.entity;
+    if (!entity?.asset) continue;
+    const existing = store.getNodeOverrideComponents(target.entityId, target.nodeName);
+    if (existing.some((component) => component.type === 'collider')) {
+      skipped += 1;
+      continue;
+    }
+    const component = createComponentForEntity(colliderDef, entity, target.nodeName);
+    if (component.type === 'collider' && component.shape === 'box') {
+      const bounds = getNodeBounds?.(target.entityId, target.nodeUuid);
+      if (bounds) {
+        const { size, offset } = fitBoxColliderToBounds(bounds);
+        component.size = size;
+        component.offset = offset;
+      }
+    }
+    edits.push({
+      entityId: target.entityId,
+      nodeName: target.nodeName,
+      components: [...existing, component],
+    });
+  }
+
+  if (edits.length === 0) {
+    showToast(
+      skipped > 0
+        ? 'All selected nodes already have colliders.'
+        : 'No selected GLB nodes can receive colliders.',
+      true,
+    );
+    return;
+  }
+
+  store.setNodeOverrideComponentsBatch(
+    edits,
+    `Add colliders to ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}`,
+  );
+  showToast(
+    skipped > 0
+      ? `Added colliders to ${edits.length} nodes (${skipped} already had one).`
+      : `Added colliders to ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}.`,
+  );
+}
+
 export function addComponentFromPalette(
   store: EditorStore,
   targetEntityId: string,
   def: ComponentDef,
   options?: AddComponentOptions & {
-    getNodeBounds?: () => { min: Vec3; max: Vec3 } | null;
+    getNodeBounds?: () => NodeBounds | null;
   },
 ): void {
   const entity = store.locate(targetEntityId)?.entity;
@@ -88,16 +180,7 @@ export function addComponentFromPalette(
     if (component.type === 'collider' && component.shape === 'box') {
       const bounds = options?.getNodeBounds?.();
       if (bounds) {
-        const size = {
-          x: Math.abs(bounds.max.x - bounds.min.x),
-          y: Math.abs(bounds.max.y - bounds.min.y),
-          z: Math.abs(bounds.max.z - bounds.min.z),
-        };
-        const offset = {
-          x: (bounds.min.x + bounds.max.x) / 2,
-          y: (bounds.min.y + bounds.max.y) / 2,
-          z: (bounds.min.z + bounds.max.z) / 2,
-        };
+        const { size, offset } = fitBoxColliderToBounds(bounds);
         component.size = size;
         component.offset = offset;
       }
@@ -156,11 +239,14 @@ function createComponentForEntity(
   }
   if (component.type !== 'collider') return component;
 
-  // Mesh colliders on GLB sub-nodes use BVH (convex off) for accurate walk surfaces.
+  // GLB node colliders start as boxes so the node-bounds fitting above can
+  // produce an immediately useful collider. Authors can still opt into a mesh
+  // collider for geometry that needs the more accurate BVH walk surface.
   if (subNodeName) {
     return {
       ...component,
-      shape: 'mesh',
+      shape: 'box',
+      size: { x: 1, y: 1, z: 1 },
     };
   }
 

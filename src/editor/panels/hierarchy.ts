@@ -3,8 +3,10 @@ import { entityBoundToAnyGlbNode, entityTargetsGlbNode } from '../glb_binding';
 import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../document';
 import {
   addColliderToEntities,
+  addColliderToGlbNodes,
   buildEntityComponentsSubmenu,
   buildGlbAuthoringMenu,
+  type GlbNodeColliderTarget,
 } from '../component_actions';
 import { getComponentDef } from '../../world/prefabs/component_registry';
 import type { PrefabComponentType } from '../../world/prefabs/schema';
@@ -62,6 +64,15 @@ function collectGlbNodeUuids(node: GlbNodeRef, out: Set<string>): void {
   }
 }
 
+function findGlbNodeByName(node: GlbNodeRef, name: string): GlbNodeRef | null {
+  if (node.name === name) return node;
+  for (const child of node.children) {
+    const found = findGlbNodeByName(child, name);
+    if (found) return found;
+  }
+  return null;
+}
+
 function collectUsedComponentTypes(roots: readonly EditorEntity[]): string[] {
   const types = new Set<string>();
   const walk = (entity: EditorEntity): void => {
@@ -87,7 +98,11 @@ export function createHierarchyPanel(
   let searchQuery = '';
   let componentFilter = '';
   let visibleEntityIds: string[] = [];
+  let visibleGlbNodes: GlbNodeColliderTarget[] = [];
   let rangeAnchorId: string | null = null;
+  let glbRangeAnchorKey: string | null = null;
+  let changingGlbSelectionFromHierarchy = false;
+  const selectedGlbNodes = new Map<string, GlbNodeColliderTarget>();
 
   const searchInput = el('input', {
     className: 'ed-input ed-hierarchy-search-input',
@@ -223,6 +238,17 @@ export function createHierarchyPanel(
     componentFilterSelect.disabled = usedTypes.length === 0;
   }
 
+  function filterByItemName(name: string): void {
+    const baseName = name.replace(/[\s_]*\(\d+\)$/, '').trim() || name.trim();
+    searchInput.value = baseName;
+    searchQuery = baseName.toLowerCase();
+    clearBtn.classList.toggle('is-visible', Boolean(searchQuery));
+    componentFilter = '';
+    componentFilterSelect.value = '';
+    autoExpandForFilters();
+    render();
+  }
+
   container.append(
     el('div', { className: 'ed-panel-title' }, [
       el('span', { text: 'Hierarchy' }),
@@ -263,7 +289,121 @@ export function createHierarchyPanel(
     return () => options.getGlbNodePrefabPosition!(sub.entityId, sub.nodeUuid);
   }
 
+  function glbSelectionKey(entityId: string, nodeUuid: string): string {
+    return `${entityId}::${nodeUuid}`;
+  }
+
+  function glbTarget(entityId: string, node: GlbNodeRef): GlbNodeColliderTarget {
+    return { entityId, nodeUuid: node.uuid, nodeName: node.name };
+  }
+
+  function setPrimaryGlbSelection(
+    target: GlbNodeColliderTarget | null,
+    fallbackEntityId?: string,
+  ): boolean {
+    const current = store.getSubSelection();
+    if (
+      target &&
+      current?.entityId === target.entityId &&
+      current.nodeUuid === target.nodeUuid
+    ) {
+      return false;
+    }
+    if (!target && !current) return false;
+    changingGlbSelectionFromHierarchy = true;
+    try {
+      if (target) {
+        ensureGlbExpanded(target.entityId, target.nodeUuid);
+        store.setSubSelection(target.entityId, target.nodeUuid);
+      } else {
+        store.setEntitySelection(fallbackEntityId ?? null, 'replace');
+      }
+    } finally {
+      changingGlbSelectionFromHierarchy = false;
+    }
+    return true;
+  }
+
+  function handleGlbNodeClick(
+    event: MouseEvent,
+    target: GlbNodeColliderTarget,
+  ): void {
+    const key = glbSelectionKey(target.entityId, target.nodeUuid);
+    let primaryChanged = false;
+
+    if (event.shiftKey && glbRangeAnchorKey) {
+      const anchorIndex = visibleGlbNodes.findIndex(
+        (candidate) =>
+          glbSelectionKey(candidate.entityId, candidate.nodeUuid) === glbRangeAnchorKey,
+      );
+      const targetIndex = visibleGlbNodes.findIndex(
+        (candidate) =>
+          candidate.entityId === target.entityId && candidate.nodeUuid === target.nodeUuid,
+      );
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        selectedGlbNodes.clear();
+        const start = Math.min(anchorIndex, targetIndex);
+        const end = Math.max(anchorIndex, targetIndex);
+        for (const candidate of visibleGlbNodes.slice(start, end + 1)) {
+          selectedGlbNodes.set(
+            glbSelectionKey(candidate.entityId, candidate.nodeUuid),
+            candidate,
+          );
+        }
+      } else {
+        selectedGlbNodes.clear();
+        selectedGlbNodes.set(key, target);
+        glbRangeAnchorKey = key;
+      }
+      primaryChanged = setPrimaryGlbSelection(target);
+    } else if (event.ctrlKey || event.metaKey) {
+      if (selectedGlbNodes.has(key)) {
+        selectedGlbNodes.delete(key);
+        const current = store.getSubSelection();
+        if (selectedGlbNodes.size === 0) {
+          primaryChanged = setPrimaryGlbSelection(null, target.entityId);
+        } else if (
+          current?.entityId === target.entityId &&
+          current.nodeUuid === target.nodeUuid
+        ) {
+          primaryChanged = setPrimaryGlbSelection(
+            [...selectedGlbNodes.values()].at(-1) ?? null,
+            target.entityId,
+          );
+        }
+      } else {
+        selectedGlbNodes.set(key, target);
+        primaryChanged = setPrimaryGlbSelection(target);
+      }
+      glbRangeAnchorKey = key;
+    } else {
+      selectedGlbNodes.clear();
+      selectedGlbNodes.set(key, target);
+      glbRangeAnchorKey = key;
+      primaryChanged = setPrimaryGlbSelection(target);
+    }
+
+    if (!primaryChanged) render();
+  }
+
+  function prepareGlbContextSelection(
+    target: GlbNodeColliderTarget,
+  ): GlbNodeColliderTarget[] {
+    const key = glbSelectionKey(target.entityId, target.nodeUuid);
+    const changedSet = !selectedGlbNodes.has(key);
+    if (changedSet) {
+      selectedGlbNodes.clear();
+      selectedGlbNodes.set(key, target);
+      glbRangeAnchorKey = key;
+    }
+    const primaryChanged = setPrimaryGlbSelection(target);
+    if (changedSet && !primaryChanged) render();
+    return [...selectedGlbNodes.values()];
+  }
+
   function handleEntityClick(event: MouseEvent, entityId: string): void {
+    selectedGlbNodes.clear();
+    glbRangeAnchorKey = null;
     if (event.shiftKey) {
       store.setEntitySelection(
         entityId,
@@ -295,6 +435,7 @@ export function createHierarchyPanel(
           label: 'Add Collider',
           action: () => addColliderToEntities(store, selectedIds),
         },
+        { label: 'Filter', action: () => filterByItemName(entity.name) },
         'sep',
         { label: 'Duplicate', action: () => store.duplicateEntities(selectedIds) },
         {
@@ -316,6 +457,7 @@ export function createHierarchyPanel(
       'sep',
       buildEntityComponentsSubmenu(store, entity.id, spawnPositionForEntity(entity.id)),
       'sep',
+      { label: 'Filter', action: () => filterByItemName(entity.name) },
       { label: 'Rename', action: () => beginRename(entity.id) },
       { label: 'Duplicate', action: () => store.duplicateEntity(entity.id) },
       {
@@ -327,14 +469,30 @@ export function createHierarchyPanel(
     ];
   }
 
-  function glbMenuEntries(entityId: string, node: GlbNodeRef): ContextMenuEntry[] {
+  function glbMenuEntries(
+    entityId: string,
+    node: GlbNodeRef,
+    targets: GlbNodeColliderTarget[],
+  ): ContextMenuEntry[] {
     const getPosition =
       options.getGlbNodePrefabPosition ??
       (() => null);
     const getBounds =
       options.getGlbNodeBounds ??
       (() => null);
+    const batchEntries: ContextMenuEntry[] =
+      targets.length > 1
+        ? [
+            {
+              label: `Add Collider to ${targets.length} Nodes`,
+              action: () =>
+                addColliderToGlbNodes(store, targets, options.getGlbNodeBounds),
+            },
+            'sep',
+          ]
+        : [];
     return [
+      ...batchEntries,
       ...buildGlbAuthoringMenu(
         store,
         entityId,
@@ -344,6 +502,7 @@ export function createHierarchyPanel(
         node.name,
       ),
       'sep',
+      { label: 'Filter', action: () => filterByItemName(node.name) },
       { label: 'Delete', action: () => store.hideGlbNode(entityId, node.uuid) },
     ];
   }
@@ -532,6 +691,11 @@ export function createHierarchyPanel(
     const sub = store.getSubSelection();
     const selected =
       sub?.entityId === entityId && sub.nodeUuid === node.uuid;
+    const target = glbTarget(entityId, node);
+    const inSelection = selectedGlbNodes.has(
+      glbSelectionKey(entityId, node.uuid),
+    );
+    visibleGlbNodes.push(target);
     const bound = getBoundEntitiesForNode(entityId, node.name);
     const nodeBadge = getNodeOverrideComponentBadge(entityId, node.name);
     const hasChildren = node.children.length > 0 || bound.length > 0;
@@ -560,20 +724,21 @@ export function createHierarchyPanel(
     const row = el(
       'div',
       {
-        className: `ed-tree-row ed-tree-row-glb${selected ? ' is-selected' : ''}`,
+        className: `ed-tree-row ed-tree-row-glb${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}`,
         attrs: { 'data-glb-uuid': node.uuid, 'data-entity-id': entityId },
         on: {
-          click: () => {
-            ensureGlbExpanded(entityId, node.uuid);
-            store.setSubSelection(entityId, node.uuid);
-          },
+          click: (event) =>
+            handleGlbNodeClick(event as MouseEvent, target),
           contextmenu: (event) => {
             event.preventDefault();
             event.stopPropagation();
-            ensureGlbExpanded(entityId, node.uuid);
-            store.setSubSelection(entityId, node.uuid);
+            const targets = prepareGlbContextSelection(target);
             const mouse = event as MouseEvent;
-            showContextMenu(mouse.clientX, mouse.clientY, glbMenuEntries(entityId, node));
+            showContextMenu(
+              mouse.clientX,
+              mouse.clientY,
+              glbMenuEntries(entityId, node, targets),
+            );
           },
         },
       },
@@ -797,6 +962,7 @@ export function createHierarchyPanel(
     refreshComponentFilterOptions();
     clearChildren(body);
     visibleEntityIds = [];
+    visibleGlbNodes = [];
     const roots = store.getState().roots;
     if (roots.length === 0) {
       body.append(
@@ -850,6 +1016,65 @@ export function createHierarchyPanel(
     body.append(tree);
   }
 
+  function scrollSelectionIntoView(): void {
+    body
+      .querySelector<HTMLElement>('.ed-tree-row.is-selected')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function remapSelectedGlbNodes(entityId: string): void {
+    if (!entityId) return;
+    const tree = store.getGlbTree(entityId);
+    if (!tree) return;
+    const selectedForEntity = [...selectedGlbNodes.entries()].filter(
+      ([, target]) => target.entityId === entityId,
+    );
+    for (const [oldKey, target] of selectedForEntity) {
+      const node = findGlbNodeByName(tree, target.nodeName);
+      if (!node) {
+        selectedGlbNodes.delete(oldKey);
+        continue;
+      }
+      const nextKey = glbSelectionKey(entityId, node.uuid);
+      if (nextKey === oldKey) continue;
+      selectedGlbNodes.delete(oldKey);
+      selectedGlbNodes.set(nextKey, glbTarget(entityId, node));
+      if (glbRangeAnchorKey === oldKey) glbRangeAnchorKey = nextKey;
+    }
+  }
+
+  function syncGlbSelectionFromStore(
+    entityId: string | null,
+    nodeUuid: string | null,
+  ): void {
+    if (!entityId || !nodeUuid) {
+      selectedGlbNodes.clear();
+      glbRangeAnchorKey = null;
+      return;
+    }
+    const nodeName = store.getGlbNodeName(entityId, nodeUuid);
+    if (!nodeName) return;
+    const matching = [...selectedGlbNodes.entries()].find(
+      ([, target]) =>
+        target.entityId === entityId && target.nodeName === nodeName,
+    );
+    if (matching && matching[1].nodeUuid !== nodeUuid) {
+      const [oldKey] = matching;
+      const next = { entityId, nodeUuid, nodeName };
+      const nextKey = glbSelectionKey(entityId, nodeUuid);
+      selectedGlbNodes.delete(oldKey);
+      selectedGlbNodes.set(nextKey, next);
+      if (glbRangeAnchorKey === oldKey) glbRangeAnchorKey = nextKey;
+      return;
+    }
+    if (changingGlbSelectionFromHierarchy) return;
+    selectedGlbNodes.clear();
+    const target = { entityId, nodeUuid, nodeName };
+    const key = glbSelectionKey(entityId, nodeUuid);
+    selectedGlbNodes.set(key, target);
+    glbRangeAnchorKey = key;
+  }
+
   store.subscribe((event) => {
     if (
       event.type === 'structure' ||
@@ -860,16 +1085,26 @@ export function createHierarchyPanel(
       event.type === 'glb-visibility' ||
       event.type === 'entity'
     ) {
+      if (event.type === 'sub-selection') {
+        syncGlbSelectionFromStore(event.entityId, event.nodeUuid);
+      } else if (event.type === 'glb-tree') {
+        remapSelectedGlbNodes(event.entityId);
+      }
       if (event.type === 'sub-selection' && event.entityId && event.nodeUuid) {
         ensureGlbExpanded(event.entityId, event.nodeUuid);
       }
       render();
+      if (event.type === 'selection' || event.type === 'sub-selection') {
+        scrollSelectionIntoView();
+      }
     }
   });
   const initialSub = store.getSubSelection();
   if (initialSub?.entityId && initialSub.nodeUuid) {
+    syncGlbSelectionFromStore(initialSub.entityId, initialSub.nodeUuid);
     ensureGlbExpanded(initialSub.entityId, initialSub.nodeUuid);
   }
   autoExpandForFilters();
   render();
+  scrollSelectionIntoView();
 }

@@ -26,6 +26,15 @@ const MotionBlurShader = `
   }
 
   void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
+    // The scene background does not write depth. Reconstructing a position from
+    // its far-plane clear value produces an undefined reprojection (and, on
+    // some GPUs, a NaN texture coordinate), which can smear one planet pixel
+    // across the entire sky while the camera moves.
+    if (depth >= 0.999999) {
+      outputColor = inputColor;
+      return;
+    }
+
     vec3 viewPos = viewPosFromDepth(uv, depth);
     vec3 worldPos = worldPosFromView(viewPos);
     

@@ -195,6 +195,6 @@ Clients send **intents**; the server owns outcomes. Domain logic stays in servic
 ## Further reading
 
 - [Physical Guards](./physical-guards) — ESLint boundaries and AI rule layers
-- Agent conventions: `.agents/AGENTS.md` (architecture section)
+- Agent conventions: `AGENTS.md` (architecture section)
 - [Design Principles](./design-principles) — SRP, DRY, SOLID applied to this layout
 - [Technology Stack](./stack) — frameworks and runtime details

@@ -10,6 +10,8 @@ import {
   addColliderToEntities,
   addComponentFromPalette,
   collectExistingComponentTypes,
+  fitBoxColliderToBounds,
+  type NodeBounds,
   shouldHideShipHullCollider,
 } from "../component_actions";
 import {
@@ -465,7 +467,10 @@ export function createInspectorPanel(
   function componentFields(
     component: PrefabComponent,
     update: (next: PrefabComponent) => void,
-    fieldOptions?: { hideColliderNodeField?: boolean },
+    fieldOptions?: {
+      hideColliderNodeField?: boolean;
+      colliderNodeBounds?: NodeBounds | null;
+    },
   ): HTMLElement[] {
     switch (component.type) {
       case "station-frame":
@@ -899,19 +904,18 @@ export function createInspectorPanel(
                 update({
                   type: "collider",
                   shape: "mesh",
-                  offset: component.offset,
                   node: component.node,
                 });
                 return;
               }
+              const fitted = fieldOptions?.colliderNodeBounds
+                ? fitBoxColliderToBounds(fieldOptions.colliderNodeBounds)
+                : null;
               update({
                 type: "collider",
                 shape: "box",
-                size:
-                  component.shape === "box"
-                    ? component.size
-                    : { x: 1, y: 1, z: 1 },
-                offset: component.offset,
+                size: fitted?.size ?? { x: 1, y: 1, z: 1 },
+                offset: fitted?.offset,
                 node: component.node,
               });
             }),
@@ -1766,6 +1770,10 @@ export function createInspectorPanel(
         { className: "ed-component-body" },
         componentFields(component, update, {
           hideColliderNodeField: isNodeContext && component.type === "collider",
+          colliderNodeBounds:
+            isNodeContext && sub && options.getGlbNodeBounds
+              ? options.getGlbNodeBounds(entity.id, sub.nodeUuid)
+              : null,
         }),
       );
       const hint =

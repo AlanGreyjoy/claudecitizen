@@ -59,4 +59,4 @@ Hierarchy uses `entityTargetsGlbNode` / `entityBoundToAnyGlbNode` from `glb_bind
 | Node overrides | `document.ts`, `serialize.ts`, `viewport.ts`, `prefab_renderer.ts` |
 | GLB binding bugs | `glb_binding.ts`, console + `node scripts/inspect_glb.mjs` |
 
-Deeper workflows: `.cursor/skills/prefab-editor/SKILL.md`. Runtime door/animation wiring: `.agents/AGENTS.md`.
+Deeper workflows: `.cursor/skills/prefab-editor/SKILL.md`. Runtime door/animation wiring: `AGENTS.md`.

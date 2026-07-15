@@ -45,7 +45,7 @@ Renderer search order: `targetObject.getObjectByName(name)` then `rootGroup.getO
 
 ## Play-mode door & animation bugs
 
-See `.agents/AGENTS.md` **Animation → collider → interaction wiring**.
+See `AGENTS.md` **Animation → collider → interaction wiring**.
 
 ### Station doors (`animation` + `interaction`)
 

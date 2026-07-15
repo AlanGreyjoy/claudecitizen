@@ -242,4 +242,4 @@ $$
 h = \|\mathbf{p}_{\mathrm{world}}\| - R
 $$
 
-See `.agents/AGENTS.md` for architecture conventions; `src/world/` and `src/render/planet_tiles/` for the implementation.
+See `AGENTS.md` for architecture conventions; `src/world/` and `src/render/planet_tiles/` for the implementation.

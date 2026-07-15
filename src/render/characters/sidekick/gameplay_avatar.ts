@@ -59,8 +59,22 @@ export function createSidekickGameplayAvatar(
         avatar = null;
         return;
       }
+      // Retarget while the skeleton is still at its native scale. Skeleton.pose()
+      // restores bind-world transforms while clips are baked; running it below a
+      // render-scaled parent makes the root bone compensate with 1 / renderScale
+      // (500x in the planet renderer), which cancels the avatar's render scale.
+      animation = await createSidekickAnimationRuntime(avatar.root);
+      if (disposed) {
+        animation.dispose();
+        animation = null;
+        avatar.dispose();
+        avatar = null;
+        return;
+      }
       avatar.root.scale.setScalar(renderScale);
-      modelOffset.add(avatar.root);
+      // Measure before parenting beneath the gameplay root. That root may already
+      // be rotated into a planet/station frame while assets load; world-aligned
+      // bounds from that frame cannot be reused as this model's local offset.
       const bounds = geometryBounds(avatar.root);
       const center = bounds.getCenter(new THREE.Vector3());
       modelOffsetPosition.set(
@@ -68,13 +82,8 @@ export function createSidekickGameplayAvatar(
         -bounds.min.y - CHARACTER_GROUND_OFFSET_METERS * renderScale,
         -center.z,
       );
+      modelOffset.add(avatar.root);
       headBone = avatar.root.getObjectByName('Head') ?? avatar.root.getObjectByName('head') ?? null;
-      animation = await createSidekickAnimationRuntime(avatar.root);
-      if (disposed) {
-        animation.dispose();
-        animation = null;
-        return;
-      }
       animation.setAnimation(desiredAnimation, 0);
       ready = true;
     } catch (error) {

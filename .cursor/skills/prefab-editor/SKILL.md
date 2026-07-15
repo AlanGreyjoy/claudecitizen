@@ -101,7 +101,7 @@ Dumps scene hierarchy, mesh bindings, and animation clip targets. Use this **bef
 | Runtime GLB binding | `prefab_renderer.ts` |
 | Ship/station door wiring | `ship_runtime.ts`, `station_runtime.ts`, `game_loop.ts` |
 
-Read `.agents/AGENTS.md` sections **Editor**, **Prefab & Animation Architecture**, and **Debugging GLB nodes & Colliders** before cross-cutting prefab changes.
+Read `AGENTS.md` sections **Editor**, **Prefab & Animation Architecture**, and **Debugging GLB nodes & Colliders** before cross-cutting prefab changes.
 
 ## Troubleshooting
 

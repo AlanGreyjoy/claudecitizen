@@ -11,7 +11,7 @@ ClaudeCitizen is vibe-coded with AI agents, but **vibe is not enough** for archi
 | Layer | What it is | When it bites |
 | --- | --- | --- |
 | **Physical guards** | ESLint rules in `eslint.config.js` | `npm run lint`, editor diagnostics, agent edits |
-| **Semantic guards** | `.agents/AGENTS.md`, `.cursor/rules/`, skills | Every agent session — context, traps, workflow |
+| **Semantic guards** | `AGENTS.md`, `.cursor/rules/`, skills | Every agent session — context, traps, workflow |
 
 Physical guards are **machine-enforced**: a bad import in `world/` fails lint with an explicit message. Semantic guards cover what linters cannot see — terrain foot desync, frame budgets, protected assets, prefab door wiring — and steer agents *before* they write the wrong code.
 
@@ -26,7 +26,7 @@ flowchart TB
   end
 
   subgraph semantic ["Semantic guards · AI rules"]
-    Agents[.agents/AGENTS.md]
+    Agents[AGENTS.md]
     Cursor[.cursor/rules/*.mdc]
     Skills[.cursor/skills/]
   end
@@ -186,7 +186,7 @@ Physical guards catch **syntax-level mistakes**. They do not know that foot plac
 flowchart TB
   Session[Agent session starts]
   Session --> Always[".cursor/rules/agent-conventions.mdc<br/>alwaysApply: true"]
-  Always --> Agents[".agents/AGENTS.md<br/>primary source of truth"]
+  Always --> Agents["AGENTS.md<br/>primary source of truth"]
   Agents --> Globs["Scoped rules e.g. prefab-editor.mdc<br/>globs: src/editor/**"]
   Globs --> Skills["Skills e.g. prefab-editor/SKILL.md<br/>on-demand workflows"]
 
@@ -197,7 +197,7 @@ flowchart TB
 | File | Scope | Role |
 | --- | --- | --- |
 | `.cursor/rules/agent-conventions.mdc` | Every chat | Points agents at AGENTS.md; performance as first-class constraint; QA/dev-server boundaries |
-| `.agents/AGENTS.md` | Architecture & ops | Bounded contexts, terrain/foot invariant, prefab animation wiring, security, editor model |
+| `AGENTS.md` | Architecture & ops | Bounded contexts, terrain/foot invariant, prefab animation wiring, security, editor model |
 | `.cursor/rules/prefab-editor.mdc` | `src/editor/**`, `src/render/editor/**` | Selection model, GLB node names, component placement paths |
 | `.cursor/skills/**` | Task-specific | Deep workflows (e.g. prefab editor troubleshooting) |
 
@@ -247,7 +247,7 @@ sequenceDiagram
 When architecture changes:
 
 1. Update **`eslint.config.js`** if the rule is expressible as imports, globals, file patterns, or metrics.
-2. Update **`.agents/AGENTS.md`** for domain knowledge, invariants, and agent workflow.
+2. Update **`AGENTS.md`** for domain knowledge, invariants, and agent workflow.
 3. Update **`.cursor/rules/agent-conventions.mdc`** only for short, always-on triggers — it should defer to AGENTS.md, not duplicate it.
 4. Add or update **scoped `.mdc` rules** when a whole subtree has its own conventions (like the prefab editor).
 
@@ -271,7 +271,7 @@ Drift between layers confuses agents. Prefer matching error messages in ESLint t
 
 1. Run `npm run lint` before handoff (or rely on IDE diagnostics).
 2. If adding a cross-layer import, check the tables above — errors are intentional.
-3. For agent sessions, ensure `.agents/AGENTS.md` reflects any new invariant you expect AI to follow.
+3. For agent sessions, ensure `AGENTS.md` reflects any new invariant you expect AI to follow.
 4. Prefer promoting repeated agent mistakes into ESLint rules when possible.
 
 ---
@@ -281,4 +281,4 @@ Drift between layers confuses agents. Prefer matching error messages in ESLint t
 - [Domain-Driven Design](./domain-design) — bounded contexts and dependency direction
 - [Design Principles](./design-principles) — SRP, DRY, SOLID behind the lint thresholds
 - [Technology Stack](./stack) — `npm run lint` in the build toolchain
-- Repo: `eslint.config.js`, `.agents/AGENTS.md`, `.cursor/rules/`
+- Repo: `eslint.config.js`, `AGENTS.md`, `.cursor/rules/`

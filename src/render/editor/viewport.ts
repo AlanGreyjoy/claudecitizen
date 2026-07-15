@@ -338,8 +338,43 @@ export function createEditorViewport(
     return group;
   }
 
+  function makeMeshColliderHelper(
+    target: THREE.Object3D,
+    component: Extract<PrefabComponent, { type: "collider"; shape: "mesh" }>,
+  ): THREE.Object3D | null {
+    target.updateWorldMatrix(true, true);
+    const targetWorldInverse = target.matrixWorld.clone().invert();
+    const group = new THREE.Group();
+    group.userData.editorMeshColliderHelper = true;
+
+    target.traverse((child) => {
+      if (
+        !(child instanceof THREE.Mesh) ||
+        child.userData.editorMeshColliderHelper
+      ) {
+        return;
+      }
+      const toTargetLocal = targetWorldInverse.clone().multiply(child.matrixWorld);
+      const geometry = child.geometry.clone().applyMatrix4(toTargetLocal);
+      const helper = makeHelperMesh(
+        geometry,
+        component.convex ? 0xffb36b : 0xff7d7d,
+        component.convex ? 0.24 : 0.34,
+        true,
+      );
+      helper.userData.editorMeshColliderHelper = true;
+      group.add(helper);
+    });
+
+    if (group.children.length === 0) return null;
+    const offset = component.offset;
+    if (offset) group.position.set(offset.x, offset.y, offset.z);
+    return group;
+  }
+
   function buildComponentHelper(
     component: PrefabComponent,
+    meshColliderTarget?: THREE.Object3D,
   ): THREE.Object3D | null {
     switch (component.type) {
       case "point-light": {
@@ -481,6 +516,9 @@ export function createEditorViewport(
       }
       case "collider": {
         if (component.shape === "mesh") {
+          if (meshColliderTarget) {
+            return makeMeshColliderHelper(meshColliderTarget, component);
+          }
           const group = new THREE.Group();
           const geometry = component.convex
             ? new THREE.IcosahedronGeometry(0.7, 1)
@@ -725,6 +763,20 @@ export function createEditorViewport(
     return null;
   }
 
+  function usesEntityAssetForMeshCollider(
+    component: PrefabComponent,
+    entity: EditorEntity,
+  ): component is Extract<
+    PrefabComponent,
+    { type: "collider"; shape: "mesh" }
+  > {
+    return (
+      component.type === "collider" &&
+      component.shape === "mesh" &&
+      (!component.assetUrl || component.assetUrl === entity.asset?.url)
+    );
+  }
+
   function applyEntityTransformToObject(
     object: THREE.Object3D,
     entity: EditorEntity,
@@ -865,9 +917,19 @@ export function createEditorViewport(
             const targetNode = model.getObjectByName(sanitizeNodeName(override.nodeName));
             if (!targetNode) continue;
             for (const component of override.components) {
-              const helper = buildComponentHelper(component);
+              const helper = buildComponentHelper(
+                component,
+                usesEntityAssetForMeshCollider(component, entity)
+                  ? targetNode
+                  : undefined,
+              );
               if (helper) targetNode.add(helper);
             }
+          }
+          for (const component of entity.components) {
+            if (!usesEntityAssetForMeshCollider(component, entity)) continue;
+            const helper = buildComponentHelper(component, model);
+            if (helper) model.add(helper);
           }
           applyShipPreview();
         })
@@ -886,6 +948,12 @@ export function createEditorViewport(
     }
 
     for (const component of entity.components) {
+      if (
+        entity.asset &&
+        usesEntityAssetForMeshCollider(component, entity)
+      ) {
+        continue;
+      }
       const helper = buildComponentHelper(component);
       if (helper) {
         group.add(helper);
@@ -1185,6 +1253,7 @@ export function createEditorViewport(
     const hits = raycaster.intersectObjects(entityRoot.children, true);
     for (const hit of hits) {
       if (!hit.object.visible) continue;
+      if (hit.object.userData.editorMeshColliderHelper) continue;
       const entityId = entityIdFromObject(hit.object);
       if (!entityId) continue;
       const root = objectsById.get(entityId);
@@ -1266,7 +1335,12 @@ export function createEditorViewport(
     const box = new THREE.Box3();
     let hasMesh = false;
     node.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return;
+      if (
+        !(child instanceof THREE.Mesh) ||
+        child.userData.editorMeshColliderHelper
+      ) {
+        return;
+      }
       const geo = child.geometry;
       if (!geo.boundingBox) geo.computeBoundingBox();
       const meshBox = geo.boundingBox.clone();
