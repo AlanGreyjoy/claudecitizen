@@ -1,0 +1,81 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-safety:
+    name: Repository safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Reject tracked protected assets
+        shell: bash
+        run: |
+          unexpected="$({
+            git ls-files \
+              'editor/assets/**' \
+              'public/assets/protected/**' \
+              'src/assets/protected/**'
+          } | grep -Ev \
+            '^(editor/assets/(README\.md|free/README\.md|protected/README\.md)|public/assets/protected/README\.md|src/assets/protected/(README\.md|characters/synty_sidekick/README\.md))$' \
+            || true)"
+
+          if [[ -n "$unexpected" ]]; then
+            echo "Protected assets must never be committed:"
+            echo "$unexpected"
+            exit 1
+          fi
+
+  code-quality:
+    name: Typecheck, lint, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Typecheck browser and server
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build browser game
+        run: npm run build:web
+
+      - name: Build API server
+        run: npm run build:server
+
+      - name: Build documentation
+        run: npm run docs:build

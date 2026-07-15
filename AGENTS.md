@@ -9,7 +9,7 @@
 - **TypeScript, ESM** at root (`"type": "module"`). Server workspace is **CommonJS**.
 - Build = `tsc --noEmit && vite build` (typecheck first, then bundle), but do not run it unless explicitly requested.
 - Dev server on port **4173**: `npm run dev`. Editor only available in dev mode.
-- No GitHub Actions / CI workflows.
+- **GitHub Actions.** `.github/workflows/quality.yml` runs repository-safety, typecheck, lint, Prisma generation, and production builds on pull requests and `main`. `.github/workflows/dependency-review.yml` rejects vulnerable dependency additions. Netlify remains responsible for deployment; do not add deploy workflows unless explicitly requested.
 
 ## Workspace structure
 
