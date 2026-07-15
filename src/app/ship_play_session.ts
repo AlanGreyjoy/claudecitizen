@@ -18,7 +18,9 @@ import {
 } from "../player/character_controller";
 import {
   createDeckCharacterState,
+  DECK_FLOOR_OFFSET_METERS,
   getDefaultDeckSpawnLocal,
+  getDeckSpawnFloorHint,
   getShipWalkZones,
   isOnShipRampDeck,
   nearestDoor,
@@ -38,7 +40,12 @@ import {
   setShipLayoutOverride,
   usesColliderDeck,
 } from "../player/ship_layout";
-import { sampleColliderGroundHeight } from "../physics/colliders";
+import {
+  createShipPhysics,
+  syncShipArticulationColliders,
+  teleportShipPlayerLocal,
+  type ShipPhysics,
+} from "../physics/ship_physics";
 import {
   createTransitionPose,
   getPilotSeatAnchor,
@@ -62,6 +69,7 @@ import { createCharacterAvatar } from "../render/main/scene/character_avatar";
 import { resolveRenderQuality } from "../render/main/domain/render_quality";
 import { createShipModel } from "../render/main/scene/ship_model";
 import { updateShipPlacement } from "../render/main/update/sun_system";
+import { attachPrefabParticleSystems } from "../render/particles";
 import { loadPrefabDocument } from "../world/prefabs/loader";
 import { buildShipLayoutFromPrefab } from "../world/prefabs/ship_runtime";
 import {
@@ -360,6 +368,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   shipModel.group.frustumCulled = false;
   scene.add(shipModel.group);
   window.__claudecitizenShipModel = shipModel;
+  if (doc && prefabApplied) {
+    attachPrefabParticleSystems(doc, shipModel.group);
+  }
 
   const avatar = createCharacterAvatar(scene, 1);
 
@@ -373,7 +384,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     velocity: vec3(0, 0, 0),
   };
   const disposeSoundScene = () => soundScene.dispose();
+  const disposeParticles = () =>
+    shipModel.group.userData.disposeParticleSystems?.();
   window.addEventListener("pagehide", disposeSoundScene, { once: true });
+  window.addEventListener("pagehide", disposeParticles, { once: true });
   // Without an authored rest height, rest the hull's lowest point on the pad
   // once the model has loaded and been measured.
   let autoRestPending = authoredRestHeight === null;
@@ -395,23 +409,46 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   let mode: SandboxMode = walkable ? "deck" : "ground";
   const spawnRig = { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) };
+  const spawnLocal = getDefaultDeckSpawnLocal(spawnRig);
+  const spawnFloorHint = getDeckSpawnFloorHint(spawnLocal);
+  let shipPhysics: ShipPhysics | null = null;
   if (walkable && usesColliderDeck()) {
-    const spawn = getDefaultDeckSpawnLocal(spawnRig);
-    const spawnFloor = sampleColliderGroundHeight(
-      spawn.right,
-      2.25,
-      spawn.forward,
-      layout.colliders,
-      spawnRig,
-    );
-    console.info(
-      `Ship sandbox: ${layout.colliders.length} deck colliders; spawn floor at (${spawn.right.toFixed(2)}, ${spawn.forward.toFixed(2)}): ${
-        spawnFloor === null ? "none — check hull node overrides / colliders" : spawnFloor.toFixed(2)
-      }`,
-    );
+    try {
+      shipPhysics = await createShipPhysics(
+        {
+          right: spawnLocal.right,
+          up: spawnFloorHint + DECK_FLOOR_OFFSET_METERS,
+          forward: spawnLocal.forward,
+        },
+        getShipLayout().colliders,
+      );
+      syncShipArticulationColliders(
+        shipPhysics,
+        spawnRig,
+        getShipLayout().doors.map((door) => door.id),
+      );
+      console.info(
+        `Ship sandbox: Rapier deck with ${getShipLayout().colliders.length} colliders; spawn (${spawnLocal.right.toFixed(2)}, ${spawnFloorHint.toFixed(2)}, ${spawnLocal.forward.toFixed(2)}).`,
+      );
+    } catch (error) {
+      console.warn("Ship sandbox: failed to create Rapier deck physics.", error);
+      shipPhysics = null;
+    }
   }
+  const disposeShipPhysics = () => {
+    shipPhysics?.dispose();
+    shipPhysics = null;
+  };
+  window.addEventListener("pagehide", disposeShipPhysics, { once: true });
+
   let character: CharacterState | DeckCharacterState = walkable
-    ? createDeckCharacterState(ship, getDefaultDeckSpawnLocal(spawnRig), undefined, spawnRig)
+    ? createDeckCharacterState(
+        ship,
+        spawnLocal,
+        undefined,
+        spawnRig,
+        spawnFloorHint,
+      )
     : groundCharacterAt({ x: 12, y: 0, z: -16 }, { x: -0.5, y: 0, z: 0.65 });
   let prompt = "";
   let transition: {
@@ -454,6 +491,18 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     actions: { interactPressed: boolean; jumpPressed: boolean },
   ): void {
     const input = controls.sampleCharacterInput();
+    const colliderRig = {
+      gear01: rig.gear01,
+      ramp01: rig.ramp01,
+      doors: doorBlends(rig),
+    };
+    if (shipPhysics) {
+      syncShipArticulationColliders(
+        shipPhysics,
+        colliderRig,
+        getShipLayout().doors.map((door) => door.id),
+      );
+    }
     const result = updateCharacterOnDeck(
       character as DeckCharacterState,
       ship,
@@ -461,7 +510,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       { ...input, jumpPressed: actions.jumpPressed },
       dt,
       SANDBOX_GRAVITY,
-      { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) },
+      colliderRig,
+      shipPhysics,
     );
     character = result.state;
     prompt = "";
@@ -535,15 +585,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       return;
     }
 
-    const colliderRig = {
-      gear01: rig.gear01,
-      ramp01: rig.ramp01,
-      doors: doorBlends(rig),
-    };
     const standingOnRamp = isOnShipRampDeck(
       deckLocal,
       result.state.deckZone,
-      colliderRig,
     );
     if (nearRampPanel(deckLocal) && !standingOnRamp) {
       prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
@@ -654,17 +698,53 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
     // Walking into the lowered ramp's foot steps aboard.
     if (walkable && isRampUsable(rig)) {
-      const mount = usesColliderDeck()
-        ? sampleRampBoarding(character, ship, rig)
-        : sampleRampMount(character, ship);
-      if (mount) {
-        character = createDeckCharacterState(ship, mount, undefined, {
-          gear01: rig.gear01,
-          ramp01: rig.ramp01,
-          doors: doorBlends(rig),
-        });
-        mode = "deck";
-        return;
+      if (usesColliderDeck()) {
+        const mount = sampleRampBoarding(character, ship, rig);
+        if (mount) {
+          const mountRig = {
+            gear01: rig.gear01,
+            ramp01: rig.ramp01,
+            doors: doorBlends(rig),
+          };
+          const floorHint = mount.floorUp;
+          character = createDeckCharacterState(
+            ship,
+            mount,
+            undefined,
+            mountRig,
+            floorHint,
+          );
+          if (shipPhysics) {
+            teleportShipPlayerLocal(shipPhysics, {
+              right: mount.right,
+              up: floorHint + DECK_FLOOR_OFFSET_METERS,
+              forward: mount.forward,
+            });
+            syncShipArticulationColliders(
+              shipPhysics,
+              mountRig,
+              getShipLayout().doors.map((door) => door.id),
+            );
+          }
+          mode = "deck";
+          return;
+        }
+      } else {
+        const mount = sampleRampMount(character, ship);
+        if (mount) {
+          character = createDeckCharacterState(
+            ship,
+            mount,
+            undefined,
+            {
+              gear01: rig.gear01,
+              ramp01: rig.ramp01,
+              doors: doorBlends(rig),
+            },
+          );
+          mode = "deck";
+          return;
+        }
       }
     }
 
@@ -693,7 +773,32 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     if (mode === "sitting") {
       mode = "pilot";
     } else {
-      character = createDeckCharacterState(ship);
+      // Prefer leave-pilot stand pose location when available.
+      const leave = getLeavePilotStandPose(ship);
+      const leaveLocal = worldToShipLocal(ship, leave.position);
+      const resumeLocal = {
+        right: leaveLocal.right,
+        forward: leaveLocal.forward,
+      };
+      const floorHint = getDeckSpawnFloorHint(resumeLocal);
+      character = createDeckCharacterState(
+        ship,
+        resumeLocal,
+        undefined,
+        {
+          gear01: rig.gear01,
+          ramp01: rig.ramp01,
+          doors: doorBlends(rig),
+        },
+        floorHint,
+      );
+      if (shipPhysics) {
+        teleportShipPlayerLocal(shipPhysics, {
+          right: resumeLocal.right,
+          up: floorHint + DECK_FLOOR_OFFSET_METERS,
+          forward: resumeLocal.forward,
+        });
+      }
       mode = "deck";
     }
     transition = null;
@@ -832,6 +937,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       doors: doorBlends(rig),
     });
     updateShipPlacement(shipModel.group, ship, vec3(0, 0, 0), 1);
+    shipModel.group.userData.updateParticles?.(dt);
 
     const firstPersonActive =
       mode !== "pilot" &&

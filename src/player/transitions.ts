@@ -9,8 +9,8 @@ import {
   SIT_TRANSITION_SECONDS,
   STAND_TRANSITION_SECONDS,
 } from './modes';
-import { createDeckCharacterState, getLeavePilotStandPose } from './ship_deck';
-import { createTransitionPose, getPilotSeatAnchor } from './ship_interaction';
+import { createDeckCharacterState, getDeckSpawnFloorHint, getLeavePilotStandPose } from './ship_deck';
+import { createTransitionPose, getPilotSeatAnchor, worldToShipLocal } from './ship_interaction';
 import type { GameMode, Planet, Pose } from '../types';
 import type { TransitionType, WorldState } from './world_state';
 import { getActiveShip, getActiveShipBody } from './world_state';
@@ -49,6 +49,11 @@ export interface TransitionContext {
   planet: Planet;
   seed: number;
   setControlsMode: (mode: GameMode | 'on-foot' | 'in-ship') => void;
+  /** Called when standing up lands back on the deck (Rapier teleport hook). */
+  onDeckEntered?: (
+    local: { right: number; forward: number },
+    floorUp: number,
+  ) => void;
 }
 
 /** Deck character near the chair sits down and takes the controls. */
@@ -116,8 +121,22 @@ export function updateTransition(world: WorldState, dt: number, ctx: TransitionC
     return;
   }
 
-  world.character = createDeckCharacterState(instance.body);
+  const leave = getLeavePilotStandPose(instance.body);
+  const leaveLocal = worldToShipLocal(instance.body, leave.position);
+  const resumeLocal = {
+    right: leaveLocal.right,
+    forward: leaveLocal.forward,
+  };
+  const floorHint = getDeckSpawnFloorHint(resumeLocal);
+  world.character = createDeckCharacterState(
+    instance.body,
+    resumeLocal,
+    undefined,
+    undefined,
+    floorHint,
+  );
   world.mode = MODE_ON_SHIP_DECK;
   world.transition = null;
   ctx.setControlsMode(MODE_ON_FOOT);
+  ctx.onDeckEntered?.(resumeLocal, floorHint);
 }

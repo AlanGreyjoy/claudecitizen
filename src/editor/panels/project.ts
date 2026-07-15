@@ -13,6 +13,7 @@ import type { EditorAudioPreviewController } from '../audio_preview';
 
 const MODEL_EXTENSIONS = ['.glb', '.gltf'];
 const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.m4a'];
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.ktx2', '.ktx'];
 const DEFAULT_EXPANDED_FOLDERS = ['', 'protected'];
 const PROJECT_ROOT_LABEL = 'assets';
 const PROJECT_ASSET_ROOTS: readonly AssetRoot[] = [EDITOR_ASSET_ROOT, SOURCE_ASSET_ROOT];
@@ -44,8 +45,13 @@ function isAudioPath(path: string): boolean {
   return AUDIO_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 
+function isImagePath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return IMAGE_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}
+
 function isDraggableAssetPath(path: string): boolean {
-  return isModelPath(path) || isAudioPath(path);
+  return isModelPath(path) || isAudioPath(path) || isImagePath(path);
 }
 
 function emptyNoteForFolder(folderPath: string): string {

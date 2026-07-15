@@ -99,10 +99,21 @@ export const DEFAULT_SHIP_DOOR_BINDINGS: ShipDoorBinding[] = [
   },
 ];
 
-function captureNode(root: THREE.Object3D, name: string): ArticulatedNode | null {
-  const object = root.getObjectByName(name);
+function captureNode(
+  root: THREE.Object3D,
+  name: string,
+  under?: string,
+): ArticulatedNode | null {
+  const scope = under ? root.getObjectByName(under) : root;
+  if (!scope) {
+    console.warn(`ClaudeCitizen ship rig ancestor missing: ${under}`);
+    return null;
+  }
+  const object = under && scope.name === name ? scope : scope.getObjectByName(name);
   if (!object) {
-    console.warn(`ClaudeCitizen ship rig node missing: ${name}`);
+    console.warn(
+      `ClaudeCitizen ship rig node missing: ${under ? `${under}/` : ""}${name}`,
+    );
     return null;
   }
   return {
@@ -183,7 +194,7 @@ export function createShipModel(
   function bindArticulation(sceneRoot: THREE.Object3D): void {
     boundGear = gearSpecs
       .map((spec) => {
-        const captured = captureNode(sceneRoot, spec.name);
+        const captured = captureNode(sceneRoot, spec.name, spec.under);
         return captured
           ? {
               ...captured,

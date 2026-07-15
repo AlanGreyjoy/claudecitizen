@@ -15,6 +15,10 @@ import type {
   PrefabNodeOverride,
   PrefabPrimitive,
 } from '../../world/prefabs/schema';
+import {
+  attachParticleSystemToEntity,
+  setupUpdateParticles,
+} from '../particles';
 
 /**
  * Builds Three.js scene graphs from prefab documents. Shared by the runtime
@@ -580,6 +584,9 @@ function buildEntity(
         localLightShadowsEnabled: options.localLightShadowsEnabled,
       }));
     }
+    if (component.type === 'particle-system') {
+      attachParticleSystemToEntity(options.rootGroup, group, component);
+    }
   }
 
   for (const child of entity.children ?? []) {
@@ -601,6 +608,7 @@ export function createPrefabStationGroup(
   const group = new THREE.Group();
   group.name = `prefab:${doc.id}`;
   setupUpdateAnimations(group);
+  setupUpdateParticles(group);
   group.add(buildEntity(doc.root, {
     lightScale: renderScale,
     localLightShadowMapSize: options.localLightShadowMapSize ?? 0,
@@ -617,6 +625,7 @@ export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
   const group = new THREE.Group();
   group.name = `prop:${doc.id}`;
   setupUpdateAnimations(group);
+  setupUpdateParticles(group);
   group.add(buildEntity(doc.root, {
     lightScale: 1,
     localLightShadowMapSize: 256,

@@ -3,6 +3,7 @@ import type {
   PrefabComponentType,
   PrefabKind,
 } from "./schema";
+import { createDefaultParticleSystemComponent } from "./schema";
 
 /**
  * Editor-facing metadata for every prefab component type: which prefab kinds
@@ -197,6 +198,14 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Loop ambience or play a one-shot when the listener enters a 3D sphere or box zone.",
   },
   {
+    type: "particle-system",
+    label: "Particle System",
+    kinds: ALL_KINDS,
+    marker: true,
+    createDefault: () => createDefaultParticleSystemComponent(),
+    hint: "Unity-style modular particle emitter. Entity transform is the emitter origin; local -Y is down for gravity.",
+  },
+  {
     type: "collider",
     label: "Collider",
     kinds: ["station", "ship", "site", "prop", "item"],
@@ -232,9 +241,33 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       },
       gear: {
         nodes: [
-          { name: "LandingGear_BackLeft", deployRadians: -0.55 },
-          { name: "LandingGear_BackRight", deployRadians: -0.55 },
-          { name: "LandingLeg_Front", deployRadians: 1.4 },
+          { name: "Front_LandingArm", deployRadians: 0.796 },
+          { name: "Front_Foot", deployRadians: -0.755 },
+          { name: "Front_LandingPiston", deployRadians: -0.563 },
+          { name: "LandingGear_BackLeft", deployRadians: -0.791 },
+          {
+            name: "Back_Arm",
+            under: "LandingGear_BackLeft",
+            deployRadians: 0.852,
+          },
+          {
+            name: "Back_Foot",
+            under: "LandingGear_BackLeft",
+            deployRadians: 0.298,
+            axis: "y",
+          },
+          { name: "LandingGear_BackRight", deployRadians: -0.791 },
+          {
+            name: "Back_Arm",
+            under: "LandingGear_BackRight",
+            deployRadians: 0.852,
+          },
+          {
+            name: "Back_Foot",
+            under: "LandingGear_BackRight",
+            deployRadians: 0.298,
+            axis: "y",
+          },
         ],
       },
       ramp: {

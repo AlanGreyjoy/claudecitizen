@@ -182,24 +182,6 @@
             }
           },
           {
-            "node": "Int_Walls",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "mesh"
-              }
-            ]
-          },
-          {
-            "node": "Int_Walls_2",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "mesh"
-              }
-            ]
-          },
-          {
             "node": "Front_LandingArm",
             "transform": {
               "position": {
@@ -212,69 +194,6 @@
                 "y": 0,
                 "z": 0,
                 "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
-          },
-          {
-            "node": "Front_Foot",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": -2.163,
-                "z": 0.121
-              },
-              "rotation": {
-                "x": -0.652442,
-                "y": 0,
-                "z": 0,
-                "w": 0.757838
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
-          },
-          {
-            "node": "Back_Foot_1",
-            "transform": {
-              "position": {
-                "x": 0.07384,
-                "y": -0.67809,
-                "z": -0.74039
-              },
-              "rotation": {
-                "x": 0.241311,
-                "y": 0.143861,
-                "z": 0.035876,
-                "w": 0.959055
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
-          },
-          {
-            "node": "Back_Foot",
-            "transform": {
-              "position": {
-                "x": 0.07384,
-                "y": -0.67809,
-                "z": -0.74039
-              },
-              "rotation": {
-                "x": 0.235884,
-                "y": 0.144062,
-                "z": 0.035062,
-                "w": 0.960404
               },
               "scale": {
                 "x": 1,
@@ -409,36 +328,6 @@
             ]
           },
           {
-            "node": "LandingLeg_Front",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": -3.06827,
-                "z": 7.91636
-              },
-              "rotation": {
-                "x": 0.644217,
-                "y": 0,
-                "z": 0,
-                "w": 0.764843
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
-          },
-          {
-            "node": "Cockpit",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "mesh"
-              }
-            ]
-          },
-          {
             "node": "Light_CockpitCeiling",
             "transform": {
               "position": {
@@ -565,7 +454,46 @@
             }
           },
           {
-            "node": "Int_Walls_1",
+            "node": "Int_Walls",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "Cockpit",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "Phobos_Starhopper_Basic_1",
+            "transform": {
+              "position": {
+                "x": 6.71878,
+                "y": 1.90996,
+                "z": 13.63422
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Phobos_Starhopper_Exterior",
             "transform": {
               "position": {
                 "x": 0,
@@ -573,10 +501,10 @@
                 "z": 0
               },
               "rotation": {
-                "x": 0,
+                "x": -0.707107,
                 "y": 0,
                 "z": 0,
-                "w": 1
+                "w": 0.707107
               },
               "scale": {
                 "x": 1,
@@ -605,23 +533,53 @@
             "gear": {
               "nodes": [
                 {
+                  "name": "Front_LandingArm",
+                  "deployRadians": 0.796
+                },
+                {
+                  "name": "Front_Foot",
+                  "deployRadians": -0.755
+                },
+                {
+                  "name": "Front_LandingPiston",
+                  "deployRadians": -0.563
+                },
+                {
                   "name": "LandingGear_BackLeft",
-                  "deployRadians": -0.55
+                  "deployRadians": -0.791
+                },
+                {
+                  "name": "Back_Arm",
+                  "under": "LandingGear_BackLeft",
+                  "deployRadians": 0.852
+                },
+                {
+                  "name": "Back_Foot",
+                  "under": "LandingGear_BackLeft",
+                  "deployRadians": 0.298,
+                  "axis": "y"
                 },
                 {
                   "name": "LandingGear_BackRight",
-                  "deployRadians": -0.55
+                  "deployRadians": -0.791
                 },
                 {
-                  "name": "LandingLeg_Front",
-                  "deployRadians": 1.4
+                  "name": "Back_Arm",
+                  "under": "LandingGear_BackRight",
+                  "deployRadians": 0.852
+                },
+                {
+                  "name": "Back_Foot",
+                  "under": "LandingGear_BackRight",
+                  "deployRadians": 0.298,
+                  "axis": "y"
                 }
               ]
             },
             "ramp": {
               "hinge": {
                 "node": "RampParent",
-                "lowerRadians": -1.05
+                "lowerRadians": -1.15
               },
               "outsideInteractId": "ramp-button-outside",
               "outsideRadius": 3,
@@ -681,8 +639,8 @@
                   "x": 2.35,
                   "z": 2.62
                 },
-                "floorUp": -1.42,
-                "ceilingUp": 1.66
+                "floorUp": -0.45,
+                "ceilingUp": 2.55
               },
               {
                 "id": "cockpit",
@@ -694,8 +652,8 @@
                   "x": 1.65,
                   "z": 7.1
                 },
-                "floorUp": -0.97,
-                "ceilingUp": 1.66
+                "floorUp": -0.25,
+                "ceilingUp": 2.55
               },
               {
                 "id": "ramp",
@@ -707,12 +665,45 @@
                   "x": 1.05,
                   "z": -6.4
                 },
-                "floorUp": -1.42,
+                "floorUp": -0.45,
                 "slopeMinUp": -3.14,
-                "ceilingUp": 1.66,
+                "ceilingUp": 2.55,
                 "openToOutside": true
               }
             ]
+          }
+        ]
+      },
+      {
+        "id": "doorway-sill",
+        "name": "Doorway Sill",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -0.52,
+            "z": -5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "collider",
+            "shape": "box",
+            "size": {
+              "x": 2.1,
+              "y": 0.2,
+              "z": 0.9
+            }
           }
         ]
       },
@@ -744,8 +735,8 @@
         "transform": {
           "position": {
             "x": 0,
-            "y": -1,
-            "z": 6
+            "y": -0.25,
+            "z": 6.5
           },
           "rotation": {
             "x": 0,
@@ -803,6 +794,218 @@
             "z": 1
           }
         }
+      },
+      {
+        "id": "e-b2b15a44",
+        "name": "Sounds",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "children": [
+          {
+            "id": "e-2fb9506a",
+            "name": "Drone",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": -0.75
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1.8
+              }
+            },
+            "components": [
+              {
+                "type": "sound",
+                "soundUrl": "/src/assets/protected/sfx/AmbientDrone2.wav",
+                "mode": "ambient",
+                "playback": "loop",
+                "volume": 0.25,
+                "blendDistance": 1,
+                "zone": {
+                  "shape": "box",
+                  "size": {
+                    "x": 10,
+                    "y": 5,
+                    "z": 10
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e-66a5c896",
+        "name": "lights",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "children": [
+          {
+            "id": "e-5ee7992a",
+            "name": "Lights 1",
+            "transform": {
+              "position": {
+                "x": 0.84466,
+                "y": 1.3226,
+                "z": -5.09979
+              },
+              "rotation": {
+                "x": -0.494535,
+                "y": -0.420368,
+                "z": -0.564061,
+                "w": 0.510453
+              },
+              "scale": {
+                "x": 0.3,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#44a4fd",
+                "intensity": 5,
+                "width": 5.8,
+                "height": 0.25
+              }
+            ]
+          },
+          {
+            "id": "e-1100d95c",
+            "name": "Lights Copy",
+            "transform": {
+              "position": {
+                "x": -0.80424,
+                "y": 1.291,
+                "z": -5.11634
+              },
+              "rotation": {
+                "x": -0.384043,
+                "y": -0.572266,
+                "z": -0.472308,
+                "w": 0.549498
+              },
+              "scale": {
+                "x": 0.3,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#44a4fd",
+                "intensity": 5,
+                "width": 5.4,
+                "height": 0.25
+              }
+            ]
+          },
+          {
+            "id": "e-67e3db50",
+            "name": "Lights Copy",
+            "transform": {
+              "position": {
+                "x": 1.85584,
+                "y": 0.76449,
+                "z": -0.35331
+              },
+              "rotation": {
+                "x": -0.488933,
+                "y": -0.507352,
+                "z": -0.48575,
+                "w": 0.517287
+              },
+              "scale": {
+                "x": 0.3,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#ffcb0f",
+                "intensity": 1,
+                "width": 6.1,
+                "height": 0.75
+              }
+            ]
+          },
+          {
+            "id": "e-c61d493f",
+            "name": "Lights Copy Copy",
+            "transform": {
+              "position": {
+                "x": -0.03611,
+                "y": 1.17868,
+                "z": 1.94859
+              },
+              "rotation": {
+                "x": -0.060326,
+                "y": -0.602992,
+                "z": -0.795134,
+                "w": 0.022876
+              },
+              "scale": {
+                "x": 0.3,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "area-light",
+                "color": "#ffcb0f",
+                "intensity": 1.7,
+                "width": 3.5,
+                "height": 0.45
+              }
+            ]
+          }
+        ]
       }
     ]
   }

@@ -451,11 +451,69 @@ export interface HangarRestSample {
   restUp: number;
 }
 
+/** Vertical slack below a hangar floor/pad so a settling ship never tunnels through. */
+const HANGAR_REST_BELOW_SLACK_METERS = 4;
+/** Ceiling above the pad for pad-only (no walk-volume room) hangar rest checks. */
+const HANGAR_PAD_REST_HEIGHT_METERS = 20;
+/**
+ * Horizontal slack beyond the pad half-extent for the ship origin. Prefab
+ * stations have no room AABB; the origin must still count as "in hangar"
+ * while parked slightly off pad center.
+ */
+const HANGAR_PAD_ORIGIN_SLACK_METERS = 4;
+
+function hangarRestSample(
+  hangar: HangarSpec,
+  surfaceUp: number,
+  shipRestHeightMeters: number,
+): HangarRestSample {
+  return {
+    hangar,
+    surfaceUp,
+    restUp: surfaceUp + shipRestHeightMeters,
+  };
+}
+
+function inRoomHangarVolume(
+  local: StationLocalPoint,
+  room: StationRoom,
+): boolean {
+  if (local.right < room.minRight || local.right > room.maxRight) return false;
+  if (local.forward < room.minForward || local.forward > room.maxForward) {
+    return false;
+  }
+  return (
+    local.up >= room.floorUp - HANGAR_REST_BELOW_SLACK_METERS &&
+    local.up <= room.floorUp + room.height
+  );
+}
+
+function withinPadHorizontal(
+  local: StationLocalPoint,
+  pad: StationLocalPoint,
+  halfMeters: number,
+): boolean {
+  return (
+    Math.abs(local.right - pad.right) <= halfMeters &&
+    Math.abs(local.forward - pad.forward) <= halfMeters
+  );
+}
+
+function withinPadVertical(local: StationLocalPoint, pad: StationLocalPoint): boolean {
+  return (
+    local.up >= pad.up - HANGAR_REST_BELOW_SLACK_METERS &&
+    local.up <= pad.up + HANGAR_PAD_REST_HEIGHT_METERS
+  );
+}
+
 /**
  * Returns the parking surface under a world position when it is inside a
  * hangar volume (with a little vertical slack below the floor so a settling
  * ship never tunnels through), or null in open space. The caller supplies
  * the active ship's gear-rest height (world/ does not know the ship layout).
+ *
+ * Prefab stations often have empty walk-volume rooms (collider-based walking),
+ * so this falls back to pad proximity when no room AABB exists for the hangar.
  */
 export function sampleHangarRest(
   frame: StationFrame,
@@ -465,20 +523,36 @@ export function sampleHangarRest(
   const local = worldToStationLocal(frame, position);
   for (const hangar of getStationHangars()) {
     const room = getStationRoom(hangar.roomId);
-    if (!room) continue;
-    if (local.right < room.minRight || local.right > room.maxRight) continue;
-    if (local.forward < room.minForward || local.forward > room.maxForward) continue;
-    if (local.up < room.floorUp - 4 || local.up > room.floorUp + room.height) continue;
-    const onPad =
-      Math.abs(local.right - hangar.padSurfaceLocal.right) <= HANGAR_PAD_HALF_METERS &&
-      Math.abs(local.forward - hangar.padSurfaceLocal.forward) <= HANGAR_PAD_HALF_METERS;
-    const surfaceUp = onPad ? hangar.padSurfaceLocal.up : room.floorUp;
-    return {
-      hangar,
-      surfaceUp,
-      restUp: surfaceUp + shipRestHeightMeters,
-    };
+    if (room) {
+      if (!inRoomHangarVolume(local, room)) continue;
+      const onPad = withinPadHorizontal(
+        local,
+        hangar.padSurfaceLocal,
+        HANGAR_PAD_HALF_METERS,
+      );
+      const surfaceUp = onPad ? hangar.padSurfaceLocal.up : room.floorUp;
+      return hangarRestSample(hangar, surfaceUp, shipRestHeightMeters);
+    }
+
+    // Pad-only hangar (prefab station with no walk-volume rooms).
+    const pad = hangar.padSurfaceLocal;
+    if (
+      !withinPadHorizontal(
+        local,
+        pad,
+        HANGAR_PAD_HALF_METERS + HANGAR_PAD_ORIGIN_SLACK_METERS,
+      ) ||
+      !withinPadVertical(local, pad)
+    ) {
+      continue;
+    }
+    return hangarRestSample(hangar, pad.up, shipRestHeightMeters);
   }
   return null;
+}
+
+/** Look up a hangar by pad index (assignedHangar), or null if missing. */
+export function getHangarByIndex(index: number): HangarSpec | null {
+  return getStationHangars().find((hangar) => hangar.index === index) ?? null;
 }
 

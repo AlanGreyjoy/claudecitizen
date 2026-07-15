@@ -24,6 +24,10 @@ import { SHIP_SEAT_ROLES } from "../../world/prefabs/schema";
 import type { StationFloorId } from "../../world/station";
 import type { EditorAudioPreviewController } from "../audio_preview";
 import {
+  buildParticleSystemFields,
+  type ParticlePreviewControls,
+} from "./particle_fields";
+import {
   collectMaterialRowsForEntity,
   formatMaterialNumber,
   type MaterialRow,
@@ -39,6 +43,7 @@ function isAudioAssetUrl(url: string): boolean {
 
 export interface InspectorPanelOptions {
   audioPreview: EditorAudioPreviewController;
+  particlePreview?: ParticlePreviewControls;
   getGlbNodeLocalTransform?: (
     entityId: string,
     nodeUuid: string,
@@ -526,6 +531,7 @@ export function createInspectorPanel(
     fieldOptions?: {
       hideColliderNodeField?: boolean;
       colliderNodeBounds?: NodeBounds | null;
+      entityId?: string;
     },
   ): HTMLElement[] {
     switch (component.type) {
@@ -1091,6 +1097,11 @@ export function createInspectorPanel(
         rows.push(previewBtn);
         return rows;
       }
+      case "particle-system":
+        return buildParticleSystemFields(component, update, {
+          entityId: fieldOptions?.entityId,
+          preview: options.particlePreview,
+        });
       case "collider":
         return [
           el("div", { className: "ed-field-row-wide" }, [
@@ -1970,6 +1981,7 @@ export function createInspectorPanel(
             isNodeContext && sub && options.getGlbNodeBounds
               ? options.getGlbNodeBounds(entity.id, sub.nodeUuid)
               : null,
+          entityId: entity.id,
         }),
       );
       const hint =

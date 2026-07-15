@@ -23,7 +23,7 @@ export interface ShipRigState {
   doors: Record<string, ShipDoorRigState>;
 }
 
-const GEAR_RATE_PER_SECOND = 0.7;
+const GEAR_RATE_PER_SECOND = 1 / 2.333;
 const RAMP_RATE_PER_SECOND = 0.65;
 const DOOR_RATE_PER_SECOND = 1.5;
 

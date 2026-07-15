@@ -766,6 +766,15 @@ function boxGroundHeight(
 
 const WALKABLE_SURFACE_MIN_UP = 0.5;
 
+/**
+ * Highest walkable mesh surface below the probe.
+ *
+ * Many Unity→glTF ship interiors have inverted floor winding, so a FrontSide
+ * downward ray misses the deck and `shipFloorUpAt` used to fall back to y=0
+ * (feet through the floor). We raycast DoubleSide and flip hits whose normal
+ * points down before the walkable test — that recovers inverted floors without
+ * treating walls as ground.
+ */
 function meshGroundHeight(
   collider: MeshGameplayCollider,
   sample: THREE.Vector3,
@@ -781,12 +790,14 @@ function meshGroundHeight(
     .sub(new THREE.Vector3().applyMatrix4(spaceToLocal))
     .normalize();
   const ray = new THREE.Ray(localOrigin, direction);
-  const intersections = asset.bvh.raycast(ray, THREE.FrontSide);
+  const intersections = asset.bvh.raycast(ray, THREE.DoubleSide);
   let best: number | null = null;
   for (const hit of intersections) {
     if (hit.faceIndex === undefined || hit.faceIndex === null) continue;
     const localNormal = triangleNormal(asset.geometry, hit.faceIndex);
     const worldNormal = transformDirection(localNormal, localToSpace);
+    // Back-facing floors (inverted winding): treat the underside as walkable.
+    if (worldNormal.y < 0) worldNormal.multiplyScalar(-1);
     if (worldNormal.y < WALKABLE_SURFACE_MIN_UP) continue;
     const hitSpace = hit.point.clone().applyMatrix4(localToSpace);
     if (hitSpace.y > sample.y) continue;
@@ -811,6 +822,9 @@ function colliderGroundHeight(
  * Returns the highest collider surface below (right, up, forward), or null if
  * no collider provides ground there. This lets station/ship walkers use real
  * geometry as a floor instead of relying solely on walk-volume floor heights.
+ *
+ * `maxUp` caps how high a hit may be (ship-local). Use it to ignore shelves /
+ * hull overhangs above the current deck while still allowing ramp descents.
  */
 export function sampleColliderGroundHeight(
   right: number,
@@ -818,14 +832,16 @@ export function sampleColliderGroundHeight(
   forward: number,
   colliders: readonly GameplayCollider[],
   rig?: ShipColliderRigState,
+  maxUp?: number,
 ): number | null {
   if (colliders.length === 0) return null;
   const sample = new THREE.Vector3(right, up, forward);
+  const ceiling = maxUp === undefined ? up : Math.min(up, maxUp);
   let best: number | null = null;
   for (const collider of colliders) {
     const height = colliderGroundHeight(collider, sample, rig);
     if (height === null) continue;
-    if (height > up) continue;
+    if (height > ceiling) continue;
     if (best === null || height > best) best = height;
   }
   return best;

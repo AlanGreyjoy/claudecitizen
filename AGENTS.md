@@ -39,9 +39,10 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 
 #### Ship prefab doors (ship-door component)
 
-1. **Visual + collider**: `ship_runtime.ts` `bindColliderAnimations` binds each collider whose `node` matches a door/ramp/gear node. The custom collision resolver (`colliders.ts` `matrixForAnimation` / `animatedNodeToRoot`) moves the collider transform with the blend.
-2. **F-key toggle**: `ship_play_session.ts` / `game_loop.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
-3. **Walk-zone gating**: `ship_rig.ts` `isDoorPassable` returns true at `open01 >= 0.85`; `colliders.ts` `DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD` skips the collider at the same threshold.
+1. **Visual**: ship model articulation follows door blends from `ship_rig.ts`.
+2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp trimeshes bake at the open pose and enable when `ramp01 >= 0.85`. Locomotion and tip dismount / fell-off use Rapier contact only (`shipHasFloorBelow`) — not BVH ramp probes, cameraBounds, or `atShipGroundLevel`.
+3. **F-key toggle**: `ship_play_session.ts` / `game_loop.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
+4. **Walk-zone gating** (legacy zone ships only): `ship_rig.ts` `isDoorPassable` returns true at `open01 >= 0.85`.
 
 ## Editor (dev-only)
 
@@ -140,9 +141,9 @@ window.__claudecitizenShipModel.listNodeNames();   // ship hull node names
 The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetObject.getObjectByName(name)` then falls back to `rootGroup.getObjectByName(name)`. If a node isn't found it logs a warning and marks the binding incomplete; check the browser console for "could not find node" messages.
 
 ### Colliders
-- **Station**: Rapier physics. `src/physics/station_physics.ts` owns the world; `src/physics/rapier_world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. `resolveCharacterAgainstColliders` in `colliders.ts` is the **ship** path (custom capsule push); the **station** path is Rapier's `KinematicCharacterController.computeColliderMovement`.
-- **Ship**: `src/player/ship_deck.ts` `resolveDeckColliderStep` calls `resolveCharacterAgainstColliders` every frame with `colliderRig = { gear01, ramp01, doors: doorBlends }`.
-- `colliders.ts` has `console.debug` lines (gated to iteration 0) that log when no push is produced and when a push is rejected by `isAllowed`. Filter the devtools console by `[collider]` to see them.
+- **Station**: Rapier physics. `src/physics/station_physics.ts` owns the world; `src/physics/rapier_world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
+- **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship_physics.ts` mirrors the station API; `ship_deck.ts` `updateCharacterOnDeckRapier` drives locomotion when `usesColliderDeck()` is true. Doors/ramp toggle via `setEnabled` from articulation blends. Walk-zone BVH push (`resolveDeckColliderStep`) is walk-zone ships only.
+- **Ship (walk-zone legacy)**: authored walk zones plus optional custom BVH push in `colliders.ts` / `resolveDeckColliderStep`. Boarding probes may still use BVH ground samples.
 
 ## Common gotchas
 
@@ -158,8 +159,9 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/world/prefabs/schema.ts` | Component type definitions + validators |
 | `src/world/prefabs/ship_runtime.ts` | Ship prefab → ShipLayout + collider animation binding |
 | `src/world/prefabs/station_runtime.ts` | Station prefab → StationLayoutOverride + collider animation binding |
-| `src/world/prefabs/collider_runtime.ts` | Bakes `collider` components into `GameplayCollider` objects |
-| `src/player/colliders.ts` | Custom capsule-vs-collider resolver (ship); animation matrix math; door-open skip threshold |
+| `src/physics/prefab_colliders.ts` | Bakes `collider` components into `GameplayCollider` objects |
+| `src/physics/ship_physics.ts` | Ship-local Rapier world for collider-deck walking (doors/ramp enable toggles) |
+| `src/physics/colliders.ts` | GameplayCollider types, mesh BVH bake/ground sample, legacy custom capsule push |
 | `src/physics/station_physics.ts` | Rapier world + static/dynamic collider sync; door-collider enable/disable |
 | `src/physics/rapier_world.ts` | Rapier body/collider creation from GameplayColliders |
 | `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) + `isDoorPassable` threshold |
@@ -168,7 +170,8 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/player/station_interaction.ts` | Resolves nearby station interactions from markers |
 | `src/app/game_loop.ts` | Main frame loop; owns `stationAnimationStates` + F-key dispatch |
 | `src/app/ship_play_session.ts` | Ship sandbox/deck mode; door + ramp toggles |
-| `src/render/prefabs/prefab_renderer.ts` | Binds animation components to GLB nodes; `updateAnimations` callback |
+| `src/render/prefabs/prefab_renderer.ts` | Binds animation components to GLB nodes; `updateAnimations` / `updateParticles` callbacks |
+| `src/render/particles/` | Unity-style `particle-system` runtime (billboards, modules, plane collision only) |
 | `src/flight/player_controls.ts` | Keyboard/gamepad input; `consumeActions` + `wasKeyPressed` |
 | `scripts/inspect_glb.mjs` | CLI GLB node hierarchy dump |
 

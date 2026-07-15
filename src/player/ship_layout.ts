@@ -13,6 +13,11 @@ import type { PrefabSoundSpec } from "../world/prefabs/sound_runtime";
 /** Hinge binding for landing gear articulation (GLB node + deploy angle). */
 export interface ShipGearHingeSpec {
   name: string;
+  /**
+   * Unique ancestor node name. When set, `name` is resolved under that
+   * subtree so mirrored legs with duplicate bone names both bind.
+   */
+  under?: string;
   deployRadians: number;
   axis?: "x" | "y" | "z";
 }
@@ -37,9 +42,35 @@ export interface ShipSpec {
 
 /** Starhopper gear/ramp hinges — shared by layout defaults and render fallback. */
 export const DEFAULT_STARHOPPER_GEAR_HINGES: ShipGearHingeSpec[] = [
-  { name: "LandingGear_BackLeft", deployRadians: -0.55 },
-  { name: "LandingGear_BackRight", deployRadians: -0.55 },
-  { name: "LandingLeg_Front", deployRadians: 1.4 },
+  // Front leg — Unity Take 001 multi-bone endpoints
+  { name: "Front_LandingArm", deployRadians: 0.796 },
+  { name: "Front_Foot", deployRadians: -0.755 },
+  { name: "Front_LandingPiston", deployRadians: -0.563 },
+  // Back legs — mount root + under-scoped arm/foot (duplicate bone names)
+  { name: "LandingGear_BackLeft", deployRadians: -0.791 },
+  {
+    name: "Back_Arm",
+    under: "LandingGear_BackLeft",
+    deployRadians: 0.852,
+  },
+  {
+    name: "Back_Foot",
+    under: "LandingGear_BackLeft",
+    deployRadians: 0.298,
+    axis: "y",
+  },
+  { name: "LandingGear_BackRight", deployRadians: -0.791 },
+  {
+    name: "Back_Arm",
+    under: "LandingGear_BackRight",
+    deployRadians: 0.852,
+  },
+  {
+    name: "Back_Foot",
+    under: "LandingGear_BackRight",
+    deployRadians: 0.298,
+    axis: "y",
+  },
 ];
 
 export const DEFAULT_STARHOPPER_RAMP_HINGE: ShipRampHingeSpec = {

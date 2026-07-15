@@ -97,9 +97,11 @@ export function createStationCharacterAt(
   roomId: string,
   local: StationLocal2,
   face: StationDir2,
+  /** Override floor height when the room has no walk-volume (prefab hangars). */
+  floorUpOverride?: number,
 ): StationCharacterState {
   const room = getStationRoom(roomId);
-  const floorUp = room?.floorUp ?? 0;
+  const floorUp = floorUpOverride ?? room?.floorUp ?? 0;
   const position = stationWalkPose(frame, local, floorUp);
   return {
     animation: 'Idle_Loop',

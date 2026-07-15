@@ -9767,6 +9767,123 @@
                 "shape": "mesh"
               }
             ]
+          },
+          {
+            "node": "SM_Bld_Bridge_Platform_01_(1)",
+            "transform": {
+              "position": {
+                "x": -15.44,
+                "y": 0.07,
+                "z": -40.9
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.706959,
+                "z": 0,
+                "w": 0.707255
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Veh_MissleRack_01_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.6543091399999976,
+                  "y": 0.780818164,
+                  "z": 1.115945400000007
+                },
+                "offset": {
+                  "x": 9.700000003221021e-8,
+                  "y": 0.390409082,
+                  "z": -0.0021352780000007954
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Veh_MissleRack_01_(1)",
+            "transform": {
+              "position": {
+                "x": -13,
+                "y": 0,
+                "z": -56
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.985004,
+                "z": 0,
+                "w": 0.172531
+              },
+              "scale": {
+                "x": 1.45301,
+                "y": 1.45301,
+                "z": 1.45301
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.6543091399999958,
+                  "y": 0.780818164,
+                  "z": 1.115945400000007
+                },
+                "offset": {
+                  "x": 9.700000003221021e-8,
+                  "y": 0.390409082,
+                  "z": -0.0021352780000007954
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Veh_MissleRack_01_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.6543091399999993,
+                  "y": 0.780818164,
+                  "z": 1.1159454
+                },
+                "offset": {
+                  "x": 9.699999559131811e-8,
+                  "y": 0.390409082,
+                  "z": -0.0021352779999972427
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_HangerDoor_01",
+            "transform": {
+              "position": {
+                "x": -6.34,
+                "y": 5.43664,
+                "z": 15.11653
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
           }
         ],
         "hiddenNodes": [
@@ -9829,7 +9946,14 @@
           "SM_Bld_Wall_Corner_Pillar_Wide_05_(1)",
           "SM_Bld_Wall_05_(7)",
           "SM_Bld_Wall_Pillar_05_(4)",
-          "SM_Bld_Wall_05_(3)"
+          "SM_Bld_Wall_05_(3)",
+          "SM_Ship_Bomber_03",
+          "SM_Bld_Bridge_Platform_01_(1)",
+          "SM_Hud_Screen_Backing_01_(26)",
+          "SM_Hud_Screen_Backing_01_(25)",
+          "SM_Bld_Bridge_Chair_Captain_01_(1)",
+          "SM_Bld_Bridge_Chair_Captain_01_(2)",
+          "SM_Veh_MissleRack_01"
         ],
         "materialOverrides": [
           {
@@ -9887,8 +10011,8 @@
             "name": "Hangar Pad",
             "transform": {
               "position": {
-                "x": 11.75,
-                "y": 0.75,
+                "x": -5,
+                "y": 0.25,
                 "z": -54.25
               },
               "rotation": {
@@ -14509,6 +14633,132 @@
                 "zone": {
                   "shape": "sphere",
                   "radius": 5
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-particle-hab-steam",
+            "name": "HabSteam",
+            "transform": {
+              "position": {
+                "x": -31,
+                "y": 3.75,
+                "z": 62.5
+              },
+              "rotation": {
+                "x": 0.965926,
+                "y": 0,
+                "z": 0,
+                "w": 0.258819
+              },
+              "scale": {
+                "x": 1.9,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "particle-system",
+                "enabled": true,
+                "playOnAwake": true,
+                "duration": 5,
+                "looping": true,
+                "prewarm": true,
+                "startDelay": {
+                  "mode": "constant",
+                  "value": 0
+                },
+                "startLifetime": {
+                  "mode": "random",
+                  "min": 1.2,
+                  "max": 2.4
+                },
+                "startSpeed": {
+                  "mode": "random",
+                  "min": 0.15,
+                  "max": 0.45
+                },
+                "startSize": {
+                  "mode": "random",
+                  "min": 0.12,
+                  "max": 0.28
+                },
+                "startColor": "#cfe8ff",
+                "startRotation": {
+                  "mode": "constant",
+                  "value": 0
+                },
+                "gravityModifier": -0.08,
+                "simulationSpace": "local",
+                "maxParticles": 64,
+                "emission": {
+                  "rateOverTime": 12,
+                  "bursts": [
+                    {
+                      "time": 0,
+                      "count": {
+                        "mode": "constant",
+                        "value": 12
+                      },
+                      "cycles": 1,
+                      "interval": 0.5
+                    }
+                  ]
+                },
+                "shape": {
+                  "enabled": true,
+                  "shape": "cone",
+                  "radius": 0.25,
+                  "radiusThickness": 1,
+                  "angle": 25,
+                  "arc": 360,
+                  "box": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  },
+                  "emitFrom": "volume",
+                  "alignToDirection": true
+                },
+                "colorOverLifetime": {
+                  "enabled": true,
+                  "gradient": [
+                    {
+                      "t": 0,
+                      "color": "#dfefff",
+                      "alpha": 0.55
+                    },
+                    {
+                      "t": 1,
+                      "color": "#a8c4e8",
+                      "alpha": 0
+                    }
+                  ]
+                },
+                "sizeOverLifetime": {
+                  "enabled": true,
+                  "curve": [
+                    {
+                      "t": 0,
+                      "value": 0.6
+                    },
+                    {
+                      "t": 1,
+                      "value": 1.8
+                    }
+                  ]
+                },
+                "renderer": {
+                  "renderMode": "billboard",
+                  "blendMode": "alpha",
+                  "softParticles": false,
+                  "softParticleNearFade": 0.2,
+                  "softParticleFarFade": 1.5,
+                  "lengthScale": 1,
+                  "speedScale": 0.05,
+                  "sortMode": "none"
                 }
               }
             ]

@@ -9,6 +9,11 @@ import {
   createPrimitiveMesh,
 } from "../prefabs/prefab_renderer";
 import {
+  createParticleShapeHelper,
+  createParticleSystem,
+  type ParticleSystemHandle,
+} from "../particles";
+import {
   BUILTIN_GEAR_HINGES,
   BUILTIN_RAMP_HINGE,
 } from "../main/scene/ship_model";
@@ -17,6 +22,7 @@ import type { PrefabComponent } from "../../world/prefabs/schema";
 import type { Vec3 } from "../../types";
 import { showContextMenu } from "../../editor/dom";
 import { buildGlbAuthoringMenu } from "../../editor/component_actions";
+import type { ParticlePreviewControls } from "../../editor/panels/particle_fields";
 
 export type GizmoMode = "translate" | "rotate" | "scale";
 export type GizmoSpace = "local" | "world";
@@ -62,6 +68,7 @@ export interface EditorViewport {
   ) => void;
   /** True while the RMB flythrough owns the camera (WASD is flying, not tool shortcuts). */
   isFlying: () => boolean;
+  particlePreview: ParticlePreviewControls;
   dispose: () => void;
 }
 
@@ -127,6 +134,40 @@ export function createEditorViewport(
   const entityRoot = new THREE.Group();
   entityRoot.name = "editor-entities";
   scene.add(entityRoot);
+
+  const particleHandles = new Map<string, ParticleSystemHandle[]>();
+
+  function disposeParticleHandles(): void {
+    for (const handles of particleHandles.values()) {
+      for (const handle of handles) handle.dispose();
+    }
+    particleHandles.clear();
+  }
+
+  function registerParticleHandle(
+    entityId: string,
+    handle: ParticleSystemHandle,
+  ): void {
+    const list = particleHandles.get(entityId) ?? [];
+    list.push(handle);
+    particleHandles.set(entityId, list);
+  }
+
+  const particlePreview: ParticlePreviewControls = {
+    restart(entityId) {
+      for (const handle of particleHandles.get(entityId) ?? []) handle.restart();
+    },
+    setPlaying(entityId, playing) {
+      for (const handle of particleHandles.get(entityId) ?? []) {
+        handle.setPlaying(playing);
+      }
+    },
+    isPlaying(entityId) {
+      const handles = particleHandles.get(entityId) ?? [];
+      if (handles.length === 0) return true;
+      return handles.some((handle) => handle.isPlaying());
+    },
+  };
 
   const orbit = new OrbitControls(camera, canvas);
   orbit.enableDamping = true;
@@ -494,6 +535,11 @@ export function createEditorViewport(
                 true,
               );
         group.add(speaker, cone, zone);
+        return group;
+      }
+      case "particle-system": {
+        const group = new THREE.Group();
+        group.add(createParticleShapeHelper(component.shape));
         return group;
       }
       case "spawn-point": {
@@ -1002,6 +1048,15 @@ export function createEditorViewport(
       ) {
         continue;
       }
+      if (component.type === "particle-system") {
+        const helper = buildComponentHelper(component);
+        if (helper) group.add(helper);
+        const handle = createParticleSystem(component);
+        group.add(handle.object3d);
+        registerParticleHandle(entity.id, handle);
+        hasVisual = true;
+        continue;
+      }
       const helper = buildComponentHelper(component);
       if (helper) {
         group.add(helper);
@@ -1031,6 +1086,7 @@ export function createEditorViewport(
     entityRoot.clear();
     objectsById.clear();
     store.clearGlbTrees();
+    disposeParticleHandles();
     for (const resource of disposables) resource.dispose();
     disposables.length = 0;
 
@@ -1076,8 +1132,12 @@ export function createEditorViewport(
     name: string,
     radians: number,
     axis: "x" | "y" | "z" = "x",
+    under?: string,
   ): void {
-    const object = entityRoot.getObjectByName(name);
+    const scope = under ? entityRoot.getObjectByName(under) : entityRoot;
+    if (!scope) return;
+    const object =
+      under && scope.name === name ? scope : scope.getObjectByName(name);
     if (!object) return;
     const base = baseOf(object);
     previewQuat.setFromAxisAngle(PREVIEW_AXES[axis], radians);
@@ -1163,6 +1223,7 @@ export function createEditorViewport(
         controller?.gear?.nodes ??
         BUILTIN_GEAR_HINGES.map((hinge) => ({
           name: hinge.name,
+          ...(hinge.under ? { under: hinge.under } : {}),
           deployRadians: hinge.deployRadians,
           axis: hinge.axis,
         }));
@@ -1171,6 +1232,7 @@ export function createEditorViewport(
           hinge.name,
           hinge.deployRadians * gear01,
           hinge.axis ?? "x",
+          hinge.under,
         );
       }
       const rampHinge = controller?.ramp?.hinge ?? {
@@ -1771,6 +1833,9 @@ export function createEditorViewport(
     if (flying) updateFly(dt);
     else orbit.update();
     selectionBoxes.forEach((box) => box.update());
+    for (const handles of particleHandles.values()) {
+      for (const handle of handles) handle.update(dt, camera);
+    }
     renderer.render(scene, camera);
   }
   animate();
@@ -1801,10 +1866,12 @@ export function createEditorViewport(
     getGlbNodeLocalTransform,
     setGlbNodeLocalTransform,
     isFlying: () => flying,
+    particlePreview,
     dispose() {
       disposed = true;
       endFly();
       unsubscribe();
+      disposeParticleHandles();
       window.removeEventListener("keydown", onKeyChange);
       window.removeEventListener("keyup", onKeyChange);
       window.removeEventListener("keydown", onFlyKey);

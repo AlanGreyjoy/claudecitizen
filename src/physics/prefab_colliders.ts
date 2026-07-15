@@ -128,7 +128,12 @@ async function collect(
         : undefined;
       for (const override of nodesWithColliders) {
         const nodeWorldMatrix = matrices.get(override.node);
-        if (!nodeWorldMatrix) continue;
+        if (!nodeWorldMatrix) {
+          console.warn(
+            `Collider on GLB node "${override.node}" skipped — node not found in ${entity.asset.url}.`,
+          );
+          continue;
+        }
         const nodeSceneMatrix = entitySceneMatrix.clone();
         if (assetRootInverse) nodeSceneMatrix.multiply(assetRootInverse);
         nodeSceneMatrix.multiply(nodeWorldMatrix);

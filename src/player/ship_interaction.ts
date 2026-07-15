@@ -93,14 +93,14 @@ export function nearShipRampOutside(
 }
 
 /**
- * Ship-local 2D spot to start deck-walking when a grounded character steps
- * onto the lowered ramp collider, or null when outside it.
+ * Ship-local spot + mesh floor when a grounded character steps onto the
+ * lowered ramp collider, or null when outside it.
  */
 export function sampleRampBoarding(
   character: Pick<CharacterState, 'position'>,
   ship: FlightBody,
   rig: ShipRigState,
-): { right: number; forward: number } | null {
+): { right: number; forward: number; floorUp: number } | null {
   if (!usesColliderDeck() || !isRampUsable(rig)) return null;
   const local = worldToShipLocal(ship, character.position);
   if (!atShipGroundLevel(local.up)) return null;
@@ -118,7 +118,7 @@ export function sampleRampBoarding(
   );
   if (floor === null) return null;
   if (Math.abs(local.up - floor) > 0.65) return null;
-  return { right: local.right, forward: local.forward };
+  return { right: local.right, forward: local.forward, floorUp: floor };
 }
 
 /**

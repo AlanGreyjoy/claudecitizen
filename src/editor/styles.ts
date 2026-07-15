@@ -1046,6 +1046,28 @@ body.ed-resize-row * {
   accent-color: var(--accent);
 }
 
+.ed-particle-module {
+  margin: 6px 0 10px;
+  border: 1px solid rgba(90, 190, 255, 0.18);
+  border-radius: 4px;
+  background: rgba(8, 16, 32, 0.45);
+}
+
+.ed-particle-module-title {
+  cursor: pointer;
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 12px;
+  user-select: none;
+}
+
+.ed-particle-module-body {
+  padding: 4px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 /* Project panel */
 .ed-project {
   display: grid;

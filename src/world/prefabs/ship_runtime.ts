@@ -151,6 +151,7 @@ function bakeFromShipController(
     out.spec.gearHinges = controller.gear.nodes.map(
       (node): ShipGearHingeSpec => ({
         name: node.name,
+        ...(node.under ? { under: node.under } : {}),
         deployRadians: node.deployRadians,
         ...(node.axis ? { axis: node.axis } : {}),
       }),
@@ -457,6 +458,7 @@ function collect(
         out.spec.gearHinges = component.nodes.map(
           (node): ShipGearHingeSpec => ({
             name: node.name,
+            ...(node.under ? { under: node.under } : {}),
             deployRadians: node.deployRadians,
             ...(node.axis ? { axis: node.axis } : {}),
           }),

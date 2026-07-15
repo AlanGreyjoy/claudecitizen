@@ -87,6 +87,151 @@ export type PrefabSoundZone =
   | { shape: "sphere"; radius: number }
   | { shape: "box"; size: Vec3 };
 
+/** Constant or random range (Unity MinMaxCurve constant/two-constants). */
+export type PrefabMinMax =
+  | { mode: "constant"; value: number }
+  | { mode: "random"; min: number; max: number };
+
+export interface PrefabCurveKey {
+  t: number;
+  value: number;
+}
+
+export interface PrefabGradientKey {
+  t: number;
+  color: PrefabColor;
+  alpha?: number;
+}
+
+export type PrefabCurve = PrefabCurveKey[];
+export type PrefabGradient = PrefabGradientKey[];
+
+export type PrefabParticleShapeType =
+  | "sphere"
+  | "hemisphere"
+  | "cone"
+  | "box"
+  | "circle"
+  | "edge";
+
+export type PrefabParticleEmitFrom = "volume" | "shell" | "edge";
+
+export type PrefabParticleRenderMode =
+  | "billboard"
+  | "stretched-billboard"
+  | "horizontal"
+  | "vertical";
+
+export type PrefabParticleBlendMode = "alpha" | "additive";
+
+export type PrefabParticleSimulationSpace = "local" | "world";
+
+export type PrefabParticleSortMode = "none" | "by-distance";
+
+export interface PrefabParticleBurst {
+  time: number;
+  count: PrefabMinMax;
+  cycles?: number;
+  interval?: number;
+}
+
+export interface PrefabParticleEmission {
+  rateOverTime: number;
+  bursts: PrefabParticleBurst[];
+}
+
+export interface PrefabParticleShape {
+  enabled: boolean;
+  shape: PrefabParticleShapeType;
+  radius: number;
+  /** 0 = shell only, 1 = full volume. */
+  radiusThickness: number;
+  /** Cone half-angle in degrees. */
+  angle: number;
+  /** Degrees of the circle/cone arc used for spawn. */
+  arc: number;
+  box: Vec3;
+  emitFrom: PrefabParticleEmitFrom;
+  alignToDirection: boolean;
+}
+
+export interface PrefabParticleVelocityOverLifetime {
+  enabled: boolean;
+  space: PrefabParticleSimulationSpace;
+  linear: Vec3;
+  orbital: Vec3;
+  radial: number;
+}
+
+export interface PrefabParticleForceOverLifetime {
+  enabled: boolean;
+  space: PrefabParticleSimulationSpace;
+  force: Vec3;
+}
+
+export interface PrefabParticleColorOverLifetime {
+  enabled: boolean;
+  gradient: PrefabGradient;
+}
+
+export interface PrefabParticleSizeOverLifetime {
+  enabled: boolean;
+  curve: PrefabCurve;
+}
+
+export interface PrefabParticleTextureSheet {
+  enabled: boolean;
+  tilesX: number;
+  tilesY: number;
+  animation: "whole-sheet" | "single-row";
+  cycles: number;
+  startFrame: number;
+}
+
+export interface PrefabParticleCollisionPlane {
+  /** Plane point in local emitter space (or world if simulationSpace is world). */
+  point: Vec3;
+  /** Unit normal. */
+  normal: Vec3;
+}
+
+export interface PrefabParticleCollision {
+  enabled: boolean;
+  type: "planes";
+  /** Include a world-space Y=0 ground plane. */
+  groundPlane: boolean;
+  planes: PrefabParticleCollisionPlane[];
+  dampen: number;
+  bounce: number;
+  lifetimeLoss: number;
+  maxKillSpeed: number;
+}
+
+export interface PrefabParticleTrails {
+  enabled: boolean;
+  /** Fraction of particles that leave a trail, 0..1. */
+  ratio: number;
+  lifetime: number;
+  minVertexDistance: number;
+  widthOverTrail: PrefabCurve;
+  colorOverTrail: PrefabGradient;
+  dieWithParticles: boolean;
+}
+
+export interface PrefabParticleRenderer {
+  renderMode: PrefabParticleRenderMode;
+  textureUrl?: string;
+  blendMode: PrefabParticleBlendMode;
+  softParticles: boolean;
+  softParticleNearFade: number;
+  softParticleFarFade: number;
+  lengthScale: number;
+  speedScale: number;
+  sortMode: PrefabParticleSortMode;
+}
+
+export const PARTICLE_MAX_PARTICLES_HARD_CAP = 2048;
+
 export type PrefabComponent =
   | { type: "station-frame" }
   | { type: "prop-frame" }
@@ -164,6 +309,33 @@ export type PrefabComponent =
       zone: PrefabSoundZone;
     }
   | {
+      type: "particle-system";
+      enabled?: boolean;
+      playOnAwake?: boolean;
+      duration: number;
+      looping: boolean;
+      prewarm?: boolean;
+      startDelay: PrefabMinMax;
+      startLifetime: PrefabMinMax;
+      startSpeed: PrefabMinMax;
+      startSize: PrefabMinMax;
+      startColor: PrefabColor;
+      startRotation: PrefabMinMax;
+      gravityModifier: number;
+      simulationSpace: PrefabParticleSimulationSpace;
+      maxParticles: number;
+      emission: PrefabParticleEmission;
+      shape: PrefabParticleShape;
+      velocityOverLifetime?: PrefabParticleVelocityOverLifetime;
+      forceOverLifetime?: PrefabParticleForceOverLifetime;
+      colorOverLifetime?: PrefabParticleColorOverLifetime;
+      sizeOverLifetime?: PrefabParticleSizeOverLifetime;
+      textureSheetAnimation?: PrefabParticleTextureSheet;
+      collision?: PrefabParticleCollision;
+      trails?: PrefabParticleTrails;
+      renderer: PrefabParticleRenderer;
+    }
+  | {
       type: "collider";
       shape: "box";
       size: Vec3;
@@ -199,7 +371,13 @@ export type PrefabComponent =
         shieldRegenPerSec?: number;
       };
       gear?: {
-        nodes: { name: string; deployRadians: number; axis?: "x" | "y" | "z" }[];
+        nodes: {
+          name: string;
+          /** Unique ancestor for duplicate bone names (mirrored back legs). */
+          under?: string;
+          deployRadians: number;
+          axis?: "x" | "y" | "z";
+        }[];
       };
       ramp?: {
         hinge: { node: string; lowerRadians: number; axis?: "x" | "y" | "z" };
@@ -259,7 +437,13 @@ export type PrefabComponent =
   /** Landing gear hinge nodes on the hull GLB. */
   | {
       type: "ship-gear";
-      nodes: { name: string; deployRadians: number; axis?: "x" | "y" | "z" }[];
+      nodes: {
+        name: string;
+        /** Unique ancestor for duplicate bone names (mirrored back legs). */
+        under?: string;
+        deployRadians: number;
+        axis?: "x" | "y" | "z";
+      }[];
     }
   /** Boarding ramp hinge node on the hull GLB. */
   | {
@@ -467,6 +651,522 @@ function parseUnitValue(value: unknown, path: string): number {
 
 function parseOptionalUnitValue(value: unknown, path: string): number | undefined {
   return value === undefined ? undefined : parseUnitValue(value, path);
+}
+
+function parseClampedNumber(
+  value: unknown,
+  path: string,
+  min: number,
+  max: number,
+): number {
+  return Math.min(max, Math.max(min, parseFiniteNumber(value, path)));
+}
+
+function parseMinMax(
+  value: unknown,
+  path: string,
+  min: number,
+  max: number,
+): PrefabMinMax {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return { mode: "constant", value: Math.min(max, Math.max(min, value)) };
+  }
+  if (!isRecord(value)) fail(path, "expected number or {mode,value}|{mode,min,max}");
+  if (value.mode === "random") {
+    const lo = parseClampedNumber(value.min, `${path}.min`, min, max);
+    const hi = parseClampedNumber(value.max, `${path}.max`, min, max);
+    return { mode: "random", min: Math.min(lo, hi), max: Math.max(lo, hi) };
+  }
+  const constant =
+    value.value === undefined
+      ? parseClampedNumber(value.constant, `${path}.value`, min, max)
+      : parseClampedNumber(value.value, `${path}.value`, min, max);
+  return { mode: "constant", value: constant };
+}
+
+function parseCurve(value: unknown, path: string): PrefabCurve {
+  if (!Array.isArray(value) || value.length === 0) {
+    fail(path, "expected non-empty keyframe array");
+  }
+  if (value.length > 16) fail(path, "too many curve keys (max 16)");
+  return value.map((key, index) => {
+    if (!isRecord(key)) fail(`${path}[${index}]`, "expected {t,value}");
+    return {
+      t: parseUnitValue(key.t, `${path}[${index}].t`),
+      value: parseFiniteNumber(key.value, `${path}[${index}].value`),
+    };
+  });
+}
+
+function parseGradient(value: unknown, path: string): PrefabGradient {
+  if (!Array.isArray(value) || value.length === 0) {
+    fail(path, "expected non-empty gradient keyframe array");
+  }
+  if (value.length > 16) fail(path, "too many gradient keys (max 16)");
+  return value.map((key, index) => {
+    if (!isRecord(key)) fail(`${path}[${index}]`, "expected {t,color}");
+    return {
+      t: parseUnitValue(key.t, `${path}[${index}].t`),
+      color: parseColor(key.color, `${path}[${index}].color`),
+      alpha:
+        key.alpha === undefined
+          ? undefined
+          : parseUnitValue(key.alpha, `${path}[${index}].alpha`),
+    };
+  });
+}
+
+function parseOptionalCurve(
+  value: unknown,
+  path: string,
+): PrefabCurve | undefined {
+  return value === undefined ? undefined : parseCurve(value, path);
+}
+
+function parseOptionalGradient(
+  value: unknown,
+  path: string,
+): PrefabGradient | undefined {
+  return value === undefined ? undefined : parseGradient(value, path);
+}
+
+export function createDefaultParticleSystemComponent(): PrefabComponent & {
+  type: "particle-system";
+} {
+  return {
+    type: "particle-system",
+    enabled: true,
+    playOnAwake: true,
+    duration: 5,
+    looping: true,
+    prewarm: false,
+    startDelay: { mode: "constant", value: 0 },
+    startLifetime: { mode: "random", min: 0.8, max: 1.4 },
+    startSpeed: { mode: "random", min: 0.4, max: 1.2 },
+    startSize: { mode: "random", min: 0.04, max: 0.1 },
+    startColor: "#ffe6a8",
+    startRotation: { mode: "constant", value: 0 },
+    gravityModifier: 0.15,
+    simulationSpace: "local",
+    maxParticles: 128,
+    emission: {
+      rateOverTime: 24,
+      bursts: [],
+    },
+    shape: {
+      enabled: true,
+      shape: "cone",
+      radius: 0.15,
+      radiusThickness: 1,
+      angle: 18,
+      arc: 360,
+      box: { x: 1, y: 1, z: 1 },
+      emitFrom: "volume",
+      alignToDirection: true,
+    },
+    velocityOverLifetime: {
+      enabled: false,
+      space: "local",
+      linear: { x: 0, y: 0, z: 0 },
+      orbital: { x: 0, y: 0, z: 0 },
+      radial: 0,
+    },
+    forceOverLifetime: {
+      enabled: false,
+      space: "local",
+      force: { x: 0, y: 0, z: 0 },
+    },
+    colorOverLifetime: {
+      enabled: true,
+      gradient: [
+        { t: 0, color: "#ffe6a8", alpha: 1 },
+        { t: 1, color: "#ff6a2a", alpha: 0 },
+      ],
+    },
+    sizeOverLifetime: {
+      enabled: true,
+      curve: [
+        { t: 0, value: 1 },
+        { t: 1, value: 0.2 },
+      ],
+    },
+    textureSheetAnimation: {
+      enabled: false,
+      tilesX: 1,
+      tilesY: 1,
+      animation: "whole-sheet",
+      cycles: 1,
+      startFrame: 0,
+    },
+    collision: {
+      enabled: false,
+      type: "planes",
+      groundPlane: true,
+      planes: [],
+      dampen: 0.1,
+      bounce: 0.3,
+      lifetimeLoss: 0.1,
+      maxKillSpeed: 100,
+    },
+    trails: {
+      enabled: false,
+      ratio: 0.3,
+      lifetime: 0.35,
+      minVertexDistance: 0.05,
+      widthOverTrail: [
+        { t: 0, value: 1 },
+        { t: 1, value: 0 },
+      ],
+      colorOverTrail: [
+        { t: 0, color: "#ffe6a8", alpha: 0.8 },
+        { t: 1, color: "#ff6a2a", alpha: 0 },
+      ],
+      dieWithParticles: true,
+    },
+    renderer: {
+      renderMode: "billboard",
+      blendMode: "additive",
+      softParticles: false,
+      softParticleNearFade: 0.2,
+      softParticleFarFade: 1.5,
+      lengthScale: 1,
+      speedScale: 0.05,
+      sortMode: "none",
+    },
+  };
+}
+
+function parseParticleSystemComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent & { type: "particle-system" } {
+  const defaults = createDefaultParticleSystemComponent();
+  const simulationSpace =
+    value.simulationSpace === "world" ? "world" : "local";
+  const emissionRaw = isRecord(value.emission) ? value.emission : {};
+  const burstsRaw = Array.isArray(emissionRaw.bursts) ? emissionRaw.bursts : [];
+  if (burstsRaw.length > 16) fail(`${path}.emission.bursts`, "too many bursts (max 16)");
+  const shapeRaw = isRecord(value.shape) ? value.shape : {};
+  const shapeType = shapeRaw.shape;
+  const parsedShapeType: PrefabParticleShapeType =
+    shapeType === "sphere" ||
+    shapeType === "hemisphere" ||
+    shapeType === "cone" ||
+    shapeType === "box" ||
+    shapeType === "circle" ||
+    shapeType === "edge"
+      ? shapeType
+      : defaults.shape.shape;
+  const emitFrom =
+    shapeRaw.emitFrom === "shell" || shapeRaw.emitFrom === "edge"
+      ? shapeRaw.emitFrom
+      : "volume";
+  const rendererRaw = isRecord(value.renderer) ? value.renderer : {};
+  const renderMode =
+    rendererRaw.renderMode === "stretched-billboard" ||
+    rendererRaw.renderMode === "horizontal" ||
+    rendererRaw.renderMode === "vertical"
+      ? rendererRaw.renderMode
+      : "billboard";
+  const blendMode =
+    rendererRaw.blendMode === "alpha" ? "alpha" : "additive";
+  const sortMode =
+    rendererRaw.sortMode === "by-distance" ? "by-distance" : "none";
+
+  const parseOptionalModule = <T>(
+    raw: unknown,
+    build: (record: Record<string, unknown>) => T,
+  ): T | undefined => {
+    if (raw === undefined) return undefined;
+    if (!isRecord(raw)) return undefined;
+    return build(raw);
+  };
+
+  return {
+    type: "particle-system",
+    enabled: value.enabled === undefined ? true : Boolean(value.enabled),
+    playOnAwake:
+      value.playOnAwake === undefined ? true : Boolean(value.playOnAwake),
+    duration: parseClampedNumber(value.duration ?? defaults.duration, `${path}.duration`, 0.01, 600),
+    looping: value.looping === undefined ? true : Boolean(value.looping),
+    prewarm: value.prewarm === undefined ? false : Boolean(value.prewarm),
+    startDelay: parseMinMax(value.startDelay ?? defaults.startDelay, `${path}.startDelay`, 0, 60),
+    startLifetime: parseMinMax(
+      value.startLifetime ?? defaults.startLifetime,
+      `${path}.startLifetime`,
+      0.01,
+      120,
+    ),
+    startSpeed: parseMinMax(
+      value.startSpeed ?? defaults.startSpeed,
+      `${path}.startSpeed`,
+      -200,
+      200,
+    ),
+    startSize: parseMinMax(
+      value.startSize ?? defaults.startSize,
+      `${path}.startSize`,
+      0.001,
+      50,
+    ),
+    startColor: parseColor(
+      value.startColor ?? defaults.startColor,
+      `${path}.startColor`,
+    ),
+    startRotation: parseMinMax(
+      value.startRotation ?? defaults.startRotation,
+      `${path}.startRotation`,
+      -3600,
+      3600,
+    ),
+    gravityModifier: parseClampedNumber(
+      value.gravityModifier ?? defaults.gravityModifier,
+      `${path}.gravityModifier`,
+      -20,
+      20,
+    ),
+    simulationSpace,
+    maxParticles: Math.min(
+      PARTICLE_MAX_PARTICLES_HARD_CAP,
+      Math.max(
+        1,
+        Math.floor(
+          parseFiniteNumber(
+            value.maxParticles ?? defaults.maxParticles,
+            `${path}.maxParticles`,
+          ),
+        ),
+      ),
+    ),
+    emission: {
+      rateOverTime: parseClampedNumber(
+        emissionRaw.rateOverTime ?? defaults.emission.rateOverTime,
+        `${path}.emission.rateOverTime`,
+        0,
+        10_000,
+      ),
+      bursts: burstsRaw.map((burst, index) => {
+        if (!isRecord(burst)) {
+          fail(`${path}.emission.bursts[${index}]`, "expected burst object");
+        }
+        return {
+          time: parseClampedNumber(burst.time, `${path}.emission.bursts[${index}].time`, 0, 600),
+          count: parseMinMax(
+            burst.count ?? { mode: "constant", value: 8 },
+            `${path}.emission.bursts[${index}].count`,
+            0,
+            2048,
+          ),
+          cycles:
+            burst.cycles === undefined
+              ? undefined
+              : Math.min(
+                  1000,
+                  Math.max(
+                    1,
+                    Math.floor(
+                      parseFiniteNumber(
+                        burst.cycles,
+                        `${path}.emission.bursts[${index}].cycles`,
+                      ),
+                    ),
+                  ),
+                ),
+          interval:
+            burst.interval === undefined
+              ? undefined
+              : parseClampedNumber(
+                  burst.interval,
+                  `${path}.emission.bursts[${index}].interval`,
+                  0.01,
+                  60,
+                ),
+        };
+      }),
+    },
+    shape: {
+      enabled: shapeRaw.enabled === undefined ? true : Boolean(shapeRaw.enabled),
+      shape: parsedShapeType,
+      radius: parseClampedNumber(
+        shapeRaw.radius ?? defaults.shape.radius,
+        `${path}.shape.radius`,
+        0,
+        500,
+      ),
+      radiusThickness: parseUnitValue(
+        shapeRaw.radiusThickness ?? defaults.shape.radiusThickness,
+        `${path}.shape.radiusThickness`,
+      ),
+      angle: parseClampedNumber(
+        shapeRaw.angle ?? defaults.shape.angle,
+        `${path}.shape.angle`,
+        0,
+        180,
+      ),
+      arc: parseClampedNumber(
+        shapeRaw.arc ?? defaults.shape.arc,
+        `${path}.shape.arc`,
+        0,
+        360,
+      ),
+      box: (() => {
+        const box = parseVec3(shapeRaw.box ?? defaults.shape.box, `${path}.shape.box`);
+        return {
+          x: Math.min(500, Math.max(0.01, box.x)),
+          y: Math.min(500, Math.max(0.01, box.y)),
+          z: Math.min(500, Math.max(0.01, box.z)),
+        };
+      })(),
+      emitFrom,
+      alignToDirection: Boolean(
+        shapeRaw.alignToDirection ?? defaults.shape.alignToDirection,
+      ),
+    },
+    velocityOverLifetime: parseOptionalModule(value.velocityOverLifetime, (raw) => ({
+      enabled: Boolean(raw.enabled),
+      space: raw.space === "world" ? "world" : "local",
+      linear: parseVec3(raw.linear ?? { x: 0, y: 0, z: 0 }, `${path}.velocityOverLifetime.linear`),
+      orbital: parseVec3(
+        raw.orbital ?? { x: 0, y: 0, z: 0 },
+        `${path}.velocityOverLifetime.orbital`,
+      ),
+      radial: parseClampedNumber(
+        raw.radial ?? 0,
+        `${path}.velocityOverLifetime.radial`,
+        -200,
+        200,
+      ),
+    })),
+    forceOverLifetime: parseOptionalModule(value.forceOverLifetime, (raw) => ({
+      enabled: Boolean(raw.enabled),
+      space: raw.space === "world" ? "world" : "local",
+      force: parseVec3(raw.force ?? { x: 0, y: 0, z: 0 }, `${path}.forceOverLifetime.force`),
+    })),
+    colorOverLifetime: parseOptionalModule(value.colorOverLifetime, (raw) => ({
+      enabled: Boolean(raw.enabled),
+      gradient: parseGradient(
+        raw.gradient ?? defaults.colorOverLifetime!.gradient,
+        `${path}.colorOverLifetime.gradient`,
+      ),
+    })),
+    sizeOverLifetime: parseOptionalModule(value.sizeOverLifetime, (raw) => ({
+      enabled: Boolean(raw.enabled),
+      curve: parseCurve(
+        raw.curve ?? defaults.sizeOverLifetime!.curve,
+        `${path}.sizeOverLifetime.curve`,
+      ),
+    })),
+    textureSheetAnimation: parseOptionalModule(value.textureSheetAnimation, (raw) => ({
+      enabled: Boolean(raw.enabled),
+      tilesX: Math.min(
+        16,
+        Math.max(1, Math.floor(parseFiniteNumber(raw.tilesX ?? 1, `${path}.textureSheetAnimation.tilesX`))),
+      ),
+      tilesY: Math.min(
+        16,
+        Math.max(1, Math.floor(parseFiniteNumber(raw.tilesY ?? 1, `${path}.textureSheetAnimation.tilesY`))),
+      ),
+      animation: raw.animation === "single-row" ? "single-row" : "whole-sheet",
+      cycles: parseClampedNumber(
+        raw.cycles ?? 1,
+        `${path}.textureSheetAnimation.cycles`,
+        0.01,
+        64,
+      ),
+      startFrame: Math.min(
+        255,
+        Math.max(
+          0,
+          Math.floor(
+            parseFiniteNumber(raw.startFrame ?? 0, `${path}.textureSheetAnimation.startFrame`),
+          ),
+        ),
+      ),
+    })),
+    collision: parseOptionalModule(value.collision, (raw) => {
+      const planesRaw = Array.isArray(raw.planes) ? raw.planes : [];
+      if (planesRaw.length > 8) fail(`${path}.collision.planes`, "too many planes (max 8)");
+      return {
+        enabled: Boolean(raw.enabled),
+        type: "planes" as const,
+        groundPlane: raw.groundPlane === undefined ? true : Boolean(raw.groundPlane),
+        planes: planesRaw.map((plane, index) => {
+          if (!isRecord(plane)) {
+            fail(`${path}.collision.planes[${index}]`, "expected {point,normal}");
+          }
+          return {
+            point: parseVec3(plane.point, `${path}.collision.planes[${index}].point`),
+            normal: parseVec3(plane.normal, `${path}.collision.planes[${index}].normal`),
+          };
+        }),
+        dampen: parseUnitValue(raw.dampen ?? 0.1, `${path}.collision.dampen`),
+        bounce: parseUnitValue(raw.bounce ?? 0.3, `${path}.collision.bounce`),
+        lifetimeLoss: parseUnitValue(
+          raw.lifetimeLoss ?? 0.1,
+          `${path}.collision.lifetimeLoss`,
+        ),
+        maxKillSpeed: parseClampedNumber(
+          raw.maxKillSpeed ?? 100,
+          `${path}.collision.maxKillSpeed`,
+          0,
+          10_000,
+        ),
+      };
+    }),
+    trails: parseOptionalModule(value.trails, (raw) => ({
+      enabled: Boolean(raw.enabled),
+      ratio: parseUnitValue(raw.ratio ?? 0.3, `${path}.trails.ratio`),
+      lifetime: parseClampedNumber(raw.lifetime ?? 0.35, `${path}.trails.lifetime`, 0.01, 30),
+      minVertexDistance: parseClampedNumber(
+        raw.minVertexDistance ?? 0.05,
+        `${path}.trails.minVertexDistance`,
+        0.001,
+        10,
+      ),
+      widthOverTrail:
+        parseOptionalCurve(raw.widthOverTrail, `${path}.trails.widthOverTrail`) ??
+        defaults.trails!.widthOverTrail,
+      colorOverTrail:
+        parseOptionalGradient(raw.colorOverTrail, `${path}.trails.colorOverTrail`) ??
+        defaults.trails!.colorOverTrail,
+      dieWithParticles:
+        raw.dieWithParticles === undefined ? true : Boolean(raw.dieWithParticles),
+    })),
+    renderer: {
+      renderMode,
+      textureUrl:
+        rendererRaw.textureUrl === undefined
+          ? undefined
+          : parseAssetUrl(rendererRaw.textureUrl, `${path}.renderer.textureUrl`),
+      blendMode,
+      softParticles: Boolean(rendererRaw.softParticles),
+      softParticleNearFade: parseClampedNumber(
+        rendererRaw.softParticleNearFade ?? defaults.renderer.softParticleNearFade,
+        `${path}.renderer.softParticleNearFade`,
+        0,
+        50,
+      ),
+      softParticleFarFade: parseClampedNumber(
+        rendererRaw.softParticleFarFade ?? defaults.renderer.softParticleFarFade,
+        `${path}.renderer.softParticleFarFade`,
+        0.01,
+        200,
+      ),
+      lengthScale: parseClampedNumber(
+        rendererRaw.lengthScale ?? defaults.renderer.lengthScale,
+        `${path}.renderer.lengthScale`,
+        0,
+        50,
+      ),
+      speedScale: parseClampedNumber(
+        rendererRaw.speedScale ?? defaults.renderer.speedScale,
+        `${path}.renderer.speedScale`,
+        0,
+        10,
+      ),
+      sortMode,
+    },
+  };
 }
 
 function parseOptionalNonNegativeNumber(
@@ -776,6 +1476,8 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         zone,
       };
     }
+    case "particle-system":
+      return parseParticleSystemComponent(value, path);
     case "collider": {
       const shape = value.shape === "mesh" ? "mesh" : "box";
       const offset =
@@ -822,12 +1524,17 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         if (!Array.isArray(raw) || raw.length === 0) {
           fail(path, "expected non-empty array of gear hinges");
         }
-        if (raw.length > 12) fail(path, "too many gear nodes (max 12)");
+        if (raw.length > 16) fail(path, "too many gear nodes (max 16)");
         return raw.map((node, index) => {
           if (!isRecord(node))
             fail(`${path}[${index}]`, "expected {name, deployRadians}");
+          const under =
+            node.under === undefined
+              ? undefined
+              : parseString(node.under, `${path}[${index}].under`, 128);
           return {
             name: parseString(node.name, `${path}[${index}].name`, 128),
+            ...(under ? { under } : {}),
             deployRadians: Math.min(
               10,
               Math.max(
@@ -1275,8 +1982,8 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
       if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
         fail(`${path}.nodes`, "expected non-empty array of gear hinges");
       }
-      if (value.nodes.length > 12)
-        fail(`${path}.nodes`, "too many gear nodes (max 12)");
+      if (value.nodes.length > 16)
+        fail(`${path}.nodes`, "too many gear nodes (max 16)");
       return {
         type,
         nodes: value.nodes.map((node, index) => {
@@ -1289,8 +1996,13 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
               : axisRaw === "x" || axisRaw === "y" || axisRaw === "z"
                 ? axisRaw
                 : fail(`${path}.nodes[${index}].axis`, 'expected "x", "y", or "z"');
+          const under =
+            node.under === undefined
+              ? undefined
+              : parseString(node.under, `${path}.nodes[${index}].under`, 128);
           return {
             name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
+            ...(under ? { under } : {}),
             deployRadians: Math.min(
               10,
               Math.max(

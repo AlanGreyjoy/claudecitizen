@@ -95,6 +95,7 @@ Dumps scene hierarchy, mesh bindings, and animation clip targets. Use this **bef
 | Task | Files |
 |------|-------|
 | New component type | `schema.ts`, `component_registry.ts`, `inspector.ts` fields |
+| Particle System | `schema.ts` `particle-system` + `src/render/particles/` + inspector modules; plane collision only; live in editor + play via `updateParticles(dt)` |
 | Add-component behavior | `component_actions.ts` |
 | Context menus | `component_actions.ts`, `hierarchy.ts`, `viewport.ts` |
 | Node override persistence | `document.ts`, `serialize.ts` |

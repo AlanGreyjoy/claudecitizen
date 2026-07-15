@@ -429,6 +429,7 @@ export function startEditorSession(): void {
   });
   createInspectorPanel(inspectorEl, store, {
     audioPreview,
+    particlePreview: viewport.particlePreview,
     getGlbNodeLocalTransform: (entityId, nodeUuid) =>
       viewport.getGlbNodeLocalTransform(entityId, nodeUuid),
     setGlbNodeLocalTransform: (entityId, nodeUuid, transform) =>

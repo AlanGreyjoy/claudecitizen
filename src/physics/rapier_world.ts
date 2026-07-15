@@ -154,11 +154,14 @@ async function createMeshCollider(
 export async function addCollider(
   world: RAPIER.World,
   collider: GameplayCollider,
+  rig?: ShipColliderRigState,
 ): Promise<RAPIER.Collider | null> {
   if (collider.kind === "box") {
-    const { translation, rotation, scale } = gameplayMatrixToRapier(
-      collider.baseLocalToSpace,
-    );
+    const worldMatrix =
+      rig && collider.animation
+        ? resolveColliderWorldMatrix(collider, rig)
+        : collider.baseLocalToSpace;
+    const { translation, rotation, scale } = gameplayMatrixToRapier(worldMatrix);
     const bodyDesc = RAPIER.RigidBodyDesc.fixed()
       .setTranslation(translation.x, translation.y, translation.z)
       .setRotation(rotation);
@@ -173,7 +176,7 @@ export async function addCollider(
     return world.createCollider(colliderDesc, body);
   }
 
-  return createMeshCollider(world, collider);
+  return createMeshCollider(world, collider, rig);
 }
 
 export function removeCollider(

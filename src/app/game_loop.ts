@@ -28,6 +28,9 @@ import {
 } from "../player/character_controller";
 import {
   createDeckCharacterState,
+  DECK_FLOOR_OFFSET_METERS,
+  getDeckSpawnFloorHint,
+  getDefaultDeckSpawnLocal,
   getShipWalkZones,
   isOnShipRampDeck,
   nearestDoor,
@@ -59,6 +62,12 @@ import {
   updateShipRig,
 } from "../player/ship_rig";
 import { DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD } from "../physics/colliders";
+import {
+  createShipPhysics,
+  syncShipArticulationColliders,
+  teleportShipPlayerLocal,
+  type ShipPhysics,
+} from "../physics/ship_physics";
 import { playSfx } from "../audio/sfx";
 import {
   beginElevatorRide,
@@ -88,6 +97,7 @@ import { buildRoomForArea } from "../player/hangar_build/validation";
 import type { HangarPropRenderer } from "../render/hangar/prop_instances";
 import { pickStationFloorPoint } from "../render/hangar/prop_instances";
 import {
+  getHangarByIndex,
   getStationFrame,
   getStationHangars,
   getStationLayoutOverride,
@@ -103,7 +113,11 @@ import type { SpikeRenderer } from "../render/main";
 import type { ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
-import { syncDynamicColliders, type StationPhysics } from "../physics/station_physics";
+import {
+  syncDynamicColliders,
+  teleportStationPlayer,
+  type StationPhysics,
+} from "../physics/station_physics";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
@@ -165,6 +179,42 @@ export function createGameLoop({
   isPaused,
 }: GameLoopOptions) {
   let world: WorldState = createWorldState(planet, seed);
+  let shipPhysics: ShipPhysics | null = null;
+  let shipPhysicsWarming = false;
+
+  function disposeShipDeckPhysics(): void {
+    shipPhysics?.dispose();
+    shipPhysics = null;
+  }
+
+  async function warmShipDeckPhysics(): Promise<ShipPhysics | null> {
+    if (!usesColliderDeck()) return null;
+    if (shipPhysics) return shipPhysics;
+    if (shipPhysicsWarming) return null;
+    shipPhysicsWarming = true;
+    try {
+      const spawn = getDefaultDeckSpawnLocal();
+      const floorHint = getDeckSpawnFloorHint(spawn);
+      shipPhysics = await createShipPhysics(
+        {
+          right: spawn.right,
+          up: floorHint + DECK_FLOOR_OFFSET_METERS,
+          forward: spawn.forward,
+        },
+        getShipLayout().colliders,
+      );
+      return shipPhysics;
+    } catch (error) {
+      console.warn("Failed to create ship Rapier deck physics.", error);
+      shipPhysics = null;
+      return null;
+    } finally {
+      shipPhysicsWarming = false;
+    }
+  }
+
+  void warmShipDeckPhysics();
+
   if (bootstrap?.hangar.assignedHangar) {
     world.assignedHangar = bootstrap.hangar.assignedHangar;
   }
@@ -318,6 +368,28 @@ export function createGameLoop({
     planet,
     seed,
     setControlsMode: controls.setMode.bind(controls),
+    onDeckEntered: (
+      local: { right: number; forward: number },
+      floorUp: number,
+    ) => {
+      if (!usesColliderDeck()) return;
+      if (!shipPhysics) {
+        void warmShipDeckPhysics().then((physics) => {
+          if (!physics) return;
+          teleportShipPlayerLocal(physics, {
+            right: local.right,
+            up: floorUp + DECK_FLOOR_OFFSET_METERS,
+            forward: local.forward,
+          });
+        });
+        return;
+      }
+      teleportShipPlayerLocal(shipPhysics, {
+        right: local.right,
+        up: floorUp + DECK_FLOOR_OFFSET_METERS,
+        forward: local.forward,
+      });
+    },
   };
 
   controls.setOrbitFacing(
@@ -394,6 +466,7 @@ export function createGameLoop({
   }
 
   function cleanupForTitleReturn(): void {
+    disposeShipDeckPhysics();
     let clearedHangar = false;
     for (const instance of listShipInstances()) {
       const inPrivateHangar =
@@ -539,15 +612,41 @@ export function createGameLoop({
     const ship = getActiveShipBody(world);
     const rig = getActiveShipRig(world);
     if (!isShipParked(ship) || !isRampUsable(rig)) return false;
-    const mount = usesColliderDeck()
-      ? sampleRampBoarding(world.character, ship, rig)
-      : sampleRampMount(world.character, ship);
-    if (!mount) return false;
-    world.character = createDeckCharacterState(ship, mount, undefined, {
+    const mountRig = {
       gear01: rig.gear01,
       ramp01: rig.ramp01,
       doors: doorBlends(rig),
-    });
+    };
+    if (usesColliderDeck()) {
+      const mount = sampleRampBoarding(world.character, ship, rig);
+      if (!mount) return false;
+      if (!shipPhysics) {
+        void warmShipDeckPhysics();
+        return false;
+      }
+      const floorHint = mount.floorUp;
+      teleportShipPlayerLocal(shipPhysics, {
+        right: mount.right,
+        up: floorHint + DECK_FLOOR_OFFSET_METERS,
+        forward: mount.forward,
+      });
+      syncShipArticulationColliders(
+        shipPhysics,
+        mountRig,
+        getShipLayout().doors.map((door) => door.id),
+      );
+      world.character = createDeckCharacterState(
+        ship,
+        mount,
+        undefined,
+        mountRig,
+        floorHint,
+      );
+    } else {
+      const mount = sampleRampMount(world.character, ship);
+      if (!mount) return false;
+      world.character = createDeckCharacterState(ship, mount, undefined, mountRig);
+    }
     world.mode = MODE_ON_SHIP_DECK;
     world.prompt = "";
     return true;
@@ -555,6 +654,8 @@ export function createGameLoop({
 
   /** Steps off the ramp tip onto whatever the ship is parked on. */
   function dismountToGround(): void {
+    disposeShipDeckPhysics();
+    void warmShipDeckPhysics();
     const ship = getActiveShipBody(world);
     const groundPosition: Vec3 = localOffsetToWorld(ship, {
       ...getRampDismountGroundLocal(),
@@ -565,19 +666,32 @@ export function createGameLoop({
       ship.position,
       getShipRestHeightMeters(),
     );
+    // Prefer live pad rest; if the ship drifted slightly, still honor the
+    // assigned hangar so we never snap to planet from a station bay.
+    const assignedHangar =
+      hangarRest?.hangar ??
+      (world.assignedHangar !== null
+        ? getHangarByIndex(world.assignedHangar)
+        : null);
     const facing = {
       x: -ship.forward.x,
       y: -ship.forward.y,
       z: -ship.forward.z,
     };
-    if (hangarRest) {
+    if (assignedHangar) {
       const local = worldToStationLocal(stationFrame, groundPosition);
+      const surfaceUp =
+        hangarRest?.surfaceUp ?? assignedHangar.padSurfaceLocal.up;
       world.character = createStationCharacterAt(
         stationFrame,
-        hangarRest.hangar.roomId,
+        assignedHangar.roomId,
         { right: local.right, forward: local.forward },
         { right: 0, forward: -1 },
+        surfaceUp,
       );
+      if (physics) {
+        teleportStationPlayer(physics, stationFrame, world.character.position);
+      }
       world.mode = MODE_IN_STATION;
       return;
     }
@@ -898,6 +1012,18 @@ export function createGameLoop({
       rampWalkable: parked && isRampUsable(rig),
       isDoorOpen: (doorId: string) => isDoorPassable(rig, doorId),
     };
+    const colliderRig = {
+      gear01: rig.gear01,
+      ramp01: rig.ramp01,
+      doors: doorBlends(rig),
+    };
+    if (shipPhysics && usesColliderDeck()) {
+      syncShipArticulationColliders(
+        shipPhysics,
+        colliderRig,
+        getShipLayout().doors.map((door) => door.id),
+      );
+    }
     const result = updateCharacterOnDeck(
       world.character as DeckCharacterState,
       instance.body,
@@ -905,7 +1031,8 @@ export function createGameLoop({
       { ...characterInput, jumpPressed: actions.jumpPressed },
       dt,
       planet.gravityMetersPerSecond2 ?? 9.8,
-      { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) },
+      colliderRig,
+      usesColliderDeck() ? shipPhysics : null,
     );
     world.character = result.state;
 
@@ -964,15 +1091,9 @@ export function createGameLoop({
       return;
     }
 
-    const colliderRig = {
-      gear01: rig.gear01,
-      ramp01: rig.ramp01,
-      doors: doorBlends(rig),
-    };
     const standingOnRamp = isOnShipRampDeck(
       deckLocal,
       result.state.deckZone,
-      colliderRig,
     );
     if (parked && nearRampPanel(deckLocal) && !standingOnRamp) {
       world.prompt = rig.rampDown
@@ -1117,6 +1238,7 @@ export function createGameLoop({
 
       updateShipSystems(dt);
       updateStationAnimations(dt);
+      renderer?.getStationRoot()?.userData.updateParticles?.(dt);
       network?.publishPresence(world);
     }
 
@@ -1235,7 +1357,9 @@ export function createGameLoop({
 
   function stop(): void {
     running = false;
+    disposeShipDeckPhysics();
     soundScene.dispose();
+    renderer?.getStationRoot()?.userData.disposeParticleSystems?.();
   }
 
   return {
