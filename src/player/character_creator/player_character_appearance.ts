@@ -10,11 +10,18 @@ import {
 } from './sidekick_manifest';
 import {
   setDefinitionBody,
+  setDefinitionColorRow,
   setDefinitionPart,
   type SidekickCharacterDefinitionV2,
 } from './sidekick_definition';
 
 export const PLAYER_CHARACTER_APPEARANCE_SCHEMA_VERSION = 1 as const;
+export const DEFAULT_PLAYER_HAIR_COLOR = '26272D';
+export const DEFAULT_PLAYER_EYE_COLOR = '503E2B';
+const HAIR_COLOR_PROPERTY_IDS = [32, 33] as const;
+const EYEBROW_COLOR_PROPERTY_IDS = [30, 31] as const;
+const FACIAL_HAIR_COLOR_PROPERTY_IDS = [35, 36, 37] as const;
+const EYE_COLOR_PROPERTY_IDS = [26, 27] as const;
 
 export interface PlayerCharacterAppearanceV1 {
   schemaVersion: typeof PLAYER_CHARACTER_APPEARANCE_SCHEMA_VERSION;
@@ -25,6 +32,10 @@ export interface PlayerCharacterAppearanceV1 {
   earVariant: number;
   noseVariant: number;
   facialHairVariant: number | null;
+  hairColor: string;
+  eyebrowColor: string;
+  facialHairColor: string;
+  eyeColor: string;
   bodySizeValue: number;
   muscleValue: number;
 }
@@ -38,6 +49,10 @@ export const DEFAULT_PLAYER_CHARACTER_APPEARANCE: Readonly<PlayerCharacterAppear
   earVariant: 1,
   noseVariant: 1,
   facialHairVariant: null,
+  hairColor: DEFAULT_PLAYER_HAIR_COLOR,
+  eyebrowColor: DEFAULT_PLAYER_HAIR_COLOR,
+  facialHairColor: DEFAULT_PLAYER_HAIR_COLOR,
+  eyeColor: DEFAULT_PLAYER_EYE_COLOR,
   bodySizeValue: 0,
   muscleValue: -100,
 };
@@ -111,6 +126,24 @@ export function buildPlayerSidekickDefinition(
     bodySizeValue: appearance.bodySizeValue,
     muscleValue: appearance.muscleValue,
   });
+  for (const [propertyIds, color] of [
+    [HAIR_COLOR_PROPERTY_IDS, appearance.hairColor],
+    [EYEBROW_COLOR_PROPERTY_IDS, appearance.eyebrowColor],
+    [FACIAL_HAIR_COLOR_PROPERTY_IDS, appearance.facialHairColor],
+    [EYE_COLOR_PROPERTY_IDS, appearance.eyeColor],
+  ] as const) {
+    for (const colorPropertyId of propertyIds) {
+      const row = definition.colorRows.find(
+        (candidate) => candidate.colorPropertyId === colorPropertyId,
+      );
+      if (row) {
+        definition = setDefinitionColorRow(definition, {
+          ...row,
+          color,
+        });
+      }
+    }
+  }
   definition = setDefinitionPart(
     definition,
     CharacterPartType.Wrap,
@@ -133,6 +166,10 @@ export function playerCharacterAppearanceKey(
     appearance.earVariant,
     appearance.noseVariant,
     appearance.facialHairVariant ?? 0,
+    appearance.hairColor,
+    appearance.eyebrowColor,
+    appearance.facialHairColor,
+    appearance.eyeColor,
     appearance.bodySizeValue,
     appearance.muscleValue,
   ].join(':');

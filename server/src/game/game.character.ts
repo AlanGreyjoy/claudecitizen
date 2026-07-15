@@ -1,4 +1,6 @@
 export const PLAYER_CHARACTER_APPEARANCE_SCHEMA_VERSION = 1 as const;
+export const DEFAULT_PLAYER_HAIR_COLOR = '26272D';
+export const DEFAULT_PLAYER_EYE_COLOR = '503E2B';
 
 export interface PlayerCharacterAppearanceV1 {
   schemaVersion: typeof PLAYER_CHARACTER_APPEARANCE_SCHEMA_VERSION;
@@ -9,6 +11,10 @@ export interface PlayerCharacterAppearanceV1 {
   earVariant: number;
   noseVariant: number;
   facialHairVariant: number | null;
+  hairColor: string;
+  eyebrowColor: string;
+  facialHairColor: string;
+  eyeColor: string;
   bodySizeValue: number;
   muscleValue: number;
 }
@@ -22,6 +28,10 @@ const APPEARANCE_KEYS = new Set([
   'earVariant',
   'noseVariant',
   'facialHairVariant',
+  'hairColor',
+  'eyebrowColor',
+  'facialHairColor',
+  'eyeColor',
   'bodySizeValue',
   'muscleValue',
 ]);
@@ -40,6 +50,15 @@ function integerInRange(
     throw new Error(`${name} must be an integer from ${minimum} to ${maximum}.`);
   }
   return value as number;
+}
+
+function appearanceColor(value: unknown, name: string): string {
+  if (typeof value !== 'string') throw new Error(`${name} must be a six-digit hex color.`);
+  const normalized = value.trim().replace(/^#/, '');
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+    throw new Error(`${name} must be a six-digit hex color.`);
+  }
+  return normalized.toUpperCase();
 }
 
 export function parsePlayerCharacterAppearance(value: unknown): PlayerCharacterAppearanceV1 {
@@ -62,6 +81,10 @@ export function parsePlayerCharacterAppearance(value: unknown): PlayerCharacterA
     earVariant: integerInRange(value.earVariant, 'earVariant', 1, 10),
     noseVariant: integerInRange(value.noseVariant, 'noseVariant', 1, 11),
     facialHairVariant,
+    hairColor: appearanceColor(value.hairColor, 'hairColor'),
+    eyebrowColor: appearanceColor(value.eyebrowColor, 'eyebrowColor'),
+    facialHairColor: appearanceColor(value.facialHairColor, 'facialHairColor'),
+    eyeColor: appearanceColor(value.eyeColor, 'eyeColor'),
     bodySizeValue: integerInRange(value.bodySizeValue, 'bodySizeValue', -100, 100),
     muscleValue: integerInRange(value.muscleValue, 'muscleValue', -100, 100),
   };
@@ -72,7 +95,16 @@ export function parseStoredPlayerCharacterAppearance(
 ): PlayerCharacterAppearanceV1 | null {
   if (value === null || value === undefined) return null;
   try {
-    return parsePlayerCharacterAppearance(value);
+    const upgraded = isRecord(value)
+      ? {
+          ...value,
+          hairColor: value.hairColor ?? DEFAULT_PLAYER_HAIR_COLOR,
+          eyebrowColor: value.eyebrowColor ?? DEFAULT_PLAYER_HAIR_COLOR,
+          facialHairColor: value.facialHairColor ?? DEFAULT_PLAYER_HAIR_COLOR,
+          eyeColor: value.eyeColor ?? DEFAULT_PLAYER_EYE_COLOR,
+        }
+      : value;
+    return parsePlayerCharacterAppearance(upgraded);
   } catch {
     return null;
   }

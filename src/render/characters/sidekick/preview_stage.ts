@@ -8,10 +8,12 @@ import { createSidekickAnimationRuntime } from './animation_runtime';
 
 export interface SidekickPreviewStage {
   dispose: () => void;
+  setAnimation: (clipName: string) => void;
   setDefinition: (definition: SidekickCharacterDefinitionV2) => void;
 }
 
 export interface SidekickPreviewStageHooks {
+  onAnimationsReady?: (clipNames: readonly string[], activeClipName: string) => void;
   onBusyChange?: (busy: boolean) => void;
   onError?: (error: unknown) => void;
 }
@@ -81,16 +83,16 @@ export async function createSidekickPreviewStage(
   const bounds = visibleGeometryBounds(avatar.root);
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
-  const horizontalBias = window.innerWidth > 760 ? -0.32 : 0;
-  controls.target.copy(center).add(new THREE.Vector3(horizontalBias, 0, 0));
+  controls.target.copy(center);
   camera.position.set(
-    center.x + horizontalBias,
+    center.x,
     center.y + size.y * 0.12,
     center.z + Math.max(2.2, size.y * 1.3),
   );
   controls.update();
 
   let animation: Awaited<ReturnType<typeof createSidekickAnimationRuntime>> | null = null;
+  let desiredAnimation = 'Idle_Loop';
   let disposed = false;
   void createSidekickAnimationRuntime(avatar.root)
     .then((runtime) => {
@@ -99,9 +101,16 @@ export async function createSidekickPreviewStage(
         return;
       }
       animation = runtime;
-      runtime.setAnimation('Idle_Loop', 0);
+      desiredAnimation = runtime.clipNames.includes(desiredAnimation)
+        ? desiredAnimation
+        : runtime.clipNames[0] ?? '';
+      runtime.setAnimation(desiredAnimation, 0);
+      hooks.onAnimationsReady?.(runtime.clipNames, desiredAnimation);
     })
-    .catch((error: unknown) => console.warn('Character creator idle animation unavailable.', error));
+    .catch((error: unknown) => {
+      hooks.onAnimationsReady?.([], '');
+      console.warn('Character creator preview animations unavailable.', error);
+    });
 
   let pendingDefinition: SidekickCharacterDefinitionV2 | null = null;
   let applying = false;
@@ -148,6 +157,10 @@ export async function createSidekickPreviewStage(
   hooks.onBusyChange?.(false);
 
   return {
+    setAnimation: (clipName) => {
+      desiredAnimation = clipName;
+      animation?.setAnimation(clipName);
+    },
     setDefinition: (definition) => {
       pendingDefinition = definition;
       void flushDefinitions();

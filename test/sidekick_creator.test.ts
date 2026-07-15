@@ -256,6 +256,10 @@ test('player appearance maps paired features while keeping base clothing fixed',
     earVariant: 8,
     noseVariant: 11,
     facialHairVariant: 4,
+    hairColor: 'A1B2C3',
+    eyebrowColor: '102030',
+    facialHairColor: '405060',
+    eyeColor: '708090',
     bodySizeValue: -100,
     muscleValue: 100,
   });
@@ -285,7 +289,42 @@ test('player appearance maps paired features while keeping base clothing fixed',
   ]) {
     assert.equal(getDefinitionPartName(type1, type), getDefinitionPartName(base, type));
   }
-  assert.deepEqual(type1.colorRows, base.colorRows);
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 32)?.color,
+    'A1B2C3',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 33)?.color,
+    'A1B2C3',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 30)?.color,
+    '102030',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 31)?.color,
+    '102030',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 35)?.color,
+    '405060',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 36)?.color,
+    '405060',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 26)?.color,
+    '708090',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 27)?.color,
+    '708090',
+  );
+  assert.equal(
+    type1.colorRows.find((row) => row.colorPropertyId === 1)?.color,
+    base.colorRows.find((row) => row.colorPropertyId === 1)?.color,
+  );
 
   const type2 = buildPlayerSidekickDefinition(catalog, {
     ...DEFAULT_PLAYER_CHARACTER_APPEARANCE,

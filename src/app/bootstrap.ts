@@ -73,6 +73,10 @@ export function bootstrap(): void {
       .then((module) => module.startEditorSession())
       .catch((error) => console.error('ClaudeCitizen editor failed to load.', error));
   };
+  const openTitleScreen = (): void => showTitleScreen({
+    onPlay: (session) => startPlayWithLoading({ requireAuth: true, session }),
+    onEditor: import.meta.env.DEV ? openEditor : undefined,
+  });
 
   if (boot === 'admin') {
     import('./admin_screen')
@@ -99,7 +103,10 @@ export function bootstrap(): void {
     return;
   }
   if (boot === 'characterCreator' && import.meta.env.DEV) {
-    void showCharacterCreationScreen();
+    void showCharacterCreationScreen().then(() => {
+      window.history.replaceState({}, '', window.location.pathname);
+      openTitleScreen();
+    });
     return;
   }
   if ((boot === 'play' || params.has('stationPrefab')) && import.meta.env.DEV) {
@@ -107,8 +114,5 @@ export function bootstrap(): void {
     return;
   }
 
-  showTitleScreen({
-    onPlay: (session) => startPlayWithLoading({ requireAuth: true, session }),
-    onEditor: import.meta.env.DEV ? openEditor : undefined,
-  });
+  openTitleScreen();
 }

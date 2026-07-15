@@ -57,6 +57,16 @@ export function showCharacterCreationScreen(): Promise<PlayerCharacterAppearance
     const root = element('main', 'character-creation');
     root.dataset.testid = 'character-creation';
     const canvas = element('canvas', 'character-creation__viewport');
+    const animationPicker = element('label', 'character-creation__animation');
+    animationPicker.append(element('span', undefined, 'Animation'));
+    const animationSelect = element('select');
+    animationSelect.dataset.testid = 'character-animation-select';
+    const loadingAnimation = element('option', undefined, 'Loading animations…');
+    loadingAnimation.value = '';
+    animationSelect.append(loadingAnimation);
+    animationSelect.disabled = true;
+    animationSelect.addEventListener('change', () => stage?.setAnimation(animationSelect.value));
+    animationPicker.append(animationSelect);
     const panel = element('section', 'character-creation__panel');
     const header = element('header', 'character-creation__header');
     header.append(
@@ -66,14 +76,53 @@ export function showCharacterCreationScreen(): Promise<PlayerCharacterAppearance
     const status = element('div', 'character-creation__status', 'Loading character…');
     status.setAttribute('role', 'status');
     const controls = element('div', 'character-creation__controls');
+    const tabs = element('nav', 'character-creation__tabs');
+    tabs.setAttribute('aria-label', 'Character customization sections');
+    const tabPanels = {
+      features: element('div', 'character-creation__tab-panel'),
+      colors: element('div', 'character-creation__tab-panel'),
+      body: element('div', 'character-creation__tab-panel'),
+    } as const;
+    const tabButtons = new Map<keyof typeof tabPanels, HTMLButtonElement>();
+    const activateTab = (activeTab: keyof typeof tabPanels): void => {
+      for (const [key, tabPanel] of Object.entries(tabPanels) as [keyof typeof tabPanels, HTMLDivElement][]) {
+        const active = key === activeTab;
+        tabPanel.hidden = !active;
+        tabButtons.get(key)?.classList.toggle('is-active', active);
+        tabButtons.get(key)?.setAttribute('aria-selected', String(active));
+        tabButtons.get(key)?.setAttribute('tabindex', active ? '0' : '-1');
+      }
+    };
+    for (const [key, label] of [
+      ['features', 'Features'],
+      ['colors', 'Colors'],
+      ['body', 'Body'],
+    ] as const) {
+      const tabPanel = tabPanels[key];
+      const tabId = `character-creation-tab-${key}`;
+      const panelId = `character-creation-panel-${key}`;
+      const tab = button(label, () => activateTab(key));
+      tab.id = tabId;
+      tab.dataset.testid = `character-${key}-tab`;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-controls', panelId);
+      tabPanel.id = panelId;
+      tabPanel.setAttribute('role', 'tabpanel');
+      tabPanel.setAttribute('aria-labelledby', tabId);
+      tabButtons.set(key, tab);
+      tabs.append(tab);
+    }
+    controls.append(tabs, ...Object.values(tabPanels));
+    activateTab('features');
     const actions = element('footer', 'character-creation__actions');
     panel.append(header, status, controls, actions);
-    root.append(canvas, panel);
+    root.append(canvas, panel, animationPicker);
     document.body.append(root);
 
     const setStatus = (message: string, error = false): void => {
       status.textContent = message;
       status.classList.toggle('is-error', error);
+      status.hidden = message === 'Ready' && !error;
     };
     const cleanup = (): void => {
       stage?.dispose();
@@ -140,7 +189,7 @@ export function showCharacterCreationScreen(): Promise<PlayerCharacterAppearance
     }
     renderTypeButtons();
     typeSection.append(typeButtons);
-    controls.append(typeSection);
+    tabPanels.features.append(typeSection);
 
     const features = element('section', 'character-creation__section');
     features.append(element('h2', undefined, 'Features'));
@@ -168,7 +217,40 @@ export function showCharacterCreationScreen(): Promise<PlayerCharacterAppearance
       renderValue();
       features.append(row);
     }
-    controls.append(features);
+    tabPanels.features.append(features);
+
+    const colorSection = element('section', 'character-creation__section');
+    colorSection.append(element('h2', undefined, 'Color'));
+    for (const colorControl of [
+      { key: 'hairColor' as const, label: 'Hair Color', testId: 'character-hair-color' },
+      { key: 'eyebrowColor' as const, label: 'Eyebrow Color', testId: 'character-eyebrow-color' },
+      { key: 'facialHairColor' as const, label: 'Beard Color', testId: 'character-beard-color' },
+      { key: 'eyeColor' as const, label: 'Eye Color', testId: 'character-eye-color' },
+    ]) {
+      const colorLabel = element('label', 'character-creation__color');
+      const colorText = element('span', undefined, colorControl.label);
+      const colorValue = element(
+        'span',
+        'character-creation__color-value',
+        `#${appearance[colorControl.key]}`,
+      );
+      const colorInput = element('input');
+      colorInput.type = 'color';
+      colorInput.value = `#${appearance[colorControl.key]}`;
+      colorInput.dataset.testid = colorControl.testId;
+      colorInput.setAttribute('aria-label', colorControl.label);
+      colorInput.addEventListener('input', () => {
+        appearance = {
+          ...appearance,
+          [colorControl.key]: colorInput.value.slice(1).toUpperCase(),
+        };
+        colorValue.textContent = `#${appearance[colorControl.key]}`;
+        applyAppearance();
+      });
+      colorLabel.append(colorText, colorInput, colorValue);
+      colorSection.append(colorLabel);
+    }
+    tabPanels.colors.append(colorSection);
 
     const shape = element('section', 'character-creation__section');
     shape.append(element('h2', undefined, 'Body Shape'));
@@ -197,12 +279,30 @@ export function showCharacterCreationScreen(): Promise<PlayerCharacterAppearance
       label.append(title, input, legend);
       shape.append(label);
     }
-    controls.append(shape);
+    tabPanels.body.append(shape);
 
     void loadSidekickCatalog()
       .then(async (catalog) => {
         const definition = buildPlayerSidekickDefinition(catalog, appearance);
         stage = await createSidekickPreviewStage(canvas, catalog, definition, {
+          onAnimationsReady: (clipNames, activeClipName) => {
+            animationSelect.replaceChildren(...clipNames.map((clipName) => {
+              const animationOption = element(
+                'option',
+                undefined,
+                clipName.replaceAll('_', ' '),
+              );
+              animationOption.value = clipName;
+              animationOption.selected = clipName === activeClipName;
+              return animationOption;
+            }));
+            animationSelect.disabled = clipNames.length === 0;
+            if (clipNames.length === 0) {
+              const unavailable = element('option', undefined, 'Animations unavailable');
+              unavailable.value = '';
+              animationSelect.append(unavailable);
+            }
+          },
           onBusyChange: (busy) => {
             stageBusy = busy;
             save.disabled = busy || saving;
