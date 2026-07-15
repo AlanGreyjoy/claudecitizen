@@ -75,7 +75,7 @@ function bakeCollider(
     kind: "mesh",
     assetUrl,
     convex: component.convex ?? false,
-    node: component.node ?? defaultNode,
+    node: component.node ?? defaultNode ?? entity.asset?.node,
     nodeOverrides: entity.nodeOverrides,
     baseLocalToSpace,
     recenterHull,
@@ -114,16 +114,24 @@ async function collect(
     );
     if (nodesWithColliders.length > 0) {
       const nodeNames = nodesWithColliders.map((o) => o.node);
+      const requestedNodeNames = entity.asset.node
+        ? [...nodeNames, entity.asset.node]
+        : nodeNames;
       const matrices = await loadNodeWorldMatrices(
         entity.asset.url,
-        nodeNames,
+        requestedNodeNames,
         entity.nodeOverrides,
         isShipHull,
       );
+      const assetRootInverse = entity.asset.node
+        ? matrices.get(entity.asset.node)?.clone().invert()
+        : undefined;
       for (const override of nodesWithColliders) {
         const nodeWorldMatrix = matrices.get(override.node);
         if (!nodeWorldMatrix) continue;
-        const nodeSceneMatrix = entitySceneMatrix.clone().multiply(nodeWorldMatrix);
+        const nodeSceneMatrix = entitySceneMatrix.clone();
+        if (assetRootInverse) nodeSceneMatrix.multiply(assetRootInverse);
+        nodeSceneMatrix.multiply(nodeWorldMatrix);
         let nodeColliderIndex = 0;
         for (const component of override.components!) {
           if (component.type !== "collider") continue;

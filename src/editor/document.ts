@@ -21,7 +21,7 @@ export interface EditorEntity {
   rotation: Vec3;
   scale: Vec3;
   visible: boolean;
-  asset: { url: string; castShadow?: boolean } | null;
+  asset: { url: string; castShadow?: boolean; node?: string } | null;
   primitive: PrefabPrimitive | null;
   glbNodeTransforms: GlbNodeTransformOverride[];
   /** Names of GLB nodes hidden (deleted) for this entity instance. */
@@ -342,6 +342,21 @@ export function createEditorStore() {
       if (uuid) return uuid;
     }
     return null;
+  }
+
+  function findGlbNodeRef(tree: GlbNodeRef, nodeUuid: string): GlbNodeRef | null {
+    if (tree.uuid === nodeUuid) return tree;
+    for (const child of tree.children) {
+      const found = findGlbNodeRef(child, nodeUuid);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function collectGlbNodeNames(node: GlbNodeRef, names = new Set<string>()): Set<string> {
+    names.add(node.name);
+    for (const child of node.children) collectGlbNodeNames(child, names);
+    return names;
   }
 
   function setGlbTree(entityId: string, tree: GlbNodeRef | null): void {
@@ -670,6 +685,151 @@ export function createEditorStore() {
   function duplicateEntity(id: string): string | null {
     const results = duplicateEntities([id]);
     return results[0] ?? null;
+  }
+
+  function createGlbNodeEntity(
+    source: EditorEntity,
+    nodeName: string,
+    transform: EntityTransform,
+    subtreeNodeNames = new Set([nodeName]),
+    entityName = `${nodeName} Copy`,
+  ): EditorEntity {
+    const copy = createEmptyEntity(entityName);
+    copy.position = cloneVec(transform.position);
+    copy.rotation = cloneVec(transform.rotation);
+    copy.scale = cloneVec(transform.scale);
+    copy.asset = { ...source.asset!, node: nodeName };
+    copy.materialOverrides = structuredClone(source.materialOverrides);
+    const rootOverride = source.glbNodeTransforms.find(
+      (candidate) => candidate.nodeName === nodeName,
+    );
+    const sourceComponents =
+      rootOverride?.components ??
+      (source.asset?.node === nodeName ? source.components : []);
+    copy.components = structuredClone(sourceComponents);
+    copy.glbNodeTransforms = structuredClone(
+      source.glbNodeTransforms.filter(
+        (override) =>
+          override.nodeName !== nodeName && subtreeNodeNames.has(override.nodeName),
+      ),
+    );
+    return copy;
+  }
+
+  function clearGlbOverrideMapForEntityId(entityId: string): void {
+    const prefix = `${entityId}::`;
+    for (const key of [...glbNodeOverrides.keys()]) {
+      if (key.startsWith(prefix)) glbNodeOverrides.delete(key);
+    }
+  }
+
+  function syncGlbOverrideMapForEntity(entity: EditorEntity): void {
+    clearGlbOverrideMapForEntityId(entity.id);
+    for (const override of entity.glbNodeTransforms) {
+      if (!override.transform) continue;
+      glbNodeOverrides.set(
+        glbOverrideKey(entity.id, override.nodeName),
+        cloneTransform(override.transform),
+      );
+    }
+  }
+
+  function duplicateGlbNode(
+    entityId: string,
+    nodeName: string,
+    transform: EntityTransform,
+  ): string | null {
+    const source = locate(entityId)?.entity;
+    if (!source?.asset) return null;
+
+    const copy = createGlbNodeEntity(source, nodeName, transform);
+
+    history.execute({
+      label: `Duplicate ${nodeName}`,
+      do() {
+        insertEntity(copy, entityId);
+        syncGlbOverrideMapForEntity(copy);
+        markDirty();
+        emit({ type: 'structure' });
+      },
+      undo() {
+        detachEntity(copy.id);
+        clearGlbOverrideMapForEntityId(copy.id);
+        removeIdsFromSelection([copy.id]);
+        emit({ type: 'structure' });
+      },
+    });
+
+    selection = copy.id;
+    selectedIds = new Set([copy.id]);
+    subSelection = null;
+    emitSelection();
+    return copy.id;
+  }
+
+  function extractGlbNode(
+    entityId: string,
+    nodeUuid: string,
+    targetParentId: string | null,
+    transform: EntityTransform,
+  ): string | null {
+    const source = locate(entityId)?.entity;
+    const tree = glbTreesByEntityId.get(entityId);
+    const node = tree ? findGlbNodeRef(tree, nodeUuid) : null;
+    if (!source?.asset || !node) return null;
+    if (targetParentId !== null && !locate(targetParentId)) return null;
+
+    const subtreeNodeNames = collectGlbNodeNames(node);
+    const copy = createGlbNodeEntity(
+      source,
+      node.name,
+      transform,
+      subtreeNodeNames,
+      node.name,
+    );
+    const sourceOverridesBefore = structuredClone(source.glbNodeTransforms);
+    const hiddenNodesBefore = [...source.glbNodeHidden];
+
+    history.execute({
+      label: `Move ${node.name} out of model`,
+      do() {
+        const target = locate(entityId)?.entity;
+        if (!target) return;
+        target.glbNodeTransforms = target.glbNodeTransforms.filter(
+          (override) => !subtreeNodeNames.has(override.nodeName),
+        );
+        if (!target.glbNodeHidden.includes(node.name)) {
+          target.glbNodeHidden.push(node.name);
+        }
+        syncGlbOverrideMapForEntity(target);
+        insertEntity(copy, targetParentId);
+        syncGlbOverrideMapForEntity(copy);
+        if (subSelection?.entityId === entityId && subSelection.nodeUuid === nodeUuid) {
+          subSelection = null;
+          emit({ type: 'sub-selection', entityId, nodeUuid: null });
+        }
+        markDirty();
+        emit({ type: 'structure' });
+      },
+      undo() {
+        detachEntity(copy.id);
+        clearGlbOverrideMapForEntityId(copy.id);
+        const target = locate(entityId)?.entity;
+        if (target) {
+          target.glbNodeTransforms = structuredClone(sourceOverridesBefore);
+          target.glbNodeHidden = [...hiddenNodesBefore];
+          syncGlbOverrideMapForEntity(target);
+        }
+        removeIdsFromSelection([copy.id]);
+        emit({ type: 'structure' });
+      },
+    });
+
+    selection = copy.id;
+    selectedIds = new Set([copy.id]);
+    subSelection = null;
+    emitSelection();
+    return copy.id;
   }
 
   function duplicateEntities(ids: string[]): string[] {
@@ -1182,6 +1342,8 @@ export function createEditorStore() {
     deleteEntity,
     deleteEntities,
     duplicateEntity,
+    duplicateGlbNode,
+    extractGlbNode,
     duplicateEntities,
     reparentEntity,
     reparentEntities,

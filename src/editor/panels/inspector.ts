@@ -22,6 +22,7 @@ import {
 import type { PrefabComponent, ShipZoneGate } from "../../world/prefabs/schema";
 import { SHIP_SEAT_ROLES } from "../../world/prefabs/schema";
 import type { StationFloorId } from "../../world/station";
+import type { EditorAudioPreviewController } from "../audio_preview";
 import {
   collectMaterialRowsForEntity,
   formatMaterialNumber,
@@ -29,8 +30,15 @@ import {
 } from "./material_manager";
 
 const FLOOR_OPTIONS: StationFloorId[] = ["hab", "lobby", "hangar"];
+const AUDIO_EXTENSIONS = [".ogg", ".mp3", ".wav", ".m4a"];
+
+function isAudioAssetUrl(url: string): boolean {
+  const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
+  return AUDIO_EXTENSIONS.some((extension) => pathname.endsWith(extension));
+}
 
 export interface InspectorPanelOptions {
+  audioPreview: EditorAudioPreviewController;
   getGlbNodeLocalTransform?: (
     entityId: string,
     nodeUuid: string,
@@ -49,7 +57,7 @@ export interface InspectorPanelOptions {
 export function createInspectorPanel(
   container: HTMLElement,
   store: EditorStore,
-  options: InspectorPanelOptions = {},
+  options: InspectorPanelOptions,
 ): void {
   const body = el("div", { className: "ed-panel-body" });
   container.append(
@@ -107,7 +115,7 @@ export function createInspectorPanel(
       const url =
         event.dataTransfer?.getData(ASSET_DND_TYPE) ||
         event.dataTransfer?.getData("text/plain");
-      if (url?.startsWith("/")) onCommit(url);
+      if (url?.startsWith("/") && isAudioAssetUrl(url)) onCommit(url);
     });
     const controls = el("div", { className: "ed-field-controls" }, [
       input,
@@ -165,6 +173,8 @@ export function createInspectorPanel(
   let glbTransformInputs: TransformInputs | null = null;
   let glbTransformTarget: { entityId: string; nodeUuid: string } | null = null;
   let materialSectionGeneration = 0;
+  let materialsSectionCollapsed = false;
+  let lastPreviewTarget = "";
 
   function commitTransform(entity: EditorEntity): void {
     if (!transformInputs) return;
@@ -423,44 +433,90 @@ export function createInspectorPanel(
       sub?.entityId === entity.id
         ? store.getGlbNodeName(entity.id, sub.nodeUuid)
         : null;
-    const section = el("div", { className: "ed-section" }, [
-      el("h3", { className: "ed-section-title", text: "Materials" }),
-    ]);
+    const caret = el("span", {
+      className: "ed-section-caret",
+      text: materialsSectionCollapsed ? "▸" : "▾",
+    });
+    const section = el("div", {
+      className: `ed-section${materialsSectionCollapsed ? " is-collapsed" : ""}`,
+    });
+    const title = el(
+      "h3",
+      {
+        className: "ed-section-title ed-section-title-toggle",
+        title: materialsSectionCollapsed
+          ? "Expand Materials"
+          : "Collapse Materials",
+        attrs: { role: "button", tabindex: "0" },
+        on: {
+          click: () => {
+            materialsSectionCollapsed = !materialsSectionCollapsed;
+            section.classList.toggle("is-collapsed", materialsSectionCollapsed);
+            caret.textContent = materialsSectionCollapsed ? "▸" : "▾";
+            title.title = materialsSectionCollapsed
+              ? "Expand Materials"
+              : "Collapse Materials";
+            if (!materialsSectionCollapsed) loadMaterials();
+          },
+          keydown: (event) => {
+            const keyEvent = event as KeyboardEvent;
+            if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+            keyEvent.preventDefault();
+            title.click();
+          },
+        },
+      },
+      [el("span", { text: "Materials" }), caret],
+    );
     const list = el("div", { className: "ed-inspector-material-list" }, [
       el("div", { className: "ed-empty-note", text: "Loading materials…" }),
     ]);
-    section.append(list);
+    section.append(title, list);
 
-    const generation = ++materialSectionGeneration;
-    void collectMaterialRowsForEntity(entity, { nodeName: selectedNodeName })
-      .then((rows) => {
-        if (
-          generation !== materialSectionGeneration ||
-          store.getSelection() !== entity.id
-        ) {
-          return;
-        }
-        clearChildren(list);
-        if (rows.length === 0) {
+    function loadMaterials(): void {
+      clearChildren(list);
+      list.append(
+        el("div", { className: "ed-empty-note", text: "Loading materials…" }),
+      );
+      const generation = ++materialSectionGeneration;
+      void collectMaterialRowsForEntity(entity, { nodeName: selectedNodeName })
+        .then((rows) => {
+          if (
+            generation !== materialSectionGeneration ||
+            store.getSelection() !== entity.id
+          ) {
+            return;
+          }
+          clearChildren(list);
+          if (rows.length === 0) {
+            list.append(
+              el("div", {
+                className: "ed-empty-note",
+                text: "No visual material",
+              }),
+            );
+            return;
+          }
+          for (const row of rows) list.append(materialSummaryRow(row));
+        })
+        .catch(() => {
+          if (
+            generation !== materialSectionGeneration ||
+            store.getSelection() !== entity.id
+          ) {
+            return;
+          }
+          clearChildren(list);
           list.append(
-            el("div", { className: "ed-empty-note", text: "No visual material" }),
+            el("div", {
+              className: "ed-empty-note",
+              text: "Materials unavailable",
+            }),
           );
-          return;
-        }
-        for (const row of rows) list.append(materialSummaryRow(row));
-      })
-      .catch(() => {
-        if (
-          generation !== materialSectionGeneration ||
-          store.getSelection() !== entity.id
-        ) {
-          return;
-        }
-        clearChildren(list);
-        list.append(
-          el("div", { className: "ed-empty-note", text: "Materials unavailable" }),
-        );
-      });
+        });
+    }
+
+    if (!materialsSectionCollapsed) loadMaterials();
     return section;
   }
 
@@ -895,6 +951,146 @@ export function createInspectorPanel(
             el("span", { text: "Cast shadows" }),
           ]),
         ];
+      case "sound": {
+        const maxBlend =
+          component.zone.shape === "sphere"
+            ? component.zone.radius
+            : Math.min(
+                component.zone.size.x,
+                component.zone.size.y,
+                component.zone.size.z,
+              ) / 2;
+        const previewKey = `sound:${component.soundUrl ?? "unassigned"}:${component.mode}:${component.playback}`;
+        const previewBtn = el("button", {
+          className: "ed-btn",
+          text: options.audioPreview.isPlaying(previewKey)
+            ? "Stop preview"
+            : "Preview sound",
+          title: component.soundUrl
+            ? "Preview assigned sound"
+            : "Assign an audio asset first",
+          on: {
+            click: () => {
+              if (!component.soundUrl) return;
+              options.audioPreview.toggle(
+                previewKey,
+                component.soundUrl,
+                {
+                  loop: component.playback === "loop",
+                  volume: component.volume,
+                },
+                (playing) => {
+                  previewBtn.textContent = playing
+                    ? "Stop preview"
+                    : "Preview sound";
+                },
+              );
+            },
+          },
+        });
+        previewBtn.disabled = !component.soundUrl;
+        const rows: HTMLElement[] = [
+          assetUrlField("Sound", component.soundUrl, (soundUrl) =>
+            update({ ...component, soundUrl }),
+          ),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Mode" }),
+            selectInput(["ambient", "spatial"], component.mode, (mode) =>
+              update({
+                ...component,
+                mode: mode as "ambient" | "spatial",
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Playback" }),
+            selectInput(
+              ["loop", "enter"],
+              component.playback,
+              (playback) =>
+                update({
+                  ...component,
+                  playback: playback as "loop" | "enter",
+                }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Volume" }),
+            numberInput(component.volume, (volume) =>
+              update({
+                ...component,
+                volume: Math.min(1, Math.max(0, volume)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Blend" }),
+            numberInput(component.blendDistance, (blendDistance) =>
+              update({
+                ...component,
+                blendDistance: Math.min(maxBlend, Math.max(0, blendDistance)),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Zone" }),
+            selectInput(["sphere", "box"], component.zone.shape, (shape) => {
+              if (shape === component.zone.shape) return;
+              update({
+                ...component,
+                blendDistance: Math.min(component.blendDistance, 2.5),
+                zone:
+                  shape === "sphere"
+                    ? { shape: "sphere", radius: 5 }
+                    : { shape: "box", size: { x: 10, y: 5, z: 10 } },
+              });
+            }),
+          ]),
+        ];
+        if (component.zone.shape === "sphere") {
+          rows.push(
+            el("div", { className: "ed-field-row-wide" }, [
+              el("span", { className: "ed-field-label", text: "Radius" }),
+              numberInput(component.zone.radius, (radius) => {
+                const nextRadius = Math.min(500, Math.max(0.05, radius));
+                update({
+                  ...component,
+                  blendDistance: Math.min(
+                    component.blendDistance,
+                    nextRadius,
+                  ),
+                  zone: { shape: "sphere", radius: nextRadius },
+                });
+              }),
+            ]),
+          );
+        } else {
+          rows.push(
+            el("div", { className: "ed-field-row" }, [
+              el("span", { className: "ed-field-label", text: "Size" }),
+              ...(["x", "y", "z"] as const).map((axis) =>
+                numberInput(component.zone.size[axis], (value) => {
+                  if (component.zone.shape !== "box") return;
+                  const size = {
+                    ...component.zone.size,
+                    [axis]: Math.min(1_000, Math.max(0.05, value)),
+                  };
+                  update({
+                    ...component,
+                    blendDistance: Math.min(
+                      component.blendDistance,
+                      Math.min(size.x, size.y, size.z) / 2,
+                    ),
+                    zone: { shape: "box", size },
+                  });
+                }),
+              ),
+            ]),
+          );
+        }
+        rows.push(previewBtn);
+        return rows;
+      }
       case "collider":
         return [
           el("div", { className: "ed-field-row-wide" }, [
@@ -1823,6 +2019,12 @@ export function createInspectorPanel(
     glbTransformTarget = null;
 
     const selectedIds = store.getSelectedIds();
+    const subSelection = store.getSubSelection();
+    const previewTarget = `${selectedIds.join(",")}:${subSelection?.nodeUuid ?? ""}`;
+    if (lastPreviewTarget && previewTarget !== lastPreviewTarget) {
+      options.audioPreview.stop();
+    }
+    lastPreviewTarget = previewTarget;
     if (selectedIds.length > 1) {
       materialSectionGeneration += 1;
       body.append(

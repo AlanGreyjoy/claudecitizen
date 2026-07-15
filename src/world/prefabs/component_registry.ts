@@ -182,6 +182,21 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Directional cone light. Entity rotation aims it; local -Z is the beam axis. Shadows are cheaper than point lights.",
   },
   {
+    type: "sound",
+    label: "Sound",
+    kinds: ["station", "ship"],
+    marker: true,
+    createDefault: () => ({
+      type: "sound",
+      mode: "ambient",
+      playback: "loop",
+      volume: 1,
+      blendDistance: 1,
+      zone: { shape: "sphere", radius: 5 },
+    }),
+    hint: "Loop ambience or play a one-shot when the listener enters a 3D sphere or box zone.",
+  },
+  {
     type: "collider",
     label: "Collider",
     kinds: ["station", "ship", "site", "prop", "item"],

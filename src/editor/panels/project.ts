@@ -9,6 +9,7 @@ import {
 } from '../api';
 import { attachColumnSplitter, PANEL_SIZE_BOUNDS } from '../panel_resize';
 import { clearChildren, el, showToast } from '../dom';
+import type { EditorAudioPreviewController } from '../audio_preview';
 
 const MODEL_EXTENSIONS = ['.glb', '.gltf'];
 const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.m4a'];
@@ -21,6 +22,7 @@ export interface ProjectPanelOptions {
   getModelThumbnail: (url: string) => Promise<string>;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onPreviewCharacter: (url: string) => void | Promise<void>;
+  audioPreview: EditorAudioPreviewController;
 }
 
 interface FolderNode {
@@ -234,6 +236,24 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
       cardChildren.push(
         el('div', { className: 'ed-asset-actions' }, [loadCharacterBtn, loadAnimationBtn]),
       );
+    } else if (isAudio) {
+      const previewKey = `asset:${sourcePath}`;
+      const previewBtn = el('button', {
+        className: 'ed-asset-action',
+        text: options.audioPreview.isPlaying(previewKey) ? 'Stop' : 'Play',
+        title: isEmptyFile ? 'File is empty' : 'Preview audio',
+        on: {
+          click: (event) => {
+            event.stopPropagation();
+            if (isEmptyFile) return;
+            options.audioPreview.toggle(previewKey, url, {}, (playing) => {
+              previewBtn.textContent = playing ? 'Stop' : 'Play';
+            });
+          },
+        },
+      });
+      previewBtn.disabled = isEmptyFile;
+      cardChildren.push(el('div', { className: 'ed-asset-actions' }, [previewBtn]));
     }
 
     return el(
@@ -245,7 +265,7 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
           : isModel
             ? `${sourcePath}\nDrag into the scene`
             : isAudio
-              ? `${sourcePath}\nDrag to assign`
+              ? `${sourcePath}\nDrag into the scene or onto an audio field`
               : sourcePath,
         attrs: isDraggable && !isEmptyFile ? { draggable: 'true' } : {},
         on: isDraggable && !isEmptyFile

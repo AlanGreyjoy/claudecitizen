@@ -19,13 +19,17 @@ import { createEditorViewport } from '../render/editor/viewport';
 import { createCharacterAnimationPreviewer } from '../render/editor/character_previewer';
 import { getModelThumbnail } from '../render/editor/thumbnails';
 import type { Vec3 } from '../types';
+import { createEditorAudioPreviewController } from './audio_preview';
+import { getComponentDef } from '../world/prefabs/component_registry';
+
+const AUDIO_EXTENSIONS = /\.(ogg|mp3|wav|m4a)(?:[?#].*)?$/i;
 
 let started = false;
 type SceneEditorTab = 'scene' | 'character-preview' | 'material-manager';
 
 function entityNameFromUrl(url: string): string {
   const fileName = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
-  return fileName.replace(/\.(glb|gltf)$/i, '') || 'Model';
+  return fileName.replace(/\.(glb|gltf|ogg|mp3|wav|m4a)(?:[?#].*)?$/i, '') || 'Asset';
 }
 
 export function startEditorSession(): void {
@@ -112,6 +116,7 @@ export function startEditorSession(): void {
 
   // --- store + viewport -------------------------------------------------------
   const store = createEditorStore();
+  const audioPreview = createEditorAudioPreviewController();
   const characterPreviewer = createCharacterAnimationPreviewer(characterPreviewEl);
   let sceneEditorTab: SceneEditorTab = 'scene';
 
@@ -143,8 +148,74 @@ export function startEditorSession(): void {
     },
   });
 
+  function duplicateGlbNode(entityId: string, nodeUuid: string): void {
+    const nodeName = store.getGlbNodeName(entityId, nodeUuid);
+    const transform = viewport.getGlbNodePrefabTransform(entityId, nodeUuid);
+    if (!nodeName || !transform) {
+      showToast('Could not duplicate the model node — its transform is unavailable.', true);
+      return;
+    }
+    if (!store.duplicateGlbNode(entityId, nodeName, transform)) {
+      showToast('Could not duplicate the model node.', true);
+    }
+  }
+
+  function duplicateSelection(): void {
+    const sub = store.getSubSelection();
+    if (sub) {
+      duplicateGlbNode(sub.entityId, sub.nodeUuid);
+      return;
+    }
+    const selectedIds = store.getSelectedIds();
+    if (selectedIds.length > 0) store.duplicateEntities(selectedIds);
+  }
+
+  function extractGlbNode(
+    entityId: string,
+    nodeUuid: string,
+    targetParentId: string | null,
+  ): boolean {
+    const transform = viewport.getGlbNodePrefabTransform(
+      entityId,
+      nodeUuid,
+      targetParentId,
+    );
+    if (!transform) {
+      showToast('Could not move the model node — its target transform is unavailable.', true);
+      return false;
+    }
+    if (!store.extractGlbNode(entityId, nodeUuid, targetParentId, transform)) {
+      showToast('Could not move the model node out of its prefab.', true);
+      return false;
+    }
+    return true;
+  }
+
+  function deleteSelection(): void {
+    const sub = store.getSubSelection();
+    if (sub) {
+      store.hideGlbNode(sub.entityId, sub.nodeUuid);
+      return;
+    }
+    const selectedIds = store.getSelectedIds();
+    if (selectedIds.length > 0) store.deleteEntities(selectedIds);
+  }
+
   function addAssetEntity(url: string, position: Vec3): void {
     const entity = createEmptyEntity(entityNameFromUrl(url));
+    if (AUDIO_EXTENSIONS.test(url)) {
+      const kind = store.getState().kind;
+      if (kind !== 'station' && kind !== 'ship') {
+        showToast('Sound objects are available in station and ship prefabs.', true);
+        return;
+      }
+      const component = getComponentDef('sound')?.createDefault();
+      if (!component || component.type !== 'sound') return;
+      entity.components = [{ ...component, soundUrl: url }];
+      entity.position = position;
+      store.addEntity(entity);
+      return;
+    }
     entity.asset = { url };
     entity.position = position;
     store.addEntity(entity);
@@ -293,6 +364,7 @@ export function startEditorSession(): void {
 
   async function loadById(id: string): Promise<void> {
     if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and load?'))) return;
+    audioPreview.stop();
     try {
       const doc = await fetchPrefab(id);
       store.loadDocument(fromPrefabDocument(doc));
@@ -304,6 +376,7 @@ export function startEditorSession(): void {
 
   async function newDocument(): Promise<void> {
     if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes?'))) return;
+    audioPreview.stop();
     store.newDocument();
   }
 
@@ -315,6 +388,7 @@ export function startEditorSession(): void {
     }
     const id = await saveCurrent();
     if (!id) return;
+    audioPreview.stop();
     const param = kind === 'ship' ? 'shipPrefab' : 'stationPrefab';
     window.location.href = `/?${param}=${encodeURIComponent(id)}`;
   }
@@ -323,6 +397,7 @@ export function startEditorSession(): void {
 
   async function exitToTitle(): Promise<void> {
     if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and exit?'))) return;
+    audioPreview.stop();
     allowUnload = true;
     window.location.href = '/';
   }
@@ -337,6 +412,8 @@ export function startEditorSession(): void {
     onNew: () => void newDocument(),
     onSave: () => void saveCurrent(),
     onLoad: (id) => void loadById(id),
+    onDuplicate: duplicateSelection,
+    onDelete: deleteSelection,
     onPreview: () => void previewInPlay(),
     onExit: () => void exitToTitle(),
     onShipPreviewChange: (state) => viewport.setShipPreview(state),
@@ -347,8 +424,11 @@ export function startEditorSession(): void {
       viewport.getGlbNodePrefabPosition(entityId, nodeUuid),
     getGlbNodeBounds: (entityId, nodeUuid) =>
       viewport.getGlbNodeBounds(entityId, nodeUuid),
+    onDuplicateGlbNode: duplicateGlbNode,
+    onExtractGlbNode: extractGlbNode,
   });
   createInspectorPanel(inspectorEl, store, {
+    audioPreview,
     getGlbNodeLocalTransform: (entityId, nodeUuid) =>
       viewport.getGlbNodeLocalTransform(entityId, nodeUuid),
     setGlbNodeLocalTransform: (entityId, nodeUuid, transform) =>
@@ -358,6 +438,7 @@ export function startEditorSession(): void {
   });
   createMaterialManagerPanel(materialManagerEl, store);
   createProjectPanel(projectEl, {
+    audioPreview,
     getModelThumbnail,
     onPreviewAnimationSource: async (url) => {
       setSceneEditorTab('character-preview');
@@ -401,8 +482,7 @@ export function startEditorSession(): void {
         void saveCurrent();
       } else if (key === 'd') {
         event.preventDefault();
-        const selectedIds = store.getSelectedIds();
-        if (selectedIds.length > 0) store.duplicateEntities(selectedIds);
+        duplicateSelection();
       } else if (key === 'z') {
         event.preventDefault();
         if (event.shiftKey) store.redo();
@@ -429,13 +509,7 @@ export function startEditorSession(): void {
         break;
       case 'delete':
       case 'backspace': {
-        const sub = store.getSubSelection();
-        if (sub) {
-          store.hideGlbNode(sub.entityId, sub.nodeUuid);
-        } else {
-          const selectedIds = store.getSelectedIds();
-          if (selectedIds.length > 0) store.deleteEntities(selectedIds);
-        }
+        deleteSelection();
         break;
       }
       case 'escape':

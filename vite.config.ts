@@ -111,7 +111,7 @@ function collectPrefabAssetUrls(value: unknown, urls: Set<string>): void {
   for (const [key, child] of Object.entries(record)) {
     if (
       typeof child === 'string' &&
-      key.endsWith('SoundUrl') &&
+      (key === 'soundUrl' || key.endsWith('SoundUrl')) &&
       child.startsWith('/')
     ) {
       urls.add(child);

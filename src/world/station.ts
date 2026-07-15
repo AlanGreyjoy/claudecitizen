@@ -3,6 +3,7 @@ import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
 import { DEFAULT_SPAWN_SITE } from './landing_sites';
 import type { Planet, Vec3 } from '../types';
 import type { GameplayCollider } from '../physics/colliders';
+import type { PrefabSoundSpec } from './prefabs/sound_runtime';
 
 /**
  * Orbital habitat station fixed above the default landing site. Gameplay uses
@@ -412,6 +413,7 @@ export interface StationLayoutOverride {
   elevatorMarkers: StationElevatorMarker[];
   infoMarkers: StationInfoMarker[];
   avmsMarkers: StationAvmsMarker[];
+  sounds: PrefabSoundSpec[];
 }
 
 let layoutOverride: StationLayoutOverride | null = null;
@@ -479,5 +481,4 @@ export function sampleHangarRest(
   }
   return null;
 }
-
 

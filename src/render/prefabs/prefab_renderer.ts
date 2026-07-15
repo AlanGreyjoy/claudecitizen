@@ -441,6 +441,28 @@ function sanitizeNodeName(name: string): string {
   return name.replace(/\s/g, '_');
 }
 
+/** Keeps one named GLB subtree and moves its authored transform onto the prefab entity. */
+export function isolatePrefabModelNode(
+  root: THREE.Object3D,
+  nodeName: string,
+): boolean {
+  const target = root.getObjectByName(sanitizeNodeName(nodeName));
+  if (!target) return false;
+  if (target === root) {
+    root.position.set(0, 0, 0);
+    root.quaternion.identity();
+    root.scale.set(1, 1, 1);
+    return true;
+  }
+  target.removeFromParent();
+  target.position.set(0, 0, 0);
+  target.quaternion.identity();
+  target.scale.set(1, 1, 1);
+  root.clear();
+  root.add(target);
+  return true;
+}
+
 function isIdentityPrefabTransform(transform: {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number; w: number };
@@ -503,9 +525,16 @@ function buildEntity(
     group.add(createPrimitiveMesh(entity.primitive, entity.materialOverrides));
   }
   if (entity.asset) {
-    const castShadow = entity.asset.castShadow ?? true;
-    void loadPrefabModel(entity.asset.url)
+    const asset = entity.asset;
+    const castShadow = asset.castShadow ?? true;
+    void loadPrefabModel(asset.url)
       .then((model) => {
+        if (asset.node && !isolatePrefabModelNode(model, asset.node)) {
+          console.warn(
+            `Prefab asset node "${asset.node}" not found in ${asset.url}.`,
+          );
+          return;
+        }
         if (!castShadow) {
           model.traverse((object) => {
             object.castShadow = false;
@@ -529,7 +558,7 @@ function buildEntity(
         bindAllDescendantAnimations(entity);
       })
       .catch((error) => {
-        console.warn(`Prefab asset failed to load: ${entity.asset?.url}`, error);
+        console.warn(`Prefab asset failed to load: ${asset.url}`, error);
       });
   } else {
     for (const component of entity.components ?? []) {

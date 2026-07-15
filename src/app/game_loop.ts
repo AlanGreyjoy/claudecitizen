@@ -16,6 +16,8 @@ import type { KeyboardActionId } from "../flight/input_settings";
 import {
   MODE_IN_SHIP,
   MODE_IN_STATION,
+  MODE_ENTERING_SHIP,
+  MODE_LEAVING_PILOT,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
   MODE_RIDING_ELEVATOR,
@@ -39,14 +41,16 @@ import {
   type DeckCharacterState,
   type DeckLocal,
 } from "../player/ship_deck";
-import { getShipLayout, getShipRestHeightMeters, usesColliderDeck } from "../player/ship_layout";
+import { getShipLayout, getShipLayoutForPrefab, getShipRestHeightMeters, usesColliderDeck } from "../player/ship_layout";
 import {
   getRampDismountGroundLocal,
   isShipParked,
   localOffsetToWorld,
+  getShipRight,
   nearShipRampOutside,
   sampleRampBoarding,
   sampleRampMount,
+  worldToShipLocal,
 } from "../player/ship_interaction";
 import {
   doorBlends,
@@ -86,19 +90,33 @@ import { pickStationFloorPoint } from "../render/hangar/prop_instances";
 import {
   getStationFrame,
   getStationHangars,
+  getStationLayoutOverride,
   sampleHangarRest,
   worldToStationLocal,
 } from "../world/station";
+import { dot, normalize } from "../math/vec3";
+import { createSoundSceneController, type SoundListenerPose } from "../audio/sound_scene";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleRenderablePlanetSurface } from "../world/planet_surface";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
-import type { ColorCorrectionSettings, Planet, SsaoSettings, Vec3 } from "../types";
+import type { ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 import { syncDynamicColliders, type StationPhysics } from "../physics/station_physics";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
+
+const STATION_SOUND_MODES = new Set<GameMode>([
+  MODE_IN_STATION,
+  MODE_RIDING_ELEVATOR,
+]);
+const SHIP_SOUND_MODES = new Set<GameMode>([
+  MODE_IN_SHIP,
+  MODE_ON_SHIP_DECK,
+  MODE_ENTERING_SHIP,
+  MODE_LEAVING_PILOT,
+]);
 
 export interface BuildAreaRuntime {
   controller: HangarBuildController;
@@ -173,6 +191,7 @@ export function createGameLoop({
     visit(stationPrefab.root);
   }
   let lastNearbyPrefabInfoId: string | null = null;
+  const soundScene = createSoundSceneController();
 
   function toggleStationAnimation(id: string): void {
     const anim = stationAnimationStates[id];
@@ -223,6 +242,77 @@ export function createGameLoop({
   let running = false;
   let frameRendererError: unknown = rendererError;
   const stationFrame = getStationFrame(planet);
+
+  function sceneVectorFromStation(vector: Vec3): Vec3 {
+    return {
+      x: -dot(vector, stationFrame.right),
+      y: dot(vector, stationFrame.up),
+      z: dot(vector, stationFrame.forward),
+    };
+  }
+
+  function sceneVectorFromShip(vector: Vec3, ship: ReturnType<typeof getActiveShipBody>): Vec3 {
+    const shipForward = normalize(ship.forward);
+    return {
+      x: -dot(vector, getShipRight(ship)),
+      y: dot(vector, ship.up),
+      z: dot(vector, shipForward),
+    };
+  }
+
+  function updateSceneSounds(focusPosition: Vec3): void {
+    const camera = renderer?.getCamera();
+    const renderScale = renderer?.getRenderScale() ?? 1;
+    const listenerWorld = camera
+      ? {
+          x: focusPosition.x + camera.position.x / renderScale,
+          y: focusPosition.y + camera.position.y / renderScale,
+          z: focusPosition.z + camera.position.z / renderScale,
+        }
+      : world.character.position;
+    const matrix = camera?.matrixWorld.elements;
+    const listenerForward = matrix
+      ? { x: -matrix[8], y: -matrix[9], z: -matrix[10] }
+      : world.character.forward;
+    const listenerUp = matrix
+      ? { x: matrix[4], y: matrix[5], z: matrix[6] }
+      : world.character.up;
+
+    if (STATION_SOUND_MODES.has(world.mode)) {
+      const layout = getStationLayoutOverride();
+      const local = worldToStationLocal(stationFrame, listenerWorld);
+      const pose: SoundListenerPose = {
+        position: { x: -local.right, y: local.up, z: local.forward },
+        forward: sceneVectorFromStation(listenerForward),
+        up: sceneVectorFromStation(listenerUp),
+      };
+      soundScene.setScene(
+        stationPrefab ? `station:${stationPrefab.id}` : null,
+        layout?.sounds ?? [],
+      );
+      soundScene.update(pose);
+      return;
+    }
+
+    if (SHIP_SOUND_MODES.has(world.mode)) {
+      const shipInstance = getActiveShip(world);
+      const ship = shipInstance.body;
+      const layout = getShipLayoutForPrefab(shipInstance.prefabId);
+      const local = worldToShipLocal(ship, listenerWorld);
+      soundScene.setScene(
+        `ship:${shipInstance.id}:${shipInstance.prefabId}`,
+        layout.sounds,
+      );
+      soundScene.update({
+        position: { x: -local.right, y: local.up, z: local.forward },
+        forward: sceneVectorFromShip(listenerForward, ship),
+        up: sceneVectorFromShip(listenerUp, ship),
+      });
+      return;
+    }
+
+    soundScene.setScene(null, []);
+  }
 
   const transitionContext = {
     planet,
@@ -1105,6 +1195,7 @@ export function createGameLoop({
     }
     window.__claudecitizenRenderStats = renderStats;
     window.__claudecitizenWorld = world;
+    updateSceneSounds(focusPosition);
 
     const focusForward =
       world.mode === MODE_IN_SHIP
@@ -1144,6 +1235,7 @@ export function createGameLoop({
 
   function stop(): void {
     running = false;
+    soundScene.dispose();
   }
 
   return {

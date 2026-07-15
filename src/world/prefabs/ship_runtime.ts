@@ -31,6 +31,7 @@ import {
   validateMeshColliders,
 } from "../../physics/colliders";
 import { buildPrefabColliders } from "../../physics/prefab_colliders";
+import { buildPrefabSounds } from "./sound_runtime";
 
 /**
  * Derives the ship gameplay layout (walk zones, doors, seats, ramp
@@ -784,5 +785,6 @@ export async function buildShipLayoutFromPrefab(
     rampDismountGround,
     cameraBounds: out.cameraBounds,
     deckSpawn: out.deckSpawn ?? undefined,
+    sounds: buildPrefabSounds(doc),
   };
 }

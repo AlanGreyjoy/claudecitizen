@@ -20,6 +20,8 @@ export interface ToolbarActions {
   onNew: () => void;
   onSave: () => void;
   onLoad: (id: string) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
   onPreview: () => void;
   onExit: () => void;
   /** Ship kind: editor-viewport articulation preview (gear / ramp / doors). */
@@ -615,19 +617,13 @@ export function createToolbar(
           {
             label: 'Duplicate',
             shortcut: 'Ctrl+D',
-            action: () => {
-              const selectedIds = store.getSelectedIds();
-              if (selectedIds.length > 0) store.duplicateEntities(selectedIds);
-            },
+            action: () => actions.onDuplicate(),
             disabled: () => store.getSelectedIds().length === 0,
           },
           {
             label: 'Delete',
             shortcut: 'Del',
-            action: () => {
-              const selectedIds = store.getSelectedIds();
-              if (selectedIds.length > 0) store.deleteEntities(selectedIds);
-            },
+            action: () => actions.onDelete(),
             disabled: () => store.getSelectedIds().length === 0,
           },
         ],

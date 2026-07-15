@@ -4,6 +4,7 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import {
   applyPrefabMaterialOverrides,
   createPrefabLightObject,
+  isolatePrefabModelNode,
   loadPrefabModel,
   createPrimitiveMesh,
 } from "../prefabs/prefab_renderer";
@@ -44,6 +45,11 @@ export interface EditorViewport {
   setShipPreview: (state: ShipPreviewState) => void;
   focusSelection: () => void;
   getGlbNodePrefabPosition: (entityId: string, nodeUuid: string) => Vec3 | null;
+  getGlbNodePrefabTransform: (
+    entityId: string,
+    nodeUuid: string,
+    parentEntityId?: string | null,
+  ) => EntityTransform | null;
   getGlbNodeBounds: (entityId: string, nodeUuid: string) => { min: Vec3; max: Vec3 } | null;
   getGlbNodeLocalTransform: (
     entityId: string,
@@ -452,6 +458,42 @@ export function createEditorViewport(
         coneGeometry.rotateX(-Math.PI / 2);
         const cone = makeHelperMesh(coneGeometry, color, 0.14, true);
         group.add(bulb, cone);
+        return group;
+      }
+      case "sound": {
+        const color = component.mode === "spatial" ? 0xd58cff : 0x65d8ff;
+        const group = new THREE.Group();
+        const speaker = makeHelperMesh(
+          new THREE.SphereGeometry(0.18, 14, 10),
+          color,
+          0.88,
+        );
+        const cone = makeHelperMesh(
+          new THREE.ConeGeometry(0.24, 0.42, 14),
+          color,
+          0.68,
+        );
+        cone.rotation.z = -Math.PI / 2;
+        cone.position.x = 0.28;
+        const zone =
+          component.zone.shape === "sphere"
+            ? makeHelperMesh(
+                new THREE.SphereGeometry(component.zone.radius, 24, 16),
+                color,
+                0.16,
+                true,
+              )
+            : makeHelperMesh(
+                new THREE.BoxGeometry(
+                  component.zone.size.x,
+                  component.zone.size.y,
+                  component.zone.size.z,
+                ),
+                color,
+                0.16,
+                true,
+              );
+        group.add(speaker, cone, zone);
         return group;
       }
       case "spawn-point": {
@@ -887,7 +929,8 @@ export function createEditorViewport(
     }
     if (entity.asset) {
       hasVisual = true;
-      const url = entity.asset.url;
+      const asset = entity.asset;
+      const url = asset.url;
       // The game recenters the flyable hull on its bounding-box center
       // (ship_model.ts), so mirror that here or zones drift from the mesh.
       const recenterAsHull = entity.components.some(
@@ -900,6 +943,11 @@ export function createEditorViewport(
           if (recenterAsHull) {
             const box = new THREE.Box3().setFromObject(model);
             model.position.sub(box.getCenter(new THREE.Vector3()));
+          }
+          if (asset.node && !isolatePrefabModelNode(model, asset.node)) {
+            console.warn(`Editor: node "${asset.node}" not found in ${url}`);
+            store.setGlbTree(entity.id, null);
+            return;
           }
           for (const material of applyPrefabMaterialOverrides(
             model,
@@ -1240,6 +1288,15 @@ export function createEditorViewport(
     return null;
   }
 
+  function isEffectivelyVisible(object: THREE.Object3D): boolean {
+    let current: THREE.Object3D | null = object;
+    while (current) {
+      if (!current.visible) return false;
+      current = current.parent;
+    }
+    return true;
+  }
+
   function pickAtScreen(
     clientX: number,
     clientY: number,
@@ -1252,7 +1309,7 @@ export function createEditorViewport(
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(entityRoot.children, true);
     for (const hit of hits) {
-      if (!hit.object.visible) continue;
+      if (!isEffectivelyVisible(hit.object)) continue;
       if (hit.object.userData.editorMeshColliderHelper) continue;
       const entityId = entityIdFromObject(hit.object);
       if (!entityId) continue;
@@ -1320,6 +1377,41 @@ export function createEditorViewport(
       x: localPositionScratch.x,
       y: localPositionScratch.y,
       z: localPositionScratch.z,
+    };
+  }
+
+  function getGlbNodePrefabTransform(
+    entityId: string,
+    nodeUuid: string,
+    parentEntityId: string | null = entityId,
+  ): EntityTransform | null {
+    const sourceGroup = objectsById.get(entityId);
+    if (!sourceGroup) return null;
+    const node = findObjectByUuid(sourceGroup, nodeUuid);
+    if (!node) return null;
+    const parentObject = parentEntityId === null
+      ? entityRoot
+      : objectsById.get(parentEntityId);
+    if (!parentObject) return null;
+    sourceGroup.updateWorldMatrix(true, true);
+    parentObject.updateWorldMatrix(true, false);
+    const relativeMatrix = parentObject.matrixWorld
+      .clone()
+      .invert()
+      .multiply(node.matrixWorld);
+    const position = new THREE.Vector3();
+    const rotation = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    relativeMatrix.decompose(position, rotation, scale);
+    const euler = new THREE.Euler().setFromQuaternion(rotation, 'XYZ');
+    return {
+      position: { x: position.x, y: position.y, z: position.z },
+      rotation: {
+        x: euler.x * RAD_TO_DEG,
+        y: euler.y * RAD_TO_DEG,
+        z: euler.z * RAD_TO_DEG,
+      },
+      scale: { x: scale.x, y: scale.y, z: scale.z },
     };
   }
 
@@ -1704,6 +1796,7 @@ export function createEditorViewport(
     },
     focusSelection,
     getGlbNodePrefabPosition,
+    getGlbNodePrefabTransform,
     getGlbNodeBounds,
     getGlbNodeLocalTransform,
     setGlbNodeLocalTransform,

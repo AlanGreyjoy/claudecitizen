@@ -31,34 +31,6 @@
     ],
     "children": [
       {
-        "id": "spawn",
-        "name": "Spawn Point",
-        "transform": {
-          "position": {
-            "x": -34.75,
-            "y": 0.25,
-            "z": 74.5
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "spawn-point",
-            "floorId": "hab"
-          }
-        ]
-      },
-      {
         "id": "lift-lobby-to-hab",
         "name": "Lift Pad (Lobby to Hab)",
         "transform": {
@@ -94,45 +66,6 @@
             "id": "hab-lift",
             "targetFloor": "hab",
             "floorId": "lobby"
-          }
-        ]
-      },
-      {
-        "id": "lift-hab-to-lobby",
-        "name": "Lift Pad (Hab to Lobby)",
-        "transform": {
-          "position": {
-            "x": -34.75,
-            "y": 0,
-            "z": 77.5
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "primitive": {
-          "shape": "box",
-          "size": {
-            "x": 2,
-            "y": 0.1,
-            "z": 2
-          },
-          "color": "#3fc6ff"
-        },
-        "components": [
-          {
-            "type": "elevator",
-            "id": "hab-lift",
-            "targetFloor": "lobby",
-            "floorId": "hab"
           }
         ]
       },
@@ -372,117 +305,6 @@
           "castShadow": true
         },
         "nodeOverrides": [
-          {
-            "node": "SM_Bld_Wall_Door_01",
-            "transform": {
-              "position": {
-                "x": 1.78033,
-                "y": -0.00456,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 1.8425446,
-                  "y": 2.43777752,
-                  "z": 0.422869862
-                },
-                "offset": {
-                  "x": 0,
-                  "y": 1.21888876,
-                  "z": 0
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_Door_02",
-            "transform": {
-              "position": {
-                "x": 3.23008,
-                "y": -0.00456,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 1.8723358,
-                  "y": 2.43777752,
-                  "z": 0.42287597
-                },
-                "offset": {
-                  "x": 0,
-                  "y": 1.21888876,
-                  "z": 0
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Crew_Shower_Door_01",
-            "transform": {
-              "position": {
-                "x": 1.07951,
-                "y": 0.13072,
-                "z": 0.33417
-              },
-              "rotation": {
-                "x": 0,
-                "y": -0.000297,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 0.99268
-              }
-            },
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 1.0204232899999999,
-                  "y": 1.84605527,
-                  "z": 0.09999991949999998
-                },
-                "offset": {
-                  "x": 0.5102116449999999,
-                  "y": 0.923027635,
-                  "z": 3.724999289231312e-8
-                }
-              }
-            ]
-          },
           {
             "node": "SM_Bld_Wall_Door_06_3",
             "transform": {
@@ -774,43 +596,6 @@
             ]
           },
           {
-            "node": "SM_Bld_Floor_09_(6)",
-            "transform": {
-              "position": {
-                "x": 5,
-                "y": 0,
-                "z": -15
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.00000190418579,
-                  "y": 0.214143127,
-                  "z": 5.00000048
-                },
-                "offset": {
-                  "x": 2.499998567907105,
-                  "y": -0.0997378975,
-                  "z": 2.50000024
-                }
-              }
-            ]
-          },
-          {
             "node": "SM_Bld_Lift_Wall_01_(1)",
             "transform": {
               "position": {
@@ -830,43 +615,6 @@
                 "z": 1
               }
             }
-          },
-          {
-            "node": "SM_Bld_Floor_09_(7)",
-            "transform": {
-              "position": {
-                "x": 5,
-                "y": 0,
-                "z": -20
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.00000190418579,
-                  "y": 0.214143127,
-                  "z": 5.00000048
-                },
-                "offset": {
-                  "x": 2.499998567907105,
-                  "y": -0.0997378975,
-                  "z": 2.50000024
-                }
-              }
-            ]
           },
           {
             "node": "SM_Bld_Floor_011_(12)",
@@ -1450,120 +1198,6 @@
                 "offset": {
                   "x": 2.5,
                   "y": -0.1,
-                  "z": 2.5
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Floor_010_(14)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.5,
-                  "z": 5
-                },
-                "offset": {
-                  "x": 2.5,
-                  "y": -0.083,
-                  "z": 2.5
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Floor_010_(13)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.5,
-                  "z": 5
-                },
-                "offset": {
-                  "x": 2.5,
-                  "y": -0.083,
-                  "z": 2.5
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Floor_010_(5)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.5,
-                  "z": 5
-                },
-                "offset": {
-                  "x": 2.5,
-                  "y": -0.083,
-                  "z": 2.5
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Floor_010_(12)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.5,
-                  "z": 5
-                },
-                "offset": {
-                  "x": 2.5,
-                  "y": -0.083,
-                  "z": 2.5
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Floor_010_(11)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.5,
-                  "z": 5
-                },
-                "offset": {
-                  "x": 2.5,
-                  "y": -0.083,
-                  "z": 2.5
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Floor_010_(4)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.5,
-                  "z": 5
-                },
-                "offset": {
-                  "x": 2.5,
-                  "y": -0.083,
                   "z": 2.5
                 }
               }
@@ -4482,113 +4116,6 @@
             ]
           },
           {
-            "node": "SM_Prop_Stool_02_(3)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 0.49777799799999994,
-                  "y": 1.23461056,
-                  "z": 0.7065850659999999
-                },
-                "offset": {
-                  "x": 1.490000000048397e-7,
-                  "y": 0.61730528,
-                  "z": 0.137748233
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Crew_Desk_01_(2)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 2.5,
-                  "y": 4.999999600000001,
-                  "z": 1.4235022
-                },
-                "offset": {
-                  "x": 1.2500000000000142,
-                  "y": 1.5045592,
-                  "z": -0.008666300000000016
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Crew_Shower_01_1",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
-          },
-          {
-            "node": "SM_Bld_Crew_Shower_01_2",
-            "transform": {
-              "position": {
-                "x": 0,
-                "y": 0,
-                "z": 0
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
-          },
-          {
-            "node": "SM_Prop_Bed_01",
-            "transform": {
-              "position": {
-                "x": 7.5,
-                "y": 0,
-                "z": -18.5
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "collider",
-                "shape": "mesh"
-              }
-            ]
-          },
-          {
             "node": "SM_Prop_Turret_Small_Pivot_Ceiling_01_2",
             "transform": {
               "position": {
@@ -4688,27 +4215,6 @@
                 }
               }
             ]
-          },
-          {
-            "node": "SM_Bld_Wall_Doorframe_05",
-            "transform": {
-              "position": {
-                "x": 5,
-                "y": 0,
-                "z": -10
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            }
           },
           {
             "node": "SM_Bld_HangerCeiling_01",
@@ -5804,6 +5310,24 @@
           },
           {
             "node": "SM_Bld_Ceiling_03",
+            "transform": {
+              "position": {
+                "x": 27.394,
+                "y": -24.74222,
+                "z": -48.11448
+              },
+              "rotation": {
+                "x": -0.190665,
+                "y": -0.159006,
+                "z": 0.031228,
+                "w": 0.968188
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -5823,6 +5347,24 @@
           },
           {
             "node": "SM_Bld_Ceiling_03_(1)",
+            "transform": {
+              "position": {
+                "x": 28.644,
+                "y": -26.22295,
+                "z": -51.61448
+              },
+              "rotation": {
+                "x": -0.190665,
+                "y": -0.159006,
+                "z": 0.031228,
+                "w": 0.968188
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -5842,6 +5384,24 @@
           },
           {
             "node": "SM_Bld_Ceiling_03_(2)",
+            "transform": {
+              "position": {
+                "x": 28.644,
+                "y": -25.81546,
+                "z": -50.61448
+              },
+              "rotation": {
+                "x": -0.190665,
+                "y": -0.159006,
+                "z": 0.031228,
+                "w": 0.968188
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -5861,6 +5421,24 @@
           },
           {
             "node": "SM_Bld_Ceiling_03_(3)",
+            "transform": {
+              "position": {
+                "x": 28.894,
+                "y": -24.85189,
+                "z": -48.36448
+              },
+              "rotation": {
+                "x": -0.190665,
+                "y": -0.159006,
+                "z": 0.031228,
+                "w": 0.968188
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -5880,6 +5458,24 @@
           },
           {
             "node": "SM_Bld_Ceiling_03_(4)",
+            "transform": {
+              "position": {
+                "x": 32.144,
+                "y": -24.59106,
+                "z": -47.61448
+              },
+              "rotation": {
+                "x": -0.190665,
+                "y": -0.159006,
+                "z": 0.031228,
+                "w": 0.968188
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -5899,6 +5495,24 @@
           },
           {
             "node": "SM_Bld_Ceiling_03_(5)",
+            "transform": {
+              "position": {
+                "x": 32.644,
+                "y": -25.18085,
+                "z": -49.11448
+              },
+              "rotation": {
+                "x": -0.190665,
+                "y": -0.159006,
+                "z": 0.031228,
+                "w": 0.968188
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -7133,44 +6747,6 @@
             ]
           },
           {
-            "node": "SM_Bld_Ceiling_03_(52)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.549083,
-                  "z": 5.000000000000001
-                },
-                "offset": {
-                  "x": 2.500000000000007,
-                  "y": 4.2146955,
-                  "z": 2.4999999999999862
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Ceiling_03_(53)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.549083,
-                  "z": 5.000000000000001
-                },
-                "offset": {
-                  "x": 2.500000000000007,
-                  "y": 4.2146955,
-                  "z": 2.5000000000000147
-                }
-              }
-            ]
-          },
-          {
             "node": "SM_Bld_Ceiling_02_(27)",
             "components": [
               {
@@ -7190,159 +6766,25 @@
             ]
           },
           {
-            "node": "SM_Bld_Wall_05_(8)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212000000002
-                },
-                "offset": {
-                  "x": 2.4999990694885073,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299606000000001
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_05_(7)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212
-                },
-                "offset": {
-                  "x": 2.4999990694885,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299606
-                }
-              }
-            ]
-          },
-          {
             "node": "SM_Bld_Wall_05_(6)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212
-                },
-                "offset": {
-                  "x": 2.4999990694885,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299606
-                }
+            "transform": {
+              "position": {
+                "x": 7.5,
+                "y": 0,
+                "z": -20.14
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
               }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_05_(5)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212
-                },
-                "offset": {
-                  "x": 2.4999990694885,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299606
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_05_(4)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212
-                },
-                "offset": {
-                  "x": 2.4999990694885,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299606
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_05_(3)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212
-                },
-                "offset": {
-                  "x": 2.499999069488493,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299606
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_05_(2)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212
-                },
-                "offset": {
-                  "x": 2.4999990694885,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299605999999965
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_05_(1)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5.000003861023,
-                  "y": 4.9954406,
-                  "z": 0.8599212
-                },
-                "offset": {
-                  "x": 2.4999990694885,
-                  "y": 1.5022796999999999,
-                  "z": 0.4299606
-                }
-              }
-            ]
-          },
-          {
-            "node": "SM_Bld_Wall_05",
+            },
             "components": [
               {
                 "type": "collider",
@@ -8390,6 +7832,24 @@
           },
           {
             "node": "SM_Bld_Wall_01",
+            "transform": {
+              "position": {
+                "x": 5,
+                "y": 0,
+                "z": -30
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -9794,25 +9254,6 @@
             ]
           },
           {
-            "node": "SM_Prop_Plant_Vase_02_(13)",
-            "components": [
-              {
-                "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 0.9307396560000001,
-                  "y": 1.34892631,
-                  "z": 2.22486878
-                },
-                "offset": {
-                  "x": -0.014210171999999993,
-                  "y": 0.674463155,
-                  "z": 0
-                }
-              }
-            ]
-          },
-          {
             "node": "SM_Prop_Plant_Vase_02_(10)",
             "components": [
               {
@@ -10093,6 +9534,239 @@
                 "z": 1
               }
             }
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": 1.5045592,
+                  "z": -0.011940549999996497
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": 1.5045592,
+                  "z": -0.01194055000000005
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.2500000000000142,
+                  "y": 1.5045592,
+                  "z": -0.011940549999992944
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": 1.5045592,
+                  "z": -0.01194055000000005
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.2499999999999858,
+                  "y": 1.5045592,
+                  "z": -0.01194055000000005
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": 1.5045592,
+                  "z": -0.01194055000000005
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": 1.5045592,
+                  "z": -0.01194055000000005
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Blank_01_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": 1.5045592,
+                  "z": -0.01194055000000005
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Wall_02_(21)",
+            "transform": {
+              "position": {
+                "x": 5,
+                "y": 0,
+                "z": -19.75
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Prop_Detail_Pipe_02_(1)",
+            "transform": {
+              "position": {
+                "x": 7.5,
+                "y": 0,
+                "z": -20.713
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_Doorframe_06_(3)",
+            "transform": {
+              "position": {
+                "x": 10,
+                "y": 0,
+                "z": -5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_Pods_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Wall_Pods_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
           }
         ],
         "hiddenNodes": [
@@ -10106,7 +9780,56 @@
           "SM_Prop_Hose_01_(2)",
           "SM_Prop_Turret_Small_Pivot_Ceiling_01_2",
           "SM_Prop_Turret_Small_Ceiling_01_(2)",
-          "SM_Prop_Turret_Small_Ceiling_01_(1)"
+          "SM_Prop_Turret_Small_Ceiling_01_(1)",
+          "SM_Bld_Wall_02_(21)",
+          "SM_Bld_Wall_05_(6)",
+          "SM_Prop_Detail_Pipe_02_(1)",
+          "SM_Bld_Ceiling_03",
+          "SM_Bld_Ceiling_03_(1)",
+          "SM_Bld_Ceiling_03_(4)",
+          "SM_Bld_Ceiling_03_(5)",
+          "SM_Bld_Ceiling_03_(3)",
+          "SM_Bld_Ceiling_03_(2)",
+          "SM_Bld_Ceiling_03_(52)",
+          "SM_Bld_Ceiling_03_(53)",
+          "SM_Bld_Wall_02_(20)",
+          "SM_Bld_Crew_Kitchen_01_(1)",
+          "SM_Bld_Wall_Doorframe_05",
+          "SM_Bld_Floor_09_(7)",
+          "SM_Prop_Bed_01",
+          "SM_Bld_Crew_Blank_02_(5)",
+          "SM_Bld_Crew_Desk_01_(2)",
+          "SM_Prop_Stool_02_(3)",
+          "SM_Bld_Floor_09_(6)",
+          "SM_Bld_Crew_Shower_01_(2)",
+          "SM_Bld_Crew_Blank_01_(8)",
+          "SM_Prop_Plant_Vase_02_(13)",
+          "SM_Prop_Screen_Small_01",
+          "SM_Bld_Floor_010_(12)",
+          "SM_Bld_Floor_010_(5)",
+          "SM_Bld_Floor_010_(4)",
+          "SM_Bld_Floor_010_(11)",
+          "SM_Bld_Floor_010_(13)",
+          "SM_Bld_Floor_010_(14)",
+          "SM_Bld_Wall_05_(5)",
+          "SM_Bld_Wall_Pillar_05_(5)",
+          "SM_Bld_Wall_Corner_Pillar_Wide_05",
+          "SM_Bld_Wall_05_(4)",
+          "SM_Bld_Wall_Corner_Pillar_Wide_05_(3)",
+          "SM_Bld_Wall_05_(1)",
+          "SM_Bld_Wall_Pillar_05_(1)",
+          "SM_Bld_Wall_Doorframe_Outer_01_(5)",
+          "SM_Bld_Wall_Doorframe_02_(7)",
+          "SM_Bld_Wall_Pillar_05",
+          "SM_Bld_Wall_05",
+          "SM_Bld_Wall_Corner_Pillar_Wide_05_(2)",
+          "SM_Bld_Wall_05_(2)",
+          "SM_Bld_Wall_Pillar_05_(3)",
+          "SM_Bld_Wall_05_(8)",
+          "SM_Bld_Wall_Corner_Pillar_Wide_05_(1)",
+          "SM_Bld_Wall_05_(7)",
+          "SM_Bld_Wall_Pillar_05_(4)",
+          "SM_Bld_Wall_05_(3)"
         ],
         "materialOverrides": [
           {
@@ -10438,70 +10161,6 @@
                     "intensity": 5,
                     "width": 1.4,
                     "height": 0.65
-                  }
-                ]
-              },
-              {
-                "id": "e-cbb5cde3",
-                "name": "Point Light",
-                "transform": {
-                  "position": {
-                    "x": 7.5,
-                    "y": 3.25,
-                    "z": -17.5
-                  },
-                  "rotation": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 0,
-                    "w": 1
-                  },
-                  "scale": {
-                    "x": 1,
-                    "y": 1,
-                    "z": 1
-                  }
-                },
-                "components": [
-                  {
-                    "type": "point-light",
-                    "color": "#ffffc8",
-                    "intensity": 28,
-                    "distance": 5,
-                    "decay": 2,
-                    "castShadow": false
-                  }
-                ]
-              },
-              {
-                "id": "e-3cf81b26",
-                "name": "Point Light Copy",
-                "transform": {
-                  "position": {
-                    "x": 7.5,
-                    "y": 3.25,
-                    "z": -12.75
-                  },
-                  "rotation": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 0,
-                    "w": 1
-                  },
-                  "scale": {
-                    "x": 1,
-                    "y": 1,
-                    "z": 1
-                  }
-                },
-                "components": [
-                  {
-                    "type": "point-light",
-                    "color": "#ffffc8",
-                    "intensity": 28,
-                    "distance": 5,
-                    "decay": 2,
-                    "castShadow": false
                   }
                 ]
               },
@@ -12230,6 +11889,2720 @@
                     "height": 0.65
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "id": "e-74d02c33",
+            "name": "SM_Bld_Wall_01 Copy",
+            "transform": {
+              "position": {
+                "x": 10,
+                "y": 0,
+                "z": -30
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_01"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.00000143051147,
+                  "y": 4.9954406,
+                  "z": 0.891821265
+                },
+                "offset": {
+                  "x": 2.499999284744265,
+                  "y": 1.5022796999999999,
+                  "z": 0.4459106325
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-34b0bcec",
+            "name": "SM_Bld_Wall_Doorframe_06_(3) Copy",
+            "transform": {
+              "position": {
+                "x": 5,
+                "y": 0,
+                "z": -10
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Doorframe_06_(3)"
+            },
+            "nodeOverrides": [
+              {
+                "node": "SM_Bld_Wall_Door_06_3",
+                "transform": {
+                  "position": {
+                    "x": 2.02604,
+                    "y": 1.05843,
+                    "z": 0
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0.013404,
+                    "z": 0,
+                    "w": 0.99991
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                }
+              }
+            ],
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e-cf9ddcc8",
+        "name": "SpawnHab",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 55.25,
+            "z": -17.75
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "children": [
+          {
+            "id": "e-820b1278",
+            "name": "SM_Bld_Ceiling_03_(52)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 73.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_03_(52)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.549083,
+                  "z": 5.000000000000001
+                },
+                "offset": {
+                  "x": 2.500000000000007,
+                  "y": 4.2146955,
+                  "z": 2.4999999999999862
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-ecd6742a",
+            "name": "SM_Bld_Ceiling_03_(53)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 68.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_03_(53)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.549083,
+                  "z": 5.000000000000001
+                },
+                "offset": {
+                  "x": 2.500000000000007,
+                  "y": 4.2146955,
+                  "z": 2.5000000000000147
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-94c512b8",
+            "name": "SM_Bld_Ceiling_03_(53) Copy",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_03_(53)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.549083,
+                  "z": 5.000000000000001
+                },
+                "offset": {
+                  "x": 2.500000000000007,
+                  "y": 4.2146955,
+                  "z": 2.5000000000000147
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-16fdd1c1",
+            "name": "SM_Bld_Ceiling_03_(53) Copy Copy",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_03_(53)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.549083,
+                  "z": 5.000000000000001
+                },
+                "offset": {
+                  "x": 2.500000000000007,
+                  "y": 4.2146955,
+                  "z": 2.5000000000000147
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-e1f747ae",
+            "name": "SM_Bld_Wall_02_(20)",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 68.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_02_(20)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-a12d6f8d",
+            "name": "SM_Bld_Crew_Kitchen_01_(1)",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 73.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Crew_Kitchen_01_(1)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-c6bfbb8c",
+            "name": "SM_Bld_Wall_Doorframe_05",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 78.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Doorframe_05"
+            },
+            "nodeOverrides": [
+              {
+                "node": "SM_Bld_Wall_Door_01",
+                "transform": {
+                  "position": {
+                    "x": 1.78033,
+                    "y": -0.00456,
+                    "z": 0
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                },
+                "components": [
+                  {
+                    "type": "collider",
+                    "shape": "box",
+                    "size": {
+                      "x": 1.8425446,
+                      "y": 2.43777752,
+                      "z": 0.422869862
+                    },
+                    "offset": {
+                      "x": 0,
+                      "y": 1.21888876,
+                      "z": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "node": "SM_Bld_Wall_Door_02",
+                "transform": {
+                  "position": {
+                    "x": 3.23008,
+                    "y": -0.00456,
+                    "z": 0
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                },
+                "components": [
+                  {
+                    "type": "collider",
+                    "shape": "box",
+                    "size": {
+                      "x": 1.8723358,
+                      "y": 2.43777752,
+                      "z": 0.42287597
+                    },
+                    "offset": {
+                      "x": 0,
+                      "y": 1.21888876,
+                      "z": 0
+                    }
+                  }
+                ]
+              }
+            ],
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-389596d5",
+            "name": "SM_Bld_Floor_09_(7)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 68.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_09_(7)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.00000190418579,
+                  "y": 0.214143127,
+                  "z": 5.00000048
+                },
+                "offset": {
+                  "x": 2.499998567907105,
+                  "y": -0.0997378975,
+                  "z": 2.50000024
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-cb0ec4c1",
+            "name": "SM_Prop_Bed_01",
+            "transform": {
+              "position": {
+                "x": -29.25,
+                "y": 0,
+                "z": 65.75
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Prop_Bed_01"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-dcbf0091",
+            "name": "SM_Bld_Crew_Blank_02_(5)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 71
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Crew_Blank_02_(5)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-435433d4",
+            "name": "SM_Bld_Crew_Desk_01_(2)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 73.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Crew_Desk_01_(2)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4235022
+                },
+                "offset": {
+                  "x": 1.2500000000000142,
+                  "y": 1.5045592,
+                  "z": -0.008666300000000016
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-a37f284d",
+            "name": "SM_Prop_Stool_02_(3)",
+            "transform": {
+              "position": {
+                "x": -36.287,
+                "y": 0,
+                "z": 72.348
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Prop_Stool_02_(3)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.49777799799999994,
+                  "y": 1.23461056,
+                  "z": 0.7065850659999999
+                },
+                "offset": {
+                  "x": 1.490000000048397e-7,
+                  "y": 0.61730528,
+                  "z": 0.137748233
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-99cff308",
+            "name": "SM_Bld_Floor_09_(6)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 73.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_09_(6)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.00000190418579,
+                  "y": 0.214143127,
+                  "z": 5.00000048
+                },
+                "offset": {
+                  "x": 2.499998567907105,
+                  "y": -0.0997378975,
+                  "z": 2.50000024
+                }
+              }
+            ]
+          },
+          {
+            "id": "spawn",
+            "name": "Spawn Point",
+            "transform": {
+              "position": {
+                "x": -34.75,
+                "y": 0.25,
+                "z": 61.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "spawn-point",
+                "floorId": "hab"
+              }
+            ]
+          },
+          {
+            "id": "lift-hab-to-lobby",
+            "name": "Lift Pad (Hab to Lobby)",
+            "transform": {
+              "position": {
+                "x": -34.75,
+                "y": 0,
+                "z": 77.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "primitive": {
+              "shape": "box",
+              "size": {
+                "x": 2,
+                "y": 0.1,
+                "z": 2
+              },
+              "color": "#3fc6ff"
+            },
+            "components": [
+              {
+                "type": "elevator",
+                "id": "hab-lift",
+                "targetFloor": "lobby",
+                "floorId": "hab"
+              }
+            ]
+          },
+          {
+            "id": "e-90c45a03",
+            "name": "SM_Bld_Crew_Shower_01_(2)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 76
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Crew_Shower_01_(2)"
+            },
+            "nodeOverrides": [
+              {
+                "node": "SM_Bld_Crew_Shower_Door_01",
+                "transform": {
+                  "position": {
+                    "x": 1.07951,
+                    "y": 0.13072,
+                    "z": 0.33417
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": -0.000297,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 0.99268
+                  }
+                },
+                "components": [
+                  {
+                    "type": "collider",
+                    "shape": "box",
+                    "size": {
+                      "x": 1.0204232899999999,
+                      "y": 1.84605527,
+                      "z": 0.09999991949999998
+                    },
+                    "offset": {
+                      "x": 0.5102116449999999,
+                      "y": 0.923027635,
+                      "z": 3.724999289231312e-8
+                    }
+                  }
+                ]
+              },
+              {
+                "node": "SM_Bld_Crew_Shower_01_1",
+                "transform": {
+                  "position": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                }
+              },
+              {
+                "node": "SM_Bld_Crew_Shower_01_2",
+                "transform": {
+                  "position": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                }
+              }
+            ],
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-199ba4ad",
+            "name": "SM_Bld_Crew_Blank_01_(8)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 78.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Crew_Blank_01_(8)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 4.999999600000001,
+                  "z": 1.4300507
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": 1.5045592,
+                  "z": -0.01194055000000005
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-74b7a567",
+            "name": "SM_Prop_Plant_Vase_02_(13)",
+            "transform": {
+              "position": {
+                "x": -33.25,
+                "y": 0,
+                "z": 72.22
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Prop_Plant_Vase_02_(13)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.9307396560000001,
+                  "y": 1.34892631,
+                  "z": 2.22486878
+                },
+                "offset": {
+                  "x": -0.014210171999999993,
+                  "y": 0.674463155,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-d61a9b72",
+            "name": "SM_Prop_Screen_Small_01",
+            "transform": {
+              "position": {
+                "x": -36.966,
+                "y": 0.807,
+                "z": 72.606
+              },
+              "rotation": {
+                "x": -0.434604,
+                "y": 0.557781,
+                "z": 0.557781,
+                "w": 0.434604
+              },
+              "scale": {
+                "x": 0.83445,
+                "y": 0.83445,
+                "z": 0.62002
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Prop_Screen_Small_01"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-2620f384",
+            "name": "SM_Bld_Floor_010_(12)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_010_(12)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-6f1921e6",
+            "name": "SM_Bld_Floor_010_(5)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_010_(5)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-5bb372ea",
+            "name": "SM_Bld_Floor_010_(4)",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_010_(4)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-1f95590b",
+            "name": "SM_Bld_Floor_010_(11)",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_010_(11)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-ae361051",
+            "name": "SM_Bld_Floor_010_(13)",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_010_(13)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-49523961",
+            "name": "SM_Bld_Floor_010_(14)",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Floor_010_(14)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-78fe843d",
+            "name": "SM_Bld_Wall_05_(5)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 68.36
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_05_(5)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000003861023,
+                  "y": 4.9954406,
+                  "z": 0.8599212
+                },
+                "offset": {
+                  "x": 2.4999990694885,
+                  "y": 1.5022796999999999,
+                  "z": 0.4299606
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-31a537d4",
+            "name": "SM_Bld_Wall_Pillar_05_(5)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 68.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Pillar_05_(5)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-599b6dca",
+            "name": "SM_Bld_Wall_Corner_Pillar_Wide_05",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 68.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Corner_Pillar_Wide_05"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-3aaf8689",
+            "name": "SM_Bld_Wall_Corner_Pillar_Wide_05_(3)",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Corner_Pillar_Wide_05_(3)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-c8f4bcf2",
+            "name": "SM_Bld_Wall_05_(1)",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_05_(1)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000003861023,
+                  "y": 4.9954406,
+                  "z": 0.8599212
+                },
+                "offset": {
+                  "x": 2.4999990694885,
+                  "y": 1.5022796999999999,
+                  "z": 0.4299606
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-2ffb06f7",
+            "name": "SM_Bld_Wall_Pillar_05_(1)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 58.589
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Pillar_05_(1)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-979696bd",
+            "name": "SM_Bld_Wall_Doorframe_Outer_01_(5)",
+            "transform": {
+              "position": {
+                "x": -37.1469,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 0.95876,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Doorframe_Outer_01_(5)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-7e56c93c",
+            "name": "SM_Bld_Wall_Doorframe_02_(7)",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Doorframe_02_(7)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-17a1228e",
+            "name": "SM_Bld_Wall_Pillar_05",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 58.589
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Pillar_05"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-89043e3e",
+            "name": "SM_Bld_Wall_05",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_05"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000003861023,
+                  "y": 4.9954406,
+                  "z": 0.8599212
+                },
+                "offset": {
+                  "x": 2.4999990694885,
+                  "y": 1.5022796999999999,
+                  "z": 0.4299606
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-0fbbec3d",
+            "name": "SM_Bld_Wall_Corner_Pillar_Wide_05_(2)",
+            "transform": {
+              "position": {
+                "x": -27.25,
+                "y": 0,
+                "z": 58.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Corner_Pillar_Wide_05_(2)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-b6989038",
+            "name": "SM_Bld_Wall_05_(2)",
+            "transform": {
+              "position": {
+                "x": -27.32,
+                "y": 0,
+                "z": 58.43
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_05_(2)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000003861023,
+                  "y": 4.9954406,
+                  "z": 0.8599212
+                },
+                "offset": {
+                  "x": 2.4999990694885,
+                  "y": 1.5022796999999999,
+                  "z": 0.4299605999999965
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-a2d4e927",
+            "name": "SM_Bld_Wall_Pillar_05_(3)",
+            "transform": {
+              "position": {
+                "x": -27.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Pillar_05_(3)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-4426d715",
+            "name": "SM_Bld_Wall_05_(8)",
+            "transform": {
+              "position": {
+                "x": -27.32,
+                "y": 0,
+                "z": 63.43
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707033,
+                "z": 0,
+                "w": 0.707181
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_05_(8)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000003861023,
+                  "y": 4.9954406,
+                  "z": 0.8599212000000002
+                },
+                "offset": {
+                  "x": 2.4999990694885073,
+                  "y": 1.5022796999999999,
+                  "z": 0.4299606000000001
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-b5ae5cb7",
+            "name": "SM_Bld_Wall_Corner_Pillar_Wide_05_(1)",
+            "transform": {
+              "position": {
+                "x": -27.25,
+                "y": 0,
+                "z": 68.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Corner_Pillar_Wide_05_(1)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-038a9459",
+            "name": "SM_Bld_Wall_05_(7)",
+            "transform": {
+              "position": {
+                "x": -27.25,
+                "y": 0,
+                "z": 68.36
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_05_(7)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000003861023,
+                  "y": 4.9954406,
+                  "z": 0.8599212
+                },
+                "offset": {
+                  "x": 2.4999990694885,
+                  "y": 1.5022796999999999,
+                  "z": 0.4299606
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-f9552640",
+            "name": "SM_Bld_Wall_Pillar_05_(4)",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 68.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Wall_Pillar_05_(4)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ]
+          },
+          {
+            "id": "e-9241db1e",
+            "name": "SM_Bld_Ceiling_02_(30) Copy",
+            "transform": {
+              "position": {
+                "x": -37.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_02_(30)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 4.999999999999999,
+                  "y": 0.9989597100000003,
+                  "z": 5.0000000031628415
+                },
+                "offset": {
+                  "x": 2.4999999999999925,
+                  "y": 3.989757145,
+                  "z": 2.500000478418586
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-7dd2735a",
+            "name": "SM_Bld_Ceiling_02_(30) Copy Copy",
+            "transform": {
+              "position": {
+                "x": -27.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_02_(30)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 4.999999999999999,
+                  "y": 0.9989597100000003,
+                  "z": 5.0000000031628415
+                },
+                "offset": {
+                  "x": 2.4999999999999925,
+                  "y": 3.989757145,
+                  "z": 2.500000478418586
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-af4d30cb",
+            "name": "SM_Bld_Ceiling_02_(30) Copy Copy",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_02_(30)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 4.999999999999999,
+                  "y": 0.9989597100000003,
+                  "z": 5.0000000031628415
+                },
+                "offset": {
+                  "x": 2.4999999999999925,
+                  "y": 3.989757145,
+                  "z": 2.500000478418586
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-488a3e82",
+            "name": "SM_Bld_Ceiling_02_(30) Copy Copy Copy",
+            "transform": {
+              "position": {
+                "x": -32.25,
+                "y": 0,
+                "z": 63.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/demo_station.glb",
+              "castShadow": true,
+              "node": "SM_Bld_Ceiling_02_(30)"
+            },
+            "materialOverrides": [
+              {
+                "material": "PolygonScifiSpace_Material_01_A",
+                "color": "#ffffff",
+                "emissive": "#808080",
+                "emissiveIntensity": 1,
+                "metalness": 0.18,
+                "roughness": 0.5,
+                "opacity": 1
+              }
+            ],
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 4.999999999999999,
+                  "y": 0.9989597100000003,
+                  "z": 5.0000000031628415
+                },
+                "offset": {
+                  "x": 2.4999999999999925,
+                  "y": 3.989757145,
+                  "z": 2.500000478418586
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-a9f6e645",
+            "name": "Lights",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "children": [
+              {
+                "id": "e-cbb5cde3",
+                "name": "Point Light",
+                "transform": {
+                  "position": {
+                    "x": -34.75,
+                    "y": 3.25,
+                    "z": 66
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                },
+                "components": [
+                  {
+                    "type": "point-light",
+                    "color": "#ffffc8",
+                    "intensity": 28,
+                    "distance": 5,
+                    "decay": 2,
+                    "castShadow": false
+                  }
+                ]
+              },
+              {
+                "id": "e-773f82a8",
+                "name": "Point Light Copy",
+                "transform": {
+                  "position": {
+                    "x": -34.75,
+                    "y": 3.25,
+                    "z": 61
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                },
+                "components": [
+                  {
+                    "type": "point-light",
+                    "color": "#ffffc8",
+                    "intensity": 28,
+                    "distance": 5,
+                    "decay": 2,
+                    "castShadow": false
+                  }
+                ]
+              },
+              {
+                "id": "e-13a62e8f",
+                "name": "Point Light Copy",
+                "transform": {
+                  "position": {
+                    "x": -34.75,
+                    "y": 3.25,
+                    "z": 71
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                },
+                "components": [
+                  {
+                    "type": "point-light",
+                    "color": "#ffffc8",
+                    "intensity": 28,
+                    "distance": 5,
+                    "decay": 2,
+                    "castShadow": false
+                  }
+                ]
+              },
+              {
+                "id": "e-3cf81b26",
+                "name": "Point Light Copy",
+                "transform": {
+                  "position": {
+                    "x": -35,
+                    "y": 3.25,
+                    "z": 76
+                  },
+                  "rotation": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0,
+                    "w": 1
+                  },
+                  "scale": {
+                    "x": 1,
+                    "y": 1,
+                    "z": 1
+                  }
+                },
+                "components": [
+                  {
+                    "type": "point-light",
+                    "color": "#ffffc8",
+                    "intensity": 28,
+                    "distance": 5,
+                    "decay": 2,
+                    "castShadow": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "e-c5ca6309",
+            "name": "HabSounds",
+            "transform": {
+              "position": {
+                "x": -35,
+                "y": 0.75,
+                "z": 68.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 2.6,
+                "y": 2.6,
+                "z": 2.6
+              }
+            },
+            "components": [
+              {
+                "type": "sound",
+                "soundUrl": "/src/assets/protected/sfx/AmbientDrone2.wav",
+                "mode": "ambient",
+                "playback": "loop",
+                "volume": 0.5,
+                "blendDistance": 1,
+                "zone": {
+                  "shape": "sphere",
+                  "radius": 5
+                }
+              }
+            ]
+          },
+          {
+            "id": "e-74b4173b",
+            "name": "SM_Bld_Wall_04_Alt",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 66
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/space-station-interiors/SM_Bld_Wall_04_Alt.glb"
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-9cce4ee4",
+            "name": "SM_Bld_Wall_05",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 61
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/space-station-interiors/SM_Bld_Wall_05.glb"
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "id": "e-dc26fa9c",
+            "name": "SM_Bld_Wall_05 Copy",
+            "transform": {
+              "position": {
+                "x": -42.25,
+                "y": 0,
+                "z": 71
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "asset": {
+              "url": "/src/assets/protected/props/space-station-interiors/SM_Bld_Wall_05.glb"
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
               }
             ]
           }

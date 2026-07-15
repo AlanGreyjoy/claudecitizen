@@ -244,6 +244,18 @@ const EDITOR_CSS = `
   font: 500 11px/1.4 var(--sc-font);
 }
 
+.ed-move-to-panel {
+  width: 320px;
+  max-width: min(320px, calc(100vw - 24px));
+}
+
+.ed-move-to-panel .ed-menu-item {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ed-menubar-doc {
   display: flex;
   align-items: center;
@@ -787,6 +799,29 @@ body.ed-resize-row * {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.ed-section-title-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.ed-section-title-toggle:hover {
+  color: var(--text);
+}
+
+.ed-section-caret {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.ed-section.is-collapsed .ed-section-title {
+  margin-bottom: 0;
+}
+
+.ed-section.is-collapsed > :not(.ed-section-title) {
+  display: none;
 }
 
 .ed-field-row {

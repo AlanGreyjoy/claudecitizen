@@ -2,6 +2,7 @@ import { FLIGHT_CONFIG } from "../flight/flight_config";
 import type { LocalOffset, Vec3 } from "../types";
 import type { GameplayCollider } from "../physics/colliders";
 import type { PrefabNodeOverride } from "../world/prefabs/schema";
+import type { PrefabSoundSpec } from "../world/prefabs/sound_runtime";
 
 /**
  * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
@@ -183,6 +184,8 @@ export interface ShipLayout {
   cameraBounds: ShipCameraBounds[];
   /** Optional authored deck spawn from ship-controller.deckSpawnEntityId. */
   deckSpawn?: { right: number; forward: number };
+  /** Prefab-local authored ambience and positional sound zones. */
+  sounds: PrefabSoundSpec[];
 }
 
 /** Minimal fallback when a ship prefab is missing or not yet loaded. */
@@ -202,6 +205,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   rampDismountForward: -Infinity,
   rampDismountGround: { right: 0, forward: 0 },
   cameraBounds: [],
+  sounds: [],
 };
 
 let override: ShipLayout | null = null;

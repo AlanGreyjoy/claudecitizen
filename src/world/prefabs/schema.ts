@@ -45,6 +45,8 @@ export interface PrefabAsset {
   /** Absolute dev-server url, e.g. "/editor/assets/protected/synty/.../Wall_01.glb". */
   url: string;
   castShadow?: boolean;
+  /** Render only this named GLB node subtree, normalized to the entity transform. */
+  node?: string;
 }
 
 export interface PrefabPrimitive {
@@ -80,6 +82,10 @@ export const SHIP_SEAT_ROLES: ShipSeatRole[] = [
   "turret",
   "passenger",
 ];
+
+export type PrefabSoundZone =
+  | { shape: "sphere"; radius: number }
+  | { shape: "box"; size: Vec3 };
 
 export type PrefabComponent =
   | { type: "station-frame" }
@@ -144,6 +150,18 @@ export type PrefabComponent =
       /** Soft edge ratio, 0..1. Default 0. */
       penumbra?: number;
       castShadow?: boolean;
+    }
+  | {
+      type: "sound";
+      /** Assigned audio asset. May be omitted while the marker is being authored. */
+      soundUrl?: string;
+      mode: "ambient" | "spatial";
+      playback: "loop" | "enter";
+      /** Per-source gain before the global master/SFX settings, 0..1. */
+      volume: number;
+      /** Local-space distance over which a loop fades in from the zone boundary. */
+      blendDistance: number;
+      zone: PrefabSoundZone;
     }
   | {
       type: "collider";
@@ -699,6 +717,65 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         castShadow:
           value.castShadow === undefined ? undefined : Boolean(value.castShadow),
       };
+    case "sound": {
+      const mode = value.mode;
+      if (mode !== "ambient" && mode !== "spatial") {
+        fail(`${path}.mode`, 'expected "ambient" or "spatial"');
+      }
+      const playback = value.playback;
+      if (playback !== "loop" && playback !== "enter") {
+        fail(`${path}.playback`, 'expected "loop" or "enter"');
+      }
+      if (!isRecord(value.zone)) fail(`${path}.zone`, "expected zone object");
+      const shape = value.zone.shape;
+      const zone: PrefabSoundZone =
+        shape === "sphere"
+          ? {
+              shape,
+              radius: Math.min(
+                500,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.zone.radius, `${path}.zone.radius`),
+                ),
+              ),
+            }
+          : shape === "box"
+            ? {
+                shape,
+                size: (() => {
+                  const size = parseVec3(value.zone.size, `${path}.zone.size`);
+                  return {
+                    x: Math.min(1_000, Math.max(0.05, size.x)),
+                    y: Math.min(1_000, Math.max(0.05, size.y)),
+                    z: Math.min(1_000, Math.max(0.05, size.z)),
+                  };
+                })(),
+              }
+            : fail(`${path}.zone.shape`, 'expected "sphere" or "box"');
+      const maxBlend =
+        zone.shape === "sphere"
+          ? zone.radius
+          : Math.min(zone.size.x, zone.size.y, zone.size.z) / 2;
+      return {
+        type,
+        soundUrl:
+          value.soundUrl === undefined
+            ? undefined
+            : parseAssetUrl(value.soundUrl, `${path}.soundUrl`),
+        mode,
+        playback,
+        volume: parseUnitValue(value.volume, `${path}.volume`),
+        blendDistance: Math.min(
+          maxBlend,
+          Math.max(
+            0,
+            parseFiniteNumber(value.blendDistance, `${path}.blendDistance`),
+          ),
+        ),
+        zone,
+      };
+    }
     case "collider": {
       const shape = value.shape === "mesh" ? "mesh" : "box";
       const offset =
@@ -1493,6 +1570,9 @@ function parseEntity(
       url: parseAssetUrl(value.asset.url, `${path}.asset.url`),
       ...(value.asset.castShadow !== undefined
         ? { castShadow: Boolean(value.asset.castShadow) }
+        : {}),
+      ...(value.asset.node !== undefined
+        ? { node: parseString(value.asset.node, `${path}.asset.node`, 128) }
         : {}),
     };
   }

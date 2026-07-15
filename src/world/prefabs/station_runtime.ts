@@ -20,6 +20,7 @@ import {
   preloadMeshColliders,
   validateMeshColliders,
 } from '../../physics/colliders';
+import { buildPrefabSounds } from './sound_runtime';
 
 /**
  * Derives gameplay layout (spawn, elevators, hangar pads, info prompts) from a
@@ -361,5 +362,6 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     elevatorMarkers,
     infoMarkers,
     avmsMarkers,
+    sounds: buildPrefabSounds(doc),
   };
 }

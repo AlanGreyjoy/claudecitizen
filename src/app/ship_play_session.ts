@@ -43,10 +43,12 @@ import {
   createTransitionPose,
   getPilotSeatAnchor,
   getRampDismountGroundLocal,
+  getShipRight,
   localOffsetToWorld,
   nearShipRampOutside,
   sampleRampBoarding,
   sampleRampMount,
+  worldToShipLocal,
 } from "../player/ship_interaction";
 import { getLeavePilotStandPose } from "../player/ship_deck";
 import {
@@ -65,12 +67,14 @@ import { buildShipLayoutFromPrefab } from "../world/prefabs/ship_runtime";
 import {
   add,
   cross,
+  dot,
   normalize,
   rotateAroundAxis,
   scale,
   vec3,
 } from "../math/vec3";
 import type { CharacterState, FlightBody, Pose, Vec3 } from "../types";
+import { createSoundSceneController } from "../audio/sound_scene";
 
 /**
  * Dev-only ship sandbox (?shipPrefab=<id>): loads a ship prefab, applies its
@@ -340,6 +344,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   scene.add(grid);
 
   const layout = getShipLayout();
+  const soundScene = createSoundSceneController();
   const shipModel = createShipModel(1, {
     hullUrl: layout.hullUrl,
     hullNodeOverrides: layout.hullNodeOverrides,
@@ -367,6 +372,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     up: { ...WORLD_UP },
     velocity: vec3(0, 0, 0),
   };
+  const disposeSoundScene = () => soundScene.dispose();
+  window.addEventListener("pagehide", disposeSoundScene, { once: true });
   // Without an authored rest height, rest the hull's lowest point on the pad
   // once the model has loaded and been measured.
   let autoRestPending = authoredRestHeight === null;
@@ -846,6 +853,32 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     );
 
     updateCamera(dt);
+    camera.updateMatrixWorld();
+    if (mode === "ground") {
+      soundScene.setScene(null, []);
+    } else {
+      const local = worldToShipLocal(ship, {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z,
+      });
+      const matrix = camera.matrixWorld.elements;
+      const worldForward = { x: -matrix[8], y: -matrix[9], z: -matrix[10] };
+      const worldUp = { x: matrix[4], y: matrix[5], z: matrix[6] };
+      const shipRight = getShipRight(ship);
+      const shipForward = normalize(ship.forward);
+      const toSceneVector = (vector: Vec3): Vec3 => ({
+        x: -dot(vector, shipRight),
+        y: dot(vector, ship.up),
+        z: dot(vector, shipForward),
+      });
+      soundScene.setScene(`ship-preview:${prefabId}`, layout.sounds);
+      soundScene.update({
+        position: { x: -local.right, y: local.up, z: local.forward },
+        forward: toSceneVector(worldForward),
+        up: toSceneVector(worldUp),
+      });
+    }
     composer.render(dt);
 
     interactPromptEl.textContent = prompt;

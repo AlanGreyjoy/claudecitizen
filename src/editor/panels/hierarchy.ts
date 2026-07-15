@@ -1,4 +1,11 @@
-import { clearChildren, el, showContextMenu, type ContextMenuEntry } from '../dom';
+import {
+  clearChildren,
+  closeContextMenu,
+  el,
+  showContextMenu,
+  type ContextMenuEntry,
+  type ContextMenuPanel,
+} from '../dom';
 import { entityBoundToAnyGlbNode, entityTargetsGlbNode } from '../glb_binding';
 import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../document';
 import {
@@ -13,6 +20,25 @@ import type { PrefabComponentType } from '../../world/prefabs/schema';
 import type { Vec3 } from '../../types';
 
 const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
+const GLB_NODE_DND_TYPE = 'application/x-claudecitizen-glb-node';
+
+interface DraggedGlbNode {
+  entityId: string;
+  nodeUuid: string;
+}
+
+function parseDraggedGlbNode(data: string): DraggedGlbNode | null {
+  if (!data) return null;
+  try {
+    const parsed = JSON.parse(data) as Partial<DraggedGlbNode>;
+    if (typeof parsed.entityId === 'string' && typeof parsed.nodeUuid === 'string') {
+      return { entityId: parsed.entityId, nodeUuid: parsed.nodeUuid };
+    }
+  } catch {
+    // Ignore malformed external drag payloads.
+  }
+  return null;
+}
 
 function parseDraggedEntityIds(data: string): string[] {
   if (!data) return [];
@@ -36,6 +62,12 @@ function idsToReparent(draggedIds: string[], store: EditorStore): string[] {
 export interface HierarchyPanelOptions {
   getGlbNodePrefabPosition?: (entityId: string, nodeUuid: string) => Vec3 | null;
   getGlbNodeBounds?: (entityId: string, nodeUuid: string) => { min: Vec3; max: Vec3 } | null;
+  onDuplicateGlbNode?: (entityId: string, nodeUuid: string) => void;
+  onExtractGlbNode?: (
+    entityId: string,
+    nodeUuid: string,
+    targetParentId: string | null,
+  ) => boolean;
 }
 
 function componentBadge(entity: EditorEntity): string | null {
@@ -93,6 +125,7 @@ export function createHierarchyPanel(
 ): void {
   const body = el('div', { className: 'ed-panel-body' });
   let renaming: string | null = null;
+  const collapsedEntities = new Set<string>();
   const expandedGlbEntities = new Set<string>();
   const expandedGlbNodes = new Set<string>();
   let searchQuery = '';
@@ -161,6 +194,7 @@ export function createHierarchyPanel(
   ]);
 
   function expandAll(): void {
+    collapsedEntities.clear();
     function walkEntity(entity: EditorEntity): void {
       const glbTree = store.getGlbTree(entity.id);
       if (entity.asset && glbTree) {
@@ -178,12 +212,24 @@ export function createHierarchyPanel(
   }
 
   function collapseAll(): void {
-    expandedGlbEntities.clear();
-    expandedGlbNodes.clear();
     const sub = store.getSubSelection();
     if (sub?.entityId) {
       store.setEntitySelection(sub.entityId, 'replace');
     }
+    function walkEntity(entity: EditorEntity): void {
+      const glbTree = store.getGlbTree(entity.id);
+      if (entity.children.length > 0 || (entity.asset && glbTree)) {
+        collapsedEntities.add(entity.id);
+      }
+      for (const child of entity.children) {
+        walkEntity(child);
+      }
+    }
+    for (const root of store.getState().roots) {
+      walkEntity(root);
+    }
+    expandedGlbEntities.clear();
+    expandedGlbNodes.clear();
     render();
   }
 
@@ -247,6 +293,100 @@ export function createHierarchyPanel(
     componentFilterSelect.value = '';
     autoExpandForFilters();
     render();
+  }
+
+  function collectEntitySubtreeIds(entityId: string, out: Set<string>): void {
+    const entity = store.locate(entityId)?.entity;
+    if (!entity || out.has(entity.id)) return;
+    out.add(entity.id);
+    for (const child of entity.children) collectEntitySubtreeIds(child.id, out);
+  }
+
+  function createMoveToPanel(
+    onMove: (parentId: string | null) => void,
+    excludedIds = new Set<string>(),
+  ): ContextMenuPanel {
+    const destinations: { id: string | null; label: string; searchText: string }[] = [
+      { id: null, label: 'Scene Root', searchText: 'scene root' },
+    ];
+    const walk = (entities: readonly EditorEntity[], parentPath: string[]): void => {
+      for (const entity of entities) {
+        const path = [...parentPath, entity.name];
+        if (!excludedIds.has(entity.id)) {
+          destinations.push({
+            id: entity.id,
+            label: path.join(' / '),
+            searchText: path.join(' ').toLowerCase(),
+          });
+        }
+        walk(entity.children, path);
+      }
+    };
+    walk(store.getState().roots, []);
+
+    const panel = el('div', { className: 'ed-move-to-panel' }) as ContextMenuPanel;
+    const list = el('div', { className: 'ed-open-list' });
+    let visibleDestinations = destinations;
+
+    const moveTo = (destination: typeof destinations[number]): void => {
+      closeContextMenu();
+      onMove(destination.id);
+    };
+
+    const renderDestinations = (): void => {
+      const query = searchInput.value.trim().toLowerCase();
+      visibleDestinations = query
+        ? destinations.filter((destination) => destination.searchText.includes(query))
+        : destinations;
+      clearChildren(list);
+      if (visibleDestinations.length === 0) {
+        list.append(el('div', { className: 'ed-open-empty', text: 'No objects found' }));
+        return;
+      }
+      for (const destination of visibleDestinations) {
+        list.append(
+          el('button', {
+            className: 'ed-menu-item',
+            text: destination.label,
+            title: destination.label,
+            on: {
+              click: (event) => {
+                event.stopPropagation();
+                moveTo(destination);
+              },
+            },
+          }),
+        );
+      }
+    };
+
+    const searchInput = el('input', {
+      className: 'ed-input ed-open-search',
+      attrs: {
+        type: 'text',
+        placeholder: 'Search objects…',
+        autocomplete: 'off',
+      },
+      on: {
+        input: renderDestinations,
+        keydown: (event) => {
+          const keyboardEvent = event as KeyboardEvent;
+          if (keyboardEvent.key === 'Enter' && visibleDestinations[0]) {
+            keyboardEvent.preventDefault();
+            moveTo(visibleDestinations[0]);
+          }
+          event.stopPropagation();
+        },
+      },
+    }) as HTMLInputElement;
+
+    panel.append(
+      el('div', { className: 'ed-open-search-wrap' }, [searchInput]),
+      list,
+    );
+    panel.focusSearch = () => searchInput.focus();
+    renderDestinations();
+    return panel;
   }
 
   container.append(
@@ -432,6 +572,17 @@ export function createHierarchyPanel(
       return [
         { label: 'Group in Empty', action: () => store.groupSelectedInEmpty() },
         {
+          label: 'Move To',
+          panel: () => {
+            const excludedIds = new Set<string>();
+            for (const id of selectedIds) collectEntitySubtreeIds(id, excludedIds);
+            return createMoveToPanel(
+              (parentId) => store.reparentEntities(selectedIds, parentId),
+              excludedIds,
+            );
+          },
+        },
+        {
           label: 'Add Collider',
           action: () => addColliderToEntities(store, selectedIds),
         },
@@ -454,6 +605,17 @@ export function createHierarchyPanel(
     return [
       { label: 'Add Child Empty', action: () => addEmptyTo(entity.id) },
       { label: 'Add Child Box', action: () => addBoxTo(entity.id) },
+      {
+        label: 'Move To',
+        panel: () => {
+          const excludedIds = new Set<string>();
+          collectEntitySubtreeIds(entity.id, excludedIds);
+          return createMoveToPanel(
+            (parentId) => store.reparentEntity(entity.id, parentId),
+            excludedIds,
+          );
+        },
+      },
       'sep',
       buildEntityComponentsSubmenu(store, entity.id, spawnPositionForEntity(entity.id)),
       'sep',
@@ -502,12 +664,28 @@ export function createHierarchyPanel(
         node.name,
       ),
       'sep',
+      ...(options.onDuplicateGlbNode
+        ? [{
+            label: 'Duplicate',
+            action: () => options.onDuplicateGlbNode!(entityId, node.uuid),
+          } satisfies ContextMenuEntry]
+        : []),
+      ...(options.onExtractGlbNode
+        ? [{
+            label: 'Move To',
+            panel: () => createMoveToPanel(
+              (parentId) => options.onExtractGlbNode!(entityId, node.uuid, parentId),
+            ),
+          } satisfies ContextMenuEntry]
+        : []),
       { label: 'Filter', action: () => filterByItemName(node.name) },
       { label: 'Delete', action: () => store.hideGlbNode(entityId, node.uuid) },
     ];
   }
 
   function ensureGlbExpanded(entityId: string, nodeUuid?: string | null): void {
+    ensureEntityAncestorsExpanded(entityId);
+    collapsedEntities.delete(entityId);
     expandedGlbEntities.add(entityId);
     const tree = store.getGlbTree(entityId);
     if (!tree || !nodeUuid) return;
@@ -560,6 +738,12 @@ export function createHierarchyPanel(
     if (!hasActiveFilters()) return;
     const walkEntity = (entity: EditorEntity): void => {
       const glbTree = store.getGlbTree(entity.id);
+      if (
+        entity.children.some((child) => entitySubtreeHasMatch(child)) ||
+        (glbTree && glbSubtreeHasMatch(entity.id, glbTree))
+      ) {
+        collapsedEntities.delete(entity.id);
+      }
       if (entity.asset && glbTree && glbSubtreeHasDescendantMatch(entity.id, glbTree)) {
         expandedGlbEntities.add(entity.id);
       }
@@ -725,7 +909,11 @@ export function createHierarchyPanel(
       'div',
       {
         className: `ed-tree-row ed-tree-row-glb${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}`,
-        attrs: { 'data-glb-uuid': node.uuid, 'data-entity-id': entityId },
+        attrs: {
+          draggable: 'true',
+          'data-glb-uuid': node.uuid,
+          'data-entity-id': entityId,
+        },
         on: {
           click: (event) =>
             handleGlbNodeClick(event as MouseEvent, target),
@@ -739,6 +927,14 @@ export function createHierarchyPanel(
               mouse.clientY,
               glbMenuEntries(entityId, node, targets),
             );
+          },
+          dragstart: (event) => {
+            const dragEvent = event as DragEvent;
+            dragEvent.dataTransfer?.setData(
+              GLB_NODE_DND_TYPE,
+              JSON.stringify({ entityId, nodeUuid: node.uuid }),
+            );
+            if (dragEvent.dataTransfer) dragEvent.dataTransfer.effectAllowed = 'move';
           },
         },
       },
@@ -832,6 +1028,10 @@ export function createHierarchyPanel(
   function renderRow(entity: EditorEntity, depth: number, rows: HTMLElement[]): void {
     visibleEntityIds.push(entity.id);
 
+    const glbTree = store.getGlbTree(entity.id);
+    const glbNodeNames = getAllGlbNodeNames(glbTree);
+    const hasChildren = entity.children.length > 0 || Boolean(entity.asset && glbTree);
+    const expanded = !collapsedEntities.has(entity.id);
     const selection = store.getSelection();
     const sub = store.getSubSelection();
     const inSelection = store.isEntitySelected(entity.id);
@@ -839,6 +1039,25 @@ export function createHierarchyPanel(
     const parentSelected =
       selection === entity.id && Boolean(sub) && sub?.entityId === entity.id;
     const badge = componentBadge(entity);
+    const toggle = hasChildren
+      ? el('button', {
+          className: `ed-tree-chevron${expanded ? ' is-expanded' : ''}`,
+          text: expanded ? '▾' : '▸',
+          title: expanded ? 'Collapse' : 'Expand',
+          attrs: { 'aria-label': expanded ? 'Collapse' : 'Expand' },
+          on: {
+            click: (event) => {
+              event.stopPropagation();
+              if (expanded) {
+                collapsedEntities.add(entity.id);
+              } else {
+                collapsedEntities.delete(entity.id);
+              }
+              render();
+            },
+          },
+        })
+      : el('span', { className: 'ed-tree-chevron-spacer' });
 
     const nameEl =
       renaming === entity.id
@@ -894,14 +1113,36 @@ export function createHierarchyPanel(
           },
           dragover: (event) => {
             const dragEvent = event as DragEvent;
-            if (!dragEvent.dataTransfer?.types.includes(ENTITY_DND_TYPE)) return;
+            const supportsEntity = dragEvent.dataTransfer?.types.includes(ENTITY_DND_TYPE);
+            const supportsGlbNode =
+              dragEvent.dataTransfer?.types.includes(GLB_NODE_DND_TYPE) &&
+              options.onExtractGlbNode;
+            if (!supportsEntity && !supportsGlbNode) return;
             dragEvent.preventDefault();
+            if (dragEvent.dataTransfer) dragEvent.dataTransfer.dropEffect = 'move';
             row.classList.add('is-drop-target');
           },
           dragleave: () => row.classList.remove('is-drop-target'),
           drop: (event) => {
             const dragEvent = event as DragEvent;
             row.classList.remove('is-drop-target');
+            const draggedGlbNode = parseDraggedGlbNode(
+              dragEvent.dataTransfer?.getData(GLB_NODE_DND_TYPE) ?? '',
+            );
+            if (draggedGlbNode && options.onExtractGlbNode) {
+              dragEvent.preventDefault();
+              dragEvent.stopPropagation();
+              if (
+                options.onExtractGlbNode(
+                  draggedGlbNode.entityId,
+                  draggedGlbNode.nodeUuid,
+                  entity.id,
+                )
+              ) {
+                collapsedEntities.delete(entity.id);
+              }
+              return;
+            }
             const draggedIds = parseDraggedEntityIds(
               dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE) ?? '',
             );
@@ -927,6 +1168,7 @@ export function createHierarchyPanel(
             },
           },
         }),
+        toggle,
         nameEl,
         ...(badge ? [el('span', { className: 'ed-tree-badge', text: badge })] : []),
       ],
@@ -934,8 +1176,7 @@ export function createHierarchyPanel(
     row.style.paddingLeft = `${10 + depth * 14}px`;
     rows.push(row);
 
-    const glbTree = store.getGlbTree(entity.id);
-    const glbNodeNames = getAllGlbNodeNames(glbTree);
+    if (!expanded) return;
 
     if (entity.asset && glbTree) {
       if (!hasActiveFilters() || glbSubtreeHasMatch(entity.id, glbTree)) {
@@ -978,10 +1219,29 @@ export function createHierarchyPanel(
       on: {
         dragover: (event) => {
           const dragEvent = event as DragEvent;
-          if (dragEvent.dataTransfer?.types.includes(ENTITY_DND_TYPE)) dragEvent.preventDefault();
+          if (
+            dragEvent.dataTransfer?.types.includes(ENTITY_DND_TYPE) ||
+            (dragEvent.dataTransfer?.types.includes(GLB_NODE_DND_TYPE) &&
+              options.onExtractGlbNode)
+          ) {
+            dragEvent.preventDefault();
+            if (dragEvent.dataTransfer) dragEvent.dataTransfer.dropEffect = 'move';
+          }
         },
         drop: (event) => {
           const dragEvent = event as DragEvent;
+          const draggedGlbNode = parseDraggedGlbNode(
+            dragEvent.dataTransfer?.getData(GLB_NODE_DND_TYPE) ?? '',
+          );
+          if (draggedGlbNode && options.onExtractGlbNode) {
+            dragEvent.preventDefault();
+            options.onExtractGlbNode(
+              draggedGlbNode.entityId,
+              draggedGlbNode.nodeUuid,
+              null,
+            );
+            return;
+          }
           const draggedIds = parseDraggedEntityIds(
             dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE) ?? '',
           );
@@ -1020,6 +1280,25 @@ export function createHierarchyPanel(
     body
       .querySelector<HTMLElement>('.ed-tree-row.is-selected')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function ensureEntityAncestorsExpanded(entityId: string): void {
+    const findPath = (
+      entities: readonly EditorEntity[],
+      ancestors: readonly string[],
+    ): string[] | null => {
+      for (const entity of entities) {
+        if (entity.id === entityId) return [...ancestors];
+        const found = findPath(entity.children, [...ancestors, entity.id]);
+        if (found) return found;
+      }
+      return null;
+    };
+    const ancestors = findPath(store.getState().roots, []);
+    if (!ancestors) return;
+    for (const ancestorId of ancestors) {
+      collapsedEntities.delete(ancestorId);
+    }
   }
 
   function remapSelectedGlbNodes(entityId: string): void {
@@ -1092,6 +1371,8 @@ export function createHierarchyPanel(
       }
       if (event.type === 'sub-selection' && event.entityId && event.nodeUuid) {
         ensureGlbExpanded(event.entityId, event.nodeUuid);
+      } else if (event.type === 'selection' && event.entityId) {
+        ensureEntityAncestorsExpanded(event.entityId);
       }
       render();
       if (event.type === 'selection' || event.type === 'sub-selection') {
@@ -1103,6 +1384,9 @@ export function createHierarchyPanel(
   if (initialSub?.entityId && initialSub.nodeUuid) {
     syncGlbSelectionFromStore(initialSub.entityId, initialSub.nodeUuid);
     ensureGlbExpanded(initialSub.entityId, initialSub.nodeUuid);
+  } else {
+    const initialSelection = store.getSelection();
+    if (initialSelection) ensureEntityAncestorsExpanded(initialSelection);
   }
   autoExpandForFilters();
   render();

@@ -59,9 +59,11 @@ export interface ContextMenuItem {
   action?: () => void;
   disabled?: boolean;
   children?: ContextMenuEntry[];
+  panel?: () => ContextMenuPanel;
 }
 
 export type ContextMenuEntry = ContextMenuItem | 'sep';
+export type ContextMenuPanel = HTMLElement & { focusSearch?: () => void };
 
 let activeContextMenu: HTMLElement | null = null;
 let closeContextMenuListeners: (() => void) | null = null;
@@ -85,7 +87,7 @@ export function showContextMenu(x: number, y: number, entries: ContextMenuEntry[
         host.append(el('div', { className: 'ed-menu-sep' }));
         continue;
       }
-      if (entry.children && entry.children.length > 0) {
+      if ((entry.children && entry.children.length > 0) || entry.panel) {
         const submenuWrap = el('div', { className: 'ed-menu-submenu' });
         const trigger = el(
           'button',
@@ -95,14 +97,24 @@ export function showContextMenu(x: number, y: number, entries: ContextMenuEntry[
             el('span', { className: 'ed-menu-item-shortcut', text: '▸' }),
           ],
         );
-        const flyout = el('div', { className: 'ed-menu-dropdown ed-menu-flyout' });
-        appendEntries(flyout, entry.children);
+        const flyout = el('div', {
+          className: `ed-menu-dropdown ed-menu-flyout${entry.panel ? ' ed-open-flyout' : ''}`,
+        });
+        const panel = entry.panel?.();
+        if (panel) flyout.append(panel);
+        else if (entry.children) appendEntries(flyout, entry.children);
         submenuWrap.append(trigger, flyout);
-        trigger.addEventListener('mouseenter', () => {
+        const openSubmenu = (): void => {
           for (const node of menu.querySelectorAll('.ed-menu-submenu')) {
             node.classList.remove('is-open');
           }
           submenuWrap.classList.add('is-open');
+          panel?.focusSearch?.();
+        };
+        trigger.addEventListener('mouseenter', openSubmenu);
+        trigger.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openSubmenu();
         });
         submenuWrap.addEventListener('mouseleave', () => {
           submenuWrap.classList.remove('is-open');
