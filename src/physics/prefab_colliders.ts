@@ -28,6 +28,28 @@ function transformMatrix(transform: PrefabTransform): THREE.Matrix4 {
   );
 }
 
+/**
+ * Play (`ship_model`) recenters the flyable hull and ignores entity translation.
+ * Colliders must match that space — otherwise a leftover editor Y offset (e.g.
+ * dropship at y=7.25) lifts the trimesh onto the visual roof.
+ */
+function shipHullColliderMatrix(
+  parentSceneMatrix: THREE.Matrix4,
+  transform: PrefabTransform,
+): THREE.Matrix4 {
+  const rotationScale = new THREE.Matrix4().compose(
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Quaternion(
+      transform.rotation.x,
+      transform.rotation.y,
+      transform.rotation.z,
+      transform.rotation.w,
+    ),
+    new THREE.Vector3(transform.scale.x, transform.scale.y, transform.scale.z),
+  );
+  return parentSceneMatrix.clone().multiply(rotationScale);
+}
+
 function offsetMatrix(offset: { x: number; y: number; z: number } | undefined): THREE.Matrix4 {
   return new THREE.Matrix4().makeTranslation(
     offset?.x ?? 0,
@@ -93,13 +115,17 @@ async function collect(
   const isShipHull =
     entity.components?.some((component) => component.type === "ship-controller") ??
     false;
+  // Hierarchy keeps full entity transform; hull colliders match play (no translation).
+  const hullColliderSceneMatrix = isShipHull
+    ? shipHullColliderMatrix(parentSceneMatrix, entity.transform)
+    : entitySceneMatrix;
   let colliderIndex = 0;
   for (const component of entity.components ?? []) {
     if (component.type !== "collider") continue;
     const collider = bakeCollider(
       component,
       entity,
-      entitySceneMatrix,
+      hullColliderSceneMatrix,
       `${entity.id}:collider-${colliderIndex}`,
       undefined,
       isShipHull,
@@ -134,7 +160,7 @@ async function collect(
           );
           continue;
         }
-        const nodeSceneMatrix = entitySceneMatrix.clone();
+        const nodeSceneMatrix = hullColliderSceneMatrix.clone();
         if (assetRootInverse) nodeSceneMatrix.multiply(assetRootInverse);
         nodeSceneMatrix.multiply(nodeWorldMatrix);
         let nodeColliderIndex = 0;

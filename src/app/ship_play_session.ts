@@ -20,22 +20,17 @@ import {
   bedInteractPrompt,
   createDeckCharacterState,
   DECK_FLOOR_OFFSET_METERS,
-  getDefaultDeckSpawnLocal,
   getDeckSpawnFloorHint,
-  getShipWalkZones,
+  getSandboxDeckSpawn,
   isOnShipRampDeck,
   nearestBed,
   nearestDoor,
   nearestSeat,
   nearRampPanel,
-  ladderInteractPrompt,
   resolveDoorInteractAim,
-  resolveLadderInteraction,
   seatInteractPrompt,
-  traverseLadder,
   updateCharacterOnDeck,
   type DeckCharacterState,
-  type DeckLocal,
 } from "../player/ship_deck";
 import {
   getShipLayout,
@@ -55,20 +50,16 @@ import {
   getBedEyeLocal,
   getBedSpec,
   getPilotSeatAnchor,
-  getRampDismountGroundLocal,
   getShipRight,
-  isShipParked,
   localOffsetToWorld,
   nearShipRampOutside,
   sampleRampBoarding,
-  sampleRampMount,
   worldToShipLocal,
 } from "../player/ship_interaction";
 import { getDeckWorldPose, getLeavePilotStandPose } from "../player/ship_deck";
 import {
   createShipRigState,
   doorBlends,
-  isDoorPassable,
   isRampUsable,
   updateShipRig,
 } from "../player/ship_rig";
@@ -325,15 +316,12 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       console.info(`Ship prefab sandbox active: "${prefabId}".`);
     }
   }
-  // Deck spawning needs authored walk zones (or the built-in ship when the
-  // prefab is missing entirely); otherwise start on the pad beside the ship.
-  const walkable =
-    (prefabApplied || !doc) &&
-    (getShipWalkZones().length > 0 || usesColliderDeck());
+  // Deck walking needs Rapier deck colliders on the ship layout.
+  const walkable = (prefabApplied || !doc) && usesColliderDeck();
   const hint = walkable
     ? "Ship sandbox — WASD walk · F interact · sit pilot to fly · G gear · Esc menu"
     : prefabApplied
-      ? "Hull loaded — add a ship-controller with deck colliders (or ship-walk-zones) to walk the interior"
+      ? "Hull loaded — add a ship-controller with deck colliders to walk the interior"
       : 'Ship prefab not applied (kind must be "ship") — showing the built-in ship';
 
   const editorReturnUrl = `/?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
@@ -602,8 +590,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   let mode: SandboxMode = walkable ? "deck" : "ground";
   const spawnRig = { gear01: rig.gear01, ramp01: rig.ramp01, doors: doorBlends(rig) };
-  const spawnLocal = getDefaultDeckSpawnLocal(spawnRig);
-  const spawnFloorHint = getDeckSpawnFloorHint(spawnLocal);
+  const sandboxSpawn = getSandboxDeckSpawn(spawnRig);
+  const spawnLocal = sandboxSpawn.local;
+  const spawnFloorHint = sandboxSpawn.floorUp;
   let shipPhysics: ShipPhysics | null = null;
   if (walkable && usesColliderDeck()) {
     try {
@@ -620,8 +609,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
         spawnRig,
         getShipLayout().doors.map((door) => door.id),
       );
+      const testSpawn = getShipLayout().testSpawn;
       console.info(
-        `Ship sandbox: Rapier deck with ${getShipLayout().colliders.length} colliders; spawn (${spawnLocal.right.toFixed(2)}, ${spawnFloorHint.toFixed(2)}, ${spawnLocal.forward.toFixed(2)}).`,
+        `Ship sandbox: Rapier deck with ${getShipLayout().colliders.length} colliders; spawn (${spawnLocal.right.toFixed(2)}, ${spawnFloorHint.toFixed(2)}, ${spawnLocal.forward.toFixed(2)})${testSpawn ? " from Test Spawn" : ""}.`,
       );
     } catch (error) {
       console.warn("Ship sandbox: failed to create Rapier deck physics.", error);
@@ -664,25 +654,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   });
 
   // --- sim ------------------------------------------------------------------------
-  function gates() {
-    return {
-      rampWalkable: isRampUsable(rig),
-      isDoorOpen: (doorId: string) => isDoorPassable(rig, doorId),
-    };
-  }
-
-  function standingInDoorway(doorId: string, deckLocal: DeckLocal): boolean {
-    return getShipWalkZones().some(
-      (zone) =>
-        typeof zone.gate === "object" &&
-        zone.gate.doorId === doorId &&
-        deckLocal.right >= zone.minRight &&
-        deckLocal.right <= zone.maxRight &&
-        deckLocal.forward >= zone.minForward &&
-        deckLocal.forward <= zone.maxForward,
-    );
-  }
-
   function updateDeck(
     dt: number,
     actions: { interactPressed: boolean; jumpPressed: boolean },
@@ -703,7 +674,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const result = updateCharacterOnDeck(
       character as DeckCharacterState,
       ship,
-      gates(),
       { ...input, jumpPressed: actions.jumpPressed },
       dt,
       SANDBOX_GRAVITY,
@@ -714,9 +684,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     prompt = "";
 
     if (result.dismounted || result.fellOffDeck) {
-      const spot = getRampDismountGroundLocal();
-      const world = localOffsetToWorld(ship, { ...spot, up: 0 });
-      character = groundCharacterAt(world, scale(ship.forward, -1));
+      // Leave at current feet — walk off the ramp collider, no tip teleport.
+      character = groundCharacterAt(character.position, character.forward);
       mode = "ground";
       return;
     }
@@ -781,10 +750,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
         prompt = doorRig.isOpen
           ? `Press F — close ${door.label}`
           : `Press F — open ${door.label}`;
-        if (
-          actions.interactPressed &&
-          !(doorRig.isOpen && standingInDoorway(door.id, deckLocal))
-        ) {
+        if (actions.interactPressed) {
           doorRig.isOpen = !doorRig.isOpen;
           const sfx = doorRig.isOpen ? door.openSoundUrl : door.closeSoundUrl;
           if (sfx) playSfx(sfx);
@@ -793,30 +759,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       }
     }
 
-    const ladder = resolveLadderInteraction(
-      deckLocal,
-      gates(),
-      result.state.deckZone,
-    );
-    if (ladder) {
-      prompt = ladderInteractPrompt(ladder.direction);
-      if (actions.interactPressed) {
-        const next = traverseLadder(
-          character as DeckCharacterState,
-          ladder.zone,
-          ladder.direction,
-          gates(),
-          ship,
-        );
-        if (next) character = next;
-      }
-      return;
-    }
-
-    const standingOnRamp = isOnShipRampDeck(
-      deckLocal,
-      result.state.deckZone,
-    );
+    const standingOnRamp = isOnShipRampDeck(deckLocal);
     if (nearRampPanel(deckLocal) && !standingOnRamp) {
       prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
       if (actions.interactPressed) {
@@ -927,55 +870,37 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     };
     prompt = "";
 
-    // Walking into the lowered ramp's foot steps aboard.
+    // Walking into the lowered ramp's foot steps aboard (Rapier handoff).
     if (walkable && isRampUsable(rig)) {
-      if (usesColliderDeck()) {
-        const mount = sampleRampBoarding(character, ship, rig);
-        if (mount) {
-          const mountRig = {
-            gear01: rig.gear01,
-            ramp01: rig.ramp01,
-            doors: doorBlends(rig),
-          };
-          const floorHint = mount.floorUp;
-          character = createDeckCharacterState(
-            ship,
-            mount,
-            undefined,
+      const mount = sampleRampBoarding(character, ship, rig);
+      if (mount) {
+        const mountRig = {
+          gear01: rig.gear01,
+          ramp01: rig.ramp01,
+          doors: doorBlends(rig),
+        };
+        const floorHint = mount.floorUp;
+        character = createDeckCharacterState(
+          ship,
+          mount,
+          undefined,
+          mountRig,
+          floorHint,
+        );
+        if (shipPhysics) {
+          teleportShipPlayerLocal(shipPhysics, {
+            right: mount.right,
+            up: floorHint + DECK_FLOOR_OFFSET_METERS,
+            forward: mount.forward,
+          });
+          syncShipArticulationColliders(
+            shipPhysics,
             mountRig,
-            floorHint,
+            getShipLayout().doors.map((door) => door.id),
           );
-          if (shipPhysics) {
-            teleportShipPlayerLocal(shipPhysics, {
-              right: mount.right,
-              up: floorHint + DECK_FLOOR_OFFSET_METERS,
-              forward: mount.forward,
-            });
-            syncShipArticulationColliders(
-              shipPhysics,
-              mountRig,
-              getShipLayout().doors.map((door) => door.id),
-            );
-          }
-          mode = "deck";
-          return;
         }
-      } else {
-        const mount = sampleRampMount(character, ship);
-        if (mount) {
-          character = createDeckCharacterState(
-            ship,
-            mount,
-            undefined,
-            {
-              gear01: rig.gear01,
-              ramp01: rig.ramp01,
-              doors: doorBlends(rig),
-            },
-          );
-          mode = "deck";
-          return;
-        }
+        mode = "deck";
+        return;
       }
     }
 
@@ -1222,9 +1147,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
         view.forward,
       );
       if (actions.primaryClickPressed && hit) {
-        const applied = applyCockpitControlAction(hit.control.action, rig, {
-          allowRamp: isShipParked(ship) || nearPad,
-        });
+        const applied = applyCockpitControlAction(hit.control.action, rig);
         if (applied) {
           playCockpitControlToggleSfx(
             hit.control.action,

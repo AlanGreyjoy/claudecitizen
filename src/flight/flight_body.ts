@@ -279,7 +279,7 @@ function integrateLinear(
   }
 
   // Star Wars–style: no gravity while flying. Altitude is thruster-only (Space / C).
-  // Landing still works via ground/hangar clamp when position hits rest height.
+  // Landing still works via hangar pad / open-planet gear-rest clamps.
 
   const speed = length(body.velocity);
   const dragCoefficient = dragSeaLevel * atmosphereFactor;
@@ -379,8 +379,11 @@ export function integrateFlightInEnvironment(
     gravityUp = radialUp(body.position);
     gravityMps2 = planet.gravityMetersPerSecond2 ?? 9.8;
     const currentSurface = sampleRenderablePlanetSurface(planet, seed, body.position);
+    // Match flat sandbox: gear-rest altitude counts as grounded, not belly-on-dirt.
+    const gearRestAltitude =
+      getShipRestHeightMeters() + FLIGHT_CONFIG.GROUNDED_ALTITUDE_METERS;
     grounded =
-      body.grounded ?? currentSurface.altitudeMeters <= FLIGHT_CONFIG.GROUNDED_ALTITUDE_METERS;
+      body.grounded ?? currentSurface.altitudeMeters <= gearRestAltitude;
     const altitudeMeters = altitudeForPosition(body.position, planet.radiusMeters);
     atmosphereFactor = Math.max(
       0,
@@ -428,22 +431,9 @@ export function integrateFlightInEnvironment(
   if (environment.kind === 'planet') {
     const { planet, seed } = environment;
     const nextSurface = sampleRenderablePlanetSurface(planet, seed, position);
-    if (nextSurface.altitudeMeters < 0) {
-      position = surfacePointFromPosition(position, nextSurface.surfaceRadiusMeters);
-      const normal = nextSurface.normal ?? radialUp(position);
-      const inwardSpeed = dot(velocity, normal);
-      if (inwardSpeed < 0) velocity = sub(velocity, scale(normal, inwardSpeed));
-      up = normal;
-      const frame = orthonormalFrame(forward, up, normal);
-      forward = frame.forward;
-      up = frame.up;
-      nextGrounded = true;
-      velocity = scale(velocity, 0.2);
-      oriented.angularVelocity = vec3(0, 0, 0);
-    }
-
+    const restHeight = getShipRestHeightMeters();
     const stationFrame = getStationFrame(planet);
-    const hangarRest = sampleHangarRest(stationFrame, position, getShipRestHeightMeters());
+    const hangarRest = sampleHangarRest(stationFrame, position, restHeight);
     if (hangarRest) {
       const localUp = worldToStationLocal(stationFrame, position).up;
       if (localUp <= hangarRest.restUp) {
@@ -456,6 +446,25 @@ export function integrateFlightInEnvironment(
         up = frame.up;
         nextGrounded = true;
       }
+    } else if (nextSurface.altitudeMeters < restHeight) {
+      // Open atmosphere: settle onto deployed-gear rest height (same as spawn /
+      // flat sandbox). Belly-on-surface used to break ramp outside interacts
+      // (feet at local.up≈0 instead of -restHeight) and left sticky
+      // grounded=false after soft landings.
+      position = surfacePointFromPosition(
+        position,
+        nextSurface.surfaceRadiusMeters + restHeight,
+      );
+      const normal = nextSurface.normal ?? radialUp(position);
+      const inwardSpeed = dot(velocity, normal);
+      if (inwardSpeed < 0) velocity = sub(velocity, scale(normal, inwardSpeed));
+      up = normal;
+      const frame = orthonormalFrame(forward, up, normal);
+      forward = frame.forward;
+      up = frame.up;
+      nextGrounded = true;
+      velocity = scale(velocity, 0.2);
+      oriented.angularVelocity = vec3(0, 0, 0);
     }
   } else {
     const restY = environment.groundY + environment.restHeightMeters;

@@ -269,6 +269,19 @@ export function getAdminUser(id: string): Promise<AdminUserDetail> {
   });
 }
 
+export function assignShipToUser(
+  userId: string,
+  body: { shipDefinitionId: string },
+): Promise<AdminOwnedShip> {
+  return requestAdminJson<AdminOwnedShip>(
+    `/admin/users/${encodeURIComponent(userId)}/ships`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
+}
+
 export function listShipDefinitions(): Promise<ShipDefinition[]> {
   return requestAdminJson<ShipDefinition[]>('/admin/ships', { method: 'GET' });
 }

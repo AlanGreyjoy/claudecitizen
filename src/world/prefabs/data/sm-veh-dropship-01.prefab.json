@@ -36,7 +36,7 @@
         "transform": {
           "position": {
             "x": 0,
-            "y": 7.25,
+            "y": 0,
             "z": 0
           },
           "rotation": {
@@ -96,6 +96,15 @@
                 "z": 1
               }
             }
+          },
+          {
+            "node": "SM_Veh_DropShip_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
           }
         ],
         "components": [
@@ -103,7 +112,7 @@
             "type": "ship-controller",
             "restHeight": 7.5,
             "stats": {
-              "maxSpeedMps": 100,
+              "maxSpeedMps": 500,
               "maxHp": 1000,
               "maxShields": 500,
               "shieldRegenPerSec": 25,
@@ -165,24 +174,137 @@
             },
             "ramp": {
               "hinge": {
-                "node": "RampParent",
-                "lowerRadians": -0.85
+                "node": "SM_Veh_DropShip_01_CargoDoor_01",
+                "lowerRadians": -1.45
               },
-              "outsideInteractId": "ramp-button-outside",
+              "outsideInteractId": "e-b5335c62",
               "outsideRadius": 3,
-              "deckInteractId": "ramp-panel-deck",
-              "deckRadius": 1.7,
-              "dismountForward": -8.5,
-              "dismountGround": {
-                "x": 0,
-                "z": -9.6
-              }
+              "deckInteractId": "e-53d356c3",
+              "deckRadius": 1.7
             },
             "doors": [],
-            "seats": [],
-            "cameraBounds": []
+            "seats": [
+              {
+                "role": "pilot",
+                "entityId": "e-96243002",
+                "eye": {
+                  "x": 0,
+                  "y": 0.87,
+                  "z": 0.25
+                },
+                "stand": {
+                  "x": 0,
+                  "z": -1.55
+                },
+                "interactRadius": 1.45
+              }
+            ],
+            "deckSpawnEntityId": "e-96243002",
+            "cameraBounds": [
+              {
+                "id": "cabin",
+                "min": {
+                  "x": -2.5,
+                  "z": -6
+                },
+                "max": {
+                  "x": 2.5,
+                  "z": 16
+                },
+                "floorUp": 1.2,
+                "ceilingUp": 4.5
+              }
+            ]
           }
         ]
+      },
+      {
+        "id": "e-test-spawn",
+        "name": "Test Spawn",
+        "transform": {
+          "position": {
+            "x": 19.75,
+            "y": -6.25,
+            "z": -16.75
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      },
+      {
+        "id": "e-96243002",
+        "name": "Pilot Seat",
+        "transform": {
+          "position": {
+            "x": 0.36856,
+            "y": -2.75,
+            "z": 15.00956
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      },
+      {
+        "id": "e-53d356c3",
+        "name": "Cabin Lower Ramp Trigger",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -6.5,
+            "z": -3.57236
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      },
+      {
+        "id": "e-b5335c62",
+        "name": "External Lower Ramp Trigger",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -7.25,
+            "z": -5.35483
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
       }
     ]
   }

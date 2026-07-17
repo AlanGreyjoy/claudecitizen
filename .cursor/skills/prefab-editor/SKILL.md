@@ -57,7 +57,7 @@ Behavior depends on component def (`marker` flag) and current selection:
 | **Collider** on ship hull with **ship-controller** (no sub-node) | Hidden from palette — sub-select a GLB node first. |
 | **Collider** on other entity with GLB (no node) | Defaults to `shape: "mesh"`. Box primitive → box sized to primitive. |
 
-**Marker components** (spawn-point, interaction, ship-door, animation, walk zones, lights, **cockpit-control**, **cockpit-stat**, etc.) are spatial — they live on empty child entities, not on the hull mesh entity itself.
+**Marker components** (spawn-point, interaction, ship-door, animation, lights, **cockpit-control**, **cockpit-stat**, etc.) are spatial — they live on empty child entities, not on the hull mesh entity itself.
 
 ### Ship doors / cubbies
 
@@ -97,7 +97,7 @@ Always-on while piloting: place a **Cockpit Stat** empty on the dash (`kind: spe
 
 On the hull **Ship Controller** (not cockpit-control markers):
 
-- **Ramp** → drag **Open SFX** / **Close SFX** (plays on F interact + cockpit cargo-ramp click)
+- **Ramp** → drag Hierarchy empties onto **Out btn** / **Deck btn** (outside + deck F interact points); drag **Open SFX** / **Close SFX** from Project (plays on F interact + cockpit cargo-ramp click)
 - **Landing gear** → drag **Deploy SFX** / **Retract SFX** (plays on cockpit landing-gear click + sandbox **G**)
 - **Camera feel** → drag **Boost SFX** (loops while **Shift** boost is held) and **Thrust SFX** (loops with any translation: W/S, A/D, Space/C; both fade in/out)
 

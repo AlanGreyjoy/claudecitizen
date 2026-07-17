@@ -133,6 +133,85 @@ pub async fn get_user(
     })))
 }
 
+pub async fn assign_ship(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(user_id): Path<String>,
+    Json(body): Json<Value>,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let definition_id = required_string(object(&body)?.get("shipDefinitionId"), "shipDefinitionId")?;
+    let user_row = sqlx::query(
+        r#"SELECT u."id", p."id" AS "playerId"
+           FROM "User" u LEFT JOIN "Player" p ON p."userId" = u."id"
+           WHERE u."id" = $1"#,
+    )
+    .bind(&user_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| ApiError::NotFound(format!("User \"{user_id}\" not found.")))?;
+    let player_id: String = user_row
+        .try_get::<Option<String>, _>("playerId")?
+        .ok_or_else(|| {
+            ApiError::BadRequest(
+                "User has no player record yet. Bootstrap the account in-game first.".to_owned(),
+            )
+        })?;
+    let definition = sqlx::query(
+        r#"SELECT "id", "name", "prefabId", "maxHp", "maxShields" FROM "ShipDefinition" WHERE "id" = $1"#,
+    )
+    .bind(&definition_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| {
+        ApiError::NotFound(format!("Ship definition \"{definition_id}\" not found."))
+    })?;
+    let prefab_id: String = definition.try_get("prefabId")?;
+    let existing = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*)::BIGINT FROM "Ship"
+           WHERE "playerId" = $1
+             AND ("shipDefinitionId" = $2 OR "prefabId" = $3)"#,
+    )
+    .bind(&player_id)
+    .bind(&definition_id)
+    .bind(&prefab_id)
+    .fetch_one(&state.db)
+    .await?;
+    if existing > 0 {
+        return Err(ApiError::Conflict(
+            "Player already owns a ship for this definition or prefab.".to_owned(),
+        ));
+    }
+    let max_hp: f64 = definition.try_get("maxHp")?;
+    let max_shields: f64 = definition.try_get("maxShields")?;
+    let ship_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"INSERT INTO "Ship"
+           ("id", "playerId", "shipDefinitionId", "prefabId", "displayName", "hp", "shields", "maxHp", "maxShields", "currentInstanceId", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $6, $7, $8, NOW(), NOW())"#,
+    )
+    .bind(&ship_id)
+    .bind(&player_id)
+    .bind(&definition_id)
+    .bind(&prefab_id)
+    .bind(definition.try_get::<String, _>("name")?)
+    .bind(max_hp)
+    .bind(max_shields)
+    .bind(format!("hangar:{player_id}"))
+    .execute(&state.db)
+    .await?;
+    let owned = sqlx::query(
+        r#"SELECT s."id", s."shipDefinitionId", s."prefabId", s."displayName", s."currentInstanceId",
+                  s."hp", s."shields", s."maxHp", s."maxShields", s."createdAt", s."updatedAt",
+                  d."id" AS "definitionId", d."name" AS "definitionName", d."prefabId" AS "definitionPrefabId", d."costArc" AS "definitionCostArc"
+           FROM "Ship" s LEFT JOIN "ShipDefinition" d ON d."id" = s."shipDefinitionId"
+           WHERE s."id" = $1"#,
+    )
+    .bind(&ship_id)
+    .fetch_one(&state.db)
+    .await?;
+    Ok((StatusCode::CREATED, Json(owned_ship_json(owned)?)))
+}
+
 pub async fn list_ships(
     State(state): State<AppState>,
     _admin: AdminUser,

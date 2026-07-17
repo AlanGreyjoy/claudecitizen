@@ -136,7 +136,7 @@ sequenceDiagram
 ```
 
 - **Schema** (`schema.ts`) is the single source of truth for component fields.
-- **Runtime flatteners** turn entity trees into gameplay structures (door rigs, walk zones, spawn points).
+- **Runtime flatteners** turn entity trees into gameplay structures (door rigs, deck colliders, spawn points).
 - **Render** loads GLBs and applies animation blends; **player** and **physics** consume the flattened layout.
 
 ## Critical invariant: terrain mesh ↔ foot placement

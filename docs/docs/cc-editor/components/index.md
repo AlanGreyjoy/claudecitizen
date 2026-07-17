@@ -27,7 +27,7 @@ Adding a marker to an **empty entity** attaches directly.
 
 ### Singleton components
 
-Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship-gear`, `ship-ramp`, `ramp-mount`). The palette hides them once present.
+Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship-gear`, `ship-ramp`). The palette hides them once present.
 
 ## Component reference
 

@@ -75,13 +75,6 @@ export interface EditorViewport {
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
 
-const SHIP_ZONE_COLORS: Record<string, number> = {
-  cabin: 0x3fc6ff,
-  cockpit: 0x7dffa8,
-  "cockpit-door": 0xffce6f,
-  ramp: 0xff9d5c,
-};
-
 export function createEditorViewport(
   container: HTMLElement,
   store: EditorStore,
@@ -448,38 +441,6 @@ export function createEditorViewport(
     }
   }
 
-  /** XZ box outline + translucent fill, origin-relative (used by zones and mounts). */
-  function makeZoneBoxHelper(
-    min: { x: number; z: number },
-    max: { x: number; z: number },
-    height: number,
-    color: number,
-    baseY = 0,
-  ): THREE.Group {
-    const width = Math.max(0.01, max.x - min.x);
-    const depth = Math.max(0.01, max.z - min.z);
-    const group = new THREE.Group();
-    const fill = makeHelperMesh(
-      new THREE.BoxGeometry(width, height, depth),
-      color,
-      0.07,
-    );
-    const wire = makeHelperMesh(
-      new THREE.BoxGeometry(width, height, depth),
-      color,
-      0.4,
-      true,
-    );
-    fill.position.set(
-      (min.x + max.x) / 2,
-      baseY + height / 2,
-      (min.z + max.z) / 2,
-    );
-    wire.position.copy(fill.position);
-    group.add(fill, wire);
-    return group;
-  }
-
   function makeMeshColliderHelper(
     target: THREE.Object3D,
     component: Extract<PrefabComponent, { type: "collider"; shape: "mesh" }>,
@@ -744,122 +705,6 @@ export function createEditorViewport(
         ring.rotation.x = Math.PI / 2;
         return ring;
       }
-      case "ship-walk-zone": {
-        const color = SHIP_ZONE_COLORS[component.zoneId] ?? 0x9d8bff;
-        const group = makeZoneBoxHelper(
-          component.min,
-          component.max,
-          component.height ?? 3.1,
-          color,
-        );
-        if (component.slopeMinUp !== undefined && component.slopeMinUp !== 0) {
-          // Slope indicator: line from the min-Z edge (offset floor) to max-Z edge.
-          const geometry = track(new THREE.BufferGeometry());
-          geometry.setFromPoints([
-            new THREE.Vector3(
-              (component.min.x + component.max.x) / 2,
-              component.slopeMinUp,
-              component.min.z,
-            ),
-            new THREE.Vector3(
-              (component.min.x + component.max.x) / 2,
-              0,
-              component.max.z,
-            ),
-          ]);
-          const material = track(
-            new THREE.LineBasicMaterial({
-              color,
-              transparent: true,
-              opacity: 0.85,
-            }),
-          );
-          group.add(new THREE.Line(geometry, material));
-        }
-        return group;
-      }
-      case "ship-stairs": {
-        const isLadder = component.variant === "ladder";
-        const color = isLadder
-          ? (SHIP_ZONE_COLORS[component.zoneId] ?? 0xff8c42)
-          : (SHIP_ZONE_COLORS[component.zoneId] ?? 0xffa86b);
-        const rise = component.riseUp;
-        const headroom = component.height ?? 3.1;
-        const spanZ = component.max.z - component.min.z;
-        const spanX = component.max.x - component.min.x;
-        const centerZ = (component.min.z + component.max.z) / 2;
-        const midX = (component.min.x + component.max.x) / 2;
-
-        if (isLadder) {
-          const group = new THREE.Group();
-          const climbDepth = Math.min(spanZ, 0.35);
-          const climbMin = { x: component.min.x, z: centerZ - climbDepth / 2 };
-          const climbMax = { x: component.max.x, z: centerZ + climbDepth / 2 };
-          group.add(makeZoneBoxHelper(climbMin, climbMax, rise, color));
-          if (headroom > 0.05) {
-            const headroomGroup = makeZoneBoxHelper(
-              component.min,
-              component.max,
-              headroom,
-              color,
-              rise,
-            );
-            headroomGroup.traverse((child) => {
-              if (
-                child instanceof THREE.Mesh &&
-                child.material instanceof THREE.MeshBasicMaterial
-              ) {
-                child.material.opacity *= 0.35;
-              }
-            });
-            group.add(headroomGroup);
-          }
-          const rungs = Math.max(4, Math.round(rise / 0.3));
-          const railThickness = 0.08;
-          for (const railX of [component.min.x, component.max.x]) {
-            const rail = makeHelperMesh(
-              new THREE.BoxGeometry(railThickness, rise, railThickness),
-              color,
-              0.75,
-            );
-            rail.position.set(railX, rise / 2, centerZ);
-            group.add(rail);
-          }
-          for (let rung = 0; rung <= rungs; rung += 1) {
-            const y = (rung / rungs) * rise;
-            const rungMesh = makeHelperMesh(
-              new THREE.BoxGeometry(spanX, 0.06, 0.1),
-              color,
-              0.7,
-            );
-            rungMesh.position.set(midX, y, centerZ);
-            group.add(rungMesh);
-          }
-          return group;
-        }
-
-        const group = makeZoneBoxHelper(
-          component.min,
-          component.max,
-          headroom + rise,
-          color,
-        );
-        group.position.y = rise / 2;
-        const steps = component.stepCount ?? 4;
-        for (let step = 0; step <= steps; step += 1) {
-          const t = step / steps;
-          const z = component.min.z + spanZ * t;
-          const y = rise * t;
-          const tread = makeHelperMesh(
-            new THREE.BoxGeometry(spanX, 0.04, 0.18),
-            color,
-            0.55,
-          );
-          tread.position.set(midX, y, z);
-          group.add(tread);
-        }
-        return group;
-      }
       case "ship-door": {
         const group = new THREE.Group();
         const radius = component.radius ?? 1.6;
@@ -988,9 +833,6 @@ export function createEditorViewport(
           0.22,
           true,
         );
-      }
-      case "ramp-mount": {
-        return makeZoneBoxHelper(component.min, component.max, 0.4, 0xff9d5c);
       }
       case "cockpit-control": {
         const group = new THREE.Group();

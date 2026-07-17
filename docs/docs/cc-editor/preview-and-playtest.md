@@ -59,7 +59,7 @@ Verify in the sandbox:
 
 | Check | How |
 | --- | --- |
-| Deck walk zones | Walk the interior |
+| Deck colliders | Walk the interior |
 | Doors | F to interact; all `ship-door` ids |
 | Ramp | F at ramp interact; walk up when lowered |
 | Pilot seat | F at seat — cockpit camera from `eye` offset |

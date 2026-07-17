@@ -34,7 +34,7 @@ Gameplay markers: spawn points, elevators, hangar pads, AVMS terminals, interact
 
 ## ship
 
-Author flyable ships with interior walk zones, boarding ramp, landing gear, doors, and pilot seats.
+Author flyable ships with deck colliders, boarding ramp, landing gear, doors, and pilot seats.
 
 Dropping a GLB from a `ships/` folder offers to switch into **Ship Editor** mode and auto-tag the hull.
 

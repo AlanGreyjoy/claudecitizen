@@ -8,7 +8,7 @@ const LAKE_MAX_CARVE_NORMALIZED = 0.14;
 const LAKE_MIN_LAND_ELEVATION = 0.02;
 const INLAND_LAKE_MOISTURE_THRESHOLD = 0.55;
 const INLAND_LAKE_MAX_NORMALIZED = 0.05;
-const INLAND_LAKE_MIN_WATER_NORMALIZED = 0.046;
+const INLAND_LAKE_MAX_DEPTH_METERS = 8;
 
 interface LakeCarvingResult {
   elevation: number;
@@ -77,17 +77,21 @@ export function sampleLakeSurface(
     };
   }
 
-  let waterLevelNormalized: number;
+  let lakeWaterLevelMeters: number;
   let strength: number;
   if (lakeStrength >= 0.18) {
     strength = lakeStrength;
-    waterLevelNormalized = preCarveNormalized - carveDepthNorm * 0.22;
+    lakeWaterLevelMeters =
+      (preCarveNormalized - carveDepthNorm * 0.22) * planet.terrainAmplitudeMeters;
   } else {
     strength = 0.35;
-    waterLevelNormalized = Math.max(waterTableNormalized, INLAND_LAKE_MIN_WATER_NORMALIZED);
+    // Moist lowlands do not have a separately carved basin. Keep their water
+    // shallow instead of lifting it to the absolute 345-488 m water table.
+    lakeWaterLevelMeters = Math.min(
+      waterTableNormalized * planet.terrainAmplitudeMeters,
+      heightMeters + INLAND_LAKE_MAX_DEPTH_METERS,
+    );
   }
-
-  const lakeWaterLevelMeters = waterLevelNormalized * planet.terrainAmplitudeMeters;
   const lakeDepth = clamp01(
     (lakeWaterLevelMeters - heightMeters) /
       Math.max(carveDepthNorm * planet.terrainAmplitudeMeters, 45),

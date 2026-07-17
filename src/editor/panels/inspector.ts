@@ -1,5 +1,5 @@
 import { clearChildren, el } from "../dom";
-import { ASSET_DND_TYPE } from "../api";
+import { ASSET_DND_TYPE, ENTITY_DND_TYPE } from "../api";
 import {
   type EditorEntity,
   type EditorStore,
@@ -19,7 +19,7 @@ import {
   searchComponents,
   type ComponentDef,
 } from "../../world/prefabs/component_registry";
-import type { PrefabComponent, ShipZoneGate } from "../../world/prefabs/schema";
+import type { PrefabComponent } from "../../world/prefabs/schema";
 import {
   COCKPIT_CONTROL_ACTIONS,
   COCKPIT_STAT_KINDS,
@@ -43,6 +43,31 @@ const AUDIO_EXTENSIONS = [".ogg", ".mp3", ".wav", ".m4a"];
 function isAudioAssetUrl(url: string): boolean {
   const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
   return AUDIO_EXTENSIONS.some((extension) => pathname.endsWith(extension));
+}
+
+function parseDraggedEntityIds(data: string): string[] {
+  if (!data) return [];
+  try {
+    const parsed = JSON.parse(data) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((id): id is string => typeof id === "string");
+    }
+  } catch {
+    // Legacy single-id payload.
+  }
+  return [data];
+}
+
+function findEntityById(
+  roots: EditorEntity[],
+  id: string,
+): EditorEntity | null {
+  for (const entity of roots) {
+    if (entity.id === id) return entity;
+    const nested = findEntityById(entity.children, id);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 export interface InspectorPanelOptions {
@@ -1254,24 +1279,62 @@ export function createInspectorPanel(
       case "ship-frame":
         return [];
       case "ship-controller": {
-        const entityIds = (() => {
-          const ids: string[] = [];
-          const visit = (entities: EditorEntity[]) => {
-            for (const entity of entities) {
-              ids.push(entity.id);
-              visit(entity.children);
-            }
-          };
-          visit(store.getState().roots);
-          return ids;
-        })();
-        const entityPicker = (
+        const entityRefField = (
           value: string | undefined,
           onPick: (next: string | undefined) => void,
-        ) =>
-          selectInput(["", ...entityIds], value ?? "", (val) =>
-            onPick(val || undefined),
-          );
+        ): HTMLElement => {
+          const matched = value
+            ? findEntityById(store.getState().roots, value)
+            : null;
+          const input = el("input", {
+            className: "ed-input",
+            attrs: {
+              type: "text",
+              readonly: "true",
+              value: matched?.name ?? value ?? "",
+              placeholder: "Drop from Hierarchy",
+              title: value
+                ? matched
+                  ? `${matched.name} (${value})`
+                  : `Missing entity: ${value}`
+                : "Drag an entity from the Hierarchy onto this field",
+            },
+          });
+          if (value && !matched) input.classList.add("is-missing-ref");
+          input.addEventListener("dragover", (event) => {
+            const dragEvent = event as DragEvent;
+            if (!dragEvent.dataTransfer?.types.includes(ENTITY_DND_TYPE)) return;
+            dragEvent.preventDefault();
+            if (dragEvent.dataTransfer) dragEvent.dataTransfer.dropEffect = "copy";
+            input.classList.add("is-drop-target");
+          });
+          input.addEventListener("dragleave", () => {
+            input.classList.remove("is-drop-target");
+          });
+          input.addEventListener("drop", (event) => {
+            const dragEvent = event as DragEvent;
+            dragEvent.preventDefault();
+            input.classList.remove("is-drop-target");
+            const ids = parseDraggedEntityIds(
+              dragEvent.dataTransfer?.getData(ENTITY_DND_TYPE) ?? "",
+            );
+            const nextId = ids[0];
+            if (!nextId) return;
+            if (!findEntityById(store.getState().roots, nextId)) return;
+            onPick(nextId);
+          });
+          return el("div", { className: "ed-field-controls" }, [
+            input,
+            el("button", {
+              className: "ed-btn",
+              text: "Clear",
+              title: "Clear entity reference",
+              on: {
+                click: () => onPick(undefined),
+              },
+            }),
+          ]);
+        };
         const stats = component.stats ?? {};
         const gear = component.gear ?? { nodes: [] };
         const ramp = component.ramp ?? {
@@ -1590,13 +1653,13 @@ export function createInspectorPanel(
           ]),
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Out btn" }),
-            entityPicker(ramp.outsideInteractId, (outsideInteractId) =>
+            entityRefField(ramp.outsideInteractId, (outsideInteractId) =>
               update({ ...component, ramp: { ...ramp, outsideInteractId } }),
             ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Deck btn" }),
-            entityPicker(ramp.deckInteractId, (deckInteractId) =>
+            entityRefField(ramp.deckInteractId, (deckInteractId) =>
               update({ ...component, ramp: { ...ramp, deckInteractId } }),
             ),
           ]),
@@ -1705,227 +1768,6 @@ export function createInspectorPanel(
             text: "Ship origin height above ground when parked (m). 0 = auto. Viewport shows a pad disc at −rest ht under the origin.",
           }),
         ];
-      case "ship-walk-zone": {
-        const gateValue =
-          component.gate === undefined
-            ? "none"
-            : component.gate === "ramp"
-              ? "ramp"
-              : "door";
-        const rows: HTMLElement[] = [
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Zone id" }),
-            textInput(component.zoneId, (zoneId) =>
-              update({ ...component, zoneId }),
-            ),
-          ]),
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Min XZ" }),
-            numberInput(component.min.x, (x) =>
-              update({ ...component, min: { ...component.min, x } }),
-            ),
-            numberInput(component.min.z, (z) =>
-              update({ ...component, min: { ...component.min, z } }),
-            ),
-            el("span", {}),
-          ]),
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Max XZ" }),
-            numberInput(component.max.x, (x) =>
-              update({ ...component, max: { ...component.max, x } }),
-            ),
-            numberInput(component.max.z, (z) =>
-              update({ ...component, max: { ...component.max, z } }),
-            ),
-            el("span", {}),
-          ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Height" }),
-            numberInput(component.height ?? 3.1, (height) =>
-              update({ ...component, height: Math.max(0.5, height) }),
-            ),
-          ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Slope Δ" }),
-            numberInput(component.slopeMinUp ?? 0, (slope) =>
-              update({
-                ...component,
-                slopeMinUp: slope === 0 ? undefined : slope,
-              }),
-            ),
-          ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Gate" }),
-            selectInput(["none", "ramp", "door"], gateValue, (next) => {
-              const gate: ShipZoneGate | undefined =
-                next === "none"
-                  ? undefined
-                  : next === "ramp"
-                    ? "ramp"
-                    : { doorId: "door-1" };
-              update({ ...component, gate });
-            }),
-          ]),
-        ];
-        if (typeof component.gate === "object") {
-          rows.push(
-            el("div", { className: "ed-field-row-wide" }, [
-              el("span", { className: "ed-field-label", text: "Door id" }),
-              textInput(component.gate.doorId, (doorId) =>
-                update({ ...component, gate: { doorId } }),
-              ),
-            ]),
-          );
-        }
-        rows.push(
-          el("label", { className: "ed-checkbox-row" }, [
-            (() => {
-              const checkbox = el("input", {
-                attrs: { type: "checkbox" },
-                on: {
-                  change: (event) =>
-                    update({
-                      ...component,
-                      passage:
-                        (event.target as HTMLInputElement).checked || undefined,
-                    }),
-                },
-              });
-              checkbox.checked = component.passage ?? false;
-              return checkbox;
-            })(),
-            el("span", { text: "Passage (connects rooms)" }),
-          ]),
-        );
-        return rows;
-      }
-      case "ship-stairs": {
-        const isLadder = component.variant === "ladder";
-        const gateValue =
-          component.gate === undefined
-            ? "none"
-            : component.gate === "ramp"
-              ? "ramp"
-              : "door";
-        const rows: HTMLElement[] = [
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Variant" }),
-            selectInput(
-              ["stairs", "ladder"],
-              component.variant ?? "stairs",
-              (next) => {
-                if (next === "ladder") {
-                  const { stepCount, ...rest } = component;
-                  void stepCount;
-                  update({ ...rest, variant: "ladder" });
-                } else {
-                  update({
-                    ...component,
-                    variant: undefined,
-                    stepCount: component.stepCount ?? 4,
-                  });
-                }
-              },
-            ),
-          ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Zone id" }),
-            textInput(component.zoneId, (zoneId) =>
-              update({ ...component, zoneId }),
-            ),
-          ]),
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Min XZ" }),
-            numberInput(component.min.x, (x) =>
-              update({ ...component, min: { ...component.min, x } }),
-            ),
-            numberInput(component.min.z, (z) =>
-              update({ ...component, min: { ...component.min, z } }),
-            ),
-            el("span", {}),
-          ]),
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Max XZ" }),
-            numberInput(component.max.x, (x) =>
-              update({ ...component, max: { ...component.max, x } }),
-            ),
-            numberInput(component.max.z, (z) =>
-              update({ ...component, max: { ...component.max, z } }),
-            ),
-            el("span", {}),
-          ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Rise" }),
-            numberInput(component.riseUp, (riseUp) =>
-              update({ ...component, riseUp: Math.max(0.05, riseUp) }),
-            ),
-          ]),
-        ];
-        if (!isLadder) {
-          rows.push(
-            el("div", { className: "ed-field-row-wide" }, [
-              el("span", { className: "ed-field-label", text: "Steps" }),
-              numberInput(component.stepCount ?? 4, (stepCount) =>
-                update({
-                  ...component,
-                  stepCount: Math.max(1, Math.floor(stepCount)),
-                }),
-              ),
-            ]),
-          );
-        }
-        rows.push(
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Height" }),
-            numberInput(component.height ?? 3.1, (height) =>
-              update({ ...component, height: Math.max(0.5, height) }),
-            ),
-          ]),
-          el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Gate" }),
-            selectInput(["none", "ramp", "door"], gateValue, (next) => {
-              const gate: ShipZoneGate | undefined =
-                next === "none"
-                  ? undefined
-                  : next === "ramp"
-                    ? "ramp"
-                    : { doorId: "door-1" };
-              update({ ...component, gate });
-            }),
-          ]),
-        );
-        if (typeof component.gate === "object") {
-          rows.push(
-            el("div", { className: "ed-field-row-wide" }, [
-              el("span", { className: "ed-field-label", text: "Door id" }),
-              textInput(component.gate.doorId, (doorId) =>
-                update({ ...component, gate: { doorId } }),
-              ),
-            ]),
-          );
-        }
-        rows.push(
-          el("label", { className: "ed-checkbox-row" }, [
-            (() => {
-              const checkbox = el("input", {
-                attrs: { type: "checkbox" },
-                on: {
-                  change: (event) =>
-                    update({
-                      ...component,
-                      passage:
-                        (event.target as HTMLInputElement).checked || undefined,
-                    }),
-                },
-              });
-              checkbox.checked = component.passage ?? false;
-              return checkbox;
-            })(),
-            el("span", { text: "Passage (connects rooms)" }),
-          ]),
-        );
-        return rows;
-      }
       case "ship-door": {
         const rows: HTMLElement[] = [
           el("div", { className: "ed-field-row-wide" }, [
@@ -2557,29 +2399,6 @@ export function createInspectorPanel(
             ),
           ]),
         ];
-      case "ramp-mount":
-        return [
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Min XZ" }),
-            numberInput(component.min.x, (x) =>
-              update({ ...component, min: { ...component.min, x } }),
-            ),
-            numberInput(component.min.z, (z) =>
-              update({ ...component, min: { ...component.min, z } }),
-            ),
-            el("span", {}),
-          ]),
-          el("div", { className: "ed-field-row" }, [
-            el("span", { className: "ed-field-label", text: "Max XZ" }),
-            numberInput(component.max.x, (x) =>
-              update({ ...component, max: { ...component.max, x } }),
-            ),
-            numberInput(component.max.z, (z) =>
-              update({ ...component, max: { ...component.max, z } }),
-            ),
-            el("span", {}),
-          ]),
-        ];
     }
   }
 
@@ -2772,16 +2591,10 @@ export function createInspectorPanel(
           entityId: entity.id,
         }),
       );
-      const hint =
-        component.type === "ship-stairs" && component.variant === "ladder"
-          ? "Vertical climb volume. Entity Y is the bottom; Press F at the foot/head to go up or down."
-          : getComponentDef(component.type)?.hint;
+      const hint = getComponentDef(component.type)?.hint;
       if (hint)
         bodyEl.append(el("div", { className: "ed-empty-note", text: hint }));
-      const componentLabel =
-        component.type === "ship-stairs" && component.variant === "ladder"
-          ? "ship-stairs (ladder)"
-          : component.type;
+      const componentLabel = component.type;
       section.append(
         el("div", { className: "ed-component" }, [
           el("div", { className: "ed-component-head" }, [

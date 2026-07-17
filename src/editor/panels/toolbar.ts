@@ -571,7 +571,7 @@ export function createToolbar(
   const modeChip = el('span', {
     className: 'ed-mode-chip is-hidden',
     text: 'Ship Editor',
-    title: 'Ship prefab: authoring the flyable ship (hull, walk zones, doors, pilot seat)',
+    title: 'Ship prefab: authoring the flyable ship (hull, deck colliders, doors, pilot seat)',
   });
 
   function refreshModeChip(): void {

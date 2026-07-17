@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import type { Planet, TerrainTileBuffers, TileInfo, TileWorkerInMessage, TileWorkerOutMessage } from '../../../types';
 import { CUBE_FACES } from '../../../world/cube_sphere';
 import { loadTerrainTile, saveTerrainTile } from '../../../cache/terrain_tile_cache';
@@ -49,6 +49,7 @@ interface TileMeshCacheOptions {
 // on a slow machine, short enough that a dead worker doesn't starve tile
 // builds for long.
 const WORKER_LIVENESS_TIMEOUT_MS = 5_000;
+const SYNC_TILE_BUILD_BUDGET_PER_FRAME = 1;
 
 export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCache {
   const { material, planet, seed, tileGroup } = options;
@@ -74,6 +75,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
   let completedSinceLastUpdate = 0;
   let evictedThisFrame = 0;
   let queuedThisFrame = 0;
+  let syncBuildBudgetRemaining = SYNC_TILE_BUILD_BUDGET_PER_FRAME;
 
   function countEntries(status: TileEntryStatus): number {
     let count = 0;
@@ -189,11 +191,11 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
 
     cacheStats.diskMisses += 1;
     meshCache.delete(key);
-    if (tileBuildWorker && info.level > MIN_LEVEL) {
+    if (tileBuildWorker && info.level > 0) {
       queueTileBuild(info);
       return;
     }
-    buildTileMeshSync(info);
+    queueSyncTileBuild(info);
   }
 
   function startTerrainDiskLoad(info: TileInfo): void {
@@ -246,6 +248,36 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     return entry;
   }
 
+  function queueSyncTileBuild(info: TileInfo): TileMeshEntry {
+    const key = tileKey(info.face, info.level, info.x, info.y);
+    let entry = meshCache.get(key);
+    if (entry) {
+      entry.lastUsedFrame = frameNumber;
+      return entry;
+    }
+
+    entry = {
+      buildId: null,
+      info,
+      lastUsedFrame: frameNumber,
+      mesh: null,
+      status: 'pending',
+    };
+    meshCache.set(key, entry);
+    updateCachePeak();
+    return entry;
+  }
+
+  function tryBuildTileMeshSync(
+    info: TileInfo,
+    buildBudget: BuildBudget,
+  ): TileMeshEntry | null {
+    if (buildBudget.remaining <= 0 || syncBuildBudgetRemaining <= 0) return null;
+    buildBudget.remaining -= 1;
+    syncBuildBudgetRemaining -= 1;
+    return buildTileMeshSync(info);
+  }
+
   function queueTileBuild(info: TileInfo): TileMeshEntry {
     const key = tileKey(info.face, info.level, info.x, info.y);
     let entry = meshCache.get(key);
@@ -290,36 +322,34 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       startTerrainDiskLoad(target);
       targetEntry = meshCache.get(targetKey);
     }
+    if (targetEntry) targetEntry.lastUsedFrame = frameNumber;
 
-    if (
-      targetEntry &&
-      targetEntry.status !== 'loading-disk' &&
-      !targetEntry.mesh &&
-      buildBudget.remaining > 0
-    ) {
-      buildBudget.remaining -= 1;
-      if (tileBuildWorker && target.level > MIN_LEVEL) {
-        queueTileBuild(target);
-      } else {
-        return {
-          info: target,
-          key: targetKey,
-          mesh: buildTileMeshSync(target).mesh!,
-        };
+    if (targetEntry && targetEntry.status !== 'loading-disk' && !targetEntry.mesh) {
+      if (!tileBuildWorker || target.level === 0) {
+        const builtEntry = tryBuildTileMeshSync(target, buildBudget);
+        if (builtEntry) {
+          return {
+            info: target,
+            key: targetKey,
+            mesh: builtEntry.mesh!,
+          };
+        }
       }
     } else if (!targetEntry && buildBudget.remaining > 0) {
-      buildBudget.remaining -= 1;
-      if (tileBuildWorker && target.level > MIN_LEVEL) {
+      if (tileBuildWorker && target.level > 0) {
+        buildBudget.remaining -= 1;
         queueTileBuild(target);
       } else {
-        return {
-          info: target,
-          key: targetKey,
-          mesh: buildTileMeshSync(target).mesh!,
-        };
+        const builtEntry = tryBuildTileMeshSync(target, buildBudget);
+        if (builtEntry) {
+          return {
+            info: target,
+            key: targetKey,
+            mesh: builtEntry.mesh!,
+          };
+        }
       }
     } else if (targetEntry) {
-      targetEntry.lastUsedFrame = frameNumber;
       if (targetEntry.mesh) {
         return {
           info: target,
@@ -360,12 +390,18 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       };
     }
 
-    if (buildBudget.remaining > 0) {
-      buildBudget.remaining -= 1;
+    const fallbackQueuedInWorker =
+      Boolean(tileBuildWorker) &&
+      fallbackEntry?.status === 'pending' &&
+      fallbackEntry.buildId != null;
+    const builtFallbackEntry = fallbackQueuedInWorker
+      ? null
+      : tryBuildTileMeshSync(fallbackInfo, buildBudget);
+    if (builtFallbackEntry) {
       return {
         info: fallbackInfo,
         key: fallbackKey,
-        mesh: buildTileMeshSync(fallbackInfo).mesh,
+        mesh: builtFallbackEntry.mesh,
       };
     }
 
@@ -437,10 +473,10 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
         return;
       }
 
-      const { colors, normals, positions, uvs, weights0, weights1 } = event.data;
+      const { colors, normals, positions } = event.data;
       const entry = meshCache.get(key);
       if (entry && entry.buildId === buildId && entry.status === 'pending') {
-        const buffers = { colors, normals, positions, uvs, weights0, weights1 };
+        const buffers = { colors, normals, positions };
         entry.mesh = createReadyMesh(entry.info, buffers, material, tileGroup);
         entry.status = 'ready';
         cacheStats.totalBuilds += 1;
@@ -479,6 +515,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       completedSinceLastUpdate = 0;
       evictedThisFrame = 0;
       queuedThisFrame = 0;
+      syncBuildBudgetRemaining = SYNC_TILE_BUILD_BUDGET_PER_FRAME;
     },
     setFrameNumber(frame) {
       frameNumber = frame;

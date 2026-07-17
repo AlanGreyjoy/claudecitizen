@@ -17,7 +17,7 @@ Open/close door bound to GLB nodes. Entity position is the interact spot. **Ship
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `id` | string | `"door-1"` | Unique within prefab; walk zones gate on it |
+| `id` | string | `"door-1"` | Unique within prefab |
 | `label` | string | `"door"` | Display name in prompts ("Press F — open &#123;label&#125;") |
 | `motion` | `"slide"` \| `"hinge"` | `"slide"` | Translation vs rotation |
 | `axis` | `"x"` \| `"y"` \| `"z"` | `"x"` | Node-local axis |
@@ -47,11 +47,10 @@ Place the marker at the doorway interact spot. Bind `nodes` to exact GLB node na
 
 Use **radial** for walk-up doorway toggles. Use **raycast** for wall panels / cubby buttons you must look at (same idea as cockpit look-at controls, but with F while on deck).
 
-[Ship walk zones](./ship-walk-zone) can `gate` on a door id so the room is only reachable when the door is open. Preview open/close from the viewport toolbar.
+Preview open/close from the viewport toolbar. Door colliders disable when the door is open enough to walk through.
 
 Unlike station doors (which pair [Animation](./animation) + [Interaction](./interaction)), ship doors bundle motion and interact in one component.
 
 ## See also
 
 - [Ship authoring](../ship-authoring)
-- [Ship walk zone](./ship-walk-zone)

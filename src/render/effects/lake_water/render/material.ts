@@ -5,11 +5,31 @@ const vertexShader = /* glsl */ `
 #include <fog_pars_vertex>
 #include <logdepthbuf_pars_vertex>
 
-varying vec2 vUv;
+uniform vec3 sunDirection;
+
+attribute vec3 barycentric;
+attribute vec3 color;
+attribute float effectDetail;
+attribute float shore;
+attribute float waterDepth;
+
+varying vec3 vBarycentric;
+varying vec3 vFacetColor;
+varying vec3 vSunDirection;
+varying vec3 vViewNormal;
 varying vec3 vViewDir;
+varying float vEffectDetail;
+varying float vShore;
+varying float vWaterDepth;
 
 void main() {
-  vUv = uv;
+  vBarycentric = barycentric;
+  vFacetColor = color;
+  vEffectDetail = effectDetail;
+  vShore = shore;
+  vWaterDepth = waterDepth;
+  vViewNormal = normalize(normalMatrix * normal);
+  vSunDirection = normalize((viewMatrix * vec4(sunDirection, 0.0)).xyz);
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   vViewDir = -mvPosition.xyz;
   gl_Position = projectionMatrix * mvPosition;
@@ -24,52 +44,60 @@ const fragmentShader = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 
 uniform float time;
-uniform sampler2D normalMap;
-uniform sampler2D waterMap;
-uniform float waterMapStrength;
-uniform vec3 sunDirection;
 uniform vec3 sunColor;
-uniform vec3 waterColor;
 uniform vec3 skyColor;
 
-varying vec2 vUv;
+varying vec3 vBarycentric;
+varying vec3 vFacetColor;
+varying vec3 vSunDirection;
+varying vec3 vViewNormal;
 varying vec3 vViewDir;
-
-vec3 sampleWaveNormal(vec2 uv) {
-  vec2 uv0 = uv * 14.0 + vec2(time * 0.045, time * 0.032);
-  vec2 uv1 = uv * 21.0 - vec2(time * 0.038, time * 0.027);
-  vec4 sample0 = texture2D(normalMap, uv0);
-  vec4 sample1 = texture2D(normalMap, uv1);
-  vec3 perturbed = vec3(
-    (sample0.r + sample1.r) - 1.0,
-    (sample0.g + sample1.g) - 1.0,
-    0.55
-  );
-  return normalize(perturbed);
-}
+varying float vEffectDetail;
+varying float vShore;
+varying float vWaterDepth;
 
 void main() {
   #include <logdepthbuf_fragment>
 
   vec3 viewDir = normalize(vViewDir);
-  vec3 normal = sampleWaveNormal(vUv);
+  vec3 normal = normalize(vViewNormal);
+  vec3 lightDirection = normalize(vSunDirection);
   float facing = max(dot(viewDir, normal), 0.0);
-  float fresnel = pow(1.0 - facing, 3.0);
+  float fresnel = pow(1.0 - facing, 2.5);
 
-  vec2 mapUv = vUv * 7.0 + vec2(time * 0.02, -time * 0.015);
-  vec3 mapColor = texture2D(waterMap, mapUv).rgb;
-  vec3 baseWaterColor = mix(waterColor, mapColor, waterMapStrength);
+  float diffuse = max(dot(lightDirection, normal), 0.0);
+  float lightBand = floor(diffuse * 3.0 + 0.5) / 3.0;
+  float facetPhase = dot(vFacetColor, vec3(13.17, 21.73, 9.41));
+  float shimmer = 0.98 + sin(time * 0.65 + facetPhase) * 0.02;
+  vec3 scatter = vFacetColor * (0.64 + lightBand * 0.36) * shimmer;
+  float shallow = 1.0 - smoothstep(2.0, 22.0, max(vWaterDepth, 0.0));
+  vec3 shallowTint = vec3(0.18, 0.54, 0.52);
+  scatter = mix(scatter, shallowTint * (0.72 + lightBand * 0.28), shallow * 0.3);
 
-  float diffuse = max(dot(sunDirection, normal), 0.0);
-  vec3 scatter = baseWaterColor * (0.5 + diffuse * 0.5);
+  vec3 halfDir = normalize(lightDirection + viewDir);
+  float spec = step(0.965, max(dot(normal, halfDir), 0.0));
 
-  vec3 halfDir = normalize(sunDirection + viewDir);
-  float spec = pow(max(dot(normal, halfDir), 0.0), 96.0);
+  vec3 color = mix(scatter, skyColor, fresnel * 0.52);
+  color += sunColor * spec * 0.28;
 
-  vec3 color = mix(scatter, skyColor, fresnel * 0.7);
-  color += sunColor * spec * 0.4;
+  vec3 baryWidth = fwidth(vBarycentric);
+  vec3 barySmooth = smoothstep(baryWidth * 0.7, baryWidth * 1.9, vBarycentric);
+  float facetEdge = 1.0 - min(min(barySmooth.x, barySmooth.y), barySmooth.z);
+  float causticPulse = 0.78 + sin(time * 0.7 + facetPhase * 2.0) * 0.22;
+  float caustic =
+    facetEdge * shallow * (1.0 - smoothstep(0.25, 0.8, vShore)) * vEffectDetail;
+  color = mix(color, vec3(0.46, 0.86, 0.78), caustic * causticPulse * 0.24);
 
-  float alpha = mix(0.84, 0.95, fresnel);
+  float foamThreshold = 0.48 + sin(time * 0.85 + facetPhase * 2.7) * 0.07;
+  float foam = smoothstep(foamThreshold, foamThreshold + 0.2, vShore);
+  float foamBreakup =
+    0.78 + sin((vBarycentric.x * 1.7 + vBarycentric.y * 2.3) * 8.0 + facetPhase) * 0.22;
+  foam *= foamBreakup * vEffectDetail;
+  color = mix(color, vec3(0.94, 0.99, 1.0), clamp(foam, 0.0, 1.0));
+
+  float alpha = mix(0.86, 0.95, fresnel);
+  alpha = mix(alpha, 0.7, shallow * 0.42);
+  alpha = mix(alpha, 0.98, clamp(foam, 0.0, 1.0));
   gl_FragColor = vec4(color, alpha);
 
   #include <tonemapping_fragment>
@@ -78,41 +106,12 @@ void main() {
 }
 `;
 
-export function createWaterNormalTexture(): THREE.DataTexture {
-  const size = 256;
-  const data = new Uint8Array(size * size * 4);
-
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      const nx =
-        Math.sin(x * 0.09) * 0.35 +
-        Math.sin(x * 0.021 + y * 0.017) * 0.35 +
-        Math.cos(y * 0.08) * 0.2;
-      const ny =
-        Math.cos(x * 0.07 + y * 0.05) * 0.35 +
-        Math.sin(y * 0.023) * 0.35 +
-        Math.sin(x * 0.031) * 0.2;
-      const i = (y * size + x) * 4;
-      data[i] = (nx * 0.5 + 0.5) * 255;
-      data[i + 1] = (ny * 0.5 + 0.5) * 255;
-      data[i + 2] = 255;
-      data[i + 3] = 255;
-    }
-  }
-
-  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-export function createLakeWaterMaterial(normalMap: THREE.Texture): THREE.ShaderMaterial {
+export function createLakeWaterMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     depthWrite: false,
     fog: true,
     fragmentShader,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     transparent: true,
     uniforms: {
       // fog: true pulls in the fog shader chunks, which read these uniforms
@@ -123,68 +122,11 @@ export function createLakeWaterMaterial(normalMap: THREE.Texture): THREE.ShaderM
       fogDensity: { value: 0.00025 },
       fogFar: { value: 2000 },
       fogNear: { value: 1 },
-      normalMap: { value: normalMap },
       skyColor: { value: new THREE.Color(0x7eb8e8) },
       sunColor: { value: new THREE.Color(0xffffff) },
       sunDirection: { value: new THREE.Vector3(0.4, 0.85, 0.2).normalize() },
       time: { value: 0 },
-      waterColor: { value: new THREE.Color(0x1a5578) },
-      waterMap: { value: normalMap },
-      waterMapStrength: { value: 0 },
     },
     vertexShader,
   });
-}
-
-const WATER_NORMAL_URL = new URL(
-  '../../../../assets/textures/Water/1/1+_normal.bmp',
-  import.meta.url,
-).href;
-const WATER_DIFFUSE_URL = new URL(
-  '../../../../assets/textures/Water/1/1+_diffuseOriginal.bmp',
-  import.meta.url,
-).href;
-
-export interface LakeWaterTextureHandle {
-  dispose: () => void;
-}
-
-// Swaps the procedural placeholder maps for the authored Water textures once
-// they finish loading; until then the material keeps its fallback look.
-export function loadLakeWaterTextures(material: THREE.ShaderMaterial): LakeWaterTextureHandle {
-  const loader = new THREE.TextureLoader();
-  const textures: THREE.Texture[] = [];
-  let disposed = false;
-
-  loader.load(WATER_NORMAL_URL, (texture) => {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    if (disposed) {
-      texture.dispose();
-      return;
-    }
-    textures.push(texture);
-    material.uniforms.normalMap.value = texture;
-  });
-
-  loader.load(WATER_DIFFUSE_URL, (texture) => {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    if (disposed) {
-      texture.dispose();
-      return;
-    }
-    textures.push(texture);
-    material.uniforms.waterMap.value = texture;
-    material.uniforms.waterMapStrength.value = 0.45;
-  });
-
-  return {
-    dispose() {
-      disposed = true;
-      for (const texture of textures) texture.dispose();
-      textures.length = 0;
-    },
-  };
 }

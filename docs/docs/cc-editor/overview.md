@@ -30,7 +30,7 @@ Saved prefabs are plain JSON tracked in git (metadata only — asset URLs may po
 | Kind | Purpose |
 | --- | --- |
 | **station** | Orbital stations — modular interiors with spawn, elevators, hangar pads, AVMS terminals |
-| **ship** | Flyable ships — hull, walk zones, doors, pilot seats, landing gear, boarding ramp |
+| **ship** | Flyable ships — hull, deck colliders, doors, pilot seats, landing gear, boarding ramp |
 | **site** | General-purpose world sites (outposts, landmarks) — colliders, interactions, lights |
 | **prop** | Placeable hangar/apartment decorations for the player build system |
 | **item** | Inventory item visuals — world pickup or icon-only catalog entries |

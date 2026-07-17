@@ -2,6 +2,7 @@ import {
   AdminAuthError,
   adminLogin,
   adminLogout,
+  assignShipToUser,
   createShipDefinition,
   createPropDefinition,
   createItemDefinition,
@@ -635,7 +636,7 @@ export function showAdminScreen(): void {
     refresh();
 
     return [
-      createPageHeader('Users', `${allUsers.length} account${allUsers.length === 1 ? '' : 's'} — read only`),
+      createPageHeader('Users', `${allUsers.length} account${allUsers.length === 1 ? '' : 's'}`),
       createToolbar(search),
       wrapInCard(tableHost),
       renderMessage(''),
@@ -680,7 +681,10 @@ export function showAdminScreen(): void {
     return item;
   }
 
-  function renderUserDetailView(user: AdminUserDetail): DocumentFragment {
+  function renderUserDetailView(
+    user: AdminUserDetail,
+    shipDefinitions: ShipDefinition[],
+  ): DocumentFragment {
     const fragment = document.createDocumentFragment();
 
     const back = createButton('Back to users', 'secondary');
@@ -759,15 +763,90 @@ export function showAdminScreen(): void {
       shipsWrap.append(table);
     }
 
-    fragment.append(header, wrapInCard(grid), shipsTitle, wrapInCard(shipsWrap), renderMessage(''));
+    const assignMessage = renderMessage('');
+    const assignPanel = document.createElement('div');
+
+    if (!user.player) {
+      const note = document.createElement('p');
+      note.className = 'sc-admin-meta';
+      note.textContent =
+        'This account has no player record yet. Bootstrap in-game before assigning ships.';
+      assignPanel.append(note);
+    } else {
+      const ownedDefinitionIds = new Set(
+        user.player.ships
+          .map((ship) => ship.shipDefinitionId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      );
+      const ownedPrefabIds = new Set(user.player.ships.map((ship) => ship.prefabId));
+      const available = shipDefinitions.filter(
+        (definition) =>
+          !ownedDefinitionIds.has(definition.id) && !ownedPrefabIds.has(definition.prefabId),
+      );
+
+      const note = document.createElement('p');
+      note.className = 'sc-admin-meta';
+      note.textContent =
+        available.length === 0
+          ? shipDefinitions.length === 0
+            ? 'No ship definitions in the catalog. Create one under Ships first.'
+            : 'Player already owns every catalog ship definition (or matching prefab).'
+          : 'Assign a catalog ship definition the player does not already own. The ship is parked in their hangar.';
+
+      const actions = document.createElement('div');
+      actions.className = 'sc-admin-actions';
+      const select = createSelect(
+        'assign-ship',
+        available.map((definition) => ({
+          value: definition.id,
+          label: `${definition.name} (${definition.prefabId})`,
+        })),
+      );
+      const assignBtn = createButton('Assign ship');
+      assignBtn.disabled = available.length === 0;
+      assignBtn.addEventListener('click', () => {
+        const shipDefinitionId = select.value;
+        if (!shipDefinitionId) return;
+        assignBtn.disabled = true;
+        void (async () => {
+          try {
+            await assignShipToUser(user.id, { shipDefinitionId });
+            await showUserDetail(user.id);
+          } catch (error) {
+            if (error instanceof AdminAuthError) {
+              renderLogin(error.message);
+              return;
+            }
+            assignBtn.disabled = available.length === 0;
+            assignMessage.textContent =
+              error instanceof Error ? error.message : 'Failed to assign ship.';
+            assignMessage.classList.add('is-error');
+          }
+        })();
+      });
+      actions.append(select, assignBtn);
+      assignPanel.append(note, actions);
+    }
+
+    fragment.append(
+      header,
+      wrapInCard(grid),
+      shipsTitle,
+      wrapInCard(shipsWrap),
+      wrapInCard(assignPanel),
+      assignMessage,
+    );
     return fragment;
   }
 
   async function showUserDetail(userId: string): Promise<void> {
     renderShell([renderMessage('Loading user...')], 'user-detail', 'users');
     try {
-      const user = await getAdminUser(userId);
-      renderShell([renderUserDetailView(user)], 'user-detail', 'users');
+      const [user, shipDefinitions] = await Promise.all([
+        getAdminUser(userId),
+        listShipDefinitions(),
+      ]);
+      renderShell([renderUserDetailView(user, shipDefinitions)], 'user-detail', 'users');
     } catch (error) {
       if (error instanceof AdminAuthError) {
         renderLogin(error.message);

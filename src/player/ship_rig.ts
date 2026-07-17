@@ -74,7 +74,7 @@ export function isRampUsable(rig: ShipRigState): boolean {
   return rig.ramp01 >= 0.98;
 }
 
-/** Doors block their gated walk zones until mostly open; unknown ids stay shut. */
+/** Doors are passable (and their colliders disable) when mostly open; unknown ids stay shut. */
 export function isDoorPassable(rig: ShipRigState, doorId: string): boolean {
   const door = rig.doors[doorId];
   return door !== undefined && door.open01 >= 0.85;

@@ -1050,6 +1050,16 @@ body.ed-resize-row * {
   min-width: 0;
 }
 
+.ed-input.is-drop-target {
+  border-color: rgba(255, 206, 111, 0.85);
+  background: rgba(255, 206, 111, 0.08);
+}
+
+.ed-input.is-missing-ref {
+  border-color: rgba(255, 120, 100, 0.55);
+  color: rgba(255, 170, 150, 0.9);
+}
+
 .ed-field-label {
   font: 600 10px/1 var(--sc-font);
   letter-spacing: 0.1em;

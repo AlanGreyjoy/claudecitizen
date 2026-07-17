@@ -845,11 +845,6 @@
               "outsideRadius": 3,
               "deckInteractId": "ramp-panel-deck",
               "deckRadius": 1.7,
-              "dismountForward": -8.5,
-              "dismountGround": {
-                "x": 0,
-                "z": -9.6
-              },
               "openSoundUrl": "/src/assets/protected/sfx/Ramp1.wav",
               "closeSoundUrl": "/src/assets/protected/sfx/Ramp1.wav"
             },
@@ -1739,6 +1734,28 @@
             "x": 0,
             "y": -1.42,
             "z": -5.7
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      },
+      {
+        "id": "test-spawn",
+        "name": "Test Spawn",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": -0.4,
+            "z": -2.5
           },
           "rotation": {
             "x": 0,

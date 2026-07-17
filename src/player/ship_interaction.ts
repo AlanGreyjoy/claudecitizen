@@ -3,7 +3,7 @@ import {
   sampleColliderGroundHeight,
   type ShipColliderRigState,
 } from '../physics/colliders';
-import { getShipLayout, getShipRestHeightMeters, usesColliderDeck } from './ship_layout';
+import { getShipLayout, getShipRestHeightMeters } from './ship_layout';
 import { isRampUsable, doorBlends, type ShipRigState } from './ship_rig';
 import type {
   CharacterState,
@@ -14,9 +14,8 @@ import type {
 } from '../types';
 
 /**
- * Ship gameplay anchors (pilot seat, ramp interacts, ramp mount strip) read
- * from the active ship layout. Values are ship-local right/up/forward meters;
- * the default layout is the Phobos Starhopper measured from its model rig.
+ * Ship gameplay anchors (pilot seat, ramp interacts) read from the active
+ * ship layout. Values are ship-local right/up/forward meters.
  */
 
 export const PARKED_MAX_SPEED_METERS_PER_SECOND = 1.0;
@@ -93,9 +92,13 @@ export function isShipParked(ship: FlightBody): boolean {
   return ship.grounded && length(ship.velocity) <= PARKED_MAX_SPEED_METERS_PER_SECOND;
 }
 
-/** Feet near the ground plane under a parked ship (rejects other station floors). */
+/**
+ * Feet near the ground / pad plane under a parked ship.
+ * Pad parking and open-planet gear rest both put feet near -restHeight.
+ * A wider band also tolerates soft altitude mismatch without matching deck floors.
+ */
 export function atShipGroundLevel(localUp: number): boolean {
-  return Math.abs(localUp + getShipRestHeightMeters()) <= 2.4;
+  return Math.abs(localUp + getShipRestHeightMeters()) <= 2.8;
 }
 
 /** Near an outside ramp button while standing on the ground. */
@@ -114,14 +117,14 @@ export function nearShipRampOutside(
 
 /**
  * Ship-local spot + mesh floor when a grounded character steps onto the
- * lowered ramp collider, or null when outside it.
+ * lowered ramp collider (mode handoff into ship Rapier), or null when outside.
  */
 export function sampleRampBoarding(
   character: Pick<CharacterState, 'position'>,
   ship: FlightBody,
   rig: ShipRigState,
 ): { right: number; forward: number; floorUp: number } | null {
-  if (!usesColliderDeck() || !isRampUsable(rig)) return null;
+  if (getShipLayout().colliders.length === 0 || !isRampUsable(rig)) return null;
   const local = worldToShipLocal(ship, character.position);
   if (!atShipGroundLevel(local.up)) return null;
   const colliderRig: ShipColliderRigState = {
@@ -139,27 +142,6 @@ export function sampleRampBoarding(
   if (floor === null) return null;
   if (Math.abs(local.up - floor) > 0.65) return null;
   return { right: local.right, forward: local.forward, floorUp: floor };
-}
-
-/**
- * @deprecated Collider-deck ships use sampleRampBoarding instead.
- */
-export function sampleRampMount(
-  character: Pick<CharacterState, 'position'>,
-  ship: FlightBody,
-): { right: number; forward: number } | null {
-  const mount = getShipLayout().rampMount;
-  if (!mount) return null;
-  const local = worldToShipLocal(ship, character.position);
-  if (!atShipGroundLevel(local.up)) return null;
-  if (local.right < mount.minRight || local.right > mount.maxRight) return null;
-  if (local.forward < mount.minForward || local.forward > mount.maxForward) return null;
-  return { right: local.right, forward: Math.max(local.forward, mount.clampForward) };
-}
-
-/** Ground spot just past the ramp tip for a character stepping off. */
-export function getRampDismountGroundLocal(): { right: number; forward: number } {
-  return getShipLayout().rampDismountGround;
 }
 
 export function createTransitionPose(start: Pose, end: Pose, t: number): Pose {

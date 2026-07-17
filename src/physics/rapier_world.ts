@@ -49,7 +49,7 @@ export function createPlayerCharacter(
     .setRestitution(0.0);
   const playerCollider = world.createCollider(colliderDesc, playerBody);
 
-  const characterController = world.createCharacterController(0.01);
+  const characterController = world.createCharacterController(0.05);
   characterController.setUp({ x: 0, y: 1, z: 0 });
   characterController.setSlideEnabled(true);
   characterController.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
@@ -107,12 +107,12 @@ function extractTrimeshData(
   }
 
   const index = geometry.getIndex();
-  const indices = index
+  const baseIndices = index
     ? new Uint32Array(index.array)
     : new Uint32Array(position.count);
   if (!index) {
     for (let i = 0; i < position.count; i += 1) {
-      indices[i] = i;
+      baseIndices[i] = i;
     }
   }
 
@@ -121,11 +121,22 @@ function extractTrimeshData(
   // winding to keep collision normals pointing outward.
   const sign = Math.sign(scale.x * scale.y * scale.z);
   if (sign < 0) {
-    for (let i = 0; i < indices.length; i += 3) {
-      const tmp = indices[i + 1];
-      indices[i + 1] = indices[i + 2];
-      indices[i + 2] = tmp;
+    for (let i = 0; i < baseIndices.length; i += 3) {
+      const tmp = baseIndices[i + 1];
+      baseIndices[i + 1] = baseIndices[i + 2];
+      baseIndices[i + 2] = tmp;
     }
+  }
+
+  // Ship / station art meshes are often single-sided shells. Rapier's kinematic
+  // character controller will tunnel through and then stay embedded — emit both
+  // windings so interior faces block as solidly as exterior ones.
+  const indices = new Uint32Array(baseIndices.length * 2);
+  indices.set(baseIndices, 0);
+  for (let i = 0; i < baseIndices.length; i += 3) {
+    indices[baseIndices.length + i] = baseIndices[i];
+    indices[baseIndices.length + i + 1] = baseIndices[i + 2];
+    indices[baseIndices.length + i + 2] = baseIndices[i + 1];
   }
 
   return { vertices, indices };

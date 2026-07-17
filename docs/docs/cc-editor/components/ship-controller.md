@@ -6,7 +6,7 @@ description: Singleton ship wiring on the hull entity.
 
 # Ship controller
 
-One **ship-controller** singleton on the hull GLB entity replaces the older scattered ship components (`ship-stats`, `ship-gear`, `ship-ramp`, `ship-door`, `pilot-seat`, `ramp-interact`, `ramp-mount`, `ship-walk-zone`).
+One **ship-controller** singleton on the hull GLB entity replaces the older scattered ship components (`ship-stats`, `ship-gear`, `ship-ramp`, `ship-door`, `pilot-seat`, `ramp-interact`).
 
 | Property | Value |
 | --- | --- |

@@ -6,6 +6,7 @@ import {
   type ContextMenuEntry,
   type ContextMenuPanel,
 } from '../dom';
+import { ENTITY_DND_TYPE } from '../api';
 import { entityBoundToAnyGlbNode, entityTargetsGlbNode } from '../glb_binding';
 import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../document';
 import {
@@ -19,7 +20,6 @@ import { getComponentDef } from '../../world/prefabs/component_registry';
 import type { PrefabComponentType } from '../../world/prefabs/schema';
 import type { Vec3 } from '../../types';
 
-const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
 const GLB_NODE_DND_TYPE = 'application/x-claudecitizen-glb-node';
 
 interface DraggedGlbNode {

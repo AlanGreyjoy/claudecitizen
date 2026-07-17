@@ -1,5 +1,5 @@
 import type { Planet } from './planet';
-import type { TileInfo } from './terrain';
+import type { LakeWaterBuffers, TileInfo } from './terrain';
 
 export interface TileWorkerInMessage {
   buildId: number;
@@ -13,11 +13,8 @@ export interface TileWorkerSuccessMessage {
   buildId: number;
   key: string;
   positions: Float32Array;
-  colors: Float32Array;
-  normals: Float32Array;
-  uvs: Float32Array;
-  weights0: Float32Array;
-  weights1: Float32Array;
+  colors: Uint8Array;
+  normals: Int16Array;
 }
 
 export interface TileWorkerErrorMessage {
@@ -35,3 +32,18 @@ export type TileWorkerOutMessage =
   | TileWorkerReadyMessage
   | TileWorkerSuccessMessage
   | TileWorkerErrorMessage;
+
+export type WaterWorkerInMessage = TileWorkerInMessage;
+
+export interface WaterWorkerSuccessMessage {
+  buildId: number;
+  key: string;
+  buffers: LakeWaterBuffers | null;
+}
+
+export type WaterWorkerErrorMessage = TileWorkerErrorMessage;
+
+export type WaterWorkerOutMessage =
+  | TileWorkerReadyMessage
+  | WaterWorkerSuccessMessage
+  | WaterWorkerErrorMessage;

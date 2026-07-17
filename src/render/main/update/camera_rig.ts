@@ -13,8 +13,7 @@ import {
   MODE_ON_SHIP_DECK,
   MODE_RIDING_ELEVATOR,
 } from '../../../player/modes';
-import { getShipWalkZone } from '../../../player/ship_deck';
-import { getShipLayout, usesColliderDeck } from '../../../player/ship_layout';
+import { getShipLayout } from '../../../player/ship_layout';
 import type { ShipCameraBounds } from '../../../player/ship_layout';
 import { getBedEyeLocal, getPilotEyeLocal } from '../../../player/ship_interaction';
 import {
@@ -102,24 +101,10 @@ function resolveCameraClampVolume(
   shipZoneId: string | null | undefined,
 ): ShipCameraBounds | null {
   if (!shipZoneId) return null;
-  if (usesColliderDeck()) {
-    return (
-      getShipLayout().cameraBounds.find((bound) => bound.id === shipZoneId) ??
-      null
-    );
-  }
-  const zone = getShipWalkZone(shipZoneId);
-  if (!zone) return null;
-  return {
-    id: zone.id,
-    minRight: zone.minRight,
-    maxRight: zone.maxRight,
-    minForward: zone.minForward,
-    maxForward: zone.maxForward,
-    floorUp: Math.min(zone.floorUp, zone.slopeMinUp ?? zone.floorUp),
-    ceilingUp: zone.ceilingUp,
-    openToOutside: zone.gate === 'ramp',
-  };
+  return (
+    getShipLayout().cameraBounds.find((bound) => bound.id === shipZoneId) ??
+    null
+  );
 }
 
 /**

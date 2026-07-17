@@ -50,14 +50,11 @@ export async function loadShipPrefabLayout(
 /** Loads the default ship prefab and activates its gameplay layout. */
 export async function applyDefaultShipPrefab(): Promise<void> {
   const layout = await loadShipPrefabLayout(DEFAULT_SHIP_PREFAB_ID);
-  const deckReady =
-    layout &&
-    (layout.walkZones.length > 0 ||
-      (layout.walkZones.length === 0 && layout.colliders.length > 0));
+  const deckReady = layout && layout.colliders.length > 0;
   if (!deckReady) {
     if (layout) {
       console.warn(
-        `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" has no walk zones or deck colliders; using the built-in layout.`,
+        `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" has no deck colliders; using the built-in layout.`,
       );
     } else {
       console.warn(

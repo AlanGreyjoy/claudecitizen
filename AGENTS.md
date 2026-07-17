@@ -26,7 +26,7 @@
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files live in `src/world/prefabs/data/*.prefab.json`.
 - **Schema** (`src/world/prefabs/schema.ts`) defines every component type and its validator. Read this first when a component's fields are unclear.
-- **Ship runtime** (`src/world/prefabs/ship_runtime.ts`) flattens a ship prefab into `ShipLayout` (walk zones, doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
+- **Ship runtime** (`src/world/prefabs/ship_runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
 - **Station runtime** (`src/world/prefabs/station_runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
 - **Game loop** (`src/app/game_loop.ts`) owns `stationAnimationStates` (per-animation blend values) and the F-key interaction dispatch.
 
@@ -43,9 +43,9 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 #### Ship prefab doors (ship-door component)
 
 1. **Visual**: ship model articulation follows door blends from `ship_rig.ts`.
-2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp trimeshes bake at the open pose and enable when `ramp01 >= 0.85`. Locomotion and tip dismount / fell-off use Rapier contact only (`shipHasFloorBelow`) — not BVH ramp probes, cameraBounds, or `atShipGroundLevel`.
+2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip child nodes that have their own colliders so the closed door is not embedded as a ghost barrier. Locomotion and leave-deck use Rapier contact only (`shipHasFloorBelow`) — walk the ramp collider; no tip-line teleports.
 3. **F-key toggle**: `ship_play_session.ts` / `game_loop.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
-4. **Walk-zone gating** (legacy zone ships only): `ship_rig.ts` `isDoorPassable` returns true at `open01 >= 0.85`.
+4. **Collider pass-through**: door trimeshes disable when `open01 >= 0.85` (same threshold as stations).
 
 #### Ship bunks (bed component)
 
@@ -142,7 +142,8 @@ The visible terrain mesh and on-foot physics **must sample the same LOD grid**. 
 - Mesh uses `sampleRenderablePlanetSurface()` at the tile's LOD. Foot placement uses **`sampleFootPlanetSurface()`** (`world/planet_surface.ts`) — it reads the LOD level from **`getFootSurfaceSampleLevel()`** (`world/foot_surface_level.ts`).
 - Each frame, the tile manager sets that level from `finestSelectedTileLevel` (`render/planet_tiles/domain/tile_coverage.ts`). Character update runs *before* render, so foot sampling uses the **previous frame's** level (one-frame lag is OK).
 - Below ~2 km altitude, `shouldSplitTile` forces max detail only for **nearby facing tiles** (`GROUND_DETAIL_RADIUS_METERS` in `render/planet_tiles/domain/lod.ts`).
-- **Do not vary `TILE_SEGMENTS` / `RENDER_SURFACE_SEGMENTS` per quality preset.** Shared index buffers and disk cache assume a fixed count. Validate cached tiles with `isValidTerrainTileBuffers()`.
+- **Do not vary `TILE_SEGMENTS` / `RENDER_SURFACE_SEGMENTS` per quality preset.** The low-poly triangle layout, foot sampler, lake mesh, and disk cache assume a fixed count. Validate cached tiles with `isValidTerrainTileBuffers()`.
+- Terrain tiles are non-indexed, flat-shaded triangles with baked per-face palette colors. `terrain_triangulation.ts` owns the alternating diagonal rule shared by mesh generation and foot sampling; do not reintroduce smooth normals or photographic terrain splat textures without an explicit art-direction change.
 - **Do not bypass** the per-frame tile build budget in `mesh_cache.ts` — unbounded sync builds freeze at 0 FPS.
 - **Debugging:** `scripts/measure_desync.ts` compares analytic/mesh heights. `?quality=balanced|performance|high` toggles render presets.
 
@@ -172,8 +173,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 
 ### Colliders
 - **Station**: Rapier physics. `src/physics/station_physics.ts` owns the world; `src/physics/rapier_world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
-- **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship_physics.ts` mirrors the station API; `ship_deck.ts` `updateCharacterOnDeckRapier` drives locomotion when `usesColliderDeck()` is true. Doors/ramp toggle via `setEnabled` from articulation blends. Walk-zone BVH push (`resolveDeckColliderStep`) is walk-zone ships only.
-- **Ship (walk-zone legacy)**: authored walk zones plus optional custom BVH push in `colliders.ts` / `resolveDeckColliderStep`. Boarding probes may still use BVH ground samples.
+- **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship_physics.ts` mirrors the station API; `ship_deck.ts` drives locomotion on hull/ramp colliders. Doors/ramp toggle via `setEnabled` from articulation blends. Boarding is a mode handoff when on-foot contacts the lowered ramp mesh; leaving is no-floor-underfoot → planet/station at current feet.
 - **Ship flight**: custom IFCS in `flight_body.ts` / `flight_aim.ts` — **do not** put flight simulation in Rapier. Rapier is for on-foot deck/station contact only.
 
 ## Common gotchas
@@ -199,7 +199,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/physics/station_physics.ts` | Rapier world + static/dynamic collider sync; door-collider enable/disable |
 | `src/physics/rapier_world.ts` | Rapier body/collider creation from GameplayColliders |
 | `src/player/ship_layout.ts` | `ShipSpec` + defaults (mass, thrust, torque) |
-| `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) + `isDoorPassable` threshold |
+| `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) |
 | `src/player/ship_deck.ts` | Ship deck walking + collider step resolution |
 | `src/player/station_walk.ts` | Station walking (Rapier character controller) |
 | `src/player/station_interaction.ts` | Resolves nearby station interactions from markers |

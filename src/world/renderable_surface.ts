@@ -2,6 +2,7 @@ import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
 import { directionFromCubeFace, faceUvFromDirection } from './cube_sphere';
 import { sampleSurfaceHeight } from './elevation';
 import { clamp } from './terrain_noise';
+import { terrainCellUsesNorthwestSoutheastDiagonal } from './terrain_triangulation';
 import type { CubeFace, Planet, RenderableSurfaceCacheStats, TileBounds, Vec3 } from '../types';
 
 export const RENDER_SURFACE_LEVEL = 16;
@@ -144,8 +145,22 @@ export function sampleVisibleSurfaceFrame(
 
   let normal: Vec3;
   let point: Vec3;
+  const usesNorthwestSoutheastDiagonal =
+    terrainCellUsesNorthwestSoutheastDiagonal(gridX, gridY);
 
-  if (fracU + fracV <= 1) {
+  if (usesNorthwestSoutheastDiagonal && fracV <= fracU) {
+    point = add(
+      add(scale(p00, 1 - fracU), scale(p10, fracU - fracV)),
+      scale(p11, fracV),
+    );
+    normal = cross(sub(p10, p00), sub(p11, p00));
+  } else if (usesNorthwestSoutheastDiagonal) {
+    point = add(
+      add(scale(p00, 1 - fracV), scale(p11, fracU)),
+      scale(p01, fracV - fracU),
+    );
+    normal = cross(sub(p11, p00), sub(p01, p00));
+  } else if (fracU + fracV <= 1) {
     point = add(
       add(scale(p00, 1 - fracU - fracV), scale(p10, fracU)),
       scale(p01, fracV),

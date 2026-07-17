@@ -1,5 +1,5 @@
 import { FLIGHT_CONFIG } from "../flight/flight_config";
-import type { LocalOffset, Vec3 } from "../types";
+import type { LocalOffset } from "../types";
 import type { GameplayCollider } from "../physics/colliders";
 import type {
   CockpitControlAction,
@@ -9,9 +9,9 @@ import type {
 import type { PrefabSoundSpec } from "../world/prefabs/sound_runtime";
 
 /**
- * Ship gameplay layout: walk zones, doors, seats, and ramp anchors in
- * ship-local right/up/forward meters. Prefab authoring via ship-controller
- * and GLB node colliders replaces the empty default stub.
+ * Ship gameplay layout: doors, seats, ramp interacts, and Rapier deck
+ * colliders in ship-local right/up/forward meters. Prefab authoring via
+ * ship-controller and GLB node colliders.
  */
 
 /** Hinge binding for landing gear articulation (GLB node + deploy angle). */
@@ -155,43 +155,6 @@ export const DEFAULT_SHIP_SPEC: ShipSpec = {
 
 export type ShipSeatRole = "pilot" | "copilot" | "turret" | "passenger";
 
-/** Oriented walk volume baked from a rotated ship-walk-zone entity. */
-export interface ShipWalkZoneOriented {
-  /** Floor center in ship-local right/up/forward. */
-  origin: { right: number; up: number; forward: number };
-  /** Unit axes in ship-local 3-space (entity local X/Y/Z after rotation). */
-  axisRight: Vec3;
-  axisUp: Vec3;
-  axisForward: Vec3;
-  halfWidth: number;
-  halfDepth: number;
-  height: number;
-}
-
-export interface ShipWalkZone {
-  id: string;
-  minRight: number;
-  maxRight: number;
-  minForward: number;
-  maxForward: number;
-  /** Floor height (at the maxForward edge when sloped). */
-  floorUp: number;
-  /** Floor height at the minForward edge — slopes for ramps and steps. */
-  slopeMinUp?: number;
-  /** Discrete steps across the run instead of a smooth slope. */
-  stepCount?: number;
-  /** Vertical climb — height from climb progress, no horizontal travel. */
-  ladder?: boolean;
-  /** Interior ceiling for camera containment. */
-  ceilingUp: number;
-  /** Walkable only while the boarding ramp or the given door is open. */
-  gate?: "ramp" | { doorId: string };
-  /** Passage zones connect rooms; real rooms win for camera framing. */
-  passage?: boolean;
-  /** Present when the prefab entity rotation tilts the walk volume off ship axes. */
-  oriented?: ShipWalkZoneOriented;
-}
-
 export type ShipDoorTrigger = "radial" | "raycast";
 
 export interface ShipDoorSpec {
@@ -227,15 +190,6 @@ export interface ShipRampInteract {
   right: number;
   forward: number;
   radius: number;
-}
-
-export interface ShipRampMount {
-  minRight: number;
-  maxRight: number;
-  minForward: number;
-  maxForward: number;
-  /** Mount lands at or above this line so it does not immediately dismount. */
-  clampForward: number;
 }
 
 export interface ShipSeatSpec {
@@ -340,7 +294,6 @@ export interface ShipLayout {
    * null = unauthored; previews measure the hull and rest it on the pad.
    */
   restHeightMeters: number | null;
-  walkZones: ShipWalkZone[];
   doors: ShipDoorSpec[];
   /** All authored seat markers from the prefab (may be empty). */
   seats: ShipSeatSpec[];
@@ -358,16 +311,16 @@ export interface ShipLayout {
   /** Standing spot just behind the primary pilot chair (2D deck local). */
   seatStand: { right: number; forward: number };
   rampInteracts: ShipRampInteract[];
-  rampMount: ShipRampMount | null;
   colliders: GameplayCollider[];
-  /** Walking past this ship-local forward on a ramp zone steps off. */
-  rampDismountForward: number;
-  /** Ground spot just past the ramp tip for a character stepping off. */
-  rampDismountGround: { right: number; forward: number };
-  /** Interior camera clamp volumes (collider-deck ships). */
+  /** Interior camera clamp volumes. */
   cameraBounds: ShipCameraBounds[];
   /** Optional authored deck spawn from ship-controller.deckSpawnEntityId. */
   deckSpawn?: { right: number; forward: number };
+  /**
+   * Prefab empty named "Test Spawn" — preferred by Preview Ship / sandbox.
+   * Full ship-local pose so feet land on the interior deck, not the hull roof.
+   */
+  testSpawn?: LocalOffset;
   /** Prefab-local authored ambience and positional sound zones. */
   sounds: PrefabSoundSpec[];
 }
@@ -377,7 +330,6 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   spec: DEFAULT_SHIP_SPEC,
   hullUrl: null,
   restHeightMeters: 3.16,
-  walkZones: [],
   doors: [],
   seats: [],
   beds: [],
@@ -388,10 +340,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   pilotEye: { right: 0, up: 0.25, forward: 6.3 },
   seatStand: { right: 0, forward: 4.5 },
   rampInteracts: [],
-  rampMount: null,
   colliders: [],
-  rampDismountForward: -Infinity,
-  rampDismountGround: { right: 0, forward: 0 },
   cameraBounds: [],
   sounds: [],
 };
@@ -451,8 +400,7 @@ export function getShipRestHeightMeters(): number {
   );
 }
 
-/** True when deck walking uses collider geometry instead of walk zones. */
+/** True when the active ship has deck colliders for Rapier walking. */
 export function usesColliderDeck(): boolean {
-  const layout = getShipLayout();
-  return layout.walkZones.length === 0 && layout.colliders.length > 0;
+  return getShipLayout().colliders.length > 0;
 }

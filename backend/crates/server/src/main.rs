@@ -131,6 +131,7 @@ fn router(state: AppState) -> Result<Router> {
         )
         .route("/admin/users", get(admin::list_users))
         .route("/admin/users/{id}", get(admin::get_user))
+        .route("/admin/users/{id}/ships", post(admin::assign_ship))
         .route(
             "/admin/ships",
             get(admin::list_ships).post(admin::create_ship),

@@ -63,6 +63,22 @@ List accounts with summary player info.
 
 Full user detail including `player.ships[]`.
 
+### `POST /admin/users/:id/ships`
+
+Assign a catalog ship to the user's player hangar.
+
+**Body:**
+
+```json
+{
+  "shipDefinitionId": "starter-phobos-starhopper"
+}
+```
+
+**Response `201`:** the created owned ship (same shape as entries in `player.ships[]`).
+
+Fails with `400` if the user has no player record, `404` if the user or definition is missing, or `409` if the player already owns that definition or prefab.
+
 ---
 
 ## Ship definitions

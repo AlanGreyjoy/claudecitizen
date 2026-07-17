@@ -25,12 +25,9 @@ Boarding ramp hinge on the hull GLB. **Ship** prefabs only.
 
 Omit to use Starhopper defaults. Preview with the viewport toolbar **Ramp** toggle or **F** in the ship sandbox.
 
-Pair with [Ramp interact](./ramp-interact) (player prompt) and [Ramp mount](./ramp-mount) (ground boarding strip).
-
-Walk zones can `gate` on `"ramp"` so interior passages only connect when the ramp is lowered.
+Pair with [Ramp interact](./ramp-interact) for the player raise/lower prompt. Boarding uses the Rapier ramp collider mesh — walk onto the lowered ramp.
 
 ## See also
 
 - [Ship authoring](../ship-authoring)
 - [Ramp interact](./ramp-interact)
-- [Ramp mount](./ramp-mount)

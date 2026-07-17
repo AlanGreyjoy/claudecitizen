@@ -842,7 +842,9 @@ kbd {
 
 .sc-flight-reticle[data-flight-mode='traverse'] .sc-flight-reticle-ring {
   opacity: 1;
-  inset: 18px;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
 }
 
 .sc-flight-reticle[data-flight-mode='combat'] .sc-flight-reticle-arms {
@@ -855,13 +857,17 @@ kbd {
 
 .sc-flight-reticle[data-flight-mode='nav'] .sc-flight-reticle-ring {
   opacity: 1;
-  inset: 6px;
+  width: 76px;
+  height: 76px;
+  margin: -38px 0 0 -38px;
   border-color: rgba(90, 220, 255, 0.55);
 }
 
 .sc-flight-reticle[data-quantum-phase='spooling'] .sc-flight-reticle-ring {
   opacity: 1;
-  inset: 4px;
+  width: 80px;
+  height: 80px;
+  margin: -40px 0 0 -40px;
   border: none;
   background: conic-gradient(
     from -90deg,
@@ -876,7 +882,9 @@ kbd {
 
 .sc-flight-reticle[data-quantum-phase='traveling'] .sc-flight-reticle-ring {
   opacity: 1;
-  inset: 2px;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
   border-color: rgba(170, 240, 255, 0.85);
   box-shadow: 0 0 18px rgba(90, 220, 255, 0.35);
   animation: sc-reticle-travel 0.8s ease-in-out infinite;
@@ -890,7 +898,9 @@ kbd {
 
 .sc-flight-reticle[data-quantum-phase='dropOut'] .sc-flight-reticle-ring {
   opacity: 1;
-  inset: 10px;
+  width: 68px;
+  height: 68px;
+  margin: -34px 0 0 -34px;
   border-color: rgba(255, 240, 200, 0.75);
 }
 

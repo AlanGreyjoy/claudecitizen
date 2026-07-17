@@ -327,12 +327,8 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       },
       ramp: {
         hinge: { node: "RampParent", lowerRadians: -0.85 },
-        outsideInteractId: "ramp-button-outside",
         outsideRadius: 3,
-        deckInteractId: "ramp-panel-deck",
         deckRadius: 1.7,
-        dismountForward: -8.5,
-        dismountGround: { x: 0, z: -9.6 },
       },
       doors: [],
       seats: [],

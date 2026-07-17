@@ -28,8 +28,11 @@ export interface ShipPhysics {
   player: RapierWorldHandle;
   /** Disable (or re-enable) every static collider bound to the given door id. */
   setDoorColliderEnabled(doorId: string, enabled: boolean): void;
-  /** Enable the open-pose ramp trimesh when the ramp is deployed enough to walk. */
-  setRampColliderEnabled(enabled: boolean): void;
+  /**
+   * Swap ramp colliders: `open` enables the lowered walk mesh and disables the
+   * closed door blocker (and vice versa).
+   */
+  setRampOpen(open: boolean): void;
   dispose(): void;
 }
 
@@ -55,16 +58,30 @@ export async function createShipPhysics(
 
   const staticColliders: RAPIER.Collider[] = [];
   const doorColliderHandles = new Map<string, RAPIER.Collider[]>();
-  const rampColliderHandles: RAPIER.Collider[] = [];
+  const rampOpenHandles: RAPIER.Collider[] = [];
+  const rampClosedHandles: RAPIER.Collider[] = [];
   const openRampRig = { ramp01: 1 };
+  const closedRampRig = { ramp01: 0 };
 
   for (const collider of colliders) {
     const isRamp = collider.animation?.kind === "ramp";
-    const rapierCollider = await addCollider(
-      world,
-      collider,
-      isRamp ? openRampRig : undefined,
-    );
+    if (isRamp) {
+      // Closed pose blocks the doorway; open pose is the walkable ramp.
+      const closedCollider = await addCollider(world, collider, closedRampRig);
+      if (closedCollider) {
+        staticColliders.push(closedCollider);
+        rampClosedHandles.push(closedCollider);
+      }
+      const openCollider = await addCollider(world, collider, openRampRig);
+      if (openCollider) {
+        staticColliders.push(openCollider);
+        openCollider.setEnabled(false);
+        rampOpenHandles.push(openCollider);
+      }
+      continue;
+    }
+
+    const rapierCollider = await addCollider(world, collider);
     if (!rapierCollider) continue;
     staticColliders.push(rapierCollider);
 
@@ -74,12 +91,6 @@ export async function createShipPhysics(
       list.push(rapierCollider);
       doorColliderHandles.set(doorId, list);
     }
-
-    if (isRamp) {
-      // Bake at the fully-open pose; keep disabled until ramp01 crosses threshold.
-      rapierCollider.setEnabled(false);
-      rampColliderHandles.push(rapierCollider);
-    }
   }
 
   const physics: ShipPhysics = {
@@ -88,10 +99,11 @@ export async function createShipPhysics(
     setDoorColliderEnabled(doorId: string, enabled: boolean) {
       const handles = doorColliderHandles.get(doorId);
       if (!handles) return;
-      for (const collider of handles) collider.setEnabled(enabled);
+      for (const handle of handles) handle.setEnabled(enabled);
     },
-    setRampColliderEnabled(enabled: boolean) {
-      for (const collider of rampColliderHandles) collider.setEnabled(enabled);
+    setRampOpen(open: boolean) {
+      for (const handle of rampOpenHandles) handle.setEnabled(open);
+      for (const handle of rampClosedHandles) handle.setEnabled(!open);
     },
     dispose() {
       removeStaticColliders(world, staticColliders);
@@ -107,9 +119,9 @@ export function syncShipArticulationColliders(
   rig: { ramp01?: number; doors?: Record<string, number> },
   doorIds: readonly string[],
 ): void {
-  const rampEnabled =
+  const rampOpen =
     (rig.ramp01 ?? 0) >= DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD;
-  physics.setRampColliderEnabled(rampEnabled);
+  physics.setRampOpen(rampOpen);
   for (const doorId of doorIds) {
     const open01 = rig.doors?.[doorId] ?? 0;
     physics.setDoorColliderEnabled(
@@ -121,6 +133,63 @@ export function syncShipArticulationColliders(
 
 export function stepShipPhysics(physics: ShipPhysics): void {
   physics.world.step();
+  depenetrateShipPlayer(physics);
+}
+
+/**
+ * Push the kinematic capsule out of any static overlap. Rapier's character
+ * controller prevents *new* penetration on the move, but once a thin hull
+ * triangle is breached the controller will happily walk around inside the wall.
+ */
+export function depenetrateShipPlayer(physics: ShipPhysics): void {
+  const body = physics.player.playerBody;
+  const playerCollider = physics.player.playerCollider;
+  const pos = body.translation();
+  // Sample torso height — walls are vertical; floor recovery is gravity's job.
+  const origin = { x: pos.x, y: pos.y + 0.95, z: pos.z };
+  const radius = 0.42;
+  const skin = 0.02;
+  const dirs: Array<{ x: number; z: number }> = [
+    { x: 1, z: 0 },
+    { x: -1, z: 0 },
+    { x: 0, z: 1 },
+    { x: 0, z: -1 },
+    { x: 0.707, z: 0.707 },
+    { x: -0.707, z: 0.707 },
+    { x: 0.707, z: -0.707 },
+    { x: -0.707, z: -0.707 },
+  ];
+  let pushX = 0;
+  let pushZ = 0;
+  for (const dir of dirs) {
+    const ray = new RAPIER.Ray(origin, { x: dir.x, y: 0, z: dir.z });
+    const hit = physics.world.castRay(
+      ray,
+      radius,
+      true,
+      undefined,
+      undefined,
+      playerCollider,
+    );
+    if (!hit) continue;
+    const depth = radius - hit.timeOfImpact;
+    if (depth <= skin) continue;
+    pushX -= dir.x * (depth + skin);
+    pushZ -= dir.z * (depth + skin);
+  }
+  if (Math.abs(pushX) < 1e-5 && Math.abs(pushZ) < 1e-5) return;
+  // Cap so a bad frame can't yeet the player across the cabin.
+  const len = Math.hypot(pushX, pushZ);
+  const maxPush = radius;
+  const scale = len > maxPush ? maxPush / len : 1;
+  body.setTranslation(
+    {
+      x: pos.x + pushX * scale,
+      y: pos.y,
+      z: pos.z + pushZ * scale,
+    },
+    true,
+  );
 }
 
 export function moveShipPlayer(
@@ -159,7 +228,7 @@ export function isShipPlayerGrounded(physics: ShipPhysics): boolean {
 
 /**
  * True when the player is standing on (or still over) a ship static collider.
- * Used for tip dismount / fell-off — Rapier only, no BVH.
+ * Used to leave deck mode when walking off the ramp / hull — Rapier only.
  */
 export function shipHasFloorBelow(
   physics: ShipPhysics,

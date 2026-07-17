@@ -332,6 +332,42 @@ export function prepareShipHullGltf(
   if (recenterHull) recenterGltfSceneRoot(scene);
 }
 
+/**
+ * Descendant GLB nodes that already have their own mesh colliders (doors,
+ * ramp, cockpit pieces). Parent hull bakes must skip them — otherwise the
+ * closed ramp stays embedded in the hull and becomes a ghost barrier when the
+ * open-pose ramp collider is enabled.
+ */
+function siblingColliderNodeNames(
+  collider: MeshGameplayCollider,
+): ReadonlySet<string> {
+  const excluded = new Set<string>();
+  for (const override of collider.nodeOverrides ?? []) {
+    if (override.node === collider.node) continue;
+    if (!override.components?.some((component) => component.type === "collider")) {
+      continue;
+    }
+    excluded.add(sanitizeNodeName(override.node));
+  }
+  return excluded;
+}
+
+function meshOwnedByExcludedAncestor(
+  mesh: THREE.Object3D,
+  root: THREE.Object3D,
+  excluded: ReadonlySet<string>,
+): boolean {
+  if (excluded.size === 0) return false;
+  let ancestor: THREE.Object3D | null = mesh.parent;
+  while (ancestor && ancestor !== root) {
+    if (ancestor.name && excluded.has(sanitizeNodeName(ancestor.name))) {
+      return true;
+    }
+    ancestor = ancestor.parent;
+  }
+  return false;
+}
+
 export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<MeshColliderAsset | null> {
   const key = meshCacheKey(
     collider.assetUrl,
@@ -364,9 +400,11 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
             ? root.parent.matrixWorld.clone()
             : new THREE.Matrix4();
         const restNodeWorld = root.matrixWorld.clone();
+        const excludedNodes = siblingColliderNodeNames(collider);
         const vertices: number[] = [];
         root.traverse((object) => {
           if (!(object instanceof THREE.Mesh)) return;
+          if (meshOwnedByExcludedAncestor(object, root, excludedNodes)) return;
           const toAssetLocal = assetLocalFromWorld.clone().multiply(object.matrixWorld);
           appendMeshPositions(object, toAssetLocal, vertices);
         });
@@ -634,20 +672,13 @@ function isDoorColliderOpen(
   return open01 >= DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD;
 }
 
-function isRampColliderActive(
-  collider: GameplayCollider,
-  rig: ShipColliderRigState | undefined,
-): boolean {
-  if (!collider.animation || collider.animation.kind !== "ramp") return true;
-  return (rig?.ramp01 ?? 0) >= DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD;
-}
-
 function colliderBlocksCharacter(
   collider: GameplayCollider,
   rig: ShipColliderRigState | undefined,
 ): boolean {
   if (isDoorColliderOpen(collider, rig)) return false;
-  if (!isRampColliderActive(collider, rig)) return false;
+  // Ramp meshes stay active for BVH push/ground; pose follows the rig. Rapier
+  // uses a separate closed/open pair toggled in ship_physics.
   return true;
 }
 

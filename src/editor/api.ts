@@ -15,6 +15,9 @@ export interface PrefabListEntry {
 /** Drag-and-drop MIME type for Project panel asset cards. */
 export const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
 
+/** Drag-and-drop MIME type for Hierarchy panel entity rows. */
+export const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
+
 export const EDITOR_ASSET_ROOT = 'editor/assets' as const;
 export const SOURCE_ASSET_ROOT = 'src/assets' as const;
 export type AssetRoot = typeof EDITOR_ASSET_ROOT | typeof SOURCE_ASSET_ROOT;

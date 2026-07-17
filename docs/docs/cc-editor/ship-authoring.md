@@ -47,7 +47,7 @@ Deck walking uses mesh colliders on individual GLB nodes — not on the hull ent
 
 The hull entity with **ship-controller** should not carry walk colliders; the editor hides **Collider** from the hull palette until a GLB node is sub-selected.
 
-No walk zones required on new ships.
+Deck walking uses Rapier hull/ramp colliders — no separate walk-zone components.
 
 ### ship-frame (singleton on root)
 
@@ -98,7 +98,7 @@ Isolated flat pad — no planet or station. Verify:
 
 ## Legacy prefabs
 
-Older ships may still use scattered components (`ship-walk-zone`, `ship-door`, …). The runtime still parses them until migrated to **ship-controller**.
+Older ships may still use scattered components (`ship-door`, `pilot-seat`, …). Prefer migrating to **ship-controller**.
 
 ## Fallback behavior
 

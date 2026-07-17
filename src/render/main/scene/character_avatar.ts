@@ -34,14 +34,10 @@ export function createCharacterAvatar(
       instance.root.visible = false;
       return;
     }
-    instance.root.visible = true;
+    instance.root.visible = !firstPerson;
     instance.setPose(character, focusPosition, renderScale);
     instance.setAnimation(character.animation);
     instance.updateMixer(nowSeconds);
-    const headBone = instance.getHeadBone();
-    if (headBone) {
-      headBone.scale.setScalar(firstPerson ? 0.001 : 1);
-    }
   }
 
   function dispose(): void {

@@ -33,4 +33,3 @@ Works with [Ship ramp](./ship-ramp) hinge bindings. Press **F** in play or use t
 
 - [Ship authoring](../ship-authoring)
 - [Ship ramp](./ship-ramp)
-- [Ramp mount](./ramp-mount)

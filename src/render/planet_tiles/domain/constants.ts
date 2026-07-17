@@ -1,6 +1,7 @@
 import { RENDER_SURFACE_LEVEL, RENDER_SURFACE_SEGMENTS } from '../../../world/renderable_surface';
 
-// Mesh segment count must stay fixed: shared index buffer + disk cache assume this layout.
+// Mesh segment count must stay fixed: the low-poly triangle layout, foot sampler,
+// lake mesh, and disk cache all assume this shared grid resolution.
 export const TILE_SEGMENTS = RENDER_SURFACE_SEGMENTS;
 export const TILE_BUILD_BUDGET_PER_FRAME = 12;
 export const MAX_CACHED_TILES = 384;

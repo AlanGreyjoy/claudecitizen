@@ -10,7 +10,6 @@ import {
   vec3,
 } from "../math/vec3";
 import {
-  integrateCharacterLocomotion,
   JUMP_SPEED_METERS_PER_SECOND,
   animationFromState,
   FIRST_PERSON_PITCH_LIMIT,
@@ -21,7 +20,6 @@ import {
   WALK_SPEED_METERS_PER_SECOND,
 } from "./character_controller";
 import {
-  resolveCharacterAgainstColliders,
   sampleColliderGroundHeight,
   type ShipColliderRigState,
 } from "../physics/colliders";
@@ -36,20 +34,15 @@ import {
 } from "../physics/ship_physics";
 import {
   getShipLayout,
-  usesColliderDeck,
   type ShipBedSpec,
   type ShipCameraBounds,
   type ShipSeatSpec,
-  type ShipWalkZone,
 } from "./ship_layout";
 import {
-  atShipGroundLevel,
   getShipRight,
   localOffsetToWorld,
-  worldToShipLocal,
 } from "./ship_interaction";
 import { resolveDeckCameraOrbit } from "../flight/flight_aim";
-import { orientedFloorUpAt, orientedZoneContains } from "./ship_zone_oriented";
 import type {
   CameraView,
   CharacterInput,
@@ -60,14 +53,11 @@ import type {
 } from "../types";
 
 /**
- * Walkable ship interior driven by the active ship layout (ship_layout.ts):
- * axis-aligned and oriented walk zones in ship-local right/forward meters with
- * per-zone floor heights, optional slopes (ramps, doorway steps), and gates.
+ * Walkable ship interior via ship-local Rapier colliders (including the ramp).
+ * Seats, doors, beds, and camera bounds still read from the active ship layout.
  */
 
 export type ShipZoneId = string;
-
-export type { ShipWalkZone } from "./ship_layout";
 
 export interface DeckLocal {
   right: number;
@@ -96,13 +86,8 @@ const COLLIDER_STEP_HEIGHT_METERS = 0.55;
 const COLLIDER_GROUND_PROBE_MARGIN = 0.75;
 /** Fallback probe height when character ship-local up is unknown. */
 const COLLIDER_GROUND_PROBE_FALLBACK_UP = 1.5;
-/** Airborne frames below deck before auto-dismount (collider-deck ships). */
-const AIRBORNE_OFF_DECK_DISMOUNT_FRAMES = 6;
-/**
- * Tip exit needs a short airborne streak so a single floor-ray miss at the
- * ramp foot (often already past dismountForward) does not eject immediately.
- */
-const TIP_DISMOUNT_AIRBORNE_FRAMES = 3;
+/** Airborne frames with no ship collider below before leaving deck mode. */
+const AIRBORNE_OFF_DECK_FRAMES = 6;
 /** ~0.25s at 60fps — ignore deck exits right after boarding. */
 const MOUNT_EXIT_GRACE_FRAMES = 15;
 
@@ -150,41 +135,6 @@ function tangentize(vector: Vec3, up: Vec3): Vec3 {
   return sub(vector, scale(up, dot(vector, up)));
 }
 
-export function getShipWalkZones(): ShipWalkZone[] {
-  return getShipLayout().walkZones;
-}
-
-export function getShipWalkZone(zoneId: string): ShipWalkZone | null {
-  return getShipLayout().walkZones.find((zone) => zone.id === zoneId) ?? null;
-}
-
-/** Floor height within a zone; slopes interpolate along forward; stairs snap to steps. */
-function zoneFloorUpAt(
-  zone: ShipWalkZone,
-  right: number,
-  forward: number,
-): number {
-  if (zone.oriented) return orientedFloorUpAt(zone.oriented, right, forward);
-  if (zone.slopeMinUp === undefined) return zone.floorUp;
-  const span = zone.maxForward - zone.minForward;
-  if (span <= 1e-6) return zone.floorUp;
-  const t = clamp((forward - zone.minForward) / span, 0, 1);
-  if (zone.stepCount !== undefined && zone.stepCount > 0) {
-    const stepIndex = Math.min(
-      zone.stepCount,
-      Math.floor(t * zone.stepCount + 1e-6),
-    );
-    const stepT = stepIndex / zone.stepCount;
-    return zone.slopeMinUp + (zone.floorUp - zone.slopeMinUp) * stepT;
-  }
-  return zone.slopeMinUp + (zone.floorUp - zone.slopeMinUp) * t;
-}
-
-/**
- * Floor height at a deck point. Sloped zones (ramps, doorway steps) win over
- * flat rooms where they overlap so the character glides along the slope.
- * Ladder volumes are excluded — they are F-only, not walkable surfaces.
- */
 function colliderProbeUp(localUp?: number): number {
   return (localUp ?? COLLIDER_GROUND_PROBE_FALLBACK_UP) + COLLIDER_GROUND_PROBE_MARGIN;
 }
@@ -194,144 +144,11 @@ export function shipFloorUpAt(
   rig?: ShipColliderRigState,
   localUp?: number,
 ): number {
-  if (usesColliderDeck()) {
-    const floor = colliderFloorAt(local, rig, localUp);
-    if (floor !== null) return floor;
-    // Mesh sample miss (threshold gaps, inverted tris): prefer authored
-    // camera-bound floor over y=0, which drops the avatar through the deck.
-    return findCameraBoundAt(local)?.floorUp ?? 0;
-  }
-  const zones = getShipLayout().walkZones;
-  let flat: ShipWalkZone | null = null;
-  for (const zone of zones) {
-    if (zone.ladder) continue;
-    if (!zoneContains(zone, local)) continue;
-    if (zone.oriented)
-      return orientedFloorUpAt(zone.oriented, local.right, local.forward);
-    if (zone.slopeMinUp !== undefined)
-      return zoneFloorUpAt(zone, local.right, local.forward);
-    flat ??= zone;
-  }
-  if (flat) return flat.floorUp;
-  // Off every zone (transitions, dismounts): nearest zone's edge height.
-  let best: { distance: number; up: number } | null = null;
-  for (const zone of zones) {
-    if (zone.ladder) continue;
-    const right = clamp(local.right, zone.minRight, zone.maxRight);
-    const forward = clamp(local.forward, zone.minForward, zone.maxForward);
-    const distance = Math.hypot(right - local.right, forward - local.forward);
-    if (!best || distance < best.distance) {
-      best = { distance, up: zoneFloorUpAt(zone, right, forward) };
-    }
-  }
-  return best?.up ?? 0;
-}
-
-export interface ShipWalkGates {
-  /** Ramp lowered and the ship parked, so the ramp is a walkable surface. */
-  rampWalkable: boolean;
-  /** Whether the given prefab door is open enough to pass through. */
-  isDoorOpen: (doorId: string) => boolean;
-}
-
-function zoneActive(zone: ShipWalkZone, gates: ShipWalkGates): boolean {
-  if (zone.gate === undefined) return true;
-  if (zone.gate === "ramp") return gates.rampWalkable;
-  return gates.isDoorOpen(zone.gate.doorId);
-}
-
-function zoneContains(zone: ShipWalkZone, local: DeckLocal): boolean {
-  if (zone.oriented) {
-    return orientedZoneContains(zone.oriented, local.right, local.forward);
-  }
-  return (
-    local.right >= zone.minRight &&
-    local.right <= zone.maxRight &&
-    local.forward >= zone.minForward &&
-    local.forward <= zone.maxForward
-  );
-}
-
-function ladderAnchor(zone: ShipWalkZone): DeckLocal {
-  return {
-    right: (zone.minRight + zone.maxRight) / 2,
-    forward: (zone.minForward + zone.maxForward) / 2,
-  };
-}
-
-function ladderZoneAt(
-  local: DeckLocal,
-  gates: ShipWalkGates,
-): ShipWalkZone | null {
-  for (const zone of getShipLayout().walkZones) {
-    if (!zone.ladder || !zoneActive(zone, gates)) continue;
-    if (!zoneContains(zone, local)) continue;
-    return zone;
-  }
-  return null;
-}
-
-function insideActiveLadder(local: DeckLocal, gates: ShipWalkGates): boolean {
-  return ladderZoneAt(local, gates) !== null;
-}
-
-/** Walkable zones for normal movement; ladder volumes are F-only traversals. */
-function findWalkZone(
-  local: DeckLocal,
-  gates: ShipWalkGates,
-): ShipWalkZone | null {
-  let passage: ShipWalkZone | null = null;
-  let flat: ShipWalkZone | null = null;
-  for (const zone of getShipLayout().walkZones) {
-    if (!zoneActive(zone, gates)) continue;
-    if (zone.ladder) continue;
-    if (!zoneContains(zone, local)) continue;
-    if (zone.passage) {
-      passage ??= zone;
-      continue;
-    }
-    if (zone.slopeMinUp !== undefined) return zone;
-    flat ??= zone;
-  }
-  return flat ?? passage;
-}
-
-interface ResolvedDeckStep {
-  local: DeckLocal;
-  zone: ShipZoneId;
-}
-
-function resolveDeckStep(
-  state: DeckCharacterState,
-  deltaRight: number,
-  deltaForward: number,
-  gates: ShipWalkGates,
-): ResolvedDeckStep {
-  const candidates: DeckLocal[] = [
-    {
-      right: state.deckLocal.right + deltaRight,
-      forward: state.deckLocal.forward + deltaForward,
-    },
-    {
-      right: state.deckLocal.right + deltaRight,
-      forward: state.deckLocal.forward,
-    },
-    {
-      right: state.deckLocal.right,
-      forward: state.deckLocal.forward + deltaForward,
-    },
-  ];
-  for (const candidate of candidates) {
-    if (insideActiveLadder(candidate, gates)) continue;
-    const zone = findWalkZone(candidate, gates);
-    if (zone) {
-      return {
-        local: candidate,
-        zone: zone.passage ? state.deckZone : zone.id,
-      };
-    }
-  }
-  return { local: state.deckLocal, zone: state.deckZone };
+  const floor = colliderFloorAt(local, rig, localUp);
+  if (floor !== null) return floor;
+  // Mesh sample miss (threshold gaps, inverted tris): prefer authored
+  // camera-bound floor over y=0, which drops the avatar through the deck.
+  return findCameraBoundAt(local)?.floorUp ?? 0;
 }
 
 function cameraBoundContains(bound: ShipCameraBounds, local: DeckLocal): boolean {
@@ -366,16 +183,9 @@ function findCameraBoundAt(local: DeckLocal): ShipCameraBounds | null {
   return best?.bound ?? null;
 }
 
-export function isOnShipRampDeck(
-  deckLocal: DeckLocal,
-  deckZone: ShipZoneId,
-): boolean {
-  if (usesColliderDeck()) {
-    // Camera volume is UI/zone labeling only — not BVH contact.
-    const bound = findCameraBoundContaining(deckLocal);
-    return bound?.id === "ramp" || bound?.openToOutside === true;
-  }
-  return getShipWalkZone(deckZone)?.gate === "ramp";
+export function isOnShipRampDeck(deckLocal: DeckLocal): boolean {
+  const bound = findCameraBoundContaining(deckLocal);
+  return bound?.id === "ramp" || bound?.openToOutside === true;
 }
 
 function colliderFloorAt(
@@ -393,40 +203,6 @@ function colliderFloorAt(
       ? undefined
       : localUp + COLLIDER_STEP_HEIGHT_METERS,
   );
-}
-
-function resolveDeckColliderStep(
-  resolved: ResolvedDeckStep,
-  gates: ShipWalkGates,
-  colliderRig: ShipColliderRigState | undefined,
-  localUp?: number,
-): ResolvedDeckStep {
-  const colliders = getShipLayout().colliders;
-  if (colliders.length === 0) return resolved;
-  // Walk-zone ships only — collider-deck locomotion is Rapier (`updateCharacterOnDeckRapier`).
-  const fromLocal = resolved.local;
-  const currentFloor = shipFloorUpAt(fromLocal, colliderRig, localUp);
-  const adjusted = resolveCharacterAgainstColliders({
-    right: fromLocal.right,
-    forward: fromLocal.forward,
-    floorUp: currentFloor ?? 0,
-    colliders,
-    rig: colliderRig,
-    isAllowed: (local) =>
-      !insideActiveLadder(local, gates) && findWalkZone(local, gates) !== null,
-  });
-  if (
-    Math.abs(adjusted.right - fromLocal.right) < 1e-6 &&
-    Math.abs(adjusted.forward - fromLocal.forward) < 1e-6
-  ) {
-    return resolved;
-  }
-  const zone = findWalkZone(adjusted, gates);
-  if (!zone) return resolved;
-  return {
-    local: adjusted,
-    zone: zone.passage ? resolved.zone : zone.id,
-  };
 }
 
 function deckCameraForward(ship: FlightBody, cameraYawRadians: number): Vec3 {
@@ -509,12 +285,10 @@ export function createDeckCharacterState(
   const floor =
     floorUp !== undefined
       ? floorUp
-      : usesColliderDeck()
-        ? (probeColliderDeckFloor(spot, colliderRig) ??
-          findCameraBoundAt(spot)?.floorUp ??
-          null)
-        : null;
-  const grounded = !usesColliderDeck() || floor !== null;
+      : (probeColliderDeckFloor(spot, colliderRig) ??
+        findCameraBoundAt(spot)?.floorUp ??
+        null);
+  const grounded = floor !== null;
   const pose =
     floor !== null
       ? (() => {
@@ -542,68 +316,63 @@ export function createDeckCharacterState(
     up: pose.up,
     velocity: vec3(0, 0, 0),
     airborneOffDeckFrames: 0,
-    deckExitGraceFrames: usesColliderDeck() ? MOUNT_EXIT_GRACE_FRAMES : 0,
+    deckExitGraceFrames: MOUNT_EXIT_GRACE_FRAMES,
     shipVerticalVelocity: 0,
   };
 }
 
-/** Non-gated zone lookup for spawn placement (ignores ramp/door state). */
+/** Camera-bound id for UI labeling (cabin / ramp / cockpit). */
 function findZoneIdAt(local: DeckLocal): ShipZoneId {
-  if (usesColliderDeck()) {
-    return findCameraBoundAt(local)?.id ?? "deck";
-  }
-  const zones = getShipLayout().walkZones;
-  const hit = zones.find(
-    (zone) =>
-      !zone.gate && !zone.passage && !zone.ladder && zoneContains(zone, local),
-  );
-  return (
-    (hit ?? zones.find((zone) => !zone.ladder && zoneContains(zone, local)))
-      ?.id ?? "cabin"
-  );
+  return findCameraBoundAt(local)?.id ?? "deck";
 }
 
 /**
- * Safe initial deck spawn: the seat-stand spot when it lies inside an
- * always-walkable zone, otherwise the center of the first ungated zone —
- * a spawn outside every zone would freeze the character (steps only resolve
- * into containing zones).
+ * Safe initial deck spawn: authored deck spawn / pilot stand / camera-bound
+ * center, preferring a spot that samples a collider floor.
  */
 export function getDefaultDeckSpawnLocal(
   rig?: ShipColliderRigState,
 ): DeckLocal {
-  const layout = getShipLayout();
-  if (usesColliderDeck()) {
-    const seen = new Set<string>();
-    for (const candidate of deckSpawnCandidates()) {
-      const key = `${candidate.right},${candidate.forward}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (!rig || probeColliderDeckFloor(candidate, rig) !== null) {
-        return candidate;
-      }
+  const seen = new Set<string>();
+  for (const candidate of deckSpawnCandidates()) {
+    const key = `${candidate.right},${candidate.forward}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!rig || probeColliderDeckFloor(candidate, rig) !== null) {
+      return candidate;
     }
-    return deckSpawnCandidates()[0] ?? { right: 0, forward: 0 };
   }
-  if (layout.deckSpawn) return { ...layout.deckSpawn };
-  const pilot = layout.seats.find((seat) => seat.role === "pilot");
-  const stand = pilot?.stand ?? layout.seatStand;
-  const zones = layout.walkZones;
-  const standWalkable = zones.some(
-    (zone) => !zone.gate && !zone.passage && zoneContains(zone, stand),
-  );
-  if (standWalkable) return { ...stand };
-  const home = zones.find((zone) => !zone.gate && !zone.passage) ?? zones[0];
-  if (!home) return { ...stand };
-  return {
-    right: (home.minRight + home.maxRight) / 2,
-    forward: (home.minForward + home.maxForward) / 2,
-  };
+  return deckSpawnCandidates()[0] ?? { right: 0, forward: 0 };
 }
 
 /** Authored camera-bound floor at a deck point (Rapier spawn hint). */
 export function getDeckSpawnFloorHint(local: DeckLocal): number {
   return findCameraBoundAt(local)?.floorUp ?? 0;
+}
+
+/**
+ * Preview Ship / sandbox spawn. Prefers a prefab empty named "Test Spawn"
+ * (full ship-local pose). Floor is probed from that marker's height so the
+ * hull roof does not steal the highest-hit sample.
+ */
+export function getSandboxDeckSpawn(rig?: ShipColliderRigState): {
+  local: DeckLocal;
+  floorUp: number;
+} {
+  const test = getShipLayout().testSpawn;
+  if (test) {
+    const local = { right: test.right, forward: test.forward };
+    const floor =
+      probeColliderDeckFloor(local, rig, test.up) ??
+      test.up;
+    return { local, floorUp: floor };
+  }
+  const local = getDefaultDeckSpawnLocal(rig);
+  return {
+    local,
+    floorUp:
+      probeColliderDeckFloor(local, rig) ?? getDeckSpawnFloorHint(local),
+  };
 }
 
 export function getLeavePilotStandPose(ship: FlightBody): Pose {
@@ -805,197 +574,42 @@ export function nearRampPanel(deckLocal: DeckLocal): boolean {
   );
 }
 
-export const LADDER_INTERACT_RADIUS = 1.45;
-const LADDER_TRAVERSE_EPSILON = 0.15;
-
-export type LadderDirection = "up" | "down";
-
-export function ladderEndLocal(
-  zone: ShipWalkZone,
-  end: "bottom" | "top",
-): DeckLocal {
-  return {
-    right: (zone.minRight + zone.maxRight) / 2,
-    forward: end === "bottom" ? zone.minForward : zone.maxForward,
-  };
-}
-
-function resolveLadderTraverseTarget(
-  zone: ShipWalkZone,
-  direction: LadderDirection,
-  deckZone: ShipZoneId,
-  gates: ShipWalkGates,
-): ResolvedDeckStep | null {
-  const anchor = ladderAnchor(zone);
-  const forward =
-    direction === "up"
-      ? zone.maxForward + LADDER_TRAVERSE_EPSILON
-      : zone.minForward - LADDER_TRAVERSE_EPSILON;
-  const candidate: DeckLocal = { right: anchor.right, forward };
-  const hit = findWalkZone(candidate, gates);
-  if (!hit) return null;
-  return {
-    local: candidate,
-    zone: hit.passage ? deckZone : hit.id,
-  };
-}
-
-/** Nearest ladder end within interact reach, or null. */
-export function resolveLadderInteraction(
-  deckLocal: DeckLocal,
-  gates: ShipWalkGates,
-  deckZone: ShipZoneId = "cabin",
-): { zone: ShipWalkZone; direction: LadderDirection } | null {
-  let best: {
-    zone: ShipWalkZone;
-    direction: LadderDirection;
-    distance: number;
-  } | null = null;
-
-  for (const zone of getShipLayout().walkZones) {
-    if (!zone.ladder || !zoneActive(zone, gates)) continue;
-
-    const bottomDist = localDistance(deckLocal, ladderEndLocal(zone, "bottom"));
-    if (
-      bottomDist <= LADDER_INTERACT_RADIUS &&
-      resolveLadderTraverseTarget(zone, "up", deckZone, gates)
-    ) {
-      if (!best || bottomDist < best.distance) {
-        best = { zone, direction: "up", distance: bottomDist };
-      }
-    }
-
-    const topDist = localDistance(deckLocal, ladderEndLocal(zone, "top"));
-    if (
-      topDist <= LADDER_INTERACT_RADIUS &&
-      resolveLadderTraverseTarget(zone, "down", deckZone, gates)
-    ) {
-      if (!best || topDist < best.distance) {
-        best = { zone, direction: "down", distance: topDist };
-      }
-    }
-  }
-
-  return best ? { zone: best.zone, direction: best.direction } : null;
-}
-
-export function ladderInteractPrompt(direction: LadderDirection, interactLabel = "F"): string {
-  return direction === "up"
-    ? `Press ${interactLabel} to go up`
-    : `Press ${interactLabel} to go down`;
-}
-
-/** Snap the character to the opposite ladder end on a connected walk zone. */
-export function traverseLadder(
-  state: DeckCharacterState,
-  zone: ShipWalkZone,
-  direction: LadderDirection,
-  gates: ShipWalkGates,
-  ship: FlightBody,
-): DeckCharacterState | null {
-  const target = resolveLadderTraverseTarget(
-    zone,
-    direction,
-    state.deckZone,
-    gates,
-  );
-  if (!target) return null;
-  const pose = getDeckWorldPose(ship, target.local);
-  return {
-    ...state,
-    animation: "Idle_Loop",
-    deckLocal: target.local,
-    deckZone: target.zone,
-    forward: pose.forward,
-    grounded: true,
-    jumpPhase: "grounded",
-    jumpPhaseTime: 0,
-    position: pose.position,
-    up: pose.up,
-    velocity: vec3(0, 0, 0),
-  };
-}
-
 export interface DeckUpdateResult {
   state: DeckCharacterState;
-  /** Set when the character walked off the bottom of the lowered ramp. */
+  /** Character left ship Rapier (no floor underfoot). */
   dismounted: boolean;
-  /** Set when the character fell off the collider deck with no landing surface. */
+  /** Alias of dismounted — kept for call-site compatibility. */
   fellOffDeck: boolean;
-}
-
-function deckDismountFlags(
-  local: DeckLocal,
-  zone: ShipZoneId,
-  grounded: boolean,
-  feetLocalUp: number,
-): {
-  dismounted: boolean;
-  fellOffDeck: boolean;
-  airborneOffDeckFrames: number;
-  onRamp: boolean;
-} {
-  const layout = getShipLayout();
-  const onRamp = zone === "ramp";
-  const atOrPastRampExit = local.forward <= layout.rampDismountForward + 0.2;
-  const groundedOnOutsidePad =
-    grounded &&
-    onRamp &&
-    atOrPastRampExit &&
-    atShipGroundLevel(feetLocalUp);
-  const dismounted =
-    onRamp &&
-    (groundedOnOutsidePad ||
-      (!grounded && atShipGroundLevel(feetLocalUp)) ||
-      (grounded && local.forward <= layout.rampDismountForward));
-
-  return {
-    dismounted,
-    fellOffDeck: false,
-    airborneOffDeckFrames: 0,
-    onRamp,
-  };
 }
 
 /**
- * Collider-deck exit: Rapier contact only.
- * No BVH ramp tests, camera volumes, or atShipGroundLevel heuristics.
+ * Collider-deck exit: leave ship mode when Rapier has no floor underfoot.
+ * Walk the ramp collider freely — no authored tip line / dismountGround.
  */
 function rapierDeckExitFlags(
   physics: ShipPhysics,
-  local: DeckLocal,
   grounded: boolean,
   airborneOffDeckFramesPrev: number,
   exitGraceFramesPrev: number,
 ): {
-  dismounted: boolean;
-  fellOffDeck: boolean;
+  leftDeck: boolean;
   airborneOffDeckFrames: number;
   deckExitGraceFrames: number;
 } {
   const deckExitGraceFrames = Math.max(0, exitGraceFramesPrev - 1);
   if (deckExitGraceFrames > 0) {
     return {
-      dismounted: false,
-      fellOffDeck: false,
+      leftDeck: false,
       airborneOffDeckFrames: 0,
       deckExitGraceFrames,
     };
   }
 
-  const pastTip = local.forward <= getShipLayout().rampDismountForward;
   const hasFloor = shipHasFloorBelow(physics);
-  // Away from the tip, airborne with no ship collider below → fell off.
-  const offDeck = !pastTip && !grounded && !hasFloor;
-  // At/past the tip with nothing underfoot — count airborne frames so a
-  // single ray miss at the ramp foot does not eject.
-  const tipOff = pastTip && !hasFloor && !grounded;
   const airborneOffDeckFrames =
-    offDeck || tipOff ? airborneOffDeckFramesPrev + 1 : 0;
+    !grounded && !hasFloor ? airborneOffDeckFramesPrev + 1 : 0;
   return {
-    dismounted: tipOff && airborneOffDeckFrames >= TIP_DISMOUNT_AIRBORNE_FRAMES,
-    fellOffDeck:
-      offDeck && airborneOffDeckFrames >= AIRBORNE_OFF_DECK_DISMOUNT_FRAMES,
+    leftDeck: airborneOffDeckFrames >= AIRBORNE_OFF_DECK_FRAMES,
     airborneOffDeckFrames,
     deckExitGraceFrames,
   };
@@ -1052,15 +666,14 @@ function updateCharacterOnDeckRapier(
   const forward = rotateToward(state.forward, desiredFacing, ship.up, dt);
   const flags = rapierDeckExitFlags(
     physics,
-    deckLocal,
     grounded,
     state.airborneOffDeckFrames ?? 0,
     state.deckExitGraceFrames ?? 0,
   );
 
   return {
-    dismounted: flags.dismounted,
-    fellOffDeck: flags.fellOffDeck,
+    dismounted: flags.leftDeck,
+    fellOffDeck: flags.leftDeck,
     state: {
       animation: animationFromState(
         { jumpPhase: "grounded" },
@@ -1089,158 +702,25 @@ function updateCharacterOnDeckRapier(
 export function updateCharacterOnDeck(
   state: DeckCharacterState,
   ship: FlightBody,
-  gates: ShipWalkGates,
   input: CharacterInput,
   dt: number,
   gravityMetersPerSecond2: number,
-  colliderRig?: ShipColliderRigState,
+  _colliderRig?: ShipColliderRigState,
   physics?: ShipPhysics | null,
 ): DeckUpdateResult {
-  if (usesColliderDeck()) {
-    if (!physics) {
-      // Rapier is required for collider-deck ships; fail soft like station.
-      return {
-        dismounted: false,
-        fellOffDeck: false,
-        state: { ...state, velocity: vec3(0, 0, 0) },
-      };
-    }
-    return updateCharacterOnDeckRapier(
-      state,
-      ship,
-      input,
-      dt,
-      gravityMetersPerSecond2,
-      physics,
-    );
+  if (!physics) {
+    return {
+      dismounted: false,
+      fellOffDeck: false,
+      state: { ...state, velocity: vec3(0, 0, 0) },
+    };
   }
-
-  const moveX = input.moveX ?? 0;
-  const moveY = input.moveY ?? 0;
-  const wantsSprint = Boolean(input.sprint);
-  const desiredDirection = deckMovementDirection(
-    ship,
-    moveX,
-    moveY,
-    input.cameraYawRadians ?? 0,
-  );
-  const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
-  const moveSpeed =
-    (wantsSprint
-      ? SPRINT_SPEED_METERS_PER_SECOND
-      : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
-
-  const right = getShipRight(ship);
-  const up = ship.up;
-  const deckForward = normalize(tangentize(ship.forward, up));
-  const desiredFacing = input.faceCameraYaw
-    ? deckCameraForward(ship, input.cameraYawRadians ?? 0)
-    : desiredDirection;
-
-  let resolved: ResolvedDeckStep = {
-    local: state.deckLocal,
-    zone: state.deckZone,
-  };
-  const isMoving = moveMagnitude > 0.08;
-  const feetLocalUp = worldToShipLocal(ship, state.position).up;
-
-  const motion = integrateCharacterLocomotion(
+  return updateCharacterOnDeckRapier(
     state,
-    {
-      wantsJump: Boolean(input.jumpPressed),
-      wantsSprint,
-      isMoving,
-      desiredDirection,
-      moveSpeed,
-    },
+    ship,
+    input,
     dt,
-    up,
     gravityMetersPerSecond2,
-    {
-      onGroundedStep: () => {
-        if (isMoving && !insideActiveLadder(state.deckLocal, gates)) {
-          const step = scale(desiredDirection, moveSpeed * dt);
-          resolved = resolveDeckStep(
-            state,
-            dot(step, right),
-            dot(step, deckForward),
-            gates,
-          );
-        } else {
-          resolved = { local: state.deckLocal, zone: state.deckZone };
-        }
-        resolved = resolveDeckColliderStep(
-          resolved,
-          gates,
-          colliderRig,
-          feetLocalUp,
-        );
-        const pose = getDeckWorldPose(ship, resolved.local, colliderRig, feetLocalUp);
-        return { position: pose.position, up: pose.up };
-      },
-      tryLand: (candidate) => {
-        const local = worldToShipLocal(ship, candidate);
-        const floorUp =
-          shipFloorUpAt(
-            { right: local.right, forward: local.forward },
-            colliderRig,
-            local.up,
-          ) + DECK_FLOOR_OFFSET_METERS;
-        if (local.up > floorUp) return null;
-        const landedLocal = { right: local.right, forward: local.forward };
-        if (insideActiveLadder(landedLocal, gates)) return null;
-        const zone = findWalkZone(landedLocal, gates);
-        resolved = {
-          local: landedLocal,
-          zone: zone
-            ? zone.passage
-              ? state.deckZone
-              : zone.id
-            : state.deckZone,
-        };
-        resolved = resolveDeckColliderStep(
-          resolved,
-          gates,
-          colliderRig,
-          feetLocalUp,
-        );
-        const pose = getDeckWorldPose(ship, resolved.local, colliderRig, feetLocalUp);
-        return { position: pose.position, up: pose.up };
-      },
-    },
+    physics,
   );
-
-  let forward = rotateToward(state.forward, desiredFacing, motion.up, dt);
-  if (length(forward) < 1e-6) {
-    forward = normalize(tangentize(state.forward, motion.up));
-  } else {
-    forward = normalize(tangentize(forward, motion.up));
-  }
-
-  const finalFeetLocalUp = worldToShipLocal(ship, motion.position).up;
-  const flags = deckDismountFlags(
-    resolved.local,
-    resolved.zone,
-    motion.grounded,
-    finalFeetLocalUp,
-  );
-
-  return {
-    dismounted: flags.dismounted,
-    fellOffDeck: flags.fellOffDeck,
-    state: {
-      animation: motion.animation,
-      deckLocal: resolved.local,
-      deckZone: resolved.zone,
-      forward,
-      grounded: motion.grounded,
-      jumpPhase: motion.jumpPhase,
-      jumpPhaseTime: motion.jumpPhaseTime,
-      position: motion.position,
-      up: motion.up,
-      velocity: motion.velocity,
-      airborneOffDeckFrames: flags.airborneOffDeckFrames,
-      shipVerticalVelocity: state.shipVerticalVelocity,
-    },
-  };
 }
