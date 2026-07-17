@@ -24,7 +24,11 @@ export interface SpikeRenderer {
   setSsaoIntensity: (intensity: number) => void;
   setSsaoColor: (color: string | null) => void;
   setTimeOverride: (mode: TimeOverride) => void;
+  setEquippedInventory: (
+    inventory: import('../../../player/inventory/types').InventoryState | null,
+  ) => void;
   getStationRoot: () => import('three').Object3D;
+  getActiveShipGroup: () => import('three').Object3D;
   getCamera: () => import('three').Camera;
   getRenderScale: () => number;
   dispose: () => void;

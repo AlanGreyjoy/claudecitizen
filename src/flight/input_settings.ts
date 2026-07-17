@@ -26,6 +26,7 @@ export type KeyboardActionId =
   | 'hangarRotate'
   | 'hangarCancel'
   | 'haloBand'
+  | 'personalInventory'
   | 'cycleFlightMode';
 
 export type FlightAnalogControlId =
@@ -151,6 +152,7 @@ export const KEYBOARD_ACTIONS: readonly KeyboardActionDefinition[] = [
   { id: 'hangarRotate', label: 'Rotate Prop', defaultBinding: { primary: 'KeyG' } },
   { id: 'hangarCancel', label: 'Cancel Build Tool', defaultBinding: { primary: 'KeyX' } },
   { id: 'haloBand', label: 'HaloBand Device', defaultBinding: { primary: 'F2' } },
+  { id: 'personalInventory', label: 'Personal Inventory', defaultBinding: { primary: 'KeyI' } },
   { id: 'cycleFlightMode', label: 'Flight Mode / Quantum', defaultBinding: { primary: 'KeyU' } },
 ] as const;
 

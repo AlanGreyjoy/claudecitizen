@@ -1,12 +1,30 @@
-import type { GameBootstrap } from './api';
-import { worldSocketUrl } from './api';
+import { createWorldSession, type GameBootstrap } from './api';
 import type { WorldState } from '../player/world_state';
 import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/world_state';
 import { getShipInstance } from '../flight/ship_world';
 import { MODE_IN_SHIP } from '../player/modes';
-import type { CharacterRenderState, NetworkLod, NetworkRenderEntity, NetworkShipBody, NetworkShipRig, Vec3 } from '../types';
-import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import type {
+  CharacterRenderState,
+  NetworkRenderEntity,
+  NetworkShipBody,
+  Vec3,
+} from '../types';
 import { resolveSnapshotCharacterAppearance } from './remote_appearance';
+import { loadPredictionEngine, type PredictionEngine, type PredictionFrame } from './prediction_wasm';
+import {
+  WORLD_PROTOCOL_VERSION,
+  WORLD_SIMULATION_VERSION,
+  decodeServerWorldMessage,
+  encodeChat,
+  encodeJoin,
+  encodeLeave,
+  encodePresenceIntent,
+  encodeTransition,
+  readStreamFrames,
+  streamFrame,
+  type SnapshotEntityMessage,
+  type SnapshotMessage,
+} from './world_protocol';
 
 export interface NetworkChatMessage {
   id: string;
@@ -17,34 +35,15 @@ export interface NetworkChatMessage {
   at: number;
 }
 
-interface ServerEnvelope {
-  t: string;
-  data?: unknown;
-}
-
-interface SnapshotEntityWire {
-  id: string;
-  playerId: string;
-  displayName: string;
-  characterAppearance?: PlayerCharacterAppearanceV1 | null;
-  lod: NetworkLod;
-  mode: string;
-  character?: CharacterRenderState | null;
-  ship?: NetworkShipBody | null;
-  shipRig?: NetworkShipRig | null;
-  markerPosition: Vec3;
-  stationRoomId?: string | null;
-  shipZoneId?: string | null;
-}
-
-interface SnapshotWire {
-  now: number;
-  entities: SnapshotEntityWire[];
-}
-
 interface EntitySample {
   at: number;
   entity: NetworkRenderEntity;
+}
+
+interface PendingPrediction {
+  sequence: number;
+  desiredVelocity: Vec3;
+  profile: 'character' | 'ship';
 }
 
 export interface WorldClientOptions {
@@ -53,11 +52,7 @@ export interface WorldClientOptions {
   onStatus?: (status: string) => void;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function toRenderEntity(wire: SnapshotEntityWire): NetworkRenderEntity {
+function toRenderEntity(wire: SnapshotEntityMessage): NetworkRenderEntity {
   return {
     id: wire.id,
     playerId: wire.playerId,
@@ -65,12 +60,12 @@ function toRenderEntity(wire: SnapshotEntityWire): NetworkRenderEntity {
     characterAppearance: wire.characterAppearance ?? null,
     lod: wire.lod,
     mode: wire.mode,
-    character: wire.character ?? null,
-    ship: wire.ship ?? null,
-    shipRig: wire.shipRig ?? null,
+    character: wire.character,
+    ship: wire.ship,
+    shipRig: wire.shipRig,
     markerPosition: wire.markerPosition,
-    stationRoomId: wire.stationRoomId ?? null,
-    shipZoneId: wire.shipZoneId ?? null,
+    stationRoomId: wire.stationRoomId,
+    shipZoneId: wire.shipZoneId,
   };
 }
 
@@ -97,8 +92,14 @@ function interpolateBody<T extends CharacterRenderState | NetworkShipBody>(a: T,
 
 class RemoteEntityStore {
   private readonly samples = new Map<string, EntitySample[]>();
+  private epochByCell = new Map<string, number>();
 
-  applySnapshot(snapshot: SnapshotWire, receivedAt: number): void {
+  applySnapshot(snapshot: SnapshotMessage, receivedAt: number): void {
+    const previousEpoch = this.epochByCell.get(snapshot.cellId) ?? 0;
+    if (snapshot.epoch < previousEpoch) return;
+    if (snapshot.epoch > previousEpoch) {
+      this.epochByCell.set(snapshot.cellId, snapshot.epoch);
+    }
     const liveIds = new Set<string>();
     for (const wire of snapshot.entities) {
       liveIds.add(wire.id);
@@ -113,11 +114,10 @@ class RemoteEntityStore {
       while (list.length > 3) list.shift();
       this.samples.set(wire.id, list);
     }
-    if (snapshot.entities.length === 0) return;
     for (const id of this.samples.keys()) {
-      if (!liveIds.has(id)) continue;
+      if (liveIds.has(id)) continue;
       const list = this.samples.get(id);
-      if (list && receivedAt - list[list.length - 1].at > 15_000) this.samples.delete(id);
+      if (list && receivedAt - list[list.length - 1]!.at > 15_000) this.samples.delete(id);
     }
   }
 
@@ -125,17 +125,22 @@ class RemoteEntityStore {
     this.samples.delete(id);
   }
 
+  clear(): void {
+    this.samples.clear();
+    this.epochByCell.clear();
+  }
+
   entities(nowMs: number): NetworkRenderEntity[] {
     const renderAt = nowMs - 100;
     const out: NetworkRenderEntity[] = [];
     for (const [id, list] of this.samples) {
       if (list.length === 0) continue;
-      if (nowMs - list[list.length - 1].at > 15_000) {
+      if (nowMs - list[list.length - 1]!.at > 15_000) {
         this.samples.delete(id);
         continue;
       }
-      const previous = [...list].reverse().find((sample) => sample.at <= renderAt) ?? list[0];
-      const next = list.find((sample) => sample.at >= renderAt) ?? list[list.length - 1];
+      const previous = [...list].reverse().find((sample) => sample.at <= renderAt) ?? list[0]!;
+      const next = list.find((sample) => sample.at >= renderAt) ?? list[list.length - 1]!;
       if (previous === next || next.at === previous.at) {
         out.push(next.entity);
         continue;
@@ -171,140 +176,311 @@ export interface WorldClient {
 
 export function createWorldClient(options: WorldClientOptions): WorldClient {
   const store = new RemoteEntityStore();
-  let socket: WebSocket | null = null;
+  let transport: WebTransport | null = null;
+  let controlWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  let datagramWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
+  let prediction: PredictionEngine | null = null;
+  let predictionFrame: PredictionFrame | null = null;
+  let previousCharacterPosition: Vec3 | null = null;
+  let pendingPredictions: PendingPrediction[] = [];
+  let predictionKind: 'character' | 'ship' | null = null;
+  let lastAcceptedSequence = 0;
+  const reconcileEpochByCell = new Map<string, number>();
   let lastPresenceAt = 0;
+  let sequence = 0;
   let leftPresence = false;
 
-  function send(t: string, data?: unknown): void {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({ t, data }));
+  function sendReliable(payload: Uint8Array): void {
+    if (!controlWriter) return;
+    void controlWriter.write(streamFrame(payload)).catch(() => undefined);
+  }
+
+  function sendDatagram(payload: Uint8Array): void {
+    if (!datagramWriter) return;
+    void datagramWriter.write(payload).catch(() => undefined);
   }
 
   function leavePresence(): void {
     if (leftPresence) return;
     leftPresence = true;
-    send('presence:leave');
+    sendReliable(encodeLeave());
   }
 
-  function handleMessage(event: MessageEvent<string>): void {
-    let envelope: ServerEnvelope;
-    try {
-      envelope = JSON.parse(event.data) as ServerEnvelope;
-    } catch {
-      return;
+  function handlePayload(payload: Uint8Array): void {
+    const message = decodeServerWorldMessage(payload);
+    switch (message.kind) {
+      case 'ready':
+        if (message.simulationVersion !== WORLD_SIMULATION_VERSION) {
+          throw new Error(
+            `Simulation version mismatch (server ${message.simulationVersion}, client ${WORLD_SIMULATION_VERSION}).`,
+          );
+        }
+        options.onStatus?.('Connected to authoritative Stanton simulation.');
+        break;
+      case 'snapshot':
+        store.applySnapshot(message.snapshot, performance.now());
+        break;
+      case 'reconcile': {
+        if (message.playerId !== options.bootstrap.player.id) break;
+        const currentEpoch = reconcileEpochByCell.get(message.cellId) ?? 0;
+        if (message.epoch < currentEpoch || message.acceptedSequence < lastAcceptedSequence) break;
+        reconcileEpochByCell.set(message.cellId, message.epoch);
+        lastAcceptedSequence = message.acceptedSequence;
+        const body = message.ship ?? message.character;
+        if (body && prediction) {
+          let replayed: PredictionFrame = {
+            position: { ...body.position },
+            velocity: { ...body.velocity },
+          };
+          pendingPredictions = pendingPredictions.filter(
+            (input) => input.sequence > message.acceptedSequence,
+          );
+          for (const input of pendingPredictions) {
+            replayed = prediction.advance(
+              replayed.position,
+              replayed.velocity,
+              input.desiredVelocity,
+              input.profile,
+            );
+          }
+          predictionFrame = replayed;
+        }
+        break;
+      }
+      case 'entity-remove':
+        store.remove(message.id);
+        break;
+      case 'chat-message':
+        options.onChatMessage?.(message.message);
+        break;
+      case 'error':
+        options.onStatus?.(message.message);
+        break;
+      case 'pong':
+        break;
     }
-    if (!envelope || typeof envelope.t !== 'string') return;
-    switch (envelope.t) {
-      case 'world:ready':
-        options.onStatus?.('Connected to Stanton relay.');
-        break;
-      case 'world:snapshot':
-        if (isRecord(envelope.data) && Array.isArray(envelope.data.entities)) {
-          store.applySnapshot(envelope.data as unknown as SnapshotWire, performance.now());
-        }
-        break;
-      case 'entity:remove':
-        if (isRecord(envelope.data) && typeof envelope.data.id === 'string') {
-          store.remove(envelope.data.id);
-        }
-        break;
-      case 'chat:message':
-        if (isRecord(envelope.data)) {
-          options.onChatMessage?.(envelope.data as unknown as NetworkChatMessage);
-        }
-        break;
-      case 'world:error':
-        if (isRecord(envelope.data) && typeof envelope.data.message === 'string') {
-          options.onStatus?.(envelope.data.message);
-        }
-        break;
-      default:
-        break;
+  }
+
+  async function readControl(readable: ReadableStream<Uint8Array>): Promise<void> {
+    const reader = readable.getReader();
+    let pending: Uint8Array = new Uint8Array();
+    try {
+      while (true) {
+        const result = await reader.read();
+        if (result.done) return;
+        pending = concatBytes(pending, result.value);
+        const parsed = readStreamFrames(pending);
+        pending = parsed.remaining;
+        for (const frame of parsed.frames) handlePayload(frame);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async function readDatagrams(readable: ReadableStream<Uint8Array>): Promise<void> {
+    const reader = readable.getReader();
+    try {
+      while (true) {
+        const result = await reader.read();
+        if (result.done) return;
+        handlePayload(result.value);
+      }
+    } finally {
+      reader.releaseLock();
     }
   }
 
   return {
     close() {
       leavePresence();
-      socket?.close();
-      socket = null;
+      controlWriter?.releaseLock();
+      datagramWriter?.releaseLock();
+      controlWriter = null;
+      datagramWriter = null;
+      transport?.close({ closeCode: 0, reason: 'client closed' });
+      transport = null;
     },
-    connect() {
-      return new Promise<void>((resolve, reject) => {
-        socket = new WebSocket(worldSocketUrl());
-        socket.addEventListener('message', handleMessage);
-        socket.addEventListener('open', () => {
-          leftPresence = false;
-          send('world:join', {
-            instanceId: options.bootstrap.spawn.instanceId,
-            stationRoomId: options.bootstrap.spawn.stationRoomId,
-          });
-          resolve();
-        });
-        socket.addEventListener('close', () => options.onStatus?.('Disconnected from relay.'));
-        socket.addEventListener('error', () => reject(new Error('World WebSocket failed to connect.')), {
-          once: true,
-        });
+    async connect() {
+      if (typeof WebTransport === 'undefined') {
+        throw new Error('This browser does not support the required WebTransport API.');
+      }
+      const [session, predictor] = await Promise.all([createWorldSession(), loadPredictionEngine()]);
+      if (session.protocolVersion !== WORLD_PROTOCOL_VERSION) {
+        throw new Error(
+          `World protocol mismatch (server ${session.protocolVersion}, client ${WORLD_PROTOCOL_VERSION}).`,
+        );
+      }
+      if (session.simulationVersion !== WORLD_SIMULATION_VERSION) {
+        throw new Error(
+          `Simulation version mismatch (server ${session.simulationVersion}, client ${WORLD_SIMULATION_VERSION}).`,
+        );
+      }
+      prediction = predictor;
+      pendingPredictions = [];
+      predictionFrame = null;
+      predictionKind = null;
+      lastAcceptedSequence = 0;
+      const sessionUrl = new URL(session.url);
+      sessionUrl.searchParams.set('ticket', session.ticket);
+      const certificateHashes = session.certificateHashBase64
+        ? [
+            {
+              algorithm: 'sha-256',
+              value: base64Bytes(session.certificateHashBase64),
+            },
+          ]
+        : undefined;
+      transport = new WebTransport(sessionUrl.toString(), {
+        ...(certificateHashes ? { serverCertificateHashes: certificateHashes } : {}),
       });
+      await transport.ready;
+      const control = await transport.createBidirectionalStream();
+      controlWriter = control.writable.getWriter();
+      datagramWriter = transport.datagrams.writable.getWriter();
+      leftPresence = false;
+      void readControl(control.readable).catch((error: unknown) => {
+        options.onStatus?.(error instanceof Error ? error.message : 'World control stream failed.');
+      });
+      void readDatagrams(transport!.datagrams.readable).catch((error: unknown) => {
+        options.onStatus?.(error instanceof Error ? error.message : 'World datagram stream failed.');
+      });
+      void transport.closed.then(
+        () => options.onStatus?.('Disconnected from authoritative simulation.'),
+        () => options.onStatus?.('Authoritative simulation connection failed.'),
+      );
+      sendReliable(
+        encodeJoin(options.bootstrap.spawn.instanceId, options.bootstrap.spawn.stationRoomId),
+      );
     },
     getRemoteEntities(nowMs: number) {
       return store.entities(nowMs);
     },
     join(instanceId: string, stationRoomId?: string | null) {
-      send('world:join', { instanceId, stationRoomId: stationRoomId ?? null });
+      store.clear();
+      sendReliable(encodeJoin(instanceId, stationRoomId ?? null));
     },
     leave() {
+      store.clear();
       leavePresence();
     },
     publishPresence(world: WorldState) {
-      if (leftPresence) return;
+      if (leftPresence || !prediction) return;
       const now = performance.now();
-      if (now - lastPresenceAt < 50) return;
+      if (now - lastPresenceAt < 33) return;
+      const dtSeconds = Math.max(1 / 120, Math.min(0.1, (now - lastPresenceAt) / 1000 || 1 / 30));
       lastPresenceAt = now;
+      sequence += 1;
       const shipInstance = getShipInstance(world.activeShipId);
-      send('presence:update', {
-        mode: world.mode,
-        character:
-          world.mode === MODE_IN_SHIP
-            ? null
-            : {
-                animation: world.character.animation,
-                forward: world.character.forward,
-                position: world.character.position,
-                up: world.character.up,
-              },
-        ship: shipInstance
-          ? {
-              ...getActiveShipBody(world),
-              shipId: world.activeShipId,
-              prefabId: getActiveShip(world).prefabId,
-              hp: getActiveShip(world).vitals.hp,
-              shields: getActiveShip(world).vitals.shields,
-              maxHp: getActiveShip(world).spec.maxHp,
-              maxShields: getActiveShip(world).spec.maxShields,
-            }
-          : null,
-        shipRig: shipInstance
-          ? {
-              gear01: getActiveShipRig(world).gear01,
-              ramp01: getActiveShipRig(world).ramp01,
-              doors: Object.fromEntries(
-                Object.entries(getActiveShipRig(world).doors).map(([id, door]) => [
-                  id,
-                  door.open01,
-                ]),
-              ),
-            }
-          : null,
-        stationRoomId: world.character.stationRoomId ?? null,
-        shipZoneId: world.character.deckZone ?? null,
+      const activeShipBody = shipInstance ? getActiveShipBody(world) : null;
+      const nextPredictionKind = activeShipBody ? 'ship' : 'character';
+      if (predictionKind !== nextPredictionKind) {
+        predictionKind = nextPredictionKind;
+        predictionFrame = null;
+        pendingPredictions = [];
+      }
+      const rawPosition = activeShipBody?.position ?? world.character.position;
+      const desiredVelocity = activeShipBody?.velocity ?? characterVelocity(
+        previousCharacterPosition,
+        world.character.position,
+        dtSeconds,
+      );
+      previousCharacterPosition = { ...world.character.position };
+      const current = predictionFrame ?? { position: { ...rawPosition }, velocity: { ...desiredVelocity } };
+      const predicted = prediction.advance(
+        current.position,
+        current.velocity,
+        desiredVelocity,
+        nextPredictionKind,
+      );
+      predictionFrame = predicted;
+      pendingPredictions.push({
+        sequence,
+        desiredVelocity: { ...desiredVelocity },
+        profile: nextPredictionKind,
       });
+      if (pendingPredictions.length > 240) pendingPredictions.shift();
+      const character =
+        world.mode === MODE_IN_SHIP
+          ? null
+          : {
+              animation: world.character.animation,
+              forward: world.character.forward,
+              position: predicted.position,
+              up: world.character.up,
+            };
+      const ship = shipInstance && activeShipBody
+        ? {
+            ...activeShipBody,
+            position: predicted.position,
+            velocity: predicted.velocity,
+            shipId: world.activeShipId,
+            prefabId: getActiveShip(world).prefabId,
+            hp: getActiveShip(world).vitals.hp,
+            shields: getActiveShip(world).vitals.shields,
+            maxHp: getActiveShip(world).spec.maxHp,
+            maxShields: getActiveShip(world).spec.maxShields,
+          }
+        : null;
+      sendDatagram(
+        encodePresenceIntent({
+          sequence,
+          mode: world.mode,
+          character,
+          ship,
+          shipRig: shipInstance
+            ? {
+                gear01: getActiveShipRig(world).gear01,
+                ramp01: getActiveShipRig(world).ramp01,
+                doors: Object.fromEntries(
+                  Object.entries(getActiveShipRig(world).doors).map(([id, door]) => [
+                    id,
+                    door.open01,
+                  ]),
+                ),
+              }
+            : null,
+          stationRoomId: world.character.stationRoomId ?? null,
+          shipZoneId: world.character.deckZone ?? null,
+          clientTimeMs: now,
+          desiredVelocity,
+        }),
+      );
     },
     sendChat(text: string) {
-      send('chat:send', { text });
+      sendReliable(encodeChat(text));
     },
     transition(instanceId: string, stationRoomId?: string | null) {
-      send('instance:transition', { instanceId, stationRoomId: stationRoomId ?? null });
+      predictionFrame = null;
+      pendingPredictions = [];
+      predictionKind = null;
+      store.clear();
+      sendReliable(encodeTransition(instanceId, stationRoomId ?? null));
     },
+  };
+}
+
+function base64Bytes(value: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  const value = new Uint8Array(left.length + right.length);
+  value.set(left);
+  value.set(right, left.length);
+  return value;
+}
+
+function characterVelocity(previous: Vec3 | null, current: Vec3, dtSeconds: number): Vec3 {
+  if (!previous) return { x: 0, y: 0, z: 0 };
+  return {
+    x: (current.x - previous.x) / dtSeconds,
+    y: (current.y - previous.y) / dtSeconds,
+    z: (current.z - previous.z) / dtSeconds,
   };
 }

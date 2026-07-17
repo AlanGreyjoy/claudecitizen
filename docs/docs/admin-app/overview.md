@@ -6,7 +6,7 @@ description: What the Admin App is, what it manages, and how it fits into Claude
 
 # Admin App overview
 
-The **Admin App** is a browser-based operator console for the ClaudeCitizen Nest.js backend. It lets you inspect registered players and manage the **game catalog** — ship, prop, and item definitions — plus global **game settings** such as starting ARC balance and starter loadouts.
+The **Admin App** is a browser-based operator console for the ClaudeCitizen Rust backend. It lets you inspect registered players and manage the **game catalog** — ship, prop, item, weapon, and backpack definitions — plus global **game settings** such as starting ARC balance and starter loadouts.
 
 Unlike the [CC Editor](/cc-editor), which authors 3D prefab JSON for the client, the Admin App manages **persistent server data** stored in PostgreSQL.
 
@@ -29,14 +29,14 @@ flowchart LR
   Browser["Browser · ?boot=admin"]
   AdminUI["admin_screen.ts"]
   AdminAPI["admin_api.ts"]
-  Nest["Nest.js /admin/*"]
-  Catalog["GameCatalogService"]
+  Rust["Axum /admin/*"]
+  Catalog["SQLx catalog handlers"]
   DB[(PostgreSQL)]
 
   Browser --> AdminUI
   AdminUI --> AdminAPI
-  AdminAPI -->|"HTTP + cc_admin cookie"| Nest
-  Nest --> Catalog
+  AdminAPI -->|"HTTP + cc_admin cookie"| Rust
+  Rust --> Catalog
   Catalog --> DB
 ```
 
@@ -44,8 +44,8 @@ flowchart LR
 | --- | --- |
 | `src/app/admin_screen.ts` | Admin UI (login, sidebar, tables, forms) |
 | `src/net/admin_api.ts` | Typed fetch helpers for `/admin/*` endpoints |
-| `server/src/admin/` | Nest controller, service, guard, and session handling |
-| `server/src/game/game.catalog.service.ts` | Catalog CRUD and starter-loadout logic |
+| `backend/crates/server/src/admin.rs` | Admin session, users, catalog, and settings handlers |
+| `backend/crates/server/src/game.rs` | Player bootstrap, inventory/loadout, and build persistence |
 
 ## When you need it
 

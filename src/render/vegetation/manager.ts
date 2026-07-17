@@ -65,6 +65,7 @@ interface VegetationCacheStatsAccumulator {
 
 export interface PlanetVegetationManager {
   dispose: () => void;
+  setVisible: (visible: boolean) => void;
   setSettings: (nextSettings: Partial<VegetationSettings>) => void;
   update: (
     bodyPosition: Vec3,
@@ -515,6 +516,9 @@ export function createPlanetVegetationManager(
 
   return {
     dispose,
+    setVisible(visible) {
+      vegetationGroup.visible = visible;
+    },
     setSettings,
     update,
   };

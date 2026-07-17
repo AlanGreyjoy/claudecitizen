@@ -60,7 +60,7 @@ export function resolveDeckCameraOrbit(
   yawRadians: number,
   pitchRadians: number,
   pitchLimit = 1.2,
-): { forward: Vec3; right: Vec3; up: Vec3 } {
+): { forward: Vec3; pitchRadians: number; right: Vec3; up: Vec3 } {
   const up = normalize(shipUp);
   const deckForward = normalize(shipForward);
   const deckRight = normalize(cross(deckForward, up));
@@ -74,7 +74,7 @@ export function resolveDeckCameraOrbit(
   const right = normalize(cross(planarForward, up));
   const clampedPitch = clamp(pitchRadians, -pitchLimit, pitchLimit);
   const forward = normalize(rotateAroundAxis(planarForward, right, clampedPitch));
-  return { forward, right, up };
+  return { forward, pitchRadians: clampedPitch, right, up };
 }
 
 /** World-space aim direction from ship frame + aim offsets. */

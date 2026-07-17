@@ -6,7 +6,7 @@ description: How SRP, DRY, and SOLID guide ClaudeCitizen code.
 
 # Design Principles
 
-ClaudeCitizen is vibe-coded, but not chaos-coded. These principles keep the codebase navigable as features pile on — procedural planets, ship interiors, FPS combat, and a future MMO backend.
+ClaudeCitizen is vibe-coded, but not chaos-coded. These principles keep the codebase navigable as features pile on — procedural planets, ship interiors, FPS combat, and authoritative multiplayer.
 
 ## At a glance
 
@@ -166,7 +166,7 @@ Large god-objects are avoided:
 
 - `RenderManager` does not expose tile worker internals to the HUD.
 - `PlayerControls` returns **action snapshots** (`interactPressed`, `wasKeyPressed`) — not the entire keyboard DOM API.
-- Nest modules (`auth`, `game`, `world`) expose narrow service APIs.
+- Rust crates (`server`, `protocol`, `sim-core`) expose narrow APIs and keep transport separate from simulation.
 
 ```mermaid
 flowchart TB
@@ -194,7 +194,7 @@ High-level flow depends on **domain concepts**, not Three.js meshes:
 | --- | --- | --- |
 | `game_loop.ts` | `ShipLayout`, blend values, mode FSM | `THREE.Mesh` |
 | `player/` movement | `sampleFootPlanetSurface()`, collider rigs | GPU buffers |
-| Future `GameService` | intent DTOs, tick state | client render details |
+| Authoritative cell | Protobuf intents, tick state | client render details |
 
 ```mermaid
 flowchart TB
@@ -211,7 +211,7 @@ flowchart TB
   style Domain fill:#2d5016,color:#fff
 ```
 
-**Factories over classes:** domain modules export `createX()` and pure helpers. Three.js objects are created at the boundary in `render/`, keeping `world/` and `flight/` portable to a future server or headless sim (`npm run demo`).
+**Factories over classes:** browser domain modules export `createX()` and pure helpers. Three.js objects are created at the boundary in `render/`; shared prediction primitives live in Rust and compile to native code plus WebAssembly.
 
 ---
 

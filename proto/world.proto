@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package cc.world.v1;
+
+message Vec3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message BodyState {
+  Vec3 position = 1;
+  Vec3 forward = 2;
+  Vec3 up = 3;
+  Vec3 velocity = 4;
+  string animation = 5;
+  bool grounded = 6;
+}
+
+message ShipState {
+  BodyState body = 1;
+  string ship_id = 2;
+  string prefab_id = 3;
+  double hp = 4;
+  double shields = 5;
+  double max_hp = 6;
+  double max_shields = 7;
+}
+
+message ShipRigState {
+  double gear_01 = 1;
+  double ramp_01 = 2;
+  map<string, double> doors = 3;
+}
+
+message Join {
+  string instance_id = 1;
+  string station_room_id = 2;
+}
+
+message PresenceIntent {
+  uint64 sequence = 1;
+  string mode = 2;
+  BodyState character = 3;
+  ShipState ship = 4;
+  ShipRigState ship_rig = 5;
+  string station_room_id = 6;
+  string ship_zone_id = 7;
+  double client_time_ms = 8;
+  Vec3 desired_velocity = 9;
+}
+
+message Leave {}
+
+message ChatSend {
+  string text = 1;
+}
+
+message Transition {
+  string instance_id = 1;
+  string station_room_id = 2;
+}
+
+message Ping {
+  uint64 nonce = 1;
+  double client_time_ms = 2;
+}
+
+message ClientEnvelope {
+  uint32 protocol_version = 1;
+
+  oneof payload {
+    Join join = 10;
+    PresenceIntent presence_intent = 11;
+    Leave leave = 12;
+    ChatSend chat_send = 13;
+    Transition transition = 14;
+    Ping ping = 15;
+  }
+}
+
+enum NetworkLod {
+  NETWORK_LOD_UNSPECIFIED = 0;
+  NETWORK_LOD_FULL = 1;
+  NETWORK_LOD_MEDIUM = 2;
+  NETWORK_LOD_MARKER = 3;
+}
+
+message Ready {
+  string player_id = 1;
+  string node_id = 2;
+  uint32 simulation_version = 3;
+}
+
+message SnapshotEntity {
+  string id = 1;
+  string player_id = 2;
+  string display_name = 3;
+  NetworkLod lod = 4;
+  string mode = 5;
+  bytes character_appearance_json = 6;
+  BodyState character = 7;
+  ShipState ship = 8;
+  ShipRigState ship_rig = 9;
+  Vec3 marker_position = 10;
+  string station_room_id = 11;
+  string ship_zone_id = 12;
+}
+
+message Snapshot {
+  uint64 now_ms = 1;
+  uint64 tick = 2;
+  uint64 epoch = 3;
+  string cell_id = 4;
+  repeated SnapshotEntity entities = 5;
+}
+
+message Reconcile {
+  uint64 accepted_sequence = 1;
+  uint64 tick = 2;
+  uint64 epoch = 3;
+  string cell_id = 4;
+  BodyState character = 5;
+  ShipState ship = 6;
+  string player_id = 7;
+}
+
+message EntityRemove {
+  string id = 1;
+}
+
+message ChatMessage {
+  string id = 1;
+  string player_id = 2;
+  string author = 3;
+  string text = 4;
+  string instance_id = 5;
+  uint64 at_ms = 6;
+}
+
+message WorldError {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message Pong {
+  uint64 nonce = 1;
+  double client_time_ms = 2;
+  uint64 server_time_ms = 3;
+}
+
+message ServerEnvelope {
+  uint32 protocol_version = 1;
+
+  oneof payload {
+    Ready ready = 10;
+    Snapshot snapshot = 11;
+    Reconcile reconcile = 12;
+    EntityRemove entity_remove = 13;
+    ChatMessage chat_message = 14;
+    WorldError error = 15;
+    Pong pong = 16;
+  }
+}

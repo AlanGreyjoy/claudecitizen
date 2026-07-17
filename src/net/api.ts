@@ -1,4 +1,10 @@
 import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import type {
+  InventoryState as PlayerInventoryState,
+  ItemDefinition,
+  LoadoutState,
+  PlayerItemStack,
+} from '../player/inventory/types';
 
 export interface AuthSession {
   user: {
@@ -46,7 +52,7 @@ export interface GameBootstrap {
   apartment: HangarBuildState;
   inventory: InventoryState;
   featureFlags: {
-    nativeWebSocketPresence: boolean;
+    webTransportPresence: boolean;
     serverAuthoritativePhysics: boolean;
   };
 }
@@ -87,28 +93,10 @@ export interface HangarBuildState {
   placements: HangarPlacementEntry[];
 }
 
-export interface ItemDefinitionEntry {
-  id: string;
-  name: string;
-  description: string;
-  itemType: string;
-  subType: string;
-  prefabId: string | null;
-  iconUrl: string | null;
-  stackMax: number;
-  costArc: number;
-  rarity: string;
-}
-
-export interface PlayerItemEntry {
-  itemDefinitionId: string;
-  quantity: number;
-}
-
-export interface InventoryState {
-  catalog: ItemDefinitionEntry[];
-  items: PlayerItemEntry[];
-}
+export type ItemDefinitionEntry = ItemDefinition;
+export type PlayerItemEntry = PlayerItemStack;
+export type InventoryState = PlayerInventoryState;
+export type { LoadoutState };
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 
@@ -118,11 +106,6 @@ export function apiBaseUrl(): string {
 
 export function apiUrl(path: string): string {
   return `${apiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
-}
-
-export function worldSocketUrl(): string {
-  const base = apiBaseUrl();
-  return `${base.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')}/world`;
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
@@ -209,6 +192,49 @@ export function discordStartUrl(): string {
 
 export function fetchGameBootstrap(): Promise<GameBootstrap> {
   return requestJson<GameBootstrap>('/game/bootstrap', { method: 'GET' });
+}
+
+export interface WorldSession {
+  url: string;
+  ticket: string;
+  certificateHashBase64: string | null;
+  protocolVersion: number;
+  simulationVersion: number;
+  expiresInMs: number;
+}
+
+export function createWorldSession(): Promise<WorldSession> {
+  return requestJson<WorldSession>('/world/session', { method: 'POST' });
+}
+
+export interface InventoryPurchaseResponse {
+  arcBalance: number;
+  inventory: InventoryState;
+}
+
+export interface InventoryEquipResponse {
+  inventory: InventoryState;
+}
+
+/** Buy a weapon into personal inventory (weapon shop terminals). */
+export function purchaseInventoryItem(
+  itemDefinitionId: string,
+): Promise<InventoryPurchaseResponse> {
+  return requestJson<InventoryPurchaseResponse>('/game/inventory/purchase', {
+    method: 'POST',
+    body: JSON.stringify({ itemDefinitionId }),
+  });
+}
+
+/** Equip or unequip an owned item into a personal loadout slot. */
+export function equipInventoryItem(
+  slotId: string,
+  itemDefinitionId: string | null,
+): Promise<InventoryEquipResponse> {
+  return requestJson<InventoryEquipResponse>('/game/inventory/equip', {
+    method: 'POST',
+    body: JSON.stringify({ slotId, itemDefinitionId }),
+  });
 }
 
 export function savePlayerCharacter(

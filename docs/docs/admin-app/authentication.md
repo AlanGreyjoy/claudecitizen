@@ -10,7 +10,7 @@ Admin access uses a **single shared operator account** configured through server
 
 ## Environment variables
 
-Set these in `server/.env` (see `server/.env.example`):
+Set these in `backend/.env` (see `backend/.env.example`):
 
 | Variable | Required | Description |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ Related server settings that affect cookies:
 3. On success, the server issues a JWT (`typ: 'admin'`, 12-hour expiry) and sets it as the **`cc_admin`** HTTP-only cookie.
 4. The response body returns `{ email }` for display in the Admin UI header.
 
-Subsequent requests include the cookie automatically. The `AdminGuard` on protected routes verifies the JWT signature, expiry, token type, and that `sub` matches the configured admin email.
+Subsequent requests include the cookie automatically. The Rust admin extractor on protected routes verifies the JWT signature, expiry, token type, and that `sub` matches the configured admin email.
 
 ## Session lifecycle
 

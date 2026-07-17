@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+target/
+public/wasm/cc_sim_core.wasm
 *.tsbuildinfo
 
 # Vite

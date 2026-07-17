@@ -55,6 +55,12 @@ const ATTACHMENT_BONES: Record<number, string> = {
   34: 'kneeAttach_r',
 };
 
+/** Map Sidekick/Unity 0..360 exports into signed degrees (356 → -4). */
+function signedDegrees(degrees: number): number {
+  const wrapped = ((degrees % 360) + 360) % 360;
+  return wrapped > 180 ? wrapped - 360 : wrapped;
+}
+
 export function getSidekickBodyMorphWeight(
   morphName: string,
   body: SidekickSerializedBlendShapes,
@@ -172,10 +178,12 @@ export async function assembleSidekickCharacter(
           movement.maxOffsetY * factor,
           movement.maxOffsetZ * factor,
         ));
+        // Sidekick exports small negative angles as 352..358 instead of -8..-2.
+        // Applying 356° * 0.5 as 178° flips attachment bones (backpack upside down).
         const rotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-          THREE.MathUtils.degToRad(movement.maxRotationX * factor),
-          THREE.MathUtils.degToRad(movement.maxRotationY * factor),
-          THREE.MathUtils.degToRad(movement.maxRotationZ * factor),
+          THREE.MathUtils.degToRad(signedDegrees(movement.maxRotationX) * factor),
+          THREE.MathUtils.degToRad(signedDegrees(movement.maxRotationY) * factor),
+          THREE.MathUtils.degToRad(signedDegrees(movement.maxRotationZ) * factor),
           'XYZ',
         ));
         bone.quaternion.multiply(rotation);

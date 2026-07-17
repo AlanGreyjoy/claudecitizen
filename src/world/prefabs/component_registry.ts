@@ -149,6 +149,40 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Opens the Asteron Vehicle Management System to call ships from inventory.",
   },
   {
+    type: "weapon-shop",
+    label: "Weapon Shop",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "weapon-shop",
+      id: "weapon-shop-1",
+      label: "Browse weapons",
+      gazeRadius: 0.4,
+      maxDistance: 3,
+      screenWidth: 0.45,
+      screenHeight: 0.28,
+    }),
+    hint:
+      "Vendor screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy weapons for ARC.",
+  },
+  {
+    type: "outfitters",
+    label: "Outfitters",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "outfitters",
+      id: "outfitters-1",
+      label: "Browse outfitters",
+      gazeRadius: 0.4,
+      maxDistance: 3,
+      screenWidth: 0.45,
+      screenHeight: 0.28,
+    }),
+    hint:
+      "Outfitters screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy backpacks and gear for ARC.",
+  },
+  {
     type: "point-light",
     label: "Point Light",
     kinds: ALL_KINDS,
@@ -372,6 +406,23 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     }),
     hint:
       "F-key bunk. Empty is the mattress/interact target (radial or raycast). Eye/stand offsets set lie-down camera and get-up spot. No flight.",
+  },
+  {
+    type: "entertainment-system",
+    label: "Entertainment System",
+    kinds: ["ship"],
+    marker: true,
+    createDefault: () => ({
+      type: "entertainment-system",
+      id: "es-1",
+      label: "Turn on ES",
+      gazeRadius: 0.35,
+      maxDistance: 2,
+      screenWidth: 0.55,
+      screenHeight: 0.32,
+    }),
+    hint:
+      "Bunk mini-TV. Place an Empty on the overhead screen. While in bed, look at it and press F to open the Entertainment System.",
   },
 ];
 

@@ -17,33 +17,34 @@ Project skills (read when the domain matches): `.cursor/skills/prefab-editor/SKI
 
 ## Performance — first-class requirement
 
-ClaudeCitizen is a **real-time web game** (React UI + Three.js/WebGL) targeting smooth play on consumer hardware, with a future **Nest.js MMO backend** (WebSockets, authoritative simulation). Performance is not a polish pass — it is a **core product constraint**. A Star Citizen–scale world on the web fails instantly if the main thread stalls, draw calls explode, or sync work scales with player count.
+ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed by an authoritative, horizontally scalable Rust cell simulation. Performance is not a polish pass — it is a **core product constraint**. A Star Citizen–scale world on the web fails instantly if the main thread stalls, draw calls explode, or sync work scales with player count.
 
 **Treat every change as a frame-budget decision.** Aim for sustained interactive framerate; profile when unsure; prefer bounded, incremental work over "do it all now" loops.
 
 ### When performance matters (always)
 
 - Game loop, render path, terrain/LOD, vegetation, ship/station loading
-- React UI that re-renders during play (HUD, menus, editor panels)
+- UI that re-renders during play (HUD, menus, editor panels)
 - Per-frame or per-tick simulation (`world/`, `flight/`, `player/`)
 - Asset size, mesh complexity, texture resolution, GLB/GLTF loads
 - Workers, caching, and anything that can block the main thread
-- Future server: tick rate, broadcast fan-out, payload size, DB hot paths
+- Backend: tick rate, interest fan-out, payload size, DB hot paths
 
-### Client — React + Three.js
+### Client — TypeScript + Three.js
 
 - **Main thread is sacred.** Heavy work belongs in Web Workers (`planet_tile_worker.js`), async loads, or spread across frames — never unbounded sync loops on the hot path.
 - **Respect existing budgets.** Per-frame tile/vegetation build caps, LOD selection, and quality presets (`?quality=performance|balanced|high`) exist because unbounded work freezes the game at 0 FPS.
-- **React stays out of the render loop.** UI updates on state/events; do not drive Three.js from React render churn. Memoize; avoid new object/array allocations every frame in shared paths.
+- **UI stays out of the render loop.** UI updates on state/events; avoid new object/array allocations every frame in shared paths.
 - **Three.js discipline.** Reuse geometries/materials; instancing where possible; frustum/distance culling; minimize scene graph churn and `dispose()` leaks.
 - **Measure.** Use the in-game FPS counter and quality presets when validating changes; see AGENTS.md "Terrain mesh vs foot placement" for terrain-specific traps.
 
-### Server — Nest.js / MMO (future)
+### Backend — Rust authoritative cells
 
 - **Server tick is a budget too.** Simulation, interest management, and broadcasts must scale with concurrent players — design for O(players-in-range), not O(world).
-- **WebSockets: small, frequent beats.** Prefer compact binary or minimal JSON deltas; batch when it helps; never ship full world state every tick.
-- **Authority without blocking.** Nest handlers stay thin; heavy domain work in services; no synchronous DB/network chains on the hot path.
-- **Client sends intents, server decides outcomes** — keeps cheating down and avoids duplicating expensive simulation on every client.
+- **WebTransport payloads stay compact.** Protobuf intents use datagrams; reliable streams carry control and reconciliation. Never ship unfiltered world state every tick.
+- **Authority without blocking.** Cell ticks must not wait on synchronous database or network work. Checkpoint and route outside the hot path.
+- **Client sends intents, cells decide outcomes.** Native Rapier owns collision and outcomes; browser prediction must use the shared Rust/WASM core.
+- **One owner per cell.** Redis leases route work; PostgreSQL epochs fence stale owners. Never introduce a dual-backend or WebSocket fallback.
 
 ## When to read
 
@@ -68,7 +69,8 @@ ClaudeCitizen is a **real-time web game** (React UI + Three.js/WebGL) targeting 
 - Foot placement uses `sampleFootPlanetSurface()` / `getFootSurfaceSampleLevel()`, not always max LOD
 - Never commit or relocate `protected/` assets
 - No unit tests in this project
-- User owns QA. Do not run tests, browser QA, screenshot checks, dev-server validation, `npm run build`, `npm run typecheck`, or `npm run lint` unless explicitly asked for validation. At the end of a multi-file feature or spike, run `npm run lint` and fix errors (and trivial warnings in touched files when practical). If validation is skipped, say so in the handoff. For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
-- **Prisma:** Agents may run `npm run prisma:generate`, `npm run prisma:migrate`, and `npm run prisma:deploy` when schema/migrations change (Alan has authorized migrate). Prefer `prisma:deploy` when the migration SQL already exists; use `prisma:migrate -- --name <slug>` when creating a new migration so the CLI does not hang on interactive prompts.
+- User owns interactive QA. Agents may run non-interactive build and static validation (`cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint`) when useful. Do not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. At the end of a multi-file feature or spike, run `npm run lint` and fix errors (and trivial warnings in touched files when practical). If relevant validation is skipped, say so in the handoff. For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
+- **SQLx:** append migrations in `backend/migrations/`; `npm run backend:migrate` applies committed migrations. Do not introduce another ORM or migration system.
 - Do not start dev servers. Vite and API servers are normally already running locally. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
+- `npm run dev:server` is the Watchexec rebuild/restart loop; `npm run start:server` runs the Rust backend once. Agents still must not start either without explicit authorization.
 - **If it can freeze the tab or tank server tick rate, fix or bound it before shipping**

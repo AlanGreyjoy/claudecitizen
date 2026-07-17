@@ -313,10 +313,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         ONE_SHOT_KEYBOARD_ACTIONS.some((action) => isKeyboardCode(action, event.code))
       ) {
         // The default F binding is hold-only while seated; tap-F interact stays for deck/doors/ramp.
-        // In bed, F is unused (always-on head look); suppress tap-F interact.
-        if (
-          !(isKeyboardCode('seatLook', event.code) && (mode === 'in-ship' || mode === 'in-bed'))
-        ) {
+        // In bed, head look is always on — allow tap-F for Entertainment System gaze interact.
+        if (!(isKeyboardCode('seatLook', event.code) && mode === 'in-ship')) {
           justPressed.add(event.code);
         }
       }

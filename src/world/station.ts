@@ -404,6 +404,46 @@ export interface StationAvmsMarker {
   radius: number;
 }
 
+/** Station weapon vendor screen (gaze + F), baked from weapon-shop components. */
+export interface StationWeaponShopMarker {
+  id: string;
+  label: string;
+  right: number;
+  up: number;
+  forward: number;
+  /**
+   * Screen orientation in station-group space (prefab/scene quat).
+   * Plane faces local +Z.
+   */
+  rotation: { x: number; y: number; z: number; w: number };
+  gazeRadius: number;
+  maxDistance: number;
+  screenWidth: number;
+  screenHeight: number;
+  /** Empty = sell all catalog weapons. */
+  itemDefinitionIds: string[];
+}
+
+/** Station outfitters vendor screen (gaze + F), baked from outfitters components. */
+export interface StationOutfittersMarker {
+  id: string;
+  label: string;
+  right: number;
+  up: number;
+  forward: number;
+  /**
+   * Screen orientation in station-group space (prefab/scene quat).
+   * Plane faces local +Z.
+   */
+  rotation: { x: number; y: number; z: number; w: number };
+  gazeRadius: number;
+  maxDistance: number;
+  screenWidth: number;
+  screenHeight: number;
+  /** Empty = sell all stocked outfitters catalog items. */
+  itemDefinitionIds: string[];
+}
+
 export interface StationLayoutOverride {
   rooms: StationRoom[];
   doorways: StationDoorway[];
@@ -413,6 +453,8 @@ export interface StationLayoutOverride {
   elevatorMarkers: StationElevatorMarker[];
   infoMarkers: StationInfoMarker[];
   avmsMarkers: StationAvmsMarker[];
+  weaponShops: StationWeaponShopMarker[];
+  outfitters: StationOutfittersMarker[];
   sounds: PrefabSoundSpec[];
 }
 

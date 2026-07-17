@@ -1,6 +1,41 @@
 name: claude-citizen
 
 services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      HTTP_BIND: 0.0.0.0:3000
+      CLIENT_ORIGIN: http://localhost:4173
+      API_PUBLIC_URL: http://localhost:3000
+      DATABASE_URL: postgresql://claude:citizen@postgres:5432/claude_citizen
+      REDIS_URL: redis://redis:6379
+      RUN_MIGRATIONS: "true"
+      JWT_ACCESS_SECRET: dev-access-secret-change-me
+      JWT_REFRESH_SECRET: dev-refresh-secret-change-me
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@claude-citizen.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:-dev-admin-secret-change-me}
+      COOKIE_SECURE: "false"
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: ClaudeCitizen <noreply@localhost>
+      WEBTRANSPORT_BIND: 0.0.0.0:4433
+      WEBTRANSPORT_PUBLIC_URL: https://localhost:4433/world
+    ports:
+      - "${BACKEND_PORT:-3000}:3000/tcp"
+      - "${WEBTRANSPORT_PORT:-4433}:4433/udp"
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped

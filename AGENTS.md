@@ -2,21 +2,24 @@
 
 ## Key facts
 
-- **No unit tests anywhere.** `npm run test -w server` exists as a stub but is unused. Unit tests are pointless with AI — they just check water = water.
-- **User owns QA.** Agents should not run tests, browser QA, screenshot checks, dev-server validation, `npm run build`, `npm run typecheck`, or `npm run lint` during normal implementation work unless explicitly asked for validation. When skipping validation, say what was not run. At the end of a multi-file feature or spike, run `npm run lint` and fix any **errors** (and trivial warnings in touched files when practical). For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
-- **Prisma migrations.** Agents may run `npm run prisma:generate` after schema changes. Agents may run `npm run prisma:migrate` or `npm run prisma:deploy` when applying schema changes — Alan has authorized this. If the migration SQL file already exists under `server/prisma/migrations/`, prefer `npm run prisma:deploy` (applies pending migrations, no interactive prompt). When creating a new migration via `prisma migrate dev`, pass `--name <slug>` (e.g. `npm run prisma:migrate -w server -- --name add_items`) so the command does not hang waiting for input.
+- **No backend unit tests.** Unit tests are not part of the normal implementation workflow.
+- **User owns interactive QA.** Agents may run non-interactive build and static validation commands such as `cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint` when useful. Agents should not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. When skipping relevant validation, say what was not run. At the end of a multi-file feature or spike, run `npm run lint` and fix any **errors** (and trivial warnings in touched files when practical). For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
+- **SQLx migrations.** Append migration SQL under `backend/migrations/` and run `npm run backend:migrate` only when explicitly applying schema changes. The Rust migration runner owns all schema history; do not introduce another ORM or migration system.
 - **Do not start dev servers.** Vite and API servers are normally already running locally. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
-- **TypeScript, ESM** at root (`"type": "module"`). Server workspace is **CommonJS**.
-- Build = `tsc --noEmit && vite build` (typecheck first, then bundle), but do not run it unless explicitly requested.
+- **Rust server reloads.** `npm run dev:server` uses Watchexec to rebuild and gracefully restart on backend, Protobuf, Cargo, migration, or backend environment changes. `npm run start:server` is the one-shot runner. Install the watcher with `cargo install watchexec-cli --locked`.
+- **TypeScript, ESM** at root (`"type": "module"`). The backend is a Rust 2024 workspace.
+- Browser build = Rust/WASM build, `tsc --noEmit`, then Vite bundle. Agents may run it as non-interactive validation.
 - Dev server on port **4173**: `npm run dev`. Editor only available in dev mode.
-- **GitHub Actions.** `.github/workflows/quality.yml` runs repository-safety, typecheck, lint, Prisma generation, and production builds on pull requests and `main`. `.github/workflows/dependency-review.yml` rejects vulnerable dependency additions. Netlify remains responsible for deployment; do not add deploy workflows unless explicitly requested.
+- **GitHub Actions.** `.github/workflows/quality.yml` runs repository-safety, browser typecheck/lint/build, Rust formatting/clippy/build, and docs builds on pull requests and `main`. `.github/workflows/dependency-review.yml` rejects vulnerable dependency additions. Netlify remains responsible for browser deployment; do not add deploy workflows unless explicitly requested.
 
 ## Workspace structure
 
 | Path | Role | Module system | Framework |
 |------|------|--------------|-----------|
 | `src/` | Browser game (Vite + Three.js) | ESM | Vite |
-| `server/` | Nest.js API (`@claudecitizen/server`) | CommonJS | NestJS, Prisma, Postgres, Redis |
+| `backend/` | Authoritative API + cell simulation | Rust 2024 | Axum, Rapier, SQLx, Redis, WebTransport |
+| `proto/` | Realtime wire contract | Protobuf | prost + browser codec |
+| `deploy/k8s/` | Horizontally scalable backend deployment | YAML | Kubernetes |
 | `editor/assets/` | Local editor asset library (gitignored) | — | — |
 
 ## Prefab & Animation Architecture
@@ -87,17 +90,25 @@ Editor-side transform overrides (`glbNodeTransforms`) and deleted nodes (`glbNod
 - Hierarchy selections use UUIDs for the current session, but resolve to names before persisting.
 - To add a new GLB-node-level operation: resolve the selected UUID→name via `store.getGlbNodeName()`, mutate the entity in `document.ts`, round-trip it through `serialize.ts`, and apply it in both `src/render/editor/viewport.ts` and `src/render/prefabs/prefab_renderer.ts`.
 
-## Server dev setup
+## Backend dev setup
 
 ```bash
 npm run dev:infra     # docker compose up -d postgres redis mailpit
-npm run dev:server    # tsx watch src/main.ts (Nest.js, port 3000)
-npm run prisma:generate   # prisma generate — agents may run after schema edits
-npm run prisma:migrate    # prisma migrate dev — agents may run; use --name <slug> to avoid prompts
-npm run prisma:deploy     # prisma migrate deploy — agents may run to apply committed migrations
+npm run dev:server    # watch/rebuild/restart Rust API on TCP 3000 + WebTransport on UDP 4433
+npm run start:server  # run the Rust backend once
+npm run backend:migrate  # apply committed SQLx migrations
+npm run build:wasm       # compile shared prediction code for the browser
 ```
 
-Server env template: `server/.env.example`. JWT secrets, DB URLs, etc. live there.
+Backend env template: `backend/.env.example`. JWT secrets, DB URLs, certificate paths, etc. live there.
+
+### Authoritative multiplayer
+
+- Cells are single-writer authorities leased through Redis and fenced by a PostgreSQL epoch.
+- `backend/crates/sim-core/` is shared by native Rapier authority and browser WASM prediction.
+- `proto/world.proto` is the canonical realtime contract. WebTransport carries reliable control/reconciliation streams plus datagram intents/snapshots.
+- PostgreSQL stores durable accounts, catalog, inventory, and cell checkpoints; Redis stores ephemeral tickets, leases, routing streams, and cross-pod snapshot fan-out.
+- Never add a WebSocket fallback, second backend, client-authoritative outcomes, or a separate prediction implementation.
 
 ## Architecture — Domain-Driven Design
 

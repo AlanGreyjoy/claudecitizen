@@ -291,6 +291,28 @@ export interface CockpitStatSpec {
   maxDistance: number;
 }
 
+/** Bunk entertainment system baked from an entertainment-system marker. */
+export interface EntertainmentSystemSpec {
+  id: string;
+  /** Gaze prompt (default "Turn on ES"). */
+  label: string;
+  /** Anchor in ship-local right/up/forward meters. */
+  position: LocalOffset;
+  /**
+   * Screen orientation in ship-group space (prefab/scene quat).
+   * Plane faces local +Z; identity = upright facing ship +forward.
+   */
+  rotation: { x: number; y: number; z: number; w: number };
+  /** Max perpendicular distance from the camera ray (m). */
+  gazeRadius: number;
+  /** Max distance from the camera (m). */
+  maxDistance: number;
+  /** Powered screen plane width (m). */
+  screenWidth: number;
+  /** Powered screen plane height (m). */
+  screenHeight: number;
+}
+
 export interface ShipCameraBounds {
   id: string;
   minRight: number;
@@ -328,6 +350,8 @@ export interface ShipLayout {
   cockpitControls: CockpitControlSpec[];
   /** Cockpit instruments (always-on while piloting) baked from cockpit-stat markers. */
   cockpitStats: CockpitStatSpec[];
+  /** Bunk entertainment screens (gaze + F while in bed). */
+  entertainmentSystems: EntertainmentSystemSpec[];
   /** Primary flight seat — derived from the first pilot-role seat, if any. */
   pilotSeat: LocalOffset;
   pilotEye: LocalOffset;
@@ -359,6 +383,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   beds: [],
   cockpitControls: [],
   cockpitStats: [],
+  entertainmentSystems: [],
   pilotSeat: { right: 0, up: -0.62, forward: 6.05 },
   pilotEye: { right: 0, up: 0.25, forward: 6.3 },
   seatStand: { right: 0, forward: 4.5 },

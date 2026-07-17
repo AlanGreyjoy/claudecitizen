@@ -75,6 +75,7 @@ import {
 } from "../player/ship_deck";
 import { getShipLayout, getShipLayoutForPrefab, getShipRestHeightMeters, usesColliderDeck } from "../player/ship_layout";
 import {
+  getBedEyeLocal,
   getRampDismountGroundLocal,
   isShipParked,
   localOffsetToWorld,
@@ -120,8 +121,47 @@ import {
   updateTransition,
 } from "../player/transitions";
 import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, PLAYER_SHIP_INSTANCE_ID, type WorldState } from "../player/world_state";
+import {
+  createEntertainmentCameraState,
+  updateEntertainmentCameraFeel,
+  type EntertainmentCameraFeel,
+} from "../player/entertainment_camera";
+import {
+  entertainmentSystemLabel,
+  resolveEntertainmentGazeTarget,
+} from "../player/entertainment_gaze";
 import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
 import type { BuildTerminalController } from "../render/effects/hud/build_terminal";
+import type { EntertainmentSystemController } from "../render/effects/hud/entertainment_system";
+import type { WeaponShopController } from "../render/effects/hud/weapon_shop";
+import type { OutfittersController } from "../render/effects/hud/outfitters";
+import type { PersonalInventoryController } from "../render/effects/hud/personal_inventory";
+import type { InventoryState, LoadoutState } from "../player/inventory/types";
+import { normalizeInventoryState } from "../player/inventory/types";
+import {
+  createEntertainmentScreen,
+  type EntertainmentScreenHandle,
+} from "../render/effects/entertainment_screen";
+import {
+  createWeaponShopScreen,
+  type WeaponShopScreenHandle,
+} from "../render/effects/weapon_shop_screen";
+import {
+  createOutfittersScreen,
+  type OutfittersScreenHandle,
+} from "../render/effects/outfitters_screen";
+import {
+  resolveStationWalkView,
+  resolveWeaponShopGazeTarget,
+  stationWalkEyeWorld,
+  weaponShopLabel,
+  weaponShopWorldPosition,
+} from "../player/weapon_shop_gaze";
+import {
+  resolveOutfittersGazeTarget,
+  outfittersLabel,
+  outfittersWorldPosition,
+} from "../player/outfitters_gaze";
 import type { HangarBuildController } from "../player/hangar_build/build_controller";
 import type { BuildPropColliderRuntime } from "../player/hangar_build/prop_colliders";
 import { buildRoomForArea } from "../player/hangar_build/validation";
@@ -179,6 +219,9 @@ export interface BuildRuntime {
 
 import type { PrefabDocument, PrefabEntity } from "../world/prefabs/schema";
 
+const INVENTORY_CAMERA_PITCH = -0.16;
+const INVENTORY_CAMERA_ZOOM = 4.1;
+
 export interface GameLoopOptions {
   planet: Planet;
   seed: number;
@@ -188,12 +231,18 @@ export interface GameLoopOptions {
   network?: WorldClient | null;
   bootstrap?: GameBootstrap | null;
   avmsTerminal?: AvmsTerminalController | null;
+  entertainmentSystem?: EntertainmentSystemController | null;
+  weaponShop?: WeaponShopController | null;
+  outfitters?: OutfittersController | null;
+  personalInventory?: PersonalInventoryController | null;
   build?: BuildRuntime | null;
   physics?: StationPhysics | null;
   stationPrefab?: PrefabDocument | null;
   onHudUpdate: (params: HudUpdateParams) => void;
   onResetPeak: () => void;
   isPaused?: () => boolean;
+  getInventoryLoadout?: () => LoadoutState;
+  getInventory?: () => InventoryState | null;
 }
 
 export function createGameLoop({
@@ -205,17 +254,54 @@ export function createGameLoop({
   network = null,
   bootstrap = null,
   avmsTerminal = null,
+  entertainmentSystem = null,
+  weaponShop = null,
+  outfitters = null,
+  personalInventory = null,
   build = null,
   physics = null,
   stationPrefab = null,
   onHudUpdate,
   onResetPeak,
   isPaused,
+  getInventoryLoadout = () => ({}),
+  getInventory = () => null,
 }: GameLoopOptions) {
+  const esBezelEl =
+    document.getElementById("es-bezel") ??
+    document.querySelector<HTMLElement>(".sc-es-bezel");
+  const esScreen: EntertainmentScreenHandle | null = esBezelEl
+    ? createEntertainmentScreen({ panelEl: esBezelEl })
+    : null;
+  const onEsResize = () => esScreen?.resize();
+  window.addEventListener("resize", onEsResize);
+
+  const weaponShopBezelEl =
+    document.getElementById("weapon-shop-bezel") ??
+    document.querySelector<HTMLElement>(".sc-weapon-shop-bezel");
+  const weaponShopScreen: WeaponShopScreenHandle | null = weaponShopBezelEl
+    ? createWeaponShopScreen({ panelEl: weaponShopBezelEl })
+    : null;
+  const onWeaponShopResize = () => weaponShopScreen?.resize();
+  window.addEventListener("resize", onWeaponShopResize);
+
+  const outfittersBezelEl =
+    document.getElementById("outfitters-bezel") ??
+    document.querySelector<HTMLElement>(".sc-outfitters-bezel");
+  const outfittersScreen: OutfittersScreenHandle | null = outfittersBezelEl
+    ? createOutfittersScreen({ panelEl: outfittersBezelEl })
+    : null;
+  const onOutfittersResize = () => outfittersScreen?.resize();
+  window.addEventListener("resize", onOutfittersResize);
+
+  const weaponShopCameraState = createEntertainmentCameraState();
+  const outfittersCameraState = createEntertainmentCameraState();
   let world: WorldState = createWorldState(planet, seed);
   let shipPhysics: ShipPhysics | null = null;
   let shipPhysicsWarming = false;
   const flightCameraFeelState = createFlightCameraFeelState();
+  const esCameraState = createEntertainmentCameraState();
+  let entertainmentCameraFeelFrame: EntertainmentCameraFeel | null = null;
   let flightCameraFeelFrame: {
     fovDeltaDeg: number;
     thrust01: number;
@@ -924,6 +1010,113 @@ export function createGameLoop({
       return;
     }
 
+    const shops = getStationLayoutOverride()?.weaponShops ?? [];
+    const outfittersShops = getStationLayoutOverride()?.outfitters ?? [];
+    const walkView = resolveStationWalkView(
+      stationFrame.forward,
+      stationFrame.up,
+      world.cameraOrbit.yawRadians,
+      world.cameraOrbit.pitchRadians,
+    );
+    const shopEye = stationWalkEyeWorld(
+      world.character.position,
+      stationFrame.up,
+      walkView.forward,
+    );
+    const shopHit = resolveWeaponShopGazeTarget(
+      shops,
+      stationFrame,
+      shopEye,
+      walkView.forward,
+    );
+    const outfittersHit = resolveOutfittersGazeTarget(
+      outfittersShops,
+      stationFrame,
+      shopEye,
+      walkView.forward,
+    );
+
+    if (weaponShopScreen && renderer && shops.length > 0) {
+      weaponShopScreen.attachTo(renderer.getStationRoot());
+      weaponShopScreen.setSpec(shopHit?.shop ?? shops[0]!);
+    }
+    if (outfittersScreen && renderer && outfittersShops.length > 0) {
+      outfittersScreen.attachTo(renderer.getStationRoot());
+      outfittersScreen.setSpec(outfittersHit?.shop ?? outfittersShops[0]!);
+    }
+
+    if (
+      shopHit &&
+      actions.interactPressed &&
+      weaponShop &&
+      !weaponShop.isOpen() &&
+      !outfitters?.isOpen()
+    ) {
+      outfittersScreen?.setInteractive(false);
+      outfittersScreen?.setPowered(false);
+      weaponShopScreen?.setPowered(true);
+      weaponShopScreen?.setInteractive(true);
+      weaponShop.open({
+        shop: shopHit.shop,
+        onClose: () => {
+          weaponShopScreen?.setInteractive(false);
+          weaponShopScreen?.setPowered(false);
+        },
+      });
+      world.prompt = "";
+      return;
+    }
+
+    if (
+      outfittersHit &&
+      actions.interactPressed &&
+      outfitters &&
+      !outfitters.isOpen() &&
+      !weaponShop?.isOpen()
+    ) {
+      weaponShopScreen?.setInteractive(false);
+      weaponShopScreen?.setPowered(false);
+      outfittersScreen?.setPowered(true);
+      outfittersScreen?.setInteractive(true);
+      outfitters.open({
+        shop: outfittersHit.shop,
+        onClose: () => {
+          outfittersScreen?.setInteractive(false);
+          outfittersScreen?.setPowered(false);
+        },
+      });
+      world.prompt = "";
+      return;
+    }
+
+    if (weaponShop?.isOpen() || outfitters?.isOpen()) {
+      world.prompt = "";
+      return;
+    }
+
+    if (shopHit) {
+      weaponShopScreen?.setInteractive(false);
+      weaponShopScreen?.setPowered(false);
+      outfittersScreen?.setInteractive(false);
+      outfittersScreen?.setPowered(false);
+      world.prompt = pressInteractPrompt(weaponShopLabel(shopHit.shop));
+      return;
+    }
+
+    if (outfittersHit) {
+      weaponShopScreen?.setInteractive(false);
+      weaponShopScreen?.setPowered(false);
+      outfittersScreen?.setInteractive(false);
+      outfittersScreen?.setPowered(false);
+      world.prompt = pressInteractPrompt(outfittersLabel(outfittersHit.shop));
+      return;
+    }
+
+    weaponShopScreen?.setInteractive(false);
+    weaponShopScreen?.setPowered(false);
+    outfittersScreen?.setInteractive(false);
+    outfittersScreen?.setPowered(false);
+
     const currentBuildRuntime = buildRuntimeForCurrentRoom();
     if (currentBuildRuntime && actions.hangarBuildPressed) {
       build?.terminal.open(currentBuildRuntime.controller);
@@ -1171,16 +1364,44 @@ export function createGameLoop({
     world.prompt = "";
   }
 
+  function syncEquippedInventory(inventory?: InventoryState | null): void {
+    const next = inventory
+      ? normalizeInventoryState(inventory)
+      : normalizeInventoryState(getInventory() ?? { catalog: [], items: [], loadout: getInventoryLoadout() });
+    renderer?.setEquippedInventory(next);
+  }
+
+  function setEquippedLoadout(loadout: LoadoutState): void {
+    const current = getInventory();
+    if (current) {
+      syncEquippedInventory({ ...current, loadout });
+      return;
+    }
+    syncEquippedInventory({ catalog: [], items: [], loadout });
+  }
+
+  function applyInventoryCameraFrame(): void {
+    if (!personalInventory?.isOpen()) return;
+    world.cameraView = "third-person";
+    world.cameraOrbit = {
+      pitchRadians: INVENTORY_CAMERA_PITCH,
+      yawRadians: world.cameraOrbit.yawRadians,
+      zoomDistance: INVENTORY_CAMERA_ZOOM,
+    };
+  }
+
   function frame(nowMs: number): void {
     if (!running) return;
 
     const paused = isPaused?.() ?? false;
-    const dt = paused ? 0 : Math.min((nowMs - lastMs) / 1000, 1 / 30);
+    const frameDt = Math.min((nowMs - lastMs) / 1000, 1 / 30);
+    const dt = paused ? 0 : frameDt;
     lastMs = nowMs;
 
     if (paused) {
       boostSfx.stop();
       thrustSfx.stop();
+      applyInventoryCameraFrame();
     }
 
     let camera = controls.sampleCameraState(0);
@@ -1203,6 +1424,7 @@ export function createGameLoop({
       world.cameraView = camera.cameraView;
       world.shipCameraView = camera.shipCameraView;
       world.shipCameraZoom = camera.shipZoomDistance;
+      applyInventoryCameraFrame();
 
       const characterInput = controls.sampleCharacterInput();
 
@@ -1400,9 +1622,59 @@ export function createGameLoop({
           seed,
           flightOptionsFromSpec(bedShip.spec),
         );
-        world.prompt = `Look around · ${holdPrompt("exitSeat", "get up")}`;
+
+        const layout = getShipLayout();
+        const eyeLocal = getBedEyeLocal(world.activeBedId) ?? layout.pilotEye;
+        const eye = localOffsetToWorld(bedShip.body, eyeLocal);
+        const seat = controls.getSeatLook();
+        const view = resolveSeatLookForward(
+          bedShip.body.forward,
+          bedShip.body.up,
+          seat.yawRadians,
+          seat.pitchRadians,
+        );
+        const esHit = resolveEntertainmentGazeTarget(
+          layout.entertainmentSystems,
+          bedShip.body,
+          eye,
+          view.forward,
+        );
+
+        if (esScreen && renderer && layout.entertainmentSystems.length > 0) {
+          esScreen.attachTo(renderer.getActiveShipGroup());
+          // Keep the physical panel anchored while in bed (nearest gaze or first).
+          esScreen.setSpec(esHit?.system ?? layout.entertainmentSystems[0]!);
+        }
+
+        if (esHit && actions.interactPressed && entertainmentSystem && !entertainmentSystem.isOpen()) {
+          esScreen?.setPowered(true);
+          esScreen?.setInteractive(true);
+          entertainmentSystem.open({
+            onExitBed: () => {
+              esScreen?.setInteractive(false);
+              esScreen?.setPowered(false);
+              beginGetUpFromBedTransition(world);
+            },
+            onClose: () => {
+              esScreen?.setInteractive(false);
+              esScreen?.setPowered(false);
+            },
+          });
+          world.prompt = "";
+        }
+
         if (actions.exitSeatPressed) {
+          entertainmentSystem?.close();
+          esScreen?.setInteractive(false);
+          esScreen?.setPowered(false);
+          esScreen?.setSpec(null);
           beginGetUpFromBedTransition(world);
+        } else if (!entertainmentSystem?.isOpen()) {
+          esScreen?.setInteractive(false);
+          esScreen?.setPowered(false);
+          world.prompt = esHit
+            ? `${pressInteractPrompt(entertainmentSystemLabel(esHit.system))} · ${holdPrompt("exitSeat", "get up")}`
+            : `Look around · ${holdPrompt("exitSeat", "get up")}`;
         }
       } else if (world.mode === MODE_ON_SHIP_DECK) {
         flightCameraFeelFrame = null;
@@ -1431,30 +1703,138 @@ export function createGameLoop({
       }
 
       updateShipSystems(dt);
-      updateStationAnimations(dt);
-      renderer?.getStationRoot()?.userData.updateParticles?.(dt);
+      if (world.quantum.phase !== "traveling") {
+        updateStationAnimations(dt);
+        renderer?.getStationRoot()?.userData.updateParticles?.(dt);
+      }
       network?.publishPresence(world);
     }
 
     const activeShip = getActiveShipBody(world);
+    const focusUsesShip =
+      world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED;
     const shipSurface = sampleRenderablePlanetSurface(
       planet,
       seed,
       activeShip.position,
     );
-    const focusPosition =
-      world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
-        ? activeShip.position
-        : world.character.position;
-    const focusVelocity =
-      world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
-        ? activeShip.velocity
-        : world.character.velocity;
-    const focusSurface = sampleRenderablePlanetSurface(
-      planet,
-      seed,
-      focusPosition,
-    );
+    const focusPosition = focusUsesShip
+      ? activeShip.position
+      : world.character.position;
+    const focusVelocity = focusUsesShip
+      ? activeShip.velocity
+      : world.character.velocity;
+    const focusSurface = focusUsesShip
+      ? shipSurface
+      : sampleRenderablePlanetSurface(planet, seed, focusPosition);
+
+    // SC-style bunk screen zoom — ease even while ES UI pauses the sim.
+    entertainmentCameraFeelFrame = null;
+    if (world.mode === MODE_IN_BED || entertainmentSystem?.isOpen()) {
+      const layout = getShipLayout();
+      const systems = layout.entertainmentSystems;
+      if (systems.length > 0) {
+        const eyeLocal = getBedEyeLocal(world.activeBedId) ?? layout.pilotEye;
+        const eye = localOffsetToWorld(activeShip, eyeLocal);
+        const seat = controls.getSeatLook();
+        const view = resolveSeatLookForward(
+          activeShip.forward,
+          activeShip.up,
+          seat.yawRadians,
+          seat.pitchRadians,
+        );
+        const esHit = resolveEntertainmentGazeTarget(
+          systems,
+          activeShip,
+          eye,
+          view.forward,
+        );
+        const screenSpec = esHit?.system ?? systems[0]!;
+        const screen = localOffsetToWorld(activeShip, screenSpec.position);
+        entertainmentCameraFeelFrame = updateEntertainmentCameraFeel(esCameraState, {
+          dt: frameDt,
+          open: entertainmentSystem?.isOpen() ?? false,
+          gazing: Boolean(esHit),
+          eye,
+          screen,
+          viewForward: view.forward,
+        });
+      }
+    } else if (
+      world.mode === MODE_IN_STATION ||
+      weaponShop?.isOpen() ||
+      outfitters?.isOpen()
+    ) {
+      const shops = getStationLayoutOverride()?.weaponShops ?? [];
+      const outfittersShops = getStationLayoutOverride()?.outfitters ?? [];
+      const walkView = resolveStationWalkView(
+        stationFrame.forward,
+        stationFrame.up,
+        world.cameraOrbit.yawRadians,
+        world.cameraOrbit.pitchRadians,
+      );
+      const eye = stationWalkEyeWorld(
+        world.character.position,
+        stationFrame.up,
+        walkView.forward,
+      );
+      const shopHit = resolveWeaponShopGazeTarget(
+        shops,
+        stationFrame,
+        eye,
+        walkView.forward,
+      );
+      const outfittersHit = resolveOutfittersGazeTarget(
+        outfittersShops,
+        stationFrame,
+        eye,
+        walkView.forward,
+      );
+
+      if (shops.length > 0 && (shopHit || weaponShop?.isOpen())) {
+        const screenSpec = shopHit?.shop ?? shops[0]!;
+        const screen = weaponShopWorldPosition(stationFrame, screenSpec);
+        entertainmentCameraFeelFrame = updateEntertainmentCameraFeel(
+          weaponShopCameraState,
+          {
+            dt: frameDt,
+            open: weaponShop?.isOpen() ?? false,
+            gazing: Boolean(shopHit),
+            eye,
+            screen,
+            viewForward: walkView.forward,
+          },
+        );
+        if (outfittersCameraState.focus01 > 0) outfittersCameraState.focus01 = 0;
+      } else if (
+        outfittersShops.length > 0 &&
+        (outfittersHit || outfitters?.isOpen())
+      ) {
+        const screenSpec = outfittersHit?.shop ?? outfittersShops[0]!;
+        const screen = outfittersWorldPosition(stationFrame, screenSpec);
+        entertainmentCameraFeelFrame = updateEntertainmentCameraFeel(
+          outfittersCameraState,
+          {
+            dt: frameDt,
+            open: outfitters?.isOpen() ?? false,
+            gazing: Boolean(outfittersHit),
+            eye,
+            screen,
+            viewForward: walkView.forward,
+          },
+        );
+        if (weaponShopCameraState.focus01 > 0) weaponShopCameraState.focus01 = 0;
+      } else {
+        if (weaponShopCameraState.focus01 > 0) weaponShopCameraState.focus01 = 0;
+        if (outfittersCameraState.focus01 > 0) outfittersCameraState.focus01 = 0;
+      }
+    } else if (esCameraState.focus01 > 0) {
+      esCameraState.focus01 = 0;
+    } else if (weaponShopCameraState.focus01 > 0) {
+      weaponShopCameraState.focus01 = 0;
+    } else if (outfittersCameraState.focus01 > 0) {
+      outfittersCameraState.focus01 = 0;
+    }
 
     let renderStats = null;
     try {
@@ -1466,6 +1846,7 @@ export function createGameLoop({
           shipCameraZoom: world.shipCameraZoom,
           seatLook: camera.seatLook,
           flightCameraFeel: flightCameraFeelFrame ?? undefined,
+          entertainmentCameraFeel: entertainmentCameraFeelFrame ?? undefined,
           activeBedId: world.activeBedId,
           character:
             world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
@@ -1515,14 +1896,134 @@ export function createGameLoop({
     window.__claudecitizenWorld = world;
     updateSceneSounds(focusPosition);
 
-    const focusForward =
-      world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
-        ? activeShip.forward
-        : world.character.forward;
+    // CSS3D bunk screen — after WebGL so the camera matrix is final.
+    if (esScreen && renderer && (world.mode === MODE_IN_BED || entertainmentSystem?.isOpen())) {
+      const cam = renderer.getCamera();
+      esScreen.sync();
+      esScreen.render(cam);
+    }
+    if (
+      weaponShopScreen &&
+      renderer &&
+      (world.mode === MODE_IN_STATION || weaponShop?.isOpen())
+    ) {
+      const cam = renderer.getCamera();
+      weaponShopScreen.sync();
+      weaponShopScreen.render(cam);
+    }
+    if (
+      outfittersScreen &&
+      renderer &&
+      (world.mode === MODE_IN_STATION || outfitters?.isOpen())
+    ) {
+      const cam = renderer.getCamera();
+      outfittersScreen.sync();
+      outfittersScreen.render(cam);
+    }
 
     let flightDual: HudUpdateParams["flightDual"];
     let cockpitGaze: HudUpdateParams["cockpitGaze"];
     let cockpitSpeed: HudUpdateParams["cockpitSpeed"];
+
+    if (world.mode === MODE_IN_BED && !entertainmentSystem?.isOpen()) {
+      const layout = getShipLayout();
+      const eyeLocal = getBedEyeLocal(world.activeBedId) ?? layout.pilotEye;
+      const eye = localOffsetToWorld(activeShip, eyeLocal);
+      const seat = controls.getSeatLook();
+      const view = resolveSeatLookForward(
+        activeShip.forward,
+        activeShip.up,
+        seat.yawRadians,
+        seat.pitchRadians,
+      );
+      const hit = resolveEntertainmentGazeTarget(
+        layout.entertainmentSystems,
+        activeShip,
+        eye,
+        view.forward,
+      );
+      if (hit) {
+        const fovY = (60 * Math.PI) / 180;
+        const viewportH = window.innerHeight;
+        const offset = projectWorldPointToScreenOffset(
+          hit.worldPosition,
+          eye,
+          view.forward,
+          view.right,
+          view.up,
+          fovY,
+          viewportH,
+        );
+        if (!offset.behind) {
+          cockpitGaze = {
+            visible: true,
+            label: entertainmentSystemLabel(hit.system),
+            offsetPx: { x: offset.x, y: offset.y },
+          };
+        }
+      }
+    }
+
+    if (
+      world.mode === MODE_IN_STATION &&
+      !weaponShop?.isOpen() &&
+      !outfitters?.isOpen()
+    ) {
+      const shops = getStationLayoutOverride()?.weaponShops ?? [];
+      const outfittersShops = getStationLayoutOverride()?.outfitters ?? [];
+      const walkView = resolveStationWalkView(
+        stationFrame.forward,
+        stationFrame.up,
+        world.cameraOrbit.yawRadians,
+        world.cameraOrbit.pitchRadians,
+      );
+      const eye = stationWalkEyeWorld(
+        world.character.position,
+        stationFrame.up,
+        walkView.forward,
+      );
+      const hit = resolveWeaponShopGazeTarget(
+        shops,
+        stationFrame,
+        eye,
+        walkView.forward,
+      );
+      const outfittersHit = resolveOutfittersGazeTarget(
+        outfittersShops,
+        stationFrame,
+        eye,
+        walkView.forward,
+      );
+      const gazeHit = hit
+        ? { worldPosition: hit.worldPosition, label: weaponShopLabel(hit.shop) }
+        : outfittersHit
+          ? {
+              worldPosition: outfittersHit.worldPosition,
+              label: outfittersLabel(outfittersHit.shop),
+            }
+          : null;
+      if (gazeHit) {
+        const fovY = (60 * Math.PI) / 180;
+        const viewportH = window.innerHeight;
+        const offset = projectWorldPointToScreenOffset(
+          gazeHit.worldPosition,
+          eye,
+          walkView.forward,
+          walkView.right,
+          walkView.up,
+          fovY,
+          viewportH,
+        );
+        if (!offset.behind) {
+          cockpitGaze = {
+            visible: true,
+            label: gazeHit.label,
+            offsetPx: { x: offset.x, y: offset.y },
+          };
+        }
+      }
+    }
+
     if (world.mode === MODE_IN_SHIP) {
       const aim = controls.getFlightAim();
       const aimDir = resolveAimForward(activeShip, aim);
@@ -1647,12 +2148,6 @@ export function createGameLoop({
       rendererMode: renderer?.rendererMode,
       planet,
       isPointerLocked: controls.isPointerLocked(),
-      seed,
-      focusPosition,
-      focusForward,
-      shipPosition: activeShip.position,
-      shipForward: activeShip.forward,
-      characterPosition: world.character.position,
       nowMs,
       flightDual,
       cockpitGaze,
@@ -1665,6 +2160,7 @@ export function createGameLoop({
   function start(): void {
     if (running) return;
     running = true;
+    syncEquippedInventory();
     requestAnimationFrame((now) => {
       lastMs = now;
       requestAnimationFrame(frame);
@@ -1673,6 +2169,16 @@ export function createGameLoop({
 
   function stop(): void {
     running = false;
+    entertainmentSystem?.close();
+    weaponShop?.close();
+    outfitters?.close();
+    personalInventory?.close();
+    window.removeEventListener("resize", onEsResize);
+    window.removeEventListener("resize", onWeaponShopResize);
+    window.removeEventListener("resize", onOutfittersResize);
+    esScreen?.dispose();
+    weaponShopScreen?.dispose();
+    outfittersScreen?.dispose();
     boostSfx.stop();
     thrustSfx.stop();
     disposeShipDeckPhysics();
@@ -1683,6 +2189,7 @@ export function createGameLoop({
   return {
     cleanupForTitleReturn,
     resetWorld,
+    setEquippedLoadout,
     start,
     stop,
   };

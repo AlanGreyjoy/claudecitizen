@@ -103,13 +103,14 @@ function slot(value: unknown, label: string): CharacterEquipmentSlotV1 {
   if (kind === 'weapon' && !isWeaponSlotType(weaponSlotType)) {
     throw new Error(`${label}.weaponSlotType is invalid.`);
   }
+  const normalizedWeaponSlotType = kind === 'weapon' ? (weaponSlotType as WeaponSlotType) : undefined;
   const providerRaw = source.providerSocket;
   const provider = providerRaw === undefined ? undefined : record(providerRaw, `${label}.providerSocket`);
   return {
     id,
     label: stringValue(source.label, `${label}.label`, 80),
     kind,
-    ...(kind === 'weapon' ? { weaponSlotType } : {}),
+    ...(normalizedWeaponSlotType ? { weaponSlotType: normalizedWeaponSlotType } : {}),
     ...(source.requiresSlotId === undefined
       ? {}
       : { requiresSlotId: stringValue(source.requiresSlotId, `${label}.requiresSlotId`, 64) }),

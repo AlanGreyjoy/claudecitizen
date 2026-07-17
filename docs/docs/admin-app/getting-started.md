@@ -6,11 +6,11 @@ description: Run the Admin App locally and open the operator console.
 
 # Getting started
 
-The Admin App is a deep-link boot mode on the same Vite client as the game. It talks to the Nest.js API on port 3000.
+The Admin App is a deep-link boot mode on the same Vite client as the game. It talks to the Rust API on port 3000.
 
 ## Prerequisites
 
-1. **Node.js 20+** and `npm install` at the repo root
+1. **Node.js 20+**, **Rust 1.96**, and `npm install` at the repo root
 2. **PostgreSQL and Redis** — start local infra:
 
    ```bash
@@ -20,10 +20,10 @@ The Admin App is a deep-link boot mode on the same Vite client as the game. It t
 3. **Database schema** — apply migrations if you have not already:
 
    ```bash
-   npm run prisma:deploy
+   npm run backend:migrate
    ```
 
-4. **Nest.js API server**:
+4. **Rust API and authoritative cell server**:
 
    ```bash
    npm run dev:server
@@ -35,7 +35,7 @@ The Admin App is a deep-link boot mode on the same Vite client as the game. It t
    npm run dev
    ```
 
-6. **Admin credentials** — copy `server/.env.example` to `server/.env` and set at minimum:
+6. **Admin credentials** — copy `backend/.env.example` to `backend/.env` and set at minimum:
 
    ```env
    ADMIN_EMAIL=admin@claude-citizen.com
@@ -55,7 +55,7 @@ http://localhost:4173/?boot=admin
 
 There is no Admin button on the title screen today — you must use the `?boot=admin` query parameter (same pattern as `?boot=editor` for the prefab editor).
 
-On load, the client checks for an existing `cc_admin` session cookie. If none is valid, you see the login form. Sign in with the email and password from your server `.env`.
+On load, the client checks for an existing `cc_admin` session cookie. If none is valid, you see the login form. Sign in with the email and password from `backend/.env`.
 
 ## API base URL
 
@@ -85,9 +85,9 @@ Each catalog section supports search filtering on its list view. Click a row to 
 
 | Symptom | Likely cause |
 | --- | --- |
-| Login fails immediately | `ADMIN_PASSWORD` not set in `server/.env`, or email/password mismatch |
+| Login fails immediately | `ADMIN_PASSWORD` not set in `backend/.env`, or email/password mismatch |
 | Network errors on every action | API server not running, or `VITE_API_BASE_URL` points at the wrong host |
-| CORS / cookie issues | `CLIENT_ORIGIN` in server `.env` must match the Vite origin (`http://localhost:4173`) |
+| CORS / cookie issues | `CLIENT_ORIGIN` in `backend/.env` must match the Vite origin (`http://localhost:4173`) |
 | Empty catalogs | Fresh database — create definitions in Ships/Props/Items, then configure Game Settings |
 
 ## Production note

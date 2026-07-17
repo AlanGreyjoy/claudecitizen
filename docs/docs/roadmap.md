@@ -78,13 +78,14 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Debug menu and FPS counter
 - [x] Headless orbit demo (`npm run demo`)
 - [x] Architecture notes for agents (`AGENTS.md`)
-- [ ] Chat wired to a real backend (currently local-only)
+- [x] Chat wired to the authoritative backend
 - [ ] In-game map and waypoint navigation
 - [ ] Deployable static build with CSP / HTTPS hygiene
 
-## Online (future)
+## Online
 
-- [ ] Backend API (`server/` or `api/`) with auth and validation
-- [ ] Authoritative multiplayer — client sends intents, server owns state
-- [ ] Persistence — accounts, ship loadouts, world state
-- [ ] Rate limiting, secrets management, and the rest of `AGENTS.md` server checklist
+- [x] Rust backend API (`backend/`) with auth, validation, SQLx, and Redis
+- [x] Authoritative cell simulation over WebTransport + Protobuf
+- [x] Authoritative multiplayer — client sends intents, server owns state
+- [x] Persistence — accounts, ship loadouts, and checkpointed cell state
+- [x] Rate limiting, Kubernetes secrets, health/readiness, metrics, and fenced ownership

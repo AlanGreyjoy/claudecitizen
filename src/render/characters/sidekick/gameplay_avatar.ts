@@ -5,6 +5,7 @@ import {
   type PlayerCharacterAppearanceV1,
 } from '../../../player/character_creator/player_character_appearance';
 import { loadSidekickCatalog } from '../../../player/character_creator/sidekick_catalog';
+import type { InventoryState } from '../../../player/inventory/types';
 import type { CharacterRenderState, Vec3 } from '../../../types';
 import type { CharacterAvatarInstance } from '../../main/scene/character_avatar_model';
 import { assembleSidekickCharacter } from './assemble_avatar';
@@ -12,6 +13,7 @@ import {
   createSidekickAnimationRuntime,
   type SidekickAnimationRuntime,
 } from './animation_runtime';
+import { createEquipmentAttachmentController } from './equipment_attach';
 
 const GAMEPLAY_ANIMATION_TIME_SCALE = 1.35;
 
@@ -46,7 +48,19 @@ export function createSidekickGameplayAvatar(
   let desiredAnimation = 'Idle_Loop';
   let lastNowSeconds: number | null = null;
   let headBone: THREE.Object3D | null = null;
+  let pendingInventory: InventoryState | null = null;
+  const equipment = createEquipmentAttachmentController();
   const modelOffsetPosition = new THREE.Vector3();
+  const characterType = appearance.type === 2 ? 2 : 1;
+
+  function syncEquipment(): void {
+    if (fallback) {
+      fallback.setEquippedInventory?.(pendingInventory);
+      return;
+    }
+    if (!avatar || !ready) return;
+    equipment.sync(avatar.root, characterType, pendingInventory);
+  }
 
   void (async () => {
     try {
@@ -86,6 +100,7 @@ export function createSidekickGameplayAvatar(
       headBone = avatar.root.getObjectByName('Head') ?? avatar.root.getObjectByName('head') ?? null;
       animation.setAnimation(desiredAnimation, 0);
       ready = true;
+      syncEquipment();
     } catch (error) {
       console.warn('ClaudeCitizen Sidekick avatar failed; using fallback avatar.', error);
       avatar?.dispose();
@@ -99,6 +114,7 @@ export function createSidekickGameplayAvatar(
       root.add(fallback.root);
       fallback.setAnimation(desiredAnimation);
       ready = true;
+      syncEquipment();
     }
   })();
 
@@ -106,6 +122,7 @@ export function createSidekickGameplayAvatar(
     root,
     dispose: () => {
       disposed = true;
+      equipment.dispose();
       animation?.dispose();
       avatar?.dispose();
       fallback?.dispose();
@@ -145,6 +162,10 @@ export function createSidekickGameplayAvatar(
       const delta = lastNowSeconds === null ? 0 : nowSeconds - lastNowSeconds;
       animation?.update(delta * timeScale);
       lastNowSeconds = nowSeconds;
+    },
+    setEquippedInventory: (inventory) => {
+      pendingInventory = inventory;
+      syncEquipment();
     },
   };
 }

@@ -1,10 +1,12 @@
 import { cartesianFromLatLonAlt } from './coordinates';
 import { resolveLandingSite } from './landing_sites';
 import { samplePlanetSurface } from './planet_surface';
-import type { Planet, Vec3 } from '../types';
+import type { Biome, Planet, Vec3 } from '../types';
 
 const OP1_SURFACE_OFFSET_METERS = 90_000;
-const OP1_PAD_OFFSET_METERS = 3;
+const PAD_OFFSET_METERS = 3;
+const POI_COUNT = 12;
+const MAX_DRY_ATTEMPTS = 48;
 
 export interface QuantumDestination {
   id: string;
@@ -13,44 +15,114 @@ export interface QuantumDestination {
   lonRadians: number;
 }
 
-const ASTERON_OP1: QuantumDestination = {
-  id: 'asteron-op-1',
-  name: 'Asteron OP-1 (Outpost 1)',
-  latRadians: 0,
-  lonRadians: 0,
-};
+/** Legacy id for the first outpost near the landing site. */
+export const SPIKE_QUANTUM_DESTINATION_ID = 'asteron-op-1';
 
-const destinationCache = new Map<string, QuantumDestination>();
+const destinationListCache = new Map<string, QuantumDestination[]>();
+const destinationPositionCache = new WeakMap<Planet, Map<string, Vec3>>();
+
+function hash01(seed: number, ...values: number[]): number {
+  let state = seed >>> 0;
+  for (const value of values) {
+    state ^= value + 0x9e3779b9 + ((state << 6) >>> 0) + (state >>> 2);
+    state = Math.imul(state ^ (state >>> 16), 0x45d9f3b);
+    state >>>= 0;
+  }
+  state ^= state >>> 16;
+  state = Math.imul(state, 0x85ebca6b) >>> 0;
+  state ^= state >>> 13;
+  state = Math.imul(state, 0xc2b2ae35) >>> 0;
+  state ^= state >>> 16;
+  return state / 0xffffffff;
+}
+
+function isDryBiome(biome: Biome): boolean {
+  return biome !== 'ocean' && biome !== 'lake';
+}
+
+function sampleBiome(planet: Planet, seed: number, latRadians: number, lonRadians: number): Biome {
+  const probe = cartesianFromLatLonAlt(latRadians, lonRadians, 0, planet.radiusMeters);
+  return samplePlanetSurface(planet, seed, probe).biome;
+}
 
 function resolveOp1Placement(planet: Planet, seed: number): QuantumDestination {
-  const cacheKey = `${planet.name}:${seed}`;
-  const cached = destinationCache.get(cacheKey);
-  if (cached) return cached;
-
   const landing = resolveLandingSite(planet, seed);
   const offsetRadians = OP1_SURFACE_OFFSET_METERS / planet.radiusMeters;
   let latRadians = landing.latRadians;
   let lonRadians = landing.lonRadians + offsetRadians;
 
-  const probe = cartesianFromLatLonAlt(latRadians, lonRadians, 0, planet.radiusMeters);
-  const surface = samplePlanetSurface(planet, seed, probe);
-  if (surface.biome === 'ocean' || surface.biome === 'lake') {
+  if (!isDryBiome(sampleBiome(planet, seed, latRadians, lonRadians))) {
     latRadians = landing.latRadians + offsetRadians * 0.35;
     lonRadians = landing.lonRadians + offsetRadians;
   }
 
-  const resolved: QuantumDestination = {
-    id: ASTERON_OP1.id,
-    name: ASTERON_OP1.name,
+  return {
+    id: SPIKE_QUANTUM_DESTINATION_ID,
+    name: 'Asteron OP-1',
     latRadians,
     lonRadians,
   };
-  destinationCache.set(cacheKey, resolved);
-  return resolved;
+}
+
+function pickDryLatLon(
+  planet: Planet,
+  seed: number,
+  index: number,
+): { latRadians: number; lonRadians: number } {
+  for (let attempt = 0; attempt < MAX_DRY_ATTEMPTS; attempt += 1) {
+    const u = hash01(seed, index, attempt, 1);
+    const v = hash01(seed, index, attempt, 2);
+    // Uniform on sphere: lat = asin(2u-1), lon = 2πv
+    const latRadians = Math.asin(2 * u - 1);
+    const lonRadians = (v * 2 - 1) * Math.PI;
+    if (isDryBiome(sampleBiome(planet, seed, latRadians, lonRadians))) {
+      return { latRadians, lonRadians };
+    }
+  }
+
+  // Fallback: nudge from landing site if every attempt landed in water.
+  const landing = resolveLandingSite(planet, seed);
+  const nudge = ((index + 1) * 120_000) / planet.radiusMeters;
+  return {
+    latRadians: landing.latRadians + nudge * 0.4,
+    lonRadians: landing.lonRadians + nudge,
+  };
+}
+
+function siteName(index: number): string {
+  if (index === 0) return 'Asteron OP-1';
+  return `Asteron Site ${String(index + 1).padStart(2, '0')}`;
+}
+
+function siteId(index: number): string {
+  if (index === 0) return SPIKE_QUANTUM_DESTINATION_ID;
+  return `asteron-site-${String(index + 1).padStart(2, '0')}`;
+}
+
+function generateAsteronPois(planet: Planet, seed: number): QuantumDestination[] {
+  const destinations: QuantumDestination[] = [resolveOp1Placement(planet, seed)];
+
+  for (let index = 1; index < POI_COUNT; index += 1) {
+    const { latRadians, lonRadians } = pickDryLatLon(planet, seed, index);
+    destinations.push({
+      id: siteId(index),
+      name: siteName(index),
+      latRadians,
+      lonRadians,
+    });
+  }
+
+  return destinations;
 }
 
 export function listQuantumDestinations(planet: Planet, seed: number): QuantumDestination[] {
-  return [resolveOp1Placement(planet, seed)];
+  const cacheKey = `${planet.name}:${seed}`;
+  const cached = destinationListCache.get(cacheKey);
+  if (cached) return cached;
+
+  const destinations = generateAsteronPois(planet, seed);
+  destinationListCache.set(cacheKey, destinations);
+  return destinations;
 }
 
 export function getQuantumDestination(
@@ -66,6 +138,15 @@ export function destinationWorldPosition(
   seed: number,
   destination: QuantumDestination,
 ): Vec3 {
+  let planetCache = destinationPositionCache.get(planet);
+  if (!planetCache) {
+    planetCache = new Map<string, Vec3>();
+    destinationPositionCache.set(planet, planetCache);
+  }
+  const cacheKey = `${seed}:${destination.id}:${destination.latRadians}:${destination.lonRadians}`;
+  const cached = planetCache.get(cacheKey);
+  if (cached) return cached;
+
   const probe = cartesianFromLatLonAlt(
     destination.latRadians,
     destination.lonRadians,
@@ -73,12 +154,12 @@ export function destinationWorldPosition(
     planet.radiusMeters,
   );
   const surface = samplePlanetSurface(planet, seed, probe);
-  return cartesianFromLatLonAlt(
+  const position = cartesianFromLatLonAlt(
     destination.latRadians,
     destination.lonRadians,
-    surface.heightMeters + OP1_PAD_OFFSET_METERS,
+    surface.heightMeters + PAD_OFFSET_METERS,
     planet.radiusMeters,
   );
+  planetCache.set(cacheKey, position);
+  return position;
 }
-
-export const SPIKE_QUANTUM_DESTINATION_ID = ASTERON_OP1.id;

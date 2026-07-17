@@ -34,7 +34,10 @@ export interface ComposerStack {
   volumetricFogPass: EffectPass;
   volumetricFogEffect: VolumetricFogEffect;
   speedBlurEffect: SpeedBlurEffect;
+  speedBlurPass: EffectPass;
   motionBlurEffect: MotionBlurEffect;
+  motionBlurPass: EffectPass;
+  motionBlurEnabledByQuality: boolean;
   colorCorrectionEffect: ColorCorrectionEffect;
   spaceSkybox: SpaceSkybox;
   volumetricClouds: ReturnType<typeof createVolumetricCloudManager>;
@@ -205,7 +208,10 @@ export function createComposerStack(
     volumetricFogPass,
     volumetricFogEffect,
     speedBlurEffect,
+    speedBlurPass,
     motionBlurEffect,
+    motionBlurPass,
+    motionBlurEnabledByQuality: renderQuality.motionBlurEnabled,
     colorCorrectionEffect,
     spaceSkybox,
     volumetricClouds,

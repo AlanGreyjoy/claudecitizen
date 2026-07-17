@@ -65,7 +65,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
-      'server/dist/**',
+      'target/**',
       'node_modules/**',
       'vendor/**',
       'docs/**',
@@ -114,34 +114,7 @@ export default tseslint.config(
   },
 
   {
-    files: ['server/src/**/*.ts'],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      globals: {
-        ...globals.node,
-        ...globals.es2022,
-      },
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-    settings: {
-      'import-x/resolver': {
-        typescript: {
-          alwaysTryTypes: true,
-          project: ['./server/tsconfig.json'],
-        },
-        node: {
-          extensions: ['.js', '.ts'],
-        },
-      },
-    },
-  },
-
-  {
-    files: ['src/**/*.ts', 'scripts/**/*.ts', 'server/src/**/*.ts'],
+    files: ['src/**/*.ts', 'scripts/**/*.ts'],
     plugins: {
       sonarjs,
       'import-x': importX,
@@ -231,57 +204,9 @@ export default tseslint.config(
     },
   },
 
-  // Nest: thin controllers, services own persistence and domain work (DIP).
-  {
-    files: ['server/src/**/*.controller.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'warn',
-        {
-          paths: [
-            {
-              name: '@prisma/client',
-              message:
-                'Controllers should delegate to services instead of using Prisma directly.',
-            },
-          ],
-          patterns: [
-            {
-              group: ['**/prisma/**'],
-              message:
-                'Controllers should delegate to services instead of reaching into Prisma.',
-            },
-          ],
-        },
-      ],
-      'max-lines-per-function': [
-        'warn',
-        { max: 40, skipBlankLines: true, skipComments: true },
-      ],
-    },
-  },
-
-  {
-    files: ['server/src/**/*.service.ts', 'server/src/**/*.guard.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['**/*.controller', '**/*.controller.ts'],
-              message:
-                'Services and guards must not import controllers. Keep dependency direction inward.',
-            },
-          ],
-        },
-      ],
-    },
-  },
-
   // Scripts and specs are utilities — lighter architectural enforcement.
   {
-    files: ['scripts/**/*.ts', 'server/src/**/*.spec.ts'],
+    files: ['scripts/**/*.ts'],
     rules: {
       'no-restricted-imports': 'off',
       'no-restricted-globals': 'off',
@@ -293,7 +218,7 @@ export default tseslint.config(
 
   // Legacy CJS in a few tooling paths; prefer ESM in new code.
   {
-    files: ['src/**/*.ts', 'scripts/**/*.ts', 'server/src/**/*.ts'],
+    files: ['src/**/*.ts', 'scripts/**/*.ts'],
     rules: {
       '@typescript-eslint/no-require-imports': 'warn',
     },

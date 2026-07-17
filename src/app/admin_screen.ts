@@ -251,7 +251,7 @@ function createSearchInput(placeholder: string, onQuery: (query: string) => void
   return input;
 }
 
-function createPageHeader(
+  function createPageHeader(
   title: string,
   subtitle?: string,
   actions?: HTMLElement[],
@@ -260,9 +260,15 @@ function createPageHeader(
   header.className = 'sc-admin-page-header';
 
   const textWrap = document.createElement('div');
+  textWrap.className = 'sc-admin-page-header-text';
+
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'sc-admin-page-eyebrow';
+  eyebrow.textContent = 'Operator Console';
+
   const heading = document.createElement('h1');
   heading.textContent = title;
-  textWrap.append(heading);
+  textWrap.append(eyebrow, heading);
 
   if (subtitle) {
     const meta = document.createElement('p');
@@ -363,47 +369,83 @@ export function showAdminScreen(): void {
 
     const brand = document.createElement('div');
     brand.className = 'sc-admin-sidebar-brand';
-    brand.textContent = 'ClaudeCitizen';
 
-    const subtitle = document.createElement('div');
-    subtitle.className = 'sc-admin-sidebar-subtitle';
-    subtitle.textContent = 'Admin';
+    const brandMark = document.createElement('div');
+    brandMark.className = 'sc-admin-sidebar-brand-mark';
+    brandMark.setAttribute('aria-hidden', 'true');
+
+    const brandText = document.createElement('div');
+    brandText.className = 'sc-admin-sidebar-brand-text';
+
+    const brandTitle = document.createElement('div');
+    brandTitle.className = 'sc-admin-sidebar-brand-title';
+    brandTitle.textContent = 'ClaudeCitizen';
+
+    const brandSub = document.createElement('div');
+    brandSub.className = 'sc-admin-sidebar-subtitle';
+    brandSub.textContent = 'Operator Console';
+
+    brandText.append(brandTitle, brandSub);
+    brand.append(brandMark, brandText);
 
     const nav = document.createElement('nav');
     nav.className = 'sc-admin-sidebar-nav';
     nav.setAttribute('aria-label', 'Admin sections');
 
-    const tabs: Array<{ id: AdminTab; label: string }> = [
-      { id: 'users', label: 'Users' },
-      { id: 'ships', label: 'Ships' },
-      { id: 'props', label: 'Props' },
-      { id: 'items', label: 'Items' },
-      { id: 'weapons', label: 'Weapons' },
-      { id: 'backpacks', label: 'Backpacks' },
-      { id: 'settings', label: 'Game Settings' },
+    const sections: Array<{ heading: string; tabs: Array<{ id: AdminTab; label: string }> }> = [
+      {
+        heading: 'Intelligence',
+        tabs: [{ id: 'users', label: 'Users' }],
+      },
+      {
+        heading: 'Catalog',
+        tabs: [
+          { id: 'ships', label: 'Ships' },
+          { id: 'props', label: 'Props' },
+          { id: 'items', label: 'Items' },
+          { id: 'weapons', label: 'Weapons' },
+          { id: 'backpacks', label: 'Backpacks' },
+        ],
+      },
+      {
+        heading: 'Systems',
+        tabs: [{ id: 'settings', label: 'Game Settings' }],
+      },
     ];
 
-    for (const tab of tabs) {
-      const link = document.createElement('button');
-      link.type = 'button';
-      link.className = 'sc-admin-sidebar-link';
-      link.textContent = tab.label;
-      link.classList.toggle('is-active', isTabActive(tab.id, currentTab, currentScene));
-      link.addEventListener('click', () => {
-        currentTab = tab.id;
-        if (tab.id === 'users') void showUsers();
-        else if (tab.id === 'ships') void showShips();
-        else if (tab.id === 'props') void showProps();
-        else if (tab.id === 'items') void showItems();
-        else if (tab.id === 'weapons') void showWeapons();
-        else if (tab.id === 'backpacks') void showBackpacks();
-        else void showSettings();
-      });
-      nav.append(link);
+    for (const section of sections) {
+      const heading = document.createElement('div');
+      heading.className = 'sc-admin-sidebar-section';
+      heading.textContent = section.heading;
+      nav.append(heading);
+
+      for (const tab of section.tabs) {
+        const link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'sc-admin-sidebar-link';
+        link.textContent = tab.label;
+        link.classList.toggle('is-active', isTabActive(tab.id, currentTab, currentScene));
+        link.addEventListener('click', () => {
+          currentTab = tab.id;
+          if (tab.id === 'users') void showUsers();
+          else if (tab.id === 'ships') void showShips();
+          else if (tab.id === 'props') void showProps();
+          else if (tab.id === 'items') void showItems();
+          else if (tab.id === 'weapons') void showWeapons();
+          else if (tab.id === 'backpacks') void showBackpacks();
+          else void showSettings();
+        });
+        nav.append(link);
+      }
     }
 
     const footer = document.createElement('div');
     footer.className = 'sc-admin-sidebar-footer';
+
+    const sessionLabel = document.createElement('div');
+    sessionLabel.className = 'sc-admin-sidebar-session';
+    sessionLabel.textContent = session.email;
+
     const logoutBtn = createButton('Log out', 'secondary');
     logoutBtn.addEventListener('click', () => {
       setStatus('Signing out...');
@@ -414,9 +456,9 @@ export function showAdminScreen(): void {
           renderLogin();
         });
     });
-    footer.append(logoutBtn);
+    footer.append(sessionLabel, logoutBtn);
 
-    sidebar.append(brand, subtitle, nav, footer);
+    sidebar.append(brand, nav, footer);
   }
 
   function renderShell(nodes: Node[], scene: AdminScene, tab: AdminTab = currentTab): void {
@@ -445,8 +487,20 @@ export function showAdminScreen(): void {
     const form = document.createElement('form');
     form.className = 'sc-admin-form';
 
+    const brand = document.createElement('div');
+    brand.className = 'sc-admin-login-brand';
+    brand.textContent = 'ClaudeCitizen';
+
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'sc-admin-login-eyebrow';
+    eyebrow.textContent = 'Restricted Access';
+
     const title = document.createElement('h1');
-    title.textContent = 'Admin Login';
+    title.textContent = 'Operator Login';
+
+    const tag = document.createElement('p');
+    tag.className = 'sc-admin-login-tag';
+    tag.textContent = 'Authenticate to manage catalog and player intelligence.';
 
     const email = createTextInput('email', 'admin@claude-citizen.com');
     email.type = 'email';
@@ -459,11 +513,14 @@ export function showAdminScreen(): void {
     password.required = true;
     password.setAttribute('autocomplete', 'current-password');
 
-    const submit = createButton('Sign in');
+    const submit = createButton('Authorize');
     submit.type = 'submit';
 
     form.append(
+      brand,
+      eyebrow,
       title,
+      tag,
       createField('Email', email),
       createField('Password', password),
       submit,
@@ -1586,7 +1643,7 @@ export function showAdminScreen(): void {
         ),
       ),
       createField('Sub-type', createTextInput('subType', defaults.subType)),
-      createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId)),
+      createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId ?? undefined)),
       createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),
       createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
       createField('Rarity', createTextInput('rarity', defaults.rarity)),
@@ -1766,7 +1823,7 @@ export function showAdminScreen(): void {
       createField('Name', createTextInput('name', defaults.name)),
       createField('Description', createTextArea('description', defaults.description)),
       createField('Sub-type', createTextInput('subType', defaults.subType)),
-      createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId)),
+      createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId ?? undefined)),
       createField('Capacity (liters)', createNumberInput('capacityLiters', defaults.capacityLiters, '0.1')),
       createField('Empty mass (kg)', createNumberInput('emptyMassKg', defaults.emptyMassKg, '0.1')),
       createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),

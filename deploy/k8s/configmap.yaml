@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claudecitizen-backend-config
+  namespace: claudecitizen
+data:
+  APP_ENV: production
+  RUST_LOG: cc_server=info,tower_http=info
+  HTTP_BIND: 0.0.0.0:3000
+  CLIENT_ORIGIN: https://claudecitizen.example.com
+  API_PUBLIC_URL: https://api.claudecitizen.example.com
+  WEBTRANSPORT_BIND: 0.0.0.0:4433
+  WEBTRANSPORT_PUBLIC_URL: https://world.claudecitizen.example.com/world
+  WEBTRANSPORT_CERT_PATH: /var/run/claudecitizen/tls/tls.crt
+  WEBTRANSPORT_KEY_PATH: /var/run/claudecitizen/tls/tls.key
+  COOKIE_SAME_SITE: lax
+  COOKIE_SECURE: "true"
+  RUN_MIGRATIONS: "false"
+

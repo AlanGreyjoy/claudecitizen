@@ -1,0 +1,18 @@
+[package]
+name = "cc-sim-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+native = ["dep:rapier3d", "dep:serde"]
+
+[dependencies]
+rapier3d = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+

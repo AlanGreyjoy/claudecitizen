@@ -14638,132 +14638,6 @@
             ]
           },
           {
-            "id": "e-particle-hab-steam",
-            "name": "HabSteam",
-            "transform": {
-              "position": {
-                "x": -31,
-                "y": 3.75,
-                "z": 62.5
-              },
-              "rotation": {
-                "x": 0.965926,
-                "y": 0,
-                "z": 0,
-                "w": 0.258819
-              },
-              "scale": {
-                "x": 1.9,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "particle-system",
-                "enabled": true,
-                "playOnAwake": true,
-                "duration": 5,
-                "looping": true,
-                "prewarm": true,
-                "startDelay": {
-                  "mode": "constant",
-                  "value": 0
-                },
-                "startLifetime": {
-                  "mode": "random",
-                  "min": 1.2,
-                  "max": 2.4
-                },
-                "startSpeed": {
-                  "mode": "random",
-                  "min": 0.15,
-                  "max": 0.45
-                },
-                "startSize": {
-                  "mode": "random",
-                  "min": 0.12,
-                  "max": 0.28
-                },
-                "startColor": "#cfe8ff",
-                "startRotation": {
-                  "mode": "constant",
-                  "value": 0
-                },
-                "gravityModifier": -0.08,
-                "simulationSpace": "local",
-                "maxParticles": 64,
-                "emission": {
-                  "rateOverTime": 12,
-                  "bursts": [
-                    {
-                      "time": 0,
-                      "count": {
-                        "mode": "constant",
-                        "value": 12
-                      },
-                      "cycles": 1,
-                      "interval": 0.5
-                    }
-                  ]
-                },
-                "shape": {
-                  "enabled": true,
-                  "shape": "cone",
-                  "radius": 0.25,
-                  "radiusThickness": 1,
-                  "angle": 25,
-                  "arc": 360,
-                  "box": {
-                    "x": 1,
-                    "y": 1,
-                    "z": 1
-                  },
-                  "emitFrom": "volume",
-                  "alignToDirection": true
-                },
-                "colorOverLifetime": {
-                  "enabled": true,
-                  "gradient": [
-                    {
-                      "t": 0,
-                      "color": "#dfefff",
-                      "alpha": 0.55
-                    },
-                    {
-                      "t": 1,
-                      "color": "#a8c4e8",
-                      "alpha": 0
-                    }
-                  ]
-                },
-                "sizeOverLifetime": {
-                  "enabled": true,
-                  "curve": [
-                    {
-                      "t": 0,
-                      "value": 0.6
-                    },
-                    {
-                      "t": 1,
-                      "value": 1.8
-                    }
-                  ]
-                },
-                "renderer": {
-                  "renderMode": "billboard",
-                  "blendMode": "alpha",
-                  "softParticles": false,
-                  "softParticleNearFade": 0.2,
-                  "softParticleFarFade": 1.5,
-                  "lengthScale": 1,
-                  "speedScale": 0.05,
-                  "sortMode": "none"
-                }
-              }
-            ]
-          },
-          {
             "id": "e-74b4173b",
             "name": "SM_Bld_Wall_04_Alt",
             "transform": {
@@ -14855,6 +14729,223 @@
                 "shape": "mesh"
               }
             ]
+          }
+        ]
+      },
+      {
+        "id": "e-ee748305",
+        "name": "SM_Prop_Vending_Machine_03",
+        "transform": {
+          "position": {
+            "x": -30,
+            "y": 55.25,
+            "z": 43.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": -0.382683,
+            "z": 0,
+            "w": 0.92388
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/SM_Prop_Vending_Machine_03.glb"
+        },
+        "children": [
+          {
+            "id": "e-5434438a",
+            "name": "Empty",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 1.14696,
+                "z": 1.04737
+              },
+              "rotation": {
+                "x": -0.251613,
+                "y": 0,
+                "z": 0,
+                "w": 0.967828
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "weapon-shop",
+                "id": "weapon-shop-1",
+                "label": "Browse weapons",
+                "gazeRadius": 0.4,
+                "maxDistance": 3,
+                "screenWidth": 0.35,
+                "screenHeight": 0.33
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e-b71687bf",
+        "name": "SM_Prop_Monitor_06",
+        "transform": {
+          "position": {
+            "x": -41.25,
+            "y": 55.25,
+            "z": 42.75
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0.707107,
+            "z": 0,
+            "w": 0.707107
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
+        },
+        "children": [
+          {
+            "id": "e-66902cf0",
+            "name": "Empty",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 1,
+                "z": 0.02458
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "e-8e5c923e",
+        "name": "SM_Prop_Monitor_07",
+        "transform": {
+          "position": {
+            "x": -39.25,
+            "y": 55.25,
+            "z": 49.25
+          },
+          "rotation": {
+            "x": 0,
+            "y": -1,
+            "z": 0,
+            "w": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/SM_Prop_Monitor_07.glb"
+        },
+        "children": [
+          {
+            "id": "e-0c8966a6",
+            "name": "Outfitters",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 1.25,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "outfitters",
+                "id": "outfitters-1",
+                "label": "Browse outfitters",
+                "gazeRadius": 0.4,
+                "maxDistance": 3,
+                "screenWidth": 0.45,
+                "screenHeight": 0.28
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e-802f3a0d",
+        "name": "SM_Prop_Locker_01",
+        "transform": {
+          "position": {
+            "x": -40.75,
+            "y": 55.25,
+            "z": 49
+          },
+          "rotation": {
+            "x": 0,
+            "y": -0.92388,
+            "z": 0,
+            "w": -0.382683
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/SM_Prop_Locker_01.glb"
+        },
+        "nodeOverrides": [
+          {
+            "node": "SM_Prop_Locker_01_Door_01",
+            "transform": {
+              "position": {
+                "x": 0.2944,
+                "y": 1.09025,
+                "z": 0.26421
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
           }
         ]
       }

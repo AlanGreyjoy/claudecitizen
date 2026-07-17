@@ -54,6 +54,8 @@ export interface CharacterAvatarInstance {
   setAnimation: (name: string) => void;
   setPose: (character: CharacterRenderState, focusPosition: Vec3, renderScale: number) => void;
   updateMixer: (nowSeconds: number, timeScale?: number) => void;
+  /** Attach equipped backpack/weapons from personal inventory loadout. */
+  setEquippedInventory?: (inventory: import('../../../player/inventory/types').InventoryState | null) => void;
 }
 
 let avatarAssetPromise: Promise<AvatarAsset> | null = null;
@@ -351,6 +353,9 @@ function createLegacyCharacterAvatarInstance(renderScale: number): CharacterAvat
     setAnimation,
     setPose,
     updateMixer,
+    setEquippedInventory: () => {
+      /* Legacy avatar has no equipment sockets. */
+    },
   };
 }
 

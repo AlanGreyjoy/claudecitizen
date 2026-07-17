@@ -198,8 +198,8 @@ function restoreReferencePose(root: THREE.Object3D): void {
 }
 
 function compatible(slot: CharacterEquipmentSlotV1, definition: CatalogDefinition): boolean {
-  if (slot.kind === 'backpack') return definition.itemType === 'backpack';
-  return definition.itemType === 'weapon' && definition.weaponSlotType === slot.weaponSlotType;
+  if (slot.kind === 'backpack') return 'capacityLiters' in definition;
+  return 'weaponSlotType' in definition && definition.weaponSlotType === slot.weaponSlotType;
 }
 
 export function createBaseCharacterEquipmentEditor(
@@ -485,6 +485,8 @@ export function createBaseCharacterEquipmentEditor(
     const definition = structuredClone(defaultDefinition);
     definition.name = `Base Character Type ${selectedType}`;
     definition.blendShapes.bodyTypeValue = selectedType === 1 ? -100 : 100;
+    definition.blendShapes.bodySizeValue = 0;
+    definition.blendShapes.muscleValue = -100;
     if (previewPose === 'reference') restoreReferencePose(avatar.root);
     await avatar.applyDefinition(definition);
     await rebuildEquipmentPreview();
@@ -512,7 +514,11 @@ export function createBaseCharacterEquipmentEditor(
     const species = findPreviewSpecies(catalog);
     if (!species) throw new Error('No playable Synty species is available.');
     defaultDefinition = buildDefaultDefinition(catalog, species);
+    // Match playable defaults so mounts aren't authored against a different
+    // backAttach basis (empty def uses muscleValue 0 → bogus ~178° flip).
     defaultDefinition.blendShapes.bodyTypeValue = -100;
+    defaultDefinition.blendShapes.bodySizeValue = 0;
+    defaultDefinition.blendShapes.muscleValue = -100;
     avatar = await assembleSidekickCharacter(catalog, defaultDefinition);
     previewRoot.add(avatar.root);
     animation = await createSidekickAnimationRuntime(avatar.root).catch((error: unknown) => {

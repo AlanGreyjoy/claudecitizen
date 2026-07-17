@@ -15,7 +15,7 @@ One **ship-controller** singleton on the hull GLB entity replaces the older scat
 
 ## What it owns
 
-- **restHeight** — parked height above ground
+- **restHeight** — parked height above ground (viewport shows a cyan pad disc at local Y = −restHeight; amber dashed = auto from hull lowest point)
 - **stats** — combat + flight tuning (see below)
 - **gear.nodes[]** — landing gear hinge bindings
 - **gear.deploySoundUrl / retractSoundUrl** — optional landing-gear SFX

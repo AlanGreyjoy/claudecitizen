@@ -115,7 +115,17 @@ import {
   projectWorldPointToScreenOffset,
   resolveCockpitGazeTarget,
 } from "../player/cockpit_gaze";
+import {
+  createEntertainmentCameraState,
+  updateEntertainmentCameraFeel,
+} from "../player/entertainment_camera";
+import {
+  entertainmentSystemLabel,
+  resolveEntertainmentGazeTarget,
+} from "../player/entertainment_gaze";
 import { resolveVisibleCockpitSpeedInstruments } from "../player/cockpit_stats";
+import { createEntertainmentSystem } from "../render/effects/hud/entertainment_system";
+import { createEntertainmentScreen } from "../render/effects/entertainment_screen";
 import {
   createFlightCameraFeelState,
   updateFlightCameraFeel,
@@ -335,7 +345,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   // Trim the full-game HUD down to FPS + interact prompt.
   for (const selector of [
-    ".sc-hud-minimap",
     ".sc-hud-chat",
     ".sc-hud-debug-wrap",
   ]) {
@@ -351,7 +360,44 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   const cockpitGazeHud = createCockpitGazeHud({ rootEl: cockpitGazeEl });
   const cockpitSpeedEl = requireElement<HTMLElement>("cockpit-speed");
   const cockpitSpeedHud = createCockpitSpeedHud({ rootEl: cockpitSpeedEl });
+  const entertainmentSystem = createEntertainmentSystem({
+    rootEl: requireElement<HTMLElement>("entertainment-system"),
+    homeEl: requireElement<HTMLElement>("es-home"),
+    docsEl: requireElement<HTMLElement>("es-docs"),
+    youtubeEl: requireElement<HTMLElement>("es-youtube"),
+    nasaEl: requireElement<HTMLElement>("es-nasa"),
+    localnowEl: requireElement<HTMLElement>("es-localnow"),
+    docsFrameEl: requireElement<HTMLIFrameElement>("es-docs-frame"),
+    youtubeFrameEl: requireElement<HTMLIFrameElement>("es-youtube-frame"),
+    nasaFrameEl: requireElement<HTMLIFrameElement>("es-nasa-frame"),
+    youtubeUrlInputEl: requireElement<HTMLInputElement>("es-youtube-url"),
+    youtubeGridEl: requireElement<HTMLElement>("es-youtube-grid"),
+    powerBtnEl: requireElement<HTMLButtonElement>("es-power-btn"),
+    backBtnEl: requireElement<HTMLButtonElement>("es-back-btn"),
+    closeBtnEl: requireElement<HTMLButtonElement>("es-close-btn"),
+    docsTileEl: requireElement<HTMLButtonElement>("es-docs-tile"),
+    youtubeTileEl: requireElement<HTMLButtonElement>("es-youtube-tile"),
+    nasaTileEl: requireElement<HTMLButtonElement>("es-nasa-tile"),
+    localnowTileEl: requireElement<HTMLButtonElement>("es-localnow-tile"),
+    localnowOpenBtnEl: requireElement<HTMLButtonElement>("es-localnow-open-btn"),
+    youtubeLoadBtnEl: requireElement<HTMLButtonElement>("es-youtube-load-btn"),
+  });
+  const esScreen = createEntertainmentScreen({
+    panelEl: requireElement<HTMLElement>("es-bezel"),
+  });
+  const esCameraState = createEntertainmentCameraState();
   const idleQuantum = createQuantumTravelState();
+  const onEsResize = () => esScreen.resize();
+  window.addEventListener("resize", onEsResize);
+  window.addEventListener(
+    "pagehide",
+    () => {
+      entertainmentSystem.dispose();
+      window.removeEventListener("resize", onEsResize);
+      esScreen.dispose();
+    },
+    { once: true },
+  );
 
   const gameMenuEl = requireElement<HTMLElement>("game-menu");
   const gameMenuResumeBtn = requireElement<HTMLButtonElement>("game-menu-resume-btn");
@@ -508,6 +554,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   });
   shipModel.group.frustumCulled = false;
   scene.add(shipModel.group);
+  esScreen.attachTo(shipModel.group);
   window.__claudecitizenShipModel = shipModel;
   if (doc && prefabApplied) {
     attachPrefabParticleSystems(doc, shipModel.group);
@@ -998,11 +1045,12 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     transition = null;
   }
 
-  function updateInBed(
-    actions: { exitSeatPressed: boolean },
-  ): void {
-    prompt = "Look around · Hold Y — get up";
-    if (!actions.exitSeatPressed || !activeBedId) return;
+  function beginGetUpFromBed(): void {
+    if (!activeBedId) return;
+    entertainmentSystem.close();
+    esScreen.setInteractive(false);
+    esScreen.setPowered(false);
+    esScreen.setSpec(null);
     const bed = getBedAnchor(ship, activeBedId);
     const stand = getDeckWorldPose(
       ship,
@@ -1025,6 +1073,79 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       up: bed.up,
       velocity: vec3(0, 0, 0),
     };
+  }
+
+  function updateInBed(
+    actions: { exitSeatPressed: boolean; interactPressed: boolean },
+  ): void {
+    const layout = getShipLayout();
+    const eyeLocal = getBedEyeLocal(activeBedId) ?? layout.pilotEye;
+    const eye = localOffsetToWorld(ship, eyeLocal);
+    const seat = controls.getSeatLook();
+    const view = resolveSeatLookForward(
+      ship.forward,
+      ship.up,
+      seat.yawRadians,
+      seat.pitchRadians,
+    );
+    const esHit = resolveEntertainmentGazeTarget(
+      layout.entertainmentSystems,
+      ship,
+      eye,
+      view.forward,
+    );
+
+    if (layout.entertainmentSystems.length > 0) {
+      esScreen.setSpec(esHit?.system ?? layout.entertainmentSystems[0]!);
+    }
+
+    if (esHit && actions.interactPressed && !entertainmentSystem.isOpen()) {
+      esScreen.setPowered(true);
+      esScreen.setInteractive(true);
+      cockpitGazeHud.update({ visible: false });
+      entertainmentSystem.open({
+        onExitBed: () => beginGetUpFromBed(),
+        onClose: () => {
+          esScreen.setInteractive(false);
+          esScreen.setPowered(false);
+        },
+      });
+      prompt = "";
+      return;
+    }
+
+    if (actions.exitSeatPressed) {
+      beginGetUpFromBed();
+      return;
+    }
+
+    esScreen.setInteractive(false);
+    esScreen.setPowered(false);
+    prompt = esHit
+      ? `Press F — ${entertainmentSystemLabel(esHit.system)} · Hold Y — get up`
+      : "Look around · Hold Y — get up";
+
+    if (esHit) {
+      const fovY = (camera.fov * Math.PI) / 180;
+      const offset = projectWorldPointToScreenOffset(
+        esHit.worldPosition,
+        eye,
+        view.forward,
+        view.right,
+        view.up,
+        fovY,
+        window.innerHeight,
+      );
+      if (!offset.behind) {
+        cockpitGazeHud.update({
+          visible: true,
+          label: entertainmentSystemLabel(esHit.system),
+          offsetPx: { x: offset.x, y: offset.y },
+        });
+        return;
+      }
+    }
+    cockpitGazeHud.update({ visible: false });
   }
 
   function updatePilot(
@@ -1272,9 +1393,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const cameraState = controls.sampleCameraState(dt);
     if (mode === "in-bed") {
       flightCameraFeelFrame = null;
-      camera.fov = camera.userData.baseFovDeg as number;
-      camera.updateProjectionMatrix();
-      const eyeLocal = getBedEyeLocal(activeBedId) ?? getShipLayout().pilotEye;
+      const layout = getShipLayout();
+      const eyeLocal = getBedEyeLocal(activeBedId) ?? layout.pilotEye;
       const eye = localOffsetToWorld(ship, eyeLocal);
       const seatLook = cameraState.seatLook;
       const lookingAround =
@@ -1290,18 +1410,54 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
             FIRST_PERSON_PITCH_LIMIT,
           )
         : { forward: ship.forward, up: ship.up };
-      camera.position.set(eye.x, eye.y, eye.z);
-      cameraTarget.set(
-        eye.x + look.forward.x * 60,
-        eye.y + look.forward.y * 60,
-        eye.z + look.forward.z * 60,
-      );
+
+      let feelEye = eye;
+      let feelTarget = {
+        x: eye.x + look.forward.x * 60,
+        y: eye.y + look.forward.y * 60,
+        z: eye.z + look.forward.z * 60,
+      };
+      let fovDelta = 0;
+      if (layout.entertainmentSystems.length > 0) {
+        const esHit = resolveEntertainmentGazeTarget(
+          layout.entertainmentSystems,
+          ship,
+          eye,
+          look.forward,
+        );
+        const screenSpec = esHit?.system ?? layout.entertainmentSystems[0]!;
+        const screen = localOffsetToWorld(ship, screenSpec.position);
+        const feel = updateEntertainmentCameraFeel(esCameraState, {
+          dt,
+          open: entertainmentSystem.isOpen(),
+          gazing: Boolean(esHit),
+          eye,
+          screen,
+          viewForward: look.forward,
+        });
+        if (feel) {
+          feelEye = feel.eye;
+          feelTarget = feel.lookTarget;
+          fovDelta = feel.fovDeltaDeg;
+        }
+      } else {
+        esCameraState.focus01 = 0;
+      }
+
+      if (typeof camera.userData.baseFovDeg !== "number") {
+        camera.userData.baseFovDeg = camera.fov;
+      }
+      camera.fov = (camera.userData.baseFovDeg as number) + fovDelta;
+      camera.updateProjectionMatrix();
+      camera.position.set(feelEye.x, feelEye.y, feelEye.z);
+      cameraTarget.set(feelTarget.x, feelTarget.y, feelTarget.z);
       camera.up.set(look.up.x, look.up.y, look.up.z);
       camera.lookAt(cameraTarget);
       camera.userData.smoothedPos = null;
       camera.userData.smoothedTarget = null;
       return;
     }
+    esCameraState.focus01 = 0;
     if (mode === "pilot") {
       if (cameraState.shipCameraView === "external") {
         camera.fov = camera.userData.baseFovDeg as number;
@@ -1471,8 +1627,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   let fpsLastUpdate = 0;
 
   function frame(nowMs: number): void {
-    const paused = gameMenu.isPaused();
-    const dt = paused ? 0 : Math.min((nowMs - lastMs) / 1000, 1 / 30);
+    const paused = gameMenu.isPaused() || entertainmentSystem.isPaused();
+    const frameDt = Math.min((nowMs - lastMs) / 1000, 1 / 30);
+    const dt = paused ? 0 : frameDt;
     lastMs = nowMs;
 
     if (!paused) {
@@ -1496,7 +1653,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           flightMode: "traverse",
           quantum: idleQuantum,
         });
-        cockpitGazeHud.update({ visible: false });
+        if (mode !== "in-bed") {
+          cockpitGazeHud.update({ visible: false });
+        }
         cockpitSpeedHud.update({ visible: false });
       }
 
@@ -1558,9 +1717,18 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           up: toSceneVector(worldUp),
         });
       }
+    } else if (mode === "in-bed" || entertainmentSystem.isOpen()) {
+      // Keep SC-style screen zoom easing while the ES UI pauses input.
+      updateCamera(frameDt);
+      camera.updateMatrixWorld();
     }
 
     composer.render(dt);
+
+    if (mode === "in-bed" || entertainmentSystem.isOpen()) {
+      esScreen.sync();
+      esScreen.render(camera);
+    }
 
     interactPromptEl.textContent = prompt;
     interactPromptEl.classList.toggle("is-visible", prompt.length > 0);

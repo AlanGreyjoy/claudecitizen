@@ -89,7 +89,7 @@ export interface NetworkShipRig {
   doors: Record<string, number>;
 }
 
-/** Ship body fields relayed from other players over the presence WebSocket. */
+/** Ship body fields received from authoritative cell snapshots. */
 export interface NetworkShipBody extends FlightBody {
   shipId?: string;
   prefabId?: string;
@@ -158,6 +158,17 @@ export interface SpikeRenderWorld {
     /** Ship-local eye offset (meters). */
     eyeShake: { right: number; up: number; forward: number };
   };
+  /**
+   * Bunk entertainment-screen focus (FOV zoom + dolly). Applied in bed mode.
+   */
+  entertainmentCameraFeel?: {
+    /** Delta from the camera's base FOV (degrees; negative = zoom in). */
+    fovDeltaDeg: number;
+    /** World-space eye after dolly toward the screen. */
+    eye: Vec3;
+    /** World-space look point (through the screen). */
+    lookTarget: Vec3;
+  };
   /** Active bunk id while in bed occupancy modes. */
   activeBedId?: string | null;
   timeSeconds?: number;
@@ -169,7 +180,7 @@ export interface SpikeRenderWorld {
   shipZoneId?: string | null;
   /** Landing gear / ramp / door articulation, 0..1 each (doors by layout id). */
   shipRig?: { gear01: number; ramp01: number; doors: Record<string, number> };
-  /** Remote players/ships received from the native WebSocket presence service. */
+  /** Remote players/ships received from WebTransport cell snapshots. */
   networkEntities?: NetworkRenderEntity[];
   /** Piloting sub-mode for ship HUD / quantum VFX. */
   flightMode?: import('../flight/flight_modes').ShipFlightMode;

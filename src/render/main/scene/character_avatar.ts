@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
 import { createCharacterAvatarInstance } from './character_avatar_model';
+import type { InventoryState } from '../../../player/inventory/types';
 import type { CharacterRenderState, Vec3 } from '../../../types';
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
 
@@ -11,6 +12,7 @@ interface CharacterAvatar {
     nowSeconds: number,
     firstPerson?: boolean,
   ) => void;
+  setEquippedInventory: (inventory: InventoryState | null) => void;
 }
 
 export function createCharacterAvatar(
@@ -50,5 +52,8 @@ export function createCharacterAvatar(
   return {
     dispose,
     update,
+    setEquippedInventory: (inventory) => {
+      instance.setEquippedInventory?.(inventory);
+    },
   };
 }

@@ -25,6 +25,7 @@ interface WaterCacheEntry {
 
 export interface PlanetLakeWaterManager {
   dispose: () => void;
+  setVisible: (visible: boolean) => void;
   update: (
     bodyPosition: Vec3,
     selectedTiles: TileInfo[],
@@ -32,6 +33,7 @@ export interface PlanetLakeWaterManager {
     dtSeconds: number,
     skyColor: THREE.Color | null | undefined,
   ) => void;
+  shiftFocus: (bodyPosition: Vec3) => void;
 }
 
 function tileKey(face: TileInfo['face'], level: number, x: number, y: number): string {
@@ -216,6 +218,14 @@ export function createPlanetLakeWaterManager(
     );
   }
 
+  function shiftFocus(bodyPosition: Vec3): void {
+    waterGroup.position.set(
+      -bodyPosition.x * renderScale,
+      -bodyPosition.y * renderScale,
+      -bodyPosition.z * renderScale,
+    );
+  }
+
   function dispose(): void {
     pendingBuilds.length = 0;
     for (const [key, entry] of cache) {
@@ -229,6 +239,10 @@ export function createPlanetLakeWaterManager(
 
   return {
     dispose,
+    setVisible(visible) {
+      waterGroup.visible = visible;
+    },
     update,
+    shiftFocus,
   };
 }

@@ -22,7 +22,7 @@ flowchart TB
     Lint --> DDD[DDD import boundaries]
     Lint --> SRP[Complexity & size limits]
     Lint --> DRY[Duplicate detection]
-    Lint --> Nest[Nest layer rules]
+    Lint --> ESM[ESM module rules]
   end
 
   subgraph semantic ["Semantic guards · AI rules"]
@@ -49,12 +49,12 @@ Together they turn [Domain-Driven Design](./domain-design) and [Design Principle
 
 | Command | Purpose |
 | --- | --- |
-| `npm run lint` | Check all `src/`, `scripts/`, and `server/src/` TypeScript |
+| `npm run lint` | Check browser and utility TypeScript under `src/` and `scripts/` |
 | `npm run lint:fix` | Auto-fix where rules support it (e.g. type-import style) |
 
 **Plugins:** `@eslint/js`, `typescript-eslint`, `eslint-plugin-import-x`, `eslint-plugin-sonarjs`.
 
-**Ignored paths:** `dist/`, `docs/`, `vendor/`, `**/*.d.ts`, `vite.config.ts`, legacy `scripts/**/*.mjs`.
+**Ignored paths:** `dist/`, `target/`, `docs/`, `vendor/`, `**/*.d.ts`, `vite.config.ts`, legacy `scripts/**/*.mjs`.
 
 Most project-specific rules are **warnings** (complexity, duplication) so existing code can evolve gradually. **Architectural boundaries are errors** — domain layers must not import Three.js or the DOM.
 
@@ -117,19 +117,17 @@ Render may **read** domain state; it must not pull in app orchestration.
 | `max-lines` | 900 (warn) | Bootstrap wires modules; it should not become a god file |
 | `sonarjs/cognitive-complexity` | 20 (warn) | Slightly higher than default — orchestration is inherently branchy |
 
-### Nest server
+### Rust backend
 
-| Files | Rule | Level |
-| --- | --- | --- |
-| `*.controller.ts` | No direct `@prisma/client` or `**/prisma/**` imports | warn |
-| `*.controller.ts` | `max-lines-per-function` ≤ 40 | warn |
-| `*.service.ts`, `*.guard.ts` | No imports from `*.controller` | **error** |
+Rust is checked separately in CI:
 
-Controllers stay thin; services own persistence and domain work ([Dependency Inversion](./design-principles#d--dependency-inversion)).
+- `cargo fmt --all -- --check` enforces formatting.
+- `cargo clippy --workspace --all-targets -- -D warnings` rejects warnings across the server, protocol, and shared simulation crates.
+- `cargo build --release -p cc-server` and the WebAssembly build compile both native and browser targets from the same workspace.
 
 ### Relaxed zones
 
-`scripts/**/*.ts` and `server/src/**/*.spec.ts` turn off architectural restrictions — utilities and tests are allowed more freedom.
+`scripts/**/*.ts` turns off architectural restrictions so utilities have more freedom.
 
 ---
 
@@ -166,13 +164,13 @@ When a function trips multiple warnings, that is a signal to extract helpers or 
 | `@typescript-eslint/consistent-type-imports` | `import type` for types — cleaner dependency graph |
 | `import-x/no-cycle` | Circular imports (max depth 4) — breaks dependency inversion |
 | `class-methods-use-this` | Methods that do not use `this` may belong as functions |
-| `@typescript-eslint/no-empty-function` | Empty stubs (except Nest decorators) |
+| `@typescript-eslint/no-empty-function` | Empty stubs (with narrow decorated-function exceptions) |
 
 ### Module style
 
 | Rule | Note |
 | --- | --- |
-| `@typescript-eslint/no-require-imports` | Prefer ESM `import` in new code (server workspace is still CommonJS at runtime) |
+| `@typescript-eslint/no-require-imports` | Prefer ESM `import` in browser and utility TypeScript |
 
 ---
 
@@ -265,7 +263,7 @@ Drift between layers confuses agents. Prefer matching error messages in ESLint t
 | Can `render/` import `app/`? | **No** — error | DDD dependency diagram |
 | Is this function too big? | `max-lines-per-function`, complexity warnings | SRP checklist in design principles |
 | Foot height for character? | — | `sampleFootPlanetSurface()` in AGENTS.md |
-| Controller calling Prisma? | warn on `*.controller.ts` | Nest DIP in design principles |
+| Browser prediction rule duplicated in TypeScript? | — | Shared Rust/WASM core rule in AGENTS.md |
 
 ### Contributor checklist
 

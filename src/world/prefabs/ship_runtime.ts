@@ -14,6 +14,7 @@ import {
   type ShipDoorSpec,
   type CockpitControlSpec,
   type CockpitStatSpec,
+  type EntertainmentSystemSpec,
   type ShipBedSpec,
   type ShipGearHingeSpec,
   type ShipLayout,
@@ -57,6 +58,10 @@ const DEFAULT_BED_AIM_RADIUS = 0.35;
 const DEFAULT_STAIR_STEPS = 4;
 const DEFAULT_COCKPIT_GAZE_RADIUS = 0.2;
 const DEFAULT_COCKPIT_MAX_DISTANCE = 2.5;
+const DEFAULT_ES_GAZE_RADIUS = 0.35;
+const DEFAULT_ES_MAX_DISTANCE = 2;
+const DEFAULT_ES_SCREEN_WIDTH = 0.55;
+const DEFAULT_ES_SCREEN_HEIGHT = 0.32;
 const DEFAULT_COCKPIT_STAT_MAX_DISTANCE = 3.5;
 /** Mount clamp keeps a fresh mount above the dismount line. */
 const RAMP_MOUNT_CLAMP_METERS = 0.6;
@@ -72,6 +77,7 @@ interface CollectedShip {
   beds: ShipBedSpec[];
   cockpitControls: CockpitControlSpec[];
   cockpitStats: CockpitStatSpec[];
+  entertainmentSystems: EntertainmentSystemSpec[];
   rampInteracts: ShipRampInteract[];
   rampMount: ShipRampMount | null;
   cameraBounds: ShipCameraBounds[];
@@ -918,6 +924,52 @@ function collectCockpitStats(
   }
 }
 
+/** Walks the entity tree for entertainment-system markers (bunk mini-TV). */
+function collectEntertainmentSystems(
+  entity: PrefabEntity,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  for (const component of entity.components ?? []) {
+    if (component.type !== "entertainment-system") continue;
+    const point = resolveEntityShipPoint(entity.id, transforms);
+    if (!point) {
+      console.warn(
+        `Entertainment system "${component.id}" entity "${entity.id}" has no transform.`,
+      );
+      continue;
+    }
+    if (
+      out.entertainmentSystems.some((c) => c.id === (component.id || entity.id))
+    ) {
+      continue;
+    }
+    const xf = transforms.get(entity.id)!;
+    out.entertainmentSystems.push({
+      id: component.id || entity.id,
+      label: component.label?.trim() || "Turn on ES",
+      position: {
+        right: point.right,
+        up: point.up,
+        forward: point.forward,
+      },
+      rotation: {
+        x: xf.rotation.x,
+        y: xf.rotation.y,
+        z: xf.rotation.z,
+        w: xf.rotation.w,
+      },
+      gazeRadius: component.gazeRadius ?? DEFAULT_ES_GAZE_RADIUS,
+      maxDistance: component.maxDistance ?? DEFAULT_ES_MAX_DISTANCE,
+      screenWidth: component.screenWidth ?? DEFAULT_ES_SCREEN_WIDTH,
+      screenHeight: component.screenHeight ?? DEFAULT_ES_SCREEN_HEIGHT,
+    });
+  }
+  for (const child of entity.children ?? []) {
+    collectEntertainmentSystems(child, transforms, out);
+  }
+}
+
 function animationForNode(
   nodeName: string,
   doors: ShipDoorSpec[],
@@ -1014,6 +1066,7 @@ export async function buildShipLayoutFromPrefab(
     beds: [],
     cockpitControls: [],
     cockpitStats: [],
+    entertainmentSystems: [],
     rampInteracts: [],
     rampMount: null,
     cameraBounds: [],
@@ -1036,6 +1089,7 @@ export async function buildShipLayoutFromPrefab(
   }
   collectCockpitControls(doc.root, transforms, out);
   collectCockpitStats(doc.root, transforms, out);
+  collectEntertainmentSystems(doc.root, transforms, out);
   collectShipDoors(doc.root, transforms, out);
   collectBeds(doc.root, transforms, out);
 
@@ -1121,6 +1175,7 @@ export async function buildShipLayoutFromPrefab(
     beds: out.beds,
     cockpitControls: out.cockpitControls,
     cockpitStats: out.cockpitStats,
+    entertainmentSystems: out.entertainmentSystems,
     pilotSeat,
     pilotEye,
     seatStand,

@@ -71,12 +71,39 @@ export function createInspectorPanel(
   options: InspectorPanelOptions,
 ): void {
   const body = el("div", { className: "ed-panel-body" });
+  const visibilityBtn = el("button", {
+    className: "ed-eye",
+    text: "◉",
+    title: "Hide",
+    attrs: { type: "button", hidden: "true" },
+    on: {
+      click: () => {
+        const entity = store.getSelectedEntity();
+        if (!entity || store.getSelectedIds().length !== 1) return;
+        store.setVisible(entity.id, !entity.visible);
+      },
+    },
+  });
   container.append(
     el("div", { className: "ed-panel-title" }, [
       el("span", { text: "Inspector" }),
+      el("div", { className: "ed-panel-title-actions" }, [visibilityBtn]),
     ]),
     body,
   );
+
+  function syncVisibilityButton(): void {
+    const selectedIds = store.getSelectedIds();
+    const entity =
+      selectedIds.length === 1 ? store.getSelectedEntity() : null;
+    if (!entity) {
+      visibilityBtn.hidden = true;
+      return;
+    }
+    visibilityBtn.hidden = false;
+    visibilityBtn.textContent = entity.visible ? "◉" : "◌";
+    visibilityBtn.title = entity.visible ? "Hide" : "Show";
+  }
 
   function numberInput(
     value: number,
@@ -639,7 +666,7 @@ export function createInspectorPanel(
           return ids;
         })();
 
-        const rows = [
+        const rows: HTMLElement[] = [
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Id" }),
             textInput(component.id, (id) => update({ ...component, id })),
@@ -1093,14 +1120,14 @@ export function createInspectorPanel(
             ]),
           );
         } else {
+          const boxZone = component.zone;
           rows.push(
             el("div", { className: "ed-field-row" }, [
               el("span", { className: "ed-field-label", text: "Size" }),
               ...(["x", "y", "z"] as const).map((axis) =>
-                numberInput(component.zone.size[axis], (value) => {
-                  if (component.zone.shape !== "box") return;
+                numberInput(boxZone.size[axis], (value) => {
                   const size = {
-                    ...component.zone.size,
+                    ...boxZone.size,
                     [axis]: Math.min(1_000, Math.max(0.05, value)),
                   };
                   update({
@@ -1261,6 +1288,10 @@ export function createInspectorPanel(
               }),
             ),
           ]),
+          el("div", {
+            className: "ed-empty-note",
+            text: "Ship origin height above the pad (m). Viewport: cyan pad = authored, amber dashed = auto from hull lowest point. 0 = auto.",
+          }),
           el("div", { className: "ed-section-label", text: "Stats" }),
           el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Max spd" }),
@@ -1671,7 +1702,7 @@ export function createInspectorPanel(
           ]),
           el("div", {
             className: "ed-empty-note",
-            text: "Ship origin height above ground when parked (m). 0 = auto: previews rest the hull on the pad.",
+            text: "Ship origin height above ground when parked (m). 0 = auto. Viewport shows a pad disc at −rest ht under the origin.",
           }),
         ];
       case "ship-walk-zone": {
@@ -2254,6 +2285,238 @@ export function createInspectorPanel(
             ),
           ]),
         ];
+      case "entertainment-system":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Label" }),
+            textInput(component.label ?? "Turn on ES", (label) =>
+              update({
+                ...component,
+                label: label.trim() ? label.trim() : undefined,
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Gaze radius" }),
+            numberInput(
+              component.gazeRadius ?? 0.35,
+              (gazeRadius) =>
+                update({
+                  ...component,
+                  gazeRadius: Math.max(0.05, Math.min(2, gazeRadius)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max distance" }),
+            numberInput(
+              component.maxDistance ?? 2,
+              (maxDistance) =>
+                update({
+                  ...component,
+                  maxDistance: Math.max(0.5, Math.min(10, maxDistance)),
+                }),
+              0.1,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Screen width" }),
+            numberInput(
+              component.screenWidth ?? 0.55,
+              (screenWidth) =>
+                update({
+                  ...component,
+                  screenWidth: Math.max(0.2, Math.min(2, screenWidth)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Screen height" }),
+            numberInput(
+              component.screenHeight ?? 0.32,
+              (screenHeight) =>
+                update({
+                  ...component,
+                  screenHeight: Math.max(0.15, Math.min(1.5, screenHeight)),
+                }),
+              0.05,
+            ),
+          ]),
+        ];
+      case "weapon-shop":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Label" }),
+            textInput(component.label ?? "Browse weapons", (label) =>
+              update({
+                ...component,
+                label: label.trim() ? label.trim() : undefined,
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Gaze radius" }),
+            numberInput(
+              component.gazeRadius ?? 0.4,
+              (gazeRadius) =>
+                update({
+                  ...component,
+                  gazeRadius: Math.max(0.05, Math.min(2, gazeRadius)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max distance" }),
+            numberInput(
+              component.maxDistance ?? 3,
+              (maxDistance) =>
+                update({
+                  ...component,
+                  maxDistance: Math.max(0.5, Math.min(10, maxDistance)),
+                }),
+              0.1,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Screen width" }),
+            numberInput(
+              component.screenWidth ?? 0.45,
+              (screenWidth) =>
+                update({
+                  ...component,
+                  screenWidth: Math.max(0.2, Math.min(2, screenWidth)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Screen height" }),
+            numberInput(
+              component.screenHeight ?? 0.28,
+              (screenHeight) =>
+                update({
+                  ...component,
+                  screenHeight: Math.max(0.15, Math.min(1.5, screenHeight)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Item IDs" }),
+            textInput(
+              (component.itemDefinitionIds ?? []).join(", "),
+              (raw) => {
+                const ids = raw
+                  .split(/[,\s]+/)
+                  .map((id) => id.trim())
+                  .filter((id) => id.length > 0);
+                update({
+                  ...component,
+                  itemDefinitionIds: ids.length > 0 ? ids : undefined,
+                });
+              },
+            ),
+          ]),
+          el("div", {
+            className: "ed-hint",
+            text: "Optional comma-separated weapon definition IDs. Empty = all catalog weapons.",
+          }),
+        ];
+      case "outfitters":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Label" }),
+            textInput(component.label ?? "Browse outfitters", (label) =>
+              update({
+                ...component,
+                label: label.trim() ? label.trim() : undefined,
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Gaze radius" }),
+            numberInput(
+              component.gazeRadius ?? 0.4,
+              (gazeRadius) =>
+                update({
+                  ...component,
+                  gazeRadius: Math.max(0.05, Math.min(2, gazeRadius)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max distance" }),
+            numberInput(
+              component.maxDistance ?? 3,
+              (maxDistance) =>
+                update({
+                  ...component,
+                  maxDistance: Math.max(0.5, Math.min(10, maxDistance)),
+                }),
+              0.1,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Screen width" }),
+            numberInput(
+              component.screenWidth ?? 0.45,
+              (screenWidth) =>
+                update({
+                  ...component,
+                  screenWidth: Math.max(0.2, Math.min(2, screenWidth)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Screen height" }),
+            numberInput(
+              component.screenHeight ?? 0.28,
+              (screenHeight) =>
+                update({
+                  ...component,
+                  screenHeight: Math.max(0.15, Math.min(1.5, screenHeight)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Item IDs" }),
+            textInput(
+              (component.itemDefinitionIds ?? []).join(", "),
+              (raw) => {
+                const ids = raw
+                  .split(/[,\s]+/)
+                  .map((id) => id.trim())
+                  .filter((id) => id.length > 0);
+                update({
+                  ...component,
+                  itemDefinitionIds: ids.length > 0 ? ids : undefined,
+                });
+              },
+            ),
+          ]),
+          el("div", {
+            className: "ed-hint",
+            text: "Optional comma-separated catalog IDs. Empty = all stocked outfitters items (Back = backpacks).",
+          }),
+        ];
       case "cockpit-stat":
         return [
           el("div", { className: "ed-field-row-wide" }, [
@@ -2554,6 +2817,7 @@ export function createInspectorPanel(
     transformInputs = null;
     glbTransformInputs = null;
     glbTransformTarget = null;
+    syncVisibilityButton();
 
     const selectedIds = store.getSelectedIds();
     const subSelection = store.getSubSelection();

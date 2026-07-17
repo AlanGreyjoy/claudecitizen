@@ -53,8 +53,9 @@ export function startEditorSession(): void {
   document.getElementById('app')?.classList.add('is-hidden');
 
   injectEditorStyles();
-  const root = document.getElementById('editor-root');
-  if (!root) throw new Error('Missing #editor-root');
+  const rootElement = document.getElementById('editor-root');
+  if (!rootElement) throw new Error('Missing #editor-root');
+  const root: HTMLElement = rootElement;
   root.classList.remove('is-hidden');
 
   // --- layout ---------------------------------------------------------------

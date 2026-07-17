@@ -9,6 +9,7 @@ const prefabThumbCache = new Map<string, Promise<string>>();
 const TYPE_LABELS: Record<ItemType, string> = {
   consumable: 'CON',
   weapon: 'WPN',
+  backpack: 'BPK',
   armor: 'ARM',
   clothing: 'CLT',
   material: 'MAT',

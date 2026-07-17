@@ -1563,6 +1563,39 @@
         ]
       },
       {
+        "id": "crew-bed-es",
+        "name": "Crew Bed ES",
+        "transform": {
+          "position": {
+            "x": 1.87755,
+            "y": 0.48757,
+            "z": -1.69344
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "entertainment-system",
+            "id": "crew-bed-es",
+            "label": "Turn on ES",
+            "gazeRadius": 0.45,
+            "maxDistance": 2.6,
+            "screenWidth": 0.65,
+            "screenHeight": 0.32
+          }
+        ]
+      },
+      {
         "id": "pilot-seat",
         "name": "Pilot Seat",
         "transform": {

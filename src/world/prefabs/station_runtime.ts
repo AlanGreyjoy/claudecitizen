@@ -7,6 +7,8 @@ import {
   type StationFloorId,
   type StationInfoMarker,
   type StationAvmsMarker,
+  type StationWeaponShopMarker,
+  type StationOutfittersMarker,
   type StationLayoutOverride,
   type StationRoom,
   type StationSpawnPose,
@@ -33,6 +35,14 @@ import { buildPrefabSounds } from './sound_runtime';
  */
 
 const MARKER_RADIUS = 2.5;
+const DEFAULT_WEAPON_SHOP_GAZE_RADIUS = 0.4;
+const DEFAULT_WEAPON_SHOP_MAX_DISTANCE = 3;
+const DEFAULT_WEAPON_SHOP_SCREEN_WIDTH = 0.45;
+const DEFAULT_WEAPON_SHOP_SCREEN_HEIGHT = 0.28;
+const DEFAULT_OUTFITTERS_GAZE_RADIUS = 0.4;
+const DEFAULT_OUTFITTERS_MAX_DISTANCE = 3;
+const DEFAULT_OUTFITTERS_SCREEN_WIDTH = 0.45;
+const DEFAULT_OUTFITTERS_SCREEN_HEIGHT = 0.28;
 
 
 interface FlattenedComponents {
@@ -72,6 +82,8 @@ interface FlattenedComponents {
     interactionType?: "info" | "animation";
     targetAnimationId?: string;
     keyLabel?: string;
+    proximitySoundUrl?: string;
+    interactSoundUrl?: string;
   }[];
   avmsSeeds: {
     id: string;
@@ -80,6 +92,32 @@ interface FlattenedComponents {
     right: number;
     up: number;
     forward: number;
+  }[];
+  weaponShopSeeds: {
+    id: string;
+    label: string;
+    right: number;
+    up: number;
+    forward: number;
+    rotation: Quat;
+    gazeRadius: number;
+    maxDistance: number;
+    screenWidth: number;
+    screenHeight: number;
+    itemDefinitionIds: string[];
+  }[];
+  outfittersSeeds: {
+    id: string;
+    label: string;
+    right: number;
+    up: number;
+    forward: number;
+    rotation: Quat;
+    gazeRadius: number;
+    maxDistance: number;
+    screenWidth: number;
+    screenHeight: number;
+    itemDefinitionIds: string[];
   }[];
   animationSpecs: {
     id: string;
@@ -184,6 +222,36 @@ function collect(
           forward,
         });
         break;
+      case 'weapon-shop':
+        out.weaponShopSeeds.push({
+          id: component.id || entity.id,
+          label: component.label?.trim() || 'Browse weapons',
+          right,
+          up: position.y,
+          forward,
+          rotation,
+          gazeRadius: component.gazeRadius ?? DEFAULT_WEAPON_SHOP_GAZE_RADIUS,
+          maxDistance: component.maxDistance ?? DEFAULT_WEAPON_SHOP_MAX_DISTANCE,
+          screenWidth: component.screenWidth ?? DEFAULT_WEAPON_SHOP_SCREEN_WIDTH,
+          screenHeight: component.screenHeight ?? DEFAULT_WEAPON_SHOP_SCREEN_HEIGHT,
+          itemDefinitionIds: component.itemDefinitionIds ?? [],
+        });
+        break;
+      case 'outfitters':
+        out.outfittersSeeds.push({
+          id: component.id || entity.id,
+          label: component.label?.trim() || 'Browse outfitters',
+          right,
+          up: position.y,
+          forward,
+          rotation,
+          gazeRadius: component.gazeRadius ?? DEFAULT_OUTFITTERS_GAZE_RADIUS,
+          maxDistance: component.maxDistance ?? DEFAULT_OUTFITTERS_MAX_DISTANCE,
+          screenWidth: component.screenWidth ?? DEFAULT_OUTFITTERS_SCREEN_WIDTH,
+          screenHeight: component.screenHeight ?? DEFAULT_OUTFITTERS_SCREEN_HEIGHT,
+          itemDefinitionIds: component.itemDefinitionIds ?? [],
+        });
+        break;
       case 'animation':
         out.animationSpecs.push({
           id: component.id,
@@ -267,6 +335,8 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     hangarSeeds: [],
     infoSeeds: [],
     avmsSeeds: [],
+    weaponShopSeeds: [],
+    outfittersSeeds: [],
     animationSpecs: [],
   };
   collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
@@ -353,6 +423,52 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     });
   }
 
+  const weaponShops: StationWeaponShopMarker[] = [];
+  for (const seed of out.weaponShopSeeds) {
+    if (weaponShops.some((shop) => shop.id === seed.id)) continue;
+    weaponShops.push({
+      id: seed.id,
+      label: seed.label,
+      right: seed.right,
+      up: seed.up,
+      forward: seed.forward,
+      rotation: {
+        x: seed.rotation.x,
+        y: seed.rotation.y,
+        z: seed.rotation.z,
+        w: seed.rotation.w,
+      },
+      gazeRadius: seed.gazeRadius,
+      maxDistance: seed.maxDistance,
+      screenWidth: seed.screenWidth,
+      screenHeight: seed.screenHeight,
+      itemDefinitionIds: seed.itemDefinitionIds,
+    });
+  }
+
+  const outfitters: StationOutfittersMarker[] = [];
+  for (const seed of out.outfittersSeeds) {
+    if (outfitters.some((shop) => shop.id === seed.id)) continue;
+    outfitters.push({
+      id: seed.id,
+      label: seed.label,
+      right: seed.right,
+      up: seed.up,
+      forward: seed.forward,
+      rotation: {
+        x: seed.rotation.x,
+        y: seed.rotation.y,
+        z: seed.rotation.z,
+        w: seed.rotation.w,
+      },
+      gazeRadius: seed.gazeRadius,
+      maxDistance: seed.maxDistance,
+      screenWidth: seed.screenWidth,
+      screenHeight: seed.screenHeight,
+      itemDefinitionIds: seed.itemDefinitionIds,
+    });
+  }
+
   return {
     rooms: out.rooms,
     doorways: [],
@@ -362,6 +478,8 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     elevatorMarkers,
     infoMarkers,
     avmsMarkers,
+    weaponShops,
+    outfitters,
     sounds: buildPrefabSounds(doc),
   };
 }

@@ -8,7 +8,7 @@ description: Create and edit playable ship catalog entries in the Admin App.
 
 A **ship definition** is a server-side catalog row that ties a bundled **ship prefab** to gameplay stats and an ARC shop price. When players receive or purchase ships, the server creates `Ship` instances from these definitions.
 
-Definitions live in the `ShipDefinition` Prisma model. The Admin App **Ships** tab is the primary way to manage them.
+Definitions live in the PostgreSQL `ShipDefinition` table managed through SQLx. The Admin App **Ships** tab is the primary way to manage them.
 
 ## List view
 

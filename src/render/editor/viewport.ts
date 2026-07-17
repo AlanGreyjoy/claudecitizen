@@ -353,6 +353,101 @@ export function createEditorViewport(
     return mesh;
   }
 
+  /**
+   * Parked rest-height debug gizmo: ship origin → pad plane at local Y = -restHeight.
+   * Gear tips / belly should meet the disc when the ship is parked.
+   */
+  function makeRestHeightHelper(
+    restHeightMeters: number,
+    options?: { auto?: boolean; radius?: number },
+  ): THREE.Group {
+    const height = Math.max(0.05, restHeightMeters);
+    const auto = options?.auto ?? false;
+    const radius = options?.radius ?? Math.max(6, Math.min(24, height * 1.5));
+    const color = auto ? 0xffce6f : 0x5ec8ff;
+    const group = new THREE.Group();
+    group.userData.editorRestHeightHelper = true;
+
+    const pad = makeHelperMesh(
+      new THREE.CylinderGeometry(radius, radius, 0.06, 48),
+      color,
+      auto ? 0.16 : 0.2,
+    );
+    pad.position.y = -height;
+    const padWire = makeHelperMesh(
+      new THREE.CylinderGeometry(radius, radius, 0.06, 48),
+      color,
+      auto ? 0.4 : 0.55,
+      true,
+    );
+    padWire.position.y = -height;
+
+    const ring = makeHelperMesh(
+      new THREE.TorusGeometry(Math.max(0.5, radius * 0.92), 0.045, 8, 48),
+      color,
+      0.75,
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = -height + 0.04;
+
+    const lineMaterial = track(
+      auto
+        ? new THREE.LineDashedMaterial({
+            color,
+            dashSize: 0.45,
+            gapSize: 0.28,
+            transparent: true,
+            opacity: 0.7,
+            depthWrite: false,
+          })
+        : new THREE.LineBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.95,
+            depthWrite: false,
+          }),
+    );
+    const stemGeometry = track(new THREE.BufferGeometry());
+    stemGeometry.setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, -height, 0),
+    ]);
+    const stem = new THREE.Line(stemGeometry, lineMaterial);
+    if (auto) stem.computeLineDistances();
+
+    const crossGeometry = track(new THREE.BufferGeometry());
+    const arm = radius * 0.85;
+    crossGeometry.setFromPoints([
+      new THREE.Vector3(-arm, -height, 0),
+      new THREE.Vector3(arm, -height, 0),
+      new THREE.Vector3(0, -height, -arm),
+      new THREE.Vector3(0, -height, arm),
+    ]);
+    const cross = new THREE.LineSegments(crossGeometry, lineMaterial);
+    if (auto) cross.computeLineDistances();
+
+    const origin = makeHelperMesh(
+      new THREE.SphereGeometry(0.18, 12, 10),
+      color,
+      0.92,
+    );
+    const contact = makeHelperMesh(
+      new THREE.SphereGeometry(0.14, 10, 8),
+      color,
+      0.88,
+    );
+    contact.position.y = -height;
+
+    group.add(pad, padWire, ring, stem, cross, origin, contact);
+    return group;
+  }
+
+  function clearRestHeightHelpers(parent: THREE.Object3D): void {
+    for (const child of [...parent.children]) {
+      if (child.userData.editorRestHeightHelper) parent.remove(child);
+    }
+  }
+
   /** XZ box outline + translucent fill, origin-relative (used by zones and mounts). */
   function makeZoneBoxHelper(
     min: { x: number; z: number },
@@ -640,6 +735,7 @@ export function createEditorViewport(
       }
       case "ship-hull": {
         // Subtle marker only — the hull is the entity's own model.
+        // Rest-height pad is attached after the GLB loads (see recenterAsHull).
         const ring = makeHelperMesh(
           new THREE.TorusGeometry(1.2, 0.05, 8, 32),
           0x8bd8ff,
@@ -932,10 +1028,73 @@ export function createEditorViewport(
         group.add(sphere, core);
         return group;
       }
+      case "entertainment-system": {
+        const group = new THREE.Group();
+        const color = 0xb48cff;
+        const radius = component.gazeRadius ?? 0.35;
+        const sphere = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 12, 10),
+          color,
+          0.28,
+          true,
+        );
+        const w = component.screenWidth ?? 0.55;
+        const h = component.screenHeight ?? 0.32;
+        const screen = makeHelperMesh(
+          new THREE.PlaneGeometry(w, h),
+          color,
+          0.75,
+        );
+        group.add(sphere, screen);
+        return group;
+      }
+      case "weapon-shop": {
+        const group = new THREE.Group();
+        const color = 0xff7a4a;
+        const radius = component.gazeRadius ?? 0.4;
+        const sphere = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 12, 10),
+          color,
+          0.28,
+          true,
+        );
+        const w = component.screenWidth ?? 0.45;
+        const h = component.screenHeight ?? 0.28;
+        const screen = makeHelperMesh(
+          new THREE.PlaneGeometry(w, h),
+          color,
+          0.75,
+        );
+        group.add(sphere, screen);
+        return group;
+      }
+      case "outfitters": {
+        const group = new THREE.Group();
+        const color = 0x4ad9a0;
+        const radius = component.gazeRadius ?? 0.4;
+        const sphere = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 12, 10),
+          color,
+          0.28,
+          true,
+        );
+        const w = component.screenWidth ?? 0.45;
+        const h = component.screenHeight ?? 0.28;
+        const screen = makeHelperMesh(
+          new THREE.PlaneGeometry(w, h),
+          color,
+          0.75,
+        );
+        group.add(sphere, screen);
+        return group;
+      }
+      case "ship-controller": {
+        if (component.restHeight === undefined) return null;
+        return makeRestHeightHelper(component.restHeight);
+      }
       case "ship-stats":
       case "ship-gear":
       case "ship-ramp":
-      case "ship-controller":
         return null;
     }
     return null;
@@ -1096,6 +1255,38 @@ export function createEditorViewport(
           store.setGlbTree(entity.id, buildGlbNodeRef(model));
           applyGlbOverridesForEntity(entity.id);
           applyHiddenNodesForEntity(entity.id);
+          if (recenterAsHull) {
+            // Rest-height pad: authored value, or auto from hull lowest point.
+            // Measure in entity-local space (group may be transformed).
+            const restSource = entity.components.find(
+              (component) =>
+                component.type === "ship-controller" ||
+                component.type === "ship-hull",
+            );
+            const authored =
+              restSource &&
+              (restSource.type === "ship-controller" ||
+                restSource.type === "ship-hull")
+                ? restSource.restHeight
+                : undefined;
+            group.updateWorldMatrix(true, true);
+            const hullBox = new THREE.Box3()
+              .setFromObject(model)
+              .applyMatrix4(group.matrixWorld.clone().invert());
+            const hullSize = hullBox.getSize(new THREE.Vector3());
+            const padRadius = Math.max(
+              4,
+              Math.max(hullSize.x, hullSize.z) * 0.55,
+            );
+            const autoRest = Math.min(30, Math.max(0.3, -hullBox.min.y));
+            clearRestHeightHelpers(group);
+            group.add(
+              makeRestHeightHelper(authored ?? autoRest, {
+                auto: authored === undefined,
+                radius: padRadius,
+              }),
+            );
+          }
           for (const override of entity.glbNodeTransforms) {
             if (override.components.length === 0) continue;
             const targetNode = model.getObjectByName(sanitizeNodeName(override.nodeName));
@@ -1270,7 +1461,7 @@ export function createEditorViewport(
           : `Editor ship preview: node "${name}" not found.`,
       );
     }
-    return object;
+    return object ?? null;
   }
 
   function findShipController(): Extract<

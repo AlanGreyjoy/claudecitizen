@@ -425,7 +425,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     return button;
   }
 
-  function renderDeviceControls(profileId: DeviceProfileId): HTMLElement {
+  function renderDeviceControls(profileId: DeviceProfileId): {
+    panel: HTMLElement;
+    startPreview: () => () => void;
+  } {
     const panel = createElement('div', 'sc-game-menu-control-page');
     const layout = createElement('div', 'sc-game-menu-device-layout');
     const main = createElement('div', 'sc-game-menu-device-main');

@@ -15,7 +15,7 @@ A procedural planet, ship physics, on-foot movement, and a Three.js renderer cou
 - **Clear ownership** — terrain bugs start in `world/`, not in a shader.
 - **Testable logic** — domain modules export pure functions and factories (no Three.js types).
 - **Performance guardrails** — `render/` cannot silently mutate simulation state mid-frame.
-- **Future server parity** — the same domain boundaries map to Nest.js services later.
+- **Shared authority semantics** — browser prediction and native authority share Rust simulation primitives.
 
 ## Bounded contexts
 
@@ -64,7 +64,7 @@ Supporting modules sit outside the core simulation boundary:
 | `physics/` | Rapier world for stations |
 | `editor/` | Dev-only prefab authoring (not shipped in prod) |
 | `ui/` | DOM HUD panels |
-| `net/` | Future client networking |
+| `net/` | WebTransport, Protobuf codecs, interpolation, and WASM prediction |
 
 ## Dependency direction
 
@@ -114,7 +114,7 @@ Terms mean the same thing in code, docs, and prefabs:
 | **Walk zone** | Authoring volume for on-foot collision (ship deck or station floor) |
 | **Foot surface** | Discrete height grid used by the character controller |
 | **Mode FSM** | Player state machine: on foot, on deck, in pilot seat, in flight |
-| **Intent** | Future multiplayer: client requests an action; server decides outcome |
+| **Intent** | Client request evaluated by the authoritative cell owner |
 
 ## Prefabs as the world model
 
@@ -163,9 +163,9 @@ flowchart LR
 
 Character update runs **before** render each frame, so foot sampling intentionally uses the **previous frame's** tile level (one-frame lag is acceptable; desync is not).
 
-## Mapping to the future server
+## Mapping to the authoritative backend
 
-When multiplayer lands, each bounded context becomes a Nest.js service boundary:
+Browser domain state is predicted locally, while the Rust cell owner evaluates intents and returns authoritative reconciliation:
 
 ```mermaid
 flowchart TB
@@ -175,22 +175,22 @@ flowchart TB
     CRender[render]
   end
 
-  subgraph server ["Authoritative server"]
-    SW[WorldService]
-    SF[FlightService]
-    SP[PlayerService]
-    SG[GameGateway · WebSockets]
+  subgraph server ["Authoritative Rust backend"]
+    GW[WebTransport · Protobuf]
+    Cell[Cell owner]
+    Sim[Shared sim-core · native Rapier]
+    Store[SQLx · PostgreSQL]
   end
 
-  CPlayer -->|intent: board ship| SG
-  SG --> SP
-  SP --> SF
-  SP --> SW
-  SG -->|state deltas| CPlayer
+  CPlayer -->|intent| GW
+  GW --> Cell
+  Cell --> Sim
+  Cell --> Store
+  GW -->|snapshot + reconcile| CPlayer
   CWorld --> CRender
 ```
 
-Clients send **intents**; the server owns outcomes. Domain logic stays in services that mirror `world/`, `flight/`, and `player/` — not in controllers or the render path.
+Clients send **intents**; the cell owner owns outcomes. `backend/crates/sim-core/` compiles to both native code and WebAssembly so prediction does not drift into a second implementation. Rendering remains presentation-only.
 
 ## Further reading
 

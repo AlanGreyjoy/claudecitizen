@@ -283,6 +283,52 @@ export type PrefabComponent =
       duration?: number;
     }
   | { type: "avms-terminal"; id: string; radius: number; floorId: StationFloorId }
+  /**
+   * Station weapon vendor screen (gaze + F while on foot). Empty marker
+   * position is the gaze / powered-screen anchor in station space.
+   */
+  | {
+      type: "weapon-shop";
+      id: string;
+      /** Prompt when gazing (default "Browse weapons"). */
+      label?: string;
+      /** Max perpendicular distance from the camera ray to count as a gaze hit (m). */
+      gazeRadius?: number;
+      /** Max distance from the camera to the marker (m). */
+      maxDistance?: number;
+      /** Powered screen plane width in meters (visual only). */
+      screenWidth?: number;
+      /** Powered screen plane height in meters (visual only). */
+      screenHeight?: number;
+      /**
+       * Optional filter of catalog weapon definition ids.
+       * Empty / omitted = sell all weapons from the live catalog.
+       */
+      itemDefinitionIds?: string[];
+    }
+  /**
+   * Station outfitters vendor screen (gaze + F while on foot). Empty marker
+   * position is the gaze / powered-screen anchor in station space.
+   */
+  | {
+      type: "outfitters";
+      id: string;
+      /** Prompt when gazing (default "Browse outfitters"). */
+      label?: string;
+      /** Max perpendicular distance from the camera ray to count as a gaze hit (m). */
+      gazeRadius?: number;
+      /** Max distance from the camera to the marker (m). */
+      maxDistance?: number;
+      /** Powered screen plane width in meters (visual only). */
+      screenWidth?: number;
+      /** Powered screen plane height in meters (visual only). */
+      screenHeight?: number;
+      /**
+       * Optional filter of catalog outfitters item definition ids.
+       * Empty / omitted = sell all stocked categories from the live catalog.
+       */
+      itemDefinitionIds?: string[];
+    }
   | {
       type: "point-light";
       color?: PrefabColor;
@@ -672,6 +718,24 @@ export type PrefabComponent =
       label?: string;
       /** Max distance from the pilot eye to show this instrument (m). */
       maxDistance?: number;
+    }
+  /**
+   * Bunk entertainment system screen (gaze + F while in bed). Empty marker
+   * position is the gaze / powered-screen anchor in ship space.
+   */
+  | {
+      type: "entertainment-system";
+      id: string;
+      /** Prompt when gazing (default "Turn on ES"). */
+      label?: string;
+      /** Max perpendicular distance from the camera ray to count as a gaze hit (m). */
+      gazeRadius?: number;
+      /** Max distance from the camera to the marker (m). */
+      maxDistance?: number;
+      /** Powered screen plane width in meters (visual only). */
+      screenWidth?: number;
+      /** Powered screen plane height in meters (visual only). */
+      screenHeight?: number;
     };
 
 export type PrefabComponentType = PrefabComponent["type"];
@@ -1489,6 +1553,134 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         ),
         floorId: parseFloorId(value.floorId, `${path}.floorId`),
       };
+    case "weapon-shop": {
+      const idsRaw = value.itemDefinitionIds;
+      let itemDefinitionIds: string[] | undefined;
+      if (idsRaw !== undefined) {
+        if (!Array.isArray(idsRaw)) {
+          fail(`${path}.itemDefinitionIds`, "expected array of strings");
+        }
+        itemDefinitionIds = idsRaw
+          .map((id, index) =>
+            parseString(id, `${path}.itemDefinitionIds[${index}]`, 64),
+          )
+          .filter((id) => id.length > 0);
+        if (itemDefinitionIds.length === 0) itemDefinitionIds = undefined;
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        label:
+          value.label === undefined
+            ? undefined
+            : parseString(value.label, `${path}.label`, 64),
+        gazeRadius:
+          value.gazeRadius === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.gazeRadius, `${path}.gazeRadius`),
+                ),
+              ),
+        maxDistance:
+          value.maxDistance === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(
+                  0.5,
+                  parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+                ),
+              ),
+        screenWidth:
+          value.screenWidth === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.2,
+                  parseFiniteNumber(value.screenWidth, `${path}.screenWidth`),
+                ),
+              ),
+        screenHeight:
+          value.screenHeight === undefined
+            ? undefined
+            : Math.min(
+                1.5,
+                Math.max(
+                  0.15,
+                  parseFiniteNumber(value.screenHeight, `${path}.screenHeight`),
+                ),
+              ),
+        itemDefinitionIds,
+      };
+    }
+    case "outfitters": {
+      const idsRaw = value.itemDefinitionIds;
+      let itemDefinitionIds: string[] | undefined;
+      if (idsRaw !== undefined) {
+        if (!Array.isArray(idsRaw)) {
+          fail(`${path}.itemDefinitionIds`, "expected array of strings");
+        }
+        itemDefinitionIds = idsRaw
+          .map((id, index) =>
+            parseString(id, `${path}.itemDefinitionIds[${index}]`, 64),
+          )
+          .filter((id) => id.length > 0);
+        if (itemDefinitionIds.length === 0) itemDefinitionIds = undefined;
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        label:
+          value.label === undefined
+            ? undefined
+            : parseString(value.label, `${path}.label`, 64),
+        gazeRadius:
+          value.gazeRadius === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.gazeRadius, `${path}.gazeRadius`),
+                ),
+              ),
+        maxDistance:
+          value.maxDistance === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(
+                  0.5,
+                  parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+                ),
+              ),
+        screenWidth:
+          value.screenWidth === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.2,
+                  parseFiniteNumber(value.screenWidth, `${path}.screenWidth`),
+                ),
+              ),
+        screenHeight:
+          value.screenHeight === undefined
+            ? undefined
+            : Math.min(
+                1.5,
+                Math.max(
+                  0.15,
+                  parseFiniteNumber(value.screenHeight, `${path}.screenHeight`),
+                ),
+              ),
+        itemDefinitionIds,
+      };
+    }
     case "point-light":
       return {
         type,
@@ -2841,6 +3033,56 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                 Math.max(
                   0.5,
                   parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+                ),
+              ),
+      };
+    }
+    case "entertainment-system": {
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        label:
+          value.label === undefined
+            ? undefined
+            : parseString(value.label, `${path}.label`, 64),
+        gazeRadius:
+          value.gazeRadius === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.gazeRadius, `${path}.gazeRadius`),
+                ),
+              ),
+        maxDistance:
+          value.maxDistance === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(
+                  0.5,
+                  parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+                ),
+              ),
+        screenWidth:
+          value.screenWidth === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.2,
+                  parseFiniteNumber(value.screenWidth, `${path}.screenWidth`),
+                ),
+              ),
+        screenHeight:
+          value.screenHeight === undefined
+            ? undefined
+            : Math.min(
+                1.5,
+                Math.max(
+                  0.15,
+                  parseFiniteNumber(value.screenHeight, `${path}.screenHeight`),
                 ),
               ),
       };

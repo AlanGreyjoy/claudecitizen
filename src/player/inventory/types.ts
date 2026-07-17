@@ -1,3 +1,5 @@
+import type { WeaponSlotType } from '../../types/equipment';
+
 export const ITEM_TYPES = [
   'consumable',
   'weapon',
@@ -21,6 +23,11 @@ export interface ItemDefinition {
   stackMax: number;
   costArc: number;
   rarity: string;
+  /** Present for weapons. */
+  weaponSlotType?: WeaponSlotType;
+  /** Present for backpacks. */
+  capacityLiters?: number;
+  emptyMassKg?: number;
 }
 
 export interface PlayerItemStack {
@@ -28,9 +35,28 @@ export interface PlayerItemStack {
   quantity: number;
 }
 
+/** Slot id → equipped itemDefinitionId. */
+export type LoadoutState = Record<string, string>;
+
 export interface InventoryState {
   catalog: ItemDefinition[];
   items: PlayerItemStack[];
+  loadout: LoadoutState;
+}
+
+export function normalizeInventoryState(value: unknown): InventoryState {
+  if (!value || typeof value !== 'object') {
+    return { catalog: [], items: [], loadout: {} };
+  }
+  const source = value as Partial<InventoryState>;
+  return {
+    catalog: Array.isArray(source.catalog) ? (source.catalog as ItemDefinition[]) : [],
+    items: Array.isArray(source.items) ? (source.items as PlayerItemStack[]) : [],
+    loadout:
+      source.loadout && typeof source.loadout === 'object' && !Array.isArray(source.loadout)
+        ? { ...(source.loadout as LoadoutState) }
+        : {},
+  };
 }
 
 export function findItemDefinition(
@@ -66,4 +92,48 @@ export function groupStacksByType(
     grouped.set(definition.itemType, bucket);
   }
   return grouped;
+}
+
+/** First compatible empty loadout slot for an item, or null if none. */
+export function findQuickEquipSlot(
+  state: InventoryState,
+  itemDefinitionId: string,
+  slots: ReadonlyArray<{
+    id: string;
+    kind: 'weapon' | 'backpack';
+    weaponSlotType?: WeaponSlotType;
+    requiresSlotId?: string;
+  }>,
+): string | null {
+  const definition = findItemDefinition(state.catalog, itemDefinitionId);
+  if (!definition) return null;
+  for (const slot of slots) {
+    if (state.loadout[slot.id]) continue;
+    if (slot.requiresSlotId && !state.loadout[slot.requiresSlotId]) continue;
+    if (slot.kind === 'backpack' && definition.itemType === 'backpack') return slot.id;
+    if (
+      slot.kind === 'weapon' &&
+      definition.itemType === 'weapon' &&
+      definition.weaponSlotType === slot.weaponSlotType
+    ) {
+      return slot.id;
+    }
+  }
+  return null;
+}
+
+export function itemCompatibleWithSlot(
+  definition: ItemDefinition,
+  slot: {
+    kind: 'weapon' | 'backpack';
+    weaponSlotType?: WeaponSlotType;
+    requiresSlotId?: string;
+  },
+  loadout: LoadoutState,
+): boolean {
+  if (slot.requiresSlotId && !loadout[slot.requiresSlotId]) return false;
+  if (slot.kind === 'backpack') return definition.itemType === 'backpack';
+  return (
+    definition.itemType === 'weapon' && definition.weaponSlotType === slot.weaponSlotType
+  );
 }

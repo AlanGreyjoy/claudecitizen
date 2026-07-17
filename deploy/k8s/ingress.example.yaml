@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: claudecitizen-backend-http
+  namespace: claudecitizen
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 512k
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["api.claudecitizen.example.com"]
+      secretName: claudecitizen-api-tls
+  rules:
+    - host: api.claudecitizen.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: claudecitizen-backend-http
+                port:
+                  name: http
+

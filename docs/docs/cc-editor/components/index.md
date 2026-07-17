@@ -51,6 +51,8 @@ Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship
 | [Elevator](./elevator) | Floor-to-floor travel between paired markers |
 | [Hangar pad](./hangar-pad) | Ship parking spot inside a hangar |
 | [AVMS terminal](./avms-terminal) | Opens the vehicle management UI |
+| [Weapon Shop](./weapon-shop) | Gaze + F vendor screen — buy weapons for ARC |
+| [Outfitters](./outfitters) | Gaze + F vendor screen — buy backpacks / gear for ARC |
 
 → Workflow details in [Station authoring](../station-authoring)
 
@@ -71,6 +73,7 @@ Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship
 | [Ship controller](./ship-controller) | Singleton hull wiring — stats, gear, ramp, doors, seats |
 | [Ship door](./ship-door) | F-key articulated door / cubby (radial or raycast) |
 | [Bed](./bed) | F-key bunk — lie down, head look, Hold Y to get up (no flight) |
+| [Entertainment System](./entertainment-system) | Bunk mini-TV — gaze + F opens Docs / YouTube launcher |
 | [Cockpit Stat](./cockpit-stat) | Always-on pilot instrument (speed number + bar; boost-aware) |
 | [Collider](./collider) | Deck floors, ramp, doors, hull blocking |
 

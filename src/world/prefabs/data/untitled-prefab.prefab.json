@@ -31,13 +31,13 @@
     ],
     "children": [
       {
-        "id": "e-dfc79cb8",
-        "name": "Phobos_Starhopper_Basic",
+        "id": "e-476d6d73",
+        "name": "SM_Prop_Vending_Machine_03",
         "transform": {
           "position": {
-            "x": -0.5,
+            "x": 0,
             "y": 0,
-            "z": -0.5
+            "z": 0
           },
           "rotation": {
             "x": 0,
@@ -52,8 +52,7 @@
           }
         },
         "asset": {
-          "url": "/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb",
-          "castShadow": true
+          "url": "/src/assets/protected/props/SM_Prop_Vending_Machine_03.glb"
         }
       }
     ]

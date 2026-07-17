@@ -167,7 +167,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
       }
     } else if (world.mode === MODE_IN_SHIP && world.flightMode === 'nav' && world.quantum.phase === 'idle') {
       elements.statusEl.textContent =
-        'Nav mode. Tap U to cycle flight modes. Leave the atmosphere, align toward Asteron OP-1, then hold U for 2 seconds to quantum travel.';
+        'Nav mode. Tap U to cycle flight modes. Leave the atmosphere, align toward a surface POI marker, then hold U for 2 seconds to quantum travel.';
     } else if (shipSurface.altitudeMeters < 20) {
       elements.statusEl.textContent =
         speed < 50

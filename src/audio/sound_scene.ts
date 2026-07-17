@@ -230,7 +230,10 @@ export function createSoundSceneController(): SoundSceneController {
           setAudioParam(panner.positionY, sound.position.y, graph.context.currentTime);
           setAudioParam(panner.positionZ, sound.position.z, graph.context.currentTime);
         } else {
-          panner.setPosition(sound.position.x, sound.position.y, sound.position.z);
+          const legacyPanner = panner as unknown as {
+            setPosition: (x: number, y: number, z: number) => void;
+          };
+          legacyPanner.setPosition(sound.position.x, sound.position.y, sound.position.z);
         }
         gain.connect(panner).connect(graph.bus);
       } else {

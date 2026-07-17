@@ -59,13 +59,20 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          toolchain: 1.96.0
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma client
-        run: npm run prisma:generate
-
-      - name: Typecheck browser and server
+      - name: Typecheck browser
         run: npm run typecheck
 
       - name: Lint
@@ -76,6 +83,12 @@ jobs:
 
       - name: Build API server
         run: npm run build:server
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint Rust backend
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Build documentation
         run: npm run docs:build

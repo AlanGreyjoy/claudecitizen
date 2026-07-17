@@ -1,6 +1,10 @@
 export { createHud, type HudElements, type HudUpdateParams } from './hud';
 export { createHaloBand, type HaloBandController, type HaloBandUpdateParams } from './hud/haloband';
 export {
+  createPersonalInventory,
+  type PersonalInventoryController,
+} from './hud/personal_inventory';
+export {
   createCloudShell,
   createVolumetricCloudManager,
   type CloudShell,

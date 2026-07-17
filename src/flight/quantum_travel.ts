@@ -14,13 +14,19 @@ import type { FlightBody, Planet, Vec3 } from '../types';
 import type { ShipFlightMode } from './flight_modes';
 import { FLIGHT_CONFIG } from './flight_config';
 
+export interface NavDestinationMarker {
+  id: string;
+  name: string;
+  position: Vec3;
+}
+
 export const MIN_QUANTUM_DISTANCE_METERS = 50_000;
 export const MAX_ALIGNMENT_DOT = Math.cos((15 * Math.PI) / 180);
 export const QUANTUM_ENGAGE_HOLD_SECONDS = 2;
 export const QUANTUM_SPOOL_BASE_SECONDS = 3;
 export const QUANTUM_SPOOL_DISTANCE_SCALE = 1 / 100_000;
 export const QUANTUM_SPOOL_MAX_SECONDS = 6;
-export const QUANTUM_DROP_OUT_SECONDS = 0.5;
+export const QUANTUM_DROP_OUT_SECONDS = 1.2;
 
 export type QuantumPhase = 'idle' | 'spooling' | 'traveling' | 'dropOut';
 
@@ -130,12 +136,43 @@ export function spikeDestinationId(): string {
   return SPIKE_QUANTUM_DESTINATION_ID;
 }
 
+/**
+ * Pick the destination the ship nose is most aligned with (planar bearing).
+ * Does not enforce the 15° eligibility gate — callers check that separately.
+ */
+export function resolveNavDestinationId(
+  body: FlightBody,
+  planet: Planet,
+  seed: number,
+): string | null {
+  const destinations = listQuantumDestinations(planet, seed);
+  if (destinations.length === 0) return null;
+
+  let bestId: string | null = null;
+  let bestDot = -Infinity;
+  for (const dest of destinations) {
+    const position = destinationWorldPosition(planet, seed, dest);
+    const align = alignmentDot(body, position);
+    if (align > bestDot) {
+      bestDot = align;
+      bestId = dest.id;
+    }
+  }
+  return bestId;
+}
+
 export function resolveLockedDestinationId(
   flightMode: ShipFlightMode,
   quantum: QuantumTravelState,
+  body?: FlightBody,
+  planet?: Planet,
+  seed?: number,
 ): string | null {
   if (quantum.destinationId) return quantum.destinationId;
   if (flightMode !== 'nav') return null;
+  if (body && planet !== undefined && seed !== undefined) {
+    return resolveNavDestinationId(body, planet, seed);
+  }
   return SPIKE_QUANTUM_DESTINATION_ID;
 }
 
@@ -148,7 +185,11 @@ export function evaluateQuantumEligibility(
   if (ctx.flightMode !== 'nav') {
     return { ok: false, reason: 'not-nav-mode' };
   }
-  const destinationId = ctx.destinationId ?? SPIKE_QUANTUM_DESTINATION_ID;
+  const destinationId =
+    ctx.destinationId ?? resolveNavDestinationId(ctx.body, ctx.planet, ctx.seed);
+  if (!destinationId) {
+    return { ok: false, reason: 'no-destination' };
+  }
   const destination = getQuantumDestination(ctx.planet, ctx.seed, destinationId);
   if (!destination) {
     return { ok: false, reason: 'no-destination' };
@@ -198,9 +239,20 @@ export function buildNavPrompt(ctx: QuantumEligibilityContext): string {
       ctx.seed,
       eligibility.destinationId,
     );
-    const shortName = destination?.name.replace(' (Outpost 1)', '') ?? 'destination';
+    const shortName = destination?.name ?? 'destination';
     return `Hold U (2s) · Quantum to ${shortName}`;
   }
+
+  if (eligibility.reason === 'misaligned') {
+    const bestId = resolveNavDestinationId(ctx.body, ctx.planet, ctx.seed);
+    const destination = bestId
+      ? getQuantumDestination(ctx.planet, ctx.seed, bestId)
+      : null;
+    if (destination) {
+      return `Nav · Align toward ${destination.name}`;
+    }
+  }
+
   return `Nav · ${quantumBlockReasonLabel(eligibility.reason)}`;
 }
 
@@ -351,6 +403,9 @@ export function advanceQuantumTravel(
         entryFlash: 0,
         exitFlash: 1,
       };
+      // Cover the first destination frame so terrain/water can repopulate
+      // behind the hyperspace shell before the drop-out reveal begins.
+      screenFade = 0.85;
     } else {
       nextQuantum = {
         ...quantum,
@@ -373,7 +428,7 @@ export function advanceQuantumTravel(
       };
       nextBody = orientToward(nextBody, bearingToDestination(nextBody, endPosition), dropT);
     }
-    const exitFlash = Math.max(0, quantum.exitFlash - dt * 3);
+    const exitFlash = Math.max(0, 1 - dropT);
     screenFade = exitFlash * 0.85;
 
     if (dropOutElapsed >= QUANTUM_DROP_OUT_SECONDS) {
@@ -387,7 +442,10 @@ export function advanceQuantumTravel(
   return { body, quantum, screenFade: 0 };
 }
 
-export function listNavDestinationMarkers(planet: Planet, seed: number) {
+export function listNavDestinationMarkers(
+  planet: Planet,
+  seed: number,
+): NavDestinationMarker[] {
   return listQuantumDestinations(planet, seed).map((dest) => ({
     id: dest.id,
     name: dest.name,

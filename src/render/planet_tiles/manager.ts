@@ -19,7 +19,10 @@ import type { TileManagerUpdateResult } from './domain/types';
 export interface PlanetTileManager {
   dispose: () => void;
   renderScale: number;
+  setVisible: (visible: boolean) => void;
   update: (bodyPosition: Vec3, surface?: PlanetSurfaceSample) => TileManagerUpdateResult;
+  /** Reposition the planet mesh without selecting/building tiles (quantum travel fast-path). */
+  shiftFocus: (bodyPosition: Vec3) => void;
 }
 
 export function createPlanetTileManager(
@@ -106,6 +109,14 @@ export function createPlanetTileManager(
     };
   }
 
+  function shiftFocus(bodyPosition: Vec3): void {
+    tileGroup.position.set(
+      -bodyPosition.x * PLANET_RENDER_SCALE,
+      -bodyPosition.y * PLANET_RENDER_SCALE,
+      -bodyPosition.z * PLANET_RENDER_SCALE,
+    );
+  }
+
   function dispose(): void {
     meshCache.dispose();
     material.dispose();
@@ -116,6 +127,10 @@ export function createPlanetTileManager(
   return {
     dispose,
     renderScale: PLANET_RENDER_SCALE,
+    setVisible(visible) {
+      tileGroup.visible = visible;
+    },
     update,
+    shiftFocus,
   };
 }

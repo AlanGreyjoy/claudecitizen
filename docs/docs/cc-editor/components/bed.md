@@ -38,8 +38,10 @@ Lie down in a ship bunk. Entity position is the mattress / interact spot. **Ship
 2. Add component **Bed**
 3. Tune **Eye** (pillow head height) and **Stand XZ** (aisle get-up spot)
 4. Preview: walk near → **F** to lie down → mouse looks around → **Hold Y** to get up
+5. Optional: place an [Entertainment System](./entertainment-system) empty on the bunk screen for in-bed Docs / YouTube
 
 ## See also
 
+- [Entertainment System](./entertainment-system) (bunk mini-TV)
 - [Ship door](./ship-door) (same radial / raycast interact pattern)
 - [Ship authoring](../ship-authoring)

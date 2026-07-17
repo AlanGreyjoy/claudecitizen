@@ -6,7 +6,7 @@ description: REST endpoints for the ClaudeCitizen admin API.
 
 # API reference
 
-All admin endpoints are served by the Nest.js server under the `/admin` prefix (default base: `http://localhost:3000`).
+All admin endpoints are served by the Rust server under the `/admin` prefix (default base: `http://localhost:3000`).
 
 ## Common behavior
 
@@ -152,7 +152,7 @@ List all `ItemDefinition` rows.
 }
 ```
 
-Valid `itemType` values: `consumable`, `weapon`, `armor`, `clothing`, `material`, `misc`.
+Valid general `itemType` values include `consumable`, `armor`, `clothing`, `material`, and `misc`. Weapons and backpacks use their specialized endpoints.
 
 ### `PATCH /admin/items/:id`
 
@@ -162,6 +162,14 @@ Partial update. `prefabId` and `iconUrl` may be set to `null`.
 
 **Response `204`** on success.  
 **Response `400`** if players still hold copies.
+
+### Weapon definitions
+
+`GET /admin/weapons`, `POST /admin/weapons`, `PATCH /admin/weapons/:id`, and `DELETE /admin/weapons/:id` manage unique weapon items. Create requests include `weaponSlotType` (`rifle`, `sword`, or `handgun`); the server fixes `itemType` to `weapon` and `stackMax` to `1`.
+
+### Backpack definitions
+
+`GET /admin/backpacks`, `POST /admin/backpacks`, `PATCH /admin/backpacks/:id`, and `DELETE /admin/backpacks/:id` manage unique backpack items. Create requests include positive `capacityLiters` and `emptyMassKg`; the server fixes `itemType` to `backpack` and `stackMax` to `1`.
 
 ---
 
@@ -202,12 +210,12 @@ Replace settings (all fields required).
 
 ---
 
-## Server implementation map
+## Backend implementation map
 
 | Layer | Path |
 | --- | --- |
-| Controller | `server/src/admin/admin.controller.ts` |
-| Service | `server/src/admin/admin.service.ts` |
-| Guard | `server/src/admin/admin.guard.ts` |
-| Catalog logic | `server/src/game/game.catalog.service.ts` |
+| Admin HTTP/auth/catalog | `backend/crates/server/src/admin.rs` |
+| Player game persistence | `backend/crates/server/src/game.rs` |
+| API router | `backend/crates/server/src/main.rs` |
+| SQL migrations | `backend/migrations/` |
 | Client API | `src/net/admin_api.ts` |

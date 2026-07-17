@@ -88,10 +88,6 @@
         </div>
       </div>
 
-      <div class="sc-panel sc-hud-minimap">
-        <canvas id="hud-minimap-canvas" aria-label="Tactical minimap"></canvas>
-      </div>
-
       <div class="sc-panel sc-hud-chat">
         <div class="sc-hud-chat-header">
           <div class="sc-label">Comms</div>
@@ -675,6 +671,258 @@
               </div>
             </footer>
           </div>
+        </div>
+      </div>
+      <div
+        class="sc-es sc-es-world"
+        id="entertainment-system"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="es-title"
+        aria-modal="true"
+      >
+        <div class="sc-es-bezel" id="es-bezel">
+          <div class="sc-es-screen">
+            <header class="sc-es-header">
+              <div class="sc-es-brand">
+                <span class="sc-es-kicker">Ship Entertainment</span>
+                <h2 class="sc-es-title" id="es-title">Entertainment System</h2>
+              </div>
+              <div class="sc-es-header-actions">
+                <button class="sc-es-icon-btn" type="button" id="es-back-btn" hidden title="Back">
+                  ←
+                </button>
+                <button class="sc-es-icon-btn" type="button" id="es-power-btn" title="Power off">
+                  ⌂
+                </button>
+                <button class="sc-es-icon-btn" type="button" id="es-close-btn" title="Close">
+                  ✕
+                </button>
+              </div>
+            </header>
+            <div class="sc-es-body">
+              <div class="sc-es-home" id="es-home">
+                <p class="sc-es-home-hint">Choose an app</p>
+                <div class="sc-es-app-grid">
+                  <button class="sc-es-app-tile" type="button" id="es-docs-tile" data-es-app="docs">
+                    <span class="sc-es-app-icon sc-es-app-icon-docs">Docs</span>
+                    <span class="sc-es-app-name">ClaudeCitizen Docs</span>
+                  </button>
+                  <button class="sc-es-app-tile" type="button" id="es-youtube-tile" data-es-app="youtube">
+                    <span class="sc-es-app-icon sc-es-app-icon-yt">YT</span>
+                    <span class="sc-es-app-name">YouTube</span>
+                  </button>
+                  <button class="sc-es-app-tile" type="button" id="es-nasa-tile" data-es-app="nasa">
+                    <span class="sc-es-app-icon sc-es-app-icon-nasa">NASA</span>
+                    <span class="sc-es-app-name">NASA TV</span>
+                  </button>
+                  <button class="sc-es-app-tile" type="button" id="es-localnow-tile" data-es-app="localnow">
+                    <span class="sc-es-app-icon sc-es-app-icon-localnow">LN</span>
+                    <span class="sc-es-app-name">Local Now</span>
+                  </button>
+                </div>
+              </div>
+              <div class="sc-es-app-view" id="es-docs" hidden>
+                <iframe
+                  class="sc-es-frame"
+                  id="es-docs-frame"
+                  title="ClaudeCitizen Docs"
+                  referrerpolicy="no-referrer-when-downgrade"
+                ></iframe>
+              </div>
+              <div class="sc-es-app-view" id="es-nasa" hidden>
+                <iframe
+                  class="sc-es-frame"
+                  id="es-nasa-frame"
+                  title="NASA TV"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen
+                  referrerpolicy="strict-origin-when-cross-origin"
+                ></iframe>
+                <p class="sc-es-nasa-note">
+                  Official NASA Live stream via YouTube. May be offline between events —
+                  <a href="https://www.nasa.gov/live/" target="_blank" rel="noopener noreferrer">nasa.gov/live</a>
+                </p>
+              </div>
+              <div class="sc-es-app-view" id="es-localnow" hidden>
+                <div class="sc-es-external">
+                  <p class="sc-es-external-title">Local Now</p>
+                  <p class="sc-es-external-body">
+                    Free local news &amp; weather. Their site blocks in-game embedding, so this
+                    opens in a new browser tab.
+                  </p>
+                  <button class="sc-title-btn" type="button" id="es-localnow-open-btn">
+                    Open localnow.com
+                  </button>
+                </div>
+              </div>
+              <div class="sc-es-app-view" id="es-youtube" hidden>
+                <div class="sc-es-youtube-bar">
+                  <input
+                    class="sc-es-youtube-input"
+                    id="es-youtube-url"
+                    type="url"
+                    placeholder="Paste a YouTube URL or video id"
+                    autocomplete="off"
+                  />
+                  <button class="sc-title-btn" type="button" id="es-youtube-load-btn">
+                    Play
+                  </button>
+                </div>
+                <div class="sc-es-youtube-stage">
+                  <iframe
+                    class="sc-es-frame sc-es-youtube-frame"
+                    id="es-youtube-frame"
+                    title="YouTube"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    referrerpolicy="strict-origin-when-cross-origin"
+                  ></iframe>
+                  <div class="sc-es-video-grid" id="es-youtube-grid"></div>
+                </div>
+              </div>
+            </div>
+            <footer class="sc-es-footer">
+              <span>Esc — back / close · Hold Y — get up</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-weapon-shop sc-weapon-shop-world"
+        id="weapon-shop"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="weapon-shop-title"
+        aria-modal="true"
+      >
+        <div class="sc-weapon-shop-bezel" id="weapon-shop-bezel">
+          <div class="sc-weapon-shop-screen">
+            <header class="sc-weapon-shop-header">
+              <div class="sc-weapon-shop-brand">
+                <span class="sc-weapon-shop-kicker">Pew Pew&apos;s Fun &apos;n&apos; Gun</span>
+                <h2 class="sc-weapon-shop-title" id="weapon-shop-title">Weapon Shop</h2>
+              </div>
+              <div class="sc-weapon-shop-header-meta">
+                <span class="sc-weapon-shop-balance" id="weapon-shop-balance">ARC —</span>
+                <div class="sc-weapon-shop-header-actions">
+                  <button class="sc-weapon-shop-icon-btn" type="button" id="weapon-shop-power-btn" title="Power off">
+                    ⌂
+                  </button>
+                  <button class="sc-weapon-shop-icon-btn" type="button" id="weapon-shop-close-btn" title="Close">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="sc-weapon-shop-body">
+              <div class="sc-weapon-shop-list" id="weapon-shop-list"></div>
+              <p class="sc-weapon-shop-status" id="weapon-shop-status" data-kind="info"></p>
+            </div>
+            <footer class="sc-weapon-shop-footer">
+              <span>Esc — close · Buy with ARC · Inventory updates in HaloBand</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-outfitters sc-outfitters-world"
+        id="outfitters"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="outfitters-title"
+        aria-modal="true"
+      >
+        <div class="sc-outfitters-bezel" id="outfitters-bezel">
+          <div class="sc-outfitters-screen">
+            <header class="sc-outfitters-header">
+              <div class="sc-outfitters-brand">
+                <span class="sc-outfitters-kicker">Station Outfitters</span>
+                <h2 class="sc-outfitters-title" id="outfitters-title">Outfitters</h2>
+              </div>
+              <div class="sc-outfitters-header-meta">
+                <span class="sc-outfitters-balance" id="outfitters-balance">ARC —</span>
+                <div class="sc-outfitters-header-actions">
+                  <button class="sc-outfitters-icon-btn" type="button" id="outfitters-power-btn" title="Power off">
+                    ⌂
+                  </button>
+                  <button class="sc-outfitters-icon-btn" type="button" id="outfitters-close-btn" title="Close">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </header>
+            <nav class="sc-outfitters-tabs" id="outfitters-tabs" aria-label="Gear categories"></nav>
+            <div class="sc-outfitters-body">
+              <div class="sc-outfitters-list" id="outfitters-list"></div>
+              <p class="sc-outfitters-status" id="outfitters-status" data-kind="info"></p>
+            </div>
+            <footer class="sc-outfitters-footer">
+              <span>Esc — close · Buy with ARC · Equip from Inventory (I)</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-personal-inv"
+        id="personal-inventory"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="personal-inventory-title"
+        aria-modal="true"
+      >
+        <div class="sc-personal-inv-left">
+          <header class="sc-personal-inv-header">
+            <div class="sc-personal-inv-brand">
+              <span class="sc-personal-inv-kicker">Personal / All</span>
+              <h2 class="sc-personal-inv-title" id="personal-inventory-title">Inventory</h2>
+            </div>
+            <div class="sc-personal-inv-header-tools">
+              <input
+                class="sc-personal-inv-search"
+                id="personal-inventory-search"
+                type="search"
+                placeholder="Search…"
+                autocomplete="off"
+                maxlength="80"
+              />
+              <button
+                class="sc-personal-inv-quick-equip"
+                type="button"
+                id="personal-inventory-quick-equip"
+              >
+                Quick Equip
+              </button>
+              <button
+                class="sc-personal-inv-close"
+                type="button"
+                id="personal-inventory-close"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </header>
+          <div class="sc-personal-inv-capacity">
+            <div class="sc-personal-inv-capacity-track">
+              <div class="sc-personal-inv-capacity-fill" id="personal-inventory-capacity-fill"></div>
+            </div>
+            <span class="sc-personal-inv-capacity-label" id="personal-inventory-capacity-label"
+              >—</span
+            >
+          </div>
+          <div class="sc-personal-inv-filters" id="personal-inventory-filters"></div>
+          <div class="sc-personal-inv-grid" id="personal-inventory-grid"></div>
+          <div class="sc-personal-inv-weapon-bars" id="personal-inventory-weapon-bars"></div>
+          <p class="sc-personal-inv-status" id="personal-inventory-status" data-kind="info"></p>
+          <footer class="sc-personal-inv-footer">
+            <span>Click &amp; drag</span>
+            <span>Quick equip</span>
+            <span>Close inventory [I]</span>
+          </footer>
+        </div>
+        <div class="sc-personal-inv-right" aria-hidden="true">
+          <div class="sc-personal-inv-gear-slots" id="personal-inventory-gear-slots"></div>
         </div>
       </div>
       <div

@@ -50,6 +50,14 @@ Ship parking spot inside a hangar. Set `hangarId`, `padIndex`, and `floorId: "ha
 
 Interaction zone that opens the **Asteron Vehicle Management System** — lets players call ships from inventory. Set `radius` and `floorId`.
 
+### weapon-shop
+
+Gaze + **F** vendor screen (ES-style flat panel). Place an Empty on the display face with local **+Z** toward the player. Sells catalog weapons for ARC via `POST /game/inventory/purchase`. Optional `itemDefinitionIds` filter; empty = all weapons.
+
+### outfitters
+
+Same gaze + **F** pattern as weapon-shop. Category tabs for Head through Back; **Back** stocks backpacks today (other tabs empty until armor/clothing catalog grows). Purchases use the same inventory purchase endpoint. Optional `itemDefinitionIds` filter; empty = all stocked outfitters items.
+
 ### interaction + animation
 
 For doors and moving platforms:

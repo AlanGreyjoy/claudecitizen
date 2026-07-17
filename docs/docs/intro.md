@@ -8,7 +8,7 @@ title: Introduction
 
 ![ClaudeCitizen banner](/img/banner-with-logo.png)
 
-A browser-based space sandbox inspired by Star Citizen — procedural planets, ship flight, on-foot exploration, and seamless surface-to-orbit transitions. Built with TypeScript, Vite, and Three.js.
+A browser-based space sandbox inspired by Star Citizen — procedural planets, ship flight, on-foot exploration, and seamless surface-to-orbit transitions. The browser client uses TypeScript, Vite, and Three.js; online play runs on an authoritative Rust backend with shared Rust/WASM prediction and Protobuf over WebTransport.
 
 The homeworld is **Asteron**: Earth-scale radius, deterministic terrain, lakes, vegetation, volumetric clouds, and a full atmospheric shell.
 
@@ -38,6 +38,7 @@ Play the latest build in your browser:
 - **Flight** — inertial ship body with radial gravity, drag, and hover assist near the pad
 - **Player** — third-person character, ship boarding animations, walkable ship deck
 - **Rendering** — tiled terrain meshing (Web Worker), instanced vegetation, star field, Takram atmosphere/clouds, volumetric fog, post-processing
+- **Online backend** — Axum APIs, native Rapier cell authority, PostgreSQL/SQLx persistence, Redis coordination, and Kubernetes deployment
 
 ## Next steps
 

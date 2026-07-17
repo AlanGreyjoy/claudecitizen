@@ -5,6 +5,10 @@ import { restoreTitleScreen } from './title_screen';
 import { createHud, createHaloBand } from '../render/effects';
 import { createGameMenu } from '../render/effects/hud/game_menu';
 import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
+import { createEntertainmentSystem } from '../render/effects/hud/entertainment_system';
+import { createWeaponShop } from '../render/effects/hud/weapon_shop';
+import { createOutfitters } from '../render/effects/hud/outfitters';
+import { createPersonalInventory } from '../render/effects/hud/personal_inventory';
 import { createBuildTerminal } from '../render/effects/hud/build_terminal';
 import { createHangarBuildController } from '../player/hangar_build/build_controller';
 import {
@@ -28,7 +32,10 @@ import {
 } from '../world/station';
 import { createStationPhysics, type StationPhysics } from '../physics/station_physics';
 import type { PrefabDocument } from '../world/prefabs/schema';
-import type { InventoryState } from '../player/inventory/types';
+import {
+  normalizeInventoryState,
+  type InventoryState,
+} from '../player/inventory/types';
 import {
   fetchGameBootstrap,
   getSession,
@@ -41,6 +48,7 @@ import type { GameMenuController } from '../render/effects/hud/game_menu';
 import type { AvmsTerminalController } from '../render/effects/hud/avms_terminal';
 import type { BuildTerminalController } from '../render/effects/hud/build_terminal';
 import type { HaloBandController } from '../render/effects/hud/haloband';
+import type { PersonalInventoryController } from '../render/effects/hud/personal_inventory';
 import type { HangarPropRenderer } from '../render/hangar/prop_instances';
 
 function requireElement<T extends HTMLElement>(id: string): T {
@@ -118,6 +126,10 @@ interface PlaySessionCleanup {
   vegetationControls: ReturnType<typeof createVegetationControls>;
   gameMenu: GameMenuController;
   avmsTerminal: AvmsTerminalController;
+  entertainmentSystem: ReturnType<typeof createEntertainmentSystem>;
+  weaponShop: ReturnType<typeof createWeaponShop>;
+  outfitters: ReturnType<typeof createOutfitters>;
+  personalInventory: PersonalInventoryController;
   buildTerminal: BuildTerminalController | null;
   haloBand: HaloBandController | null;
   buildPropRenderers: HangarPropRenderer[];
@@ -137,6 +149,10 @@ export function stopPlaySession(): void {
 
   cleanup.gameMenu.dispose();
   cleanup.avmsTerminal.dispose();
+  cleanup.entertainmentSystem.dispose();
+  cleanup.weaponShop.dispose();
+  cleanup.outfitters.dispose();
+  cleanup.personalInventory.dispose();
   cleanup.buildTerminal?.dispose();
   cleanup.haloBand?.dispose();
   for (const renderer of cleanup.buildPropRenderers) renderer.dispose();
@@ -200,7 +216,6 @@ export async function startPlaySession(
 
   const canvas = requireElement<HTMLCanvasElement>('view');
   const fpsEl = requireElement<HTMLElement>('hud-fps-value');
-  const minimapCanvas = requireElement<HTMLCanvasElement>('hud-minimap-canvas');
   const chatMessagesEl = requireElement<HTMLElement>('hud-chat-messages');
   const chatInputEl = requireElement<HTMLInputElement>('hud-chat-input');
   const debugBtnEl = requireElement<HTMLButtonElement>('hud-debug-btn');
@@ -291,7 +306,6 @@ export async function startPlaySession(
   const hud = createHud(
     {
       fpsEl,
-      minimapCanvas,
       chatMessagesEl,
       chatInputEl,
       debugBtnEl,
@@ -309,8 +323,6 @@ export async function startPlaySession(
       cockpitSpeedEl,
       screenFadeEl,
     },
-    planet,
-    seed,
     {
       onChatSend: (text) => networkClient?.sendChat(text),
       onTimeOverrideChange: (mode) => renderer?.setTimeOverride(mode),
@@ -348,8 +360,8 @@ export async function startPlaySession(
   // Must be created before the game menu so HaloBand's capture key listener
   // registers first and can claim Esc before the menu opens.
   let arcBalance: number | null = bootstrap ? bootstrap.economy.arcBalance : null;
-  const inventoryState: InventoryState | null = bootstrap
-    ? (bootstrap.inventory as InventoryState)
+  let inventoryState: InventoryState | null = bootstrap
+    ? normalizeInventoryState(bootstrap.inventory)
     : null;
   haloBand = createHaloBand(
     {
@@ -405,6 +417,98 @@ export async function startPlaySession(
     storeBtnEl: avmsStoreBtn,
     closeBtnEl: avmsCloseBtn,
   });
+
+  const entertainmentSystemEl = requireElement<HTMLElement>('entertainment-system');
+  const entertainmentSystem = createEntertainmentSystem({
+    rootEl: entertainmentSystemEl,
+    homeEl: requireElement<HTMLElement>('es-home'),
+    docsEl: requireElement<HTMLElement>('es-docs'),
+    youtubeEl: requireElement<HTMLElement>('es-youtube'),
+    nasaEl: requireElement<HTMLElement>('es-nasa'),
+    localnowEl: requireElement<HTMLElement>('es-localnow'),
+    docsFrameEl: requireElement<HTMLIFrameElement>('es-docs-frame'),
+    youtubeFrameEl: requireElement<HTMLIFrameElement>('es-youtube-frame'),
+    nasaFrameEl: requireElement<HTMLIFrameElement>('es-nasa-frame'),
+    youtubeUrlInputEl: requireElement<HTMLInputElement>('es-youtube-url'),
+    youtubeGridEl: requireElement<HTMLElement>('es-youtube-grid'),
+    powerBtnEl: requireElement<HTMLButtonElement>('es-power-btn'),
+    backBtnEl: requireElement<HTMLButtonElement>('es-back-btn'),
+    closeBtnEl: requireElement<HTMLButtonElement>('es-close-btn'),
+    docsTileEl: requireElement<HTMLButtonElement>('es-docs-tile'),
+    youtubeTileEl: requireElement<HTMLButtonElement>('es-youtube-tile'),
+    nasaTileEl: requireElement<HTMLButtonElement>('es-nasa-tile'),
+    localnowTileEl: requireElement<HTMLButtonElement>('es-localnow-tile'),
+    localnowOpenBtnEl: requireElement<HTMLButtonElement>('es-localnow-open-btn'),
+    youtubeLoadBtnEl: requireElement<HTMLButtonElement>('es-youtube-load-btn'),
+  });
+
+  const personalInventory = createPersonalInventory(
+    {
+      rootEl: requireElement<HTMLElement>('personal-inventory'),
+      searchEl: requireElement<HTMLInputElement>('personal-inventory-search'),
+      capacityFillEl: requireElement<HTMLElement>('personal-inventory-capacity-fill'),
+      capacityLabelEl: requireElement<HTMLElement>('personal-inventory-capacity-label'),
+      filtersEl: requireElement<HTMLElement>('personal-inventory-filters'),
+      gridEl: requireElement<HTMLElement>('personal-inventory-grid'),
+      weaponBarsEl: requireElement<HTMLElement>('personal-inventory-weapon-bars'),
+      gearSlotsEl: requireElement<HTMLElement>('personal-inventory-gear-slots'),
+      statusEl: requireElement<HTMLElement>('personal-inventory-status'),
+      quickEquipBtnEl: requireElement<HTMLButtonElement>('personal-inventory-quick-equip'),
+      closeBtnEl: requireElement<HTMLButtonElement>('personal-inventory-close'),
+    },
+    {
+      playerControls: controls,
+      getInventory: () => inventoryState,
+      onInventoryResult: (inventory) => {
+        inventoryState = normalizeInventoryState(inventory);
+        personalInventory.refresh();
+        loopRef.loop?.setEquippedLoadout(inventoryState.loadout);
+      },
+    },
+  );
+
+  const weaponShop = createWeaponShop(
+    {
+      rootEl: requireElement<HTMLElement>('weapon-shop'),
+      bezelEl: requireElement<HTMLElement>('weapon-shop-bezel'),
+      listEl: requireElement<HTMLElement>('weapon-shop-list'),
+      statusEl: requireElement<HTMLElement>('weapon-shop-status'),
+      balanceEl: requireElement<HTMLElement>('weapon-shop-balance'),
+      closeBtnEl: requireElement<HTMLButtonElement>('weapon-shop-close-btn'),
+      powerBtnEl: requireElement<HTMLButtonElement>('weapon-shop-power-btn'),
+    },
+    {
+      getArcBalance: () => arcBalance,
+      getInventory: () => inventoryState,
+      onPurchaseResult: (result) => {
+        arcBalance = result.arcBalance;
+        inventoryState = normalizeInventoryState(result.inventory);
+        personalInventory.refresh();
+      },
+    },
+  );
+
+  const outfitters = createOutfitters(
+    {
+      rootEl: requireElement<HTMLElement>('outfitters'),
+      bezelEl: requireElement<HTMLElement>('outfitters-bezel'),
+      tabsEl: requireElement<HTMLElement>('outfitters-tabs'),
+      listEl: requireElement<HTMLElement>('outfitters-list'),
+      statusEl: requireElement<HTMLElement>('outfitters-status'),
+      balanceEl: requireElement<HTMLElement>('outfitters-balance'),
+      closeBtnEl: requireElement<HTMLButtonElement>('outfitters-close-btn'),
+      powerBtnEl: requireElement<HTMLButtonElement>('outfitters-power-btn'),
+    },
+    {
+      getArcBalance: () => arcBalance,
+      getInventory: () => inventoryState,
+      onPurchaseResult: (result) => {
+        arcBalance = result.arcBalance;
+        inventoryState = normalizeInventoryState(result.inventory);
+        personalInventory.refresh();
+      },
+    },
+  );
 
   const buildAreas: Partial<Record<BuildArea, BuildAreaRuntime>> = {};
   const buildPropRenderers: HangarPropRenderer[] = [];
@@ -553,6 +657,10 @@ export async function startPlaySession(
     network: networkClient,
     bootstrap,
     avmsTerminal,
+    entertainmentSystem,
+    weaponShop,
+    outfitters,
+    personalInventory,
     stationPrefab,
     build:
       buildTerminal
@@ -568,7 +676,15 @@ export async function startPlaySession(
     },
     onResetPeak: () => hud.resetPeak(),
     isPaused: () =>
-      gameMenu.isPaused() || avmsTerminal.isPaused() || (buildTerminal?.isPaused() ?? false),
+      gameMenu.isPaused() ||
+      avmsTerminal.isPaused() ||
+      entertainmentSystem.isPaused() ||
+      weaponShop.isPaused() ||
+      outfitters.isPaused() ||
+      personalInventory.isPaused() ||
+      (buildTerminal?.isPaused() ?? false),
+    getInventoryLoadout: () => inventoryState?.loadout ?? {},
+    getInventory: () => inventoryState,
   });
 
   loopRef.loop = gameLoop;
@@ -599,6 +715,10 @@ export async function startPlaySession(
     vegetationControls,
     gameMenu,
     avmsTerminal,
+    entertainmentSystem,
+    weaponShop,
+    outfitters,
+    personalInventory,
     buildTerminal,
     haloBand,
     buildPropRenderers,

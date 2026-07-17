@@ -209,39 +209,59 @@ export function updateCameraRig(
   const focusVec = new THREE.Vector3(focusPosition.x, focusPosition.y, focusPosition.z);
 
   if (mode === MODE_IN_BED) {
-    if (typeof camera.userData.baseFovDeg === 'number') {
-      camera.fov = camera.userData.baseFovDeg;
-      camera.updateProjectionMatrix();
-    }
     camera.userData.smoothedWorldPos = null;
     camera.userData.smoothedWorldTarget = null;
 
-    const shipRight = normalize(cross(shipForward, shipUp));
-    const bedEye = getBedEyeLocal(world.activeBedId) ?? getPilotEyeLocal();
-    const eye = add(
-      add(scale(shipRight, bedEye.right), scale(shipUp, bedEye.up)),
-      scale(shipForward, bedEye.forward),
-    );
-    const seatLook = world.seatLook;
-    const lookForward =
-      seatLook &&
-      (Math.abs(seatLook.yawRadians) > 1e-6 || Math.abs(seatLook.pitchRadians) > 1e-6)
-        ? resolveShipDeckOrbit(
-            shipForward,
-            shipUp,
-            seatLook.yawRadians,
-            seatLook.pitchRadians,
-            FIRST_PERSON_PITCH_LIMIT,
-          ).forward
-        : shipForward;
-    const lookMeters = 60;
-    camera.position.set(eye.x * renderScale, eye.y * renderScale, eye.z * renderScale);
-    cameraTarget.set(
-      (eye.x + lookForward.x * lookMeters) * renderScale,
-      (eye.y + lookForward.y * lookMeters) * renderScale,
-      (eye.z + lookForward.z * lookMeters) * renderScale,
-    );
-    camera.up.copy(v3(shipUp));
+    const esFeel = world.entertainmentCameraFeel;
+    if (esFeel) {
+      if (typeof camera.userData.baseFovDeg !== 'number') {
+        camera.userData.baseFovDeg = camera.fov;
+      }
+      camera.fov = (camera.userData.baseFovDeg as number) + esFeel.fovDeltaDeg;
+      camera.updateProjectionMatrix();
+      camera.position.set(
+        esFeel.eye.x * renderScale,
+        esFeel.eye.y * renderScale,
+        esFeel.eye.z * renderScale,
+      );
+      cameraTarget.set(
+        esFeel.lookTarget.x * renderScale,
+        esFeel.lookTarget.y * renderScale,
+        esFeel.lookTarget.z * renderScale,
+      );
+      camera.up.copy(v3(shipUp));
+    } else {
+      if (typeof camera.userData.baseFovDeg === 'number') {
+        camera.fov = camera.userData.baseFovDeg;
+        camera.updateProjectionMatrix();
+      }
+      const shipRight = normalize(cross(shipForward, shipUp));
+      const bedEye = getBedEyeLocal(world.activeBedId) ?? getPilotEyeLocal();
+      const eye = add(
+        add(scale(shipRight, bedEye.right), scale(shipUp, bedEye.up)),
+        scale(shipForward, bedEye.forward),
+      );
+      const seatLook = world.seatLook;
+      const lookForward =
+        seatLook &&
+        (Math.abs(seatLook.yawRadians) > 1e-6 || Math.abs(seatLook.pitchRadians) > 1e-6)
+          ? resolveShipDeckOrbit(
+              shipForward,
+              shipUp,
+              seatLook.yawRadians,
+              seatLook.pitchRadians,
+              FIRST_PERSON_PITCH_LIMIT,
+            ).forward
+          : shipForward;
+      const lookMeters = 60;
+      camera.position.set(eye.x * renderScale, eye.y * renderScale, eye.z * renderScale);
+      cameraTarget.set(
+        (eye.x + lookForward.x * lookMeters) * renderScale,
+        (eye.y + lookForward.y * lookMeters) * renderScale,
+        (eye.z + lookForward.z * lookMeters) * renderScale,
+      );
+      camera.up.copy(v3(shipUp));
+    }
   } else if (mode === 'in-ship' || !character) {
     if ((world.shipCameraView ?? 'cockpit') === 'cockpit') {
       // Cockpit first person: rigidly attached to the ship frame and snapped
@@ -327,96 +347,119 @@ export function updateCameraRig(
     }
     camera.up.copy(v3(shipUp));
   } else {
-    if (typeof camera.userData.baseFovDeg === 'number') {
-      camera.fov = camera.userData.baseFovDeg;
+    const shopFeel = world.entertainmentCameraFeel;
+    if (stationActive && shopFeel) {
+      camera.userData.smoothedWorldPos = null;
+      camera.userData.smoothedWorldTarget = null;
+      if (typeof camera.userData.baseFovDeg !== 'number') {
+        camera.userData.baseFovDeg = camera.fov;
+      }
+      camera.fov = (camera.userData.baseFovDeg as number) + shopFeel.fovDeltaDeg;
       camera.updateProjectionMatrix();
-    }
-    const pitchLimit = firstPersonActive ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
-    const orbit =
-      stationActive && station
-        ? resolveShipDeckOrbit(
-            station.frame.forward,
-            station.frame.up,
-            cameraOrbit.yawRadians,
-            cameraOrbit.pitchRadians,
-            pitchLimit,
-          )
-        : mode === MODE_ON_SHIP_DECK
+      // Station camera is focus-relative (character at origin of render frame).
+      camera.position.set(
+        (shopFeel.eye.x - focusPosition.x) * renderScale,
+        (shopFeel.eye.y - focusPosition.y) * renderScale,
+        (shopFeel.eye.z - focusPosition.z) * renderScale,
+      );
+      cameraTarget.set(
+        (shopFeel.lookTarget.x - focusPosition.x) * renderScale,
+        (shopFeel.lookTarget.y - focusPosition.y) * renderScale,
+        (shopFeel.lookTarget.z - focusPosition.z) * renderScale,
+      );
+      camera.up.copy(v3(station?.frame.up ?? shipUp));
+    } else {
+      if (typeof camera.userData.baseFovDeg === 'number') {
+        camera.fov = camera.userData.baseFovDeg;
+        camera.updateProjectionMatrix();
+      }
+      const pitchLimit = firstPersonActive ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
+      const orbit =
+        stationActive && station
           ? resolveShipDeckOrbit(
-              shipForward,
-              shipUp,
+              station.frame.forward,
+              station.frame.up,
               cameraOrbit.yawRadians,
               cameraOrbit.pitchRadians,
               pitchLimit,
             )
-          : resolveOrbitCamera(
-              character.position,
-              cameraOrbit.yawRadians,
-              cameraOrbit.pitchRadians,
-              pitchLimit,
-            );
+          : mode === MODE_ON_SHIP_DECK
+            ? resolveShipDeckOrbit(
+                shipForward,
+                shipUp,
+                cameraOrbit.yawRadians,
+                cameraOrbit.pitchRadians,
+                pitchLimit,
+              )
+            : resolveOrbitCamera(
+                character.position,
+                cameraOrbit.yawRadians,
+                cameraOrbit.pitchRadians,
+                pitchLimit,
+              );
 
-    if (firstPersonActive) {
-      const rig = resolveFirstPersonCameraRig(orbit);
-      const desiredWorldPos = new THREE.Vector3(
-        focusPosition.x + rig.positionOffset.x,
-        focusPosition.y + rig.positionOffset.y,
-        focusPosition.z + rig.positionOffset.z,
-      );
-
-      if (!camera.userData.smoothedWorldPos) {
-        camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
-      }
-
-      // Smooth first-person camera position in world space to iron out physics/terrain bumps
-      smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
-
-      camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
-
-      // Keep look direction instantaneous to avoid mouse latency
-      const lookDir = new THREE.Vector3(orbit.forward.x, orbit.forward.y, orbit.forward.z);
-      cameraTarget.copy(camera.position).addScaledVector(lookDir, FIRST_PERSON_LOOK_DISTANCE_METERS * renderScale);
-      camera.userData.smoothedWorldTarget = null;
-    } else {
-      const zoomDistance = cameraOrbit.zoomDistance ?? 7.4;
-      const rig = resolveCharacterCameraRig(orbit, zoomDistance);
-      let positionOffset = rig.positionOffset;
-      if (stationActive && station) {
-        positionOffset = clampOffsetToRoom(positionOffset, character.position, station);
-      } else if (mode === MODE_ON_SHIP_DECK) {
-        positionOffset = clampOffsetToShipZone(
-          positionOffset,
-          character.position,
-          world,
-          shipUp,
-          shipForward,
+      if (firstPersonActive) {
+        const rig = resolveFirstPersonCameraRig(orbit);
+        const desiredWorldPos = new THREE.Vector3(
+          focusPosition.x + rig.positionOffset.x,
+          focusPosition.y + rig.positionOffset.y,
+          focusPosition.z + rig.positionOffset.z,
         );
+
+        if (!camera.userData.smoothedWorldPos) {
+          camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
+        }
+
+        // Smooth first-person camera position in world space to iron out physics/terrain bumps
+        smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
+
+        camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
+
+        // Keep look direction instantaneous to avoid mouse latency
+        const lookDir = new THREE.Vector3(orbit.forward.x, orbit.forward.y, orbit.forward.z);
+        cameraTarget.copy(camera.position).addScaledVector(lookDir, FIRST_PERSON_LOOK_DISTANCE_METERS * renderScale);
+        camera.userData.smoothedWorldTarget = null;
+      } else {
+        const zoomDistance = cameraOrbit.zoomDistance ?? 7.4;
+        const rig = resolveCharacterCameraRig(orbit, zoomDistance);
+        let positionOffset = rig.positionOffset;
+        if (stationActive && station) {
+          positionOffset = clampOffsetToRoom(positionOffset, character.position, station);
+        } else if (mode === MODE_ON_SHIP_DECK) {
+          positionOffset = clampOffsetToShipZone(
+            positionOffset,
+            character.position,
+            world,
+            shipUp,
+            shipForward,
+          );
+        }
+
+        const desiredWorldPos = new THREE.Vector3(
+          focusPosition.x + positionOffset.x,
+          focusPosition.y + positionOffset.y,
+          focusPosition.z + positionOffset.z,
+        );
+        const desiredWorldTarget = new THREE.Vector3(
+          focusPosition.x + rig.targetOffset.x,
+          focusPosition.y + rig.targetOffset.y,
+          focusPosition.z + rig.targetOffset.z,
+        );
+
+        if (!camera.userData.smoothedWorldPos || !camera.userData.smoothedWorldTarget) {
+          camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
+          camera.userData.smoothedWorldTarget = new THREE.Vector3().copy(desiredWorldTarget);
+        }
+
+        // Smooth third-person camera position and target in world space
+        smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
+        smoothVector(camera.userData.smoothedWorldTarget, desiredWorldTarget, dt, 0.04);
+
+        camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
+        cameraTarget.copy(camera.userData.smoothedWorldTarget).sub(focusVec).multiplyScalar(renderScale);
       }
-
-      const desiredWorldPos = new THREE.Vector3(
-        focusPosition.x + positionOffset.x,
-        focusPosition.y + positionOffset.y,
-        focusPosition.z + positionOffset.z,
-      );
-      const desiredWorldTarget = new THREE.Vector3(
-        focusPosition.x + rig.targetOffset.x,
-        focusPosition.y + rig.targetOffset.y,
-        focusPosition.z + rig.targetOffset.z,
-      );
-
-      if (!camera.userData.smoothedWorldPos || !camera.userData.smoothedWorldTarget) {
-        camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
-        camera.userData.smoothedWorldTarget = new THREE.Vector3().copy(desiredWorldTarget);
-      }
-
-      // Smooth third-person camera position and target in world space
-      smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
-      smoothVector(camera.userData.smoothedWorldTarget, desiredWorldTarget, dt, 0.04);
-
-      camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
-      cameraTarget.copy(camera.userData.smoothedWorldTarget).sub(focusVec).multiplyScalar(renderScale);
+      camera.up.copy(v3(orbit.up));
     }
-    camera.up.copy(v3(orbit.up));
   }
 
   camera.lookAt(cameraTarget);
@@ -429,12 +472,18 @@ export function updateSpeedBlur(
 ): void {
   const { character = null, mode = 'in-ship', ship, quantum } = world;
   if (quantum?.phase === 'traveling') {
-    speedBlurEffect.setStrength(0.08);
+    // Skip the 8-tap radial blur during warp — planet tile thrash was the
+    // bigger hit, but this still costs a full-screen pass for little read.
+    speedBlurEffect.setStrength(0);
     return;
   }
   if (quantum?.phase === 'spooling') {
     const spoolT = quantum.spoolElapsed / Math.max(quantum.spoolDuration, 0.001);
-    speedBlurEffect.setStrength(spoolT * 0.03);
+    speedBlurEffect.setStrength(spoolT * 0.02);
+    return;
+  }
+  if (quantum?.phase === 'dropOut') {
+    speedBlurEffect.setStrength(0);
     return;
   }
 

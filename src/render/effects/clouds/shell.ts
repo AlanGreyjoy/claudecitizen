@@ -11,6 +11,7 @@ interface CloudLayer {
 
 export interface CloudShell {
   dispose: () => void;
+  setVisible: (visible: boolean) => void;
   update: (
     bodyPosition: Vec3,
     nowSeconds: number,
@@ -134,6 +135,9 @@ export function createCloudShell(
 
   return {
     dispose,
+    setVisible(visible) {
+      group.visible = visible;
+    },
     update,
   };
 }

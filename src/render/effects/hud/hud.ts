@@ -1,11 +1,9 @@
 import type { WorldState } from '../../../player/world_state';
-import { MODE_IN_SHIP } from '../../../player/modes';
 import type { Planet, PlanetSurfaceSample, RenderStats, SsaoSettings, Vec3 } from '../../../types';
 import { createChatPanel } from './chat_panel';
 import { createDebugMenu } from './debug_menu';
 import { createDebugSettings } from './debug_settings';
 import { createFpsCounter } from './fps_counter';
-import { createMinimap } from './minimap';
 import { createStatsPanel } from './stats_panel';
 import { createFlightReticle } from './flight_reticle';
 import { createCockpitGazeHud } from './cockpit_gaze_hud';
@@ -16,7 +14,6 @@ import {
 
 export interface HudElements {
   fpsEl: HTMLElement;
-  minimapCanvas: HTMLCanvasElement;
   chatMessagesEl: HTMLElement;
   chatInputEl: HTMLInputElement;
   debugBtnEl: HTMLButtonElement;
@@ -45,12 +42,6 @@ export interface HudUpdateParams {
   rendererMode: string | undefined;
   planet: Planet;
   isPointerLocked: boolean;
-  seed: number;
-  focusPosition: Vec3;
-  focusForward: Vec3;
-  shipPosition: Vec3;
-  shipForward: Vec3;
-  characterPosition: Vec3;
   nowMs: number;
   flightDual?: {
     aimOffsetPx: { x: number; y: number };
@@ -76,13 +67,10 @@ export interface HudCallbacks {
 
 export function createHud(
   elements: HudElements,
-  planet: Planet,
-  seed: number,
   callbacks: HudCallbacks = {},
 ) {
   const debugSettings = createDebugSettings();
   const fpsCounter = createFpsCounter(elements.fpsEl);
-  const minimap = createMinimap(elements.minimapCanvas, planet, seed);
   const chatPanel = createChatPanel(elements.chatMessagesEl, elements.chatInputEl, {
     onSendMessage: callbacks.onChatSend,
   });
@@ -113,8 +101,6 @@ export function createHud(
     callbacks.onTimeOverrideChange?.(settings.timeOverride);
   });
 
-  window.addEventListener('resize', () => minimap.resize());
-
   function update(params: HudUpdateParams): void {
     fpsCounter.update(params.nowMs);
 
@@ -135,21 +121,6 @@ export function createHud(
     cockpitSpeedHud.update(
       params.cockpitSpeed ?? { visible: false },
     );
-
-    const showCharacter = params.world.mode !== MODE_IN_SHIP;
-    minimap.update({
-      planet: params.planet,
-      seed: params.seed,
-      focusPosition: params.focusPosition,
-      focusForward: params.focusForward,
-      shipPosition: params.shipPosition,
-      shipForward: params.shipForward,
-      characterPosition: params.characterPosition,
-      showCharacter,
-      nowMs: params.nowMs,
-      flightMode: params.world.flightMode,
-      quantumPhase: params.world.quantum.phase,
-    });
 
     if (debugSettings.getSettings().showStatsPanel) {
       statsPanel.update(params);

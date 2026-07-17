@@ -36,7 +36,7 @@
         "transform": {
           "position": {
             "x": 0,
-            "y": 0,
+            "y": 7.25,
             "z": 0
           },
           "rotation": {
@@ -54,480 +54,133 @@
         "asset": {
           "url": "/editor/assets/protected/ships/SM_Veh_DropShip_01.glb"
         },
-        "components": [
+        "nodeOverrides": [
           {
-            "type": "ship-hull"
-          }
-        ]
-      },
-      {
-        "id": "e-a301224b",
-        "name": "Walk_Zone",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -6.75,
-            "z": 1.25
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 2.2,
-            "y": 1.6,
-            "z": 1.8
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cabin",
-            "min": {
-              "x": -2,
-              "z": -3
-            },
-            "max": {
-              "x": 2,
-              "z": 3
-            },
-            "height": 3.1,
-            "passage": true
-          }
-        ]
-      },
-      {
-        "id": "e-6560ffa2",
-        "name": "Pilot_Chair",
-        "transform": {
-          "position": {
-            "x": 0.5,
-            "y": -3,
-            "z": 15
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "pilot-seat",
-            "role": "pilot",
-            "eye": {
-              "x": 0,
-              "y": 0.87,
-              "z": 0.25
-            },
-            "stand": {
-              "x": 0,
-              "z": -1.55
-            },
-            "interactRadius": 1.45
-          }
-        ]
-      },
-      {
-        "id": "e-b4b29ff0",
-        "name": "Co_Pilot_Chair",
-        "transform": {
-          "position": {
-            "x": -0.5,
-            "y": -3,
-            "z": 15
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "pilot-seat",
-            "eye": {
-              "x": 0,
-              "y": 0.87,
-              "z": 0.25
-            },
-            "stand": {
-              "x": 0,
-              "z": -1.55
-            },
-            "interactRadius": 1.45
-          }
-        ]
-      },
-      {
-        "id": "e-45918812",
-        "name": "Back_Seat_01",
-        "transform": {
-          "position": {
-            "x": 0.5,
-            "y": -2.25,
-            "z": 12.75
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "pilot-seat",
-            "eye": {
-              "x": 0,
-              "y": 0.87,
-              "z": 0.25
-            },
-            "stand": {
-              "x": 0,
-              "z": -1.55
-            },
-            "interactRadius": 1.45
-          }
-        ]
-      },
-      {
-        "id": "e-3b1ed92a",
-        "name": "Back_Seat_02",
-        "transform": {
-          "position": {
-            "x": -0.5,
-            "y": -2.25,
-            "z": 12.75
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "pilot-seat",
-            "eye": {
-              "x": 0,
-              "y": 0.87,
-              "z": 0.25
-            },
-            "stand": {
-              "x": 0,
-              "z": -1.55
-            },
-            "interactRadius": 1.45
-          }
-        ]
-      },
-      {
-        "id": "e-fac7f141",
-        "name": "Ladder",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -7,
-            "z": 6.5
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1.7,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ship-stairs",
-            "variant": "ladder",
-            "zoneId": "ladder",
-            "min": {
-              "x": -0.35,
-              "z": -1.5
-            },
-            "max": {
-              "x": 0.35,
-              "z": 1.5
-            },
-            "riseUp": 2.4,
-            "height": 2.4
-          }
-        ]
-      },
-      {
-        "id": "e-e3f3f735",
-        "name": "Walk_Zone_02",
-        "transform": {
-          "position": {
-            "x": 0.22738,
-            "y": -3.61485,
-            "z": 8.62936
-          },
-          "rotation": {
-            "x": -0.285261,
-            "y": 0.078924,
-            "z": 0.016721,
-            "w": 0.955049
-          },
-          "scale": {
-            "x": 0.4,
-            "y": 0.83835,
-            "z": 0.73519
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cabin",
-            "min": {
-              "x": -2,
-              "z": -3
-            },
-            "max": {
-              "x": 2,
-              "z": 3
-            },
-            "height": 3.1,
-            "passage": true
-          }
-        ]
-      },
-      {
-        "id": "e-e28917ef",
-        "name": "Walk_Zone_Cockpit",
-        "transform": {
-          "position": {
-            "x": -0.0205,
-            "y": -2.74094,
-            "z": 11.13079
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 0.6376,
-            "y": 0.78484,
-            "z": 0.37691
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cabin",
-            "min": {
-              "x": -2,
-              "z": -3
-            },
-            "max": {
-              "x": 2,
-              "z": 3
-            },
-            "height": 3.1,
-            "passage": true
-          }
-        ]
-      },
-      {
-        "id": "e-8b6b00f0",
-        "name": "Walk_Zone_Cockpit Copy",
-        "transform": {
-          "position": {
-            "x": 0.02495,
-            "y": -3.21774,
-            "z": 13.29567
-          },
-          "rotation": {
-            "x": 0.185901,
-            "y": 0.003572,
-            "z": -0.003765,
-            "w": 0.982555
-          },
-          "scale": {
-            "x": 0.6376,
-            "y": 0.78484,
-            "z": 0.37691
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cabin",
-            "min": {
-              "x": -2,
-              "z": -3
-            },
-            "max": {
-              "x": 2,
-              "z": 3
-            },
-            "height": 3.1,
-            "passage": true
-          }
-        ]
-      },
-      {
-        "id": "e-df23b869",
-        "name": "Cockpit_Walk",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -3.54918,
-            "z": 14.84184
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 0.6,
-            "y": 1,
-            "z": 0.43368
-          }
-        },
-        "components": [
-          {
-            "type": "ship-walk-zone",
-            "zoneId": "cock_pit",
-            "min": {
-              "x": -2,
-              "z": -3
-            },
-            "max": {
-              "x": 2,
-              "z": 3
-            },
-            "height": 3.1,
-            "passage": true
-          }
-        ]
-      },
-      {
-        "id": "e-02a6191a",
-        "name": "Inside_Ramp_Trigger",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -4.25,
-            "z": -3.5
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ramp-interact",
-            "placement": "deck",
-            "radius": 3
-          }
-        ]
-      },
-      {
-        "id": "e-4dda5bc0",
-        "name": "Outside_Ramp_Trigger Copy",
-        "transform": {
-          "position": {
-            "x": 1,
-            "y": -6.75,
-            "z": -6
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ramp-interact",
-            "placement": "outside",
-            "radius": 3
-          }
-        ]
-      },
-      {
-        "id": "e-fa37a3b5",
-        "name": "Empty",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -6.75,
-            "z": -4.5
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
-          {
-            "type": "ramp-mount",
-            "min": {
-              "x": -1.05,
-              "z": -0.4
-            },
-            "max": {
-              "x": 1.05,
-              "z": 0.4
+            "node": "SM_Veh_DropShip_01_Engine_02",
+            "transform": {
+              "position": {
+                "x": 11.65181,
+                "y": 1.89494,
+                "z": -1.4244
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
             }
+          },
+          {
+            "node": "SM_Veh_DropShip_01_Glass_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          }
+        ],
+        "components": [
+          {
+            "type": "ship-controller",
+            "restHeight": 7.5,
+            "stats": {
+              "maxSpeedMps": 100,
+              "maxHp": 1000,
+              "maxShields": 500,
+              "shieldRegenPerSec": 25,
+              "massKg": 12000,
+              "maxAngularRateRadps": 0.85,
+              "forwardThrustN": 3696000,
+              "backwardThrustN": 2217600,
+              "verticalThrustN": 2520000,
+              "lateralThrustN": 2016000,
+              "pitchTorqueNm": 960000,
+              "yawTorqueNm": 1104000,
+              "rollTorqueNm": 1584000
+            },
+            "gear": {
+              "nodes": [
+                {
+                  "name": "Front_LandingArm",
+                  "deployRadians": 0.796
+                },
+                {
+                  "name": "Front_Foot",
+                  "deployRadians": -0.755
+                },
+                {
+                  "name": "Front_LandingPiston",
+                  "deployRadians": -0.563
+                },
+                {
+                  "name": "LandingGear_BackLeft",
+                  "deployRadians": -0.791
+                },
+                {
+                  "name": "Back_Arm",
+                  "under": "LandingGear_BackLeft",
+                  "deployRadians": 0.852
+                },
+                {
+                  "name": "Back_Foot",
+                  "under": "LandingGear_BackLeft",
+                  "deployRadians": 0.298,
+                  "axis": "y"
+                },
+                {
+                  "name": "LandingGear_BackRight",
+                  "deployRadians": -0.791
+                },
+                {
+                  "name": "Back_Arm",
+                  "under": "LandingGear_BackRight",
+                  "deployRadians": 0.852
+                },
+                {
+                  "name": "Back_Foot",
+                  "under": "LandingGear_BackRight",
+                  "deployRadians": 0.298,
+                  "axis": "y"
+                }
+              ]
+            },
+            "ramp": {
+              "hinge": {
+                "node": "RampParent",
+                "lowerRadians": -0.85
+              },
+              "outsideInteractId": "ramp-button-outside",
+              "outsideRadius": 3,
+              "deckInteractId": "ramp-panel-deck",
+              "deckRadius": 1.7,
+              "dismountForward": -8.5,
+              "dismountGround": {
+                "x": 0,
+                "z": -9.6
+              }
+            },
+            "doors": [],
+            "seats": [],
+            "cameraBounds": []
           }
         ]
       }
