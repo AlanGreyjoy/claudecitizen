@@ -6,6 +6,11 @@ export interface FlightBody {
   position: Vec3;
   up: Vec3;
   velocity: Vec3;
+  /**
+   * Ship-local angular velocity (rad/s):
+   * x = pitch, y = yaw, z = roll. Optional for network snapshots.
+   */
+  angularVelocity?: Vec3;
 }
 
 export interface FlightInput {
@@ -17,4 +22,10 @@ export interface FlightInput {
   strafe01?: number;
   throttle01?: number;
   yaw01?: number;
+}
+
+/** Persistent mouse aim offset from ship forward (radians). */
+export interface FlightAimState {
+  pitchRadians: number;
+  yawRadians: number;
 }

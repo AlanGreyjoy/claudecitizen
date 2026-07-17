@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "slots": [
+    {
+      "id": "backpack",
+      "label": "Backpack",
+      "kind": "backpack"
+    },
+    {
+      "id": "rifle-primary",
+      "label": "Primary Rifle",
+      "kind": "weapon",
+      "weaponSlotType": "rifle",
+      "providerSocket": {
+        "slotId": "backpack",
+        "socketId": "rifle-primary"
+      }
+    },
+    {
+      "id": "rifle-secondary",
+      "label": "Secondary Rifle",
+      "kind": "weapon",
+      "weaponSlotType": "rifle",
+      "requiresSlotId": "backpack",
+      "providerSocket": {
+        "slotId": "backpack",
+        "socketId": "rifle-secondary"
+      }
+    },
+    {
+      "id": "sword",
+      "label": "Sword",
+      "kind": "weapon",
+      "weaponSlotType": "sword"
+    },
+    {
+      "id": "handgun",
+      "label": "Handgun",
+      "kind": "weapon",
+      "weaponSlotType": "handgun"
+    }
+  ],
+  "variants": {
+    "1": {
+      "type": 1,
+      "label": "Male / Type 1",
+      "mounts": {
+        "backpack": {
+          "bone": "backAttach",
+          "position": {
+            "x": 0,
+            "y": -0.049086553193181386,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 1,
+            "w": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "rifle-primary": {
+          "bone": "backAttach",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "rifle-secondary": {
+          "bone": "backAttach",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "sword": {
+          "bone": "hipAttach_l",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "handgun": {
+          "bone": "hipAttach_r",
+          "position": {
+            "x": -0.04120153149869412,
+            "y": -0.003201732316557124,
+            "z": -0.0008579015879229837
+          },
+          "rotation": {
+            "x": 0.7903343913115048,
+            "y": -0.05305705450138083,
+            "z": -0.0691452996344182,
+            "w": 0.6064449079812421
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      }
+    },
+    "2": {
+      "type": 2,
+      "label": "Female / Type 2",
+      "mounts": {
+        "backpack": {
+          "bone": "backAttach",
+          "position": {
+            "x": 0,
+            "y": -0.03088023984084107,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 1,
+            "w": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "rifle-primary": {
+          "bone": "backAttach",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "rifle-secondary": {
+          "bone": "backAttach",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "sword": {
+          "bone": "hipAttach_l",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "handgun": {
+          "bone": "hipAttach_r",
+          "position": {
+            "x": -0.03,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0.7631294127377697,
+            "y": -0.056022631551222134,
+            "z": -0.0667651724177507,
+            "w": 0.6403416087687969
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        }
+      }
+    }
+  }
+}

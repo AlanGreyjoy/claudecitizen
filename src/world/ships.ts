@@ -105,6 +105,9 @@ export async function applyOwnedShipToInstance(
     ...getShipLayoutForPrefab(owned.prefabId).spec,
     maxSpeedMps: owned.maxSpeedMps,
     throttleAccelMps2: owned.throttleAccelMps2,
+    forwardThrustN:
+      owned.throttleAccelMps2 *
+      getShipLayoutForPrefab(owned.prefabId).spec.massKg,
     maxHp: owned.maxHp,
     maxShields: owned.maxShields,
     shieldRegenPerSec: owned.shieldRegenPerSec,

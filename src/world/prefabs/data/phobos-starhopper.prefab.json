@@ -518,6 +518,258 @@
                 "shape": "mesh"
               }
             ]
+          },
+          {
+            "node": "Phobos_Starhopper_BathroomDoor",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "WardrobeDoor_Slot",
+            "transform": {
+              "position": {
+                "x": 1.42379,
+                "y": -3.26181,
+                "z": -0.60849
+              },
+              "rotation": {
+                "x": -1,
+                "y": 0,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": -1,
+                "y": -1,
+                "z": -1
+              }
+            }
+          },
+          {
+            "node": "ArmoryDoor2",
+            "transform": {
+              "position": {
+                "x": -1.52394,
+                "y": -1.61928,
+                "z": 0.18246
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Back_Foot",
+            "transform": {
+              "position": {
+                "x": 0.07384,
+                "y": -0.67809,
+                "z": -0.74039
+              },
+              "rotation": {
+                "x": -0.03191,
+                "y": 0.005564,
+                "z": -0.024045,
+                "w": 0.999186
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "Back_Foot_1",
+            "transform": {
+              "position": {
+                "x": 0.07384,
+                "y": -0.67809,
+                "z": -0.74039
+              },
+              "rotation": {
+                "x": 0.000047,
+                "y": 0.148267,
+                "z": -0.000305,
+                "w": 0.988947
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "BedDrawer",
+            "transform": {
+              "position": {
+                "x": 1.5,
+                "y": -1.77777,
+                "z": -0.38694
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "LargeCupboard",
+            "transform": {
+              "position": {
+                "x": -1.47218,
+                "y": 0.89216,
+                "z": 0.22323
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.48805,
+                "z": 0,
+                "w": 0.872816
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SmallCupboard3",
+            "transform": {
+              "position": {
+                "x": -1.38539,
+                "y": 1.91925,
+                "z": 0.09443
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "LargeCupboard_1",
+            "transform": {
+              "position": {
+                "x": 1.47218,
+                "y": 0.89216,
+                "z": 0.22323
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.48805,
+                "z": 0,
+                "w": 0.872816
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "VerticalCupboard2",
+            "transform": {
+              "position": {
+                "x": 1.48758,
+                "y": 1.60217,
+                "z": 0.19016
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.481249,
+                "z": 0,
+                "w": 0.876584
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "VerticalCupboard1",
+            "transform": {
+              "position": {
+                "x": 1.48758,
+                "y": 2.23194,
+                "z": 0.19016
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.481249,
+                "z": 0,
+                "w": 0.876584
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "ComputerRack",
+            "transform": {
+              "position": {
+                "x": 1.36501,
+                "y": 1.05237,
+                "z": 0.16801
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
           }
         ],
         "components": [
@@ -525,10 +777,16 @@
             "type": "ship-controller",
             "restHeight": 3.16,
             "stats": {
-              "maxSpeedMps": 100,
+              "maxSpeedMps": 500,
               "maxHp": 1000,
               "maxShields": 500,
-              "shieldRegenPerSec": 25
+              "shieldRegenPerSec": 25,
+              "massKg": 120000,
+              "boostShakeAmplitudeM": 0.005,
+              "boostShakeHz": 10,
+              "boostSoundUrl": "/src/assets/protected/sfx/EngineLow1.wav",
+              "thrustSoundUrl": "/src/assets/protected/sfx/EngineMid1.wav",
+              "thrustSoundVolume": 0.3
             },
             "gear": {
               "nodes": [
@@ -574,12 +832,14 @@
                   "deployRadians": 0.298,
                   "axis": "y"
                 }
-              ]
+              ],
+              "deploySoundUrl": "/src/assets/protected/sfx/LGear_Front_Open.wav",
+              "retractSoundUrl": "/src/assets/protected/sfx/LGear_Front_Close.wav"
             },
             "ramp": {
               "hinge": {
                 "node": "RampParent",
-                "lowerRadians": -1.15
+                "lowerRadians": -0.95
               },
               "outsideInteractId": "ramp-button-outside",
               "outsideRadius": 3,
@@ -589,28 +849,11 @@
               "dismountGround": {
                 "x": 0,
                 "z": -9.6
-              }
+              },
+              "openSoundUrl": "/src/assets/protected/sfx/Ramp1.wav",
+              "closeSoundUrl": "/src/assets/protected/sfx/Ramp1.wav"
             },
-            "doors": [
-              {
-                "id": "cockpit",
-                "label": "cockpit",
-                "motion": "slide",
-                "axis": "x",
-                "nodes": [
-                  {
-                    "name": "CockpitDoor_L",
-                    "delta": -1
-                  },
-                  {
-                    "name": "CockpitDoor_R",
-                    "delta": 1
-                  }
-                ],
-                "interactEntityId": "door-cockpit",
-                "radius": 1.55
-              }
-            ],
+            "doors": [],
             "seats": [
               {
                 "role": "pilot",
@@ -672,38 +915,565 @@
               }
             ]
           }
-        ]
-      },
-      {
-        "id": "doorway-sill",
-        "name": "Doorway Sill",
-        "transform": {
-          "position": {
-            "x": 0,
-            "y": -0.52,
-            "z": -5
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "w": 1
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          }
-        },
-        "components": [
+        ],
+        "children": [
           {
-            "type": "collider",
-            "shape": "box",
-            "size": {
-              "x": 2.1,
-              "y": 0.2,
-              "z": 0.9
-            }
+            "id": "e-a6fe4b60",
+            "name": "Ship Door (Phobos_Starhopper_BathroomDoor)",
+            "transform": {
+              "position": {
+                "x": -1.424,
+                "y": -1,
+                "z": 1.563
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-phobos_starhopper_bathroomdoor",
+                "label": "Bathroom",
+                "motion": "slide",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "DoorParent",
+                    "delta": -1.5,
+                    "under": "BathroomDoor_Slot"
+                  }
+                ],
+                "trigger": "radial",
+                "radius": 1,
+                "aimRadius": 0.45,
+                "openSoundUrl": "/src/assets/protected/sfx/Door1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/Door1_Close.wav"
+              }
+            ],
+            "glbAnchor": "Phobos_Starhopper_BathroomDoor"
+          },
+          {
+            "id": "e-868133a4",
+            "name": "Ship Door (WardrobeDoor_Slot)",
+            "transform": {
+              "position": {
+                "x": 1.25,
+                "y": -1,
+                "z": 1.56323
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-wardrobedoor_slot",
+                "label": "WardrobeDoor_Slot",
+                "motion": "slide",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "WardrobeDoor_Slot",
+                    "delta": -1
+                  }
+                ],
+                "trigger": "radial",
+                "radius": 1,
+                "aimRadius": 0.5,
+                "openSoundUrl": "/src/assets/protected/sfx/Door1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/Door1_Close.wav"
+              }
+            ],
+            "glbAnchor": "WardrobeDoor_Slot"
+          },
+          {
+            "id": "e-3a34f44f",
+            "name": "Ship Door (ArmoryDoor1)",
+            "transform": {
+              "position": {
+                "x": -1.5,
+                "y": -1,
+                "z": 0.36462
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-armorydoor1",
+                "label": "ArmoryDoor1",
+                "motion": "slide",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "ArmoryDoor1",
+                    "delta": -0.5
+                  }
+                ],
+                "trigger": "radial",
+                "radius": 1,
+                "openSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Close.wav"
+              }
+            ],
+            "glbAnchor": "ArmoryDoor1"
+          },
+          {
+            "id": "e-fc4d23fd",
+            "name": "Ship Door (ArmoryDoor2)",
+            "transform": {
+              "position": {
+                "x": -1.52394,
+                "y": -1,
+                "z": -0.06725
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-armorydoor2",
+                "label": "ArmoryDoor2",
+                "motion": "slide",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "ArmoryDoor2",
+                    "delta": 0.5
+                  }
+                ],
+                "trigger": "radial",
+                "radius": 1,
+                "openSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Close.wav"
+              }
+            ],
+            "glbAnchor": "ArmoryDoor2"
+          },
+          {
+            "id": "e-e533214a",
+            "name": "Ship Door (BedDrawer)",
+            "transform": {
+              "position": {
+                "x": 1.5,
+                "y": -0.75,
+                "z": 0.07919
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-beddrawer",
+                "label": "BedDrawer",
+                "motion": "slide",
+                "axis": "x",
+                "nodes": [
+                  {
+                    "name": "BedDrawer",
+                    "delta": -0.4
+                  }
+                ],
+                "trigger": "radial",
+                "radius": 1,
+                "aimRadius": 0.5,
+                "openSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Close.wav"
+              }
+            ],
+            "glbAnchor": "BedDrawer"
+          },
+          {
+            "id": "e-32433309",
+            "name": "Ship Door (LargeCupboard)",
+            "transform": {
+              "position": {
+                "x": -1.47218,
+                "y": -0.11506,
+                "z": -2.31294
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-largecupboard",
+                "label": "LargeCupboard",
+                "motion": "hinge",
+                "axis": "x",
+                "nodes": [
+                  {
+                    "name": "LargeCupboard",
+                    "delta": -2.3
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1,
+                "aimRadius": 0.5,
+                "openSoundUrl": "/src/assets/protected/sfx/Cupboard3_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/Cupboard3_Close.wav"
+              }
+            ],
+            "glbAnchor": "LargeCupboard"
+          },
+          {
+            "id": "e-cd0aecd4",
+            "name": "Ship Door (SmallCupboard1)",
+            "transform": {
+              "position": {
+                "x": -1.26225,
+                "y": 0.52853,
+                "z": -3.61783
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-smallcupboard1",
+                "label": "SmallCupboard1",
+                "motion": "hinge",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "SmallCupboard1",
+                    "delta": -1
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1.6,
+                "aimRadius": 0.35,
+                "openSoundUrl": "/src/assets/protected/sfx/Cupboard1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/Cupboard1_Close.wav"
+              }
+            ],
+            "glbAnchor": "SmallCupboard1"
+          },
+          {
+            "id": "e-4b53de17",
+            "name": "Ship Door (SmallCupboard2)",
+            "transform": {
+              "position": {
+                "x": -1.31201,
+                "y": 0.06948,
+                "z": -3.61784
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-smallcupboard2",
+                "label": "SmallCupboard2",
+                "motion": "hinge",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "SmallCupboard2",
+                    "delta": -1
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1.6,
+                "aimRadius": 0.35,
+                "openSoundUrl": "/src/assets/protected/sfx/Cupboard1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/Cupboard1_Close.wav"
+              }
+            ],
+            "glbAnchor": "SmallCupboard2"
+          },
+          {
+            "id": "e-6f621327",
+            "name": "Ship Door (SmallCupboard3)",
+            "transform": {
+              "position": {
+                "x": -1.07901,
+                "y": -0.22482,
+                "z": -3.61784
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-smallcupboard3",
+                "label": "SmallCupboard3",
+                "motion": "hinge",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "SmallCupboard3",
+                    "delta": -1
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1.6,
+                "aimRadius": 0.35,
+                "openSoundUrl": "/src/assets/protected/sfx/Cupboard1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/Cupboard1_Close.wav"
+              }
+            ],
+            "glbAnchor": "SmallCupboard3"
+          },
+          {
+            "id": "e-ba747b45",
+            "name": "Ship Door (LargeCupboard_1)",
+            "transform": {
+              "position": {
+                "x": 1.25,
+                "y": 0,
+                "z": -2.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-largecupboard_1",
+                "label": "LargeCupboard_1",
+                "motion": "hinge",
+                "axis": "x",
+                "nodes": [
+                  {
+                    "name": "LargeCupboard_1",
+                    "delta": -2
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1.6,
+                "aimRadius": 0.35,
+                "openSoundUrl": "/src/assets/protected/sfx/Cupboard3_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/Cupboard3_Close.wav"
+              }
+            ],
+            "glbAnchor": "LargeCupboard_1"
+          },
+          {
+            "id": "e-700d9447",
+            "name": "Ship Door (VerticalCupboard2)",
+            "transform": {
+              "position": {
+                "x": 1.25,
+                "y": 0.00843,
+                "z": -3.30075
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-verticalcupboard2",
+                "label": "VerticalCupboard2",
+                "motion": "slide",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "VerticalCupboard2",
+                    "delta": -1
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1.6,
+                "aimRadius": 0.35,
+                "openSoundUrl": "/src/assets/protected/sfx/SlidingCupboardOpen.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Close.wav"
+              }
+            ],
+            "glbAnchor": "VerticalCupboard2"
+          },
+          {
+            "id": "e-0f8c8b2c",
+            "name": "Ship Door (VerticalCupboard1)",
+            "transform": {
+              "position": {
+                "x": 1.25,
+                "y": 0.00843,
+                "z": -3.93053
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-verticalcupboard1",
+                "label": "VerticalCupboard1",
+                "motion": "slide",
+                "axis": "y",
+                "nodes": [
+                  {
+                    "name": "VerticalCupboard1",
+                    "delta": -0.6
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1.6,
+                "aimRadius": 0.35,
+                "openSoundUrl": "/src/assets/protected/sfx/SlidingCupboardOpen.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Close.wav"
+              }
+            ],
+            "glbAnchor": "VerticalCupboard1"
+          },
+          {
+            "id": "e-eedc778e",
+            "name": "Ship Door (ComputerRack)",
+            "transform": {
+              "position": {
+                "x": 1.20884,
+                "y": -0.01371,
+                "z": -2.75095
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "ship-door",
+                "id": "door-computerrack",
+                "label": "ComputerRack",
+                "motion": "slide",
+                "axis": "x",
+                "nodes": [
+                  {
+                    "name": "ComputerRack",
+                    "delta": -0.8
+                  }
+                ],
+                "trigger": "raycast",
+                "radius": 1.6,
+                "aimRadius": 0.35,
+                "openSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Open.wav",
+                "closeSoundUrl": "/src/assets/protected/sfx/SlidingDoor1_Close.wav"
+              }
+            ],
+            "glbAnchor": "ComputerRack"
           }
         ]
       },
@@ -727,7 +1497,70 @@
             "y": 1,
             "z": 1
           }
-        }
+        },
+        "components": [
+          {
+            "type": "ship-door",
+            "id": "cockpit",
+            "label": "cockpit",
+            "motion": "slide",
+            "axis": "x",
+            "nodes": [
+              {
+                "name": "CockpitDoor_L",
+                "delta": 1
+              },
+              {
+                "name": "CockpitDoor_R",
+                "delta": -1
+              }
+            ],
+            "radius": 0.85,
+            "openSoundUrl": "/src/assets/protected/sfx/Door2_Open.wav",
+            "closeSoundUrl": "/src/assets/protected/sfx/Door2_Close.wav"
+          }
+        ]
+      },
+      {
+        "id": "crew-bed",
+        "name": "Crew Bed",
+        "transform": {
+          "position": {
+            "x": 1.92149,
+            "y": -0.19087,
+            "z": -0.25
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "bed",
+            "id": "crew-bed",
+            "label": "bed",
+            "trigger": "radial",
+            "radius": 1.4,
+            "aimRadius": 0.35,
+            "eye": {
+              "x": 0,
+              "y": 0.28,
+              "z": 0.35
+            },
+            "stand": {
+              "x": -0.85,
+              "z": 0.15
+            }
+          }
+        ]
       },
       {
         "id": "pilot-seat",
@@ -735,7 +1568,7 @@
         "transform": {
           "position": {
             "x": 0,
-            "y": -0.25,
+            "y": -0.5,
             "z": 6.5
           },
           "rotation": {
@@ -750,6 +1583,98 @@
             "z": 1
           }
         }
+      },
+      {
+        "id": "cockpit-gear",
+        "name": "Cockpit Landing Gear",
+        "transform": {
+          "position": {
+            "x": 0.4,
+            "y": -0.1,
+            "z": 7
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "cockpit-control",
+            "id": "cockpit-gear",
+            "action": "landing-gear",
+            "gazeRadius": 0.25,
+            "maxDistance": 2.5
+          }
+        ]
+      },
+      {
+        "id": "cockpit-ramp",
+        "name": "Cockpit Cargo Ramp",
+        "transform": {
+          "position": {
+            "x": -0.4,
+            "y": -0.1,
+            "z": 7
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "cockpit-control",
+            "id": "cockpit-ramp",
+            "action": "cargo-ramp",
+            "gazeRadius": 0.25,
+            "maxDistance": 2.5
+          }
+        ]
+      },
+      {
+        "id": "cockpit-speed",
+        "name": "Cockpit Speed",
+        "transform": {
+          "position": {
+            "x": 0.5,
+            "y": 0.0463,
+            "z": 7.49933
+          },
+          "rotation": {
+            "x": 0.12106,
+            "y": 0.25376,
+            "z": -0.022995,
+            "w": 0.959386
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "cockpit-stat",
+            "id": "cockpit-speed",
+            "kind": "speed",
+            "maxDistance": 3.5
+          }
+        ]
       },
       {
         "id": "ramp-button-outside",
@@ -891,10 +1816,10 @@
                 "z": -5.09979
               },
               "rotation": {
-                "x": -0.494535,
-                "y": -0.420368,
-                "z": -0.564061,
-                "w": 0.510453
+                "x": -0.494533,
+                "y": -0.420367,
+                "z": -0.564064,
+                "w": 0.510451
               },
               "scale": {
                 "x": 0.3,
@@ -999,7 +1924,7 @@
               {
                 "type": "area-light",
                 "color": "#ffcb0f",
-                "intensity": 1.7,
+                "intensity": 2,
                 "width": 3.5,
                 "height": 0.45
               }

@@ -21,6 +21,7 @@ const DEFAULT_STARTER_PREFAB_ID = 'phobos-starhopper';
 export const ITEM_TYPES = [
   'consumable',
   'weapon',
+  'backpack',
   'armor',
   'clothing',
   'material',
@@ -28,6 +29,9 @@ export const ITEM_TYPES = [
 ] as const;
 
 export type ItemType = (typeof ITEM_TYPES)[number];
+
+export const WEAPON_SLOT_TYPES = ['sword', 'handgun', 'rifle'] as const;
+export type WeaponSlotType = (typeof WEAPON_SLOT_TYPES)[number];
 
 type CatalogDb = Prisma.TransactionClient | PrismaService;
 
@@ -355,6 +359,204 @@ export class GameCatalogService {
     });
   }
 
+  async listWeaponDefinitions() {
+    const entries = await this.prisma.weaponDefinition.findMany({
+      include: { itemDefinition: true },
+      orderBy: [
+        { weaponSlotType: 'asc' },
+        { itemDefinition: { name: 'asc' } },
+      ],
+    });
+    return entries.map((entry) => ({
+      ...entry.itemDefinition,
+      weaponSlotType: entry.weaponSlotType,
+    }));
+  }
+
+  async createWeaponDefinition(input: {
+    name: string;
+    description: string;
+    subType: string;
+    prefabId: string;
+    iconUrl: string | null;
+    costArc: number;
+    rarity: string;
+    weaponSlotType: WeaponSlotType;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.itemDefinition.create({
+        data: {
+          name: input.name,
+          description: input.description,
+          itemType: 'weapon',
+          subType: input.subType,
+          prefabId: input.prefabId,
+          iconUrl: input.iconUrl,
+          stackMax: 1,
+          costArc: input.costArc,
+          rarity: input.rarity,
+        },
+      });
+      await tx.weaponDefinition.create({
+        data: {
+          itemDefinitionId: item.id,
+          weaponSlotType: input.weaponSlotType,
+        },
+      });
+      return { ...item, weaponSlotType: input.weaponSlotType };
+    });
+  }
+
+  async updateWeaponDefinition(
+    id: string,
+    input: Partial<{
+      name: string;
+      description: string;
+      subType: string;
+      prefabId: string;
+      iconUrl: string | null;
+      costArc: number;
+      rarity: string;
+      weaponSlotType: WeaponSlotType;
+    }>,
+  ) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const item = await tx.itemDefinition.update({
+          where: { id },
+          data: {
+            name: input.name,
+            description: input.description,
+            subType: input.subType,
+            prefabId: input.prefabId,
+            iconUrl: input.iconUrl,
+            costArc: input.costArc,
+            rarity: input.rarity,
+          },
+        });
+        const weapon = await tx.weaponDefinition.update({
+          where: { itemDefinitionId: id },
+          data: { weaponSlotType: input.weaponSlotType },
+        });
+        return { ...item, weaponSlotType: weapon.weaponSlotType };
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Weapon definition "${id}" not found.`);
+      }
+      throw error;
+    }
+  }
+
+  async deleteWeaponDefinition(id: string): Promise<void> {
+    await this.deleteItemDefinition(id);
+  }
+
+  async listBackpackDefinitions() {
+    const entries = await this.prisma.backpackDefinition.findMany({
+      include: { itemDefinition: true },
+      orderBy: { itemDefinition: { name: 'asc' } },
+    });
+    return entries.map((entry) => ({
+      ...entry.itemDefinition,
+      capacityLiters: entry.capacityLiters,
+      emptyMassKg: entry.emptyMassKg,
+    }));
+  }
+
+  async createBackpackDefinition(input: {
+    name: string;
+    description: string;
+    subType: string;
+    prefabId: string;
+    iconUrl: string | null;
+    costArc: number;
+    rarity: string;
+    capacityLiters: number;
+    emptyMassKg: number;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.itemDefinition.create({
+        data: {
+          name: input.name,
+          description: input.description,
+          itemType: 'backpack',
+          subType: input.subType,
+          prefabId: input.prefabId,
+          iconUrl: input.iconUrl,
+          stackMax: 1,
+          costArc: input.costArc,
+          rarity: input.rarity,
+        },
+      });
+      await tx.backpackDefinition.create({
+        data: {
+          itemDefinitionId: item.id,
+          capacityLiters: input.capacityLiters,
+          emptyMassKg: input.emptyMassKg,
+        },
+      });
+      return {
+        ...item,
+        capacityLiters: input.capacityLiters,
+        emptyMassKg: input.emptyMassKg,
+      };
+    });
+  }
+
+  async updateBackpackDefinition(
+    id: string,
+    input: Partial<{
+      name: string;
+      description: string;
+      subType: string;
+      prefabId: string;
+      iconUrl: string | null;
+      costArc: number;
+      rarity: string;
+      capacityLiters: number;
+      emptyMassKg: number;
+    }>,
+  ) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const item = await tx.itemDefinition.update({
+          where: { id },
+          data: {
+            name: input.name,
+            description: input.description,
+            subType: input.subType,
+            prefabId: input.prefabId,
+            iconUrl: input.iconUrl,
+            costArc: input.costArc,
+            rarity: input.rarity,
+          },
+        });
+        const backpack = await tx.backpackDefinition.update({
+          where: { itemDefinitionId: id },
+          data: {
+            capacityLiters: input.capacityLiters,
+            emptyMassKg: input.emptyMassKg,
+          },
+        });
+        return {
+          ...item,
+          capacityLiters: backpack.capacityLiters,
+          emptyMassKg: backpack.emptyMassKg,
+        };
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Backpack definition "${id}" not found.`);
+      }
+      throw error;
+    }
+  }
+
+  async deleteBackpackDefinition(id: string): Promise<void> {
+    await this.deleteItemDefinition(id);
+  }
+
   asItemDefinitionDto(entry: {
     id: string;
     name: string;
@@ -392,6 +594,9 @@ export class GameCatalogService {
     costArc: number;
     rarity: string;
   }) {
+    if (input.itemType === 'weapon' || input.itemType === 'backpack') {
+      throw new BadRequestException('Use the specialized weapon or backpack catalog.');
+    }
     return this.prisma.itemDefinition.create({ data: input });
   }
 
@@ -409,6 +614,14 @@ export class GameCatalogService {
       rarity?: string;
     },
   ) {
+    const current = await this.prisma.itemDefinition.findUnique({
+      where: { id },
+      include: { weapon: true, backpack: true },
+    });
+    if (!current) throw new NotFoundException(`Item definition "${id}" not found.`);
+    if (current.weapon || current.backpack || input.itemType === 'weapon' || input.itemType === 'backpack') {
+      throw new BadRequestException('Use the specialized weapon or backpack catalog.');
+    }
     try {
       return await this.prisma.itemDefinition.update({ where: { id }, data: input });
     } catch (error) {

@@ -25,6 +25,7 @@ import {
   type KeyboardActionId,
 } from '../../../flight/input_settings';
 import type { RenderQualityPreset } from '../../main/domain/render_quality';
+import { createBindingAxisPreview } from './binding_axis_preview';
 
 export interface GameMenuElements {
   rootEl: HTMLElement;
@@ -118,6 +119,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     | null = null;
   let keyboardCaptureCleanup: (() => void) | null = null;
   let deviceCaptureCleanup: (() => void) | null = null;
+  let axisPreviewCleanup: (() => void) | null = null;
   let telemetryInterval: number | null = null;
 
   const navButtons = Array.from(
@@ -190,8 +192,14 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
       return;
     }
     cancelCapture();
+    stopAxisPreview();
     stopTelemetry();
     elements.rootEl.blur();
+  }
+
+  function stopAxisPreview(): void {
+    axisPreviewCleanup?.();
+    axisPreviewCleanup = null;
   }
 
   function toggleOpen(): void {
@@ -419,6 +427,8 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
 
   function renderDeviceControls(profileId: DeviceProfileId): HTMLElement {
     const panel = createElement('div', 'sc-game-menu-control-page');
+    const layout = createElement('div', 'sc-game-menu-device-layout');
+    const main = createElement('div', 'sc-game-menu-device-main');
     const profile = settings.input[profileId];
     const settingsGrid = createElement('div', 'sc-game-menu-control-grid');
     settingsGrid.append(
@@ -502,7 +512,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     reset.addEventListener('click', () => resetControlsTab(profileId));
     actions.append(reset);
 
-    panel.append(
+    main.append(
       settingsGrid,
       devicesTitle,
       renderDetectedDevices(profileId),
@@ -512,18 +522,27 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
       buttonBindings,
       actions,
     );
-    return panel;
+
+    const preview = createBindingAxisPreview(profileId, () => settings.input[profileId]);
+    layout.append(main, preview.root);
+    panel.append(layout);
+    return { panel, startPreview: preview.start };
   }
 
   function renderControlsPanel(): void {
     if (!controlsRoot) return;
+    stopAxisPreview();
     controlsRoot.replaceChildren();
     controlsRoot.append(renderControlsSubnav());
     const status = renderControlsStatus();
     if (status) controlsRoot.append(status);
-    controlsRoot.append(
-      controlsTab === 'mouseKeyboard' ? renderKeyboardControls() : renderDeviceControls(controlsTab),
-    );
+    if (controlsTab === 'mouseKeyboard') {
+      controlsRoot.append(renderKeyboardControls());
+      return;
+    }
+    const { panel, startPreview } = renderDeviceControls(controlsTab);
+    controlsRoot.append(panel);
+    axisPreviewCleanup = startPreview();
   }
 
   function cancelCapture(status = ''): void {
@@ -686,7 +705,15 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   function startTelemetry(): void {
     if (telemetryInterval !== null) return;
     telemetryInterval = window.setInterval(() => {
-      if (open && activeTab === 'controls' && !isCapturingControls()) renderControlsPanel();
+      // Device tabs keep a live axis preview rAF; avoid full re-renders that tear it down.
+      if (
+        open &&
+        activeTab === 'controls' &&
+        controlsTab === 'mouseKeyboard' &&
+        !isCapturingControls()
+      ) {
+        renderControlsPanel();
+      }
     }, 500);
   }
 
@@ -765,6 +792,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     dispose() {
       window.removeEventListener('keydown', handleKeyDown, true);
       cancelCapture();
+      stopAxisPreview();
       stopTelemetry();
     },
     isOpen() {

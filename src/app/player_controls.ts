@@ -3,7 +3,13 @@ import {
   loadGameSettings,
   type GameSettings,
 } from '../settings/game_settings';
-import type { CameraView, FlightInput, GameMode, ShipCameraView } from '../types';
+import type {
+  CameraView,
+  FlightAimState,
+  FlightInput,
+  GameMode,
+  ShipCameraView,
+} from '../types';
 import {
   applyShipWheelZoom,
   applyWheelZoom,
@@ -13,6 +19,10 @@ import {
   updateSmoothZoom,
 } from '../flight/camera_zoom';
 import { buildCharacterInput, buildFlightInput } from '../flight/control_mix';
+import {
+  applyMouseDeltaToAim,
+  createFlightAimState,
+} from '../flight/flight_aim';
 import { QUANTUM_ENGAGE_HOLD_SECONDS } from '../flight/quantum_travel';
 import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character_controller';
 import {
@@ -83,8 +93,11 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   const keys = new Set<string>();
   const justPressed = new Set<string>();
   const deviceActionStates = new Map<string, boolean>();
-  const flightLook = { pitch01: 0, yaw01: 0 };
+  let flightAim: FlightAimState = createFlightAimState();
+  let coupledMode = true;
+  let coupledTogglePressed = false;
   const seatLook = { pitchRadians: 0, yawRadians: 0, targetPitchRadians: 0, targetYawRadians: 0 };
+  let primaryClickPressed = false;
   const orbitLook = {
     pitchRadians: -0.35,
     yawRadians: 0,
@@ -118,6 +131,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
 
   function isHandledKey(code: string): boolean {
     if (code.startsWith('Key') || code === 'Space') return true;
+    if (code === 'AltLeft' || code === 'AltRight') return true;
     return Object.values(keyboardBindings()).some(
       (binding) => binding.primary === code || binding.secondary === code,
     );
@@ -244,11 +258,20 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     return mode === 'in-ship' && isKeyboardActionDown('seatLook') && shipCameraView === 'cockpit';
   }
 
+  function isBedLookActive(): boolean {
+    return mode === 'in-bed';
+  }
+
+  function isHeadLookActive(): boolean {
+    return isSeatLookActive() || isBedLookActive();
+  }
+
   function toggleCameraView() {
     if (mode === 'in-ship') {
       shipCameraView = shipCameraView === 'cockpit' ? 'external' : 'cockpit';
       return;
     }
+    if (mode === 'in-bed') return;
     cameraView = cameraView === 'first-person' ? 'third-person' : 'first-person';
     if (cameraView === 'third-person') {
       orbitLook.pitchRadians = Math.max(
@@ -274,12 +297,26 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         uHeldSinceMs = performance.now();
         quantumEngageTriggered = false;
       }
+      // Star Citizen-style coupled/decoupled toggle (Alt+C).
+      if (
+        !wasDown &&
+        event.code === 'KeyC' &&
+        event.altKey &&
+        mode === 'in-ship'
+      ) {
+        coupledMode = !coupledMode;
+        coupledTogglePressed = true;
+        return;
+      }
       if (
         !wasDown &&
         ONE_SHOT_KEYBOARD_ACTIONS.some((action) => isKeyboardCode(action, event.code))
       ) {
         // The default F binding is hold-only while seated; tap-F interact stays for deck/doors/ramp.
-        if (!(isKeyboardCode('seatLook', event.code) && mode === 'in-ship')) {
+        // In bed, F is unused (always-on head look); suppress tap-F interact.
+        if (
+          !(isKeyboardCode('seatLook', event.code) && (mode === 'in-ship' || mode === 'in-bed'))
+        ) {
           justPressed.add(event.code);
         }
       }
@@ -319,9 +356,21 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         );
         return;
       }
-      flightLook.yaw01 = clampAxis(flightLook.yaw01 - event.movementX * 0.015 * flightMouseSensitivity);
-      flightLook.pitch01 = clampAxis(
-        flightLook.pitch01 + event.movementY * pitchSign * 0.015 * flightMouseSensitivity,
+      flightAim = applyMouseDeltaToAim(
+        flightAim,
+        event.movementX,
+        event.movementY,
+        flightMouseSensitivity,
+        mouseKeyboard.invertMouseY,
+      );
+      return;
+    }
+    if (mode === 'in-bed') {
+      seatLook.targetYawRadians -= event.movementX * SEAT_LOOK_YAW_SENSITIVITY * lookSensitivity;
+      seatLook.targetPitchRadians = clampPitch(
+        seatLook.targetPitchRadians +
+          event.movementY * pitchSign * SEAT_LOOK_PITCH_SENSITIVITY * lookSensitivity,
+        FIRST_PERSON_PITCH_LIMIT,
       );
       return;
     }
@@ -340,12 +389,19 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     canvas.requestPointerLock?.();
   }
 
+  function onPointerDown(event: PointerEvent) {
+    if (event.button !== 0) return;
+    if (document.pointerLockElement !== canvas) return;
+    if (inputSuppressed) return;
+    primaryClickPressed = true;
+  }
+
   function onBlur() {
     keys.clear();
     justPressed.clear();
     deviceActionStates.clear();
-    flightLook.pitch01 = 0;
-    flightLook.yaw01 = 0;
+    primaryClickPressed = false;
+    flightAim = createFlightAimState();
     resetSeatLookState();
   }
 
@@ -364,6 +420,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       shipLook.targetZoomDistance = applyShipWheelZoom(shipLook.targetZoomDistance, delta);
       return;
     }
+    if (mode === 'in-bed') return;
     if (cameraView === 'first-person') return;
     orbitLook.targetZoomDistance = applyWheelZoom(orbitLook.targetZoomDistance, delta);
   }
@@ -375,6 +432,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   window.addEventListener(GAME_SETTINGS_CHANGED_EVENT, handleSettingsChanged);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('click', onCanvasClick);
+  canvas.addEventListener('pointerdown', onPointerDown);
 
   function updateQuantumEngageHold(): boolean {
     if (mode !== 'in-ship' || !isKeyboardActionDown('cycleFlightMode')) {
@@ -396,7 +454,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function updateExitSeatHold(): boolean {
-    if (mode !== 'in-ship' || !isExitSeatHeld()) {
+    if ((mode !== 'in-ship' && mode !== 'in-bed') || !isExitSeatHeld()) {
       yHeldSinceMs = null;
       exitSeatTriggered = false;
       return false;
@@ -421,8 +479,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       keys.clear();
       justPressed.clear();
       deviceActionStates.clear();
-      flightLook.pitch01 = 0;
-      flightLook.yaw01 = 0;
+      flightAim = createFlightAimState();
       resetSeatLookState();
     }
   }
@@ -439,7 +496,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         hangarCancelPressed: false,
         hangarDigit: null,
         cycleFlightModePressed: false,
+        coupledToggled: false,
         quantumEngagePressed: false,
+        primaryClickPressed: false,
         wasKeyPressed: () => false,
       };
     }
@@ -459,6 +518,10 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     const justPressedSnapshot = new Set(justPressed);
     const cycleFlightModeTap = cycleFlightModePressed;
     cycleFlightModePressed = false;
+    const coupledToggled = coupledTogglePressed;
+    coupledTogglePressed = false;
+    const clickPressed = primaryClickPressed;
+    primaryClickPressed = false;
     const actions = {
       interactPressed,
       exitSeatPressed: updateExitSeatHold(),
@@ -468,7 +531,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       hangarCancelPressed: wasKeyboardActionPressed('hangarCancel'),
       hangarDigit,
       cycleFlightModePressed: cycleFlightModeTap,
+      coupledToggled,
       quantumEngagePressed: updateQuantumEngageHold(),
+      primaryClickPressed: clickPressed,
       wasKeyPressed: (code: string) => justPressedSnapshot.has(code) || (code === 'KeyF' && interactPressed),
     };
     justPressed.clear();
@@ -476,7 +541,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function updateContinuousDeviceLook(dt: number): void {
-    if (dt <= 0 || mode === 'in-ship') return;
+    if (dt <= 0 || mode === 'in-ship' || mode === 'in-bed') return;
     const yaw = readProfileAnalog('controller', 'yaw');
     const pitch = readProfileAnalog('controller', 'pitch');
     if (yaw === 0 && pitch === 0) return;
@@ -489,7 +554,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function updateSeatLookSnap(dt: number): void {
-    if (isSeatLookActive()) return;
+    // Bed look stays where you left it (SC head cam); only snap cockpit free-look.
+    if (isHeadLookActive() || mode === 'in-bed') return;
     if (seatLook.yawRadians === 0 && seatLook.pitchRadians === 0) return;
     const decay = Math.exp((-dt * Math.LN2) / SEAT_LOOK_SNAP_HALF_LIFE_SECONDS);
     seatLook.yawRadians *= decay;
@@ -530,7 +596,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
 
       orbitLook.pitchRadians += (orbitLook.targetPitchRadians - orbitLook.pitchRadians) * blend;
 
-      if (isSeatLookActive()) {
+      if (isHeadLookActive()) {
         seatLook.yawRadians += (seatLook.targetYawRadians - seatLook.yawRadians) * blend;
         seatLook.pitchRadians += (seatLook.targetPitchRadians - seatLook.pitchRadians) * blend;
       }
@@ -560,7 +626,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function sampleFlightInput() {
-    const input = buildFlightInput(keys, flightLook, keyboardBindings());
+    // Mouse drives persistent aim (IFCS); keyboard/gamepad pitch/yaw are direct torque.
+    const input = buildFlightInput(keys, { pitch01: 0, yaw01: 0 }, keyboardBindings());
     if (inputSuppressed) return input;
     for (const profileId of PROFILE_IDS) {
       for (const [control, field] of Object.entries(FLIGHT_INPUT_FIELDS) as [
@@ -573,11 +640,23 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     input.boost01 = Math.max(input.boost01 ?? 0, isDeviceActionDown('boost') ? 1 : 0);
     input.brake01 = Math.max(input.brake01 ?? 0, isDeviceActionDown('brake') ? 1 : 0);
     if (isDeviceActionDown('jump')) input.lift01 = Math.max(input.lift01 ?? 0, 1);
-    flightLook.pitch01 *= 0.3;
-    flightLook.yaw01 *= 0.3;
-    if (Math.abs(flightLook.pitch01) < 0.001) flightLook.pitch01 = 0;
-    if (Math.abs(flightLook.yaw01) < 0.001) flightLook.yaw01 = 0;
     return input;
+  }
+
+  function getFlightAim(): FlightAimState {
+    return { ...flightAim };
+  }
+
+  function getSeatLook(): { pitchRadians: number; yawRadians: number } {
+    return { pitchRadians: seatLook.pitchRadians, yawRadians: seatLook.yawRadians };
+  }
+
+  function setFlightAim(next: FlightAimState): void {
+    flightAim = next;
+  }
+
+  function isCoupledMode(): boolean {
+    return coupledMode;
   }
 
   function dispose() {
@@ -588,6 +667,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleSettingsChanged);
     canvas.removeEventListener('wheel', onWheel);
     canvas.removeEventListener('click', onCanvasClick);
+    canvas.removeEventListener('pointerdown', onPointerDown);
   }
 
   return {
@@ -599,18 +679,28 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     isPointerLocked() {
       return document.pointerLockElement === canvas;
     },
+    isSeatLookActive,
     sampleCameraState,
     sampleCharacterInput,
     sampleFlightInput,
+    getFlightAim,
+    getSeatLook,
+    setFlightAim,
+    isCoupledMode,
     setInputSuppressed,
     setMode(nextMode: GameMode | 'on-foot' | 'in-ship') {
       // Taking the pilot seat always starts in the cockpit view.
       if (nextMode === 'in-ship' && mode !== 'in-ship') shipCameraView = 'cockpit';
-      if (mode === 'in-ship' && nextMode !== 'in-ship') resetSeatLookState();
+      if (
+        (mode === 'in-ship' || mode === 'in-bed') &&
+        nextMode !== 'in-ship' &&
+        nextMode !== 'in-bed'
+      ) {
+        resetSeatLookState();
+      }
       mode = nextMode;
       if (mode !== 'in-ship') {
-        flightLook.pitch01 = 0;
-        flightLook.yaw01 = 0;
+        flightAim = createFlightAimState();
       }
     },
     /** Snaps the orbit camera, e.g. to face out of an elevator on arrival. */

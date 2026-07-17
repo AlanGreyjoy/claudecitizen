@@ -69,6 +69,26 @@ export function getPilotEyeLocal(): LocalOffset {
   return getShipLayout().pilotEye;
 }
 
+export function getBedSpec(bedId: string | null | undefined) {
+  if (!bedId) return null;
+  return getShipLayout().beds.find((bed) => bed.id === bedId) ?? null;
+}
+
+export function getBedAnchor(ship: FlightBody, bedId: string): ShipAnchor {
+  const bed = getBedSpec(bedId);
+  const local = bed?.bed ?? { right: 0, up: 0, forward: 0 };
+  return {
+    forward: normalize(tangentize(ship.forward, ship.up)),
+    position: localOffsetToWorld(ship, local),
+    right: getShipRight(ship),
+    up: ship.up,
+  };
+}
+
+export function getBedEyeLocal(bedId: string | null | undefined): LocalOffset | null {
+  return getBedSpec(bedId)?.eye ?? null;
+}
+
 export function isShipParked(ship: FlightBody): boolean {
   return ship.grounded && length(ship.velocity) <= PARKED_MAX_SPEED_METERS_PER_SECOND;
 }

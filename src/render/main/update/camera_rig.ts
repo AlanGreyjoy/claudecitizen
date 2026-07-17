@@ -8,6 +8,7 @@ import {
   resolveOrbitCamera,
 } from '../../../player/character_controller';
 import {
+  MODE_IN_BED,
   MODE_IN_STATION,
   MODE_ON_SHIP_DECK,
   MODE_RIDING_ELEVATOR,
@@ -15,7 +16,7 @@ import {
 import { getShipWalkZone } from '../../../player/ship_deck';
 import { getShipLayout, usesColliderDeck } from '../../../player/ship_layout';
 import type { ShipCameraBounds } from '../../../player/ship_layout';
-import { getPilotEyeLocal } from '../../../player/ship_interaction';
+import { getBedEyeLocal, getPilotEyeLocal } from '../../../player/ship_interaction';
 import {
   getStationRoom,
   worldToStationLocal,
@@ -201,10 +202,47 @@ export function updateCameraRig(
   const stationActive =
     station !== null && (mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR);
 
-  const focusPosition = mode === 'in-ship' || !character ? world.ship.position : character.position;
+  const focusPosition =
+    mode === 'in-ship' || mode === MODE_IN_BED || !character
+      ? world.ship.position
+      : character.position;
   const focusVec = new THREE.Vector3(focusPosition.x, focusPosition.y, focusPosition.z);
 
-  if (mode === 'in-ship' || !character) {
+  if (mode === MODE_IN_BED) {
+    if (typeof camera.userData.baseFovDeg === 'number') {
+      camera.fov = camera.userData.baseFovDeg;
+      camera.updateProjectionMatrix();
+    }
+    camera.userData.smoothedWorldPos = null;
+    camera.userData.smoothedWorldTarget = null;
+
+    const shipRight = normalize(cross(shipForward, shipUp));
+    const bedEye = getBedEyeLocal(world.activeBedId) ?? getPilotEyeLocal();
+    const eye = add(
+      add(scale(shipRight, bedEye.right), scale(shipUp, bedEye.up)),
+      scale(shipForward, bedEye.forward),
+    );
+    const seatLook = world.seatLook;
+    const lookForward =
+      seatLook &&
+      (Math.abs(seatLook.yawRadians) > 1e-6 || Math.abs(seatLook.pitchRadians) > 1e-6)
+        ? resolveShipDeckOrbit(
+            shipForward,
+            shipUp,
+            seatLook.yawRadians,
+            seatLook.pitchRadians,
+            FIRST_PERSON_PITCH_LIMIT,
+          ).forward
+        : shipForward;
+    const lookMeters = 60;
+    camera.position.set(eye.x * renderScale, eye.y * renderScale, eye.z * renderScale);
+    cameraTarget.set(
+      (eye.x + lookForward.x * lookMeters) * renderScale,
+      (eye.y + lookForward.y * lookMeters) * renderScale,
+      (eye.z + lookForward.z * lookMeters) * renderScale,
+    );
+    camera.up.copy(v3(shipUp));
+  } else if (mode === 'in-ship' || !character) {
     if ((world.shipCameraView ?? 'cockpit') === 'cockpit') {
       // Cockpit first person: rigidly attached to the ship frame and snapped
       // every frame — smoothing here would drag the eye through the canopy
@@ -214,9 +252,18 @@ export function updateCameraRig(
 
       const shipRight = normalize(cross(shipForward, shipUp));
       const pilotEye = getPilotEyeLocal();
+      const feel = world.flightCameraFeel;
+      const shake = feel?.eyeShake;
+      const eyeLocal = shake
+        ? {
+            right: pilotEye.right + shake.right,
+            up: pilotEye.up + shake.up,
+            forward: pilotEye.forward + shake.forward,
+          }
+        : pilotEye;
       const eye = add(
-        add(scale(shipRight, pilotEye.right), scale(shipUp, pilotEye.up)),
-        scale(shipForward, pilotEye.forward),
+        add(scale(shipRight, eyeLocal.right), scale(shipUp, eyeLocal.up)),
+        scale(shipForward, eyeLocal.forward),
       );
       const seatLook = world.seatLook;
       const lookForward =
@@ -237,7 +284,18 @@ export function updateCameraRig(
         (eye.y + lookForward.y * lookMeters) * renderScale,
         (eye.z + lookForward.z * lookMeters) * renderScale,
       );
+
+      if (typeof camera.userData.baseFovDeg !== 'number') {
+        camera.userData.baseFovDeg = camera.fov;
+      }
+      const fovDelta = feel?.fovDeltaDeg ?? 0;
+      camera.fov = (camera.userData.baseFovDeg as number) + fovDelta;
+      camera.updateProjectionMatrix();
     } else {
+      if (typeof camera.userData.baseFovDeg === 'number') {
+        camera.fov = camera.userData.baseFovDeg;
+        camera.updateProjectionMatrix();
+      }
       const zoom = shipCameraZoom ?? 1.0;
       const cameraBackMeters = (58 + altitudeFactor * 180) * zoom;
       const cameraUpMeters = (9 + altitudeFactor * 136) * zoom;
@@ -269,6 +327,10 @@ export function updateCameraRig(
     }
     camera.up.copy(v3(shipUp));
   } else {
+    if (typeof camera.userData.baseFovDeg === 'number') {
+      camera.fov = camera.userData.baseFovDeg;
+      camera.updateProjectionMatrix();
+    }
     const pitchLimit = firstPersonActive ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
     const orbit =
       stationActive && station
@@ -377,7 +439,7 @@ export function updateSpeedBlur(
   }
 
   const focusVelocity =
-    mode === 'in-ship'
+    mode === 'in-ship' || mode === MODE_IN_BED
       ? ship.velocity
       : (character as CharacterRenderState & { velocity?: Vec3 })!.velocity;
   const speed = focusVelocity ? Math.hypot(focusVelocity.x, focusVelocity.y, focusVelocity.z) : 0;
@@ -385,6 +447,8 @@ export function updateSpeedBlur(
   if (mode === 'in-ship') {
     const t = Math.max(0, Math.min(1, (speed - 120) / 1000));
     speedBlurEffect.setStrength(t * 0.045);
+  } else if (mode === MODE_IN_BED) {
+    speedBlurEffect.setStrength(0);
   } else {
     const t = Math.max(0, Math.min(1, (speed - 6) / 10));
     speedBlurEffect.setStrength(t * 0.012);

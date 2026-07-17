@@ -435,3 +435,71 @@ export function isLikelyHotasGamepad(gamepad: Pick<Gamepad, 'axes' | 'id' | 'map
     (gamepad.mapping !== 'standard' && gamepad.axes.length >= 3)
   );
 }
+
+export function clampInputAxis(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
+
+export function applyInputDeadzone(value: number, deadzone: number): number {
+  const magnitude = Math.abs(value);
+  if (magnitude <= deadzone) return 0;
+  const scaled = (magnitude - deadzone) / Math.max(0.0001, 1 - deadzone);
+  return Math.sign(value) * scaled;
+}
+
+export function gamepadMatchesDeviceProfile(
+  gamepad: Pick<Gamepad, 'axes' | 'id' | 'index' | 'mapping'>,
+  profileId: DeviceProfileId,
+  binding: DeviceInputBinding | null,
+): boolean {
+  if (binding?.deviceId) return gamepad.id === binding.deviceId;
+  if (binding?.deviceIndex !== undefined) return gamepad.index === binding.deviceIndex;
+  const hotas = isLikelyHotasGamepad(gamepad);
+  return profileId === 'hotas' ? hotas : !hotas;
+}
+
+function readRawDeviceBindingValue(
+  gamepad: Gamepad,
+  binding: DeviceInputBinding,
+  deadzone: number,
+): number {
+  if (binding.kind === 'button') {
+    return gamepad.buttons[binding.button]?.value ?? 0;
+  }
+  let value = applyInputDeadzone(gamepad.axes[binding.axis] ?? 0, deadzone);
+  if (binding.direction) value *= binding.direction;
+  if (binding.invert) value *= -1;
+  return value;
+}
+
+export function readDeviceAnalogControl(
+  profile: DeviceInputProfileSettings,
+  profileId: DeviceProfileId,
+  control: FlightAnalogControlId,
+  gamepads: readonly Gamepad[],
+): number {
+  const binding = profile.analogBindings[control];
+  if (!profile.enabled || !binding) return 0;
+  let bestValue = 0;
+  for (const gamepad of gamepads) {
+    if (!gamepadMatchesDeviceProfile(gamepad, profileId, binding)) continue;
+    const value = readRawDeviceBindingValue(gamepad, binding, profile.deadzone);
+    if (Math.abs(value) > Math.abs(bestValue)) bestValue = value;
+  }
+  return clampInputAxis(bestValue * profile.sensitivity);
+}
+
+export function readDeviceAnalogAxes(
+  profile: DeviceInputProfileSettings,
+  profileId: DeviceProfileId,
+  gamepads: readonly Gamepad[],
+): Record<FlightAnalogControlId, number> {
+  return {
+    pitch: readDeviceAnalogControl(profile, profileId, 'pitch', gamepads),
+    yaw: readDeviceAnalogControl(profile, profileId, 'yaw', gamepads),
+    roll: readDeviceAnalogControl(profile, profileId, 'roll', gamepads),
+    throttle: readDeviceAnalogControl(profile, profileId, 'throttle', gamepads),
+    strafe: readDeviceAnalogControl(profile, profileId, 'strafe', gamepads),
+    lift: readDeviceAnalogControl(profile, profileId, 'lift', gamepads),
+  };
+}

@@ -60,6 +60,9 @@ export type GameMode =
   | 'in-ship'
   | 'on-ship-deck'
   | 'leaving-pilot'
+  | 'entering-bed'
+  | 'in-bed'
+  | 'leaving-bed'
   | 'in-station'
   | 'riding-elevator';
 

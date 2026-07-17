@@ -8,6 +8,11 @@ import { createFpsCounter } from './fps_counter';
 import { createMinimap } from './minimap';
 import { createStatsPanel } from './stats_panel';
 import { createFlightReticle } from './flight_reticle';
+import { createCockpitGazeHud } from './cockpit_gaze_hud';
+import {
+  createCockpitSpeedHud,
+  type CockpitSpeedInstrumentUpdate,
+} from './cockpit_speed_hud';
 
 export interface HudElements {
   fpsEl: HTMLElement;
@@ -26,6 +31,8 @@ export interface HudElements {
   interactPromptEl: HTMLElement;
   screenFadeEl: HTMLElement;
   flightReticleEl: HTMLElement;
+  cockpitGazeEl: HTMLElement;
+  cockpitSpeedEl: HTMLElement;
 }
 
 export interface HudUpdateParams {
@@ -45,6 +52,20 @@ export interface HudUpdateParams {
   shipForward: Vec3;
   characterPosition: Vec3;
   nowMs: number;
+  flightDual?: {
+    aimOffsetPx: { x: number; y: number };
+    noseOffsetPx: { x: number; y: number };
+    coupled: boolean;
+  };
+  cockpitGaze?: {
+    visible: boolean;
+    label?: string;
+    offsetPx?: { x: number; y: number };
+  };
+  cockpitSpeed?: {
+    visible: boolean;
+    instruments?: readonly CockpitSpeedInstrumentUpdate[];
+  };
 }
 
 export interface HudCallbacks {
@@ -79,6 +100,8 @@ export function createHud(
     statusEl: elements.statusEl,
   });
   const flightReticle = createFlightReticle({ rootEl: elements.flightReticleEl });
+  const cockpitGazeHud = createCockpitGazeHud({ rootEl: elements.cockpitGazeEl });
+  const cockpitSpeedHud = createCockpitSpeedHud({ rootEl: elements.cockpitSpeedEl });
 
   debugSettings.subscribe((settings) => {
     debugSettings.applyVisibility({
@@ -104,7 +127,14 @@ export function createHud(
       mode: params.world.mode,
       flightMode: params.world.flightMode,
       quantum: params.world.quantum,
+      dual: params.flightDual,
     });
+    cockpitGazeHud.update(
+      params.cockpitGaze ?? { visible: false },
+    );
+    cockpitSpeedHud.update(
+      params.cockpitSpeed ?? { visible: false },
+    );
 
     const showCharacter = params.world.mode !== MODE_IN_SHIP;
     minimap.update({

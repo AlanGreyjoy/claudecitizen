@@ -9,7 +9,11 @@ import { JwtService } from '@nestjs/jwt';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EnvService } from '../shared/env.service';
-import { GameCatalogService, type ItemType } from '../game/game.catalog.service';
+import {
+  GameCatalogService,
+  type ItemType,
+  type WeaponSlotType,
+} from '../game/game.catalog.service';
 import type { AdminSessionDto, AdminSessionPayload } from './admin.types';
 
 const ADMIN_COOKIE_MS = 12 * 60 * 60 * 1000;
@@ -310,5 +314,81 @@ export class AdminService {
 
   async deleteItemDefinition(id: string) {
     return this.catalog.deleteItemDefinition(id);
+  }
+
+  async listWeaponDefinitions() {
+    return this.catalog.listWeaponDefinitions();
+  }
+
+  async createWeaponDefinition(input: {
+    name: string;
+    description: string;
+    subType: string;
+    prefabId: string;
+    iconUrl: string | null;
+    costArc: number;
+    rarity: string;
+    weaponSlotType: WeaponSlotType;
+  }) {
+    return this.catalog.createWeaponDefinition(input);
+  }
+
+  async updateWeaponDefinition(
+    id: string,
+    input: Partial<{
+      name: string;
+      description: string;
+      subType: string;
+      prefabId: string;
+      iconUrl: string | null;
+      costArc: number;
+      rarity: string;
+      weaponSlotType: WeaponSlotType;
+    }>,
+  ) {
+    return this.catalog.updateWeaponDefinition(id, input);
+  }
+
+  async deleteWeaponDefinition(id: string) {
+    return this.catalog.deleteWeaponDefinition(id);
+  }
+
+  async listBackpackDefinitions() {
+    return this.catalog.listBackpackDefinitions();
+  }
+
+  async createBackpackDefinition(input: {
+    name: string;
+    description: string;
+    subType: string;
+    prefabId: string;
+    iconUrl: string | null;
+    costArc: number;
+    rarity: string;
+    capacityLiters: number;
+    emptyMassKg: number;
+  }) {
+    return this.catalog.createBackpackDefinition(input);
+  }
+
+  async updateBackpackDefinition(
+    id: string,
+    input: Partial<{
+      name: string;
+      description: string;
+      subType: string;
+      prefabId: string;
+      iconUrl: string | null;
+      costArc: number;
+      rarity: string;
+      capacityLiters: number;
+      emptyMassKg: number;
+    }>,
+  ) {
+    return this.catalog.updateBackpackDefinition(id, input);
+  }
+
+  async deleteBackpackDefinition(id: string) {
+    return this.catalog.deleteBackpackDefinition(id);
   }
 }

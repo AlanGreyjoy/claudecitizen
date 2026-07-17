@@ -14,7 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ITEM_TYPES } from '../game/game.catalog.service';
+import { ITEM_TYPES, WEAPON_SLOT_TYPES } from '../game/game.catalog.service';
 import { EnvService } from '../shared/env.service';
 import { AdminGuard } from './admin.guard';
 import { AdminService } from './admin.service';
@@ -58,6 +58,14 @@ function requireItemType(value: string): (typeof ITEM_TYPES)[number] {
     throw new Error('Item type is invalid.');
   }
   return trimmed as (typeof ITEM_TYPES)[number];
+}
+
+function requireWeaponSlotType(value: string): (typeof WEAPON_SLOT_TYPES)[number] {
+  const trimmed = value.trim();
+  if (!(WEAPON_SLOT_TYPES as readonly string[]).includes(trimmed)) {
+    throw new Error('Weapon slot type is invalid.');
+  }
+  return trimmed as (typeof WEAPON_SLOT_TYPES)[number];
 }
 
 function requireText(value: string, label: string, maxLength: number): string {
@@ -320,6 +328,103 @@ function parseItemDefinitionPatch(body: unknown) {
   return next;
 }
 
+function parseSpecializedItemCreate(body: unknown) {
+  const prefabId = requirePrefabId(readString(body, 'prefabId'));
+  const iconRaw = readNullableString(body, 'iconUrl');
+  return {
+    name: requireText(readString(body, 'name'), 'Name', 80),
+    description: requireText(readString(body, 'description'), 'Description', 2_000),
+    subType: requireText(readString(body, 'subType') || 'generic', 'Sub-type', 40),
+    prefabId,
+    iconUrl:
+      iconRaw === undefined || iconRaw === null || iconRaw === ''
+        ? null
+        : iconRaw.slice(0, 512),
+    costArc: requireInteger(readFiniteNumber(body, 'costArc') ?? 0, 'Cost', 0, 2_000_000_000),
+    rarity: requireText(readString(body, 'rarity') || 'common', 'Rarity', 24),
+  };
+}
+
+function parseSpecializedItemPatch(body: unknown) {
+  const next: {
+    name?: string;
+    description?: string;
+    subType?: string;
+    prefabId?: string;
+    iconUrl?: string | null;
+    costArc?: number;
+    rarity?: string;
+  } = {};
+  const name = readOptionalString(body, 'name');
+  if (name !== undefined) next.name = requireText(name, 'Name', 80);
+  const description = readOptionalString(body, 'description');
+  if (description !== undefined) next.description = requireText(description, 'Description', 2_000);
+  const subType = readOptionalString(body, 'subType');
+  if (subType !== undefined) next.subType = requireText(subType, 'Sub-type', 40);
+  const prefabId = readOptionalString(body, 'prefabId');
+  if (prefabId !== undefined) next.prefabId = requirePrefabId(prefabId);
+  if (typeof body === 'object' && body !== null && 'iconUrl' in body) {
+    const iconUrl = readNullableString(body, 'iconUrl');
+    next.iconUrl = iconUrl ? iconUrl.slice(0, 512) : null;
+  }
+  const costArc = readFiniteNumber(body, 'costArc');
+  if (costArc !== null) next.costArc = requireInteger(costArc, 'Cost', 0, 2_000_000_000);
+  const rarity = readOptionalString(body, 'rarity');
+  if (rarity !== undefined) next.rarity = requireText(rarity, 'Rarity', 24);
+  return next;
+}
+
+function parseWeaponDefinitionCreate(body: unknown) {
+  return {
+    ...parseSpecializedItemCreate(body),
+    weaponSlotType: requireWeaponSlotType(readString(body, 'weaponSlotType')),
+  };
+}
+
+function parseWeaponDefinitionPatch(body: unknown) {
+  const next = parseSpecializedItemPatch(body);
+  const weaponSlotType = readOptionalString(body, 'weaponSlotType');
+  return {
+    ...next,
+    ...(weaponSlotType === undefined
+      ? {}
+      : { weaponSlotType: requireWeaponSlotType(weaponSlotType) }),
+  };
+}
+
+function parseBackpackDefinitionCreate(body: unknown) {
+  return {
+    ...parseSpecializedItemCreate(body),
+    capacityLiters: requireFloat(
+      readFiniteNumber(body, 'capacityLiters'),
+      'Capacity',
+      0.1,
+      100_000,
+    ),
+    emptyMassKg: requireFloat(
+      readFiniteNumber(body, 'emptyMassKg'),
+      'Empty mass',
+      0.01,
+      10_000,
+    ),
+  };
+}
+
+function parseBackpackDefinitionPatch(body: unknown) {
+  const next = parseSpecializedItemPatch(body);
+  const capacityLiters = readFiniteNumber(body, 'capacityLiters');
+  const emptyMassKg = readFiniteNumber(body, 'emptyMassKg');
+  return {
+    ...next,
+    ...(capacityLiters === null
+      ? {}
+      : { capacityLiters: requireFloat(capacityLiters, 'Capacity', 0.1, 100_000) }),
+    ...(emptyMassKg === null
+      ? {}
+      : { emptyMassKg: requireFloat(emptyMassKg, 'Empty mass', 0.01, 10_000) }),
+  };
+}
+
 @Controller('admin')
 export class AdminController {
   constructor(
@@ -487,5 +592,79 @@ export class AdminController {
         error instanceof Error ? error.message : 'Item definition delete failed.',
       );
     }
+  }
+
+  @Get('weapons')
+  @UseGuards(AdminGuard)
+  async listWeapons() {
+    return this.admin.listWeaponDefinitions();
+  }
+
+  @Post('weapons')
+  @UseGuards(AdminGuard)
+  async createWeapon(@Body() body: unknown) {
+    try {
+      return this.admin.createWeaponDefinition(parseWeaponDefinitionCreate(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Weapon definition is invalid.',
+      );
+    }
+  }
+
+  @Patch('weapons/:id')
+  @UseGuards(AdminGuard)
+  async updateWeapon(@Param('id') id: string, @Body() body: unknown) {
+    try {
+      return this.admin.updateWeaponDefinition(id, parseWeaponDefinitionPatch(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Weapon definition update is invalid.',
+      );
+    }
+  }
+
+  @Delete('weapons/:id')
+  @HttpCode(204)
+  @UseGuards(AdminGuard)
+  async deleteWeapon(@Param('id') id: string) {
+    await this.admin.deleteWeaponDefinition(id);
+  }
+
+  @Get('backpacks')
+  @UseGuards(AdminGuard)
+  async listBackpacks() {
+    return this.admin.listBackpackDefinitions();
+  }
+
+  @Post('backpacks')
+  @UseGuards(AdminGuard)
+  async createBackpack(@Body() body: unknown) {
+    try {
+      return this.admin.createBackpackDefinition(parseBackpackDefinitionCreate(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Backpack definition is invalid.',
+      );
+    }
+  }
+
+  @Patch('backpacks/:id')
+  @UseGuards(AdminGuard)
+  async updateBackpack(@Param('id') id: string, @Body() body: unknown) {
+    try {
+      return this.admin.updateBackpackDefinition(id, parseBackpackDefinitionPatch(body));
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Backpack definition update is invalid.',
+      );
+    }
+  }
+
+  @Delete('backpacks/:id')
+  @HttpCode(204)
+  @UseGuards(AdminGuard)
+  async deleteBackpack(@Param('id') id: string) {
+    await this.admin.deleteBackpackDefinition(id);
   }
 }

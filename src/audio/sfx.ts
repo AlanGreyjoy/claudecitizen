@@ -98,6 +98,100 @@ export function playSfx(url: string): void {
   })();
 }
 
+export interface LoopingSfxController {
+  /**
+   * Keep a looping voice for `url` at `level01` (0..1 volume).
+   * Starts when level rises above silence; stops after fading to ~0.
+   */
+  setLevel(url: string | undefined, level01: number): void;
+  stop(): void;
+}
+
+const LOOP_SFX_STOP_THRESHOLD = 0.01;
+
+/** Controllable looping SFX voice with per-frame volume (e.g. ship boost fade). */
+export function createLoopingSfxController(): LoopingSfxController {
+  let stopped = false;
+  let source: AudioBufferSourceNode | null = null;
+  let gain: GainNode | null = null;
+  let activeUrl: string | null = null;
+  let startGeneration = 0;
+
+  function disconnectVoice(): void {
+    if (source) {
+      try {
+        source.stop();
+      } catch {
+        // Already ended.
+      }
+      source.disconnect();
+    }
+    gain?.disconnect();
+    source = null;
+    gain = null;
+    activeUrl = null;
+  }
+
+  function stop(): void {
+    stopped = true;
+    startGeneration += 1;
+    disconnectVoice();
+  }
+
+  function ensurePlaying(url: string, level01: number): void {
+    if (activeUrl === url && (source || gain)) {
+      if (gain) gain.gain.value = level01;
+      return;
+    }
+    disconnectVoice();
+    stopped = false;
+    activeUrl = url;
+    const generation = ++startGeneration;
+    void (async () => {
+      const graph = getSfxAudioGraph();
+      if (!graph || !url) return;
+      if (graph.context.state === "suspended") {
+        try {
+          await graph.context.resume();
+        } catch {
+          return;
+        }
+      }
+      try {
+        const buffer = await loadSfxBuffer(url);
+        if (stopped || generation !== startGeneration || activeUrl !== url) return;
+        source = graph.context.createBufferSource();
+        gain = graph.context.createGain();
+        source.buffer = buffer;
+        source.loop = true;
+        gain.gain.value = level01;
+        source.connect(gain).connect(graph.bus);
+        source.start();
+      } catch (error) {
+        console.warn(`Looping SFX failed for ${url}`, error);
+        if (generation === startGeneration) disconnectVoice();
+      }
+    })();
+  }
+
+  return {
+    setLevel(url, level01) {
+      const level = Math.max(0, Math.min(1, level01));
+      if (!url || level <= LOOP_SFX_STOP_THRESHOLD) {
+        if (gain && level > 0) {
+          gain.gain.value = level;
+          return;
+        }
+        stop();
+        stopped = false;
+        return;
+      }
+      ensurePlaying(url, level);
+    },
+    stop,
+  };
+}
+
 export interface AudioPreviewHandle {
   stop: () => void;
 }

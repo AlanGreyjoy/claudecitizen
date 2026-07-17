@@ -1,4 +1,5 @@
 import { apiUrl } from './api';
+import type { WeaponSlotType } from '../types/equipment';
 
 export interface AdminSession {
   email: string;
@@ -128,6 +129,38 @@ export interface ItemDefinitionInput {
   stackMax: number;
   costArc: number;
   rarity: string;
+}
+
+export interface WeaponDefinition extends ItemDefinition {
+  weaponSlotType: WeaponSlotType;
+}
+
+export interface WeaponDefinitionInput {
+  name: string;
+  description: string;
+  subType: string;
+  prefabId: string;
+  iconUrl: string | null;
+  costArc: number;
+  rarity: string;
+  weaponSlotType: WeaponSlotType;
+}
+
+export interface BackpackDefinition extends ItemDefinition {
+  capacityLiters: number;
+  emptyMassKg: number;
+}
+
+export interface BackpackDefinitionInput {
+  name: string;
+  description: string;
+  subType: string;
+  prefabId: string;
+  iconUrl: string | null;
+  costArc: number;
+  rarity: string;
+  capacityLiters: number;
+  emptyMassKg: number;
 }
 
 export interface PropDefinition {
@@ -317,6 +350,64 @@ export function updateItemDefinition(
 
 export function deleteItemDefinition(id: string): Promise<void> {
   return requestAdminJson<void>(`/admin/items/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function listWeaponDefinitions(): Promise<WeaponDefinition[]> {
+  return requestAdminJson<WeaponDefinition[]>('/admin/weapons', { method: 'GET' });
+}
+
+export function createWeaponDefinition(
+  body: WeaponDefinitionInput,
+): Promise<WeaponDefinition> {
+  return requestAdminJson<WeaponDefinition>('/admin/weapons', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateWeaponDefinition(
+  id: string,
+  body: Partial<WeaponDefinitionInput>,
+): Promise<WeaponDefinition> {
+  return requestAdminJson<WeaponDefinition>(`/admin/weapons/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteWeaponDefinition(id: string): Promise<void> {
+  return requestAdminJson<void>(`/admin/weapons/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function listBackpackDefinitions(): Promise<BackpackDefinition[]> {
+  return requestAdminJson<BackpackDefinition[]>('/admin/backpacks', { method: 'GET' });
+}
+
+export function createBackpackDefinition(
+  body: BackpackDefinitionInput,
+): Promise<BackpackDefinition> {
+  return requestAdminJson<BackpackDefinition>('/admin/backpacks', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateBackpackDefinition(
+  id: string,
+  body: Partial<BackpackDefinitionInput>,
+): Promise<BackpackDefinition> {
+  return requestAdminJson<BackpackDefinition>(`/admin/backpacks/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteBackpackDefinition(id: string): Promise<void> {
+  return requestAdminJson<void>(`/admin/backpacks/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

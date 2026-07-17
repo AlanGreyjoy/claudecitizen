@@ -31,6 +31,8 @@ export interface ToolbarActions {
 export interface ToolbarHandle {
   setGizmoMode: (mode: ToolbarGizmoMode) => void;
   setPrefabOptions: (entries: PrefabListEntry[]) => void;
+  /** Toggle a ship-door / animation open preview by id. */
+  toggleDoorPreview: (doorId: string) => void;
 }
 
 type MenuAction = {
@@ -521,16 +523,22 @@ export function createToolbar(
           text: anim.label,
           title: `Preview animation "${anim.id}" open / closed`,
           on: {
-            click: () => {
-              shipPreviewState.doorsOpen[anim.id] = !isOpen;
-              refreshShipPreviewGroup();
-              emitShipPreview();
-            },
+            click: () => toggleDoorPreview(anim.id),
           },
         }),
       );
     }
   }
+
+  function toggleDoorPreview(doorId: string): void {
+    const anim = collectAnimations().find((entry) => entry.id === doorId);
+    const current =
+      shipPreviewState.doorsOpen[doorId] ?? anim?.defaultOpen ?? false;
+    shipPreviewState.doorsOpen[doorId] = !current;
+    refreshShipPreviewGroup();
+    emitShipPreview();
+  }
+
   refreshShipPreviewGroup();
 
   // -- document menubar --
@@ -729,5 +737,6 @@ export function createToolbar(
       prefabOptions = entries;
       rerenderMenus(menubar);
     },
+    toggleDoorPreview,
   };
 }

@@ -69,6 +69,9 @@ Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship
 | --- | --- |
 | [Ship frame](./ship-frame) | Flight body anchor (auto on save) |
 | [Ship controller](./ship-controller) | Singleton hull wiring — stats, gear, ramp, doors, seats |
+| [Ship door](./ship-door) | F-key articulated door / cubby (radial or raycast) |
+| [Bed](./bed) | F-key bunk — lie down, head look, Hold Y to get up (no flight) |
+| [Cockpit Stat](./cockpit-stat) | Always-on pilot instrument (speed number + bar; boost-aware) |
 | [Collider](./collider) | Deck floors, ramp, doors, hull blocking |
 
 → Workflow details in [Ship authoring](../ship-authoring)

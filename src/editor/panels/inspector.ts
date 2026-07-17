@@ -20,7 +20,11 @@ import {
   type ComponentDef,
 } from "../../world/prefabs/component_registry";
 import type { PrefabComponent, ShipZoneGate } from "../../world/prefabs/schema";
-import { SHIP_SEAT_ROLES } from "../../world/prefabs/schema";
+import {
+  COCKPIT_CONTROL_ACTIONS,
+  COCKPIT_STAT_KINDS,
+  SHIP_SEAT_ROLES,
+} from "../../world/prefabs/schema";
 import type { StationFloorId } from "../../world/station";
 import type { EditorAudioPreviewController } from "../audio_preview";
 import {
@@ -57,6 +61,8 @@ export interface InspectorPanelOptions {
     entityId: string,
     nodeUuid: string,
   ) => { min: Vec3; max: Vec3 } | null;
+  /** Toggle ship-door / animation open preview in the viewport. */
+  onToggleShipDoorPreview?: (doorId: string) => void;
 }
 
 export function createInspectorPanel(
@@ -535,6 +541,22 @@ export function createInspectorPanel(
     },
   ): HTMLElement[] {
     switch (component.type) {
+      case "equipment-socket":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Socket id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Accepts" }),
+            selectInput(["sword", "handgun", "rifle"], component.accepts, (accepts) =>
+              update({
+                ...component,
+                accepts: accepts as "sword" | "handgun" | "rifle",
+              }),
+            ),
+          ]),
+        ];
       case "station-frame":
       case "prop-frame":
       case "item-frame":
@@ -1250,6 +1272,254 @@ export function createInspectorPanel(
             ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Mass kg" }),
+            numberInput(stats.massKg ?? 12_000, (massKg) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  massKg: Math.min(50_000_000, Math.max(100, massKg)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max rot" }),
+            numberInput(stats.maxAngularRateRadps ?? 0.85, (maxAngularRateRadps) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  maxAngularRateRadps: Math.min(10, Math.max(0.05, maxAngularRateRadps)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-section-label", text: "Thrust (N)" }),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Fwd" }),
+            numberInput(stats.forwardThrustN ?? 3_696_000, (forwardThrustN) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  forwardThrustN: Math.min(1e12, Math.max(1, forwardThrustN)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Back" }),
+            numberInput(stats.backwardThrustN ?? 2_217_600, (backwardThrustN) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  backwardThrustN: Math.min(1e12, Math.max(1, backwardThrustN)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Vert" }),
+            numberInput(stats.verticalThrustN ?? 2_520_000, (verticalThrustN) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  verticalThrustN: Math.min(1e12, Math.max(1, verticalThrustN)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Lat" }),
+            numberInput(stats.lateralThrustN ?? 2_016_000, (lateralThrustN) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  lateralThrustN: Math.min(1e12, Math.max(1, lateralThrustN)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-section-label", text: "Torque (N·m)" }),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Pitch" }),
+            numberInput(stats.pitchTorqueNm ?? 960_000, (pitchTorqueNm) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  pitchTorqueNm: Math.min(1e12, Math.max(1, pitchTorqueNm)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Yaw" }),
+            numberInput(stats.yawTorqueNm ?? 1_104_000, (yawTorqueNm) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  yawTorqueNm: Math.min(1e12, Math.max(1, yawTorqueNm)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Roll" }),
+            numberInput(stats.rollTorqueNm ?? 1_584_000, (rollTorqueNm) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  rollTorqueNm: Math.min(1e12, Math.max(1, rollTorqueNm)),
+                },
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-section-label", text: "Camera feel" }),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "FOV fwd°" }),
+            numberInput(stats.thrustFovForwardDeg ?? 5, (thrustFovForwardDeg) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  thrustFovForwardDeg: Math.min(
+                    30,
+                    Math.max(0, thrustFovForwardDeg),
+                  ),
+                },
+              }),
+              0.5,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "FOV back°" }),
+            numberInput(
+              stats.thrustFovBackwardDeg ?? 3.5,
+              (thrustFovBackwardDeg) =>
+                update({
+                  ...component,
+                  stats: {
+                    ...stats,
+                    thrustFovBackwardDeg: Math.min(
+                      30,
+                      Math.max(0, thrustFovBackwardDeg),
+                    ),
+                  },
+                }),
+              0.5,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "FOV blend" }),
+            numberInput(
+              stats.thrustFovBlendPerSec ?? 8,
+              (thrustFovBlendPerSec) =>
+                update({
+                  ...component,
+                  stats: {
+                    ...stats,
+                    thrustFovBlendPerSec: Math.min(
+                      40,
+                      Math.max(0.5, thrustFovBlendPerSec),
+                    ),
+                  },
+                }),
+              0.5,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Boost shake" }),
+            numberInput(
+              stats.boostShakeAmplitudeM ?? 0.015,
+              (boostShakeAmplitudeM) =>
+                update({
+                  ...component,
+                  stats: {
+                    ...stats,
+                    boostShakeAmplitudeM: Math.min(
+                      0.2,
+                      Math.max(0, boostShakeAmplitudeM),
+                    ),
+                  },
+                }),
+              0.001,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Shake Hz" }),
+            numberInput(stats.boostShakeHz ?? 20, (boostShakeHz) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  boostShakeHz: Math.min(60, Math.max(1, boostShakeHz)),
+                },
+              }),
+              1,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Boost fade" }),
+            numberInput(stats.boostBlendPerSec ?? 4.5, (boostBlendPerSec) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  boostBlendPerSec: Math.min(
+                    40,
+                    Math.max(0.5, boostBlendPerSec),
+                  ),
+                },
+              }),
+              0.5,
+            ),
+          ]),
+          assetUrlField("Boost SFX", stats.boostSoundUrl, (boostSoundUrl) =>
+            update({
+              ...component,
+              stats: { ...stats, boostSoundUrl },
+            }),
+          ),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Boost vol" }),
+            numberInput(stats.boostSoundVolume ?? 1, (boostSoundVolume) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  boostSoundVolume: Math.min(1, Math.max(0, boostSoundVolume)),
+                },
+              }),
+              0.05,
+            ),
+          ]),
+          assetUrlField("Thrust SFX", stats.thrustSoundUrl, (thrustSoundUrl) =>
+            update({
+              ...component,
+              stats: { ...stats, thrustSoundUrl },
+            }),
+          ),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Thrust vol" }),
+            numberInput(stats.thrustSoundVolume ?? 1, (thrustSoundVolume) =>
+              update({
+                ...component,
+                stats: {
+                  ...stats,
+                  thrustSoundVolume: Math.min(1, Math.max(0, thrustSoundVolume)),
+                },
+              }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
             el("span", { className: "ed-field-label", text: "Max HP" }),
             numberInput(stats.maxHp ?? 1000, (maxHp) =>
               update({
@@ -1299,9 +1569,28 @@ export function createInspectorPanel(
               update({ ...component, ramp: { ...ramp, deckInteractId } }),
             ),
           ]),
+          assetUrlField("Open SFX", ramp.openSoundUrl, (openSoundUrl) =>
+            update({ ...component, ramp: { ...ramp, openSoundUrl } }),
+          ),
+          assetUrlField("Close SFX", ramp.closeSoundUrl, (closeSoundUrl) =>
+            update({ ...component, ramp: { ...ramp, closeSoundUrl } }),
+          ),
+          el("div", { className: "ed-section-label", text: "Landing gear" }),
+          assetUrlField("Deploy SFX", gear.deploySoundUrl, (deploySoundUrl) =>
+            update({
+              ...component,
+              gear: { ...gear, nodes: gear.nodes ?? [], deploySoundUrl },
+            }),
+          ),
+          assetUrlField("Retract SFX", gear.retractSoundUrl, (retractSoundUrl) =>
+            update({
+              ...component,
+              gear: { ...gear, nodes: gear.nodes ?? [], retractSoundUrl },
+            }),
+          ),
           el("div", {
             className: "ed-empty-note",
-            text: `${gear.nodes.length} gear hinge(s), ${(component.doors ?? []).length} door(s), ${(component.seats ?? []).length} seat(s). Edit arrays in prefab JSON for now.`,
+            text: `${gear.nodes.length} gear hinge(s), ${(component.seats ?? []).length} seat(s). Add doors/cubbies as Ship Door marker empties (Open/Close SFX in inspector). Legacy controller.doors[] still bakes if present.`,
           }),
         ];
         return rows;
@@ -1631,28 +1920,73 @@ export function createInspectorPanel(
             ),
           ]),
           el("div", { className: "ed-field-row-wide" }, [
-            el("span", { className: "ed-field-label", text: "Radius" }),
+            el("span", { className: "ed-field-label", text: "Trigger" }),
+            selectInput(
+              ["radial", "raycast"],
+              component.trigger ?? "radial",
+              (trigger) =>
+                update({
+                  ...component,
+                  trigger: trigger as "radial" | "raycast",
+                }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", {
+              className: "ed-field-label",
+              text:
+                (component.trigger ?? "radial") === "raycast"
+                  ? "Max distance"
+                  : "Radius",
+            }),
             numberInput(component.radius ?? 1.6, (radius) =>
               update({ ...component, radius: Math.max(0.5, radius) }),
             ),
           ]),
-          el("label", { className: "ed-checkbox-row" }, [
-            (() => {
-              const checkbox = el("input", {
-                attrs: { type: "checkbox" },
-                on: {
-                  change: (event) =>
+          ...((component.trigger ?? "radial") === "raycast"
+            ? [
+                el("div", { className: "ed-field-row-wide" }, [
+                  el("span", {
+                    className: "ed-field-label",
+                    text: "Aim radius",
+                  }),
+                  numberInput(component.aimRadius ?? 0.35, (aimRadius) =>
                     update({
                       ...component,
-                      defaultOpen:
-                        (event.target as HTMLInputElement).checked || undefined,
+                      aimRadius: Math.max(0.05, aimRadius),
                     }),
-                },
-              });
-              checkbox.checked = component.defaultOpen ?? false;
-              return checkbox;
-            })(),
-            el("span", { text: "Open on spawn" }),
+                  ),
+                ]),
+              ]
+            : []),
+          el("div", { className: "ed-field-row-wide ed-door-spawn-row" }, [
+            el("label", { className: "ed-checkbox-row" }, [
+              (() => {
+                const checkbox = el("input", {
+                  attrs: { type: "checkbox" },
+                  on: {
+                    change: (event) =>
+                      update({
+                        ...component,
+                        defaultOpen:
+                          (event.target as HTMLInputElement).checked ||
+                          undefined,
+                      }),
+                  },
+                });
+                checkbox.checked = component.defaultOpen ?? false;
+                return checkbox;
+              })(),
+              el("span", { text: "Open on spawn" }),
+            ]),
+            el("button", {
+              className: "ed-btn",
+              text: "Animate",
+              title: "Preview this door open / closed in the viewport",
+              on: {
+                click: () => options.onToggleShipDoorPreview?.(component.id),
+              },
+            }),
           ]),
         ];
         component.nodes.forEach((node, nodeIndex) => {
@@ -1691,6 +2025,23 @@ export function createInspectorPanel(
                 }),
               ]),
             ]),
+            el("div", { className: "ed-field-row-wide" }, [
+              el("span", {
+                className: "ed-field-label",
+                text: "Under",
+              }),
+              textInput(node.under ?? "", (under) => {
+                const nodes = component.nodes.map((entry, index) =>
+                  index === nodeIndex
+                    ? {
+                        ...entry,
+                        under: under.trim() ? under.trim() : undefined,
+                      }
+                    : entry,
+                );
+                update({ ...component, nodes });
+              }),
+            ]),
           );
         });
         rows.push(
@@ -1706,6 +2057,14 @@ export function createInspectorPanel(
                 }),
             },
           }),
+        );
+        rows.push(
+          assetUrlField("Open SFX", component.openSoundUrl, (openSoundUrl) =>
+            update({ ...component, openSoundUrl }),
+          ),
+          assetUrlField("Close SFX", component.closeSoundUrl, (closeSoundUrl) =>
+            update({ ...component, closeSoundUrl }),
+          ),
         );
         return rows;
       }
@@ -1749,6 +2108,80 @@ export function createInspectorPanel(
           ]),
         ];
       }
+      case "bed": {
+        const eye = component.eye ?? { x: 0, y: 0.3, z: 0.15 };
+        const stand = component.stand ?? { x: -0.9, z: 0 };
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Label" }),
+            textInput(component.label ?? "bed", (label) =>
+              update({ ...component, label }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Trigger" }),
+            selectInput(
+              ["radial", "raycast"],
+              component.trigger ?? "radial",
+              (trigger) =>
+                update({
+                  ...component,
+                  trigger: trigger as "radial" | "raycast",
+                }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", {
+              className: "ed-field-label",
+              text:
+                (component.trigger ?? "radial") === "raycast"
+                  ? "Max distance"
+                  : "Radius",
+            }),
+            numberInput(component.radius ?? 1.6, (radius) =>
+              update({ ...component, radius: Math.max(0.5, radius) }),
+            ),
+          ]),
+          ...((component.trigger ?? "radial") === "raycast"
+            ? [
+                el("div", { className: "ed-field-row-wide" }, [
+                  el("span", {
+                    className: "ed-field-label",
+                    text: "Aim radius",
+                  }),
+                  numberInput(component.aimRadius ?? 0.35, (aimRadius) =>
+                    update({
+                      ...component,
+                      aimRadius: Math.max(0.05, aimRadius),
+                    }),
+                  ),
+                ]),
+              ]
+            : []),
+          el("div", { className: "ed-field-row" }, [
+            el("span", { className: "ed-field-label", text: "Eye" }),
+            ...(["x", "y", "z"] as const).map((axis) =>
+              numberInput(eye[axis], (next) =>
+                update({ ...component, eye: { ...eye, [axis]: next } }),
+              ),
+            ),
+          ]),
+          el("div", { className: "ed-field-row" }, [
+            el("span", { className: "ed-field-label", text: "Stand XZ" }),
+            numberInput(stand.x, (x) =>
+              update({ ...component, stand: { ...stand, x } }),
+            ),
+            numberInput(stand.z, (z) =>
+              update({ ...component, stand: { ...stand, z } }),
+            ),
+            el("span", {}),
+          ]),
+        ];
+      }
       case "ramp-interact":
         return [
           el("div", { className: "ed-field-row-wide" }, [
@@ -1766,6 +2199,98 @@ export function createInspectorPanel(
               component.radius ?? (component.placement === "outside" ? 3 : 1.7),
               (radius) =>
                 update({ ...component, radius: Math.max(0.5, radius) }),
+            ),
+          ]),
+        ];
+      case "cockpit-control":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Action" }),
+            selectInput(
+              [...COCKPIT_CONTROL_ACTIONS],
+              component.action,
+              (action) =>
+                update({
+                  ...component,
+                  action: action as (typeof COCKPIT_CONTROL_ACTIONS)[number],
+                }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Label" }),
+            textInput(component.label ?? "", (label) =>
+              update({
+                ...component,
+                label: label.trim() ? label.trim() : undefined,
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Gaze radius" }),
+            numberInput(
+              component.gazeRadius ?? 0.2,
+              (gazeRadius) =>
+                update({
+                  ...component,
+                  gazeRadius: Math.max(0.05, Math.min(2, gazeRadius)),
+                }),
+              0.05,
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max distance" }),
+            numberInput(
+              component.maxDistance ?? 2.5,
+              (maxDistance) =>
+                update({
+                  ...component,
+                  maxDistance: Math.max(0.5, Math.min(10, maxDistance)),
+                }),
+              0.1,
+            ),
+          ]),
+        ];
+      case "cockpit-stat":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Kind" }),
+            selectInput(
+              [...COCKPIT_STAT_KINDS],
+              component.kind,
+              (kind) =>
+                update({
+                  ...component,
+                  kind: kind as (typeof COCKPIT_STAT_KINDS)[number],
+                }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Label" }),
+            textInput(component.label ?? "", (label) =>
+              update({
+                ...component,
+                label: label.trim() ? label.trim() : undefined,
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max distance" }),
+            numberInput(
+              component.maxDistance ?? 3.5,
+              (maxDistance) =>
+                update({
+                  ...component,
+                  maxDistance: Math.max(0.5, Math.min(10, maxDistance)),
+                }),
+              0.1,
             ),
           ]),
         ];

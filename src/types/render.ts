@@ -148,6 +148,18 @@ export interface SpikeRenderWorld {
   shipCameraView?: ShipCameraView;
   /** Cockpit free-look offset while holding F in the pilot seat. */
   seatLook?: SeatLook;
+  /**
+   * Cockpit flight camera feel for the current frame (FOV kick + boost shake).
+   * Only applied in pilot cockpit view.
+   */
+  flightCameraFeel?: {
+    /** Delta from the camera's base FOV (degrees; positive = wider). */
+    fovDeltaDeg: number;
+    /** Ship-local eye offset (meters). */
+    eyeShake: { right: number; up: number; forward: number };
+  };
+  /** Active bunk id while in bed occupancy modes. */
+  activeBedId?: string | null;
   timeSeconds?: number;
   shipCameraZoom?: number;
   prompt?: string;

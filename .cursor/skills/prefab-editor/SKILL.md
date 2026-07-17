@@ -57,7 +57,53 @@ Behavior depends on component def (`marker` flag) and current selection:
 | **Collider** on ship hull with **ship-controller** (no sub-node) | Hidden from palette — sub-select a GLB node first. |
 | **Collider** on other entity with GLB (no node) | Defaults to `shape: "mesh"`. Box primitive → box sized to primitive. |
 
-**Marker components** (spawn-point, interaction, ship-door, animation, walk zones, lights, etc.) are spatial — they live on empty child entities, not on the hull mesh entity itself.
+**Marker components** (spawn-point, interaction, ship-door, animation, walk zones, lights, **cockpit-control**, **cockpit-stat**, etc.) are spatial — they live on empty child entities, not on the hull mesh entity itself.
+
+### Ship doors / cubbies
+
+Prefer **Ship Door** marker empties (not `ship-controller.doors[]`):
+
+1. Add Empty at the interact stand position (or Add Component → Ship Door on the hull to spawn a marker)
+2. Set **Id**, **Label**, **Motion** / **Axis**, and GLB **nodes** + signed open **delta**
+3. Choose **Trigger**: `radial` (stand in sphere) or `raycast` (camera aim within max distance + aim radius)
+4. Drag audio from the Project asset browser onto **Open SFX** / **Close SFX**
+5. Preview: radial → walk near the empty → **F**; raycast → look at the marker within range → **F**
+
+Optional: sub-select a GLB door panel first, then add Ship Door — `nodes` pre-fills from that name. Add a second node row for double doors.
+
+Colliders bound to the same GLB node names still disable when the door is mostly open.
+
+### Bed (ships)
+
+SC-style bunk: place an Empty on the mattress → **Bed** component → **radial** (or raycast) trigger.
+
+1. Tune **Eye** (pillow head cam) and **Stand XZ** (get-up aisle spot)
+2. Preview: walk near → **F** to lie down → mouse looks around → **Hold Y** to get up
+3. Does **not** enable flight (separate from the pilot seat)
+
+### Cockpit look-at controls (ships)
+
+SC-style while seated: **Hold F** free-look → gaze at a `cockpit-control` empty → **left-click** to toggle gear/ramp.
+
+1. Add Empty near the physical switch in the cockpit
+2. Add component **Cockpit Control** (`landing-gear` | `cargo-ramp`)
+3. Tune **Gaze radius** / **Max distance** if the hit feel is too tight or loose
+
+### Cockpit instruments (ships)
+
+Always-on while piloting: place a **Cockpit Stat** empty on the dash (`kind: speed` → number + bar). Boost (Shift) raises the speed cap and accents the bar. Separate from clickable cockpit-control markers.
+
+### Ramp / landing gear / boost SFX (ship-controller)
+
+On the hull **Ship Controller** (not cockpit-control markers):
+
+- **Ramp** → drag **Open SFX** / **Close SFX** (plays on F interact + cockpit cargo-ramp click)
+- **Landing gear** → drag **Deploy SFX** / **Retract SFX** (plays on cockpit landing-gear click + sandbox **G**)
+- **Camera feel** → drag **Boost SFX** (loops while **Shift** boost is held) and **Thrust SFX** (loops with any translation: W/S, A/D, Space/C; both fade in/out)
+
+Auto-close of the ramp when taking off does **not** play SFX.
+
+See also `.cursor/skills/ship-flight/SKILL.md`.
 
 **Node override components** persist in prefab JSON as `nodeOverrides[].components` (see `serialize.ts`).
 
@@ -102,7 +148,7 @@ Dumps scene hierarchy, mesh bindings, and animation clip targets. Use this **bef
 | Runtime GLB binding | `prefab_renderer.ts` |
 | Ship/station door wiring | `ship_runtime.ts`, `station_runtime.ts`, `game_loop.ts` |
 
-Read `AGENTS.md` sections **Editor**, **Prefab & Animation Architecture**, and **Debugging GLB nodes & Colliders** before cross-cutting prefab changes.
+Read AGENTS.md sections **Editor**, **Prefab & Animation Architecture**, **Ship flight**, and **Debugging GLB nodes & Colliders** before cross-cutting prefab changes.
 
 ## Troubleshooting
 

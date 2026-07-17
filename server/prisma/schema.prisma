@@ -132,6 +132,25 @@ model ItemDefinition {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   inventory   PlayerItem[]
+  weapon      WeaponDefinition?
+  backpack    BackpackDefinition?
+}
+
+model WeaponDefinition {
+  itemDefinitionId String         @id
+  weaponSlotType   String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  itemDefinition   ItemDefinition @relation(fields: [itemDefinitionId], references: [id], onDelete: Cascade)
+}
+
+model BackpackDefinition {
+  itemDefinitionId String         @id
+  capacityLiters   Float
+  emptyMassKg      Float
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  itemDefinition   ItemDefinition @relation(fields: [itemDefinitionId], references: [id], onDelete: Cascade)
 }
 
 model PlayerItem {

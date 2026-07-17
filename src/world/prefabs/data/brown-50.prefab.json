@@ -1,0 +1,60 @@
+{
+  "id": "brown-50",
+  "name": "Brown 50",
+  "version": 1,
+  "kind": "item",
+  "root": {
+    "id": "root",
+    "name": "Brown 50",
+    "transform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "components": [
+      {
+        "type": "item-frame"
+      }
+    ],
+    "children": [
+      {
+        "id": "e-514534cb",
+        "name": "SM_Wep_Sniper_03",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/weapons/SM_Wep_Sniper_03.glb"
+        }
+      }
+    ]
+  }
+}

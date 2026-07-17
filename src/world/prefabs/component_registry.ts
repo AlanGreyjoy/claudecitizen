@@ -60,6 +60,18 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Marks the item origin used for world pickup or drop visuals.",
   },
   {
+    type: "equipment-socket",
+    label: "Equipment Socket",
+    kinds: ITEM_KINDS,
+    marker: true,
+    createDefault: () => ({
+      type: "equipment-socket",
+      id: "rifle-primary",
+      accepts: "rifle",
+    }),
+    hint: "Attachment socket supplied by an item. Backpacks require rifle-primary and rifle-secondary sockets.",
+  },
+  {
     type: "spawn-point",
     label: "Spawn Point",
     kinds: ["station"],
@@ -238,6 +250,15 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
         maxHp: 1000,
         maxShields: 500,
         shieldRegenPerSec: 25,
+        massKg: 12_000,
+        maxAngularRateRadps: 0.85,
+        forwardThrustN: 3_696_000,
+        backwardThrustN: 2_217_600,
+        verticalThrustN: 2_520_000,
+        lateralThrustN: 2_016_000,
+        pitchTorqueNm: 960_000,
+        yawTorqueNm: 1_104_000,
+        rollTorqueNm: 1_584_000,
       },
       gear: {
         nodes: [
@@ -284,7 +305,73 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       cameraBounds: [],
     }),
     hint:
-      "Singleton ship wiring on the hull: stats, gear, ramp, doors, seats, and camera bounds. Child empties are referenced by entity id.",
+      "Singleton ship wiring on the hull: stats, gear, ramp, seats, and camera bounds. Prefer Ship Door marker empties for doors/cubbies.",
+  },
+  {
+    type: "ship-door",
+    label: "Ship Door",
+    kinds: ["ship"],
+    marker: true,
+    createDefault: () => ({
+      type: "ship-door",
+      id: "door-1",
+      label: "door",
+      motion: "slide",
+      axis: "x",
+      nodes: [{ name: "Door", delta: 1 }],
+      trigger: "radial",
+      radius: 1.6,
+      aimRadius: 0.35,
+    }),
+    hint:
+      "F-key door/cubby. Empty is the interact target (radial stand-in or camera-aim raycast). Bind GLB nodes + deltas; drag Open/Close SFX from the asset browser.",
+  },
+  {
+    type: "cockpit-control",
+    label: "Cockpit Control",
+    kinds: ["ship"],
+    marker: true,
+    createDefault: () => ({
+      type: "cockpit-control",
+      id: "cockpit-1",
+      action: "landing-gear",
+      gazeRadius: 0.2,
+      maxDistance: 2.5,
+    }),
+    hint:
+      "Look-at target while Hold F free-looking in the seat. Left-click toggles landing gear or cargo ramp.",
+  },
+  {
+    type: "cockpit-stat",
+    label: "Cockpit Stat",
+    kinds: ["ship"],
+    marker: true,
+    createDefault: () => ({
+      type: "cockpit-stat",
+      id: "cockpit-stat-1",
+      kind: "speed",
+      maxDistance: 3.5,
+    }),
+    hint:
+      "Always-on pilot instrument (e.g. speed number + bar). Place an Empty on the dash; boost raises the speed cap and bar ceiling.",
+  },
+  {
+    type: "bed",
+    label: "Bed",
+    kinds: ["ship"],
+    marker: true,
+    createDefault: () => ({
+      type: "bed",
+      id: "bed-1",
+      label: "bed",
+      trigger: "radial",
+      radius: 1.6,
+      aimRadius: 0.35,
+      eye: { x: 0, y: 0.3, z: 0.15 },
+      stand: { x: -0.9, z: 0 },
+    }),
+    hint:
+      "F-key bunk. Empty is the mattress/interact target (radial or raycast). Eye/stand offsets set lie-down camera and get-up spot. No flight.",
   },
 ];
 

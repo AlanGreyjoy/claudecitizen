@@ -34,6 +34,7 @@ One wiring panel on the hull GLB entity. See [Ship controller](./components/ship
 
 - **stats**, **gear**, **ramp**, **doors[]**, **seats[]**
 - Child empties referenced by **entity id** for interact spots (ramp buttons, door panel, pilot seat)
+- Prefer **Ship Door** / **Bed** marker empties for doors and bunks (not only controller arrays)
 - **cameraBounds[]** for interior third-person camera clamping
 
 ### collider (on GLB nodes)

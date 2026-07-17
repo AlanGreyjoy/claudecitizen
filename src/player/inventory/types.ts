@@ -1,6 +1,7 @@
 export const ITEM_TYPES = [
   'consumable',
   'weapon',
+  'backpack',
   'armor',
   'clothing',
   'material',

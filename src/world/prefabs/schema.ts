@@ -1,6 +1,7 @@
 import type { Vec3 } from "../../types";
 import type { Quat } from "../../math/quat";
 import type { StationFloorId } from "../station";
+import { isWeaponSlotType, type WeaponSlotType } from "../../types/equipment";
 
 /**
  * Prefab documents are the contract between the editor and the game: a tree
@@ -82,6 +83,19 @@ export const SHIP_SEAT_ROLES: ShipSeatRole[] = [
   "turret",
   "passenger",
 ];
+
+/** Actions for cockpit look-at controls (Hold F free-look + click). */
+export type CockpitControlAction = "landing-gear" | "cargo-ramp";
+
+export const COCKPIT_CONTROL_ACTIONS: CockpitControlAction[] = [
+  "landing-gear",
+  "cargo-ramp",
+];
+
+/** Readout kinds for cockpit-stat instruments (always-on while piloting). */
+export type CockpitStatKind = "speed";
+
+export const COCKPIT_STAT_KINDS: CockpitStatKind[] = ["speed"];
 
 export type PrefabSoundZone =
   | { shape: "sphere"; radius: number }
@@ -236,6 +250,13 @@ export type PrefabComponent =
   | { type: "station-frame" }
   | { type: "prop-frame" }
   | { type: "item-frame" }
+  | {
+      type: "equipment-socket";
+      /** Unique within the item prefab (e.g. rifle-primary). */
+      id: string;
+      /** Exact weapon compatibility accepted by this socket. */
+      accepts: WeaponSlotType;
+    }
   | { type: "spawn-point"; floorId: StationFloorId }
   | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
   | { type: "hangar-pad"; hangarId: string; padIndex: number; floorId?: StationFloorId }
@@ -369,6 +390,50 @@ export type PrefabComponent =
         maxHp?: number;
         maxShields?: number;
         shieldRegenPerSec?: number;
+        /** Inertial mass (kg). Higher = slower accel / turn. */
+        massKg?: number;
+        /** Hard cap on |angular velocity| (rad/s). */
+        maxAngularRateRadps?: number;
+        /** Forward thruster force (N). Accel ≈ thrust / mass. */
+        forwardThrustN?: number;
+        /** Reverse thruster force (N). */
+        backwardThrustN?: number;
+        /** Vertical thruster force (N). */
+        verticalThrustN?: number;
+        /** Lateral thruster force (N). */
+        lateralThrustN?: number;
+        /** Pitch thruster torque (N·m). */
+        pitchTorqueNm?: number;
+        /** Yaw thruster torque (N·m). */
+        yawTorqueNm?: number;
+        /** Roll thruster torque (N·m). */
+        rollTorqueNm?: number;
+        /**
+         * Cockpit FOV widen (degrees) at full forward thrust.
+         * 0 = disabled.
+         */
+        thrustFovForwardDeg?: number;
+        /**
+         * Cockpit FOV narrow (degrees) at full reverse thrust.
+         * 0 = disabled.
+         */
+        thrustFovBackwardDeg?: number;
+        /** How quickly FOV lerps toward the thrust target (1/s). */
+        thrustFovBlendPerSec?: number;
+        /** Cockpit eye shake amplitude while boosting (meters). 0 = off. */
+        boostShakeAmplitudeM?: number;
+        /** Boost shake oscillation rate (Hz). */
+        boostShakeHz?: number;
+        /** How quickly boost effects / SFX fade in and out (1/s). */
+        boostBlendPerSec?: number;
+        /** Looping SFX while boost is held (drag audio from the asset browser). */
+        boostSoundUrl?: string;
+        /** Boost SFX volume 0..1 (default 1). */
+        boostSoundVolume?: number;
+        /** Looping SFX while throttling forward/back (drag audio from the asset browser). */
+        thrustSoundUrl?: string;
+        /** Thrust SFX volume 0..1 (default 1). */
+        thrustSoundVolume?: number;
       };
       gear?: {
         nodes: {
@@ -378,6 +443,10 @@ export type PrefabComponent =
           deployRadians: number;
           axis?: "x" | "y" | "z";
         }[];
+        /** SFX when gear deploys (gearDown → true). */
+        deploySoundUrl?: string;
+        /** SFX when gear retracts (gearDown → false). */
+        retractSoundUrl?: string;
       };
       ramp?: {
         hinge: { node: string; lowerRadians: number; axis?: "x" | "y" | "z" };
@@ -389,16 +458,28 @@ export type PrefabComponent =
         dismountForward?: number;
         /** Ground spot past the ramp tip when stepping off. */
         dismountGround?: PrefabVec2;
+        /** SFX when ramp lowers (rampDown → true). */
+        openSoundUrl?: string;
+        /** SFX when ramp raises (rampDown → false). */
+        closeSoundUrl?: string;
       };
       doors?: {
         id: string;
         label: string;
         motion: "slide" | "hinge";
         axis: "x" | "y" | "z";
-        nodes: { name: string; delta: number }[];
+        nodes: {
+          name: string;
+          delta: number;
+          under?: string;
+        }[];
         interactEntityId: string;
+        trigger?: "radial" | "raycast";
         radius?: number;
+        aimRadius?: number;
         defaultOpen?: boolean;
+        openSoundUrl?: string;
+        closeSoundUrl?: string;
       }[];
       seats?: {
         role?: ShipSeatRole;
@@ -486,10 +567,26 @@ export type PrefabComponent =
       /** Node-local axis the motion happens on. */
       axis: "x" | "y" | "z";
       /** GLB node names + signed open delta (slide: meters, hinge: radians). */
-      nodes: { name: string; delta: number }[];
-      /** Interact distance from the entity position (default 1.6). */
+      nodes: {
+        name: string;
+        delta: number;
+        /** Unique ancestor when duplicate bone/node names exist (mirrored wardrobe). */
+        under?: string;
+      }[];
+      /**
+       * How F-key interact is detected (default radial).
+       * radial = stand inside the sphere; raycast = aim camera at the marker within radius.
+       */
+      trigger?: "radial" | "raycast";
+      /** Interact distance from the entity (radial stand reach / raycast max range; default 1.6). */
       radius?: number;
+      /** Raycast-only: max perpendicular miss from the camera ray to the marker (default 0.35). */
+      aimRadius?: number;
       defaultOpen?: boolean;
+      /** One-shot SFX when the door opens (asset browser drag). */
+      openSoundUrl?: string;
+      /** One-shot SFX when the door closes. */
+      closeSoundUrl?: string;
     }
   | {
       type: "pilot-seat";
@@ -501,6 +598,27 @@ export type PrefabComponent =
       stand?: PrefabVec2;
       /** Interact distance around the chair (default 1.45). */
       interactRadius?: number;
+    }
+  /** Ship bunk: F to lie down (no flight). Empty position is the mattress/interact anchor. */
+  | {
+      type: "bed";
+      /** Unique within the prefab. */
+      id: string;
+      /** Display name for prompts ("Press F — lie down" / label variant). */
+      label?: string;
+      /**
+       * How F-key interact is detected (default radial).
+       * radial = stand inside the sphere; raycast = aim camera at the marker within radius.
+       */
+      trigger?: "radial" | "raycast";
+      /** Interact distance from the entity (radial stand reach / raycast max range; default 1.6). */
+      radius?: number;
+      /** Raycast-only: max perpendicular miss from the camera ray to the marker (default 0.35). */
+      aimRadius?: number;
+      /** Head/eye offset from the marker in scene axes (default {0, 0.3, 0.15}). */
+      eye?: Vec3;
+      /** Get-up spot offset from the marker in scene XZ (default {-0.9, 0}). */
+      stand?: PrefabVec2;
     }
   | {
       type: "ship-stairs";
@@ -526,7 +644,35 @@ export type PrefabComponent =
       radius?: number;
     }
   /** Tail strip (local XZ box) where a grounded character steps onto the ramp. */
-  | { type: "ramp-mount"; min: PrefabVec2; max: PrefabVec2 };
+  | { type: "ramp-mount"; min: PrefabVec2; max: PrefabVec2 }
+  /**
+   * Cockpit look-at control (Hold F free-look + click). Empty marker entity
+   * position is the gaze target in ship space.
+   */
+  | {
+      type: "cockpit-control";
+      id: string;
+      action: CockpitControlAction;
+      /** Optional label override; runtime otherwise derives from action + rig state. */
+      label?: string;
+      /** Max perpendicular distance from the camera ray to count as a gaze hit (m). */
+      gazeRadius?: number;
+      /** Max distance from the camera to the marker (m). */
+      maxDistance?: number;
+    }
+  /**
+   * Cockpit instrument readout (always-on while piloting). Empty marker
+   * position is the world-projected HUD anchor in ship space.
+   */
+  | {
+      type: "cockpit-stat";
+      id: string;
+      kind: CockpitStatKind;
+      /** Optional title override (default from kind, e.g. SPEED). */
+      label?: string;
+      /** Max distance from the pilot eye to show this instrument (m). */
+      maxDistance?: number;
+    };
 
 export type PrefabComponentType = PrefabComponent["type"];
 
@@ -1222,6 +1368,16 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
       return { type };
     case "item-frame":
       return { type };
+    case "equipment-socket": {
+      if (!isWeaponSlotType(value.accepts)) {
+        fail(`${path}.accepts`, "expected sword, handgun, or rifle");
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        accepts: value.accepts,
+      };
+    }
     case "spawn-point":
       return { type, floorId: parseFloorId(value.floorId, `${path}.floorId`) };
     case "elevator":
@@ -1557,6 +1713,10 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         return raw.map((node, index) => {
           if (!isRecord(node))
             fail(`${path}[${index}]`, "expected {name, delta}");
+          const under =
+            node.under === undefined
+              ? undefined
+              : parseString(node.under, `${path}[${index}].under`, 128);
           return {
             name: parseString(node.name, `${path}[${index}].name`, 128),
             delta: Math.min(
@@ -1566,6 +1726,7 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                 parseFiniteNumber(node.delta, `${path}[${index}].delta`),
               ),
             ),
+            ...(under ? { under } : {}),
           };
         });
       };
@@ -1595,6 +1756,10 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                     `${path}.doors[${index}].interactEntityId`,
                     128,
                   ),
+                  trigger: parseShipDoorTrigger(
+                    door.trigger,
+                    `${path}.doors[${index}].trigger`,
+                  ),
                   radius:
                     door.radius === undefined
                       ? undefined
@@ -1608,10 +1773,39 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                             ),
                           ),
                         ),
+                  aimRadius:
+                    door.aimRadius === undefined
+                      ? undefined
+                      : Math.min(
+                          5,
+                          Math.max(
+                            0.05,
+                            parseFiniteNumber(
+                              door.aimRadius,
+                              `${path}.doors[${index}].aimRadius`,
+                            ),
+                          ),
+                        ),
                   defaultOpen:
                     door.defaultOpen === undefined
                       ? undefined
                       : Boolean(door.defaultOpen),
+                  ...(door.openSoundUrl === undefined
+                    ? {}
+                    : {
+                        openSoundUrl: parseAssetUrl(
+                          door.openSoundUrl,
+                          `${path}.doors[${index}].openSoundUrl`,
+                        ),
+                      }),
+                  ...(door.closeSoundUrl === undefined
+                    ? {}
+                    : {
+                        closeSoundUrl: parseAssetUrl(
+                          door.closeSoundUrl,
+                          `${path}.doors[${index}].closeSoundUrl`,
+                        ),
+                      }),
                 };
               },
             );
@@ -1771,6 +1965,8 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
             deckRadius?: number;
             dismountForward?: number;
             dismountGround?: PrefabVec2;
+            openSoundUrl?: string;
+            closeSoundUrl?: string;
           }
         | undefined;
       if (value.ramp !== undefined) {
@@ -1848,6 +2044,22 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                   value.ramp.dismountGround,
                   `${path}.ramp.dismountGround`,
                 ),
+          ...(value.ramp.openSoundUrl === undefined
+            ? {}
+            : {
+                openSoundUrl: parseAssetUrl(
+                  value.ramp.openSoundUrl,
+                  `${path}.ramp.openSoundUrl`,
+                ),
+              }),
+          ...(value.ramp.closeSoundUrl === undefined
+            ? {}
+            : {
+                closeSoundUrl: parseAssetUrl(
+                  value.ramp.closeSoundUrl,
+                  `${path}.ramp.closeSoundUrl`,
+                ),
+              }),
         };
       }
       return {
@@ -1918,11 +2130,266 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                           ),
                         ),
                       ),
+                massKg:
+                  value.stats.massKg === undefined
+                    ? undefined
+                    : Math.min(
+                        50_000_000,
+                        Math.max(
+                          100,
+                          parseFiniteNumber(
+                            value.stats.massKg,
+                            `${path}.stats.massKg`,
+                          ),
+                        ),
+                      ),
+                maxAngularRateRadps:
+                  value.stats.maxAngularRateRadps === undefined
+                    ? undefined
+                    : Math.min(
+                        10,
+                        Math.max(
+                          0.05,
+                          parseFiniteNumber(
+                            value.stats.maxAngularRateRadps,
+                            `${path}.stats.maxAngularRateRadps`,
+                          ),
+                        ),
+                      ),
+                forwardThrustN:
+                  value.stats.forwardThrustN === undefined
+                    ? undefined
+                    : Math.min(
+                        1e12,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.forwardThrustN,
+                            `${path}.stats.forwardThrustN`,
+                          ),
+                        ),
+                      ),
+                backwardThrustN:
+                  value.stats.backwardThrustN === undefined
+                    ? undefined
+                    : Math.min(
+                        1e12,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.backwardThrustN,
+                            `${path}.stats.backwardThrustN`,
+                          ),
+                        ),
+                      ),
+                verticalThrustN:
+                  value.stats.verticalThrustN === undefined
+                    ? undefined
+                    : Math.min(
+                        1e12,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.verticalThrustN,
+                            `${path}.stats.verticalThrustN`,
+                          ),
+                        ),
+                      ),
+                lateralThrustN:
+                  value.stats.lateralThrustN === undefined
+                    ? undefined
+                    : Math.min(
+                        1e12,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.lateralThrustN,
+                            `${path}.stats.lateralThrustN`,
+                          ),
+                        ),
+                      ),
+                pitchTorqueNm:
+                  value.stats.pitchTorqueNm === undefined
+                    ? undefined
+                    : Math.min(
+                        1e12,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.pitchTorqueNm,
+                            `${path}.stats.pitchTorqueNm`,
+                          ),
+                        ),
+                      ),
+                yawTorqueNm:
+                  value.stats.yawTorqueNm === undefined
+                    ? undefined
+                    : Math.min(
+                        1e12,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.yawTorqueNm,
+                            `${path}.stats.yawTorqueNm`,
+                          ),
+                        ),
+                      ),
+                rollTorqueNm:
+                  value.stats.rollTorqueNm === undefined
+                    ? undefined
+                    : Math.min(
+                        1e12,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.rollTorqueNm,
+                            `${path}.stats.rollTorqueNm`,
+                          ),
+                        ),
+                      ),
+                thrustFovForwardDeg:
+                  value.stats.thrustFovForwardDeg === undefined
+                    ? undefined
+                    : Math.min(
+                        30,
+                        Math.max(
+                          0,
+                          parseFiniteNumber(
+                            value.stats.thrustFovForwardDeg,
+                            `${path}.stats.thrustFovForwardDeg`,
+                          ),
+                        ),
+                      ),
+                thrustFovBackwardDeg:
+                  value.stats.thrustFovBackwardDeg === undefined
+                    ? undefined
+                    : Math.min(
+                        30,
+                        Math.max(
+                          0,
+                          parseFiniteNumber(
+                            value.stats.thrustFovBackwardDeg,
+                            `${path}.stats.thrustFovBackwardDeg`,
+                          ),
+                        ),
+                      ),
+                thrustFovBlendPerSec:
+                  value.stats.thrustFovBlendPerSec === undefined
+                    ? undefined
+                    : Math.min(
+                        40,
+                        Math.max(
+                          0.5,
+                          parseFiniteNumber(
+                            value.stats.thrustFovBlendPerSec,
+                            `${path}.stats.thrustFovBlendPerSec`,
+                          ),
+                        ),
+                      ),
+                boostShakeAmplitudeM:
+                  value.stats.boostShakeAmplitudeM === undefined
+                    ? undefined
+                    : Math.min(
+                        0.2,
+                        Math.max(
+                          0,
+                          parseFiniteNumber(
+                            value.stats.boostShakeAmplitudeM,
+                            `${path}.stats.boostShakeAmplitudeM`,
+                          ),
+                        ),
+                      ),
+                boostShakeHz:
+                  value.stats.boostShakeHz === undefined
+                    ? undefined
+                    : Math.min(
+                        60,
+                        Math.max(
+                          1,
+                          parseFiniteNumber(
+                            value.stats.boostShakeHz,
+                            `${path}.stats.boostShakeHz`,
+                          ),
+                        ),
+                      ),
+                boostBlendPerSec:
+                  value.stats.boostBlendPerSec === undefined
+                    ? undefined
+                    : Math.min(
+                        40,
+                        Math.max(
+                          0.5,
+                          parseFiniteNumber(
+                            value.stats.boostBlendPerSec,
+                            `${path}.stats.boostBlendPerSec`,
+                          ),
+                        ),
+                      ),
+                ...(value.stats.boostSoundUrl === undefined
+                  ? {}
+                  : {
+                      boostSoundUrl: parseAssetUrl(
+                        value.stats.boostSoundUrl,
+                        `${path}.stats.boostSoundUrl`,
+                      ),
+                    }),
+                boostSoundVolume:
+                  value.stats.boostSoundVolume === undefined
+                    ? undefined
+                    : Math.min(
+                        1,
+                        Math.max(
+                          0,
+                          parseFiniteNumber(
+                            value.stats.boostSoundVolume,
+                            `${path}.stats.boostSoundVolume`,
+                          ),
+                        ),
+                      ),
+                ...(value.stats.thrustSoundUrl === undefined
+                  ? {}
+                  : {
+                      thrustSoundUrl: parseAssetUrl(
+                        value.stats.thrustSoundUrl,
+                        `${path}.stats.thrustSoundUrl`,
+                      ),
+                    }),
+                thrustSoundVolume:
+                  value.stats.thrustSoundVolume === undefined
+                    ? undefined
+                    : Math.min(
+                        1,
+                        Math.max(
+                          0,
+                          parseFiniteNumber(
+                            value.stats.thrustSoundVolume,
+                            `${path}.stats.thrustSoundVolume`,
+                          ),
+                        ),
+                      ),
               },
         gear:
           value.gear === undefined || !isRecord(value.gear)
             ? undefined
-            : { nodes: parseGearNodes(value.gear.nodes, `${path}.gear.nodes`) },
+            : {
+                nodes: parseGearNodes(value.gear.nodes, `${path}.gear.nodes`),
+                ...(value.gear.deploySoundUrl === undefined
+                  ? {}
+                  : {
+                      deploySoundUrl: parseAssetUrl(
+                        value.gear.deploySoundUrl,
+                        `${path}.gear.deploySoundUrl`,
+                      ),
+                    }),
+                ...(value.gear.retractSoundUrl === undefined
+                  ? {}
+                  : {
+                      retractSoundUrl: parseAssetUrl(
+                        value.gear.retractSoundUrl,
+                        `${path}.gear.retractSoundUrl`,
+                      ),
+                    }),
+              },
         ramp,
         doors,
         seats,
@@ -2106,6 +2573,10 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         nodes: value.nodes.map((node, index) => {
           if (!isRecord(node))
             fail(`${path}.nodes[${index}]`, "expected {name, delta}");
+          const under =
+            node.under === undefined
+              ? undefined
+              : parseString(node.under, `${path}.nodes[${index}].under`, 128);
           return {
             name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
             delta: Math.min(
@@ -2115,8 +2586,10 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                 parseFiniteNumber(node.delta, `${path}.nodes[${index}].delta`),
               ),
             ),
+            ...(under ? { under } : {}),
           };
         }),
+        trigger: parseShipDoorTrigger(value.trigger, `${path}.trigger`),
         radius:
           value.radius === undefined
             ? undefined
@@ -2127,10 +2600,36 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                   parseFiniteNumber(value.radius, `${path}.radius`),
                 ),
               ),
+        aimRadius:
+          value.aimRadius === undefined
+            ? undefined
+            : Math.min(
+                5,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.aimRadius, `${path}.aimRadius`),
+                ),
+              ),
         defaultOpen:
           value.defaultOpen === undefined
             ? undefined
             : Boolean(value.defaultOpen),
+        ...(value.openSoundUrl === undefined
+          ? {}
+          : {
+              openSoundUrl: parseAssetUrl(
+                value.openSoundUrl,
+                `${path}.openSoundUrl`,
+              ),
+            }),
+        ...(value.closeSoundUrl === undefined
+          ? {}
+          : {
+              closeSoundUrl: parseAssetUrl(
+                value.closeSoundUrl,
+                `${path}.closeSoundUrl`,
+              ),
+            }),
       };
     }
     case "pilot-seat": {
@@ -2168,6 +2667,42 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                   ),
                 ),
               ),
+      };
+    }
+    case "bed": {
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        label:
+          value.label === undefined
+            ? undefined
+            : parseString(value.label, `${path}.label`, 64),
+        trigger: parseShipDoorTrigger(value.trigger, `${path}.trigger`),
+        radius:
+          value.radius === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
+              ),
+        aimRadius:
+          value.aimRadius === undefined
+            ? undefined
+            : Math.min(
+                5,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.aimRadius, `${path}.aimRadius`),
+                ),
+              ),
+        eye:
+          value.eye === undefined
+            ? undefined
+            : parseVec3(value.eye, `${path}.eye`),
+        stand:
+          value.stand === undefined
+            ? undefined
+            : parseVec2(value.stand, `${path}.stand`),
       };
     }
     case "ship-stairs": {
@@ -2241,6 +2776,75 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         min: parseVec2(value.min, `${path}.min`),
         max: parseVec2(value.max, `${path}.max`),
       };
+    case "cockpit-control": {
+      const actionRaw = value.action;
+      if (
+        actionRaw !== "landing-gear" &&
+        actionRaw !== "cargo-ramp"
+      ) {
+        fail(
+          `${path}.action`,
+          `expected one of: ${COCKPIT_CONTROL_ACTIONS.join(", ")}`,
+        );
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        action: actionRaw,
+        label:
+          value.label === undefined
+            ? undefined
+            : parseString(value.label, `${path}.label`, 64),
+        gazeRadius:
+          value.gazeRadius === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.gazeRadius, `${path}.gazeRadius`),
+                ),
+              ),
+        maxDistance:
+          value.maxDistance === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(
+                  0.5,
+                  parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+                ),
+              ),
+      };
+    }
+    case "cockpit-stat": {
+      const kindRaw = value.kind;
+      if (kindRaw !== "speed") {
+        fail(
+          `${path}.kind`,
+          `expected one of: ${COCKPIT_STAT_KINDS.join(", ")}`,
+        );
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        kind: kindRaw,
+        label:
+          value.label === undefined
+            ? undefined
+            : parseString(value.label, `${path}.label`, 64),
+        maxDistance:
+          value.maxDistance === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(
+                  0.5,
+                  parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+                ),
+              ),
+      };
+    }
     default:
       // Unknown component types are dropped for forward compatibility.
       console.warn(
@@ -2248,6 +2852,15 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
       );
       return null;
   }
+}
+
+function parseShipDoorTrigger(
+  value: unknown,
+  path: string,
+): "radial" | "raycast" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "radial" || value === "raycast") return value;
+  fail(path, 'expected "radial" or "raycast"');
 }
 
 function parseShipZoneGate(

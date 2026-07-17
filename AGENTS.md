@@ -23,7 +23,7 @@
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files live in `src/world/prefabs/data/*.prefab.json`.
 - **Schema** (`src/world/prefabs/schema.ts`) defines every component type and its validator. Read this first when a component's fields are unclear.
-- **Ship runtime** (`src/world/prefabs/ship_runtime.ts`) flattens a ship prefab into `ShipLayout` (walk zones, doors, seats, colliders). Ship doors use the `ship-door` component.
+- **Ship runtime** (`src/world/prefabs/ship_runtime.ts`) flattens a ship prefab into `ShipLayout` (walk zones, doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
 - **Station runtime** (`src/world/prefabs/station_runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
 - **Game loop** (`src/app/game_loop.ts`) owns `stationAnimationStates` (per-animation blend values) and the F-key interaction dispatch.
 
@@ -43,6 +43,25 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp trimeshes bake at the open pose and enable when `ramp01 >= 0.85`. Locomotion and tip dismount / fell-off use Rapier contact only (`shipHasFloorBelow`) — not BVH ramp probes, cameraBounds, or `atShipGroundLevel`.
 3. **F-key toggle**: `ship_play_session.ts` / `game_loop.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
 4. **Walk-zone gating** (legacy zone ships only): `ship_rig.ts` `isDoorPassable` returns true at `open01 >= 0.85`.
+
+#### Ship bunks (bed component)
+
+1. Marker empty + `bed` component (radial or raycast trigger, like doors).
+2. Deck **F** → `entering-bed` → `in-bed` (always-on mouse head look; **no flight**).
+3. **Hold Y** → `leaving-bed` → deck at the bed's stand offset.
+4. Baked into `ShipLayout.beds` via `ship_runtime.ts` `collectBeds` (works with ship-controller hulls).
+
+### Ship flight (SC-style IFCS)
+
+Flight is **not** Rapier. Deck walking may use Rapier; flying uses the custom integrator in `src/flight/`.
+
+- **Per-ship feel** is authored on `ship-controller` stats: `massKg`, `maxSpeedMps`, `maxAngularRateRadps`, thrust (N), torque (N·m). Baked into `ShipSpec` via `ship_runtime.ts`. Accel ≈ thrust/mass; turn ≈ torque/(mass × `INERTIA_FACTOR`).
+- **Global feel** (mouse aim gain, IFCS damping, coupled bleed, drag) lives in `src/flight/flight_config.ts` — only change when *all* ships feel wrong.
+- **Gravity (Star Wars–style):** once airborne, gravity does **not** pull the ship down. Altitude is thruster-only (Space/C). Landing uses ground/hangar clamp. **No auto-level** — roll/pitch attitude sticks until the pilot corrects (preview levels on pad exit).
+- **Mouse dual-reticle**: persistent aim pip + nose pip; IFCS PD-tracks aim (`flight_aim.ts`). Hold **F** = cockpit free-look (camera only); while free-looking, gaze + **LMB** activates `cockpit-control` markers (gear/ramp). **Alt+C** = coupled ↔ decoupled.
+- **Main play**: `game_loop.ts` `MODE_IN_SHIP` → `integrateFlightBody` + dual reticle HUD.
+- **Preview Ship** (`?shipPrefab=` / `ship_play_session.ts`): sit pilot → takeoff/flight over the flat pad (same flight model). Hold **Y** exits the seat anytime (settles onto the pad when nearby).
+- **Tuning workflow**: read `.cursor/skills/ship-flight/SKILL.md` (and `.cursor/rules/ship-flight.mdc`). Symptom → fix tables live there.
 
 ## Editor (dev-only)
 
@@ -144,13 +163,17 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 - **Station**: Rapier physics. `src/physics/station_physics.ts` owns the world; `src/physics/rapier_world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
 - **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship_physics.ts` mirrors the station API; `ship_deck.ts` `updateCharacterOnDeckRapier` drives locomotion when `usesColliderDeck()` is true. Doors/ramp toggle via `setEnabled` from articulation blends. Walk-zone BVH push (`resolveDeckColliderStep`) is walk-zone ships only.
 - **Ship (walk-zone legacy)**: authored walk zones plus optional custom BVH push in `colliders.ts` / `resolveDeckColliderStep`. Boarding probes may still use BVH ground samples.
+- **Ship flight**: custom IFCS in `flight_body.ts` / `flight_aim.ts` — **do not** put flight simulation in Rapier. Rapier is for on-foot deck/station contact only.
 
 ## Common gotchas
 
-- **F-key does nothing for station animation doors**: `consumeActions()` (`src/flight/player_controls.ts`) returns `wasKeyPressed` as a closure. It must snapshot `justPressed` before `justPressed.clear()` runs, otherwise the closure always reads an empty set. `interactPressed` is a captured boolean and is safe; only `wasKeyPressed` had this bug.
+- **F-key does nothing for station animation doors**: `consumeActions()` (`src/app/player_controls.ts`) returns `wasKeyPressed` as a closure. It must snapshot `justPressed` before `justPressed.clear()` runs, otherwise the closure always reads an empty set. `interactPressed` is a captured boolean and is safe; only `wasKeyPressed` had this bug.
 - **"Open on spawn" works but F doesn't**: the animation init path (`stationAnimationStates` seeded from `defaultOpen`) runs without any key input, so it masks a broken key-press path. If `defaultOpen` works but F doesn't, suspect the `wasKeyPressed` closure or the `prefab-info` interaction branch.
 - **Door animates visually but player can't walk through**: the collider isn't bound to the animation (check `collider.animation` is set) or the Rapier collider isn't being toggled (check `setDoorColliderEnabled` is called in `updateStationAnimations`).
 - **Door animation with no bound collider**: `ship_runtime.ts` `bindColliderAnimations` and `station_runtime.ts` `bindStationColliderAnimations` log a warning **per door/animation** that has zero colliders bound to its node(s) — the door will animate but its collider stays enabled (player can't walk through). A collider with no matching node is a normal static floor/hull collider and is intentionally **not** warned about (that was a prior false-positive flood). Check the console for "has no collider bound".
+- **Ship pitch bounces after mouse aim**: IFCS overshoot — raise `AIM_IFCS_DAMPING` in `flight_config.ts` or lower per-ship pitch torque / `maxAngularRateRadps`. See ship-flight skill.
+- **One ship too twitchy / sluggish**: tune that prefab's `ship-controller` mass/thrust/torque — do not edit `FLIGHT_CONFIG` unless every hull is wrong.
+- **Preview pilot won't exit**: Hold Y should always leave the seat (same as main play). If the hold doesn't fire, check `exitSeat` binding / `updateExitSeatHold` in `player_controls.ts`.
 
 ## Key files
 
@@ -164,16 +187,28 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/physics/colliders.ts` | GameplayCollider types, mesh BVH bake/ground sample, legacy custom capsule push |
 | `src/physics/station_physics.ts` | Rapier world + static/dynamic collider sync; door-collider enable/disable |
 | `src/physics/rapier_world.ts` | Rapier body/collider creation from GameplayColliders |
+| `src/player/ship_layout.ts` | `ShipSpec` + defaults (mass, thrust, torque) |
 | `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) + `isDoorPassable` threshold |
 | `src/player/ship_deck.ts` | Ship deck walking + collider step resolution |
 | `src/player/station_walk.ts` | Station walking (Rapier character controller) |
 | `src/player/station_interaction.ts` | Resolves nearby station interactions from markers |
-| `src/app/game_loop.ts` | Main frame loop; owns `stationAnimationStates` + F-key dispatch |
-| `src/app/ship_play_session.ts` | Ship sandbox/deck mode; door + ramp toggles |
+| `src/flight/flight_config.ts` | Global IFCS / drag / damping / mouse aim knobs |
+| `src/flight/flight_aim.ts` | Aim state, mouse → aim, PD IFCS torque demand |
+| `src/flight/flight_body.ts` | Mass/thrust/torque integrate (planet + sandbox flat) |
+| `src/app/player_controls.ts` | Keyboard/gamepad input; aim persistence; Alt+C coupled; `wasKeyPressed` |
+| `src/app/game_loop.ts` | Main frame loop; flight + `stationAnimationStates` + F-key dispatch |
+| `src/app/ship_play_session.ts` | Ship sandbox: deck walk + pilot flight preview |
+| `src/render/effects/hud/flight_reticle.ts` | Dual-reticle aim + nose pips |
+| `src/player/flight_camera_feel.ts` | Thrust FOV + boost shake (ship-controller stats) |
+| `src/player/cockpit_gaze.ts` | Cockpit look-at pick + gear/ramp activate |
+| `src/player/cockpit_stats.ts` | Cockpit-stat instrument visibility / screen projection |
+| `src/render/effects/hud/cockpit_gaze_hud.ts` | Screen-space cockpit control labels |
+| `src/render/effects/hud/cockpit_speed_hud.ts` | Speed number + bar (boost-aware) |
 | `src/render/prefabs/prefab_renderer.ts` | Binds animation components to GLB nodes; `updateAnimations` / `updateParticles` callbacks |
 | `src/render/particles/` | Unity-style `particle-system` runtime (billboards, modules, plane collision only) |
-| `src/flight/player_controls.ts` | Keyboard/gamepad input; `consumeActions` + `wasKeyPressed` |
 | `scripts/inspect_glb.mjs` | CLI GLB node hierarchy dump |
+| `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/IFCS symptoms) |
+| `.cursor/skills/prefab-editor/SKILL.md` | Prefab editor skill |
 
 ## Utility scripts
 
@@ -188,5 +223,6 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 ## Other conventions
 
 - `.cursor/rules/agent-conventions.mdc` exists and defers to this file as the primary source — update both if changing architecture boundaries.
+- Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/` — read when editing those domains.
 - Export **factories + pure functions** from domain modules (not classes). Three.js objects never appear in `world/` or `flight/`.
 - Prefab JSON lives in `src/world/prefabs/data/<id>.prefab.json` and is committed (metadata only). The game bundles them via `import.meta.glob`.

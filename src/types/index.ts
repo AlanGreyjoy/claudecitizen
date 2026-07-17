@@ -6,3 +6,4 @@ export * from './flight';
 export * from './character';
 export * from './render';
 export * from './worker';
+export * from './equipment';

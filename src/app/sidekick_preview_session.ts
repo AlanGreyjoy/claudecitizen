@@ -71,7 +71,7 @@ function showPreviewShell(): HTMLCanvasElement {
   requireElement<HTMLElement>('app').classList.remove('is-hidden');
   for (const selector of [
     '.sc-hud-minimap', '.sc-hud-chat', '.sc-hud-debug-wrap', '.hud',
-    '#interact-prompt', '#flight-reticle', '#vegetation-menu', '#game-menu',
+    '#interact-prompt', '#flight-reticle', '#cockpit-gaze', '#vegetation-menu', '#game-menu',
     '#avms-terminal', '#build-terminal', '#haloband',
   ]) {
     document.querySelector<HTMLElement>(selector)?.style.setProperty('display', 'none');

@@ -364,6 +364,8 @@ function copyReferencedGameAssets(): Plugin {
  *   GET  /__editor/prefabs                               — saved prefab metadata (id, kind, name)
  *   GET  /__editor/prefab?id=<id>                        — prefab JSON
  *   POST /__editor/prefab                                — save prefab JSON
+ *   GET  /__editor/base-characters                       — base character equipment JSON
+ *   POST /__editor/base-characters                       — save base character equipment JSON
  *
  * Prefabs are written to src/world/prefabs/data/<id>.prefab.json so the game
  * bundles them via import.meta.glob.
@@ -406,6 +408,10 @@ function editorDevApi(): Plugin {
 
   function prefabDataDir(): string {
     return resolve(projectRoot, 'src/world/prefabs/data');
+  }
+
+  function baseCharacterEquipmentPath(): string {
+    return resolve(projectRoot, 'src/player/equipment/data/base-characters.json');
   }
 
   function editorAssetDir(): string {
@@ -597,6 +603,39 @@ function editorDevApi(): Plugin {
     sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
   }
 
+  async function handleGetBaseCharacters(res: ServerResponse): Promise<void> {
+    try {
+      const contents = await readFile(baseCharacterEquipmentPath(), 'utf8');
+      sendJson(res, 200, { document: JSON.parse(contents) });
+    } catch {
+      sendJson(res, 404, { error: 'base character equipment document not found' });
+    }
+  }
+
+  async function handleSaveBaseCharacters(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    let document: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
+      if (typeof parsed.document !== 'object' || parsed.document === null) {
+        throw new Error('missing document');
+      }
+      document = parsed.document as Record<string, unknown>;
+      if (document.schemaVersion !== 1 || !Array.isArray(document.slots)) {
+        throw new Error('invalid base character equipment document');
+      }
+    } catch (error) {
+      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
+      return;
+    }
+    const filePath = baseCharacterEquipmentPath();
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+    sendJson(res, 200, { saved: true, path: relative(projectRoot, filePath) });
+  }
+
   return {
     name: 'claudecitizen-editor-dev-api',
     apply: 'serve',
@@ -621,6 +660,8 @@ function editorDevApi(): Plugin {
           if (route === 'GET /prefabs') return handleListPrefabs(res);
           if (route === 'GET /prefab') return handleGetPrefab(url, res);
           if (route === 'POST /prefab') return handleSavePrefab(req, res);
+          if (route === 'GET /base-characters') return handleGetBaseCharacters(res);
+          if (route === 'POST /base-characters') return handleSaveBaseCharacters(req, res);
           sendJson(res, 404, { error: `unknown editor api route: ${route}` });
         })();
         handled.catch((error) => {
@@ -641,7 +682,10 @@ export default defineConfig({
       // reload that races (and cancels) the editor's jump into Play preview.
       // Dev builds read prefabs through /__editor/prefab instead, so no HMR
       // is needed for these files.
-      ignored: ['**/src/world/prefabs/data/**'],
+      ignored: [
+        '**/src/world/prefabs/data/**',
+        '**/src/player/equipment/data/base-characters.json',
+      ],
     },
   },
 });

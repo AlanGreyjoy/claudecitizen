@@ -1,7 +1,11 @@
 import { FLIGHT_CONFIG } from "../flight/flight_config";
 import type { LocalOffset, Vec3 } from "../types";
 import type { GameplayCollider } from "../physics/colliders";
-import type { PrefabNodeOverride } from "../world/prefabs/schema";
+import type {
+  CockpitControlAction,
+  CockpitStatKind,
+  PrefabNodeOverride,
+} from "../world/prefabs/schema";
 import type { PrefabSoundSpec } from "../world/prefabs/sound_runtime";
 
 /**
@@ -32,12 +36,53 @@ export interface ShipRampHingeSpec {
 /** Static per-ship-type stats and articulation authored on the prefab. */
 export interface ShipSpec {
   maxSpeedMps: number;
+  /**
+   * Legacy forward acceleration (m/s²). Prefer thrust/mass; kept for
+   * admin/DB ships and as a derived fallback.
+   */
   throttleAccelMps2: number;
+  massKg: number;
+  maxAngularRateRadps: number;
+  forwardThrustN: number;
+  backwardThrustN: number;
+  verticalThrustN: number;
+  lateralThrustN: number;
+  pitchTorqueNm: number;
+  yawTorqueNm: number;
+  rollTorqueNm: number;
+  /** Cockpit FOV widen (deg) at full forward thrust. */
+  thrustFovForwardDeg: number;
+  /** Cockpit FOV narrow (deg) at full reverse thrust. */
+  thrustFovBackwardDeg: number;
+  /** FOV lerp rate toward thrust target (1/s). */
+  thrustFovBlendPerSec: number;
+  /** Cockpit eye shake amplitude while boosting (m). */
+  boostShakeAmplitudeM: number;
+  /** Boost shake frequency (Hz). */
+  boostShakeHz: number;
+  /** How quickly boost effects / SFX fade in and out (1/s). */
+  boostBlendPerSec: number;
   maxHp: number;
   maxShields: number;
   shieldRegenPerSec: number;
   gearHinges: ShipGearHingeSpec[];
   rampHinge: ShipRampHingeSpec | null;
+  /** Landing gear deploy SFX (gearDown → true). */
+  gearDeploySoundUrl?: string;
+  /** Landing gear retract SFX (gearDown → false). */
+  gearRetractSoundUrl?: string;
+  /** Cargo ramp lower SFX (rampDown → true). */
+  rampOpenSoundUrl?: string;
+  /** Cargo ramp raise SFX (rampDown → false). */
+  rampCloseSoundUrl?: string;
+  /** Looping boost thruster SFX while Shift is held. */
+  boostSoundUrl?: string;
+  /** Boost SFX gain 0..1. */
+  boostSoundVolume: number;
+  /** Looping main thruster SFX while throttling forward/back. */
+  thrustSoundUrl?: string;
+  /** Thrust SFX gain 0..1. */
+  thrustSoundVolume: number;
 }
 
 /** Starhopper gear/ramp hinges — shared by layout defaults and render fallback. */
@@ -78,9 +123,29 @@ export const DEFAULT_STARHOPPER_RAMP_HINGE: ShipRampHingeSpec = {
   lowerRadians: -0.62,
 };
 
+/** Reference mass for Starhopper-class defaults (kg). */
+export const DEFAULT_SHIP_MASS_KG = 12_000;
+
 export const DEFAULT_SHIP_SPEC: ShipSpec = {
   maxSpeedMps: FLIGHT_CONFIG.MAX_SPEED_METERS_PER_SECOND,
   throttleAccelMps2: FLIGHT_CONFIG.THROTTLE_ACCEL,
+  massKg: DEFAULT_SHIP_MASS_KG,
+  maxAngularRateRadps: 0.85,
+  forwardThrustN: FLIGHT_CONFIG.THROTTLE_ACCEL * DEFAULT_SHIP_MASS_KG,
+  backwardThrustN: FLIGHT_CONFIG.THROTTLE_ACCEL * DEFAULT_SHIP_MASS_KG * 0.6,
+  verticalThrustN: FLIGHT_CONFIG.LIFT_ACCEL * DEFAULT_SHIP_MASS_KG,
+  lateralThrustN: FLIGHT_CONFIG.STRAFE_ACCEL * DEFAULT_SHIP_MASS_KG,
+  pitchTorqueNm: FLIGHT_CONFIG.PITCH_RATE * 2 * DEFAULT_SHIP_MASS_KG * FLIGHT_CONFIG.INERTIA_FACTOR,
+  yawTorqueNm: FLIGHT_CONFIG.YAW_RATE * 2 * DEFAULT_SHIP_MASS_KG * FLIGHT_CONFIG.INERTIA_FACTOR,
+  rollTorqueNm: FLIGHT_CONFIG.ROLL_RATE * 2.2 * DEFAULT_SHIP_MASS_KG * FLIGHT_CONFIG.INERTIA_FACTOR,
+  thrustFovForwardDeg: 5,
+  thrustFovBackwardDeg: 3.5,
+  thrustFovBlendPerSec: 8,
+  boostShakeAmplitudeM: 0.015,
+  boostShakeHz: 20,
+  boostBlendPerSec: 4.5,
+  boostSoundVolume: 1,
+  thrustSoundVolume: 1,
   maxHp: 1000,
   maxShields: 500,
   shieldRegenPerSec: 25,
@@ -127,6 +192,8 @@ export interface ShipWalkZone {
   oriented?: ShipWalkZoneOriented;
 }
 
+export type ShipDoorTrigger = "radial" | "raycast";
+
 export interface ShipDoorSpec {
   id: string;
   /** Prompt name ("Press F — open {label}"). */
@@ -134,11 +201,25 @@ export interface ShipDoorSpec {
   motion: "slide" | "hinge";
   axis: "x" | "y" | "z";
   /** GLB node names + signed open delta (slide: meters, hinge: radians). */
-  nodes: { name: string; delta: number }[];
+  nodes: {
+    name: string;
+    delta: number;
+    /** Unique ancestor when duplicate bone/node names exist. */
+    under?: string;
+  }[];
   /** Ship-local interact anchor. */
   interact: LocalOffset;
+  /** radial = stand in sphere; raycast = camera aim within radius. */
+  trigger: ShipDoorTrigger;
+  /** Radial stand reach / raycast max camera distance. */
   radius: number;
+  /** Raycast hit tolerance (perpendicular meters from camera ray). */
+  aimRadius: number;
   defaultOpen: boolean;
+  /** One-shot SFX when opening (optional). */
+  openSoundUrl?: string;
+  /** One-shot SFX when closing (optional). */
+  closeSoundUrl?: string;
 }
 
 export interface ShipRampInteract {
@@ -166,6 +247,48 @@ export interface ShipSeatSpec {
   /** Standing spot just behind the chair after getting up (2D deck local). */
   stand: { right: number; forward: number };
   interactRadius: number;
+}
+
+/** Ship bunk baked from a bed marker (F to lie down; no flight). */
+export interface ShipBedSpec {
+  id: string;
+  label: string;
+  /** Mattress / interact anchor in ship-local space. */
+  bed: LocalOffset;
+  eye: LocalOffset;
+  /** Get-up spot beside the bunk (2D deck local). */
+  stand: { right: number; forward: number };
+  trigger: "radial" | "raycast";
+  radius: number;
+  aimRadius: number;
+}
+
+/** Cockpit look-at control baked from a cockpit-control marker. */
+export type { CockpitControlAction, CockpitStatKind };
+
+export interface CockpitControlSpec {
+  id: string;
+  action: CockpitControlAction;
+  /** Optional authored label; runtime may override from rig state. */
+  label?: string;
+  /** Anchor in ship-local right/up/forward meters. */
+  position: LocalOffset;
+  /** Max perpendicular distance from the camera ray (m). */
+  gazeRadius: number;
+  /** Max distance from the camera (m). */
+  maxDistance: number;
+}
+
+/** Cockpit instrument baked from a cockpit-stat marker. */
+export interface CockpitStatSpec {
+  id: string;
+  kind: CockpitStatKind;
+  /** Optional authored title; runtime defaults from kind. */
+  label?: string;
+  /** Anchor in ship-local right/up/forward meters. */
+  position: LocalOffset;
+  /** Max distance from the pilot eye to show (m). */
+  maxDistance: number;
 }
 
 export interface ShipCameraBounds {
@@ -199,6 +322,12 @@ export interface ShipLayout {
   doors: ShipDoorSpec[];
   /** All authored seat markers from the prefab (may be empty). */
   seats: ShipSeatSpec[];
+  /** Authored bunk markers (F to lie down; no flight). */
+  beds: ShipBedSpec[];
+  /** Cockpit look-at controls (Hold F + click) baked from cockpit-control markers. */
+  cockpitControls: CockpitControlSpec[];
+  /** Cockpit instruments (always-on while piloting) baked from cockpit-stat markers. */
+  cockpitStats: CockpitStatSpec[];
   /** Primary flight seat — derived from the first pilot-role seat, if any. */
   pilotSeat: LocalOffset;
   pilotEye: LocalOffset;
@@ -227,6 +356,9 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   walkZones: [],
   doors: [],
   seats: [],
+  beds: [],
+  cockpitControls: [],
+  cockpitStats: [],
   pilotSeat: { right: 0, up: -0.62, forward: 6.05 },
   pilotEye: { right: 0, up: 0.25, forward: 6.3 },
   seatStand: { right: 0, forward: 4.5 },

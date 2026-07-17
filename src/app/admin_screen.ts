@@ -5,16 +5,24 @@ import {
   createShipDefinition,
   createPropDefinition,
   createItemDefinition,
+  createWeaponDefinition,
+  createBackpackDefinition,
   deleteItemDefinition,
+  deleteWeaponDefinition,
+  deleteBackpackDefinition,
   getAdminSession,
   getAdminUser,
   getGameSettings,
   listAdminUsers,
   listItemDefinitions,
+  listWeaponDefinitions,
+  listBackpackDefinitions,
   listPropDefinitions,
   listShipDefinitions,
   updateGameSettings,
   updateItemDefinition,
+  updateWeaponDefinition,
+  updateBackpackDefinition,
   updatePropDefinition,
   updateShipDefinition,
   type AdminSession,
@@ -22,6 +30,10 @@ import {
   type AdminUserSummary,
   type ItemDefinition,
   type ItemDefinitionInput,
+  type WeaponDefinition,
+  type WeaponDefinitionInput,
+  type BackpackDefinition,
+  type BackpackDefinitionInput,
   type PropDefinition,
   type PropDefinitionInput,
   type ShipDefinition,
@@ -31,8 +43,11 @@ import { listShipPrefabOptions, type ShipPrefabOption } from '../world/prefabs/l
 import { listPropPrefabOptions, type PropPrefabOption } from '../world/prefabs/list_prop_prefabs';
 import { listItemPrefabOptions, type ItemPrefabOption } from '../world/prefabs/list_item_prefabs';
 import { ITEM_TYPES } from '../player/inventory/types';
+import { WEAPON_SLOT_TYPES, type WeaponSlotType } from '../types/equipment';
+import { loadPrefabDocument } from '../world/prefabs/loader';
+import { validateBackpackPrefab } from '../world/prefabs/item_runtime';
 
-type AdminTab = 'users' | 'ships' | 'props' | 'items' | 'settings';
+type AdminTab = 'users' | 'ships' | 'props' | 'items' | 'weapons' | 'backpacks' | 'settings';
 type AdminScene =
   | 'login'
   | 'users'
@@ -43,6 +58,10 @@ type AdminScene =
   | 'prop-form'
   | 'items'
   | 'item-form'
+  | 'weapons'
+  | 'weapon-form'
+  | 'backpacks'
+  | 'backpack-form'
   | 'settings';
 
 const DEFAULT_ITEM_FORM: ItemDefinitionInput = {
@@ -55,6 +74,29 @@ const DEFAULT_ITEM_FORM: ItemDefinitionInput = {
   stackMax: 99,
   costArc: 0,
   rarity: 'common',
+};
+
+const DEFAULT_WEAPON_FORM: WeaponDefinitionInput = {
+  name: '',
+  description: '',
+  subType: 'generic',
+  prefabId: '',
+  iconUrl: null,
+  costArc: 0,
+  rarity: 'common',
+  weaponSlotType: 'rifle',
+};
+
+const DEFAULT_BACKPACK_FORM: BackpackDefinitionInput = {
+  name: '',
+  description: '',
+  subType: 'generic',
+  prefabId: '',
+  iconUrl: null,
+  costArc: 0,
+  rarity: 'common',
+  capacityLiters: 0,
+  emptyMassKg: 0,
 };
 
 const DEFAULT_PROP_FORM: PropDefinitionInput = {
@@ -260,7 +302,9 @@ function isTabActive(tab: AdminTab, currentTab: AdminTab, currentScene: AdminSce
     currentScene !== 'user-detail' &&
     currentScene !== 'ship-form' &&
     currentScene !== 'prop-form' &&
-    currentScene !== 'item-form'
+    currentScene !== 'item-form' &&
+    currentScene !== 'weapon-form' &&
+    currentScene !== 'backpack-form'
   );
 }
 
@@ -279,6 +323,8 @@ export function showAdminScreen(): void {
   let editingShipId: string | null = null;
   let editingPropId: string | null = null;
   let editingItemId: string | null = null;
+  let editingWeaponId: string | null = null;
+  let editingBackpackId: string | null = null;
   let selectedUserId: string | null = null;
 
   function setStatus(message: string, isError = false): void {
@@ -332,6 +378,8 @@ export function showAdminScreen(): void {
       { id: 'ships', label: 'Ships' },
       { id: 'props', label: 'Props' },
       { id: 'items', label: 'Items' },
+      { id: 'weapons', label: 'Weapons' },
+      { id: 'backpacks', label: 'Backpacks' },
       { id: 'settings', label: 'Game Settings' },
     ];
 
@@ -347,6 +395,8 @@ export function showAdminScreen(): void {
         else if (tab.id === 'ships') void showShips();
         else if (tab.id === 'props') void showProps();
         else if (tab.id === 'items') void showItems();
+        else if (tab.id === 'weapons') void showWeapons();
+        else if (tab.id === 'backpacks') void showBackpacks();
         else void showSettings();
       });
       nav.append(link);
@@ -1179,8 +1229,7 @@ export function showAdminScreen(): void {
         rarityCell.textContent = item.rarity;
         row.append(iconCell, stackCell, rarityCell);
         row.addEventListener('click', () => {
-          editingItemId = item.id;
-          void showItemForm(item);
+          void routeItemDefinition(item);
         });
         body.append(row);
       }
@@ -1255,9 +1304,30 @@ export function showAdminScreen(): void {
   }
 
   async function ensureItemPrefabs(): Promise<ItemPrefabOption[]> {
-    if (itemPrefabs.length > 0) return itemPrefabs;
+    if (!import.meta.env.DEV && itemPrefabs.length > 0) return itemPrefabs;
     itemPrefabs = await listItemPrefabOptions();
     return itemPrefabs;
+  }
+
+  async function routeItemDefinition(item: ItemDefinition): Promise<void> {
+    if (item.itemType === 'weapon') {
+      const weapon = (await listWeaponDefinitions()).find((entry) => entry.id === item.id);
+      if (weapon) {
+        editingWeaponId = weapon.id;
+        await showWeaponForm(weapon);
+        return;
+      }
+    }
+    if (item.itemType === 'backpack') {
+      const backpack = (await listBackpackDefinitions()).find((entry) => entry.id === item.id);
+      if (backpack) {
+        editingBackpackId = backpack.id;
+        await showBackpackForm(backpack);
+        return;
+      }
+    }
+    editingItemId = item.id;
+    await showItemForm(item);
   }
 
   function readItemForm(form: HTMLFormElement): ItemDefinitionInput {
@@ -1318,7 +1388,10 @@ export function showAdminScreen(): void {
         'Item type',
         createSelect(
           'itemType',
-          ITEM_TYPES.map((type) => ({ value: type, label: type })),
+          ITEM_TYPES.filter((type) => type !== 'weapon' && type !== 'backpack').map((type) => ({
+            value: type,
+            label: type,
+          })),
           defaults.itemType,
         ),
       ),
@@ -1376,6 +1449,386 @@ export function showAdminScreen(): void {
     });
 
     renderShell([header, wrapInCard(form)], 'item-form', 'items');
+  }
+
+  function renderWeaponsTable(weapons: WeaponDefinition[]): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'sc-admin-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'sc-admin-table';
+    table.innerHTML = `
+      <thead><tr><th>Name</th><th>Slot type</th><th>Sub-type</th><th>Prefab</th><th>Rarity</th></tr></thead>
+    `;
+    const body = document.createElement('tbody');
+    if (weapons.length === 0) {
+      const row = document.createElement('tr');
+      row.className = 'is-static';
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.className = 'sc-admin-empty';
+      cell.textContent = 'No weapon definitions match your search.';
+      row.append(cell);
+      body.append(row);
+    }
+    for (const weapon of weapons) {
+      const row = document.createElement('tr');
+      for (const value of [weapon.name, weapon.weaponSlotType, weapon.subType]) {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.append(cell);
+      }
+      row.append(createTruncatedCell(weapon.prefabId ?? '—', 24, true));
+      const rarity = document.createElement('td');
+      rarity.textContent = weapon.rarity;
+      row.append(rarity);
+      row.addEventListener('click', () => {
+        editingWeaponId = weapon.id;
+        void showWeaponForm(weapon);
+      });
+      body.append(row);
+    }
+    table.append(body);
+    wrap.append(table);
+    return wrap;
+  }
+
+  async function showWeapons(): Promise<void> {
+    renderShell([renderMessage('Loading weapon catalog...')], 'weapons', 'weapons');
+    try {
+      const weapons = await listWeaponDefinitions();
+      let query = '';
+      const host = document.createElement('div');
+      const refresh = (): void => {
+        const needle = normalizeSearchQuery(query);
+        host.replaceChildren(
+          renderWeaponsTable(
+            needle
+              ? weapons.filter((weapon) =>
+                  [weapon.name, weapon.weaponSlotType, weapon.subType, weapon.prefabId ?? ''].some(
+                    (value) => value.toLowerCase().includes(needle),
+                  ),
+                )
+              : weapons,
+          ),
+        );
+      };
+      const create = createButton('Create weapon definition');
+      create.addEventListener('click', () => {
+        editingWeaponId = null;
+        void showWeaponForm();
+      });
+      const search = createSearchInput('Search weapons…', (value) => {
+        query = value;
+        refresh();
+      });
+      refresh();
+      renderShell(
+        [
+          createPageHeader(
+            'Weapon definitions',
+            `${weapons.length} definition${weapons.length === 1 ? '' : 's'}`,
+          ),
+          createToolbar(search, create),
+          wrapInCard(host),
+          renderMessage(''),
+        ],
+        'weapons',
+        'weapons',
+      );
+    } catch (error) {
+      if (error instanceof AdminAuthError) return renderLogin(error.message);
+      renderShell(
+        [createPageHeader('Weapon definitions'), renderMessage(error instanceof Error ? error.message : 'Failed to load weapons.', true)],
+        'weapons',
+        'weapons',
+      );
+    }
+  }
+
+  function readWeaponForm(form: HTMLFormElement): WeaponDefinitionInput {
+    const iconUrl = formValue(form, 'iconUrl');
+    const weaponSlotTypeRaw = formValue(form, 'weaponSlotType') as WeaponSlotType;
+    return {
+      name: formValue(form, 'name'),
+      description: formValue(form, 'description'),
+      subType: formValue(form, 'subType') || 'generic',
+      prefabId: formValue(form, 'prefabId'),
+      iconUrl: iconUrl || null,
+      costArc: Math.round(formNumber(form, 'costArc')),
+      rarity: formValue(form, 'rarity') || 'common',
+      weaponSlotType: WEAPON_SLOT_TYPES.includes(weaponSlotTypeRaw) ? weaponSlotTypeRaw : 'rifle',
+    };
+  }
+
+  async function showWeaponForm(existing?: WeaponDefinition): Promise<void> {
+    const prefabs = await ensureItemPrefabs();
+    const defaults = existing ?? DEFAULT_WEAPON_FORM;
+    const form = document.createElement('form');
+    form.className = 'sc-admin-form sc-admin-form-wide';
+    const back = createButton('Back to weapons', 'secondary');
+    back.addEventListener('click', () => {
+      editingWeaponId = null;
+      void showWeapons();
+    });
+    const prefabOptions = [
+      { value: '', label: 'Select an item prefab' },
+      ...prefabs.map((prefab) => ({ value: prefab.id, label: `${prefab.label} (${prefab.id})` })),
+    ];
+    form.append(
+      createField('Name', createTextInput('name', defaults.name)),
+      createField('Description', createTextArea('description', defaults.description)),
+      createField(
+        'Weapon slot type',
+        createSelect(
+          'weaponSlotType',
+          WEAPON_SLOT_TYPES.map((type) => ({ value: type, label: type })),
+          defaults.weaponSlotType,
+        ),
+      ),
+      createField('Sub-type', createTextInput('subType', defaults.subType)),
+      createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId)),
+      createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),
+      createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
+      createField('Rarity', createTextInput('rarity', defaults.rarity)),
+    );
+    const actions = document.createElement('div');
+    actions.className = 'sc-admin-actions';
+    const save = createButton(existing ? 'Save changes' : 'Create definition');
+    save.type = 'submit';
+    actions.append(save);
+    if (existing) {
+      const remove = createButton('Delete definition', 'secondary');
+      remove.addEventListener('click', () => {
+        if (!window.confirm(`Delete weapon "${existing.name}"? This cannot be undone.`)) return;
+        setStatus('Deleting weapon definition...');
+        deleteWeaponDefinition(existing.id)
+          .then(() => {
+            editingWeaponId = null;
+            void showWeapons();
+          })
+          .catch((error) => setStatus(error instanceof Error ? error.message : 'Delete failed.', true));
+      });
+      actions.append(remove);
+    }
+    form.append(actions, renderMessage(''));
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const payload = readWeaponForm(form);
+      if (!payload.prefabId) return setStatus('Select an item prefab before saving.', true);
+      setStatus('Saving weapon definition...');
+      const request = existing
+        ? updateWeaponDefinition(existing.id, payload)
+        : createWeaponDefinition(payload);
+      request
+        .then(() => {
+          editingWeaponId = null;
+          void showWeapons();
+        })
+        .catch((error) => setStatus(error instanceof Error ? error.message : 'Save failed.', true));
+    });
+    renderShell(
+      [
+        createPageHeader(existing ? 'Edit weapon definition' : 'Create weapon definition', existing?.name, [back]),
+        wrapInCard(form),
+      ],
+      'weapon-form',
+      'weapons',
+    );
+  }
+
+  function renderBackpacksTable(backpacks: BackpackDefinition[]): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'sc-admin-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'sc-admin-table';
+    table.innerHTML = `
+      <thead><tr><th>Name</th><th>Capacity</th><th>Empty mass</th><th>Sub-type</th><th>Prefab</th></tr></thead>
+    `;
+    const body = document.createElement('tbody');
+    if (backpacks.length === 0) {
+      const row = document.createElement('tr');
+      row.className = 'is-static';
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.className = 'sc-admin-empty';
+      cell.textContent = 'No backpack definitions match your search.';
+      row.append(cell);
+      body.append(row);
+    }
+    for (const backpack of backpacks) {
+      const row = document.createElement('tr');
+      const values = [
+        backpack.name,
+        `${backpack.capacityLiters} L`,
+        `${backpack.emptyMassKg} kg`,
+        backpack.subType,
+      ];
+      for (const value of values) {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.append(cell);
+      }
+      row.append(createTruncatedCell(backpack.prefabId ?? '—', 24, true));
+      row.addEventListener('click', () => {
+        editingBackpackId = backpack.id;
+        void showBackpackForm(backpack);
+      });
+      body.append(row);
+    }
+    table.append(body);
+    wrap.append(table);
+    return wrap;
+  }
+
+  async function showBackpacks(): Promise<void> {
+    renderShell([renderMessage('Loading backpack catalog...')], 'backpacks', 'backpacks');
+    try {
+      const backpacks = await listBackpackDefinitions();
+      let query = '';
+      const host = document.createElement('div');
+      const refresh = (): void => {
+        const needle = normalizeSearchQuery(query);
+        host.replaceChildren(
+          renderBackpacksTable(
+            needle
+              ? backpacks.filter((backpack) =>
+                  [backpack.name, backpack.subType, backpack.prefabId ?? ''].some((value) =>
+                    value.toLowerCase().includes(needle),
+                  ),
+                )
+              : backpacks,
+          ),
+        );
+      };
+      const create = createButton('Create backpack definition');
+      create.addEventListener('click', () => {
+        editingBackpackId = null;
+        void showBackpackForm();
+      });
+      const search = createSearchInput('Search backpacks…', (value) => {
+        query = value;
+        refresh();
+      });
+      refresh();
+      renderShell(
+        [
+          createPageHeader(
+            'Backpack definitions',
+            `${backpacks.length} definition${backpacks.length === 1 ? '' : 's'}`,
+          ),
+          createToolbar(search, create),
+          wrapInCard(host),
+          renderMessage(''),
+        ],
+        'backpacks',
+        'backpacks',
+      );
+    } catch (error) {
+      if (error instanceof AdminAuthError) return renderLogin(error.message);
+      renderShell(
+        [createPageHeader('Backpack definitions'), renderMessage(error instanceof Error ? error.message : 'Failed to load backpacks.', true)],
+        'backpacks',
+        'backpacks',
+      );
+    }
+  }
+
+  function readBackpackForm(form: HTMLFormElement): BackpackDefinitionInput {
+    const iconUrl = formValue(form, 'iconUrl');
+    return {
+      name: formValue(form, 'name'),
+      description: formValue(form, 'description'),
+      subType: formValue(form, 'subType') || 'generic',
+      prefabId: formValue(form, 'prefabId'),
+      iconUrl: iconUrl || null,
+      costArc: Math.round(formNumber(form, 'costArc')),
+      rarity: formValue(form, 'rarity') || 'common',
+      capacityLiters: formNumber(form, 'capacityLiters'),
+      emptyMassKg: formNumber(form, 'emptyMassKg'),
+    };
+  }
+
+  async function showBackpackForm(existing?: BackpackDefinition): Promise<void> {
+    const prefabs = await ensureItemPrefabs();
+    const defaults = existing ?? DEFAULT_BACKPACK_FORM;
+    const form = document.createElement('form');
+    form.className = 'sc-admin-form sc-admin-form-wide';
+    const back = createButton('Back to backpacks', 'secondary');
+    back.addEventListener('click', () => {
+      editingBackpackId = null;
+      void showBackpacks();
+    });
+    const prefabOptions = [
+      { value: '', label: 'Select an item prefab' },
+      ...prefabs.map((prefab) => ({ value: prefab.id, label: `${prefab.label} (${prefab.id})` })),
+    ];
+    form.append(
+      createField('Name', createTextInput('name', defaults.name)),
+      createField('Description', createTextArea('description', defaults.description)),
+      createField('Sub-type', createTextInput('subType', defaults.subType)),
+      createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId)),
+      createField('Capacity (liters)', createNumberInput('capacityLiters', defaults.capacityLiters, '0.1')),
+      createField('Empty mass (kg)', createNumberInput('emptyMassKg', defaults.emptyMassKg, '0.1')),
+      createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),
+      createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
+      createField('Rarity', createTextInput('rarity', defaults.rarity)),
+    );
+    const actions = document.createElement('div');
+    actions.className = 'sc-admin-actions';
+    const save = createButton(existing ? 'Save changes' : 'Create definition');
+    save.type = 'submit';
+    actions.append(save);
+    if (existing) {
+      const remove = createButton('Delete definition', 'secondary');
+      remove.addEventListener('click', () => {
+        if (!window.confirm(`Delete backpack "${existing.name}"? This cannot be undone.`)) return;
+        setStatus('Deleting backpack definition...');
+        deleteBackpackDefinition(existing.id)
+          .then(() => {
+            editingBackpackId = null;
+            void showBackpacks();
+          })
+          .catch((error) => setStatus(error instanceof Error ? error.message : 'Delete failed.', true));
+      });
+      actions.append(remove);
+    }
+    form.append(actions, renderMessage(''));
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void (async () => {
+        const payload = readBackpackForm(form);
+        if (!payload.prefabId) {
+          setStatus('Select an item prefab before saving.', true);
+          return;
+        }
+        setStatus('Validating backpack prefab...');
+        const prefab = await loadPrefabDocument(payload.prefabId);
+        const errors = prefab
+          ? validateBackpackPrefab(prefab)
+          : [`Item prefab "${payload.prefabId}" could not be loaded.`];
+        if (errors.length > 0) {
+          setStatus(`Backpack cannot be saved: ${errors.join(' ')}`, true);
+          return;
+        }
+        setStatus('Saving backpack definition...');
+        const request = existing
+          ? updateBackpackDefinition(existing.id, payload)
+          : createBackpackDefinition(payload);
+        await request;
+        editingBackpackId = null;
+        await showBackpacks();
+      })().catch((error) => {
+        setStatus(error instanceof Error ? error.message : 'Save failed.', true);
+      });
+    });
+    renderShell(
+      [
+        createPageHeader(existing ? 'Edit backpack definition' : 'Create backpack definition', existing?.name, [back]),
+        wrapInCard(form),
+      ],
+      'backpack-form',
+      'backpacks',
+    );
   }
 
   function renderStarterEditor(
@@ -1591,9 +2044,27 @@ export function showAdminScreen(): void {
               else void showItems();
             })
             .catch(() => void showItems());
+        } else if (editingWeaponId) {
+          listWeaponDefinitions()
+            .then((weapons) => {
+              const weapon = weapons.find((entry) => entry.id === editingWeaponId);
+              if (weapon) void showWeaponForm(weapon);
+              else void showWeapons();
+            })
+            .catch(() => void showWeapons());
+        } else if (editingBackpackId) {
+          listBackpackDefinitions()
+            .then((backpacks) => {
+              const backpack = backpacks.find((entry) => entry.id === editingBackpackId);
+              if (backpack) void showBackpackForm(backpack);
+              else void showBackpacks();
+            })
+            .catch(() => void showBackpacks());
         } else if (currentTab === 'ships') void showShips();
         else if (currentTab === 'props') void showProps();
         else if (currentTab === 'items') void showItems();
+        else if (currentTab === 'weapons') void showWeapons();
+        else if (currentTab === 'backpacks') void showBackpacks();
         else if (currentTab === 'settings') void showSettings();
         else void showUsers();
         return;

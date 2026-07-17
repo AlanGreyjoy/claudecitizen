@@ -1,4 +1,8 @@
 import { parsePrefabDocument, type PrefabDocument, type PrefabKind } from '../world/prefabs/schema';
+import {
+  parseBaseCharacterEquipment,
+  type BaseCharacterEquipmentV1,
+} from '../player/equipment/base_character_equipment';
 
 export interface PrefabListEntry {
   id: string;
@@ -57,6 +61,23 @@ export async function savePrefab(doc: PrefabDocument): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: doc }),
+  });
+  return payload.path;
+}
+
+export async function fetchBaseCharacterEquipment(): Promise<BaseCharacterEquipmentV1> {
+  const payload = await requestJson<{ document: unknown }>('/__editor/base-characters');
+  return parseBaseCharacterEquipment(payload.document);
+}
+
+export async function saveBaseCharacterEquipment(
+  document: BaseCharacterEquipmentV1,
+): Promise<string> {
+  const parsed = parseBaseCharacterEquipment(document);
+  const payload = await requestJson<{ path: string }>('/__editor/base-characters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: parsed }),
   });
   return payload.path;
 }

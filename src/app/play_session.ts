@@ -215,6 +215,8 @@ export async function startPlaySession(
   const controlsEl = requireElement<HTMLElement>('hud-controls');
   const interactPromptEl = requireElement<HTMLElement>('interact-prompt');
   const flightReticleEl = requireElement<HTMLElement>('flight-reticle');
+  const cockpitGazeEl = requireElement<HTMLElement>('cockpit-gaze');
+  const cockpitSpeedEl = requireElement<HTMLElement>('cockpit-speed');
   const screenFadeEl = requireElement<HTMLElement>('screen-fade');
   const gameMenuEl = requireElement<HTMLElement>('game-menu');
   const gameMenuResumeBtn = requireElement<HTMLButtonElement>('game-menu-resume-btn');
@@ -303,6 +305,8 @@ export async function startPlaySession(
       controlsEl,
       interactPromptEl,
       flightReticleEl,
+      cockpitGazeEl,
+      cockpitSpeedEl,
       screenFadeEl,
     },
     planet,

@@ -13,6 +13,10 @@ import {
   integrateCharacterLocomotion,
   JUMP_SPEED_METERS_PER_SECOND,
   animationFromState,
+  FIRST_PERSON_PITCH_LIMIT,
+  ORBIT_PITCH_LIMIT,
+  resolveCharacterCameraRig,
+  resolveFirstPersonCameraRig,
   SPRINT_SPEED_METERS_PER_SECOND,
   WALK_SPEED_METERS_PER_SECOND,
 } from "./character_controller";
@@ -33,6 +37,7 @@ import {
 import {
   getShipLayout,
   usesColliderDeck,
+  type ShipBedSpec,
   type ShipCameraBounds,
   type ShipSeatSpec,
   type ShipWalkZone,
@@ -40,10 +45,13 @@ import {
 import {
   atShipGroundLevel,
   getShipRight,
+  localOffsetToWorld,
   worldToShipLocal,
 } from "./ship_interaction";
+import { resolveDeckCameraOrbit } from "../flight/flight_aim";
 import { orientedFloorUpAt, orientedZoneContains } from "./ship_zone_oriented";
 import type {
+  CameraView,
   CharacterInput,
   CharacterState,
   FlightBody,
@@ -660,17 +668,133 @@ export function canReturnToPilot(deckLocal: DeckLocal): boolean {
   const nearby = nearestSeat(deckLocal);
   return nearby?.role === "pilot";
 }
-export function nearestDoor(deckLocal: DeckLocal): { doorId: string } | null {
-  let best: { doorId: string; distance: number } | null = null;
+/** Camera aim for raycast ship-door triggers (world space). */
+export interface DoorInteractAim {
+  ship: FlightBody;
+  cameraPos: Vec3;
+  cameraForward: Vec3;
+}
+
+/** Build deck camera aim from orbit look (matches on-deck camera rig). */
+export function resolveDoorInteractAim(
+  ship: FlightBody,
+  characterPosition: Vec3,
+  yawRadians: number,
+  pitchRadians: number,
+  cameraView: CameraView,
+  zoomDistance = 7.4,
+): DoorInteractAim {
+  const firstPerson = cameraView === "first-person";
+  const pitchLimit = firstPerson ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
+  const orbit = resolveDeckCameraOrbit(
+    ship.forward,
+    ship.up,
+    yawRadians,
+    pitchRadians,
+    pitchLimit,
+  );
+  const rig = firstPerson
+    ? resolveFirstPersonCameraRig(orbit)
+    : resolveCharacterCameraRig(orbit, zoomDistance);
+  return {
+    ship,
+    cameraPos: add(characterPosition, rig.positionOffset),
+    cameraForward: orbit.forward,
+  };
+}
+
+/**
+ * Score a raycast door like cockpit gaze: within maxDistance along the camera
+ * ray and within aimRadius of the ray. Lower score is better.
+ */
+function scoreRaycastDoor(
+  door: {
+    interact: { right: number; up: number; forward: number };
+    radius: number;
+    aimRadius: number;
+  },
+  aim: DoorInteractAim,
+): number | null {
+  const worldPosition = localOffsetToWorld(aim.ship, door.interact);
+  const forward = normalize(aim.cameraForward);
+  if (length(forward) < 1e-6) return null;
+
+  const toPoint = sub(worldPosition, aim.cameraPos);
+  const distance = length(toPoint);
+  if (distance > door.radius || distance < 1e-4) return null;
+
+  const along = dot(toPoint, forward);
+  if (along < 0.05) return null;
+
+  const closestOnRay = scale(forward, along);
+  const perpDistance = length(sub(toPoint, closestOnRay));
+  if (perpDistance > door.aimRadius) return null;
+
+  const angular = perpDistance / Math.max(along, 0.05);
+  return angular * 10 + along * 0.05;
+}
+
+export function nearestDoor(
+  deckLocal: DeckLocal,
+  aim?: DoorInteractAim | null,
+): { doorId: string } | null {
+  let best: { doorId: string; score: number } | null = null;
   for (const door of getShipLayout().doors) {
+    if (door.trigger === "raycast") {
+      if (!aim) continue;
+      const hit = scoreRaycastDoor(door, aim);
+      if (hit == null) continue;
+      if (!best || hit < best.score) best = { doorId: door.id, score: hit };
+      continue;
+    }
     const distance = localDistance(deckLocal, {
       right: door.interact.right,
       forward: door.interact.forward,
     });
     if (distance > door.radius) continue;
-    if (!best || distance < best.distance) best = { doorId: door.id, distance };
+    if (!best || distance < best.score)
+      best = { doorId: door.id, score: distance };
   }
   return best ? { doorId: best.doorId } : null;
+}
+
+/** Nearest authored bunk within interact reach, or null. */
+export function nearestBed(
+  deckLocal: DeckLocal,
+  aim?: DoorInteractAim | null,
+): ShipBedSpec | null {
+  let best: { bed: ShipBedSpec; score: number } | null = null;
+  for (const bed of getShipLayout().beds) {
+    if (bed.trigger === "raycast") {
+      if (!aim) continue;
+      const hit = scoreRaycastDoor(
+        {
+          interact: bed.bed,
+          radius: bed.radius,
+          aimRadius: bed.aimRadius,
+        },
+        aim,
+      );
+      if (hit == null) continue;
+      if (!best || hit < best.score) best = { bed, score: hit };
+      continue;
+    }
+    const distance = localDistance(deckLocal, {
+      right: bed.bed.right,
+      forward: bed.bed.forward,
+    });
+    if (distance > bed.radius) continue;
+    if (!best || distance < best.score) best = { bed, score: distance };
+  }
+  return best?.bed ?? null;
+}
+
+export function bedInteractPrompt(bed: ShipBedSpec, interactLabel = "F"): string {
+  const label = bed.label?.trim();
+  if (label && label.toLowerCase() !== "bed") {
+    return `Press ${interactLabel} — lie down (${label})`;
+  }
+  return `Press ${interactLabel} — lie down`;
 }
 
 export function nearRampPanel(deckLocal: DeckLocal): boolean {

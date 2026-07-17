@@ -13,6 +13,8 @@ Before architectural or cross-cutting changes, read the project's agent docs:
 
 Also scan `.agents/` for any additional convention files. Use those docs for bounded-context ownership, import boundaries, terrain/foot sync, security, and performance pitfalls. Do not restate them here — read the source files.
 
+Project skills (read when the domain matches): `.cursor/skills/prefab-editor/SKILL.md`, `.cursor/skills/ship-flight/SKILL.md`.
+
 ## Performance — first-class requirement
 
 ClaudeCitizen is a **real-time web game** (React UI + Three.js/WebGL) targeting smooth play on consumer hardware, with a future **Nest.js MMO backend** (WebSockets, authoritative simulation). Performance is not a polish pass — it is a **core product constraint**. A Star Citizen–scale world on the web fails instantly if the main thread stalls, draw calls explode, or sync work scales with player count.
@@ -57,6 +59,7 @@ ClaudeCitizen is a **real-time web game** (React UI + Three.js/WebGL) targeting 
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (dev-only)"
+- Ship flight / mass / thrust / IFCS / dual-reticle / Preview Ship flight → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, and AGENTS.md "Ship flight"
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 
 ## Key reminders

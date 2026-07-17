@@ -23,6 +23,7 @@ export interface ProjectPanelOptions {
   getModelThumbnail: (url: string) => Promise<string>;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onPreviewCharacter: (url: string) => void | Promise<void>;
+  onCreateItemPrefab: (url: string) => void | Promise<void>;
   audioPreview: EditorAudioPreviewController;
 }
 
@@ -113,6 +114,29 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
   const folderTree = el('div', { className: 'ed-folder-tree' });
   const grid = el('div', { className: 'ed-asset-grid' });
 
+  /** Only render GLB thumbs for cards near the scroll viewport. */
+  const thumbObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const thumb = entry.target as HTMLElement;
+        const url = thumb.dataset.thumbUrl;
+        if (!url) continue;
+        thumbObserver.unobserve(thumb);
+        delete thumb.dataset.thumbUrl;
+        const alt = thumb.dataset.thumbAlt ?? '';
+        delete thumb.dataset.thumbAlt;
+        void options.getModelThumbnail(url).then((dataUrl) => {
+          if (!dataUrl || !thumb.isConnected) return;
+          clearChildren(thumb);
+          thumb.textContent = '';
+          thumb.append(el('img', { attrs: { src: dataUrl, alt } }));
+        });
+      }
+    },
+    { root: grid, rootMargin: '160px 0px', threshold: 0.01 },
+  );
+
   const side = el('div', { className: 'ed-project-side' }, [
     el('div', { className: 'ed-panel-title' }, [
       el('span', { text: 'Project' }),
@@ -186,18 +210,17 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
     const isDraggable = isDraggableAssetPath(entry.path);
     const isEmptyFile = entry.size === 0;
     const sourcePath = `${entry.root}/${entry.path}`;
+    const canCreateItemPrefab =
+      isModel && /(?:^|\/)protected\/props\/weapons\//i.test(entry.path);
 
     const thumb = el('div', {
       className: `ed-asset-thumb${isEmptyFile ? ' is-warning' : ''}`,
       text: isEmptyFile ? '!' : isModel ? '◇' : isAudio ? '♪' : '▦',
     });
     if (isModel && !isEmptyFile) {
-      void options.getModelThumbnail(url).then((dataUrl) => {
-        if (!dataUrl) return;
-        clearChildren(thumb);
-        thumb.textContent = '';
-        thumb.append(el('img', { attrs: { src: dataUrl, alt: fileName } }));
-      });
+      thumb.dataset.thumbUrl = url;
+      thumb.dataset.thumbAlt = fileName;
+      thumbObserver.observe(thumb);
     } else if (!isEmptyFile && !isAudio) {
       clearChildren(thumb);
       thumb.textContent = '';
@@ -242,6 +265,24 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
       cardChildren.push(
         el('div', { className: 'ed-asset-actions' }, [loadCharacterBtn, loadAnimationBtn]),
       );
+      if (canCreateItemPrefab) {
+        const createItemBtn = el('button', {
+          className: 'ed-asset-action',
+          text: 'Item',
+          title: isEmptyFile ? 'File is empty' : 'Create an item prefab using this model',
+          on: {
+            click: (event) => {
+              event.stopPropagation();
+              if (isEmptyFile) return;
+              void Promise.resolve(options.onCreateItemPrefab(url)).catch((error) => {
+                showToast(`Item prefab creation failed: ${(error as Error).message}`, true);
+              });
+            },
+          },
+        });
+        createItemBtn.disabled = isEmptyFile;
+        cardChildren.push(el('div', { className: 'ed-asset-actions' }, [createItemBtn]));
+      }
     } else if (isAudio) {
       const previewKey = `asset:${sourcePath}`;
       const previewBtn = el('button', {
@@ -288,6 +329,7 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
   }
 
   function renderGrid(): void {
+    thumbObserver.disconnect();
     clearChildren(grid);
     const folder = findFolder(tree, selectedFolder) ?? tree;
     const files = [...folder.files].sort(

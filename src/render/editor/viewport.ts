@@ -766,15 +766,26 @@ export function createEditorViewport(
       }
       case "ship-door": {
         const group = new THREE.Group();
+        const radius = component.radius ?? 1.6;
+        const raycast = (component.trigger ?? "radial") === "raycast";
         const sphere = makeHelperMesh(
-          new THREE.SphereGeometry(component.radius ?? 1.6, 16, 12),
-          0xffce6f,
-          0.24,
+          new THREE.SphereGeometry(radius, 16, 12),
+          raycast ? 0x7db8ff : 0xffce6f,
+          raycast ? 0.14 : 0.24,
           true,
         );
+        if (raycast) {
+          const aim = makeHelperMesh(
+            new THREE.SphereGeometry(component.aimRadius ?? 0.35, 12, 10),
+            0x7db8ff,
+            0.45,
+            true,
+          );
+          group.add(aim);
+        }
         const panel = makeHelperMesh(
           new THREE.BoxGeometry(1.2, 1.8, 0.08),
-          0xffce6f,
+          raycast ? 0x7db8ff : 0xffce6f,
           0.4,
         );
         panel.position.y = 0.9;
@@ -828,6 +839,49 @@ export function createEditorViewport(
         group.add(seat, back, eyeDot, standDot, reach);
         return group;
       }
+      case "bed": {
+        const group = new THREE.Group();
+        const bedColor = 0xb88cff;
+        const mattress = makeHelperMesh(
+          new THREE.BoxGeometry(0.9, 0.12, 2.0),
+          bedColor,
+          0.55,
+        );
+        mattress.position.y = 0.06;
+        const eye = component.eye ?? { x: 0, y: 0.3, z: 0.15 };
+        const eyeDot = makeHelperMesh(
+          new THREE.SphereGeometry(0.08, 10, 8),
+          0xffffff,
+          0.85,
+        );
+        eyeDot.position.set(eye.x, eye.y, eye.z);
+        const stand = component.stand ?? { x: -0.9, z: 0 };
+        const standDot = makeHelperMesh(
+          new THREE.SphereGeometry(0.1, 10, 8),
+          0xffce6f,
+          0.7,
+        );
+        standDot.position.set(stand.x, 0.05, stand.z);
+        const radius = component.radius ?? 1.6;
+        const raycast = (component.trigger ?? "radial") === "raycast";
+        const reach = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 16, 12),
+          raycast ? 0x7db8ff : bedColor,
+          raycast ? 0.14 : 0.12,
+          true,
+        );
+        if (raycast) {
+          const aim = makeHelperMesh(
+            new THREE.SphereGeometry(component.aimRadius ?? 0.35, 12, 10),
+            0x7db8ff,
+            0.45,
+            true,
+          );
+          group.add(aim);
+        }
+        group.add(mattress, eyeDot, standDot, reach);
+        return group;
+      }
       case "ramp-interact": {
         const color = component.placement === "outside" ? 0xff9d5c : 0xffce6f;
         const radius =
@@ -841,6 +895,42 @@ export function createEditorViewport(
       }
       case "ramp-mount": {
         return makeZoneBoxHelper(component.min, component.max, 0.4, 0xff9d5c);
+      }
+      case "cockpit-control": {
+        const group = new THREE.Group();
+        const color =
+          component.action === "landing-gear" ? 0x7dffa8 : 0xffce6f;
+        const radius = component.gazeRadius ?? 0.2;
+        const sphere = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 12, 10),
+          color,
+          0.35,
+          true,
+        );
+        const core = makeHelperMesh(
+          new THREE.SphereGeometry(0.06, 10, 8),
+          color,
+          0.9,
+        );
+        group.add(sphere, core);
+        return group;
+      }
+      case "cockpit-stat": {
+        const group = new THREE.Group();
+        const color = 0x6fc8ff;
+        const sphere = makeHelperMesh(
+          new THREE.SphereGeometry(0.18, 12, 10),
+          color,
+          0.3,
+          true,
+        );
+        const core = makeHelperMesh(
+          new THREE.BoxGeometry(0.22, 0.1, 0.04),
+          color,
+          0.85,
+        );
+        group.add(sphere, core);
+        return group;
       }
       case "ship-stats":
       case "ship-gear":
@@ -1134,10 +1224,7 @@ export function createEditorViewport(
     axis: "x" | "y" | "z" = "x",
     under?: string,
   ): void {
-    const scope = under ? entityRoot.getObjectByName(under) : entityRoot;
-    if (!scope) return;
-    const object =
-      under && scope.name === name ? scope : scope.getObjectByName(name);
+    const object = findArticulationNode(name, under);
     if (!object) return;
     const base = baseOf(object);
     previewQuat.setFromAxisAngle(PREVIEW_AXES[axis], radians);
@@ -1148,12 +1235,42 @@ export function createEditorViewport(
     name: string,
     offset: number,
     axis: "x" | "y" | "z",
+    under?: string,
   ): void {
-    const object = entityRoot.getObjectByName(name);
+    const object = findArticulationNode(name, under);
     if (!object) return;
     const base = baseOf(object);
     previewAxis.copy(PREVIEW_AXES[axis]).multiplyScalar(offset);
     object.position.copy(base.position).add(previewAxis);
+  }
+
+  /** Resolve a GLB node for gear/ramp/door preview; `under` disambiguates duplicates. */
+  function findArticulationNode(
+    name: string,
+    under?: string,
+  ): THREE.Object3D | null {
+    const safeName = sanitizeNodeName(name);
+    const scope = under
+      ? entityRoot.getObjectByName(sanitizeNodeName(under))
+      : entityRoot;
+    if (!scope) {
+      console.warn(
+        `Editor ship preview: ancestor "${under}" not found for node "${name}".`,
+      );
+      return null;
+    }
+    const object =
+      under && sanitizeNodeName(scope.name) === safeName
+        ? scope
+        : scope.getObjectByName(safeName);
+    if (!object) {
+      console.warn(
+        under
+          ? `Editor ship preview: node "${name}" not found under "${under}".`
+          : `Editor ship preview: node "${name}" not found.`,
+      );
+    }
+    return object;
   }
 
   function findShipController(): Extract<
@@ -1180,38 +1297,62 @@ export function createEditorViewport(
     id: string;
     motion: "slide" | "hinge";
     axis: "x" | "y" | "z";
-    nodes: { name: string; delta: number }[];
+    nodes: { name: string; delta: number; under?: string }[];
     defaultOpen?: boolean;
   }> {
+    const byId = new Map<
+      string,
+      {
+        id: string;
+        motion: "slide" | "hinge";
+        axis: "x" | "y" | "z";
+        nodes: { name: string; delta: number; under?: string }[];
+        defaultOpen?: boolean;
+      }
+    >();
+
+    // Legacy: doors still authored on ship-controller.
     const controller = findShipController();
-    if (controller) {
-      return (controller.doors ?? []).map((door) => ({
+    for (const door of controller?.doors ?? []) {
+      byId.set(door.id, {
         id: door.id,
         motion: door.motion,
         axis: door.axis,
-        nodes: door.nodes,
+        nodes: door.nodes.map((node) => ({
+          name: node.name,
+          delta: node.delta,
+          ...(node.under ? { under: node.under } : {}),
+        })),
         defaultOpen: door.defaultOpen,
-      }));
+      });
     }
-    const list: Extract<PrefabComponent, { type: "ship-door" | "animation" }>[] = [];
+
+    // Primary: ship-door / animation markers (win on id conflict).
     const visit = (entities: EditorEntity[]): void => {
       for (const entity of entities) {
         for (const component of entity.components) {
           if (component.type === "ship-door" || component.type === "animation") {
-            list.push(component);
+            byId.set(component.id, {
+              id: component.id,
+              motion: component.motion,
+              axis: component.axis,
+              nodes: component.nodes.map((node) => ({
+                name: node.name,
+                delta: node.delta,
+                ...("under" in node && node.under
+                  ? { under: node.under }
+                  : {}),
+              })),
+              defaultOpen: component.defaultOpen,
+            });
           }
         }
         visit(entity.children);
       }
     };
     visit(store.getState().roots);
-    return list.map((anim) => ({
-      id: anim.id,
-      motion: anim.motion,
-      axis: anim.axis,
-      nodes: anim.nodes,
-      defaultOpen: anim.defaultOpen,
-    }));
+
+    return [...byId.values()];
   }
 
   function applyShipPreview(): void {
@@ -1251,8 +1392,8 @@ export function createEditorViewport(
       const open01 = open ? 1 : 0;
       for (const node of anim.nodes) {
         if (anim.motion === "slide")
-          previewSlide(node.name, node.delta * open01, anim.axis);
-        else previewHinge(node.name, node.delta * open01, anim.axis);
+          previewSlide(node.name, node.delta * open01, anim.axis, node.under);
+        else previewHinge(node.name, node.delta * open01, anim.axis, node.under);
       }
     }
   }

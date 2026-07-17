@@ -29,7 +29,7 @@ export interface ShipDoorBinding {
   id: string;
   motion: 'slide' | 'hinge';
   axis: 'x' | 'y' | 'z';
-  nodes: { name: string; delta: number }[];
+  nodes: { name: string; delta: number; under?: string }[];
 }
 
 export interface ShipModelOptions {
@@ -93,8 +93,8 @@ export const DEFAULT_SHIP_DOOR_BINDINGS: ShipDoorBinding[] = [
     motion: 'slide',
     axis: 'x',
     nodes: [
-      { name: 'CockpitDoor_L', delta: -1 },
-      { name: 'CockpitDoor_R', delta: 1 },
+      { name: 'CockpitDoor_L', delta: 1 },
+      { name: 'CockpitDoor_R', delta: -1 },
     ],
   },
 ];
@@ -220,7 +220,7 @@ export function createShipModel(
       binding,
       nodes: binding.nodes
         .map((node) => {
-          const captured = captureNode(sceneRoot, node.name);
+          const captured = captureNode(sceneRoot, node.name, node.under);
           return captured ? { ...captured, delta: node.delta } : null;
         })
         .filter((node): node is BoundDoorNode => node !== null),

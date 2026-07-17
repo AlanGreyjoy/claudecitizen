@@ -55,8 +55,9 @@ Hierarchy uses `entityTargetsGlbNode` / `entityBoundToAnyGlbNode` from `glb_bind
 | Task | Files |
 |------|-------|
 | New component type | `schema.ts`, `component_registry.ts`, `inspector.ts` |
+| Ship flight stats on ship-controller | `schema.ts`, `inspector.ts`, `ship_runtime.ts` — tune via `.cursor/skills/ship-flight/SKILL.md` |
 | Add-component / context menus | `component_actions.ts`, `hierarchy.ts`, `viewport.ts` |
 | Node overrides | `document.ts`, `serialize.ts`, `viewport.ts`, `prefab_renderer.ts` |
 | GLB binding bugs | `glb_binding.ts`, console + `node scripts/inspect_glb.mjs` |
 
-Deeper workflows: `.cursor/skills/prefab-editor/SKILL.md`. Runtime door/animation wiring: `AGENTS.md`.
+Deeper workflows: `.cursor/skills/prefab-editor/SKILL.md`. Ship flight feel: `.cursor/skills/ship-flight/SKILL.md`. Runtime door/animation wiring: `AGENTS.md`.

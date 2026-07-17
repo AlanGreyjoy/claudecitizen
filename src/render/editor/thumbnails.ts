@@ -1,14 +1,21 @@
 import * as THREE from 'three';
-import { loadPrefabModel } from '../prefabs/prefab_renderer';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 /**
- * Lazy model thumbnails for the asset browser: one shared offscreen renderer,
- * one model rendered at a time, results cached per url for the session.
+ * Lazy model thumbnails for the asset browser / inventory icons.
+ * One shared offscreen renderer, one model at a time, ephemeral GLB loads
+ * (never touches the prefab modelCache), LRU-cached data-URLs.
  */
 
 const THUMB_SIZE = 96;
+const MAX_CACHED_THUMBS = 96;
+const CLEAR_COLOR = 0x12161c;
 
-const cache = new Map<string, Promise<string>>();
+const gltfLoader = new GLTFLoader();
+/** Resolved thumbnail data-URLs (insertion order = LRU). */
+const resolved = new Map<string, string>();
+/** In-flight renders keyed by url. */
+const inflight = new Map<string, Promise<string>>();
 
 let shared: {
   renderer: THREE.WebGLRenderer;
@@ -17,13 +24,21 @@ let shared: {
   stage: THREE.Group;
 } | null = null;
 
+let queue: Promise<unknown> = Promise.resolve();
+
 function ensureShared() {
   if (shared) return shared;
   const canvas = document.createElement('canvas');
   canvas.width = THUMB_SIZE;
   canvas.height = THUMB_SIZE;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: false,
+    preserveDrawingBuffer: true,
+  });
   renderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
+  renderer.setClearColor(CLEAR_COLOR, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
@@ -40,11 +55,46 @@ function ensureShared() {
   return shared;
 }
 
-let queue: Promise<unknown> = Promise.resolve();
+function disposeObjectTree(root: THREE.Object3D): void {
+  const textures = new Set<THREE.Texture>();
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    object.geometry?.dispose();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!material) continue;
+      for (const value of Object.values(material)) {
+        if (value instanceof THREE.Texture) textures.add(value);
+      }
+      material.dispose();
+    }
+  });
+  for (const texture of textures) texture.dispose();
+}
+
+function encodeThumbnail(canvas: HTMLCanvasElement): string {
+  try {
+    return canvas.toDataURL('image/webp', 0.82);
+  } catch {
+    return canvas.toDataURL('image/jpeg', 0.85);
+  }
+}
+
+function rememberResolved(url: string, dataUrl: string): void {
+  if (!dataUrl) return;
+  if (resolved.has(url)) resolved.delete(url);
+  resolved.set(url, dataUrl);
+  while (resolved.size > MAX_CACHED_THUMBS) {
+    const oldest = resolved.keys().next().value;
+    if (oldest === undefined) break;
+    resolved.delete(oldest);
+  }
+}
 
 async function renderThumbnail(url: string): Promise<string> {
   const { renderer, scene, camera, stage } = ensureShared();
-  const model = await loadPrefabModel(url);
+  const gltf = await gltfLoader.loadAsync(url);
+  const model = gltf.scene;
   stage.add(model);
   try {
     const box = new THREE.Box3().setFromObject(model);
@@ -59,24 +109,40 @@ async function renderThumbnail(url: string): Promise<string> {
     camera.far = radius * 20;
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
-    return renderer.domElement.toDataURL('image/png');
+    return encodeThumbnail(renderer.domElement);
   } finally {
     stage.remove(model);
+    disposeObjectTree(model);
   }
 }
 
-/** Returns a data-url thumbnail for a GLB/GLTF asset (serialized, cached). */
+/** Returns a data-url thumbnail for a GLB/GLTF asset (serialized, LRU-cached). */
 export function getModelThumbnail(url: string): Promise<string> {
-  let pending = cache.get(url);
+  const cached = resolved.get(url);
+  if (cached !== undefined) {
+    resolved.delete(url);
+    resolved.set(url, cached);
+    return Promise.resolve(cached);
+  }
+
+  let pending = inflight.get(url);
   if (!pending) {
-    pending = queue.then(() =>
-      renderThumbnail(url).catch((error) => {
+    pending = queue
+      .then(() => renderThumbnail(url))
+      .catch((error) => {
         console.warn(`Thumbnail failed for ${url}`, error);
         return '';
-      }),
+      })
+      .then((dataUrl) => {
+        inflight.delete(url);
+        rememberResolved(url, dataUrl);
+        return dataUrl;
+      });
+    inflight.set(url, pending);
+    queue = pending.then(
+      () => undefined,
+      () => undefined,
     );
-    queue = pending;
-    cache.set(url, pending);
   }
   return pending;
 }

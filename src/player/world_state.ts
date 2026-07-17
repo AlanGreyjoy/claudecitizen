@@ -33,7 +33,7 @@ import {
   type QuantumTravelState,
 } from '../flight/quantum_travel';
 
-export type TransitionType = 'sit' | 'stand';
+export type TransitionType = 'sit' | 'stand' | 'lie' | 'get-up';
 
 export interface WorldTransition {
   duration: number;
@@ -63,6 +63,8 @@ export interface WorldState {
   prompt: string;
   /** Id of the ship the player is piloting / boarding. */
   activeShipId: string;
+  /** Active bunk id while entering / in / leaving bed. */
+  activeBedId: string | null;
   transition: WorldTransition | null;
   /** Hangar the ship was delivered to via the lobby terminal, if called. */
   assignedHangar: number | null;
@@ -121,6 +123,7 @@ export function createWorldState(planet: Planet, seed: number): WorldState {
     mode: MODE_IN_STATION,
     prompt: '',
     activeShipId: instance.id,
+    activeBedId: null,
     transition: null,
     assignedHangar: null,
     stationElevator: null,

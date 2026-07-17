@@ -173,7 +173,7 @@ export function createSpikeRenderer(
     const dt = Math.max(0.0001, Math.min(nowSeconds - lastTime, 0.1));
     lastTime = nowSeconds;
 
-    const focusBody = mode === 'in-ship' || !character ? ship : character;
+    const focusBody = mode === 'in-ship' || mode === 'in-bed' || !character ? ship : character;
     const volumetricEnabled = true;
     const surface = sampleRenderablePlanetSurface(planet, seed, focusBody.position);
     const up = radialUp(focusBody.position);

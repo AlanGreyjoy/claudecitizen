@@ -17,16 +17,19 @@ import {
   WALK_SPEED_METERS_PER_SECOND,
 } from "../player/character_controller";
 import {
+  bedInteractPrompt,
   createDeckCharacterState,
   DECK_FLOOR_OFFSET_METERS,
   getDefaultDeckSpawnLocal,
   getDeckSpawnFloorHint,
   getShipWalkZones,
   isOnShipRampDeck,
+  nearestBed,
   nearestDoor,
   nearestSeat,
   nearRampPanel,
   ladderInteractPrompt,
+  resolveDoorInteractAim,
   resolveLadderInteraction,
   seatInteractPrompt,
   traverseLadder,
@@ -48,16 +51,20 @@ import {
 } from "../physics/ship_physics";
 import {
   createTransitionPose,
+  getBedAnchor,
+  getBedEyeLocal,
+  getBedSpec,
   getPilotSeatAnchor,
   getRampDismountGroundLocal,
   getShipRight,
+  isShipParked,
   localOffsetToWorld,
   nearShipRampOutside,
   sampleRampBoarding,
   sampleRampMount,
   worldToShipLocal,
 } from "../player/ship_interaction";
-import { getLeavePilotStandPose } from "../player/ship_deck";
+import { getDeckWorldPose, getLeavePilotStandPose } from "../player/ship_deck";
 import {
   createShipRigState,
   doorBlends,
@@ -76,6 +83,7 @@ import {
   add,
   cross,
   dot,
+  length,
   normalize,
   rotateAroundAxis,
   scale,
@@ -83,12 +91,54 @@ import {
 } from "../math/vec3";
 import type { CharacterState, FlightBody, Pose, Vec3 } from "../types";
 import { createSoundSceneController } from "../audio/sound_scene";
+import { createLoopingSfxController, playSfx } from "../audio/sfx";
+import {
+  flightOptionsFromSpec,
+  integrateSandboxFlightBody,
+} from "../flight/flight_body";
+import {
+  recenterAimAsNoseTracks,
+  resolveAimForward,
+  resolveDeckCameraOrbit,
+  resolveSeatLookForward,
+} from "../flight/flight_aim";
+import {
+  createFlightReticle,
+  projectDirectionToReticleOffset,
+} from "../render/effects/hud/flight_reticle";
+import { createCockpitGazeHud } from "../render/effects/hud/cockpit_gaze_hud";
+import { createCockpitSpeedHud } from "../render/effects/hud/cockpit_speed_hud";
+import { createGameMenu } from "../render/effects/hud/game_menu";
+import {
+  applyCockpitControlAction,
+  cockpitControlLabel,
+  projectWorldPointToScreenOffset,
+  resolveCockpitGazeTarget,
+} from "../player/cockpit_gaze";
+import { resolveVisibleCockpitSpeedInstruments } from "../player/cockpit_stats";
+import {
+  createFlightCameraFeelState,
+  updateFlightCameraFeel,
+} from "../player/flight_camera_feel";
+import { resolveBoostMaxSpeedMps } from "../flight/flight_config";
+import {
+  playCockpitControlToggleSfx,
+  playShipGearToggleSfx,
+  playShipRampToggleSfx,
+} from "../player/ship_articulation_sfx";
+import { createQuantumTravelState } from "../flight/quantum_travel";
+import {
+  GET_UP_FROM_BED_SECONDS,
+  LIE_TRANSITION_SECONDS,
+  MODE_IN_SHIP,
+  MODE_ON_FOOT,
+} from "../player/modes";
 
 /**
  * Dev-only ship sandbox (?shipPrefab=<id>): loads a ship prefab, applies its
- * gameplay layout, and drops the player on the deck of the parked ship on a
- * flat test pad — no planet, station, or flight. Everything that matters for
- * a ship prefab is testable here: walk zones, doors, ramp, pilot seat, rig.
+ * gameplay layout, and drops the player on the deck of the ship on a flat
+ * test pad. Pilot seat enables SC-style flight (mass/thrust + dual reticle)
+ * over the pad — no planet or station.
  */
 
 const PAD_RADIUS_METERS = 42;
@@ -101,7 +151,15 @@ const STAND_SECONDS = 1.0;
 const WORLD_UP: Vec3 = { x: 0, y: 1, z: 0 };
 const SHIP_FORWARD: Vec3 = { x: 0, y: 0, z: 1 };
 
-type SandboxMode = "deck" | "ground" | "pilot" | "sitting" | "standing";
+type SandboxMode =
+  | "deck"
+  | "ground"
+  | "pilot"
+  | "sitting"
+  | "standing"
+  | "lying"
+  | "in-bed"
+  | "getting-up";
 
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -130,7 +188,7 @@ function smoothstep01(value: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
-/** Y-up orbit camera basis for the flat sandbox frame. */
+/** Y-up orbit camera basis for the flat sandbox frame (on-foot / third-person). */
 function resolveSandboxOrbit(
   yawRadians: number,
   pitchRadians: number,
@@ -152,6 +210,23 @@ function resolveSandboxOrbit(
     right,
     up: WORLD_UP,
   };
+}
+
+/** Cockpit free-look relative to the ship frame (matches main-play). */
+function resolveShipSeatLook(
+  shipForward: Vec3,
+  shipUp: Vec3,
+  yawRadians: number,
+  pitchRadians: number,
+  pitchLimit: number,
+) {
+  return resolveSeatLookForward(
+    shipForward,
+    shipUp,
+    yawRadians,
+    pitchRadians,
+    pitchLimit,
+  );
 }
 
 function groundCharacterAt(position: Vec3, forward: Vec3): CharacterState {
@@ -176,7 +251,7 @@ function mountBanner(
   button.type = "button";
   button.textContent = `◂ Back to Editor (${prefabId})`;
   button.title =
-    "Return to the editor with this prefab loaded (press Esc first to unlock the mouse)";
+    "Return to the editor with this prefab loaded (Esc opens the menu and unlocks the mouse)";
   Object.assign(button.style, {
     position: "fixed",
     top: "18px",
@@ -246,10 +321,12 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     (prefabApplied || !doc) &&
     (getShipWalkZones().length > 0 || usesColliderDeck());
   const hint = walkable
-    ? "Ship sandbox — WASD walk · F interact · V camera · G gear · Esc unlock mouse"
+    ? "Ship sandbox — WASD walk · F interact · sit pilot to fly · G gear · Esc menu"
     : prefabApplied
       ? "Hull loaded — add a ship-controller with deck colliders (or ship-walk-zones) to walk the interior"
       : 'Ship prefab not applied (kind must be "ship") — showing the built-in ship';
+
+  const editorReturnUrl = `/?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
 
   // --- DOM --------------------------------------------------------------------
   document.getElementById("title-screen")?.classList.add("is-hidden");
@@ -268,6 +345,60 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   const canvas = requireElement<HTMLCanvasElement>("view");
   const fpsEl = requireElement<HTMLElement>("hud-fps-value");
   const interactPromptEl = requireElement<HTMLElement>("interact-prompt");
+  const flightReticleEl = requireElement<HTMLElement>("flight-reticle");
+  const flightReticle = createFlightReticle({ rootEl: flightReticleEl });
+  const cockpitGazeEl = requireElement<HTMLElement>("cockpit-gaze");
+  const cockpitGazeHud = createCockpitGazeHud({ rootEl: cockpitGazeEl });
+  const cockpitSpeedEl = requireElement<HTMLElement>("cockpit-speed");
+  const cockpitSpeedHud = createCockpitSpeedHud({ rootEl: cockpitSpeedEl });
+  const idleQuantum = createQuantumTravelState();
+
+  const gameMenuEl = requireElement<HTMLElement>("game-menu");
+  const gameMenuResumeBtn = requireElement<HTMLButtonElement>("game-menu-resume-btn");
+  const gameMenuExitBtn = requireElement<HTMLButtonElement>("game-menu-exit-btn");
+  const gameMenuMasterVolume = requireElement<HTMLInputElement>("game-menu-master-volume");
+  const gameMenuSfxVolume = requireElement<HTMLInputElement>("game-menu-sfx-volume");
+  const gameMenuMusicVolume = requireElement<HTMLInputElement>("game-menu-music-volume");
+  const gameMenuMasterValue = requireElement<HTMLElement>("game-menu-master-value");
+  const gameMenuSfxValue = requireElement<HTMLElement>("game-menu-sfx-value");
+  const gameMenuMusicValue = requireElement<HTMLElement>("game-menu-music-value");
+  const chatInputEl = requireElement<HTMLInputElement>("hud-chat-input");
+
+  const exitCopyEl = gameMenuEl.querySelector<HTMLElement>(".sc-game-menu-exit-copy");
+  const exitPanelTitleEl = gameMenuEl.querySelector<HTMLElement>(
+    '#game-menu-panel-exit .sc-game-menu-panel-title',
+  );
+  const exitNavBtn = gameMenuEl.querySelector<HTMLButtonElement>(
+    '[data-game-menu-tab="exit"]',
+  );
+  if (exitCopyEl) {
+    exitCopyEl.textContent =
+      "Leave ship preview and return to the prefab editor with this ship loaded.";
+  }
+  if (exitPanelTitleEl) exitPanelTitleEl.textContent = "Back to Editor";
+  if (exitNavBtn) exitNavBtn.textContent = "Back to Editor";
+  gameMenuExitBtn.textContent = "Back to Editor";
+
+  const gameMenu = createGameMenu(
+    {
+      rootEl: gameMenuEl,
+      resumeBtnEl: gameMenuResumeBtn,
+      exitBtnEl: gameMenuExitBtn,
+      chatInputEl,
+      masterVolumeEl: gameMenuMasterVolume,
+      sfxVolumeEl: gameMenuSfxVolume,
+      musicVolumeEl: gameMenuMusicVolume,
+      masterValueEl: gameMenuMasterValue,
+      sfxValueEl: gameMenuSfxValue,
+      musicValueEl: gameMenuMusicValue,
+    },
+    {
+      onExitGame: () => {
+        window.location.href = editorReturnUrl;
+      },
+    },
+  );
+  window.addEventListener("pagehide", () => gameMenu.dispose(), { once: true });
 
   // --- scene --------------------------------------------------------------------
   const renderQuality = resolveRenderQuality();
@@ -283,7 +414,17 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 2_000);
   camera.position.set(14, 8, 14);
+  camera.userData.baseFovDeg = 60;
   const cameraTarget = new THREE.Vector3();
+  const flightCameraFeelState = createFlightCameraFeelState();
+  let flightCameraFeelFrame: {
+    fovDeltaDeg: number;
+    thrust01: number;
+    boost01: number;
+    eyeShake: { right: number; up: number; forward: number };
+  } | null = null;
+  const boostSfx = createLoopingSfxController();
+  const thrustSfx = createLoopingSfxController();
 
   const composer = new EffectComposer(renderer, {
     frameBufferType: THREE.HalfFloatType,
@@ -377,6 +518,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   // --- world state ---------------------------------------------------------------
   const authoredRestHeight = layout.restHeightMeters;
   const ship: FlightBody = {
+    angularVelocity: vec3(0, 0, 0),
     forward: { ...SHIP_FORWARD },
     grounded: true,
     position: { x: 0, y: getShipRestHeightMeters(), z: 0 },
@@ -388,6 +530,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     shipModel.group.userData.disposeParticleSystems?.();
   window.addEventListener("pagehide", disposeSoundScene, { once: true });
   window.addEventListener("pagehide", disposeParticles, { once: true });
+  window.addEventListener("pagehide", () => {
+    boostSfx.stop();
+    thrustSfx.stop();
+  }, { once: true });
   // Without an authored rest height, rest the hull's lowest point on the pad
   // once the model has loaded and been measured.
   let autoRestPending = authoredRestHeight === null;
@@ -451,6 +597,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       )
     : groundCharacterAt({ x: 12, y: 0, z: -16 }, { x: -0.5, y: 0, z: 0.65 });
   let prompt = "";
+  let activeBedId: string | null = null;
   let transition: {
     start: Pose;
     end: Pose;
@@ -463,7 +610,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   // Gear preview toggle (visual only — the parked pose does not move).
   window.addEventListener("keydown", (event) => {
-    if (event.code === "KeyG") rig.gearDown = !rig.gearDown;
+    if (event.code === "KeyG") {
+      rig.gearDown = !rig.gearDown;
+      playShipGearToggleSfx(getShipLayout().spec, rig.gearDown);
+    }
   });
 
   // --- sim ------------------------------------------------------------------------
@@ -545,7 +695,36 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       return;
     }
 
-    const doorNearby = nearestDoor(deckLocal);
+    const cameraState = controls.sampleCameraState(0);
+    const doorAim = resolveDoorInteractAim(
+      ship,
+      result.state.position,
+      cameraState.yawRadians,
+      cameraState.pitchRadians,
+      cameraState.cameraView,
+      cameraState.zoomDistance,
+    );
+    const bedNearby = nearestBed(deckLocal, doorAim);
+    if (bedNearby) {
+      prompt = bedInteractPrompt(bedNearby);
+      if (actions.interactPressed) {
+        activeBedId = bedNearby.id;
+        transition = {
+          start: {
+            forward: character.forward,
+            position: character.position,
+            up: character.up,
+          },
+          end: getBedAnchor(ship, bedNearby.id),
+          elapsed: 0,
+          duration: LIE_TRANSITION_SECONDS,
+        };
+        mode = "lying";
+      }
+      return;
+    }
+
+    const doorNearby = nearestDoor(deckLocal, doorAim);
     if (doorNearby) {
       const door = getShipLayout().doors.find(
         (entry) => entry.id === doorNearby.doorId,
@@ -560,6 +739,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           !(doorRig.isOpen && standingInDoorway(door.id, deckLocal))
         ) {
           doorRig.isOpen = !doorRig.isOpen;
+          const sfx = doorRig.isOpen ? door.openSoundUrl : door.closeSoundUrl;
+          if (sfx) playSfx(sfx);
         }
         return;
       }
@@ -591,7 +772,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     );
     if (nearRampPanel(deckLocal) && !standingOnRamp) {
       prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
-      if (actions.interactPressed) rig.rampDown = !rig.rampDown;
+      if (actions.interactPressed) {
+        rig.rampDown = !rig.rampDown;
+        playShipRampToggleSfx(getShipLayout().spec, rig.rampDown);
+      }
     }
   }
 
@@ -750,7 +934,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
     if (nearShipRampOutside(character, ship)) {
       prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
-      if (actions.interactPressed) rig.rampDown = !rig.rampDown;
+      if (actions.interactPressed) {
+        rig.rampDown = !rig.rampDown;
+        playShipRampToggleSfx(getShipLayout().spec, rig.rampDown);
+      }
     }
   }
 
@@ -759,8 +946,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     transition.elapsed = Math.min(transition.duration, transition.elapsed + dt);
     const eased = smoothstep01(transition.elapsed / transition.duration);
     const pose = createTransitionPose(transition.start, transition.end, eased);
+    const entering = mode === "sitting" || mode === "lying";
     character = {
-      animation: mode === "sitting" ? "Sitting_Enter" : "Sitting_Exit",
+      animation: entering ? "Sitting_Enter" : "Sitting_Exit",
       forward: pose.forward,
       grounded: true,
       jumpPhase: "grounded",
@@ -772,9 +960,14 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     if (transition.elapsed < transition.duration) return;
     if (mode === "sitting") {
       mode = "pilot";
+    } else if (mode === "lying") {
+      mode = "in-bed";
     } else {
-      // Prefer leave-pilot stand pose location when available.
-      const leave = getLeavePilotStandPose(ship);
+      // Prefer leave-pilot / bed stand pose location when available.
+      const leave =
+        mode === "getting-up" && activeBedId
+          ? getDeckWorldPose(ship, getBedSpec(activeBedId)?.stand ?? { right: 0, forward: 0 })
+          : getLeavePilotStandPose(ship);
       const leaveLocal = worldToShipLocal(ship, leave.position);
       const resumeLocal = {
         right: leaveLocal.right,
@@ -799,14 +992,151 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           forward: resumeLocal.forward,
         });
       }
+      activeBedId = null;
       mode = "deck";
     }
     transition = null;
   }
 
-  function updatePilot(actions: { exitSeatPressed: boolean }): void {
-    prompt = "Hold F — look around · Hold Y — get up";
-    if (actions.exitSeatPressed) {
+  function updateInBed(
+    actions: { exitSeatPressed: boolean },
+  ): void {
+    prompt = "Look around · Hold Y — get up";
+    if (!actions.exitSeatPressed || !activeBedId) return;
+    const bed = getBedAnchor(ship, activeBedId);
+    const stand = getDeckWorldPose(
+      ship,
+      getBedSpec(activeBedId)?.stand ?? { right: 0, forward: 0 },
+    );
+    transition = {
+      start: bed,
+      end: stand,
+      elapsed: 0,
+      duration: GET_UP_FROM_BED_SECONDS,
+    };
+    mode = "getting-up";
+    character = {
+      animation: "Sitting_Exit",
+      forward: bed.forward,
+      grounded: true,
+      jumpPhase: "grounded",
+      jumpPhaseTime: 0,
+      position: bed.position,
+      up: bed.up,
+      velocity: vec3(0, 0, 0),
+    };
+  }
+
+  function updatePilot(
+    dt: number,
+    actions: {
+      exitSeatPressed: boolean;
+      coupledToggled?: boolean;
+      primaryClickPressed?: boolean;
+    },
+  ): void {
+    const flightInput = controls.sampleFlightInput();
+    const previousForward = ship.forward;
+    const aim = controls.getFlightAim();
+    const aimForward = resolveAimForward(ship, aim);
+    const restHeight = getShipRestHeightMeters();
+    const next = integrateSandboxFlightBody(
+      ship,
+      flightInput,
+      dt,
+      {
+        gravityMps2: SANDBOX_GRAVITY,
+        groundY: SANDBOX_GROUND_Y_METERS,
+        restHeightMeters: restHeight,
+        atmosphereHeightMeters: 80,
+      },
+      flightOptionsFromSpec(getShipLayout().spec, {
+        coupled: controls.isCoupledMode(),
+        aimForward,
+      }),
+    );
+    Object.assign(ship, next);
+    controls.setFlightAim(recenterAimAsNoseTracks(aim, ship, previousForward));
+
+    flightCameraFeelFrame = updateFlightCameraFeel(
+      flightCameraFeelState,
+      {
+        throttle01: flightInput.throttle01 ?? 0,
+        strafe01: flightInput.strafe01 ?? 0,
+        lift01: flightInput.lift01 ?? 0,
+        boost01: flightInput.boost01 ?? 0,
+      },
+      getShipLayout().spec,
+      dt,
+    );
+    const layout = getShipLayout();
+    boostSfx.setLevel(
+      layout.spec.boostSoundUrl,
+      flightCameraFeelFrame.boost01 * layout.spec.boostSoundVolume,
+    );
+    thrustSfx.setLevel(
+      layout.spec.thrustSoundUrl,
+      flightCameraFeelFrame.thrust01 * layout.spec.thrustSoundVolume,
+    );
+
+    const speed = length(ship.velocity);
+    const nearPad =
+      Boolean(ship.grounded) || ship.position.y <= restHeight + 6;
+    const parkedEnough = speed < 4;
+
+    if (controls.isSeatLookActive()) {
+      const eye = localOffsetToWorld(ship, layout.pilotEye);
+      const seat = controls.getSeatLook();
+      const view = resolveSeatLookForward(
+        ship.forward,
+        ship.up,
+        seat.yawRadians,
+        seat.pitchRadians,
+        FIRST_PERSON_PITCH_LIMIT,
+      );
+      const hit = resolveCockpitGazeTarget(
+        layout.cockpitControls,
+        ship,
+        eye,
+        view.forward,
+      );
+      if (actions.primaryClickPressed && hit) {
+        const applied = applyCockpitControlAction(hit.control.action, rig, {
+          allowRamp: isShipParked(ship) || nearPad,
+        });
+        if (applied) {
+          playCockpitControlToggleSfx(
+            hit.control.action,
+            rig,
+            getShipLayout().spec,
+          );
+        }
+      }
+    }
+
+    if (actions.coupledToggled) {
+      prompt = controls.isCoupledMode() ? "Coupled mode" : "Decoupled mode";
+    } else if (actions.exitSeatPressed) {
+      // Match main play: Hold Y always leaves the seat. Settle onto the pad
+      // when nearby so deck walk starts from a parked ship.
+      if (nearPad) {
+        ship.position = {
+          ...ship.position,
+          y: Math.max(ship.position.y, restHeight),
+        };
+        ship.velocity = vec3(0, 0, 0);
+        ship.angularVelocity = vec3(0, 0, 0);
+        // Park level with the pad — keep yaw, kill flight pitch/roll.
+        const flatForward = normalize({
+          x: ship.forward.x,
+          y: 0,
+          z: ship.forward.z,
+        });
+        ship.forward =
+          length(flatForward) > 1e-4 ? flatForward : { ...SHIP_FORWARD };
+        ship.up = { ...WORLD_UP };
+        ship.grounded = true;
+      }
       transition = {
         start: getPilotSeatAnchor(ship),
         end: getLeavePilotStandPose(ship),
@@ -814,51 +1144,274 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
         duration: STAND_SECONDS,
       };
       mode = "standing";
+      prompt = "";
+    } else {
+      prompt = parkedEnough
+        ? "Hold F — look around · V camera · Hold Y — get up · Alt+C coupled"
+        : "WASD thrust · mouse aim · Hold F look · V camera · Hold Y — get up · Alt+C";
     }
+
+    const seat = controls.getSeatLook();
+    const seatLooking = controls.isSeatLookActive();
+    const freeLooking =
+      seatLooking ||
+      Math.abs(seat.yawRadians) > 1e-6 ||
+      Math.abs(seat.pitchRadians) > 1e-6;
+    const view = freeLooking
+      ? resolveSeatLookForward(
+          ship.forward,
+          ship.up,
+          seat.yawRadians,
+          seat.pitchRadians,
+          FIRST_PERSON_PITCH_LIMIT,
+        )
+      : {
+          forward: ship.forward,
+          up: ship.up,
+          right: normalize(cross(ship.forward, ship.up)),
+        };
+    const aimDir = resolveAimForward(ship, controls.getFlightAim());
+    const fovY = (camera.fov * Math.PI) / 180;
+    const viewportH = window.innerHeight;
+    const aimOff = projectDirectionToReticleOffset(
+      aimDir,
+      view.forward,
+      view.right,
+      view.up,
+      fovY,
+      viewportH,
+    );
+    const noseOff = projectDirectionToReticleOffset(
+      ship.forward,
+      view.forward,
+      view.right,
+      view.up,
+      fovY,
+      viewportH,
+    );
+    flightReticle.update({
+      mode: MODE_IN_SHIP,
+      flightMode: "combat",
+      quantum: idleQuantum,
+      dual: {
+        aimOffsetPx: { x: aimOff.x, y: aimOff.y },
+        noseOffsetPx: { x: noseOff.x, y: noseOff.y },
+        coupled: controls.isCoupledMode(),
+      },
+    });
+
+    const eye = localOffsetToWorld(ship, layout.pilotEye);
+    const boost01 = flightCameraFeelFrame?.boost01 ?? 0;
+    const scmMax = layout.spec.maxSpeedMps;
+    const boostMax = resolveBoostMaxSpeedMps(scmMax);
+    const speedViews = resolveVisibleCockpitSpeedInstruments(
+      layout.cockpitStats,
+      ship,
+      eye,
+      view.forward,
+      view.right,
+      view.up,
+      fovY,
+      viewportH,
+    );
+    if (speedViews.length > 0) {
+      const speedMps = length(ship.velocity);
+      cockpitSpeedHud.update({
+        visible: true,
+        instruments: speedViews.map((viewStat) => ({
+          id: viewStat.id,
+          offsetPx: viewStat.offsetPx,
+          speedMps,
+          scmMaxMps: scmMax,
+          boostMaxMps: boostMax,
+          boosting: boost01 > 0.05,
+          boost01,
+          ...(viewStat.label ? { label: viewStat.label } : {}),
+        })),
+      });
+    } else {
+      cockpitSpeedHud.update({ visible: false });
+    }
+
+    if (seatLooking) {
+      const hit = resolveCockpitGazeTarget(
+        layout.cockpitControls,
+        ship,
+        eye,
+        view.forward,
+      );
+      if (hit) {
+        const offset = projectWorldPointToScreenOffset(
+          hit.worldPosition,
+          eye,
+          view.forward,
+          view.right,
+          view.up,
+          fovY,
+          viewportH,
+        );
+        if (!offset.behind) {
+          cockpitGazeHud.update({
+            visible: true,
+            label: cockpitControlLabel(
+              hit.control.action,
+              { gearDown: rig.gearDown, rampDown: rig.rampDown },
+              hit.control.label,
+            ),
+            offsetPx: { x: offset.x, y: offset.y },
+          });
+          return;
+        }
+      }
+    }
+    cockpitGazeHud.update({ visible: false });
   }
 
   // --- render loop -----------------------------------------------------------------
   function updateCamera(dt: number): void {
     const cameraState = controls.sampleCameraState(dt);
-    if (mode === "pilot") {
-      const eye = localOffsetToWorld(ship, getShipLayout().pilotEye);
+    if (mode === "in-bed") {
+      flightCameraFeelFrame = null;
+      camera.fov = camera.userData.baseFovDeg as number;
+      camera.updateProjectionMatrix();
+      const eyeLocal = getBedEyeLocal(activeBedId) ?? getShipLayout().pilotEye;
+      const eye = localOffsetToWorld(ship, eyeLocal);
       const seatLook = cameraState.seatLook;
-      const lookForward =
+      const lookingAround =
         seatLook &&
         (Math.abs(seatLook.yawRadians) > 1e-6 ||
-          Math.abs(seatLook.pitchRadians) > 1e-6)
-          ? resolveSandboxOrbit(
-              seatLook.yawRadians,
-              seatLook.pitchRadians,
-              FIRST_PERSON_PITCH_LIMIT,
-            ).forward
-          : ship.forward;
+          Math.abs(seatLook.pitchRadians) > 1e-6);
+      const look = lookingAround
+        ? resolveShipSeatLook(
+            ship.forward,
+            ship.up,
+            seatLook.yawRadians,
+            seatLook.pitchRadians,
+            FIRST_PERSON_PITCH_LIMIT,
+          )
+        : { forward: ship.forward, up: ship.up };
       camera.position.set(eye.x, eye.y, eye.z);
       cameraTarget.set(
-        eye.x + lookForward.x * 60,
-        eye.y + lookForward.y * 60,
-        eye.z + lookForward.z * 60,
+        eye.x + look.forward.x * 60,
+        eye.y + look.forward.y * 60,
+        eye.z + look.forward.z * 60,
       );
-      camera.up.set(0, 1, 0);
+      camera.up.set(look.up.x, look.up.y, look.up.z);
       camera.lookAt(cameraTarget);
+      camera.userData.smoothedPos = null;
+      camera.userData.smoothedTarget = null;
+      return;
+    }
+    if (mode === "pilot") {
+      if (cameraState.shipCameraView === "external") {
+        camera.fov = camera.userData.baseFovDeg as number;
+        camera.updateProjectionMatrix();
+        const zoom = cameraState.shipZoomDistance ?? 1;
+        const back = 28 * zoom;
+        const up = 8 * zoom;
+        const lookAhead = 40;
+        const desiredPos = new THREE.Vector3(
+          ship.position.x - ship.forward.x * back + ship.up.x * up,
+          ship.position.y - ship.forward.y * back + ship.up.y * up,
+          ship.position.z - ship.forward.z * back + ship.up.z * up,
+        );
+        const desiredTarget = new THREE.Vector3(
+          ship.position.x + ship.forward.x * lookAhead,
+          ship.position.y + ship.forward.y * lookAhead,
+          ship.position.z + ship.forward.z * lookAhead,
+        );
+        if (!camera.userData.smoothedPos) {
+          camera.userData.smoothedPos = new THREE.Vector3().copy(desiredPos);
+        }
+        if (!camera.userData.smoothedTarget) {
+          camera.userData.smoothedTarget = new THREE.Vector3().copy(desiredTarget);
+        }
+        smoothVector(camera.userData.smoothedPos, desiredPos, dt, 0.06);
+        smoothVector(camera.userData.smoothedTarget, desiredTarget, dt, 0.04);
+        camera.position.copy(camera.userData.smoothedPos);
+        cameraTarget.copy(camera.userData.smoothedTarget);
+        camera.up.set(ship.up.x, ship.up.y, ship.up.z);
+        camera.lookAt(cameraTarget);
+        return;
+      }
+
+      const eyeLocal = getShipLayout().pilotEye;
+      const shake = flightCameraFeelFrame?.eyeShake;
+      const eyeOffset = shake
+        ? {
+            right: eyeLocal.right + shake.right,
+            up: eyeLocal.up + shake.up,
+            forward: eyeLocal.forward + shake.forward,
+          }
+        : eyeLocal;
+      const eye = localOffsetToWorld(ship, eyeOffset);
+      const seatLook = cameraState.seatLook;
+      const lookingAround =
+        seatLook &&
+        (Math.abs(seatLook.yawRadians) > 1e-6 ||
+          Math.abs(seatLook.pitchRadians) > 1e-6);
+      const look = lookingAround
+        ? resolveShipSeatLook(
+            ship.forward,
+            ship.up,
+            seatLook.yawRadians,
+            seatLook.pitchRadians,
+            FIRST_PERSON_PITCH_LIMIT,
+          )
+        : { forward: ship.forward, up: ship.up };
+      camera.position.set(eye.x, eye.y, eye.z);
+      cameraTarget.set(
+        eye.x + look.forward.x * 60,
+        eye.y + look.forward.y * 60,
+        eye.z + look.forward.z * 60,
+      );
+      camera.up.set(look.up.x, look.up.y, look.up.z);
+      camera.lookAt(cameraTarget);
+      camera.fov =
+        (camera.userData.baseFovDeg as number) +
+        (flightCameraFeelFrame?.fovDeltaDeg ?? 0);
+      camera.updateProjectionMatrix();
 
       camera.userData.smoothedPos = null;
       camera.userData.smoothedTarget = null;
       return;
     }
 
+    flightCameraFeelFrame = null;
+    camera.fov = camera.userData.baseFovDeg as number;
+    camera.updateProjectionMatrix();
+
     const firstPerson =
       cameraState.cameraView === "first-person" &&
       mode !== "sitting" &&
-      mode !== "standing";
+      mode !== "standing" &&
+      mode !== "lying" &&
+      mode !== "getting-up";
     const pitchLimit = firstPerson
       ? FIRST_PERSON_PITCH_LIMIT
       : ORBIT_PITCH_LIMIT;
-    const orbit = resolveSandboxOrbit(
-      cameraState.yawRadians,
-      cameraState.pitchRadians,
-      pitchLimit,
-    );
+
+    // On the hull, orbit relative to ship frame so a pitched ship leans the camera too.
+    const onShip =
+      mode === "deck" ||
+      mode === "sitting" ||
+      mode === "standing" ||
+      mode === "lying" ||
+      mode === "getting-up";
+    const orbit = onShip
+      ? resolveDeckCameraOrbit(
+          ship.forward,
+          ship.up,
+          cameraState.yawRadians,
+          cameraState.pitchRadians,
+          pitchLimit,
+        )
+      : resolveSandboxOrbit(
+          cameraState.yawRadians,
+          cameraState.pitchRadians,
+          pitchLimit,
+        );
+    const orbitUp = onShip ? ship.up : WORLD_UP;
     const rigOffsets = firstPerson
       ? resolveFirstPersonCameraRig(orbit)
       : resolveCharacterCameraRig(orbit, cameraState.zoomDistance);
@@ -896,7 +1449,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       cameraTarget.copy(camera.userData.smoothedTarget);
     }
 
-    camera.up.set(0, 1, 0);
+    camera.up.set(orbitUp.x, orbitUp.y, orbitUp.z);
     camera.lookAt(cameraTarget);
   }
 
@@ -918,85 +1471,109 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   let fpsLastUpdate = 0;
 
   function frame(nowMs: number): void {
-    const dt = Math.min((nowMs - lastMs) / 1000, 1 / 30);
+    const paused = gameMenu.isPaused();
+    const dt = paused ? 0 : Math.min((nowMs - lastMs) / 1000, 1 / 30);
     lastMs = nowMs;
 
-    tryAutoRest();
-    controls.setMode(mode === "pilot" ? "in-ship" : "on-foot");
-    const actions = controls.consumeActions();
+    if (!paused) {
+      tryAutoRest();
+      controls.setMode(
+        mode === "pilot" ? "in-ship" : mode === "in-bed" ? "in-bed" : "on-foot",
+      );
+      const actions = controls.consumeActions();
 
-    if (mode === "deck") updateDeck(dt, actions);
-    else if (mode === "ground") updateGround(dt, actions);
-    else if (mode === "pilot") updatePilot(actions);
-    else updateTransitionMode(dt);
+      if (mode === "deck") updateDeck(dt, actions);
+      else if (mode === "ground") updateGround(dt, actions);
+      else if (mode === "pilot") updatePilot(dt, actions);
+      else if (mode === "in-bed") updateInBed(actions);
+      else updateTransitionMode(dt);
 
-    updateShipRig(rig, dt);
-    shipModel.setArticulation({
-      gear01: rig.gear01,
-      ramp01: rig.ramp01,
-      doors: doorBlends(rig),
-    });
-    updateShipPlacement(shipModel.group, ship, vec3(0, 0, 0), 1);
-    shipModel.group.userData.updateParticles?.(dt);
+      if (mode !== "pilot") {
+        boostSfx.stop();
+        thrustSfx.stop();
+        flightReticle.update({
+          mode: MODE_ON_FOOT,
+          flightMode: "traverse",
+          quantum: idleQuantum,
+        });
+        cockpitGazeHud.update({ visible: false });
+        cockpitSpeedHud.update({ visible: false });
+      }
 
-    const firstPersonActive =
-      mode !== "pilot" &&
-      mode !== "sitting" &&
-      mode !== "standing" &&
-      controls.sampleCameraState(0).cameraView === "first-person";
-    avatar.update(
-      mode === "pilot"
-        ? null
-        : {
-            animation: character.animation,
-            forward: character.forward,
-            position: character.position,
-            up: character.up,
-          },
-      vec3(0, 0, 0),
-      nowMs / 1000,
-      firstPersonActive,
-    );
-
-    updateCamera(dt);
-    camera.updateMatrixWorld();
-    if (mode === "ground") {
-      soundScene.setScene(null, []);
-    } else {
-      const local = worldToShipLocal(ship, {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z,
+      updateShipRig(rig, dt);
+      shipModel.setArticulation({
+        gear01: rig.gear01,
+        ramp01: rig.ramp01,
+        doors: doorBlends(rig),
       });
-      const matrix = camera.matrixWorld.elements;
-      const worldForward = { x: -matrix[8], y: -matrix[9], z: -matrix[10] };
-      const worldUp = { x: matrix[4], y: matrix[5], z: matrix[6] };
-      const shipRight = getShipRight(ship);
-      const shipForward = normalize(ship.forward);
-      const toSceneVector = (vector: Vec3): Vec3 => ({
-        x: -dot(vector, shipRight),
-        y: dot(vector, ship.up),
-        z: dot(vector, shipForward),
-      });
-      soundScene.setScene(`ship-preview:${prefabId}`, layout.sounds);
-      soundScene.update({
-        position: { x: -local.right, y: local.up, z: local.forward },
-        forward: toSceneVector(worldForward),
-        up: toSceneVector(worldUp),
-      });
+      updateShipPlacement(shipModel.group, ship, vec3(0, 0, 0), 1);
+      shipModel.group.userData.updateParticles?.(dt);
+
+      const firstPersonActive =
+        mode !== "pilot" &&
+        mode !== "in-bed" &&
+        mode !== "sitting" &&
+        mode !== "standing" &&
+        mode !== "lying" &&
+        mode !== "getting-up" &&
+        controls.sampleCameraState(0).cameraView === "first-person";
+      avatar.update(
+        mode === "pilot" || mode === "in-bed"
+          ? null
+          : {
+              animation: character.animation,
+              forward: character.forward,
+              position: character.position,
+              up: character.up,
+            },
+        vec3(0, 0, 0),
+        nowMs / 1000,
+        firstPersonActive,
+      );
+
+      updateCamera(dt);
+      camera.updateMatrixWorld();
+      if (mode === "ground") {
+        soundScene.setScene(null, []);
+      } else {
+        const local = worldToShipLocal(ship, {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z,
+        });
+        const matrix = camera.matrixWorld.elements;
+        const worldForward = { x: -matrix[8], y: -matrix[9], z: -matrix[10] };
+        const worldUp = { x: matrix[4], y: matrix[5], z: matrix[6] };
+        const shipRight = getShipRight(ship);
+        const shipForward = normalize(ship.forward);
+        const toSceneVector = (vector: Vec3): Vec3 => ({
+          x: -dot(vector, shipRight),
+          y: dot(vector, ship.up),
+          z: dot(vector, shipForward),
+        });
+        soundScene.setScene(`ship-preview:${prefabId}`, layout.sounds);
+        soundScene.update({
+          position: { x: -local.right, y: local.up, z: local.forward },
+          forward: toSceneVector(worldForward),
+          up: toSceneVector(worldUp),
+        });
+      }
     }
+
     composer.render(dt);
 
     interactPromptEl.textContent = prompt;
     interactPromptEl.classList.toggle("is-visible", prompt.length > 0);
 
-    fpsAccum += dt;
-    fpsFrames += 1;
-    if (nowMs - fpsLastUpdate > 500 && fpsAccum > 0) {
-      fpsEl.textContent = String(Math.round(fpsFrames / fpsAccum));
-      fpsAccum = 0;
-      fpsFrames = 0;
-      fpsLastUpdate = nowMs;
+    if (!paused) {
+      fpsAccum += dt;
+      fpsFrames += 1;
+      if (nowMs - fpsLastUpdate > 500 && fpsAccum > 0) {
+        fpsEl.textContent = String(Math.round(fpsFrames / fpsAccum));
+        fpsAccum = 0;
+        fpsFrames = 0;
+        fpsLastUpdate = nowMs;
+      }
     }
 
     requestAnimationFrame(frame);

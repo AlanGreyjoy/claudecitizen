@@ -1,0 +1,38 @@
+---
+description: Ship flight IFCS — mass/thrust/torque, dual-reticle aim, coupled mode, preview flight. Use when tuning or changing ship flight.
+globs: src/flight/**,src/app/ship_play_session.ts,src/app/player_controls.ts,src/app/game_loop.ts,src/player/ship_layout.ts,src/render/effects/hud/flight_reticle.ts,src/world/prefabs/ship_runtime.ts,src/world/prefabs/data/*.prefab.json
+alwaysApply: false
+---
+
+# Ship Flight
+
+SC-style IFCS: mouse aim + nose lag, mass-scaled thrust/torque. **Flight is not Rapier** — Rapier is deck/station walking only.
+
+## Before changing feel
+
+1. Read `.cursor/skills/ship-flight/SKILL.md` (presets, symptom → fix, workflow).
+2. Read AGENTS.md section **Ship flight (SC-style IFCS)**.
+
+## Ownership
+
+| Layer | Where |
+| --- | --- |
+| Per-ship stats | `ship-controller` on hull → `ShipSpec` via `ship_runtime.ts` |
+| Global IFCS / damping | `src/flight/flight_config.ts` (all ships) |
+| Integrate | `flight_body.ts` (+ sandbox flat env) |
+| Aim / PD IFCS | `flight_aim.ts` + `player_controls.ts` |
+| Main play | `game_loop.ts` `MODE_IN_SHIP` |
+| Preview | `ship_play_session.ts` pilot mode |
+| HUD | `flight_reticle.ts` (aim + nose pips); `cockpit_gaze_hud.ts` (Hold F look-at labels); `cockpit_speed_hud.ts` (cockpit-stat speed) |
+| Cockpit controls | `cockpit-control` markers → `ShipLayout.cockpitControls` → `cockpit_gaze.ts` |
+| Cockpit instruments | `cockpit-stat` markers → `ShipLayout.cockpitStats` → `cockpit_stats.ts` + speed HUD |
+
+## Rules of thumb
+
+- Balance **one hull** via inspector mass/thrust/torque — do not edit `FLIGHT_CONFIG` unless every ship is wrong.
+- Pitch bounce → ↑ `AIM_IFCS_DAMPING` or ↓ pitch torque / max angular rate (see skill).
+- **No airborne gravity** (Star Wars hover) and **no auto-level** — roll/pitch stick; do not reintroduce without an explicit design change.
+- `world/` / `flight/` must not import `three` or DOM.
+- Keep flight math out of `render/` and out of Rapier.
+
+Deeper tuning: `.cursor/skills/ship-flight/SKILL.md`. Prefab authoring: `.cursor/skills/prefab-editor/SKILL.md`.

@@ -18,6 +18,10 @@ import { parsePrefabDocument, slugifyPrefabName } from '../world/prefabs/schema'
 import { createEditorViewport } from '../render/editor/viewport';
 import { createCharacterAnimationPreviewer } from '../render/editor/character_previewer';
 import { getModelThumbnail } from '../render/editor/thumbnails';
+import {
+  createBaseCharacterEquipmentEditor,
+  type BaseCharacterEquipmentEditor,
+} from '../render/editor/base_character_equipment_editor';
 import type { Vec3 } from '../types';
 import { createEditorAudioPreviewController } from './audio_preview';
 import { getComponentDef } from '../world/prefabs/component_registry';
@@ -25,11 +29,20 @@ import { getComponentDef } from '../world/prefabs/component_registry';
 const AUDIO_EXTENSIONS = /\.(ogg|mp3|wav|m4a)(?:[?#].*)?$/i;
 
 let started = false;
-type SceneEditorTab = 'scene' | 'character-preview' | 'material-manager';
+type SceneEditorTab = 'scene' | 'character-preview' | 'material-manager' | 'base-characters';
 
 function entityNameFromUrl(url: string): string {
   const fileName = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
   return fileName.replace(/\.(glb|gltf|ogg|mp3|wav|m4a)(?:[?#].*)?$/i, '') || 'Asset';
+}
+
+function itemNameFromUrl(url: string): string {
+  return entityNameFromUrl(url)
+    .replace(/^sm_(?:wep_|chr_attach_)?/i, '')
+    .replace(/^(?:sk|chr|prop|wep|weapon)[_-]+/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .trim() || 'Item';
 }
 
 export function startEditorSession(): void {
@@ -47,7 +60,7 @@ export function startEditorSession(): void {
   // --- layout ---------------------------------------------------------------
   const toolbarEl = el('div', { className: 'ed-toolbar' });
   const viewportToolbarEl = el('div', { className: 'ed-viewport-toolbar' });
-  const hierarchyEl = el('div', { className: 'ed-panel' });
+  const hierarchyEl = el('div', { className: 'ed-panel ed-hierarchy-panel' });
   const sceneTabSceneBtn = el('button', {
     className: 'ed-scene-tab is-active',
     text: 'Scene',
@@ -63,6 +76,11 @@ export function startEditorSession(): void {
     text: 'Material Manager',
     on: { click: () => setSceneEditorTab('material-manager') },
   });
+  const sceneTabBaseCharactersBtn = el('button', {
+    className: 'ed-scene-tab',
+    text: 'Base Characters',
+    on: { click: () => setSceneEditorTab('base-characters') },
+  });
   const viewportEl = el('div', { className: 'ed-viewport' }, [
     viewportToolbarEl,
     el('div', {
@@ -72,22 +90,25 @@ export function startEditorSession(): void {
   ]);
   const characterPreviewEl = el('div', { className: 'ed-scene-panel ed-character-preview is-hidden' });
   const materialManagerEl = el('div', { className: 'ed-scene-panel ed-material-manager is-hidden' });
+  const baseCharactersEl = el('div', { className: 'ed-scene-panel ed-base-characters is-hidden' });
   const sceneShellEl = el('div', { className: 'ed-scene-shell' }, [
     el('div', { className: 'ed-scene-tabs' }, [
       sceneTabSceneBtn,
       sceneTabPreviewBtn,
       sceneTabMaterialBtn,
+      sceneTabBaseCharactersBtn,
     ]),
     el('div', { className: 'ed-scene-body' }, [
       viewportEl,
       characterPreviewEl,
       materialManagerEl,
+      baseCharactersEl,
     ]),
   ]);
-  const inspectorEl = el('div', { className: 'ed-panel' });
-  const hierarchySplitter = el('div', { className: 'ed-splitter ed-splitter-col' });
-  const inspectorSplitter = el('div', { className: 'ed-splitter ed-splitter-col' });
-  const projectSplitter = el('div', { className: 'ed-splitter ed-splitter-row' });
+  const inspectorEl = el('div', { className: 'ed-panel ed-inspector-panel' });
+  const hierarchySplitter = el('div', { className: 'ed-splitter ed-splitter-col ed-hierarchy-splitter' });
+  const inspectorSplitter = el('div', { className: 'ed-splitter ed-splitter-col ed-inspector-splitter' });
+  const projectSplitter = el('div', { className: 'ed-splitter ed-splitter-row ed-project-splitter' });
   const mainEl = el('div', { className: 'ed-main' }, [
     hierarchyEl,
     hierarchySplitter,
@@ -118,10 +139,15 @@ export function startEditorSession(): void {
   const store = createEditorStore();
   const audioPreview = createEditorAudioPreviewController();
   const characterPreviewer = createCharacterAnimationPreviewer(characterPreviewEl);
+  let baseCharacterEditor: BaseCharacterEquipmentEditor | null = null;
   let sceneEditorTab: SceneEditorTab = 'scene';
 
   function setSceneEditorTab(tab: SceneEditorTab): void {
+    if (sceneEditorTab === 'base-characters' && tab !== sceneEditorTab && !baseCharacterEditor?.canLeave()) {
+      return;
+    }
     sceneEditorTab = tab;
+    root.classList.toggle('is-base-characters', sceneEditorTab === 'base-characters');
     sceneTabSceneBtn.classList.toggle('is-active', sceneEditorTab === 'scene');
     sceneTabPreviewBtn.classList.toggle(
       'is-active',
@@ -131,6 +157,7 @@ export function startEditorSession(): void {
       'is-active',
       sceneEditorTab === 'material-manager',
     );
+    sceneTabBaseCharactersBtn.classList.toggle('is-active', sceneEditorTab === 'base-characters');
     viewportEl.classList.toggle('is-hidden', sceneEditorTab !== 'scene');
     characterPreviewEl.classList.toggle(
       'is-hidden',
@@ -140,6 +167,13 @@ export function startEditorSession(): void {
       'is-hidden',
       sceneEditorTab !== 'material-manager',
     );
+    baseCharactersEl.classList.toggle('is-hidden', sceneEditorTab !== 'base-characters');
+    if (sceneEditorTab === 'base-characters') {
+      baseCharacterEditor ??= createBaseCharacterEquipmentEditor(baseCharactersEl);
+      baseCharacterEditor.activate();
+    } else {
+      baseCharacterEditor?.deactivate();
+    }
   }
 
   const viewport = createEditorViewport(viewportEl, store, {
@@ -380,6 +414,19 @@ export function startEditorSession(): void {
     store.newDocument();
   }
 
+  async function createItemPrefab(url: string): Promise<void> {
+    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and create an item prefab?'))) {
+      return;
+    }
+    audioPreview.stop();
+    const name = itemNameFromUrl(url);
+    store.newDocument();
+    store.setPrefabMeta({ kind: 'item', prefabName: name, prefabId: slugifyPrefabName(name) });
+    addAssetEntity(url, { x: 0, y: 0, z: 0 });
+    setSceneEditorTab('scene');
+    showToast(`Created item prefab "${name}". Add sockets if this is a backpack, then save.`);
+  }
+
   async function previewInPlay(): Promise<void> {
     const kind = store.getState().kind;
     if (kind !== 'station' && kind !== 'ship') {
@@ -436,6 +483,7 @@ export function startEditorSession(): void {
       viewport.setGlbNodeLocalTransform(entityId, nodeUuid, transform),
     getGlbNodeBounds: (entityId, nodeUuid) =>
       viewport.getGlbNodeBounds(entityId, nodeUuid),
+    onToggleShipDoorPreview: (doorId) => toolbar.toggleDoorPreview(doorId),
   });
   createMaterialManagerPanel(materialManagerEl, store);
   createProjectPanel(projectEl, {
@@ -449,6 +497,7 @@ export function startEditorSession(): void {
       setSceneEditorTab('character-preview');
       await characterPreviewer.loadCharacter(url);
     },
+    onCreateItemPrefab: createItemPrefab,
   });
   void refreshPrefabList();
 
@@ -468,6 +517,10 @@ export function startEditorSession(): void {
   }
 
   function setGizmoMode(mode: ToolbarGizmoMode): void {
+    if (sceneEditorTab === 'base-characters') {
+      baseCharacterEditor?.setGizmoMode(mode);
+      return;
+    }
     viewport.setGizmoMode(mode);
     toolbar.setGizmoMode(mode);
   }
@@ -480,7 +533,8 @@ export function startEditorSession(): void {
       const key = event.key.toLowerCase();
       if (key === 's') {
         event.preventDefault();
-        void saveCurrent();
+        if (sceneEditorTab === 'base-characters') void baseCharacterEditor?.save();
+        else void saveCurrent();
       } else if (key === 'd') {
         event.preventDefault();
         duplicateSelection();
@@ -520,7 +574,7 @@ export function startEditorSession(): void {
   });
 
   window.addEventListener('beforeunload', (event) => {
-    if (allowUnload || !store.isDirty()) return;
+    if (allowUnload || (!store.isDirty() && !baseCharacterEditor?.isDirty())) return;
     event.preventDefault();
   });
 }

@@ -1,7 +1,30 @@
 import {
+  flightOptionsFromSpec,
   integrateFlightBody,
   integrateHoveringShip,
 } from "../flight/flight_body";
+import {
+  recenterAimAsNoseTracks,
+  resolveAimForward,
+  resolveSeatLookForward,
+} from "../flight/flight_aim";
+import { projectDirectionToReticleOffset } from "../render/effects/hud/flight_reticle";
+import {
+  applyCockpitControlAction,
+  cockpitControlLabel,
+  projectWorldPointToScreenOffset,
+  resolveCockpitGazeTarget,
+} from "../player/cockpit_gaze";
+import { resolveVisibleCockpitSpeedInstruments } from "../player/cockpit_stats";
+import {
+  createFlightCameraFeelState,
+  updateFlightCameraFeel,
+} from "../player/flight_camera_feel";
+import {
+  playCockpitControlToggleSfx,
+  playShipRampToggleSfx,
+} from "../player/ship_articulation_sfx";
+import { resolveBoostMaxSpeedMps } from "../flight/flight_config";
 import { cycleFlightMode } from "../flight/flight_modes";
 import {
   advanceQuantumTravel,
@@ -14,9 +37,12 @@ import { getShipInstance, listShipInstances, removeShipInstance } from "../fligh
 import { type createPlayerControls } from "./player_controls";
 import type { KeyboardActionId } from "../flight/input_settings";
 import {
+  MODE_ENTERING_BED,
+  MODE_IN_BED,
   MODE_IN_SHIP,
   MODE_IN_STATION,
   MODE_ENTERING_SHIP,
+  MODE_LEAVING_BED,
   MODE_LEAVING_PILOT,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
@@ -27,16 +53,19 @@ import {
   updateCharacterState,
 } from "../player/character_controller";
 import {
+  bedInteractPrompt,
   createDeckCharacterState,
   DECK_FLOOR_OFFSET_METERS,
   getDeckSpawnFloorHint,
   getDefaultDeckSpawnLocal,
   getShipWalkZones,
   isOnShipRampDeck,
+  nearestBed,
   nearestDoor,
   nearestSeat,
   nearRampPanel,
   ladderInteractPrompt,
+  resolveDoorInteractAim,
   resolveLadderInteraction,
   seatInteractPrompt,
   traverseLadder,
@@ -68,7 +97,7 @@ import {
   teleportShipPlayerLocal,
   type ShipPhysics,
 } from "../physics/ship_physics";
-import { playSfx } from "../audio/sfx";
+import { createLoopingSfxController, playSfx } from "../audio/sfx";
 import {
   beginElevatorRide,
   callShipToHangar,
@@ -84,6 +113,8 @@ import {
   type StationCharacterState,
 } from "../player/station_walk";
 import {
+  beginGetUpFromBedTransition,
+  beginLieTransition,
   beginSitTransition,
   beginStandTransition,
   updateTransition,
@@ -104,7 +135,7 @@ import {
   sampleHangarRest,
   worldToStationLocal,
 } from "../world/station";
-import { dot, normalize } from "../math/vec3";
+import { cross, dot, length, normalize } from "../math/vec3";
 import { createSoundSceneController, type SoundListenerPose } from "../audio/sound_scene";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleRenderablePlanetSurface } from "../world/planet_surface";
@@ -130,6 +161,9 @@ const SHIP_SOUND_MODES = new Set<GameMode>([
   MODE_ON_SHIP_DECK,
   MODE_ENTERING_SHIP,
   MODE_LEAVING_PILOT,
+  MODE_ENTERING_BED,
+  MODE_IN_BED,
+  MODE_LEAVING_BED,
 ]);
 
 export interface BuildAreaRuntime {
@@ -181,6 +215,15 @@ export function createGameLoop({
   let world: WorldState = createWorldState(planet, seed);
   let shipPhysics: ShipPhysics | null = null;
   let shipPhysicsWarming = false;
+  const flightCameraFeelState = createFlightCameraFeelState();
+  let flightCameraFeelFrame: {
+    fovDeltaDeg: number;
+    thrust01: number;
+    boost01: number;
+    eyeShake: { right: number; up: number; forward: number };
+  } | null = null;
+  const boostSfx = createLoopingSfxController();
+  const thrustSfx = createLoopingSfxController();
 
   function disposeShipDeckPhysics(): void {
     shipPhysics?.dispose();
@@ -466,6 +509,8 @@ export function createGameLoop({
   }
 
   function cleanupForTitleReturn(): void {
+    boostSfx.stop();
+    thrustSfx.stop();
     disposeShipDeckPhysics();
     let clearedHangar = false;
     for (const instance of listShipInstances()) {
@@ -590,7 +635,7 @@ export function createGameLoop({
   function updateShipSystems(dt: number): void {
     for (const instance of listShipInstances()) {
       const rig = instance.rig;
-      rig.gearDown = instance.body.grounded;
+      // Gear is pilot-authored (cockpit gaze / KeyG in preview). Ramp auto-closes in flight.
       if (!isShipParked(instance.body)) rig.rampDown = false;
       updateShipRig(rig, dt);
       regenerateShipShields(instance, dt);
@@ -603,7 +648,10 @@ export function createGameLoop({
     const rig = getActiveShipRig(world);
     if (!isShipParked(ship)) return null;
     if (!nearShipRampOutside(world.character, ship)) return null;
-    if (interactPressed) rig.rampDown = !rig.rampDown;
+    if (interactPressed) {
+      rig.rampDown = !rig.rampDown;
+      playShipRampToggleSfx(getShipLayout().spec, rig.rampDown);
+    }
     return rig.rampDown ? pressInteractPrompt("raise ramp") : pressInteractPrompt("lower ramp");
   }
 
@@ -1003,10 +1051,7 @@ export function createGameLoop({
     const instance = getActiveShip(world);
     const ship = instance.body;
     const rig = instance.rig;
-    instance.body = integrateHoveringShip(ship, dt, planet, seed, {
-      maxSpeedMps: instance.spec.maxSpeedMps,
-      throttleAccelMps2: instance.spec.throttleAccelMps2,
-    });
+    instance.body = integrateHoveringShip(ship, dt, planet, seed, flightOptionsFromSpec(instance.spec));
     const parked = isShipParked(instance.body);
     const gates = {
       rampWalkable: parked && isRampUsable(rig),
@@ -1051,7 +1096,22 @@ export function createGameLoop({
       return;
     }
 
-    const doorNearby = nearestDoor(deckLocal);
+    const doorAim = resolveDoorInteractAim(
+      instance.body,
+      result.state.position,
+      world.cameraOrbit.yawRadians,
+      world.cameraOrbit.pitchRadians,
+      world.cameraView,
+      world.cameraOrbit.zoomDistance,
+    );
+    const bedNearby = nearestBed(deckLocal, doorAim);
+    if (bedNearby) {
+      world.prompt = bedInteractPrompt(bedNearby, keyLabel("interact"));
+      if (actions.interactPressed) beginLieTransition(world, bedNearby.id);
+      return;
+    }
+
+    const doorNearby = nearestDoor(deckLocal, doorAim);
     if (doorNearby) {
       const door = getShipLayout().doors.find(
         (entry) => entry.id === doorNearby.doorId,
@@ -1066,6 +1126,8 @@ export function createGameLoop({
           !(doorRig.isOpen && standingInDoorway(door.id, deckLocal))
         ) {
           doorRig.isOpen = !doorRig.isOpen;
+          const sfx = doorRig.isOpen ? door.openSoundUrl : door.closeSoundUrl;
+          if (sfx) playSfx(sfx);
         }
         return;
       }
@@ -1099,7 +1161,10 @@ export function createGameLoop({
       world.prompt = rig.rampDown
         ? pressInteractPrompt("raise ramp")
         : pressInteractPrompt("lower ramp");
-      if (actions.interactPressed) rig.rampDown = !rig.rampDown;
+      if (actions.interactPressed) {
+        rig.rampDown = !rig.rampDown;
+        playShipRampToggleSfx(getShipLayout().spec, rig.rampDown);
+      }
       return;
     }
 
@@ -1113,10 +1178,21 @@ export function createGameLoop({
     const dt = paused ? 0 : Math.min((nowMs - lastMs) / 1000, 1 / 30);
     lastMs = nowMs;
 
+    if (paused) {
+      boostSfx.stop();
+      thrustSfx.stop();
+    }
+
     let camera = controls.sampleCameraState(0);
 
     if (!paused) {
-      controls.setMode(world.mode === MODE_IN_SHIP ? MODE_IN_SHIP : MODE_ON_FOOT);
+      controls.setMode(
+        world.mode === MODE_IN_SHIP
+          ? MODE_IN_SHIP
+          : world.mode === MODE_IN_BED
+            ? MODE_IN_BED
+            : MODE_ON_FOOT,
+      );
       const actions = controls.consumeActions();
       camera = controls.sampleCameraState(dt);
       world.cameraOrbit = {
@@ -1131,6 +1207,9 @@ export function createGameLoop({
       const characterInput = controls.sampleCharacterInput();
 
       if (world.mode === MODE_ON_FOOT) {
+        flightCameraFeelFrame = null;
+        boostSfx.stop();
+        thrustSfx.stop();
         world.character = updateCharacterState(
           world.character,
           {
@@ -1187,23 +1266,109 @@ export function createGameLoop({
               : world.quantum.phase === "traveling"
                 ? "Quantum travel"
                 : "Drop out";
+          flightCameraFeelFrame = updateFlightCameraFeel(
+            flightCameraFeelState,
+            { throttle01: 0, strafe01: 0, lift01: 0, boost01: 0 },
+            instance.spec,
+            dt,
+          );
+          boostSfx.setLevel(
+            instance.spec.boostSoundUrl,
+            flightCameraFeelFrame.boost01 * instance.spec.boostSoundVolume,
+          );
+          thrustSfx.setLevel(
+            instance.spec.thrustSoundUrl,
+            flightCameraFeelFrame.thrust01 * instance.spec.thrustSoundVolume,
+          );
         } else {
           const flightInput = controls.sampleFlightInput();
           if (world.flightMode === "nav") {
             flightInput.throttle01 = (flightInput.throttle01 ?? 0) * 0.5;
           }
+          const previousForward = instance.body.forward;
+          const aim = controls.getFlightAim();
+          const aimForward = resolveAimForward(instance.body, aim);
           instance.body = integrateFlightBody(
             instance.body,
             flightInput,
             dt,
             planet,
             seed,
-            {
-              maxSpeedMps: instance.spec.maxSpeedMps,
-              throttleAccelMps2: instance.spec.throttleAccelMps2,
-            },
+            flightOptionsFromSpec(instance.spec, {
+              coupled: controls.isCoupledMode(),
+              aimForward,
+            }),
           );
-          if (world.flightMode === "nav") {
+          controls.setFlightAim(
+            recenterAimAsNoseTracks(aim, instance.body, previousForward),
+          );
+
+          if ((camera.shipCameraView ?? "cockpit") === "cockpit") {
+            flightCameraFeelFrame = updateFlightCameraFeel(
+              flightCameraFeelState,
+              {
+                throttle01: flightInput.throttle01 ?? 0,
+                strafe01: flightInput.strafe01 ?? 0,
+                lift01: flightInput.lift01 ?? 0,
+                boost01: flightInput.boost01 ?? 0,
+              },
+              instance.spec,
+              dt,
+            );
+          } else {
+            flightCameraFeelFrame = updateFlightCameraFeel(
+              flightCameraFeelState,
+              { throttle01: 0, strafe01: 0, lift01: 0, boost01: 0 },
+              instance.spec,
+              dt,
+            );
+          }
+          boostSfx.setLevel(
+            instance.spec.boostSoundUrl,
+            (flightCameraFeelFrame?.boost01 ?? 0) * instance.spec.boostSoundVolume,
+          );
+          thrustSfx.setLevel(
+            instance.spec.thrustSoundUrl,
+            (flightCameraFeelFrame?.thrust01 ?? 0) * instance.spec.thrustSoundVolume,
+          );
+
+          // Cockpit look-at controls: Hold F + gaze + left-click.
+          if (controls.isSeatLookActive()) {
+            const eye = localOffsetToWorld(instance.body, getShipLayout().pilotEye);
+            const seat = controls.getSeatLook();
+            const view = resolveSeatLookForward(
+              instance.body.forward,
+              instance.body.up,
+              seat.yawRadians,
+              seat.pitchRadians,
+            );
+            const hit = resolveCockpitGazeTarget(
+              getShipLayout().cockpitControls,
+              instance.body,
+              eye,
+              view.forward,
+            );
+            if (actions.primaryClickPressed && hit) {
+              const applied = applyCockpitControlAction(
+                hit.control.action,
+                instance.rig,
+                { allowRamp: isShipParked(instance.body) },
+              );
+              if (applied) {
+                playCockpitControlToggleSfx(
+                  hit.control.action,
+                  instance.rig,
+                  getShipLayout().spec,
+                );
+              }
+            }
+          }
+
+          if (actions.coupledToggled) {
+            world.prompt = controls.isCoupledMode()
+              ? "Coupled mode"
+              : "Decoupled mode";
+          } else if (world.flightMode === "nav") {
             world.prompt = buildNavPrompt({
               body: instance.body,
               flightMode: world.flightMode,
@@ -1212,7 +1377,7 @@ export function createGameLoop({
               seed,
             });
           } else {
-            world.prompt = `${holdPrompt("seatLook", "look around")} · ${holdPrompt("exitSeat", "get up")}`;
+            world.prompt = `${holdPrompt("seatLook", "look around")} · ${holdPrompt("exitSeat", "get up")} · Alt+C coupled`;
           }
         }
 
@@ -1222,17 +1387,46 @@ export function createGameLoop({
         if (world.quantum.phase === "idle" && world.screenFade > 0) {
           world.screenFade = Math.max(0, world.screenFade - dt * 4);
         }
+      } else if (world.mode === MODE_IN_BED) {
+        flightCameraFeelFrame = null;
+        boostSfx.stop();
+        thrustSfx.stop();
+        // Keep the hull integrating while the player rests (no flight input).
+        const bedShip = getActiveShip(world);
+        bedShip.body = integrateHoveringShip(
+          bedShip.body,
+          dt,
+          planet,
+          seed,
+          flightOptionsFromSpec(bedShip.spec),
+        );
+        world.prompt = `Look around · ${holdPrompt("exitSeat", "get up")}`;
+        if (actions.exitSeatPressed) {
+          beginGetUpFromBedTransition(world);
+        }
       } else if (world.mode === MODE_ON_SHIP_DECK) {
+        flightCameraFeelFrame = null;
+        boostSfx.stop();
+        thrustSfx.stop();
         updateDeckMode(characterInput, actions, dt);
       } else if (world.mode === MODE_IN_STATION) {
+        flightCameraFeelFrame = null;
+        boostSfx.stop();
+        thrustSfx.stop();
         updateStationMode(characterInput, actions, dt);
       } else if (world.mode === MODE_RIDING_ELEVATOR) {
+        flightCameraFeelFrame = null;
+        boostSfx.stop();
+        thrustSfx.stop();
         const ride = updateElevatorRide(world, stationFrame, dt, physics);
         world.prompt = ride.destination ? `${ride.destination.label}…` : "";
         if (ride.teleportedNow && ride.destination) {
           controls.setOrbitFacing(stationYawForDir(ride.destination.face));
         }
       } else {
+        flightCameraFeelFrame = null;
+        boostSfx.stop();
+        thrustSfx.stop();
         updateTransition(world, dt, transitionContext);
       }
 
@@ -1249,11 +1443,11 @@ export function createGameLoop({
       activeShip.position,
     );
     const focusPosition =
-      world.mode === MODE_IN_SHIP
+      world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
         ? activeShip.position
         : world.character.position;
     const focusVelocity =
-      world.mode === MODE_IN_SHIP
+      world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
         ? activeShip.velocity
         : world.character.velocity;
     const focusSurface = sampleRenderablePlanetSurface(
@@ -1271,8 +1465,10 @@ export function createGameLoop({
           shipCameraView: world.shipCameraView,
           shipCameraZoom: world.shipCameraZoom,
           seatLook: camera.seatLook,
+          flightCameraFeel: flightCameraFeelFrame ?? undefined,
+          activeBedId: world.activeBedId,
           character:
-            world.mode === MODE_IN_SHIP
+            world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
               ? null
               : {
                   animation: world.character.animation,
@@ -1320,9 +1516,126 @@ export function createGameLoop({
     updateSceneSounds(focusPosition);
 
     const focusForward =
-      world.mode === MODE_IN_SHIP
+      world.mode === MODE_IN_SHIP || world.mode === MODE_IN_BED
         ? activeShip.forward
         : world.character.forward;
+
+    let flightDual: HudUpdateParams["flightDual"];
+    let cockpitGaze: HudUpdateParams["cockpitGaze"];
+    let cockpitSpeed: HudUpdateParams["cockpitSpeed"];
+    if (world.mode === MODE_IN_SHIP) {
+      const aim = controls.getFlightAim();
+      const aimDir = resolveAimForward(activeShip, aim);
+      // Project vs actual view: during Hold-F free look the reticle stays
+      // world-locked on ship aim/nose (moves on screen as you look around).
+      const seat = camera.seatLook;
+      const seatLooking = controls.isSeatLookActive();
+      const freeLooking =
+        seatLooking ||
+        (seat &&
+          (Math.abs(seat.yawRadians) > 1e-6 ||
+            Math.abs(seat.pitchRadians) > 1e-6));
+      const view = freeLooking
+        ? resolveSeatLookForward(
+            activeShip.forward,
+            activeShip.up,
+            seat.yawRadians,
+            seat.pitchRadians,
+          )
+        : {
+            forward: activeShip.forward,
+            up: activeShip.up,
+            right: normalize(cross(activeShip.forward, activeShip.up)),
+          };
+      const fovY =
+        ((72 + (flightCameraFeelFrame?.fovDeltaDeg ?? 0)) * Math.PI) / 180;
+      const viewportH = window.innerHeight;
+      const aimOff = projectDirectionToReticleOffset(
+        aimDir,
+        view.forward,
+        view.right,
+        view.up,
+        fovY,
+        viewportH,
+      );
+      const noseOff = projectDirectionToReticleOffset(
+        activeShip.forward,
+        view.forward,
+        view.right,
+        view.up,
+        fovY,
+        viewportH,
+      );
+      flightDual = {
+        aimOffsetPx: { x: aimOff.x, y: aimOff.y },
+        noseOffsetPx: { x: noseOff.x, y: noseOff.y },
+        coupled: controls.isCoupledMode(),
+      };
+
+      const layout = getShipLayout();
+      const eye = localOffsetToWorld(activeShip, layout.pilotEye);
+      const boost01 = flightCameraFeelFrame?.boost01 ?? 0;
+      const scmMax = layout.spec.maxSpeedMps;
+      const boostMax = resolveBoostMaxSpeedMps(scmMax);
+      const speedViews = resolveVisibleCockpitSpeedInstruments(
+        layout.cockpitStats,
+        activeShip,
+        eye,
+        view.forward,
+        view.right,
+        view.up,
+        fovY,
+        viewportH,
+      );
+      if (speedViews.length > 0) {
+        const speedMps = length(activeShip.velocity);
+        cockpitSpeed = {
+          visible: true,
+          instruments: speedViews.map((viewStat) => ({
+            id: viewStat.id,
+            offsetPx: viewStat.offsetPx,
+            speedMps,
+            scmMaxMps: scmMax,
+            boostMaxMps: boostMax,
+            boosting: boost01 > 0.05,
+            boost01,
+            ...(viewStat.label ? { label: viewStat.label } : {}),
+          })),
+        };
+      }
+
+      if (seatLooking) {
+        const hit = resolveCockpitGazeTarget(
+          layout.cockpitControls,
+          activeShip,
+          eye,
+          view.forward,
+        );
+        if (hit) {
+          const offset = projectWorldPointToScreenOffset(
+            hit.worldPosition,
+            eye,
+            view.forward,
+            view.right,
+            view.up,
+            fovY,
+            viewportH,
+          );
+          if (!offset.behind) {
+            const rig = getActiveShipRig(world);
+            cockpitGaze = {
+              visible: true,
+              label: cockpitControlLabel(
+                hit.control.action,
+                { gearDown: rig.gearDown, rampDown: rig.rampDown },
+                hit.control.label,
+              ),
+              offsetPx: { x: offset.x, y: offset.y },
+            };
+          }
+        }
+      }
+    }
 
     onHudUpdate({
       world,
@@ -1341,6 +1654,9 @@ export function createGameLoop({
       shipForward: activeShip.forward,
       characterPosition: world.character.position,
       nowMs,
+      flightDual,
+      cockpitGaze,
+      cockpitSpeed,
     });
 
     requestAnimationFrame(frame);
@@ -1357,6 +1673,8 @@ export function createGameLoop({
 
   function stop(): void {
     running = false;
+    boostSfx.stop();
+    thrustSfx.stop();
     disposeShipDeckPhysics();
     soundScene.dispose();
     renderer?.getStationRoot()?.userData.disposeParticleSystems?.();
