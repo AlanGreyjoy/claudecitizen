@@ -3,6 +3,7 @@ import { createGameLoop, type BuildAreaRuntime } from './game_loop';
 import type { LoadingScreenHandle } from './loading_screen';
 import { restoreTitleScreen } from './title_screen';
 import { createHud, createHaloBand } from '../render/effects';
+import { createBiomeTeleportPanel } from '../render/effects/hud/biome_teleport_panel';
 import { createGameMenu } from '../render/effects/hud/game_menu';
 import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
 import { createEntertainmentSystem } from '../render/effects/hud/entertainment_system';
@@ -831,6 +832,14 @@ export async function startPlaySession(
   });
 
   loopRef.loop = gameLoop;
+
+  if (spawnSurface) {
+    const biomeTeleportEl = requireElement<HTMLElement>('biome-teleport');
+    createBiomeTeleportPanel(biomeTeleportEl, {
+      onTeleport: (biome) => gameLoop.teleportToBiome(biome),
+      onStatus: (text) => hud.appendChatMessage('SYS', text),
+    }).setVisible(true);
+  }
 
   if (bootstrap) {
     await syncBootstrapShips(

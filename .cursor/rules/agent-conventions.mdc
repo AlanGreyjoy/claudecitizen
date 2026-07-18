@@ -69,7 +69,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 ## Key reminders
 
 - Domain logic lives in `world/`, `flight/`, `player/`, `npc/` — not in `render/` or `app.js`
-- Terrain mesh and foot placement must share the canonical band-limited LOD grid; preserve `renderableGridSampleSpacingMeters()` ownership, two-sided edge skirts, pinned L0 fallback coverage, and the cached downhill river graph
+- Terrain mesh and foot placement must share the uniform per-LOD band-limited grid; preserve `renderableGridSampleSpacingMeters()` ownership, mixed-LOD edge stitching, two-sided fallback skirts, pinned L0 fallback coverage, and the cached downhill river graph
 - Never commit or relocate `protected/` assets
 - No unit tests in this project
 - User owns interactive QA. Agents may run non-interactive build and static validation (`cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint`) when useful. Do not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. At the end of a multi-file feature or spike, run `npm run lint` and fix errors (and trivial warnings in touched files when practical). If relevant validation is skipped, say so in the handoff. For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.

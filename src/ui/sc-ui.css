@@ -155,6 +155,74 @@ body {
   box-shadow: 0 0 12px rgba(80, 200, 255, 0.15);
 }
 
+.sc-biome-teleport {
+  position: fixed;
+  right: 18px;
+  bottom: 74px;
+  width: min(220px, calc(100vw - 36px));
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 24%),
+    rgba(6, 12, 26, 0.88);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 18px var(--sc-glow);
+  clip-path: polygon(
+    8px 0,
+    calc(100% - 8px) 0,
+    100% 8px,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    8px 100%,
+    0 calc(100% - 8px),
+    0 8px
+  );
+  pointer-events: auto;
+  z-index: 20;
+}
+
+.sc-biome-teleport-title {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font: 600 11px/1.2 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-biome-teleport-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sc-biome-teleport-btn {
+  margin: 0;
+  padding: 6px 4px;
+  border: 1px solid rgba(90, 190, 255, 0.28);
+  background: rgba(8, 18, 36, 0.92);
+  color: var(--text);
+  font: 600 11px/1.1 var(--sc-font);
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  cursor: pointer;
+  clip-path: polygon(
+    5px 0,
+    calc(100% - 5px) 0,
+    100% 5px,
+    100% calc(100% - 5px),
+    calc(100% - 5px) 100%,
+    5px 100%,
+    0 calc(100% - 5px),
+    0 5px
+  );
+}
+
+.sc-biome-teleport-btn:hover {
+  border-color: rgba(139, 216, 255, 0.55);
+  background: rgba(139, 216, 255, 0.1);
+  color: var(--accent);
+}
+
 .sc-hud-debug-wrap {
   position: fixed;
   right: 18px;

@@ -25,6 +25,7 @@ export interface VisibleSurfaceFrame {
   heightDetails: SurfaceHeightDetails;
   heightMeters: number;
   normal: Vec3;
+  point: Vec3;
 }
 
 interface RenderableGridSample {
@@ -130,30 +131,6 @@ function tileBounds(level: number, x: number, y: number): TileBounds {
   };
 }
 
-function canonicalRenderableGridPoint(
-  level: number,
-  gridX: number,
-  gridY: number,
-): { gridX: number; gridY: number; level: number } {
-  let canonicalLevel = level;
-  let canonicalGridX = gridX;
-  let canonicalGridY = gridY;
-  while (
-    canonicalLevel > 0 &&
-    canonicalGridX % 2 === 0 &&
-    canonicalGridY % 2 === 0
-  ) {
-    canonicalLevel -= 1;
-    canonicalGridX /= 2;
-    canonicalGridY /= 2;
-  }
-  return {
-    gridX: canonicalGridX,
-    gridY: canonicalGridY,
-    level: canonicalLevel,
-  };
-}
-
 export function renderableCellSampleSpacingMeters(
   planet: Planet,
   level: number,
@@ -168,11 +145,12 @@ export function renderableCellSampleSpacingMeters(
 export function renderableGridSampleSpacingMeters(
   planet: Planet,
   level: number,
-  gridX: number,
-  gridY: number,
 ): number {
-  const canonical = canonicalRenderableGridPoint(level, gridX, gridY);
-  return renderableCellSampleSpacingMeters(planet, canonical.level);
+  // Every vertex introduced by a tile must use the same band limit. Letting
+  // inherited even/even vertices fall back to a coarser level creates sparse
+  // height outliers surrounded by fine samples: the visible pyramid spikes and
+  // inverted holes that this grid is meant to prevent.
+  return renderableCellSampleSpacingMeters(planet, level);
 }
 
 function renderableGridPoint(
@@ -181,21 +159,11 @@ function renderableGridPoint(
   coordinates: RenderableGridCoordinates,
 ): RenderableGridSample {
   const { face, gridX, gridY, level } = coordinates;
-  const canonical = canonicalRenderableGridPoint(level, gridX, gridY);
-  const cellsPerFace = (2 ** canonical.level) * RENDER_SURFACE_SEGMENTS;
-  const u = -1 + (canonical.gridX * 2) / cellsPerFace;
-  const v = -1 + (canonical.gridY * 2) / cellsPerFace;
+  const cellsPerFace = (2 ** level) * RENDER_SURFACE_SEGMENTS;
+  const u = -1 + (gridX * 2) / cellsPerFace;
+  const v = -1 + (gridY * 2) / cellsPerFace;
   const direction = directionFromCubeFace(face, u, v);
-  const key = renderableHeightKey(
-    planet,
-    seed,
-    {
-      face,
-      gridX: canonical.gridX,
-      gridY: canonical.gridY,
-      level: canonical.level,
-    },
-  );
+  const key = renderableHeightKey(planet, seed, coordinates);
   let details = renderableHeightCache.get(key);
 
   if (details == null) {
@@ -205,12 +173,7 @@ function renderableGridPoint(
       seed,
       scale(direction, planet.radiusMeters),
       {
-        sampleSpacingMeters: renderableGridSampleSpacingMeters(
-          planet,
-          canonical.level,
-          canonical.gridX,
-          canonical.gridY,
-        ),
+        sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, level),
       },
     );
     touchRenderableHeightEntry(key, details);
@@ -283,6 +246,7 @@ function sampleRenderableSurfaceGrid(
   heightDetails: SurfaceHeightDetails;
   heightMeters: number;
   normal: Vec3 | null;
+  point: Vec3;
 } {
   const direction = normalize(position);
   const faceUv = faceUvFromDirection(direction);
@@ -371,12 +335,13 @@ function sampleRenderableSurfaceGrid(
     heightDetails: interpolateHeightDetails(samples, weights, heightMeters),
     heightMeters,
     normal: normal ? orientNormal(normal, direction) : null,
+    point,
   };
 }
 
 /**
- * Height + details from the canonical renderable grid without building a
- * triangle normal. Vegetation placement rejection uses this so rejected
+ * Height + details from the per-LOD renderable grid without building a triangle
+ * normal. Vegetation placement rejection uses this so rejected
  * attempts avoid the cross/normalize work; accepted instances call
  * {@link sampleVisibleSurfaceFrame} (corners are already cache-warm).
  */
@@ -404,6 +369,7 @@ export function sampleVisibleSurfaceFrame(
     heightDetails: sample.heightDetails,
     heightMeters: sample.heightMeters,
     normal: sample.normal ?? sample.direction,
+    point: sample.point,
   };
 }
 

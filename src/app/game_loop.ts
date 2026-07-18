@@ -30,6 +30,7 @@ import {
   advanceQuantumTravel,
   buildNavPrompt,
   consumePendingHandoffPlanetId,
+  createQuantumTravelState,
   evaluateQuantumEligibility,
   tryBeginQuantumTravel,
 } from "../flight/quantum_travel";
@@ -54,6 +55,7 @@ import {
   createCharacterState,
   updateCharacterState,
 } from "../player/character_controller";
+import { initialCameraYaw } from "../player/spawn";
 import {
   bedInteractPrompt,
   createDeckCharacterState,
@@ -186,10 +188,12 @@ import { createSoundSceneController, type SoundListenerPose } from "../audio/sou
 import { createStationNpcPopulation } from "../npc/station_population";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from "../world/planet_surface";
-import { radialUp, surfacePointFromPosition } from "../world/coordinates";
+import { findBiomeLocation } from "../world/biome_teleport";
+import { cartesianFromLatLonAlt, radialUp, surfacePointFromPosition } from "../world/coordinates";
+import { warmRenderableHeightRing } from "../world/spawn_warm";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
-import type { ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
+import type { Biome, ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 import {
@@ -574,6 +578,57 @@ export function createGameLoop({
       .join(' / ');
   }
 
+  function teleportToBiome(biome: Biome): boolean {
+    const location = findBiomeLocation(planet, seed, biome);
+    if (!location) return false;
+
+    const probe = cartesianFromLatLonAlt(
+      location.latRadians,
+      location.lonRadians,
+      0,
+      planet.radiusMeters,
+    );
+    if (![probe.x, probe.y, probe.z].every(Number.isFinite)) return false;
+    warmRenderableHeightRing(planet, seed, probe, 450, 18);
+    const surface = sampleFootPlanetSurface(planet, seed, probe);
+    if (
+      !Number.isFinite(surface.surfaceRadiusMeters) ||
+      !Number.isFinite(surface.heightMeters)
+    ) {
+      return false;
+    }
+    const groundPosition = surfacePointFromPosition(
+      probe,
+      surface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS,
+    );
+    if (![groundPosition.x, groundPosition.y, groundPosition.z].every(Number.isFinite)) {
+      return false;
+    }
+    const character = createCharacterState(groundPosition);
+    world.character = character;
+    world.mode = MODE_ON_FOOT;
+    world.shipExteriorWalk = false;
+    world.activeBedId = null;
+    world.transition = null;
+    world.stationElevator = null;
+    world.screenFade = 0;
+    world.flightMode = 'traverse';
+    world.quantum = createQuantumTravelState();
+    world.cameraOrbit = {
+      pitchRadians: -0.12,
+      yawRadians: initialCameraYaw(character),
+      zoomDistance: 5.2,
+    };
+    controls.setMode(MODE_ON_FOOT);
+    controls.setOrbitFacing(
+      world.cameraOrbit.yawRadians,
+      world.cameraOrbit.pitchRadians,
+    );
+    planetPhysics?.dispose();
+    planetPhysics = null;
+    return true;
+  }
+
   // Console-only dev shortcuts (mirrors the __spikeScene diagnostic).
   window.__claudecitizenDev = {
     callShip: async () => {
@@ -641,6 +696,7 @@ export function createGameLoop({
         stats: renderer?.getSurfaceSpawnDebugStats() ?? null,
       };
     },
+    teleportToBiome,
   };
 
   function resetWorld(): void {
@@ -2424,5 +2480,6 @@ export function createGameLoop({
     setEquippedLoadout,
     start,
     stop,
+    teleportToBiome,
   };
 }

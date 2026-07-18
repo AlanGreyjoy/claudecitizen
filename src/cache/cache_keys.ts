@@ -12,7 +12,7 @@ import { getActivePlanetConfig } from '../world/planets/runtime';
 // Low-poly tiles use a non-indexed triangle layout with baked facet colors.
 // Keep this explicit because the height fingerprint does not capture buffer
 // layout or palette-only changes.
-export const TERRAIN_CACHE_VERSION = 'mulberry-bandlimited-skirts-routed-l17-v6';
+export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v7';
 // v15: quality sample budgets (grass/tree counts) are part of the storage key.
 export const VEGETATION_CACHE_VERSION = 'v15';
 /** Bump when surface-spawn placement algorithm or stored spawn-tile schema changes. */

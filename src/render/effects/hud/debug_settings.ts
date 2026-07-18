@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS: DebugSettings = {
 const DEBUG_BOOT_SETTINGS: DebugSettings = {
   debugEnabled: true,
   showStatsPanel: true,
-  showControlsReference: true,
+  showControlsReference: false,
   showTutorialBanner: false,
   renderGrass: true,
   renderTrees: true,

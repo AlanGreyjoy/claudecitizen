@@ -26,6 +26,10 @@ import {
   type TileSelectionView,
 } from './domain/selection';
 import type { ResolvedTile, TileManagerUpdateResult } from './domain/types';
+import {
+  updateTerrainSeamStitching,
+  type TerrainSeamTile,
+} from './render/seam_stitching';
 
 const APPROACH_PREFETCH_INTERVAL_FRAMES = 12;
 /** Total speculative starts across every look-ahead focus in one pass. */
@@ -77,6 +81,7 @@ export function createPlanetTileManager(
   let frameNumber = 0;
   let lastApproachPrefetchFrame = -APPROACH_PREFETCH_INTERVAL_FRAMES;
   let previousSplitKeys = new Set<string>();
+  let terrainSeamConfiguration = '';
 
   function runApproachPrefetch(
     bodyPosition: Vec3,
@@ -133,6 +138,7 @@ export function createPlanetTileManager(
     const keepKeys = new Set<string>();
     const requestedTiles: TileInfo[] = [];
     const renderedTiles: TileInfo[] = [];
+    const renderedSeamTiles: TerrainSeamTile[] = [];
     const resolvedCandidates = new Map<string, ResolvedTile>();
     const nextSplitKeys = new Set<string>();
 
@@ -167,7 +173,20 @@ export function createPlanetTileManager(
       resolved.mesh!.renderOrder = 0;
       resolved.mesh!.visible = true;
       renderedTiles.push(resolved.info);
+      renderedSeamTiles.push({ info: resolved.info, mesh: resolved.mesh! });
       selectedKeys.add(resolved.key);
+    }
+
+    const nextTerrainSeamConfiguration = renderedSeamTiles
+      .map(
+        ({ info, mesh }) =>
+          `${tileKey(info.face, info.level, info.x, info.y)}@${mesh.uuid}`,
+      )
+      .sort()
+      .join('|');
+    if (nextTerrainSeamConfiguration !== terrainSeamConfiguration) {
+      updateTerrainSeamStitching(renderedSeamTiles, planet, seed);
+      terrainSeamConfiguration = nextTerrainSeamConfiguration;
     }
 
     runApproachPrefetch(bodyPosition, surface.altitudeMeters, options?.velocity);

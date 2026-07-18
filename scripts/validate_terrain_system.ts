@@ -28,6 +28,7 @@ import {
 import {
   RENDER_SURFACE_LEVEL,
   RENDER_SURFACE_SEGMENTS,
+  renderableCellSampleSpacingMeters,
   renderableGridSampleSpacingMeters,
   sampleVisibleSurfaceFrame,
 } from '../src/world/renderable_surface';
@@ -110,7 +111,7 @@ interface TerrainValidationSummary {
   sameLodSeamContacts: number;
   selectedTiles: number;
   selectionMilliseconds: number;
-  sharedVertexHeightErrorMeters: number;
+  maxUniformLodSpacingErrorMeters: number;
 }
 
 const planet = CLAUDECITIZEN_PLANET;
@@ -289,55 +290,14 @@ function validateHighlandGroundDetail(): {
   return { heightMeters, selectedLevel, selectedTiles: selected.length };
 }
 
-function validateCanonicalSharedVertices(): number {
+function validateUniformLodSampleSpacing(): number {
   let maximumError = 0;
-  for (let index = 0; index < 600; index += 1) {
-    const face = CUBE_FACES[index % CUBE_FACES.length];
-    const level = 4 + (index % (RENDER_SURFACE_LEVEL - 5));
-    const cells = 2 ** level * RENDER_SURFACE_SEGMENTS;
-    const gridX = 1 + ((index * 7_919) % (cells - 2));
-    const gridY = 1 + ((index * 1_543) % (cells - 2));
-    const direction = directionFromCubeFace(
-      face,
-      -1 + (gridX * 2) / cells,
-      -1 + (gridY * 2) / cells,
-    );
-    const coarse = sampleSurfaceHeightDetails(planet, seed, direction, {
-      sampleSpacingMeters: renderableGridSampleSpacingMeters(
-        planet,
-        level,
-        gridX,
-        gridY,
-      ),
-    });
-    const fineLevel = level + 2;
-    const fineGridX = gridX * 4;
-    const fineGridY = gridY * 4;
-    const fineCells = 2 ** fineLevel * RENDER_SURFACE_SEGMENTS;
-    const fineDirection = directionFromCubeFace(
-      face,
-      -1 + (fineGridX * 2) / fineCells,
-      -1 + (fineGridY * 2) / fineCells,
-    );
-    const fine = sampleSurfaceHeightDetails(planet, seed, fineDirection, {
-      sampleSpacingMeters: renderableGridSampleSpacingMeters(
-        planet,
-        fineLevel,
-        fineGridX,
-        fineGridY,
-      ),
-    });
-    maximumError = Math.max(
-      maximumError,
-      Math.abs(coarse.heightMeters - fine.heightMeters),
-    );
-    assert.equal(coarse.riverStrength, fine.riverStrength);
-    assert.equal(
-      coarse.riverWaterLevelNormalized,
-      fine.riverWaterLevelNormalized,
-    );
+  for (let level = 0; level <= RENDER_SURFACE_LEVEL; level += 1) {
+    const expected = renderableCellSampleSpacingMeters(planet, level);
+    const actual = renderableGridSampleSpacingMeters(planet, level);
+    maximumError = Math.max(maximumError, Math.abs(actual - expected));
   }
-  assert.equal(maximumError, 0, 'canonical shared LOD vertices changed height');
+  assert.equal(maximumError, 0, 'terrain vertices within one LOD changed sample spacing');
   return maximumError;
 }
 
@@ -357,8 +317,6 @@ function validateVisibleFrames(): number {
       sampleSpacingMeters: renderableGridSampleSpacingMeters(
         planet,
         RENDER_SURFACE_LEVEL,
-        gridX,
-        gridY,
       ),
     });
     const frame = sampleVisibleSurfaceFrame(
@@ -1222,7 +1180,7 @@ function main(): TerrainValidationSummary {
   const fallbackCoverage = validateFallbackCoverage(selected);
   const horizonTileCounts = validateHorizonCoverage();
   const highlandGroundDetail = validateHighlandGroundDetail();
-  const sharedVertexHeightErrorMeters = validateCanonicalSharedVertices();
+  const maxUniformLodSpacingErrorMeters = validateUniformLodSampleSpacing();
   const maxVisibleFrameHeightErrorMeters = validateVisibleFrames();
   const meshFootAgreement = validateMeshFootAgreement(selected);
   const sameLodSeams = validateSameLodSeams();
@@ -1266,6 +1224,7 @@ function main(): TerrainValidationSummary {
     maxMeshFootHeightErrorMeters: meshFootAgreement.maximumHeightErrorMeters,
     maxMixedLodGapToSkirtRatio: maximumRatio,
     maxSameLodSeamErrorMeters: sameLodSeams.maximumErrorMeters,
+    maxUniformLodSpacingErrorMeters,
     maxVisibleFrameHeightErrorMeters,
     minimumSkirtFrontFacingDot: minimumFrontFacingDot,
     minimumGroundMeshFootNormalDot: meshFootAgreement.minimumGroundNormalDot,
@@ -1274,7 +1233,6 @@ function main(): TerrainValidationSummary {
     sameLodSeamContacts: sameLodSeams.contacts,
     selectedTiles: selected.length,
     selectionMilliseconds,
-    sharedVertexHeightErrorMeters,
   };
 }
 

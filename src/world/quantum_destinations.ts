@@ -61,7 +61,8 @@ function hash01(seed: number, ...values: number[]): number {
   state ^= state >>> 13;
   state = Math.imul(state, 0xc2b2ae35) >>> 0;
   state ^= state >>> 16;
-  return state / 0xffffffff;
+  // Final XOR is a signed int32 in JS; force uint32 before normalizing.
+  return (state >>> 0) / 0x1_0000_0000;
 }
 
 function isDryBiome(biome: Biome): boolean {

@@ -278,12 +278,7 @@ export function tileHasLakeWater(info: TileInfo, planet: Planet, seed: number): 
         seed,
         scale(direction, planet.radiusMeters),
         {
-          sampleSpacingMeters: renderableGridSampleSpacingMeters(
-            planet,
-            info.level,
-            info.x * TILE_SEGMENTS + ix,
-            info.y * TILE_SEGMENTS + iy,
-          ),
+          sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, info.level),
         },
       );
       if (isShorePadded(surface)) return true;
@@ -379,12 +374,7 @@ export function buildLakeWaterGeometry(
     for (let ix = 0; ix <= TILE_SEGMENTS; ix += 1) {
       const u = u0 + ((u1 - u0) * ix) / TILE_SEGMENTS;
       const cell = sampleGridCell(info, planetRef, seed, {
-        sampleSpacingMeters: renderableGridSampleSpacingMeters(
-          planetRef,
-          info.level,
-          info.x * TILE_SEGMENTS + ix,
-          info.y * TILE_SEGMENTS + iy,
-        ),
+        sampleSpacingMeters: renderableGridSampleSpacingMeters(planetRef, info.level),
         u,
         v,
       });

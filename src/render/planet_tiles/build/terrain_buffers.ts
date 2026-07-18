@@ -497,20 +497,12 @@ function buildTerrainGrid(
       const u = u0 + ((u1 - u0) * ix) / TILE_SEGMENTS;
       const direction = directionFromCubeFace(info.face, u, v);
       const samplePosition = scale(direction, planet.radiusMeters);
-      const globalGridX = info.x * TILE_SEGMENTS + ix;
-      const globalGridY = info.y * TILE_SEGMENTS + iy;
-      // Tile vertices already lie on the canonical nested cube-face grid. The
-      // visible-frame sampler would fetch four max-LOD heights to reconstruct a
-      // normal that this builder discards before calculating flat facet normals.
-      // Sampling the canonical analytic height once produces the same grid
-      // vertex without the three redundant neighboring height evaluations.
+      // Every vertex in this tile uses one uniform LOD band limit. The
+      // visible-frame sampler would fetch four heights to reconstruct a normal
+      // that this builder discards before calculating flat facet normals, so
+      // sample the analytic height once here.
       const surface = sampleAnalyticPlanetSurface(planet, seed, samplePosition, {
-        sampleSpacingMeters: renderableGridSampleSpacingMeters(
-          planet,
-          info.level,
-          globalGridX,
-          globalGridY,
-        ),
+        sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, info.level),
       });
       const renderSurface: PlanetSurfaceSample =
         surface.lakeWaterLevelMeters != null &&
