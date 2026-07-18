@@ -1,9 +1,17 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { VegetationAssetCatalog } from '../domain/asset_catalog';
-import { createGrassBillboardAssets } from './grass_billboard';
+import {
+  createGrassBillboardAssets,
+  createGrassBillboardFromTexture,
+} from './grass_billboard';
+import { DEFAULT_GRASS_COLOR } from '../settings';
 import { applyWindToMaterial } from './wind';
 import { deduplicateObjectTextures } from '../../assets/texture_dedup';
+
+function isGrassImageUrl(url: string): boolean {
+  return /\.(png|jpe?g|webp)(\?|$)/i.test(url);
+}
 
 export type VegetationWindProfile = 'grass' | 'tree';
 
@@ -24,6 +32,16 @@ export interface InstancedAssetPart {
 
 export interface InstancedAsset {
   baseOffsetY: number;
+  /**
+   * Mesh AABB half-extents at scale = 1 (local Y = up). Used by surface-spawn
+   * physics so prop colliders match the visible GLB, not tiny authored defaults.
+   */
+  boundsHalfExtents?: [number, number, number];
+  /**
+   * Collider center in instance-local space when the body sits on the surface
+   * contact point (accounts for baseOffsetY / non-centered pivots).
+   */
+  collisionCenter?: [number, number, number];
   parts: InstancedAssetPart[];
 }
 
@@ -90,8 +108,20 @@ export function extractInstancedAsset(
     }
   }
 
+  if (bounds.isEmpty()) {
+    return { baseOffsetY: 0, parts };
+  }
+  const baseOffsetY = -bounds.min.y;
+  const hx = Math.max(0.05, (bounds.max.x - bounds.min.x) * 0.5);
+  const hy = Math.max(0.05, (bounds.max.y - bounds.min.y) * 0.5);
+  const hz = Math.max(0.05, (bounds.max.z - bounds.min.z) * 0.5);
+  const cx = (bounds.min.x + bounds.max.x) * 0.5;
+  const cz = (bounds.min.z + bounds.max.z) * 0.5;
+  // Bottom of AABB sits on the surface after baseOffsetY lift → center at +hy.
   return {
-    baseOffsetY: bounds.isEmpty() ? 0 : -bounds.min.y,
+    baseOffsetY,
+    boundsHalfExtents: [hx, hy, hz],
+    collisionCenter: [cx, hy, cz],
     parts,
   };
 }
@@ -127,55 +157,89 @@ export function createEmptyAssetCatalog(): InstancedAssetCatalog {
   return { grass: [], trees: [] };
 }
 
+export interface VegetationAssetUrlLists {
+  grassUrls: readonly string[];
+  treeUrls: readonly string[];
+  /** CSS hex tint for grass billboards. */
+  grassColor?: string;
+}
+
+/**
+ * Load planet-authored vegetation. Grass URLs are PNG billboard textures
+ * (empty → procedural cards). Tree URLs are GLB/GLTF meshes (empty → none).
+ */
 export function loadInstancedAssetCatalog(
+  urls: VegetationAssetUrlLists,
   onComplete: (catalog: InstancedAssetCatalog) => void,
   onError?: (path: string, label: string, error: unknown) => void,
 ): void {
   const catalog = createEmptyAssetCatalog();
-  const loader = new GLTFLoader();
+  const gltfLoader = new GLTFLoader();
+  const textureLoader = new THREE.TextureLoader();
+  const grassUrls = urls.grassUrls.filter((url) => url.length > 0);
+  const treeUrls = urls.treeUrls.filter((url) => url.length > 0);
+  const grassColor = urls.grassColor ?? DEFAULT_GRASS_COLOR;
 
-  // Grass is procedural Y-locked billboards (no Magakit mesh loads).
-  catalog.grass.push(...createGrassBillboardAssets());
-
-  const pinePaths = [
-    '../../../assets/stylized-nature-magakit/Pine_1.gltf',
-    '../../../assets/stylized-nature-magakit/Pine_2.gltf',
-    '../../../assets/stylized-nature-magakit/Pine_3.gltf',
-    '../../../assets/stylized-nature-magakit/Pine_4.gltf',
-    '../../../assets/stylized-nature-magakit/Pine_5.gltf',
-  ];
-  const totalAssetLoads = pinePaths.length;
-  let loadedAssetCount = 0;
-
-  function markAssetLoaded(): void {
-    loadedAssetCount += 1;
-    if (loadedAssetCount === totalAssetLoads) onComplete(catalog);
+  if (grassUrls.length === 0) {
+    catalog.grass.push(...createGrassBillboardAssets(grassColor));
   }
 
-  function load(
-    path: string,
-    target: InstancedAsset[],
-    label: string,
-    windProfile: VegetationWindProfile,
-  ): void {
-    const url = new URL(path, import.meta.url).href;
-    loader.load(
-      url,
+  type GrassJob = { kind: 'grass'; url: string };
+  type TreeJob = { kind: 'tree'; url: string };
+  type LoadJob = GrassJob | TreeJob;
+  const jobs: LoadJob[] = [
+    ...grassUrls.map((url): GrassJob => ({ kind: 'grass', url })),
+    ...treeUrls.map((url): TreeJob => ({ kind: 'tree', url })),
+  ];
+
+  if (jobs.length === 0) {
+    onComplete(catalog);
+    return;
+  }
+
+  let loadedAssetCount = 0;
+  function markAssetLoaded(): void {
+    loadedAssetCount += 1;
+    if (loadedAssetCount === jobs.length) onComplete(catalog);
+  }
+
+  for (const job of jobs) {
+    if (job.kind === 'grass') {
+      if (!isGrassImageUrl(job.url)) {
+        onError?.(job.url, 'grass', new Error('Grass assets must be image textures'));
+        markAssetLoaded();
+        continue;
+      }
+      textureLoader.load(
+        job.url,
+        (texture) => {
+          catalog.grass.push(
+            createGrassBillboardFromTexture(texture, { color: grassColor }),
+          );
+          markAssetLoaded();
+        },
+        undefined,
+        (err) => {
+          onError?.(job.url, 'grass', err);
+          markAssetLoaded();
+        },
+      );
+      continue;
+    }
+
+    gltfLoader.load(
+      job.url,
       (gltf) => {
         deduplicateObjectTextures(gltf.scene);
-        const asset = extractInstancedAsset(gltf, windProfile);
-        if (asset.parts.length > 0) target.push(asset);
+        const asset = extractInstancedAsset(gltf, 'tree');
+        if (asset.parts.length > 0) catalog.trees.push(asset);
         markAssetLoaded();
       },
       undefined,
       (err) => {
-        onError?.(path, label, err);
+        onError?.(job.url, 'tree', err);
         markAssetLoaded();
       },
     );
   }
-
-  pinePaths.forEach((path) => {
-    load(path, catalog.trees, 'pine', 'tree');
-  });
 }

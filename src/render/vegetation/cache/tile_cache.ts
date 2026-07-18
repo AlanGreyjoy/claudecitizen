@@ -1,15 +1,23 @@
 import type { Planet, VegetationSettings } from '../../../types';
 import {
+  hashVegetationQualityBudgets,
   hashVegetationSettings,
   vegetationStorageKey,
 } from '../../../cache/cache_keys';
 import { getCachedTile, putCachedTile } from '../../../cache/tile_cache_store';
+import {
+  getGrassSampleCount,
+  getTreeSampleCount,
+} from '../domain/constants';
 import type { StoredVegetationTile } from '../domain/storage';
 
 export type { StoredVegetationInstance, StoredVegetationTile } from '../domain/storage';
 
 export function vegetationSettingsHash(settings: VegetationSettings): string {
-  return hashVegetationSettings(settings);
+  return [
+    hashVegetationSettings(settings),
+    hashVegetationQualityBudgets(getGrassSampleCount(), getTreeSampleCount()),
+  ].join('#');
 }
 
 export async function loadVegetationTile(
@@ -24,7 +32,7 @@ export async function loadVegetationTile(
   const key = vegetationStorageKey(
     planet,
     seed,
-    hashVegetationSettings(settings),
+    vegetationSettingsHash(settings),
     face,
     level,
     x,
@@ -46,7 +54,7 @@ export function saveVegetationTile(
   const key = vegetationStorageKey(
     planet,
     seed,
-    hashVegetationSettings(settings),
+    vegetationSettingsHash(settings),
     face,
     level,
     x,

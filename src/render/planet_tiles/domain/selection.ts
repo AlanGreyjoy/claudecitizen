@@ -7,10 +7,15 @@ import {
   shouldSplitTile,
   type TileSelectionView,
 } from './lod';
-import { makeTileInfo } from './tile_info';
+import { makeTileInfo, tileKey } from './tile_info';
 import { clamp } from './tile_key';
 
 export type { TileSelectionView };
+
+export interface TileSelectionLodState {
+  nextSplitKeys: Set<string>;
+  previousSplitKeys: ReadonlySet<string>;
+}
 
 export function visitSelectedTiles(
   planet: Planet,
@@ -18,6 +23,7 @@ export function visitSelectedTiles(
   altitudeMeters: number,
   visitTile: (info: TileInfo) => void,
   view?: TileSelectionView | null,
+  lodState?: TileSelectionLodState,
 ): void {
   const cameraUp = radialUp(bodyPosition);
   const cameraFace = faceUvFromDirection(cameraUp);
@@ -66,7 +72,10 @@ export function visitSelectedTiles(
     if (shouldCullTile(info, planet, cameraUp, altitudeMeters, bodyPosition, view)) {
       return false;
     }
-    if (shouldSplitTile(info, planet, bodyPosition, cameraUp, altitudeMeters)) {
+    const key = tileKey(info.face, info.level, info.x, info.y);
+    const wasSplit = lodState?.previousSplitKeys.has(key) ?? false;
+    if (shouldSplitTile(info, planet, bodyPosition, cameraUp, altitudeMeters, wasSplit)) {
+      lodState?.nextSplitKeys.add(key);
       let anyChild = false;
       for (const child of orderedChildren(face, level, x, y)) {
         if (traverse(face, level + 1, child.x, child.y)) anyChild = true;

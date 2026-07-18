@@ -107,6 +107,7 @@ function createMockWorld(shipMode: boolean): WorldState {
     shipCameraZoom: 1,
     character: createCharacterState(vec3(6_371_000, 0, 0)),
     mode: shipMode ? MODE_IN_SHIP : MODE_IN_STATION,
+    shipExteriorWalk: false,
     prompt: '',
     activeShipId: PLAYER_SHIP_INSTANCE_ID,
     activeBedId: null,

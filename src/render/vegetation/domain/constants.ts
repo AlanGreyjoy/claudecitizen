@@ -99,8 +99,18 @@ export function treeSampleMultiplier(level: number): number {
 export const VEGETATION_BUILD_BUDGET_PER_FRAME = 5;
 /** Soft wall-clock cap so one lush L17 tile cannot stall the frame. */
 export const VEGETATION_BUILD_BUDGET_MS_PER_FRAME = 10;
-export const MAX_CACHED_VEGETATION_TILES = 160;
-export const VEGETATION_CACHE_STALE_FRAMES = 45;
+/**
+ * How many veg tiles may be selected/visible at once. Kept separate from the
+ * memory residency cap so a short walk can keep a warm corridor without
+ * exploding draw calls.
+ */
+export const VEGETATION_SELECTION_BUDGET = 160;
+/** Soft cap on ready GPU veg tiles kept resident (active set + recent corridor). */
+export const MAX_CACHED_VEGETATION_TILES = 288;
+/** Spare entries retained around the active vegetation coverage during LOD swaps. */
+export const VEGETATION_CACHE_ACTIVE_HEADROOM = 96;
+/** Keep recently left tiles ~3s so short walks do not rebuild meshes. */
+export const VEGETATION_CACHE_STALE_FRAMES = 180;
 export const VEGETATION_ALTITUDE_CUTOFF_METERS = 18_000;
 export const VEGETATION_MIN_TILE_LEVEL = 4;
 export const VEGETATION_TILE_DOT_THRESHOLD = 0.32;

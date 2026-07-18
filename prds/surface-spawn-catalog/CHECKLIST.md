@@ -26,66 +26,66 @@ When you finish a phase, check off items in CHECKLIST.md and the phase file.
 
 Details: [phases/01-catalog-schema.md](./phases/01-catalog-schema.md)
 
-- [ ] `PlanetSpawnCatalog` / `PlanetSpawnEntry` types
-- [ ] Parse array→catalog migrate + object catalog parse
-- [ ] Hash includes samplesPerTile, density, weights
-- [ ] Asteron / legacy JSON still loads
-- [ ] Compat adapter so play does not break pre-02/03
-- [ ] typecheck + lint clean
+- [x] `PlanetSpawnCatalog` / `PlanetSpawnEntry` types
+- [x] Parse array→catalog migrate + object catalog parse
+- [x] Hash includes samplesPerTile, density, weights
+- [x] Asteron / legacy JSON still loads
+- [x] Compat adapter so play does not break pre-02/03
+- [x] typecheck + lint clean
 
 ## Phase 02 — Shared-probe placement + budgets
 
 Details: [phases/02-shared-placement.md](./phases/02-shared-placement.md)
 
-- [ ] One probe set per tile (`samplesPerTile`)
-- [ ] Weighted / rule accept across entries (seed-stable)
-- [ ] Per-entry gap grids retained
-- [ ] Instance/sample hard caps
-- [ ] Manager uses new collector API
-- [ ] Bump `SURFACE_SPAWN_CACHE_VERSION`
-- [ ] typecheck + lint clean
+- [x] One probe set per tile (`samplesPerTile`)
+- [x] Weighted / rule accept across entries (seed-stable)
+- [x] Per-entry gap grids retained
+- [x] Instance/sample hard caps
+- [x] Manager uses new collector API
+- [x] Bump `SURFACE_SPAWN_CACHE_VERSION`
+- [x] typecheck + lint clean
 
 ## Phase 03 — Batched render by asset
 
 Details: [phases/03-batched-render.md](./phases/03-batched-render.md)
 
-- [ ] Batch InstancedMesh by `assetUrl` (not per entry)
-- [ ] Shared asset load for duplicate URLs
-- [ ] Dirty selection + translation-only focus pack preserved
-- [ ] Global instance budget + debug stats
-- [ ] Multi-part GLB warning
-- [ ] Physics still resolves collider by entry id
-- [ ] typecheck + lint clean
+- [x] Batch InstancedMesh by `assetUrl` (not per entry)
+- [x] Shared asset load for duplicate URLs
+- [x] Dirty selection + translation-only focus pack preserved
+- [x] Global instance budget + debug stats
+- [x] Multi-part GLB warning
+- [x] Physics still resolves collider by entry id
+- [x] typecheck + lint clean
 
 ## Phase 04 — Editor Spawn Catalog UX
 
 Details: [phases/04-editor-catalog.md](./phases/04-editor-catalog.md)
 
-- [ ] samplesPerTile + catalog density fields
-- [ ] Per-entry weight field
-- [ ] Soft warning at >50 entries
-- [ ] Save/load catalog object shape
-- [ ] Update `docs/docs/cc-editor/planet-authoring.md`
-- [ ] typecheck + lint clean
+- [x] samplesPerTile + catalog density fields
+- [x] Per-entry weight field
+- [x] Soft warning at >50 entries
+- [x] Save/load catalog object shape
+- [x] Update `docs/docs/cc-editor/planet-authoring.md`
+- [x] typecheck + lint clean
 
 ## Phase 05 — Worker + IndexedDB
 
 Details: [phases/05-worker-disk-cache.md](./phases/05-worker-disk-cache.md)
 
-- [ ] Spawn tile worker running phase-02 placement
-- [ ] IndexedDB get/put via `surfaceSpawnStorageKey`
-- [ ] Manager apply path budgeted; invalidate on catalog/version change
-- [ ] Docs / terrain-cache bump rules verified
-- [ ] typecheck + lint clean
+- [x] Spawn tile worker running phase-02 placement
+- [x] IndexedDB get/put via `surfaceSpawnStorageKey`
+- [x] Manager apply path budgeted; invalidate on catalog/version change
+- [x] Docs / terrain-cache bump rules verified
+- [x] typecheck + lint clean
 
 ---
 
 ## Product acceptance
 
 - [ ] ~50 enabled catalog entries sustain interactive FPS near spawn (Preview Planet / play)
-- [ ] Legacy `spawning` arrays still load
-- [ ] Draw calls scale with unique assets × parts, not entry count
-- [ ] Placement probes do not run a full per-entry sample loop
-- [ ] On-foot box/capsule collision still works
-- [ ] `world/surface_spawns` stays Three/DOM-free
-- [ ] Docs describe Spawn Catalog + performance knobs
+- [x] Legacy `spawning` arrays still load
+- [x] Draw calls scale with unique assets × parts, not entry count
+- [x] Placement probes do not run a full per-entry sample loop
+- [x] On-foot box/capsule collision still works
+- [x] `world/surface_spawns` stays Three/DOM-free
+- [x] Docs describe Spawn Catalog + performance knobs

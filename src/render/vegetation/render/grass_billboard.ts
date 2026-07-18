@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { applyWindToMaterial } from './wind';
+import { DEFAULT_GRASS_COLOR } from '../settings';
 
 /**
  * Grass as surface-aligned crossed alpha-cutout cards.
@@ -8,29 +9,25 @@ import { applyWindToMaterial } from './wind';
  * instanceMatrix * position). Custom camera-facing billboard shaders fought the
  * floating-origin renderScale and floated cards into the sky — crossed quads
  * stay planted because Three.js applies the instance matrix normally.
+ *
+ * Procedural cards paint grayscale blades; authored PNGs are typically white
+ * silhouettes. Planet-authored `vegetation.grass.color` tints via material.color.
  */
 
 export interface GrassBillboardVariant {
-  color: string;
   height: number;
   width: number;
   bladeCount: number;
+  /** Relative shade of white blades for within-card depth (1 = full white). */
+  shade: number;
 }
 
 const GRASS_VARIANTS: GrassBillboardVariant[] = [
-  { color: '#6a8f3a', height: 0.55, width: 0.45, bladeCount: 5 },
-  { color: '#7a9f42', height: 0.85, width: 0.5, bladeCount: 6 },
-  { color: '#5e8534', height: 0.45, width: 0.4, bladeCount: 4 },
-  { color: '#8aad4e', height: 0.95, width: 0.55, bladeCount: 7 },
+  { height: 0.55, width: 0.45, bladeCount: 5, shade: 0.92 },
+  { height: 0.85, width: 0.5, bladeCount: 6, shade: 1 },
+  { height: 0.45, width: 0.4, bladeCount: 4, shade: 0.88 },
+  { height: 0.95, width: 0.55, bladeCount: 7, shade: 0.96 },
 ];
-
-function shadeColor(hex: string, shade: number): string {
-  const value = Number.parseInt(hex.slice(1), 16);
-  const r = Math.min(255, Math.round(((value >> 16) & 255) * shade));
-  const g = Math.min(255, Math.round(((value >> 8) & 255) * shade));
-  const b = Math.min(255, Math.round((value & 255) * shade));
-  return `rgb(${r},${g},${b})`;
-}
 
 function paintGrassCard(
   ctx: CanvasRenderingContext2D,
@@ -46,7 +43,11 @@ function paintGrassCard(
     const t = (i + 0.5) / variant.bladeCount - 0.5;
     const lean = t * variant.width * size * 0.7;
     const bladeWidth = size * (0.055 + (1 - Math.abs(t)) * 0.04);
-    const shade = 0.9 + Math.abs(t) * 0.15;
+    const shade = Math.min(
+      1,
+      variant.shade * (0.9 + Math.abs(t) * 0.15),
+    );
+    const channel = Math.round(shade * 255);
     ctx.beginPath();
     ctx.moveTo(baseX + lean * 0.1 - bladeWidth, baseY);
     ctx.quadraticCurveTo(
@@ -62,7 +63,7 @@ function paintGrassCard(
       baseY,
     );
     ctx.closePath();
-    ctx.fillStyle = shadeColor(variant.color, shade);
+    ctx.fillStyle = `rgb(${channel},${channel},${channel})`;
     ctx.fill();
   }
 }
@@ -118,7 +119,79 @@ function createCrossedGrassGeometry(width: number, height: number): THREE.Buffer
   return geometry;
 }
 
-export function createGrassBillboardAssets(): Array<{
+/**
+ * Author color pickers allow bright mint/neon hexes. White silhouette maps ×
+ * those tints become near-emissive under night ambient + moonlight + bloom.
+ * Cap luminance so grass tracks terrain brightness instead of glowing.
+ */
+const GRASS_ALBEDO_MAX_LUMINANCE = 0.35;
+
+function grassAlbedoFromTint(tintHex: string): THREE.Color {
+  const color = new THREE.Color(tintHex);
+  const luminance =
+    0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+  if (luminance > GRASS_ALBEDO_MAX_LUMINANCE && luminance > 1e-6) {
+    color.multiplyScalar(GRASS_ALBEDO_MAX_LUMINANCE / luminance);
+  }
+  return color;
+}
+
+function createGrassBillboardMaterial(
+  texture: THREE.Texture,
+  height: number,
+  tintHex: string,
+): THREE.MeshLambertMaterial {
+  // Lambert (not Basic): unlit cards stayed neon at dusk/night. Standard
+  // went near-black outdoors; Lambert follows ambient + sun/moon like terrain.
+  const material = new THREE.MeshLambertMaterial({
+    map: texture,
+    alphaTest: 0.35,
+    transparent: false,
+    depthWrite: true,
+    side: THREE.DoubleSide,
+    color: grassAlbedoFromTint(tintHex),
+  });
+  applyWindToMaterial(material, {
+    referenceHeight: height,
+    strength: height * 0.12,
+    speed: 1.6,
+  });
+  return material;
+}
+
+/** Crossed alpha-cutout cards textured with an authored PNG (or procedural canvas). */
+export function createGrassBillboardFromTexture(
+  texture: THREE.Texture,
+  options?: { height?: number; width?: number; color?: string },
+): {
+  baseOffsetY: number;
+  parts: Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>;
+} {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+
+  const image = texture.image as { width?: number; height?: number } | undefined;
+  const aspect =
+    image?.width && image?.height && image.height > 0
+      ? image.width / image.height
+      : 0.65;
+  const height = options?.height ?? 1.15;
+  const width = options?.width ?? Math.max(0.35, height * aspect);
+  const tint = options?.color ?? DEFAULT_GRASS_COLOR;
+  const geometry = createCrossedGrassGeometry(width, height);
+  const material = createGrassBillboardMaterial(texture, height, tint);
+  return {
+    baseOffsetY: 0,
+    parts: [{ geometry, material }],
+  };
+}
+
+export function createGrassBillboardAssets(color = DEFAULT_GRASS_COLOR): Array<{
   baseOffsetY: number;
   parts: Array<{ geometry: THREE.BufferGeometry; material: THREE.Material }>;
 }> {
@@ -127,26 +200,6 @@ export function createGrassBillboardAssets(): Array<{
     const height = 0.7 + variant.height * 0.55;
     const width = 0.45 + variant.width * 0.3;
     const texture = createGrassTexture(variant);
-    const geometry = createCrossedGrassGeometry(width, height);
-    // Lambert (not Basic): unlit cards stayed neon at dusk/night. Standard
-    // went near-black outdoors; Lambert follows ambient + sun/moon like terrain.
-    const material = new THREE.MeshLambertMaterial({
-      map: texture,
-      alphaTest: 0.35,
-      transparent: false,
-      depthWrite: true,
-      side: THREE.DoubleSide,
-      color: 0xffffff,
-    });
-    applyWindToMaterial(material, {
-      referenceHeight: height,
-      strength: height * 0.12,
-      speed: 1.6,
-    });
-    return {
-      // Geometry already pivots at y=0; no extra sink offset.
-      baseOffsetY: 0,
-      parts: [{ geometry, material }],
-    };
+    return createGrassBillboardFromTexture(texture, { height, width, color });
   });
 }

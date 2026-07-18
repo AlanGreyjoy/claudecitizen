@@ -1,11 +1,13 @@
 import type {
   ColorCorrectionSettings,
   FogSettings,
+  PlanetSpawnCatalog,
   PlanetSpawnLayer,
   RenderStats,
   SpikeRenderWorld,
   SsaoSettings,
   SurfaceSpawnInstance,
+  SurfaceSpawnMeshCollision,
   VegetationSettings,
   Vec3,
 } from '../../../types';
@@ -23,15 +25,23 @@ export interface SpikeRenderer {
   setVegetationSettings: (nextSettings: Partial<VegetationSettings>) => void;
   /** FPS-debug layer toggles; does not change planet-authored density. */
   setVegetationLayers: (layers: { grass?: boolean; trees?: boolean }) => void;
+  setSurfaceSpawnCatalog: (catalog: PlanetSpawnCatalog) => void;
+  /** Compat wrapper — prefer setSurfaceSpawnCatalog. */
   setSurfaceSpawnLayers: (layers: readonly PlanetSpawnLayer[]) => void;
   getNearbySurfaceSpawns: (
     focus: Vec3,
     radiusMeters: number,
   ) => SurfaceSpawnInstance[];
   getSurfaceSpawnLayers: () => readonly PlanetSpawnLayer[];
+  getSurfaceSpawnCatalog: () => PlanetSpawnCatalog;
+  getSurfaceSpawnMeshCollisions: () => ReadonlyMap<string, SurfaceSpawnMeshCollision>;
   getSurfaceSpawnDebugStats: () => {
     layerCount: number;
     enabledLayers: number;
+    entryCount: number;
+    uniqueAssets: number;
+    batchMeshes: number;
+    estimatedDrawCalls: number;
     cachedTiles: number;
     readyTiles: number;
     pendingTiles: number;

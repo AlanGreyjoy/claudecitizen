@@ -1,10 +1,5 @@
 import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
-import {
-  sampleColliderGroundHeight,
-  type ShipColliderRigState,
-} from '../physics/colliders';
 import { getShipLayout, getShipRestHeightMeters } from './ship_layout';
-import { isRampUsable, doorBlends, type ShipRigState } from './ship_rig';
 import type {
   CharacterState,
   FlightBody,
@@ -12,6 +7,9 @@ import type {
   Pose,
   Vec3,
 } from '../types';
+
+/** Must match `SHIP_NEAR_PAD_HALF_EXTENT_METERS` in ship_physics. */
+const NEAR_PAD_HALF_EXTENT_METERS = 36;
 
 /**
  * Ship gameplay anchors (pilot seat, ramp interacts) read from the active
@@ -115,33 +113,32 @@ export function nearShipRampOutside(
   );
 }
 
-/**
- * Ship-local spot + mesh floor when a grounded character steps onto the
- * lowered ramp collider (mode handoff into ship Rapier), or null when outside.
- */
-export function sampleRampBoarding(
+/** Horizontal pad interest (ignores height) — stay near ship while exterior-walking. */
+export function isWithinShipPadHorizontal(
   character: Pick<CharacterState, 'position'>,
   ship: FlightBody,
-  rig: ShipRigState,
-): { right: number; forward: number; floorUp: number } | null {
-  if (getShipLayout().colliders.length === 0 || !isRampUsable(rig)) return null;
+  halfExtentMeters: number = NEAR_PAD_HALF_EXTENT_METERS,
+): boolean {
   const local = worldToShipLocal(ship, character.position);
-  if (!atShipGroundLevel(local.up)) return null;
-  const colliderRig: ShipColliderRigState = {
-    gear01: rig.gear01,
-    ramp01: rig.ramp01,
-    doors: doorBlends(rig),
-  };
-  const floor = sampleColliderGroundHeight(
-    local.right,
-    local.up + 4,
-    local.forward,
-    getShipLayout().colliders,
-    colliderRig,
+  return (
+    Math.abs(local.right) <= halfExtentMeters &&
+    Math.abs(local.forward) <= halfExtentMeters
   );
-  if (floor === null) return null;
-  if (Math.abs(local.up - floor) > 0.65) return null;
-  return { right: local.right, forward: local.forward, floorUp: floor };
+}
+
+/**
+ * True when a parked ship owns locomotion: feet near the gear-rest pad band
+ * and inside the ship-local pad horizontal extent.
+ */
+export function isNearParkedShipPad(
+  character: Pick<CharacterState, 'position'>,
+  ship: FlightBody,
+  halfExtentMeters: number = NEAR_PAD_HALF_EXTENT_METERS,
+): boolean {
+  if (!isShipParked(ship)) return false;
+  const local = worldToShipLocal(ship, character.position);
+  if (!atShipGroundLevel(local.up)) return false;
+  return isWithinShipPadHorizontal(character, ship, halfExtentMeters);
 }
 
 export function createTransitionPose(start: Pose, end: Pose, t: number): Pose {

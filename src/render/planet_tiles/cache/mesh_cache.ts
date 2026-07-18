@@ -15,6 +15,7 @@ import { buildTerrainTileBuffers } from '../build/terrain_buffers';
 import {
   MAX_CACHED_TILES,
   MIN_LEVEL,
+  TILE_CACHE_ACTIVE_HEADROOM,
   TILE_CACHE_STALE_FRAMES,
 } from '../domain/constants';
 import { makeTileInfo, parentTileInfo, tileKey } from '../domain/tile_info';
@@ -495,6 +496,30 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     startTerrainDiskLoad(info);
   }
 
+  function beginBudgetedSelectedTileLoad(
+    info: TileInfo,
+    buildBudget: BuildBudget,
+  ): TileMeshEntry | undefined {
+    const key = tileKey(info.face, info.level, info.x, info.y);
+    const existing = meshCache.get(key);
+    if (existing) {
+      existing.lastUsedFrame = frameNumber;
+      if (
+        !existing.mesh &&
+        existing.status !== 'loading-disk' &&
+        maySyncBuild(info)
+      ) {
+        return tryBuildTileMeshSync(info, buildBudget) ?? existing;
+      }
+      return existing;
+    }
+    if (buildBudget.remaining <= 0) return undefined;
+
+    buildBudget.remaining -= 1;
+    beginSelectedTileLoad(info);
+    return meshCache.get(key);
+  }
+
   function prefetchTiles(tiles: readonly TileInfo[]): string[] {
     const keys: string[] = [];
     // Leave headroom for underfoot selection; never let prefetch fill the cache.
@@ -556,9 +581,17 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     const targetKey = tileKey(target.face, target.level, target.x, target.y);
     let targetEntry = meshCache.get(targetKey);
 
+    // Start the requested leaf before any fallback parent. Queue priority is
+    // distance-first with a fine-LOD tie-break, so cold-cache refinement grows
+    // outward from the viewer instead of consuming the budget on coarse rings.
     if (!targetEntry) {
-      beginSelectedTileLoad(target);
-      targetEntry = meshCache.get(targetKey);
+      targetEntry = beginBudgetedSelectedTileLoad(target, buildBudget);
+    }
+    if (!targetEntry?.mesh) {
+      const immediateParent = searchChain[1];
+      if (immediateParent) {
+        beginBudgetedSelectedTileLoad(immediateParent, buildBudget);
+      }
     }
     if (targetEntry) targetEntry.lastUsedFrame = frameNumber;
 
@@ -578,20 +611,6 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
         if (buildBudget.remaining > 0) {
           buildBudget.remaining -= 1;
           queueTileBuild(target);
-        }
-      }
-    } else if (!targetEntry && buildBudget.remaining > 0) {
-      if (hasWorkers() && target.level > 0) {
-        buildBudget.remaining -= 1;
-        queueTileBuild(target);
-      } else if (maySyncBuild(target)) {
-        const builtEntry = tryBuildTileMeshSync(target, buildBudget);
-        if (builtEntry) {
-          return {
-            info: target,
-            key: targetKey,
-            mesh: builtEntry.mesh!,
-          };
         }
       }
     } else if (targetEntry) {
@@ -671,7 +690,14 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       }
     }
 
-    if (meshCache.size <= MAX_CACHED_TILES) return;
+    // Cube-face seams can legitimately require more than the nominal cache
+    // size at ground LOD. Keep a small ring around that protected working set;
+    // otherwise every meter of travel evicts the tiles needed a meter later.
+    const effectiveCacheLimit = Math.max(
+      MAX_CACHED_TILES,
+      selectedKeys.size + TILE_CACHE_ACTIVE_HEADROOM,
+    );
+    if (meshCache.size <= effectiveCacheLimit) return;
 
     const inactiveEntries: [string, TileMeshEntry][] = [];
     for (const [key, entry] of meshCache) {
@@ -681,7 +707,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     inactiveEntries.sort((a, b) => a[1].lastUsedFrame - b[1].lastUsedFrame);
 
     for (const [key, entry] of inactiveEntries) {
-      if (meshCache.size <= MAX_CACHED_TILES) break;
+      if (meshCache.size <= effectiveCacheLimit) break;
       releaseTileEntry(key, entry);
     }
   }

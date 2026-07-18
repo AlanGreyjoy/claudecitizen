@@ -13,24 +13,74 @@ import { sampleSurfaceHeight } from '../../world/elevation';
 import { activatePlanetDocument } from '../../world/planets/runtime';
 import {
   createDefaultPlanetDocument,
-  createDefaultSpawnLayer,
+  createDefaultSpawnCatalog,
+  createDefaultSpawnEntry,
   parsePlanetDocument,
   planetPhysicsFromDocument,
   type PlanetBiomePalette,
   type PlanetDocument,
 } from '../../world/planets/schema';
 import { samplePlanetSurface } from '../../world/planet_surface';
-import type { Biome, PlanetSpawnLayer } from '../../types';
+import type {
+  Biome,
+  PlanetSpawnEntry,
+  PlanetSpawnLayer,
+  VegetationLayerSettings,
+} from '../../types';
+import {
+  PREVIEW_HALF_EXTENT_RADIANS,
+  PREVIEW_HEIGHT_SCALE,
+  PREVIEW_PATCH_EXTENT_METERS,
+  buildPreviewVegetation,
+  type PreviewVegetationHandle,
+} from './planet_preview_vegetation';
+import {
+  buildPreviewSpawns,
+  type PreviewSpawnHandle,
+} from './planet_preview_spawns';
 
 function isModelAssetUrl(url: string): boolean {
   return /\.(glb|gltf)(\?|$)/i.test(url);
 }
 
-function nextSpawnLayerId(layers: readonly PlanetSpawnLayer[]): string {
+const GRASS_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
+
+function isGrassImageAssetUrl(url: string): boolean {
+  const pathname = url.split(/[?#]/, 1)[0]?.toLowerCase() ?? '';
+  return GRASS_IMAGE_EXTENSIONS.some((extension) => pathname.endsWith(extension));
+}
+
+function ensureVegetationLayer(layer: VegetationLayerSettings): void {
+  if (!Array.isArray(layer.assetUrls)) {
+    layer.assetUrls = [];
+  }
+}
+
+function ensureGrassColor(layer: VegetationLayerSettings): void {
+  if (
+    typeof layer.color !== 'string' ||
+    !/^#[0-9a-fA-F]{6}$/.test(layer.color)
+  ) {
+    layer.color = '#7a9f42';
+  }
+}
+
+function nextSpawnLayerId(layers: readonly PlanetSpawnEntry[]): string {
   let n = layers.length + 1;
   const used = new Set(layers.map((layer) => layer.id));
   while (used.has(`spawn-${n}`)) n += 1;
   return `spawn-${n}`;
+}
+
+function ensureSpawnCatalog(doc: PlanetDocument): void {
+  if (
+    !doc.spawning ||
+    typeof doc.spawning !== 'object' ||
+    Array.isArray(doc.spawning) ||
+    !Array.isArray(doc.spawning.entries)
+  ) {
+    doc.spawning = createDefaultSpawnCatalog();
+  }
 }
 
 export interface PlanetAuthoringEditor {
@@ -151,9 +201,11 @@ function checkboxField(
   );
 }
 
-function modelAssetField(
+function dropAssetField(
   label: string,
   value: string,
+  placeholder: string,
+  accept: (url: string) => boolean,
   onChange: (value: string) => void,
 ): HTMLElement {
   const input = el('input', {
@@ -161,7 +213,7 @@ function modelAssetField(
     attrs: {
       type: 'text',
       value,
-      placeholder: 'Drop .glb / .gltf from Project…',
+      placeholder,
     },
     on: {
       input: () => onChange(input.value.trim()),
@@ -181,7 +233,7 @@ function modelAssetField(
     const url =
       event.dataTransfer?.getData(ASSET_DND_TYPE) ||
       event.dataTransfer?.getData('text/plain');
-    if (url?.startsWith('/') && isModelAssetUrl(url)) {
+    if (url?.startsWith('/') && accept(url)) {
       input.value = url;
       onChange(url);
     }
@@ -190,6 +242,34 @@ function modelAssetField(
     'label',
     { className: 'ed-planet-field ed-planet-field-wide' },
     [el('span', { text: label }), input],
+  );
+}
+
+function modelAssetField(
+  label: string,
+  value: string,
+  onChange: (value: string) => void,
+): HTMLElement {
+  return dropAssetField(
+    label,
+    value,
+    'Drop .glb / .gltf from Project…',
+    isModelAssetUrl,
+    onChange,
+  );
+}
+
+function grassImageAssetField(
+  label: string,
+  value: string,
+  onChange: (value: string) => void,
+): HTMLElement {
+  return dropAssetField(
+    label,
+    value,
+    'Drop .png from Project…',
+    isGrassImageAssetUrl,
+    onChange,
   );
 }
 
@@ -229,6 +309,15 @@ function spawnLayerEditor(
   onRemove: () => void,
   onRebuild: () => void,
 ): HTMLElement {
+  if (typeof layer.weight !== 'number' || !Number.isFinite(layer.weight)) {
+    layer.weight = 1;
+  }
+  if (
+    typeof layer.terrainInsetMeters !== 'number' ||
+    !Number.isFinite(layer.terrainInsetMeters)
+  ) {
+    layer.terrainInsetMeters = 0;
+  }
   const half = layer.collider.halfExtents ?? [0.5, 0.5, 0.5];
   const body: HTMLElement[] = [
     checkboxField('Enabled', layer.enabled, (value) => {
@@ -241,6 +330,10 @@ function spawnLayerEditor(
     }),
     modelAssetField('Asset', layer.assetUrl, (value) => {
       layer.assetUrl = value;
+      onChange();
+    }),
+    numberField('Weight', layer.weight, (value) => {
+      layer.weight = Math.max(0, value);
       onChange();
     }),
     numberField('Density', layer.density, (value) => {
@@ -271,6 +364,11 @@ function spawnLayerEditor(
       layer.alignToNormal = value;
       onChange();
     }),
+    numberField('Terrain inset (m)', layer.terrainInsetMeters, (value) => {
+      // Negative sinks into the terrain; positive lifts above it.
+      layer.terrainInsetMeters = value;
+      onChange();
+    }, 0.01),
     biomeMultiSelect(layer.biomes, (biomes) => {
       layer.biomes = biomes;
       onChange();
@@ -358,7 +456,7 @@ function spawnLayerEditor(
   body.push(
     el('button', {
       className: 'ed-btn ed-planet-remove-layer',
-      text: 'Remove layer',
+      text: 'Remove entry',
       attrs: { type: 'button' },
       on: { click: onRemove },
     }),
@@ -370,6 +468,60 @@ function spawnLayerEditor(
       text: layer.name || layer.id,
     }),
     ...body,
+  ]);
+}
+
+function vegetationAssetListEditor(
+  layer: VegetationLayerSettings,
+  label: string,
+  kind: 'grass' | 'tree',
+  onChange: () => void,
+  onRebuild: () => void,
+): HTMLElement {
+  ensureVegetationLayer(layer);
+  const assetField = kind === 'grass' ? grassImageAssetField : modelAssetField;
+  const rows: HTMLElement[] = [];
+  for (let i = 0; i < layer.assetUrls.length; i += 1) {
+    const index = i;
+    rows.push(
+      el('div', { className: 'ed-planet-veg-asset-row' }, [
+        assetField(`Asset ${index + 1}`, layer.assetUrls[index] ?? '', (value) => {
+          layer.assetUrls[index] = value;
+          onChange();
+        }),
+        el('button', {
+          className: 'ed-btn ed-planet-remove-layer',
+          text: 'Remove',
+          attrs: { type: 'button' },
+          on: {
+            click: () => {
+              layer.assetUrls.splice(index, 1);
+              onChange();
+              onRebuild();
+            },
+          },
+        }),
+      ]),
+    );
+  }
+  return el('div', { className: 'ed-planet-veg-assets' }, [
+    el('div', {
+      className: 'ed-planet-spawn-layer-title',
+      text: label,
+    }),
+    ...rows,
+    el('button', {
+      className: 'ed-btn',
+      text: 'Add asset',
+      attrs: { type: 'button' },
+      on: {
+        click: () => {
+          layer.assetUrls.push('');
+          onChange();
+          onRebuild();
+        },
+      },
+    }),
   ]);
 }
 
@@ -455,6 +607,13 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
   scene.add(light, new THREE.AmbientLight(0x8899aa, 0.55));
   let previewMesh: THREE.Mesh | null = null;
   let previewWaterMesh: THREE.Mesh | null = null;
+  let previewVegetation: PreviewVegetationHandle | null = null;
+  let previewVegetationLoad: { cancel: () => void } | null = null;
+  let previewVegetationGeneration = 0;
+  let previewSpawns: PreviewSpawnHandle | null = null;
+  let previewSpawnsLoad: { cancel: () => void } | null = null;
+  let previewSpawnsGeneration = 0;
+  let vegetationPreviewTimer = 0;
 
   const orbit = new OrbitControls(camera, canvas);
   orbit.enableDamping = true;
@@ -611,6 +770,24 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     setStatus(`${documentState.name} — unsaved`);
   }
 
+  /**
+   * Veg/spawn edits: mark unsaved and rebuild decorations. Avoid markDirty()'s
+   * previewDirty path — that clears plants on the next frame before the
+   * debounced rebuild, which made density tweaks look like no-ops.
+   */
+  function markVegetationDirty(): void {
+    setStatus(`${documentState.name} — unsaved`);
+    window.clearTimeout(vegetationPreviewTimer);
+    vegetationPreviewTimer = window.setTimeout(() => {
+      if (!active) return;
+      refreshHeightfieldPreview();
+    }, 200);
+  }
+
+  function markSpawnCatalogDirty(): void {
+    markVegetationDirty();
+  }
+
   function rebuildForm(): void {
     clearChildren(formHost);
     const doc = documentState;
@@ -714,24 +891,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
           markDirty();
         }),
       ]),
-      section('Vegetation', [
-        numberField('Grass density', doc.vegetation.grass.density, (value) => {
-          doc.vegetation.grass.density = value;
-          markDirty();
-        }),
-        numberField('Grass gap (m)', doc.vegetation.grass.gapMeters, (value) => {
-          doc.vegetation.grass.gapMeters = value;
-          markDirty();
-        }),
-        numberField('Tree density', doc.vegetation.tree.density, (value) => {
-          doc.vegetation.tree.density = value;
-          markDirty();
-        }),
-        numberField('Tree gap (m)', doc.vegetation.tree.gapMeters, (value) => {
-          doc.vegetation.tree.gapMeters = value;
-          markDirty();
-        }),
-      ]),
+      section('Vegetation', buildVegetationSection(doc)),
       section(
         'Palette',
         BIOME_KEYS.map((biome) =>
@@ -741,28 +901,129 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
           }),
         ),
       ),
-      section('Spawning', buildSpawningSection(doc)),
+      section('Spawn Catalog', buildSpawningSection(doc)),
     );
   }
 
+  function buildVegetationSection(doc: PlanetDocument): HTMLElement[] {
+    ensureVegetationLayer(doc.vegetation.grass);
+    ensureVegetationLayer(doc.vegetation.tree);
+    ensureGrassColor(doc.vegetation.grass);
+    return [
+      el('div', {
+        className: 'ed-empty-note',
+        text: 'Grass assets are PNG billboards (empty → procedural). Trees need at least one GLB/GLTF from Project.',
+      }),
+      el('div', {
+        className: 'ed-planet-spawn-layer-title',
+        text: 'Grass',
+      }),
+      colorField('Grass color', doc.vegetation.grass.color ?? '#7a9f42', (value) => {
+        doc.vegetation.grass.color = value;
+        markVegetationDirty();
+      }),
+      numberField('Grass density', doc.vegetation.grass.density, (value) => {
+        doc.vegetation.grass.density = value;
+        markVegetationDirty();
+      }),
+      numberField('Grass gap (m)', doc.vegetation.grass.gapMeters, (value) => {
+        doc.vegetation.grass.gapMeters = value;
+        markVegetationDirty();
+      }),
+      numberField('Grass min scale', doc.vegetation.grass.minScale, (value) => {
+        doc.vegetation.grass.minScale = value;
+        markVegetationDirty();
+      }),
+      numberField('Grass max scale', doc.vegetation.grass.maxScale, (value) => {
+        doc.vegetation.grass.maxScale = value;
+        markVegetationDirty();
+      }),
+      vegetationAssetListEditor(
+        doc.vegetation.grass,
+        'Grass assets',
+        'grass',
+        () => markVegetationDirty(),
+        () => rebuildForm(),
+      ),
+      el('div', {
+        className: 'ed-planet-spawn-layer-title',
+        text: 'Trees',
+      }),
+      numberField('Tree density', doc.vegetation.tree.density, (value) => {
+        doc.vegetation.tree.density = value;
+        markVegetationDirty();
+      }),
+      numberField('Tree gap (m)', doc.vegetation.tree.gapMeters, (value) => {
+        doc.vegetation.tree.gapMeters = value;
+        markVegetationDirty();
+      }),
+      numberField('Tree min scale', doc.vegetation.tree.minScale, (value) => {
+        doc.vegetation.tree.minScale = value;
+        markVegetationDirty();
+      }),
+      numberField('Tree max scale', doc.vegetation.tree.maxScale, (value) => {
+        doc.vegetation.tree.maxScale = value;
+        markVegetationDirty();
+      }),
+      vegetationAssetListEditor(
+        doc.vegetation.tree,
+        'Tree assets',
+        'tree',
+        () => markVegetationDirty(),
+        () => rebuildForm(),
+      ),
+    ];
+  }
+
   function buildSpawningSection(doc: PlanetDocument): HTMLElement[] {
-    if (!Array.isArray(doc.spawning)) doc.spawning = [];
+    ensureSpawnCatalog(doc);
+    const catalog = doc.spawning;
+    const entries = catalog.entries;
     const children: HTMLElement[] = [
       el('div', {
         className: 'ed-empty-note',
-        text: 'Drag .glb props from Project. Height is normalized 0–1 (sea→peak). Plains/forest usually need min≈0, max≈1 — not min=1. Shore: beach + max≈0.012.',
+        text: 'Shared samples place all entries from one probe set. Weights compete among acceptors. Prefer reusing a few GLBs — draw calls scale with unique assets × mesh parts, not entry count. Use Test Play for FPS.',
+      }),
+      numberField('Samples per tile', catalog.samplesPerTile, (value) => {
+        catalog.samplesPerTile = Math.max(0, Math.round(value));
+        markSpawnCatalogDirty();
+      }),
+      numberField('Catalog density', catalog.density, (value) => {
+        catalog.density = Math.max(0, value);
+        markSpawnCatalogDirty();
+      }),
+      el('div', {
+        className: 'ed-empty-note',
+        text: 'Drag .glb props from Project. Height is normalized 0–1 (sea→peak). Plains/forest usually need min≈0, max≈1 — not min=1. Shore: beach + max≈0.012. Colliders: box/capsule only. Preview shows catalog props on the heightfield.',
       }),
     ];
-    for (let i = 0; i < doc.spawning.length; i += 1) {
-      const layer = doc.spawning[i]!;
+    if (entries.length > 50) {
+      children.push(
+        el('div', {
+          className: 'ed-spawn-catalog-warning',
+          text: `Catalog has ${entries.length} entries (>50). Prefer fewer unique GLBs and tune weights — large catalogs can hurt FPS.`,
+        }),
+      );
+    }
+    const enabledCount = entries.filter((e) => e.enabled).length;
+    if (enabledCount > 50) {
+      children.push(
+        el('div', {
+          className: 'ed-spawn-catalog-warning',
+          text: `${enabledCount} enabled entries. Soft target is ~50 enabled props; disable unused entries.`,
+        }),
+      );
+    }
+    for (let i = 0; i < entries.length; i += 1) {
+      const layer = entries[i]!;
       const index = i;
       children.push(
         spawnLayerEditor(
           layer,
-          () => markDirty(),
+          () => markSpawnCatalogDirty(),
           () => {
-            doc.spawning.splice(index, 1);
-            markDirty();
+            entries.splice(index, 1);
+            markSpawnCatalogDirty();
             rebuildForm();
           },
           () => rebuildForm(),
@@ -772,13 +1033,15 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     children.push(
       el('button', {
         className: 'ed-btn',
-        text: 'Add spawn layer',
+        text: 'Add catalog entry',
         attrs: { type: 'button' },
         on: {
           click: () => {
-            const id = nextSpawnLayerId(doc.spawning);
-            doc.spawning.push(createDefaultSpawnLayer(id, `Spawn ${doc.spawning.length + 1}`));
-            markDirty();
+            const id = nextSpawnLayerId(entries);
+            entries.push(
+              createDefaultSpawnEntry(id, `Spawn ${entries.length + 1}`),
+            );
+            markSpawnCatalogDirty();
             rebuildForm();
           },
         },
@@ -792,15 +1055,36 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
   }
 
+  function clearPreviewVegetation(): void {
+    previewVegetationLoad?.cancel();
+    previewVegetationLoad = null;
+    previewVegetation?.dispose();
+    previewVegetation = null;
+  }
+
+  function clearPreviewSpawns(): void {
+    previewSpawnsLoad?.cancel();
+    previewSpawnsLoad = null;
+    previewSpawns?.dispose();
+    previewSpawns = null;
+  }
+
+  function clearPreviewDecorations(): void {
+    clearPreviewVegetation();
+    clearPreviewSpawns();
+  }
+
   function rebuildPreviewMesh(): void {
+    // Terrain edits invalidate planted props until Preview rebuilds them.
+    clearPreviewDecorations();
     activatePlanetDocument(documentState);
     const planet = planetPhysicsFromDocument(documentState);
     const seed = documentState.seed;
-    const hint = documentState.spawnHint ?? { latRadians: -0.18, lonRadians: 1.0524073464102095 };
+    const hint = documentState.spawnHint ?? { latRadians: -0.946, lonRadians: 2.176407 };
     const segments = 48;
-    const halfExtentRadians = 0.012;
-    const heightScale = 0.08;
-    const patchExtentMeters = 2_400;
+    const halfExtentRadians = PREVIEW_HALF_EXTENT_RADIANS;
+    const heightScale = PREVIEW_HEIGHT_SCALE;
+    const patchExtentMeters = PREVIEW_PATCH_EXTENT_METERS;
     const gridWidth = segments + 1;
     const positions: number[] = [];
     const colors: number[] = [];
@@ -1052,6 +1336,123 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     return true;
   }
 
+  function framePreviewCameraForVegetation(): void {
+    const planet = planetPhysicsFromDocument(documentState);
+    const hint =
+      documentState.spawnHint ?? {
+        latRadians: -0.946,
+        lonRadians: 2.176407,
+      };
+    const midHeight =
+      sampleSurfaceHeight(
+        planet,
+        documentState.seed,
+        cartesianFromLatLonAlt(hint.latRadians, hint.lonRadians, 0, planet.radiusMeters),
+      ) * PREVIEW_HEIGHT_SCALE;
+    endFly();
+    camera.position.set(0, midHeight + 110, 220);
+    orbit.target.set(0, midHeight + 20, 0);
+    camera.lookAt(orbit.target);
+    orbit.update();
+  }
+
+  function refreshHeightfieldPreview(): void {
+    activatePlanetDocument(documentState);
+    ensureVegetationLayer(documentState.vegetation.grass);
+    ensureVegetationLayer(documentState.vegetation.tree);
+    ensureSpawnCatalog(documentState);
+    const vegGeneration = ++previewVegetationGeneration;
+    const spawnGeneration = ++previewSpawnsGeneration;
+    previewDirty = false;
+    rebuildPreviewMesh();
+
+    const planet = planetPhysicsFromDocument(documentState);
+    const hint =
+      documentState.spawnHint ?? {
+        latRadians: -0.946,
+        lonRadians: 2.176407,
+      };
+    const patch = {
+      halfExtentRadians: PREVIEW_HALF_EXTENT_RADIANS,
+      heightScale: PREVIEW_HEIGHT_SCALE,
+      hint,
+      patchExtentMeters: PREVIEW_PATCH_EXTENT_METERS,
+    };
+
+    let grassCount = 0;
+    let treeCount = 0;
+    let spawnCount = 0;
+    let vegReady = false;
+    let spawnReady = false;
+    let hadError = false;
+
+    function publishPreviewStatus(): void {
+      if (!vegReady || !spawnReady || hadError) return;
+      if (grassCount === 0 && treeCount === 0 && spawnCount === 0) {
+        setStatus(
+          'Preview placed 0 props — check veg density, spawn catalog density/biomes/height bands.',
+          true,
+        );
+        return;
+      }
+      const gd = documentState.vegetation.grass.density;
+      const td = documentState.vegetation.tree.density;
+      setStatus(
+        `Preview: ${grassCount} grass (d=${gd}), ${treeCount} trees (d=${td}), ${spawnCount} catalog props.`,
+      );
+    }
+
+    setStatus('Building vegetation + spawn preview…');
+    previewVegetationLoad = buildPreviewVegetation(
+      planet,
+      documentState.seed,
+      patch,
+      documentState.vegetation,
+      (handle) => {
+        if (vegGeneration !== previewVegetationGeneration) {
+          handle.dispose();
+          return;
+        }
+        previewVegetation = handle;
+        scene.add(handle.group);
+        grassCount = handle.grassCount;
+        treeCount = handle.treeCount;
+        vegReady = true;
+        framePreviewCameraForVegetation();
+        publishPreviewStatus();
+      },
+      (message) => {
+        if (vegGeneration !== previewVegetationGeneration) return;
+        hadError = true;
+        setStatus(message, true);
+      },
+    );
+
+    previewSpawnsLoad = buildPreviewSpawns(
+      planet,
+      documentState.seed,
+      patch,
+      documentState.spawning,
+      (handle) => {
+        if (spawnGeneration !== previewSpawnsGeneration) {
+          handle.dispose();
+          return;
+        }
+        previewSpawns = handle;
+        scene.add(handle.group);
+        spawnCount = handle.spawnCount;
+        spawnReady = true;
+        framePreviewCameraForVegetation();
+        publishPreviewStatus();
+      },
+      (message) => {
+        if (spawnGeneration !== previewSpawnsGeneration) return;
+        hadError = true;
+        setStatus(message, true);
+      },
+    );
+  }
+
   function openPlanetPicker(): void {
     const query = window.prompt(
       `Open planet id:\n${planetList.map((entry) => `${entry.id} — ${entry.name}`).join('\n')}`,
@@ -1074,7 +1475,12 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     }),
     el('button', {
       className: 'ed-btn ed-btn-accent',
-      text: 'Preview Planet',
+      text: 'Preview',
+      on: { click: () => refreshHeightfieldPreview() },
+    }),
+    el('button', {
+      className: 'ed-btn',
+      text: 'Test Play',
       on: { click: () => void previewPlanet() },
     }),
     el('button', {
@@ -1116,8 +1522,10 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     },
     deactivate: () => {
       active = false;
+      window.clearTimeout(vegetationPreviewTimer);
       endFly();
       cancelAnimationFrame(raf);
+      clearPreviewDecorations();
     },
     canLeave: () =>
       !hasUnsavedChanges() ||

@@ -31,8 +31,11 @@ declare global {
           minH: number;
           maxH: number;
           density: number;
+          weight?: number;
+          collider?: unknown;
         }>;
         nearbyCount: number;
+        activeColliders?: number;
         sample: unknown[];
       };
     };

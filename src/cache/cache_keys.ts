@@ -2,6 +2,8 @@ import { terrainFingerprint } from '../world/terrain_fingerprint';
 import type {
   CubeFace,
   Planet,
+  PlanetSpawnCatalog,
+  PlanetSpawnEntry,
   PlanetSpawnLayer,
   VegetationSettings,
 } from '../types';
@@ -11,10 +13,10 @@ import { getActivePlanetConfig } from '../world/planets/runtime';
 // Keep this explicit because the height fingerprint does not capture buffer
 // layout or palette-only changes.
 export const TERRAIN_CACHE_VERSION = 'mulberry-bandlimited-skirts-routed-l17-v6';
-// v11: denser 1× underfoot carpet.
-export const VEGETATION_CACHE_VERSION = 'v11';
-/** Bump when surface-spawn placement algorithm or instance schema changes. */
-export const SURFACE_SPAWN_CACHE_VERSION = 'v1';
+// v15: quality sample budgets (grass/tree counts) are part of the storage key.
+export const VEGETATION_CACHE_VERSION = 'v15';
+/** Bump when surface-spawn placement algorithm or stored spawn-tile schema changes. */
+export const SURFACE_SPAWN_CACHE_VERSION = 'v3-idb';
 
 function paletteHash(): string {
   const { oceanShallow, palette, planetId } = getActivePlanetConfig();
@@ -52,7 +54,7 @@ export function terrainStorageKey(
 
 export function hashVegetationSettings(settings: VegetationSettings): string {
   const { grass, tree } = settings;
-  return [
+  const numbers = [
     grass.density,
     grass.gapMeters,
     grass.minScale,
@@ -64,6 +66,21 @@ export function hashVegetationSettings(settings: VegetationSettings): string {
   ]
     .map((value) => value.toFixed(3))
     .join(',');
+  const grassAssets = (grass.assetUrls ?? []).join('|');
+  const treeAssets = (tree.assetUrls ?? []).join('|');
+  return `${numbers};g:${grassAssets};t:${treeAssets}`;
+}
+
+/**
+ * Quality presets change per-tile sample budgets without touching authored
+ * settings. Include them in the disk key so performance/balanced/high cannot
+ * share tiles (and so agents stop bumping VEGETATION_CACHE_VERSION for that).
+ */
+export function hashVegetationQualityBudgets(
+  grassSampleCount: number,
+  treeSampleCount: number,
+): string {
+  return `q${Math.round(grassSampleCount)}/${Math.round(treeSampleCount)}`;
 }
 
 export function vegetationStorageKey(
@@ -90,29 +107,43 @@ export function vegetationStorageKey(
   ].join(':');
 }
 
-export function hashSurfaceSpawnLayers(layers: readonly PlanetSpawnLayer[]): string {
-  return layers
-    .map((layer) =>
-      [
-        layer.id,
-        layer.enabled ? 1 : 0,
-        layer.assetUrl,
-        layer.density.toFixed(3),
-        layer.gapMeters.toFixed(3),
-        layer.minScale.toFixed(3),
-        layer.maxScale.toFixed(3),
-        layer.biomes.join(','),
-        layer.minNormalizedHeight.toFixed(4),
-        layer.maxNormalizedHeight.toFixed(4),
-        layer.alignToNormal ? 1 : 0,
-        layer.collider.shape,
-        (layer.collider.halfExtents ?? [0, 0, 0]).map((v) => v.toFixed(3)).join('x'),
-        (layer.collider.radius ?? 0).toFixed(3),
-        (layer.collider.halfHeight ?? 0).toFixed(3),
-        layer.seedOffset,
-      ].join('|'),
-    )
-    .join(';');
+function hashSurfaceSpawnEntry(entry: PlanetSpawnEntry | PlanetSpawnLayer): string {
+  return [
+    entry.id,
+    entry.enabled ? 1 : 0,
+    entry.assetUrl,
+    entry.weight.toFixed(3),
+    entry.density.toFixed(3),
+    entry.gapMeters.toFixed(3),
+    entry.minScale.toFixed(3),
+    entry.maxScale.toFixed(3),
+    entry.biomes.join(','),
+    entry.minNormalizedHeight.toFixed(4),
+    entry.maxNormalizedHeight.toFixed(4),
+    entry.alignToNormal ? 1 : 0,
+    (entry.terrainInsetMeters ?? 0).toFixed(3),
+    entry.collider.shape,
+    (entry.collider.halfExtents ?? [0, 0, 0]).map((v) => v.toFixed(3)).join('x'),
+    (entry.collider.radius ?? 0).toFixed(3),
+    (entry.collider.halfHeight ?? 0).toFixed(3),
+    entry.seedOffset,
+  ].join('|');
+}
+
+/** Hash entry list only (legacy / physics-adjacent callers). */
+export function hashSurfaceSpawnLayers(
+  layers: readonly PlanetSpawnEntry[] | readonly PlanetSpawnLayer[],
+): string {
+  return layers.map(hashSurfaceSpawnEntry).join(';');
+}
+
+/** Full catalog hash for cache invalidation (settings + entries). */
+export function hashSurfaceSpawnCatalog(catalog: PlanetSpawnCatalog): string {
+  return [
+    `s${Math.round(catalog.samplesPerTile)}`,
+    `d${catalog.density.toFixed(3)}`,
+    hashSurfaceSpawnLayers(catalog.entries),
+  ].join('#');
 }
 
 export function surfaceSpawnStorageKey(

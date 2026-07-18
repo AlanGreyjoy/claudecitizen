@@ -423,11 +423,15 @@ export async function startPlaySession(
   loading?.setProgress(0.45);
 
   renderer?.setVegetationSettings(normalizeVegetationSettings(planetDocument.vegetation));
-  const spawnLayers = planetDocument.spawning ?? [];
-  renderer?.setSurfaceSpawnLayers(spawnLayers);
+  const spawnCatalog = planetDocument.spawning;
+  renderer?.setSurfaceSpawnCatalog(spawnCatalog);
   console.info(
-    `ClaudeCitizen surface spawns: ${spawnLayers.length} layer(s)`,
-    spawnLayers.map((layer) => `${layer.id}:${layer.assetUrl ? 'asset' : 'no-asset'}`),
+    `ClaudeCitizen surface spawns: ${spawnCatalog.entries.length} entr(y/ies)` +
+      ` samplesPerTile=${spawnCatalog.samplesPerTile}` +
+      ` density=${spawnCatalog.density}`,
+    spawnCatalog.entries.map(
+      (layer) => `${layer.id}:${layer.assetUrl ? 'asset' : 'no-asset'}`,
+    ),
   );
   if (fromEditor || playParams.get('debug') === '1') {
     statsPanelEl.classList.remove('is-hidden');

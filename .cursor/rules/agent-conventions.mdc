@@ -59,7 +59,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`)
 - Friendly station NPCs / waypoint routes / population definitions → `src/npc/` plus AGENTS.md "Friendly station NPCs"
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
-- Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache_keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs invalidate automatically — no bump.
+- Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache_keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (dev-only)"
 - Ship flight / mass / thrust / IFCS / dual-reticle / Preview Ship flight → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, and AGENTS.md "Ship flight"

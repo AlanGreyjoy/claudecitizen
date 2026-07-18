@@ -3,6 +3,8 @@ export * from './planet';
 export * from './terrain';
 export * from './vegetation';
 export * from './surface_spawn';
+export * from './surface_spawn_collision';
+export * from './surface_spawn_worker';
 export * from './flight';
 export * from './character';
 export * from './render';

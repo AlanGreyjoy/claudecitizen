@@ -16,7 +16,8 @@ After saving, the toolbar shows:
 | --- | --- | --- |
 | **Preview Station** | `kind: "station"` | Save → navigate to station playtest |
 | **Preview Ship** | `kind: "ship"` | Save → navigate to ship sandbox |
-| **Preview Planet** | Planet Authoring tab | Save → surface playtest |
+| **Test Play** | Planet Authoring tab | Save → surface playtest |
+| **Preview** | Planet Authoring panel | Rebuild heightfield + plant vegetation in the editor viewport (no play mode) |
 
 Other prefab kinds show a toast: *"Preview in Play supports station and ship prefabs."*
 

@@ -1,7 +1,7 @@
 # Phase 02 — Shared-probe placement + budgets
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Complete  
 **Depends on:** Phase 01  
 **Unlocks:** Phase 03 (batched render), Phase 05 (worker cache)
 

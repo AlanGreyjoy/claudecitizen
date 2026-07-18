@@ -1,7 +1,7 @@
 # Phase 03 — Batched render by asset
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Complete  
 **Depends on:** Phase 02  
 **Unlocks:** Phase 04 (editor warnings), Phase 05 (cache apply path)
 

@@ -185,6 +185,40 @@ export function isOnShipRampDeck(deckLocal: DeckLocal): boolean {
   return bound?.id === "ramp" || bound?.openToOutside === true;
 }
 
+/**
+ * True when feet are on an interior walk volume (cabin / deck / ramp), not the
+ * outer hull roof. Roof tops often share right/forward with a cabin bound but
+ * sit above that zone's ceiling.
+ */
+export function isShipInteriorWalkPose(
+  local: DeckLocal,
+  localUp: number,
+  structureFloorUp: number | null,
+): boolean {
+  if (structureFloorUp === null) return false;
+  if (
+    localUp < structureFloorUp - 0.12 ||
+    localUp > structureFloorUp + 0.85
+  ) {
+    return false;
+  }
+  const bounds = getShipLayout().cameraBounds;
+  if (bounds.length === 0) return true;
+  const bound = findCameraBoundContaining(local);
+  if (!bound) return false;
+  if (bound.openToOutside) return true;
+  if (localUp > bound.ceilingUp - 0.2) return false;
+  const floorTarget =
+    bound.slopeMinUp === undefined
+      ? bound.floorUp
+      : // Approximate ramp/cabin floor along the bound's forward span.
+        bound.slopeMinUp +
+        ((local.forward - bound.minForward) /
+          Math.max(1e-3, bound.maxForward - bound.minForward)) *
+          (bound.floorUp - bound.slopeMinUp);
+  return Math.abs(localUp - floorTarget) <= 0.9;
+}
+
 function colliderFloorAt(
   local: DeckLocal,
   rig: ShipColliderRigState | undefined,
@@ -568,15 +602,18 @@ export function nearRampPanel(deckLocal: DeckLocal): boolean {
 
 export interface DeckUpdateResult {
   state: DeckCharacterState;
-  /** Character left ship Rapier (no floor underfoot). */
+  /**
+   * Character has no ship/pad floor underfoot (true freefall eject).
+   * Standing on the parked pad plane is still "aboard" ship Rapier.
+   */
   dismounted: boolean;
   /** Alias of dismounted — kept for call-site compatibility. */
   fellOffDeck: boolean;
 }
 
 /**
- * Collider-deck exit: leave ship mode when Rapier has no floor underfoot.
- * Walk the ramp collider freely — no authored tip line / dismountGround.
+ * Freefall eject when Rapier has no hull/ramp/pad underfoot.
+ * Walk ramp ↔ pad continuously — pad contact is not an exit.
  */
 function rapierDeckExitFlags(
   physics: ShipPhysics,
@@ -607,6 +644,16 @@ function rapierDeckExitFlags(
   };
 }
 
+export interface DeckLocomotionOptions {
+  /**
+   * Near-ship exterior on planet: Rapier has no pad floor, so treat planet
+   * contact as grounded for jump / landing.
+   */
+  exteriorPlanetGrounded?: boolean;
+  /** Skip freefall eject (parked exterior absorbs it via planet snap). */
+  suppressDeckExit?: boolean;
+}
+
 function updateCharacterOnDeckRapier(
   state: DeckCharacterState,
   ship: FlightBody,
@@ -614,6 +661,7 @@ function updateCharacterOnDeckRapier(
   dt: number,
   gravityMetersPerSecond2: number,
   physics: ShipPhysics,
+  options?: DeckLocomotionOptions,
 ): DeckUpdateResult {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -632,7 +680,8 @@ function updateCharacterOnDeckRapier(
   const desiredFacing = desiredDirection;
 
   let verticalVelocity = state.shipVerticalVelocity ?? 0;
-  const groundedBefore = isShipPlayerGrounded(physics);
+  const groundedBefore =
+    isShipPlayerGrounded(physics) || Boolean(options?.exteriorPlanetGrounded);
   if (groundedBefore && verticalVelocity <= 0) {
     verticalVelocity = 0;
   }
@@ -648,25 +697,41 @@ function updateCharacterOnDeckRapier(
   moveShipPlayer(physics, ship, velocity, dt);
   stepShipPhysics(physics);
 
-  const grounded = isShipPlayerGrounded(physics);
+  const rapierGrounded = isShipPlayerGrounded(physics);
+  const grounded =
+    rapierGrounded ||
+    (Boolean(options?.exteriorPlanetGrounded) && verticalVelocity <= 0.15);
   const localPose = getShipPlayerLocal(physics);
   const position = getShipPlayerWorldPosition(physics, ship);
   const deckLocal = { right: localPose.right, forward: localPose.forward };
   const bound = findCameraBoundAt(deckLocal);
   const forward = rotateToward(state.forward, desiredFacing, ship.up, dt);
-  const flags = rapierDeckExitFlags(
-    physics,
-    grounded,
-    state.airborneOffDeckFrames ?? 0,
-    state.deckExitGraceFrames ?? 0,
-  );
+  const flags = options?.suppressDeckExit
+    ? {
+        leftDeck: false,
+        airborneOffDeckFrames: 0,
+        deckExitGraceFrames: Math.max(0, (state.deckExitGraceFrames ?? 0) - 1),
+      }
+    : rapierDeckExitFlags(
+        physics,
+        grounded,
+        state.airborneOffDeckFrames ?? 0,
+        state.deckExitGraceFrames ?? 0,
+      );
 
+  const airborne = !grounded || verticalVelocity > 0.15;
   return {
     dismounted: flags.leftDeck,
     fellOffDeck: flags.leftDeck,
     state: {
       animation: animationFromState(
-        { jumpPhase: "grounded" },
+        {
+          jumpPhase: airborne
+            ? verticalVelocity > 0.5
+              ? "jump-start"
+              : "jump-loop"
+            : "grounded",
+        },
         moveMagnitude > 0.08,
         wantsSprint,
       ),
@@ -676,8 +741,12 @@ function updateCharacterOnDeckRapier(
         length(forward) < 1e-6
           ? normalize(tangentize(state.forward, ship.up))
           : normalize(tangentize(forward, ship.up)),
-      grounded,
-      jumpPhase: "grounded",
+      grounded: !airborne,
+      jumpPhase: airborne
+        ? verticalVelocity > 0.5
+          ? "jump-start"
+          : "jump-loop"
+        : "grounded",
       jumpPhaseTime: 0,
       position,
       up: ship.up,
@@ -697,6 +766,7 @@ export function updateCharacterOnDeck(
   gravityMetersPerSecond2: number,
   _colliderRig?: ShipColliderRigState,
   physics?: ShipPhysics | null,
+  options?: DeckLocomotionOptions,
 ): DeckUpdateResult {
   if (!physics) {
     return {
@@ -712,5 +782,6 @@ export function updateCharacterOnDeck(
     dt,
     gravityMetersPerSecond2,
     physics,
+    options,
   );
 }

@@ -1,7 +1,8 @@
 import type {
   CubeFace,
   Planet,
-  PlanetSpawnLayer,
+  PlanetSpawnCatalog,
+  PlanetSpawnEntry,
   SurfaceSpawnInstance,
   TileInfo,
   Vec3,
@@ -16,6 +17,7 @@ import {
   canPlaceWithGap,
   createPlacementGrid,
   registerPlacement,
+  type PlacementGrid,
 } from './placement_grid';
 
 const FACE_INDEX: Record<CubeFace, number> = {
@@ -27,60 +29,127 @@ const FACE_INDEX: Record<CubeFace, number> = {
   pz: 6,
 };
 
-/** Base sample attempts per tile before density scaling. */
-const BASE_SAMPLES_PER_TILE = 96;
+/** Hard clamp on catalog samplesPerTile (shared probes). */
+export const MAX_SAMPLES_PER_TILE = 256;
+/** Hard cap on instances produced for one tile. */
+export const MAX_INSTANCES_PER_TILE = 512;
+/** Soft per-entry cap within a tile (prevents one entry dominating). */
+export const MAX_INSTANCES_PER_ENTRY_PER_TILE = 128;
 /** Only decorate tiles at this LOD or finer (near-ground detail). */
 export const SURFACE_SPAWN_MIN_TILE_LEVEL = 12;
 
-function layerSampleSeed(planetSeed: number, layer: PlanetSpawnLayer): number {
-  return (planetSeed + layer.seedOffset) >>> 0;
-}
+/** Scratch list reused across probes — domain-only, not concurrent. */
+const acceptScratch: PlanetSpawnEntry[] = [];
+const weightScratch: number[] = [];
 
-function acceptsSurface(
-  layer: PlanetSpawnLayer,
+/** Biome + height-band + enabled/weight gates for one catalog entry. */
+export function acceptsSurface(
+  entry: PlanetSpawnEntry,
   biome: string,
   normalizedHeight: number,
 ): boolean {
-  if (!layer.enabled || !layer.assetUrl || layer.biomes.length === 0) return false;
-  if (!layer.biomes.includes(biome as PlanetSpawnLayer['biomes'][number])) {
+  if (!entry.enabled || !entry.assetUrl || entry.biomes.length === 0) return false;
+  if (entry.weight <= 0 || entry.density <= 0) return false;
+  if (!entry.biomes.includes(biome as PlanetSpawnEntry['biomes'][number])) {
     return false;
   }
   return (
-    normalizedHeight >= layer.minNormalizedHeight &&
-    normalizedHeight <= layer.maxNormalizedHeight
+    normalizedHeight >= entry.minNormalizedHeight &&
+    normalizedHeight <= entry.maxNormalizedHeight
   );
 }
 
+/** Relative lottery weight (weight × density). */
+export function entryLotteryWeight(entry: PlanetSpawnEntry): number {
+  return Math.max(0, entry.weight) * Math.max(0, entry.density);
+}
+
 /**
- * Deterministic surface-prop placements for one terrain tile and one layer.
- * Pure domain — no Three.js.
+ * Offset a surface position along the normal by authored inset × scale.
+ * Negative inset sinks into the terrain; positive lifts above it.
  */
-export function collectLayerInstancesForTile(
+export function applyTerrainInset(
+  position: Vec3,
+  normal: Vec3,
+  terrainInsetMeters: number,
+  scaleValue: number,
+): void {
+  if (!Number.isFinite(terrainInsetMeters) || terrainInsetMeters === 0) return;
+  const offset = terrainInsetMeters * scaleValue;
+  position.x += normal.x * offset;
+  position.y += normal.y * offset;
+  position.z += normal.z * offset;
+}
+
+/**
+ * Seed-stable weighted lottery among accepting entries.
+ * Returns the chosen entry or null if none / zero total weight.
+ */
+function pickWeightedEntry(
+  seed: number,
+  faceIndex: number,
+  tileInfo: TileInfo,
+  sampleIndex: number,
+  candidates: readonly PlanetSpawnEntry[],
+  weights: readonly number[],
+): PlanetSpawnEntry | null {
+  let total = 0;
+  for (let i = 0; i < weights.length; i += 1) total += weights[i]!;
+  if (total <= 0 || candidates.length === 0) return null;
+  const roll =
+    hash01(
+      seed,
+      faceIndex,
+      tileInfo.level,
+      tileInfo.x,
+      tileInfo.y,
+      sampleIndex,
+      101,
+    ) * total;
+  let cursor = 0;
+  for (let i = 0; i < candidates.length; i += 1) {
+    cursor += weights[i]!;
+    if (roll < cursor) return candidates[i]!;
+  }
+  return candidates[candidates.length - 1]!;
+}
+
+/**
+ * Deterministic surface-prop placements for one terrain tile from a shared
+ * probe set. Entries compete by accept rules + weighted lottery — no per-entry
+ * full sample loops. Pure domain — no Three.js.
+ */
+export function collectTileSurfaceSpawns(
   tileInfo: TileInfo,
   planet: Planet,
   planetSeed: number,
-  layer: PlanetSpawnLayer,
+  catalog: PlanetSpawnCatalog,
 ): SurfaceSpawnInstance[] {
-  if (
-    !layer.enabled ||
-    !layer.assetUrl ||
-    layer.biomes.length === 0 ||
-    layer.density <= 0 ||
-    tileInfo.level < SURFACE_SPAWN_MIN_TILE_LEVEL
-  ) {
-    return [];
-  }
+  if (tileInfo.level < SURFACE_SPAWN_MIN_TILE_LEVEL) return [];
 
-  const seed = layerSampleSeed(planetSeed, layer);
+  const entries = catalog.entries;
+  if (entries.length === 0) return [];
+
   const faceIndex = FACE_INDEX[tileInfo.face] ?? 0;
-  const densityScale = Math.pow(layer.density, 1.2);
-  const sampleCount = scaledSampleCount(BASE_SAMPLES_PER_TILE, densityScale);
+  const catalogDensity = Math.max(0, catalog.density);
+  if (catalogDensity <= 0) return [];
+
+  const baseSamples = Math.min(
+    MAX_SAMPLES_PER_TILE,
+    Math.max(0, Math.round(catalog.samplesPerTile)),
+  );
+  const densityScale = Math.pow(catalogDensity, 1.2);
+  const sampleCount = scaledSampleCount(baseSamples, densityScale);
   if (sampleCount <= 0) return [];
 
-  const placementGrid = createPlacementGrid(layer.gapMeters);
+  const seed = planetSeed >>> 0;
+  const grids = new Map<string, PlacementGrid | null>();
+  const perEntryCounts = new Map<string, number>();
   const instances: SurfaceSpawnInstance[] = [];
 
   for (let i = 0; i < sampleCount; i += 1) {
+    if (instances.length >= MAX_INSTANCES_PER_TILE) break;
+
     const uJitter = hash01(seed, faceIndex, tileInfo.level, tileInfo.x, tileInfo.y, i, 11);
     const vJitter = hash01(seed, faceIndex, tileInfo.level, tileInfo.x, tileInfo.y, i, 29);
     const u =
@@ -91,17 +160,49 @@ export function collectLayerInstancesForTile(
     const probe = scale(direction, planet.radiusMeters);
     const surface = samplePlanetSurface(planet, planetSeed, probe);
 
-    if (
-      !acceptsSurface(layer, surface.biome, surface.normalizedHeight)
-    ) {
-      continue;
+    acceptScratch.length = 0;
+    weightScratch.length = 0;
+    for (const entry of entries) {
+      if (!acceptsSurface(entry, surface.biome, surface.normalizedHeight)) {
+        continue;
+      }
+      const count = perEntryCounts.get(entry.id) ?? 0;
+      if (count >= MAX_INSTANCES_PER_ENTRY_PER_TILE) continue;
+      const w = entryLotteryWeight(entry);
+      if (w <= 0) continue;
+      acceptScratch.push(entry);
+      weightScratch.push(w);
     }
+    if (acceptScratch.length === 0) continue;
 
-    // Stochastic accept so density feels sparse at low values.
-    const accept =
+    // Catalog-level stochastic sparsity (same curve family as legacy layer density).
+    const catalogAccept =
       hash01(seed, faceIndex, tileInfo.level, tileInfo.x, tileInfo.y, i, 71) <
-      Math.min(1, 0.85 * Math.sqrt(Math.max(0.01, layer.density)));
-    if (!accept) continue;
+      Math.min(1, 0.85 * Math.sqrt(Math.max(0.01, catalogDensity)));
+    if (!catalogAccept) continue;
+
+    const chosen = pickWeightedEntry(
+      seed,
+      faceIndex,
+      tileInfo,
+      i,
+      acceptScratch,
+      weightScratch,
+    );
+    if (!chosen) continue;
+
+    // Per-entry sparsity from legacy density (single-entry catalogs keep old feel).
+    const entryAccept =
+      hash01(
+        seed + chosen.seedOffset,
+        faceIndex,
+        tileInfo.level,
+        tileInfo.x,
+        tileInfo.y,
+        i,
+        73,
+      ) < Math.min(1, 0.85 * Math.sqrt(Math.max(0.01, chosen.density)));
+    if (!entryAccept) continue;
 
     const worldPosition: Vec3 = {
       x: direction.x * surface.surfaceRadiusMeters,
@@ -109,51 +210,77 @@ export function collectLayerInstancesForTile(
       z: direction.z * surface.surfaceRadiusMeters,
     };
 
-    if (!canPlaceWithGap(placementGrid, worldPosition)) continue;
-    registerPlacement(placementGrid, worldPosition);
+    let grid: PlacementGrid | null | undefined = grids.get(chosen.id);
+    if (grid === undefined) {
+      grid = createPlacementGrid(chosen.gapMeters);
+      grids.set(chosen.id, grid);
+    }
+    if (!canPlaceWithGap(grid, worldPosition)) continue;
+    registerPlacement(grid, worldPosition);
 
     let normal: Vec3 = direction;
-    if (layer.alignToNormal) {
+    if (chosen.alignToNormal) {
       normal = normalize(
         sampleVisibleSurfaceFrame(planet, planetSeed, probe).normal,
       );
     }
 
     const yaw =
-      hash01(seed, faceIndex, tileInfo.level, tileInfo.x, tileInfo.y, i, 47) *
+      hash01(
+        seed + chosen.seedOffset,
+        faceIndex,
+        tileInfo.level,
+        tileInfo.x,
+        tileInfo.y,
+        i,
+        47,
+      ) *
       Math.PI *
       2;
     const scaleValue = lerp(
-      layer.minScale,
-      layer.maxScale,
-      clamp01(hash01(seed, tileInfo.x, tileInfo.y, i, 83)),
+      chosen.minScale,
+      chosen.maxScale,
+      clamp01(
+        hash01(seed + chosen.seedOffset, tileInfo.x, tileInfo.y, i, 83),
+      ),
+    );
+
+    // Bury after gap registration so spacing stays surface-based.
+    applyTerrainInset(
+      worldPosition,
+      normal,
+      chosen.terrainInsetMeters ?? 0,
+      scaleValue,
     );
 
     instances.push({
-      layerId: layer.id,
+      layerId: chosen.id,
       position: worldPosition,
       normal,
       yawRadians: yaw,
       scale: scaleValue,
     });
+    perEntryCounts.set(chosen.id, (perEntryCounts.get(chosen.id) ?? 0) + 1);
   }
 
   return instances;
 }
 
-export function collectTileSurfaceSpawns(
+/**
+ * Legacy single-entry helper — wraps a one-entry catalog so density/feel stays
+ * comparable for callers that still place one layer at a time.
+ */
+export function collectLayerInstancesForTile(
   tileInfo: TileInfo,
   planet: Planet,
   planetSeed: number,
-  layers: readonly PlanetSpawnLayer[],
+  layer: PlanetSpawnEntry,
 ): SurfaceSpawnInstance[] {
-  const out: SurfaceSpawnInstance[] = [];
-  for (const layer of layers) {
-    out.push(
-      ...collectLayerInstancesForTile(tileInfo, planet, planetSeed, layer),
-    );
-  }
-  return out;
+  return collectTileSurfaceSpawns(tileInfo, planet, planetSeed, {
+    samplesPerTile: 96,
+    density: 1,
+    entries: [layer],
+  });
 }
 
 /** Re-classify helper for editor docs / tests. */

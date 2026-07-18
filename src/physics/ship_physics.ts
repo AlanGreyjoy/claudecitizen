@@ -17,10 +17,24 @@ function shipRight(ship: FlightBody): Vec3 {
   return normalize(cross(ship.forward, ship.up));
 }
 
+/** Horizontal half-extent of the near-ship pad (main play interest radius). */
+export const SHIP_NEAR_PAD_HALF_EXTENT_METERS = 36;
+const SHIP_PAD_HALF_THICKNESS_METERS = 0.35;
+
 export interface ShipLocalPose {
   right: number;
   up: number;
   forward: number;
+}
+
+/** Optional ground pad under a parked ship so exterior walk stays in ship Rapier. */
+export interface ShipPhysicsPadOptions {
+  restHeightMeters: number;
+  halfExtentMeters: number;
+}
+
+export interface ShipPhysicsOptions {
+  pad?: ShipPhysicsPadOptions | null;
 }
 
 export interface ShipPhysics {
@@ -33,7 +47,33 @@ export interface ShipPhysics {
    * closed door blocker (and vice versa).
    */
   setRampOpen(open: boolean): void;
+  /** Enable/disable the parked-ship ground pad (off while flying). */
+  setPadEnabled(enabled: boolean): void;
+  /** Move the pad so its top sits at local y = -restHeightMeters. */
+  setPadRestHeight(restHeightMeters: number): void;
   dispose(): void;
+}
+
+function addShipPadCollider(
+  world: RAPIER.World,
+  pad: ShipPhysicsPadOptions,
+): { body: RAPIER.RigidBody; collider: RAPIER.Collider } {
+  const half = Math.max(4, pad.halfExtentMeters);
+  const hy = SHIP_PAD_HALF_THICKNESS_METERS;
+  const body = world.createRigidBody(
+    RAPIER.RigidBodyDesc.fixed().setTranslation(
+      0,
+      -pad.restHeightMeters - hy,
+      0,
+    ),
+  );
+  const collider = world.createCollider(
+    RAPIER.ColliderDesc.cuboid(half, hy, half)
+      .setFriction(0.6)
+      .setRestitution(0),
+    body,
+  );
+  return { body, collider };
 }
 
 /**
@@ -41,10 +81,14 @@ export interface ShipPhysics {
  * Axes match gameplay: x = right, y = up, z = forward. Hull bodies stay fixed
  * while the flight body moves in world space; character pose is reconstructed
  * from ship basis + local translation.
+ *
+ * Optional pad: thin ground plane at local y = -restHeight so outside walking
+ * near a parked ship (and continuous ramp boarding) uses the same world.
  */
 export async function createShipPhysics(
   spawnLocal: ShipLocalPose,
   colliders: readonly GameplayCollider[],
+  options?: ShipPhysicsOptions,
 ): Promise<ShipPhysics> {
   const world = createRapierWorld();
   const player = createPlayerCharacter(world, {
@@ -93,6 +137,15 @@ export async function createShipPhysics(
     }
   }
 
+  let padBody: RAPIER.RigidBody | null = null;
+  let padCollider: RAPIER.Collider | null = null;
+  if (options?.pad) {
+    const pad = addShipPadCollider(world, options.pad);
+    padBody = pad.body;
+    padCollider = pad.collider;
+    staticColliders.push(pad.collider);
+  }
+
   const physics: ShipPhysics = {
     world,
     player,
@@ -105,8 +158,24 @@ export async function createShipPhysics(
       for (const handle of rampOpenHandles) handle.setEnabled(open);
       for (const handle of rampClosedHandles) handle.setEnabled(!open);
     },
+    setPadEnabled(enabled: boolean) {
+      padCollider?.setEnabled(enabled);
+    },
+    setPadRestHeight(restHeightMeters: number) {
+      if (!padBody) return;
+      padBody.setTranslation(
+        {
+          x: 0,
+          y: -restHeightMeters - SHIP_PAD_HALF_THICKNESS_METERS,
+          z: 0,
+        },
+        true,
+      );
+    },
     dispose() {
       removeStaticColliders(world, staticColliders);
+      padBody = null;
+      padCollider = null;
       player.dispose();
     },
   };
@@ -227,8 +296,8 @@ export function isShipPlayerGrounded(physics: ShipPhysics): boolean {
 }
 
 /**
- * True when the player is standing on (or still over) a ship static collider.
- * Used to leave deck mode when walking off the ramp / hull — Rapier only.
+ * True when the player is standing on (or still over) a ship static collider
+ * (hull, ramp, or parked pad). Used for freefall eject when nothing is below.
  */
 export function shipHasFloorBelow(
   physics: ShipPhysics,

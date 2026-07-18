@@ -9,7 +9,9 @@ import type { CubeFace, Planet, RenderableSurfaceCacheStats, TileBounds, Vec3 } 
 export const RENDER_SURFACE_LEVEL = 17;
 export const RENDER_SURFACE_SEGMENTS = 24;
 
-const MAX_RENDERABLE_HEIGHT_CACHE = 120_000;
+// On-foot L17 + lush veg probes thrash at 120k; give the ring more headroom so
+// short walks do not constantly recompute band-limited heights.
+const MAX_RENDERABLE_HEIGHT_CACHE = 180_000;
 
 interface RenderableHeightCacheStatsInternal {
   evictions: number;

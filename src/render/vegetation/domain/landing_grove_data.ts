@@ -13,6 +13,7 @@ import {
 } from './constants';
 import { clamp01, hash01, lerp, scaledSampleCount } from './hash';
 import { composeInstanceMatrix } from './instance_matrix';
+import { grassScaleCoverageMultiplier } from '../settings';
 import {
   canPlaceWithGap,
   createPlacementGrid,
@@ -77,7 +78,13 @@ export function collectLandingGroveData(
   const grassSettings = vegetationSettings.grass;
   const treeSettings = vegetationSettings.tree;
   const grassDensityScale =
-    grassSettings.density <= 0 ? 0 : Math.pow(grassSettings.density, 1.35);
+    grassSettings.density <= 0
+      ? 0
+      : Math.pow(grassSettings.density, 1.35) *
+        grassScaleCoverageMultiplier(
+          grassSettings.minScale,
+          grassSettings.maxScale,
+        );
   const grassSampleCount = scaledSampleCount(
     getLandingGrassCount(),
     grassDensityScale,
@@ -105,13 +112,8 @@ export function collectLandingGroveData(
       );
       const surface = sampleRenderablePlanetSurface(planet, seed, worldPoint);
       if (!(surface.biome === 'plains' || surface.biome === 'forest')) continue;
-      if (
-        hash01(seed, 7005, i) >
-        Math.min(
-          1,
-          surface.grassDensity * 1.4 * Math.max(1, Math.sqrt(grassSettings.density)),
-        )
-      ) {
+      // Authored density scales sample count; accept is biome/surface only.
+      if (hash01(seed, 7005, i) > Math.min(1, surface.grassDensity * 1.4)) {
         continue;
       }
 

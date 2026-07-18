@@ -39,6 +39,8 @@ import {
 } from "../player/ship_layout";
 import {
   createShipPhysics,
+  getShipPlayerLocal,
+  getShipPlayerWorldPosition,
   syncShipArticulationColliders,
   teleportShipPlayerLocal,
   type ShipPhysics,
@@ -52,14 +54,12 @@ import {
   getShipRight,
   localOffsetToWorld,
   nearShipRampOutside,
-  sampleRampBoarding,
   worldToShipLocal,
 } from "../player/ship_interaction";
 import { getDeckWorldPose, getLeavePilotStandPose } from "../player/ship_deck";
 import {
   createShipRigState,
   doorBlends,
-  isRampUsable,
   updateShipRig,
 } from "../player/ship_rig";
 import { createCharacterAvatar } from "../render/main/scene/character_avatar";
@@ -580,6 +580,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   // Without an authored rest height, rest the hull's lowest point on the pad
   // once the model has loaded and been measured.
   let autoRestPending = authoredRestHeight === null;
+  function sandboxPadRestHeightMeters(): number {
+    return Math.max(0.3, ship.position.y - SANDBOX_GROUND_Y_METERS);
+  }
   function tryAutoRest(): void {
     if (!autoRestPending) return;
     const measured = shipModel.measure() as {
@@ -591,6 +594,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       ...ship.position,
       y: Math.min(30, Math.max(0.3, -lowestUp)),
     };
+    shipPhysics?.setPadRestHeight(sandboxPadRestHeightMeters());
     autoRestPending = false;
   }
   const rig = createShipRigState({ gearDown: true, rampDown: true });
@@ -611,7 +615,14 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           forward: spawnLocal.forward,
         },
         getShipLayout().colliders,
+        {
+          pad: {
+            restHeightMeters: sandboxPadRestHeightMeters(),
+            halfExtentMeters: PAD_RADIUS_METERS,
+          },
+        },
       );
+      shipPhysics.setPadEnabled(true);
       syncShipArticulationColliders(
         shipPhysics,
         spawnRig,
@@ -619,7 +630,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       );
       const testSpawn = getShipLayout().testSpawn;
       console.info(
-        `Ship sandbox: Rapier deck with ${getShipLayout().colliders.length} colliders; spawn (${spawnLocal.right.toFixed(2)}, ${spawnFloorHint.toFixed(2)}, ${spawnLocal.forward.toFixed(2)})${testSpawn ? " from Test Spawn" : ""}.`,
+        `Ship sandbox: Rapier deck+pad with ${getShipLayout().colliders.length} colliders; spawn (${spawnLocal.right.toFixed(2)}, ${spawnFloorHint.toFixed(2)}, ${spawnLocal.forward.toFixed(2)})${testSpawn ? " from Test Spawn" : ""}.`,
       );
     } catch (error) {
       console.warn("Ship sandbox: failed to create Rapier deck physics.", error);
@@ -662,23 +673,47 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   });
 
   // --- sim ------------------------------------------------------------------------
-  function updateDeck(
+  function clampLocalToSandboxPad(right: number, forward: number): {
+    right: number;
+    forward: number;
+  } {
+    const radial = Math.hypot(right, forward);
+    const maxR = PAD_RADIUS_METERS - 2;
+    if (radial <= maxR || radial < 1e-4) return { right, forward };
+    const pull = maxR / radial;
+    return { right: right * pull, forward: forward * pull };
+  }
+
+  function softTagWalkModeFromPad(): void {
+    if (!shipPhysics) return;
+    const local = getShipPlayerLocal(shipPhysics);
+    // Camera/HUD only — locomotion always stays in ship Rapier when available.
+    // Tight band so mid-ramp / deck keep ship-orbit camera.
+    const onPad =
+      Math.abs(local.up + sandboxPadRestHeightMeters()) <= 0.85;
+    mode = onPad ? "ground" : "deck";
+  }
+
+  /**
+   * Unified pad + hull + ramp walk via ship-local Rapier (no board/leave teleport).
+   */
+  function updateShipWalk(
     dt: number,
     actions: { interactPressed: boolean; jumpPressed: boolean },
   ): void {
+    if (!shipPhysics) return;
     const input = controls.sampleCharacterInput();
     const colliderRig = {
       gear01: rig.gear01,
       ramp01: rig.ramp01,
       doors: doorBlends(rig),
     };
-    if (shipPhysics) {
-      syncShipArticulationColliders(
-        shipPhysics,
-        colliderRig,
-        getShipLayout().doors.map((door) => door.id),
-      );
-    }
+    shipPhysics.setPadEnabled(true);
+    syncShipArticulationColliders(
+      shipPhysics,
+      colliderRig,
+      getShipLayout().doors.map((door) => door.id),
+    );
     const result = updateCharacterOnDeck(
       character as DeckCharacterState,
       ship,
@@ -692,13 +727,41 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     prompt = "";
 
     if (result.dismounted || result.fellOffDeck) {
-      // Leave at current feet — walk off the ramp collider, no tip teleport.
-      character = groundCharacterAt(character.position, character.forward);
-      mode = "ground";
+      // Keep Rapier authority — snap back onto the pad plane.
+      const rest = sandboxPadRestHeightMeters();
+      const local = getShipPlayerLocal(shipPhysics);
+      const clamped = clampLocalToSandboxPad(local.right, local.forward);
+      teleportShipPlayerLocal(shipPhysics, {
+        right: clamped.right,
+        up: -rest + DECK_FLOOR_OFFSET_METERS,
+        forward: clamped.forward,
+      });
+      character = createDeckCharacterState(
+        ship,
+        clamped,
+        undefined,
+        colliderRig,
+        -rest,
+      );
+      character.position = getShipPlayerWorldPosition(shipPhysics, ship);
+      softTagWalkModeFromPad();
       return;
     }
 
+    softTagWalkModeFromPad();
     const deckLocal = result.state.deckLocal;
+    const onPad = mode === "ground";
+
+    if (onPad) {
+      if (nearShipRampOutside(character, ship)) {
+        prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
+        if (actions.interactPressed) {
+          rig.rampDown = !rig.rampDown;
+          playShipRampToggleSfx(getShipLayout().spec, rig.rampDown);
+        }
+      }
+      return;
+    }
 
     const seatNearby = nearestSeat(deckLocal);
     if (seatNearby) {
@@ -783,7 +846,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     return { x: position.x * pull, y: position.y, z: position.z * pull };
   }
 
-  function updateGround(
+  /** Fallback when the ship has no collider deck (rare). */
+  function updateGroundFallback(
     dt: number,
     actions: { interactPressed: boolean; jumpPressed: boolean },
   ): void {
@@ -876,48 +940,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       velocity: motion.velocity,
     };
     prompt = "";
-
-    // Walking into the lowered ramp's foot steps aboard (Rapier handoff).
-    if (walkable && isRampUsable(rig)) {
-      const mount = sampleRampBoarding(character, ship, rig);
-      if (mount) {
-        const mountRig = {
-          gear01: rig.gear01,
-          ramp01: rig.ramp01,
-          doors: doorBlends(rig),
-        };
-        const floorHint = mount.floorUp;
-        character = createDeckCharacterState(
-          ship,
-          mount,
-          undefined,
-          mountRig,
-          floorHint,
-        );
-        if (shipPhysics) {
-          teleportShipPlayerLocal(shipPhysics, {
-            right: mount.right,
-            up: floorHint + DECK_FLOOR_OFFSET_METERS,
-            forward: mount.forward,
-          });
-          syncShipArticulationColliders(
-            shipPhysics,
-            mountRig,
-            getShipLayout().doors.map((door) => door.id),
-          );
-        }
-        mode = "deck";
-        return;
-      }
-    }
-
-    if (nearShipRampOutside(character, ship)) {
-      prompt = rig.rampDown ? "Press F — raise ramp" : "Press F — lower ramp";
-      if (actions.interactPressed) {
-        rig.rampDown = !rig.rampDown;
-        playShipRampToggleSfx(getShipLayout().spec, rig.rampDown);
-      }
-    }
   }
 
   function updateTransitionMode(dt: number): void {
@@ -1546,9 +1568,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       );
       const actions = controls.consumeActions();
 
-      if (mode === "deck") updateDeck(dt, actions);
-      else if (mode === "ground") updateGround(dt, actions);
-      else if (mode === "pilot") updatePilot(dt, actions);
+      if (mode === "deck" || mode === "ground") {
+        if (shipPhysics && walkable) updateShipWalk(dt, actions);
+        else updateGroundFallback(dt, actions);
+      } else if (mode === "pilot") updatePilot(dt, actions);
       else if (mode === "in-bed") updateInBed(actions);
       else updateTransitionMode(dt);
 

@@ -61,6 +61,7 @@ import {
   getDeckSpawnFloorHint,
   getDefaultDeckSpawnLocal,
   isOnShipRampDeck,
+  isShipInteriorWalkPose,
   nearestBed,
   nearestDoor,
   nearestSeat,
@@ -73,21 +74,26 @@ import {
 import { getShipLayout, getShipLayoutForPrefab, getShipRestHeightMeters, usesColliderDeck } from "../player/ship_layout";
 import {
   getBedEyeLocal,
+  isNearParkedShipPad,
   isShipParked,
+  isWithinShipPadHorizontal,
   localOffsetToWorld,
   getShipRight,
   nearShipRampOutside,
-  sampleRampBoarding,
   worldToShipLocal,
 } from "../player/ship_interaction";
 import {
   doorBlends,
-  isRampUsable,
   updateShipRig,
 } from "../player/ship_rig";
-import { DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD } from "../physics/colliders";
+import {
+  DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD,
+  sampleColliderGroundHeight,
+} from "../physics/colliders";
 import {
   createShipPhysics,
+  getShipPlayerLocal,
+  getShipPlayerWorldPosition,
   syncShipArticulationColliders,
   teleportShipPlayerLocal,
   type ShipPhysics,
@@ -175,12 +181,12 @@ import {
   sampleHangarRest,
   worldToStationLocal,
 } from "../world/station";
-import { cross, dot, length, normalize } from "../math/vec3";
+import { cross, dot, length, normalize, sub } from "../math/vec3";
 import { createSoundSceneController, type SoundListenerPose } from "../audio/sound_scene";
 import { createStationNpcPopulation } from "../npc/station_population";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from "../world/planet_surface";
-import { surfacePointFromPosition } from "../world/coordinates";
+import { radialUp, surfacePointFromPosition } from "../world/coordinates";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
 import type { ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
@@ -341,6 +347,8 @@ export function createGameLoop({
     try {
       const spawn = getDefaultDeckSpawnLocal();
       const floorHint = getDeckSpawnFloorHint(spawn);
+      // No pad plane on planet — exterior feet snap to terrain so the character
+      // does not float on a flat ship-local ground disc over hills.
       shipPhysics = await createShipPhysics(
         {
           right: spawn.right,
@@ -621,8 +629,12 @@ export function createGameLoop({
           minH: layer.minNormalizedHeight,
           maxH: layer.maxNormalizedHeight,
           density: layer.density,
+          weight: layer.weight,
+          collider: layer.collider,
         })),
         nearbyCount: nearby.length,
+        activeColliders: planetPhysics?.getActiveColliderCount() ?? 0,
+        meshCollisionAssets: renderer?.getSurfaceSpawnMeshCollisions()?.size ?? 0,
         within5km: wide.length,
         minDistMeters: Number.isFinite(minDist) ? Math.round(minDist) : null,
         sample: nearby.slice(0, 3),
@@ -810,57 +822,60 @@ export function createGameLoop({
     return rig.rampDown ? pressInteractPrompt("raise ramp") : pressInteractPrompt("lower ramp");
   }
 
-  /** Walking into the foot of the lowered ramp steps aboard (Rapier handoff). */
-  function tryMountRamp(): boolean {
-    const ship = getActiveShipBody(world);
-    const rig = getActiveShipRig(world);
-    if (!isShipParked(ship) || !isRampUsable(rig)) return false;
+  /**
+   * Enter ship-local Rapier when near a parked ship (pad interest).
+   * Continuous walk onto the open ramp — no ramp-tip teleport.
+   */
+  function tryEnterShipPadInterest(): boolean {
     if (!usesColliderDeck()) return false;
-    const mount = sampleRampBoarding(world.character, ship, rig);
-    if (!mount) return false;
+    const ship = getActiveShipBody(world);
+    if (!isNearParkedShipPad(world.character, ship)) return false;
+    if (!shipPhysics) {
+      void warmShipDeckPhysics();
+      return false;
+    }
+    const rig = getActiveShipRig(world);
     const mountRig = {
       gear01: rig.gear01,
       ramp01: rig.ramp01,
       doors: doorBlends(rig),
     };
-    if (!shipPhysics) {
-      void warmShipDeckPhysics();
-      return false;
-    }
-    const floorHint = mount.floorUp;
+    const local = worldToShipLocal(ship, world.character.position);
+    shipPhysics.setPadEnabled(true);
+    shipPhysics.setPadRestHeight(getShipRestHeightMeters());
     teleportShipPlayerLocal(shipPhysics, {
-      right: mount.right,
-      up: floorHint + DECK_FLOOR_OFFSET_METERS,
-      forward: mount.forward,
+      right: local.right,
+      up: local.up,
+      forward: local.forward,
     });
     syncShipArticulationColliders(
       shipPhysics,
       mountRig,
       getShipLayout().doors.map((door) => door.id),
     );
+    // floorUp is mesh height; createDeckCharacterState adds DECK_FLOOR_OFFSET.
     world.character = createDeckCharacterState(
       ship,
-      mount,
+      { right: local.right, forward: local.forward },
       undefined,
       mountRig,
-      floorHint,
+      local.up - DECK_FLOOR_OFFSET_METERS,
     );
     world.mode = MODE_ON_SHIP_DECK;
+    world.shipExteriorWalk = true;
     world.prompt = "";
     return true;
   }
 
   /**
-   * Leave ship-local Rapier for planet/station at the character's current feet.
-   * Collider-deck ships walk the ramp mesh; this is only the mode handoff when
-   * there is no ship floor underfoot anymore — not an authored tip teleport.
+   * Leave ship-local Rapier for planet/station at the character's current feet
+   * (walked off the pad / freefall). Keeps ship physics warm for re-entry.
    */
   function leaveShipDeck(): void {
     const ship = getActiveShipBody(world);
     const feet = world.character.position;
     const facing = world.character.forward;
-    disposeShipDeckPhysics();
-    void warmShipDeckPhysics();
+    world.shipExteriorWalk = false;
 
     const hangarRest = sampleHangarRest(
       stationFrame,
@@ -1064,7 +1079,7 @@ export function createGameLoop({
       physics,
     );
 
-    if (tryMountRamp()) return;
+    if (tryEnterShipPadInterest()) return;
 
     const rampPrompt = handleRampOutside(actions.interactPressed);
     if (rampPrompt !== null) {
@@ -1285,6 +1300,74 @@ export function createGameLoop({
     }
   }
 
+  /** Height above planet foot surface along radial up (meters). */
+  function planetFeetHeightAbove(position: Vec3): number {
+    const surface = sampleFootPlanetSurface(planet, seed, position);
+    const groundWorld = surfacePointFromPosition(
+      position,
+      surface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS,
+    );
+    return dot(sub(position, groundWorld), radialUp(position));
+  }
+
+  function isPlanetFeetGrounded(
+    position: Vec3,
+    verticalVelocity: number,
+  ): boolean {
+    if (verticalVelocity > 0.15) return false;
+    return planetFeetHeightAbove(position) <= 0.22;
+  }
+
+  /**
+   * Exterior near-ship: keep Rapier XY (hull collision), stick to / land on
+   * planet terrain. Does not kill jumps mid-air.
+   */
+  function syncShipExteriorFeetToPlanet(): void {
+    if (!shipPhysics) return;
+    const ship = getActiveShipBody(world);
+    const deck = world.character as DeckCharacterState;
+    const verticalVel = deck.shipVerticalVelocity ?? 0;
+    const local = getShipPlayerLocal(shipPhysics);
+    const approxWorld = getShipPlayerWorldPosition(shipPhysics, ship);
+    const up = radialUp(approxWorld);
+    const heightAbove = planetFeetHeightAbove(approxWorld);
+
+    // Airborne: follow Rapier pose, keep vertical velocity, planet-radial up.
+    if (verticalVel > 0.15 || heightAbove > 0.35) {
+      world.character = {
+        ...deck,
+        position: approxWorld,
+        up,
+        grounded: false,
+        airborneOffDeckFrames: 0,
+        shipVerticalVelocity: verticalVel,
+      };
+      return;
+    }
+
+    const surface = sampleFootPlanetSurface(planet, seed, approxWorld);
+    const groundWorld = surfacePointFromPosition(
+      approxWorld,
+      surface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS,
+    );
+    const groundLocal = worldToShipLocal(ship, groundWorld);
+    teleportShipPlayerLocal(shipPhysics, {
+      right: local.right,
+      up: groundLocal.up,
+      forward: local.forward,
+    });
+    const position = getShipPlayerWorldPosition(shipPhysics, ship);
+    world.character = {
+      ...deck,
+      position,
+      up: radialUp(position),
+      grounded: true,
+      jumpPhase: "grounded",
+      airborneOffDeckFrames: 0,
+      shipVerticalVelocity: 0,
+    };
+  }
+
   function updateDeckMode(
     characterInput: ReturnType<PlayerControls["sampleCharacterInput"]>,
     actions: ReturnType<PlayerControls["consumeActions"]>,
@@ -1304,23 +1387,106 @@ export function createGameLoop({
         getShipLayout().doors.map((door) => door.id),
       );
     }
+
+    const prior = world.character as DeckCharacterState;
+    const priorLocal = worldToShipLocal(instance.body, prior.position);
+    const priorStructureFloor = sampleColliderGroundHeight(
+      priorLocal.right,
+      priorLocal.up + 4,
+      priorLocal.forward,
+      getShipLayout().colliders,
+      colliderRig,
+      priorLocal.up + 0.55,
+    );
+    const priorVertical = prior.shipVerticalVelocity ?? 0;
+    const priorInterior =
+      priorVertical <= 0.5 &&
+      isShipInteriorWalkPose(
+        { right: priorLocal.right, forward: priorLocal.forward },
+        priorLocal.up,
+        priorStructureFloor,
+      );
+    const likelyExterior =
+      isShipParked(instance.body) &&
+      isWithinShipPadHorizontal(prior, instance.body) &&
+      (world.shipExteriorWalk || !priorInterior);
+    // Planet jump only on ground — not while standing on the outer hull.
+    const onHullContact =
+      priorStructureFloor !== null &&
+      priorLocal.up >= priorStructureFloor - 0.12 &&
+      priorLocal.up <= priorStructureFloor + 0.85;
+    const exteriorPlanetGrounded =
+      likelyExterior &&
+      !onHullContact &&
+      isPlanetFeetGrounded(prior.position, priorVertical);
+
     const result = updateCharacterOnDeck(
-      world.character as DeckCharacterState,
+      prior,
       instance.body,
       { ...characterInput, jumpPressed: actions.jumpPressed },
       dt,
       planet.gravityMetersPerSecond2 ?? 9.8,
       colliderRig,
       usesColliderDeck() ? shipPhysics : null,
+      {
+        exteriorPlanetGrounded,
+        suppressDeckExit: likelyExterior,
+      },
     );
     world.character = result.state;
+
+    const deckLocal = result.state.deckLocal;
+    const local = worldToShipLocal(instance.body, result.state.position);
+    const structureFloor = sampleColliderGroundHeight(
+      local.right,
+      local.up + 4,
+      local.forward,
+      getShipLayout().colliders,
+      colliderRig,
+      local.up + 0.55,
+    );
+    const verticalVel = result.state.shipVerticalVelocity ?? 0;
+    const onHullExterior =
+      structureFloor !== null &&
+      verticalVel <= 0.5 &&
+      local.up >= structureFloor - 0.12 &&
+      local.up <= structureFloor + 0.85 &&
+      !isShipInteriorWalkPose(deckLocal, local.up, structureFloor);
+    const onInterior =
+      verticalVel <= 0.5 &&
+      isShipInteriorWalkPose(deckLocal, local.up, structureFloor);
+
+    if (!onInterior) {
+      if (
+        !isShipParked(instance.body) ||
+        !isWithinShipPadHorizontal(world.character, instance.body)
+      ) {
+        leaveShipDeck();
+        return;
+      }
+      world.shipExteriorWalk = true;
+      if (onHullExterior) {
+        // Outer hull / roof: keep Rapier contact, character-orbit camera.
+        // Do not snap through the ship to planet ground.
+        world.character = {
+          ...result.state,
+          up: radialUp(result.state.position),
+          deckZone: undefined,
+        };
+        world.prompt = handleRampOutside(actions.interactPressed) ?? "";
+        return;
+      }
+      syncShipExteriorFeetToPlanet();
+      world.prompt = handleRampOutside(actions.interactPressed) ?? "";
+      return;
+    }
+
+    world.shipExteriorWalk = false;
 
     if (result.dismounted || result.fellOffDeck) {
       leaveShipDeck();
       return;
     }
-
-    const deckLocal = result.state.deckLocal;
 
     const seatNearby = nearestSeat(deckLocal);
     if (seatNearby) {
@@ -1451,10 +1617,15 @@ export function createGameLoop({
         }
         if (planetPhysics && renderer) {
           const radius = planetPhysicsColliderRadiusMeters();
+          const catalog = renderer.getSurfaceSpawnCatalog();
+          const entries = catalog.entries;
           planetPhysics.syncNearby(
             world.character.position,
             renderer.getNearbySurfaceSpawns(world.character.position, radius),
-            renderer.getSurfaceSpawnLayers(),
+            entries,
+            {
+              meshByAssetUrl: renderer.getSurfaceSpawnMeshCollisions(),
+            },
           );
         }
         world.character = updateCharacterState(
@@ -1468,7 +1639,7 @@ export function createGameLoop({
           seed,
           planetPhysics,
         );
-        if (!tryMountRamp()) {
+        if (!tryEnterShipPadInterest()) {
           world.prompt = handleRampOutside(actions.interactPressed) ?? "";
         }
       } else if (world.mode === MODE_IN_SHIP) {
@@ -1894,6 +2065,7 @@ export function createGameLoop({
                   up: world.character.up,
                 },
           mode: world.mode,
+          shipExteriorWalk: world.shipExteriorWalk,
           prompt: world.prompt,
           ship: activeShip,
           activeShipId: world.activeShipId,

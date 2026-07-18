@@ -1,7 +1,7 @@
 # Phase 01 — Catalog schema + legacy migration
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Complete  
 **Depends on:** Nothing  
 **Unlocks:** Phase 02 (placement), Phase 04 (editor)
 

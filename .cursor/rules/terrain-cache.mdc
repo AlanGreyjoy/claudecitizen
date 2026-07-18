@@ -1,6 +1,6 @@
 ---
 description: When to bump terrain/vegetation disk cache versions after code edits
-globs: src/cache/cache_keys.ts,src/world/**/*.ts,src/render/planet_tiles/**/*.ts,src/render/vegetation/**/*.ts,src/world/planets/**/*
+globs: src/cache/cache_keys.ts,src/world/**/*.ts,src/render/planet_tiles/**/*.ts,src/render/vegetation/**/*.ts,src/render/surface_spawns/**/*.ts,src/world/planets/**/*
 alwaysApply: false
 ---
 
@@ -13,8 +13,8 @@ IndexedDB tile caches key off versions + fingerprints in `src/cache/cache_keys.t
 | Constant | Bump when |
 |----------|-----------|
 | `TERRAIN_CACHE_VERSION` | Mesh layout, triangulation, skirts, vertex count, palette baking path, worker buffer format, or anything `isValidTerrainTileBuffers()` assumes |
-| `VEGETATION_CACHE_VERSION` | Instance placement formula, LOD sample multipliers, grass/tree asset path, stored tile schema, or biome rules that change placement without changing height probes |
-| `SURFACE_SPAWN_CACHE_VERSION` | Surface spawn placement algorithm or stored spawn-tile schema changes |
+| `VEGETATION_CACHE_VERSION` | Instance placement formula, LOD sample multipliers, grass/tree asset path, stored tile schema, or biome rules that change placement without changing height probes. Quality `grassSampleCount`/`treeSampleCount` are in the storage key — no bump for budget-only changes. |
+| `SURFACE_SPAWN_CACHE_VERSION` | Surface spawn placement algorithm or stored spawn-tile schema changes. Catalog knobs (samplesPerTile, density, entry weight/density/asset/biomes/…) invalidate via `hashSurfaceSpawnCatalog` — no bump for Planet Authoring edits alone. |
 
 Also bump `TERRAIN_TILE_VERTEX_COUNT` (and related constants) when skirt/layout vertex counts change — see AGENTS.md "Terrain mesh vs foot placement".
 
@@ -24,21 +24,24 @@ These already change the storage key via `planetCacheId()` / hashes:
 
 - **Planet Authoring** height, regions, hydrology, seed, radius, amplitude → `terrainFingerprint()`
 - **Planet Authoring** palette → `paletteHash()`
-- **Planet Authoring** vegetation density / gap / scale → `hashVegetationSettings()`
+- **Planet Authoring** vegetation density / gap / scale / assetUrls → `hashVegetationSettings()`
 - Planet id changes → new key namespace
 
 Agents editing `*.planet.json` or Planet Authoring UI do **not** bump cache versions for those fields alone.
+
+## Quality sample budgets (in the veg key)
+
+`grassSampleCount` / `treeSampleCount` from `configureVegetationDensity` are hashed into the veg disk key via `hashVegetationQualityBudgets` (see `src/render/vegetation/cache/tile_cache.ts`). Quality presets do **not** share tiles and do **not** need a version bump for budget-only changes.
 
 ## NOT in the cache key today (must bump version or extend the key)
 
 If you change any of these in code and leave versions alone, players keep serving old IDB tiles:
 
-- Render-quality sample budgets (`grassSampleCount` / `treeSampleCount` / `configureVegetationDensity`)
 - `grassSampleMultiplier` / `treeSampleMultiplier` / veg distance cutoffs that change instance counts
 - Biome/climate classification that alters grass/tree accept rules without changing probed heights
 - Switching grass/tree mesh or billboard generation
 
-Prefer: bump `VEGETATION_CACHE_VERSION`, **and** when adding quality-dependent placement, put those budgets into the veg storage key so `performance` / `balanced` / `high` cannot share tiles.
+Prefer: bump `VEGETATION_CACHE_VERSION` when placement/schema changes.
 
 ## Agent checklist after terrain/veg code edits
 

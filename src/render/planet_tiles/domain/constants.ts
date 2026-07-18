@@ -15,6 +15,8 @@ export const TERRAIN_TILE_VERTEX_COUNT =
 /** How many selected/missed tiles may enter the build/disk pipeline per frame. */
 export const TILE_BUILD_BUDGET_PER_FRAME = 20;
 export const MAX_CACHED_TILES = 384;
+/** Spare entries retained around an oversized active selection to avoid edge churn. */
+export const TILE_CACHE_ACTIVE_HEADROOM = 96;
 export const TILE_CACHE_STALE_FRAMES = 90;
 export const MIN_LEVEL = 2;
 export const MAX_LEVEL = RENDER_SURFACE_LEVEL;

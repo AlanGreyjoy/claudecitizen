@@ -1,7 +1,7 @@
 # Phase 04 — Planet Authoring Spawn Catalog UX
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Complete  
 **Depends on:** Phase 01 (02–03 recommended so Preview Planet matches new runtime)  
 **Unlocks:** Author-friendly 50-entry workflows
 

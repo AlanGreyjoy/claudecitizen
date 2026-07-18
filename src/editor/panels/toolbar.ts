@@ -796,7 +796,7 @@ export function createToolbar(
           {
             label:
               actions.isPlanetAuthoring()
-                ? 'Preview Planet'
+                ? 'Test Play'
                 : store.getState().kind === 'ship'
                   ? 'Preview Ship'
                   : store.getState().kind === 'station'

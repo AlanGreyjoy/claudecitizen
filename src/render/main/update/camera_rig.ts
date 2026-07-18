@@ -179,9 +179,12 @@ export function updateCameraRig(
     character = null,
     mode = 'in-ship',
     shipCameraZoom = 1.0,
+    shipExteriorWalk = false,
   } = world;
   const stationActive =
     station !== null && (mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR);
+  /** Outside hull/ramp near a parked ship — character camera, not ship-zone orbit. */
+  const onShipDeckInterior = mode === MODE_ON_SHIP_DECK && !shipExteriorWalk;
 
   const focusPosition =
     mode === 'in-ship' || mode === MODE_IN_BED || !character
@@ -363,7 +366,7 @@ export function updateCameraRig(
               cameraOrbit.pitchRadians,
               ORBIT_PITCH_LIMIT,
             )
-          : mode === MODE_ON_SHIP_DECK
+          : onShipDeckInterior
             ? resolveShipDeckOrbit(
                 shipForward,
                 shipUp,
@@ -383,7 +386,7 @@ export function updateCameraRig(
       let positionOffset = rig.positionOffset;
       if (stationActive && station) {
         positionOffset = clampOffsetToRoom(positionOffset, character.position, station);
-      } else if (mode === MODE_ON_SHIP_DECK) {
+      } else if (onShipDeckInterior) {
         positionOffset = clampOffsetToShipZone(
           positionOffset,
           character.position,

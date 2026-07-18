@@ -48,13 +48,39 @@ function tileAngularRadius(info: TileInfo): number {
   return radius;
 }
 
-function tileBoundingRadiusMeters(info: TileInfo, planet: Planet): number {
+function tileFootprintRadiusMeters(info: TileInfo, planet: Planet): number {
   const angularRadius = tileAngularRadius(info);
   const surfaceRadius = planet.radiusMeters + Math.abs(planet.terrainAmplitudeMeters);
-  const surfaceChordRadius = 2 * surfaceRadius * Math.sin(angularRadius * 0.5);
-  // Tile centers sit on the sea-level sphere. Include the full authored height
-  // envelope plus skirt depth so the view test cannot reject visible geometry.
-  return surfaceChordRadius + Math.abs(planet.terrainAmplitudeMeters) * 2;
+  return 2 * surfaceRadius * Math.sin(angularRadius * 0.5);
+}
+
+/**
+ * Conservative support radius for a tile against one frustum plane.
+ *
+ * Treating the complete terrain height envelope as an isotropic sphere made
+ * every fine tile roughly 30 km wide for culling purposes on Asteron. Almost
+ * the complete near hemisphere then survived a narrow cockpit view. Terrain
+ * height and skirts are radial, so only their projection onto the tested plane
+ * belongs in the bound.
+ */
+function tilePlaneSupportMeters(
+  info: TileInfo,
+  planet: Planet,
+  sideAxis: Vec3,
+  forwardAxis: Vec3,
+  sideSign: -1 | 1,
+  tanHalfFov: number,
+): number {
+  const footprintSupport =
+    tileFootprintRadiusMeters(info, planet) * Math.hypot(1, tanHalfFov);
+  // Surface heights are clamped to +/- amplitude. Skirts can extend another
+  // 0.75 amplitude inward, so 2x amplitude safely bounds the radial extrusion.
+  const heightEnvelope = Math.abs(planet.terrainAmplitudeMeters) * 2;
+  const radialProjection = Math.abs(
+    sideSign * dot(info.centerDirection, sideAxis) -
+      tanHalfFov * dot(info.centerDirection, forwardAxis),
+  );
+  return footprintSupport + heightEnvelope * radialProjection;
 }
 
 export function targetErrorForAltitude(altitudeMeters: number): number {
@@ -114,24 +140,47 @@ export function shouldCullTile(
   if (!view) return false;
 
   const toCenter = sub(info.centerPosition, view.eye);
-  const radius = tileBoundingRadiusMeters(info, planet);
+  const footprintRadius = tileFootprintRadiusMeters(info, planet);
+  const heightEnvelope = Math.abs(planet.terrainAmplitudeMeters) * 2;
   const forwardDistance = dot(toCenter, view.forward);
-  if (forwardDistance < -radius) return true;
+  const forwardSupport =
+    footprintRadius +
+    heightEnvelope * Math.abs(dot(info.centerDirection, view.forward));
+  if (forwardDistance < -forwardSupport) return true;
 
-  // Sphere-vs-perspective-frustum side planes. The previous circular cone used
-  // vertical FOV for both axes and a planet-centered tile radius, which culled
-  // terrain that was visibly inside the wider horizontal camera frustum.
-  const horizontalDistance = Math.abs(dot(toCenter, view.right));
-  const horizontalLimit =
-    Math.max(0, forwardDistance) * view.tanHalfFovX +
-    radius * Math.hypot(1, view.tanHalfFovX);
-  if (horizontalDistance > horizontalLimit) return true;
+  // Tile-vs-perspective-frustum side planes. Test each side separately so the
+  // radial height envelope is projected in the correct direction instead of
+  // inflating every tile by the planet's full terrain amplitude.
+  const horizontalCenter = dot(toCenter, view.right);
+  for (const sign of [-1, 1] as const) {
+    const planeDistance =
+      sign * horizontalCenter - forwardDistance * view.tanHalfFovX;
+    const support = tilePlaneSupportMeters(
+      info,
+      planet,
+      view.right,
+      view.forward,
+      sign,
+      view.tanHalfFovX,
+    );
+    if (planeDistance > support) return true;
+  }
 
-  const verticalDistance = Math.abs(dot(toCenter, view.up));
-  const verticalLimit =
-    Math.max(0, forwardDistance) * view.tanHalfFovY +
-    radius * Math.hypot(1, view.tanHalfFovY);
-  return verticalDistance > verticalLimit;
+  const verticalCenter = dot(toCenter, view.up);
+  for (const sign of [-1, 1] as const) {
+    const planeDistance =
+      sign * verticalCenter - forwardDistance * view.tanHalfFovY;
+    const support = tilePlaneSupportMeters(
+      info,
+      planet,
+      view.up,
+      view.forward,
+      sign,
+      view.tanHalfFovY,
+    );
+    if (planeDistance > support) return true;
+  }
+  return false;
 }
 
 export function shouldSplitTile(
@@ -140,6 +189,7 @@ export function shouldSplitTile(
   bodyPosition: Vec3,
   cameraUp: Vec3,
   altitudeMeters: number,
+  wasSplit = false,
 ): boolean {
   if (info.level < MIN_LEVEL) return true;
   if (info.level >= MAX_LEVEL) return false;
@@ -157,15 +207,23 @@ export function shouldSplitTile(
     nearestSurfaceDistance,
     Math.max(altitudeMeters, 0),
   );
+  const groundDetailRadius =
+    GROUND_DETAIL_RADIUS_METERS * (wasSplit ? 1.15 : 1);
+  const groundDetailAltitude =
+    GROUND_MAX_LOD_ALTITUDE_METERS * (wasSplit ? 1.1 : 1);
   if (
     info.level < MAX_LEVEL &&
-    altitudeMeters < GROUND_MAX_LOD_ALTITUDE_METERS &&
+    altitudeMeters < groundDetailAltitude &&
     facing > 0.2 &&
-    groundCameraDistance < GROUND_DETAIL_RADIUS_METERS + altitudeMeters * 0.35
+    groundCameraDistance < groundDetailRadius + altitudeMeters * 0.35
   ) {
     return true;
   }
 
   const projectedError = info.spanMeters / Math.max(cameraDistance, 1);
-  return projectedError > targetErrorForAltitude(altitudeMeters);
+  const targetError = targetErrorForAltitude(altitudeMeters);
+  // Once a parent has split, keep its children until the projected error falls
+  // clearly below the entry threshold. This prevents tiny ship/camera motion
+  // from alternating a cached parent and its four cached children every frame.
+  return projectedError > targetError * (wasSplit ? 0.82 : 1);
 }

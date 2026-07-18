@@ -34,7 +34,7 @@ function advanceOnSphere(direction: Vec3, tangent: Vec3, distanceRadians: number
  * so arbitrary landings warm tiles before L17 is forced near the surface.
  *
  * Near-surface selection already requests underfoot fine LODs. Prefetching
- * every level from MIN→MAX inside a large radius floods the 384-slot mesh
+ * every level from MIN→MAX inside a large radius floods the terrain mesh
  * cache, thrashing pending worker jobs before they finish.
  */
 export function planApproachPrefetch(

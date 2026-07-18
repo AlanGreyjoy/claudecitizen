@@ -51,7 +51,7 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 #### Ship prefab doors (ship-door component)
 
 1. **Visual**: ship model articulation follows door blends from `ship_rig.ts`.
-2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip child nodes that have their own colliders so the closed door is not embedded as a ghost barrier. Locomotion and leave-deck use Rapier contact only (`shipHasFloorBelow`) — walk the ramp collider; no tip-line teleports.
+2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip child nodes that have their own colliders so the closed door is not embedded as a ghost barrier. Near a parked ship, a ship-local pad plane shares that Rapier world so exterior hull collision and ramp walk are continuous (`shipHasFloorBelow`); freefall off the pad hands back to planet/station.
 3. **F-key toggle**: `ship_play_session.ts` / `game_loop.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
 4. **Collider pass-through**: door trimeshes disable when `open01 >= 0.85` (same threshold as stations).
 
@@ -167,7 +167,7 @@ The visible terrain mesh and on-foot physics **must sample the same LOD grid**. 
 
 IndexedDB keys live in `src/cache/cache_keys.ts` (`TERRAIN_CACHE_VERSION`, `VEGETATION_CACHE_VERSION`, `planetCacheId()`, `hashVegetationSettings()`). Cursor rule: `.cursor/rules/terrain-cache.mdc`.
 
-**Planet Authoring / `*.planet.json` — no manual version bump.** Height, regions, hydrology, seed, radius, amplitude → `terrainFingerprint()`; palette → `paletteHash()`; vegetation density/gap/scale → settings hash. New keys miss cache automatically.
+**Planet Authoring / `*.planet.json` — no manual version bump.** Height, regions, hydrology, seed, radius, amplitude → `terrainFingerprint()`; palette → `paletteHash()`; vegetation density/gap/scale/assetUrls → settings hash. New keys miss cache automatically.
 
 **Code/algorithm edits — bump the matching version** (or extend the key) when:
 
@@ -176,7 +176,7 @@ IndexedDB keys live in `src/cache/cache_keys.ts` (`TERRAIN_CACHE_VERSION`, `VEGE
 | Terrain mesh layout, skirts, triangulation, vertex count, worker buffer format | Bump `TERRAIN_CACHE_VERSION` (and vertex-count constants when skirts/layout change) |
 | Veg placement formula, LOD sample multipliers, grass/tree assets, stored veg tile schema | Bump `VEGETATION_CACHE_VERSION` |
 | Biome/climate accept rules that change instances without changing height probes | Bump `VEGETATION_CACHE_VERSION` (fingerprint only samples heights) |
-| Quality sample budgets (`grassSampleCount` / `treeSampleCount`) | Not in the veg key today — bump `VEGETATION_CACHE_VERSION` and/or add those budgets to the storage key so quality presets cannot share tiles |
+| Quality sample budgets (`grassSampleCount` / `treeSampleCount`) | Already in the veg storage key via `hashVegetationQualityBudgets` — no version bump for budget-only changes |
 
 When unsure whether probes catch a code change, bump. Stale veg tiles with wrong instance counts tank FPS; stale terrain tiles desync feet from mesh.
 
@@ -206,7 +206,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 
 ### Colliders
 - **Station**: Rapier physics. `src/physics/station_physics.ts` owns the world; `src/physics/rapier_world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
-- **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship_physics.ts` mirrors the station API; `ship_deck.ts` drives locomotion on hull/ramp colliders. Doors/ramp toggle via `setEnabled` from articulation blends. Boarding is a mode handoff when on-foot contacts the lowered ramp mesh; leaving is no-floor-underfoot → planet/station at current feet.
+- **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship_physics.ts` mirrors the station API; `ship_deck.ts` drives locomotion on hull/ramp/pad colliders. Doors/ramp toggle via `setEnabled` from articulation blends. Near a parked ship, on-foot enters that same world (pad + hull) and walks the open ramp continuously; leaving is freefall with no floor underfoot (off the pad) → planet/station at current feet.
 - **Ship flight**: custom IFCS in `flight_body.ts` / `flight_aim.ts` — **do not** put flight simulation in Rapier. Rapier is for on-foot deck/station contact only.
 
 ## Common gotchas
@@ -231,7 +231,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/npc/station_population.ts` | Deterministic cosmetic station population + waypoint movement |
 | `src/render/main/scene/station_npcs.ts` | Station NPC avatar lifecycle, animation, and distance activation |
 | `src/physics/prefab_colliders.ts` | Bakes `collider` components into `GameplayCollider` objects |
-| `src/physics/ship_physics.ts` | Ship-local Rapier world for collider-deck walking (doors/ramp enable toggles) |
+| `src/physics/ship_physics.ts` | Ship-local Rapier world for collider-deck walking (doors/ramp/pad enable toggles) |
 | `src/physics/colliders.ts` | GameplayCollider types, mesh BVH bake/ground sample, legacy custom capsule push |
 | `src/physics/station_physics.ts` | Rapier world + static/dynamic collider sync; door-collider enable/disable |
 | `src/physics/rapier_world.ts` | Rapier body/collider creation from GameplayColliders |

@@ -44,7 +44,16 @@ export interface WorldTransition {
 }
 
 export type WorldCharacter = CharacterState &
-  Partial<Pick<DeckCharacterState, 'deckLocal' | 'deckZone'>> &
+  Partial<
+    Pick<
+      DeckCharacterState,
+      | 'deckLocal'
+      | 'deckZone'
+      | 'airborneOffDeckFrames'
+      | 'shipVerticalVelocity'
+      | 'deckExitGraceFrames'
+    >
+  > &
   Partial<
     Pick<
       StationCharacterState,
@@ -59,6 +68,11 @@ export interface WorldState {
   shipCameraZoom: number;
   character: WorldCharacter;
   mode: GameMode;
+  /**
+   * True while ship-local Rapier is active but feet are on planet ground outside
+   * the hull/ramp (near a parked ship). Camera/HUD treat this as on-foot.
+   */
+  shipExteriorWalk: boolean;
   prompt: string;
   /** Id of the ship the player is piloting / boarding. */
   activeShipId: string;
@@ -138,6 +152,7 @@ export function createWorldState(
     shipCameraZoom: 1.0,
     character,
     mode: spawnSurface ? MODE_ON_FOOT : MODE_IN_STATION,
+    shipExteriorWalk: false,
     prompt: '',
     activeShipId: instance.id,
     activeBedId: null,

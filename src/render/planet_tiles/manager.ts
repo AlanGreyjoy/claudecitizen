@@ -16,13 +16,16 @@ import {
 import { setFootSurfaceSampleLevel } from '../../world/foot_surface_level';
 import { planApproachPrefetch } from './domain/approach_prefetch';
 import { collectTilesNearPosition } from './domain/spawn_tiles';
-import { finestSelectedTileLevel } from './domain/tile_coverage';
+import {
+  finestSelectedTileLevel,
+  hasSelectedTileAncestor,
+} from './domain/tile_coverage';
 import { tileKey } from './domain/tile_info';
 import {
   visitSelectedTiles,
   type TileSelectionView,
 } from './domain/selection';
-import type { TileManagerUpdateResult } from './domain/types';
+import type { ResolvedTile, TileManagerUpdateResult } from './domain/types';
 
 const APPROACH_PREFETCH_INTERVAL_FRAMES = 12;
 /** Total speculative starts across every look-ahead focus in one pass. */
@@ -73,6 +76,7 @@ export function createPlanetTileManager(
   const activeKeys = new Set<string>();
   let frameNumber = 0;
   let lastApproachPrefetchFrame = -APPROACH_PREFETCH_INTERVAL_FRAMES;
+  let previousSplitKeys = new Set<string>();
 
   function runApproachPrefetch(
     bodyPosition: Vec3,
@@ -127,29 +131,48 @@ export function createPlanetTileManager(
     // Without this, pending underfoot tiles are the first capacity evictions
     // and the worker never finishes them.
     const keepKeys = new Set<string>();
-    const selectedTiles: TileInfo[] = [];
+    const requestedTiles: TileInfo[] = [];
+    const renderedTiles: TileInfo[] = [];
+    const resolvedCandidates = new Map<string, ResolvedTile>();
+    const nextSplitKeys = new Set<string>();
 
     visitSelectedTiles(
       planet,
       bodyPosition,
       surface.altitudeMeters,
       (info) => {
+        requestedTiles.push(info);
         keepKeys.add(tileKey(info.face, info.level, info.x, info.y));
         const resolved = meshCache.requestBestAvailableTile(info, buildBudget);
         if (!resolved.mesh) return;
-        resolved.mesh.visible = true;
-        if (!selectedKeys.has(resolved.key)) {
-          selectedTiles.push(resolved.info);
-        }
-        selectedKeys.add(resolved.key);
+        resolvedCandidates.set(resolved.key, resolved);
         keepKeys.add(resolved.key);
       },
       options?.view ?? null,
+      { nextSplitKeys, previousSplitKeys },
     );
+    previousSplitKeys = nextSplitKeys;
+
+    const orderedCandidates = [...resolvedCandidates.values()].sort(
+      (a, b) => a.info.level - b.info.level,
+    );
+    for (const resolved of orderedCandidates) {
+      // A fallback ancestor and one of its ready descendants must never render
+      // together. Terrain skirts are intentionally deep crack covers; exposing
+      // the nested ancestor skirts turns a cold-cache refinement into walls.
+      // Keep the coarsest complete cover until every request in that subtree
+      // can resolve without the fallback ancestor.
+      if (hasSelectedTileAncestor(resolved.info, selectedKeys)) continue;
+      resolved.mesh!.material = material;
+      resolved.mesh!.renderOrder = 0;
+      resolved.mesh!.visible = true;
+      renderedTiles.push(resolved.info);
+      selectedKeys.add(resolved.key);
+    }
 
     runApproachPrefetch(bodyPosition, surface.altitudeMeters, options?.velocity);
 
-    const footLevel = finestSelectedTileLevel(selectedTiles, bodyPosition);
+    const footLevel = finestSelectedTileLevel(renderedTiles, bodyPosition);
     if (footLevel > 0) {
       setFootSurfaceSampleLevel(footLevel);
     }
@@ -169,9 +192,11 @@ export function createPlanetTileManager(
     const cacheStats = meshCache.stats();
     const frameStats = meshCache.snapshotFrameStats();
     return {
-      selectedTiles,
+      // Downstream vegetation/water/spawn streaming follows the stable desired
+      // quadtree rather than temporarily dropping to a terrain fallback root.
+      selectedTiles: requestedTiles,
       stats: {
-        activeTiles: selectedTiles.length,
+        activeTiles: selectedKeys.size,
         builtThisFrame: frameStats.builtThisFrame,
         cacheLimit: MAX_CACHED_TILES,
         cachedTiles: meshCache.countEntries('ready'),

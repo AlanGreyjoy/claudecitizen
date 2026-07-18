@@ -2,24 +2,49 @@ import type {
   Biome,
   LandingSiteHint,
   Planet,
+  PlanetSpawnCatalog,
+  PlanetSpawnEntry,
   PlanetSpawnLayer,
   SurfaceSpawnCollider,
   VegetationSettings,
 } from '../../types';
 
+const DEFAULT_GRASS_COLOR = '#7a9f42';
+
 const DEFAULT_VEGETATION: VegetationSettings = Object.freeze({
-  grass: Object.freeze({ density: 1, gapMeters: 0, minScale: 0.35, maxScale: 1.0 }),
-  tree: Object.freeze({ density: 1, gapMeters: 0, minScale: 1.1, maxScale: 3.5 }),
+  grass: Object.freeze({
+    density: 1,
+    gapMeters: 0,
+    minScale: 0.35,
+    maxScale: 1.0,
+    assetUrls: Object.freeze([]) as unknown as string[],
+    color: DEFAULT_GRASS_COLOR,
+  }),
+  tree: Object.freeze({
+    density: 1,
+    gapMeters: 0,
+    minScale: 1.1,
+    maxScale: 3.5,
+    assetUrls: Object.freeze([]) as unknown as string[],
+  }),
 });
+
+/** Default shared probes per tile (matches legacy per-layer base). */
+export const DEFAULT_SPAWN_SAMPLES_PER_TILE = 96;
 
 /**
  * Planet documents are the contract between the Planet Authoring editor and
  * runtime generation: identity, physics, height recipe, hydrology, biome
- * palette, vegetation defaults, and surface spawn layers. Files live under
+ * palette, vegetation defaults, and surface spawn catalog. Files live under
  * src/world/planets/data/<id>.planet.json.
  */
 
-export type { PlanetSpawnLayer, SurfaceSpawnCollider };
+export type {
+  PlanetSpawnCatalog,
+  PlanetSpawnEntry,
+  PlanetSpawnLayer,
+  SurfaceSpawnCollider,
+};
 
 export interface PlanetHeightRecipe {
   continentScale: number;
@@ -84,8 +109,8 @@ export interface PlanetDocument {
   hydrology: PlanetHydrologyRecipe;
   palette: PlanetBiomePalette;
   vegetation: VegetationSettings;
-  /** Authored GLB scatter layers (rocks, props, etc.). */
-  spawning: PlanetSpawnLayer[];
+  /** Authored surface spawn catalog (rocks, props, etc.). */
+  spawning: PlanetSpawnCatalog;
   spawnHint?: LandingSiteHint;
 }
 
@@ -102,15 +127,16 @@ function seedOffsetFromId(id: string): number {
   return hash % 10_000;
 }
 
-export function createDefaultSpawnLayer(
+export function createDefaultSpawnEntry(
   id: string,
-  name = 'Spawn layer',
-): PlanetSpawnLayer {
+  name = 'Spawn entry',
+): PlanetSpawnEntry {
   return {
     id,
     name,
     assetUrl: '',
     enabled: true,
+    weight: 1,
     density: 1,
     gapMeters: 4,
     minScale: 0.8,
@@ -119,11 +145,30 @@ export function createDefaultSpawnLayer(
     minNormalizedHeight: 0,
     maxNormalizedHeight: 1,
     alignToNormal: true,
+    terrainInsetMeters: 0,
     collider: {
       shape: 'box',
       halfExtents: [0.5, 0.5, 0.5],
     },
     seedOffset: seedOffsetFromId(id),
+  };
+}
+
+/** @deprecated Prefer createDefaultSpawnEntry. */
+export function createDefaultSpawnLayer(
+  id: string,
+  name = 'Spawn layer',
+): PlanetSpawnLayer {
+  return createDefaultSpawnEntry(id, name);
+}
+
+export function createDefaultSpawnCatalog(
+  entries: PlanetSpawnEntry[] = [],
+): PlanetSpawnCatalog {
+  return {
+    samplesPerTile: DEFAULT_SPAWN_SAMPLES_PER_TILE,
+    density: 1,
+    entries,
   };
 }
 
@@ -316,6 +361,39 @@ function readPalette(raw: unknown): PlanetBiomePalette {
   return palette;
 }
 
+function isTreeVegetationAssetUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('/') &&
+    /\.(glb|gltf)(\?|$)/i.test(value)
+  );
+}
+
+function isGrassVegetationAssetUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('/') &&
+    /\.(png|jpe?g|webp)(\?|$)/i.test(value)
+  );
+}
+
+function readVegetationAssetUrls(
+  raw: unknown,
+  kind: 'grass' | 'tree',
+): string[] {
+  if (!Array.isArray(raw)) return [];
+  const accept =
+    kind === 'grass' ? isGrassVegetationAssetUrl : isTreeVegetationAssetUrl;
+  const urls: string[] = [];
+  for (const entry of raw) {
+    if (!accept(entry)) continue;
+    const trimmed = entry.trim();
+    if (trimmed.length === 0) continue;
+    urls.push(trimmed);
+  }
+  return urls;
+}
+
 function readVegetation(raw: unknown): VegetationSettings {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const grass = src.grass && typeof src.grass === 'object' ? (src.grass as Record<string, unknown>) : {};
@@ -326,12 +404,18 @@ function readVegetation(raw: unknown): VegetationSettings {
       gapMeters: readNumber(grass.gapMeters, DEFAULT_VEGETATION.grass.gapMeters),
       minScale: readNumber(grass.minScale, DEFAULT_VEGETATION.grass.minScale),
       maxScale: readNumber(grass.maxScale, DEFAULT_VEGETATION.grass.maxScale),
+      assetUrls: readVegetationAssetUrls(grass.assetUrls, 'grass'),
+      color: readHexColor(
+        grass.color,
+        DEFAULT_VEGETATION.grass.color ?? DEFAULT_GRASS_COLOR,
+      ),
     },
     tree: {
       density: readNumber(tree.density, DEFAULT_VEGETATION.tree.density),
       gapMeters: readNumber(tree.gapMeters, DEFAULT_VEGETATION.tree.gapMeters),
       minScale: readNumber(tree.minScale, DEFAULT_VEGETATION.tree.minScale),
       maxScale: readNumber(tree.maxScale, DEFAULT_VEGETATION.tree.maxScale),
+      assetUrls: readVegetationAssetUrls(tree.assetUrls, 'tree'),
     },
   };
 }
@@ -366,7 +450,7 @@ function readCollider(raw: unknown): SurfaceSpawnCollider {
   };
 }
 
-function readSpawnLayer(raw: unknown, index: number): PlanetSpawnLayer | null {
+function readSpawnEntry(raw: unknown, index: number): PlanetSpawnEntry | null {
   if (!raw || typeof raw !== 'object') return null;
   const src = raw as Record<string, unknown>;
   const id =
@@ -388,6 +472,7 @@ function readSpawnLayer(raw: unknown, index: number): PlanetSpawnLayer | null {
     name,
     assetUrl,
     enabled: src.enabled !== false,
+    weight: Math.max(0, readNumber(src.weight, 1)),
     density: Math.max(0, readNumber(src.density, 1)),
     gapMeters: Math.max(0, readNumber(src.gapMeters, 4)),
     minScale: Math.max(0.01, readNumber(src.minScale, 0.8)),
@@ -396,19 +481,56 @@ function readSpawnLayer(raw: unknown, index: number): PlanetSpawnLayer | null {
     minNormalizedHeight: Math.min(minH, maxH),
     maxNormalizedHeight: Math.max(minH, maxH),
     alignToNormal: src.alignToNormal !== false,
+    terrainInsetMeters: readNumber(src.terrainInsetMeters, 0),
     collider: readCollider(src.collider),
     seedOffset: Math.round(readNumber(src.seedOffset, seedOffsetFromId(id))),
   };
 }
 
-function readSpawning(raw: unknown): PlanetSpawnLayer[] {
+function readSpawnEntries(raw: unknown): PlanetSpawnEntry[] {
   if (!Array.isArray(raw)) return [];
-  const layers: PlanetSpawnLayer[] = [];
+  const entries: PlanetSpawnEntry[] = [];
   for (let i = 0; i < raw.length; i += 1) {
-    const layer = readSpawnLayer(raw[i], i);
-    if (layer) layers.push(layer);
+    const entry = readSpawnEntry(raw[i], i);
+    if (entry) entries.push(entry);
   }
-  return layers;
+  return entries;
+}
+
+/**
+ * Parse spawning: legacy `PlanetSpawnLayer[]` migrates 1:1 into a catalog;
+ * object shape is the Surface Spawn Catalog.
+ */
+function readSpawning(raw: unknown): PlanetSpawnCatalog {
+  if (Array.isArray(raw)) {
+    return createDefaultSpawnCatalog(readSpawnEntries(raw));
+  }
+  if (!raw || typeof raw !== 'object') {
+    return createDefaultSpawnCatalog();
+  }
+  const src = raw as Record<string, unknown>;
+  const samplesPerTile = Math.max(
+    0,
+    Math.round(readNumber(src.samplesPerTile, DEFAULT_SPAWN_SAMPLES_PER_TILE)),
+  );
+  const density = Math.max(0, readNumber(src.density, 1));
+  return {
+    samplesPerTile,
+    density,
+    entries: readSpawnEntries(src.entries),
+  };
+}
+
+/** Flatten catalog entries for APIs that still take a layer/entry list. */
+export function spawnCatalogEntries(
+  catalog: PlanetSpawnCatalog | readonly PlanetSpawnEntry[] | null | undefined,
+): PlanetSpawnEntry[] {
+  if (!catalog) return [];
+  if (Array.isArray(catalog)) {
+    return [...(catalog as readonly PlanetSpawnEntry[])];
+  }
+  const asCatalog = catalog as PlanetSpawnCatalog;
+  return [...asCatalog.entries];
 }
 
 /** Validates and normalizes unknown JSON into a PlanetDocument. */
@@ -455,9 +577,15 @@ export function createDefaultPlanetDocument(
     hydrology: { ...DEFAULT_HYDROLOGY_RECIPE },
     palette: { ...DEFAULT_BIOME_PALETTE },
     vegetation: {
-      grass: { ...DEFAULT_VEGETATION.grass },
-      tree: { ...DEFAULT_VEGETATION.tree },
+      grass: {
+        ...DEFAULT_VEGETATION.grass,
+        assetUrls: [...DEFAULT_VEGETATION.grass.assetUrls],
+      },
+      tree: {
+        ...DEFAULT_VEGETATION.tree,
+        assetUrls: [...DEFAULT_VEGETATION.tree.assetUrls],
+      },
     },
-    spawning: [],
+    spawning: createDefaultSpawnCatalog(),
   };
 }

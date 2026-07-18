@@ -143,6 +143,11 @@ export interface NetworkRenderEntity {
 
 export interface SpikeRenderWorld {
   mode?: GameMode;
+  /**
+   * Near-ship exterior walk: use on-foot camera (character focus, planet orbit)
+   * even though locomotion still runs in ship-local Rapier.
+   */
+  shipExteriorWalk?: boolean;
   ship: import('./flight').FlightBody;
   /** All ship instances visible this frame (multi-ship render pool). */
   ships?: RenderShipInstance[];

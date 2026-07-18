@@ -422,7 +422,9 @@ export function createSpikeRenderer(
     );
     updateSunIntensity(lighting.sun, sunState.rawDaylight, spaceFactor);
 
-    // Camera before tile selection so frustum culling uses this frame's view.
+    // Camera still updates before terrain so Three.js can frustum-cull draws,
+    // but terrain residency itself is deliberately view-independent. Mouse
+    // look must never hide/reselect the planet underneath a stationary body.
     updateCameraRig(
       camera,
       cameraTarget,
@@ -434,31 +436,6 @@ export function createSpikeRenderer(
       { frame: stationFrame, roomId: world.stationRoomId ?? null },
       dt,
     );
-
-    const viewForward = new THREE.Vector3();
-    const viewRight = new THREE.Vector3(1, 0, 0);
-    const viewUp = new THREE.Vector3(0, 1, 0);
-    const viewRotation = new THREE.Quaternion();
-    camera.getWorldDirection(viewForward);
-    camera.getWorldQuaternion(viewRotation);
-    viewRight.applyQuaternion(viewRotation);
-    viewUp.applyQuaternion(viewRotation);
-    const halfFovYRadians = THREE.MathUtils.degToRad(camera.fov * 0.5);
-    const tanHalfFovY = Math.tan(halfFovYRadians);
-    const tanHalfFovX = tanHalfFovY * camera.aspect;
-    const eyeWorld: Vec3 = {
-      x: focusBody.position.x + camera.position.x / renderScale,
-      y: focusBody.position.y + camera.position.y / renderScale,
-      z: focusBody.position.z + camera.position.z / renderScale,
-    };
-    const selectionView = {
-      eye: eyeWorld,
-      forward: { x: viewForward.x, y: viewForward.y, z: viewForward.z },
-      right: { x: viewRight.x, y: viewRight.y, z: viewRight.z },
-      up: { x: viewUp.x, y: viewUp.y, z: viewUp.z },
-      tanHalfFovX,
-      tanHalfFovY,
-    };
     // Approach prefetch uses ship velocity (character render state has no
     // velocity). On foot, selection alone covers the local ring.
     const focusVelocity = ship.velocity;
@@ -487,7 +464,7 @@ export function createSpikeRenderer(
       tileState = quantumPreloadTileState;
     } else {
       tileState = tileManager.update(focusBody.position, surface, {
-        view: selectionView,
+        view: null,
         velocity: focusVelocity,
       });
     }
@@ -765,6 +742,9 @@ export function createSpikeRenderer(
     setVegetationLayers(layers) {
       vegetationManager.setLayerVisible(layers);
     },
+    setSurfaceSpawnCatalog(catalog) {
+      surfaceSpawnManager.setCatalog(catalog);
+    },
     setSurfaceSpawnLayers(layers) {
       surfaceSpawnManager.setLayers(layers);
     },
@@ -773,6 +753,12 @@ export function createSpikeRenderer(
     },
     getSurfaceSpawnLayers() {
       return surfaceSpawnManager.getLayers();
+    },
+    getSurfaceSpawnCatalog() {
+      return surfaceSpawnManager.getCatalog();
+    },
+    getSurfaceSpawnMeshCollisions() {
+      return surfaceSpawnManager.getMeshCollisions();
     },
     getSurfaceSpawnDebugStats() {
       return surfaceSpawnManager.getDebugStats();

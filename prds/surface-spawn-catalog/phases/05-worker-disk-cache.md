@@ -1,7 +1,7 @@
 # Phase 05 — Worker + IndexedDB spawn tiles
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Complete  
 **Depends on:** Phases 02–03  
 **Unlocks:** Cold-cache walks without main-thread placement spikes at catalog scale
 

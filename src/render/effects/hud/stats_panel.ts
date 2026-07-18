@@ -92,7 +92,12 @@ export function createStatsPanel(elements: StatsPanelElements) {
       : [];
 
     elements.readoutsEl.innerHTML = [
-      ['Mode', modeLabel(world.mode)],
+      [
+        'Mode',
+        modeLabel(
+          world.shipExteriorWalk ? MODE_ON_FOOT : world.mode,
+        ),
+      ],
       ...(world.mode === MODE_IN_SHIP
         ? ([
             ['Flight', flightModeLabel(world.flightMode)],
@@ -141,7 +146,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
       } else {
         elements.statusEl.textContent = `Your ship is parked in Hangar ${world.assignedHangar}. Ride the hangar elevators from the lobby.`;
       }
-    } else if (world.mode === MODE_ON_SHIP_DECK) {
+    } else if (world.mode === MODE_ON_SHIP_DECK && !world.shipExteriorWalk) {
       if (!isPointerLocked) {
         elements.statusEl.textContent =
           'Click the view to lock the mouse, then walk the ship with WASD and sprint with Shift.';
@@ -151,7 +156,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
         elements.statusEl.textContent =
           'Walk the cabin. The cockpit doors are forward; the boarding ramp is at the tail.';
       }
-    } else if (world.mode === MODE_ON_FOOT) {
+    } else if (world.mode === MODE_ON_FOOT || world.shipExteriorWalk) {
       if (!isPointerLocked) {
         elements.statusEl.textContent =
           'Click the view to lock the mouse, then move with WASD, sprint with Shift, and jump with Space.';

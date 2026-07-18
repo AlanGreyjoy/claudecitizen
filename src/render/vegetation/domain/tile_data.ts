@@ -17,6 +17,7 @@ import {
 } from './constants';
 import { clamp01, hash01, lerp, scaledSampleCount } from './hash';
 import { composeInstanceMatrix } from './instance_matrix';
+import { grassScaleCoverageMultiplier } from '../settings';
 import {
   canPlaceWithGap,
   createPlacementGrid,
@@ -232,12 +233,16 @@ export function collectTileVegetationData(
   const anchor = createAnchorFromTile(tileInfo, planet, seed);
   const grassSettings = vegetationSettings.grass;
   const treeSettings = vegetationSettings.tree;
-  // Density is authored as a feel multiplier: use a mild super-linear curve so
-  // 2×–4× reads as clearly denser, not "barely more attempts."
+  // Density is coverage: mild super-linear curve, plus scale compensation so
+  // small authored min/max scale still carpets at density 1.
   const grassDensityScale =
     grassSettings.density <= 0
       ? 0
-      : Math.pow(grassSettings.density, 1.35);
+      : Math.pow(grassSettings.density, 1.35) *
+        grassScaleCoverageMultiplier(
+          grassSettings.minScale,
+          grassSettings.maxScale,
+        );
   const grassSampleCount = scaledSampleCount(
     getGrassSampleCount() * grassSampleMultiplier(tileInfo.level),
     grassDensityScale,
@@ -258,10 +263,7 @@ export function collectTileVegetationData(
       (surface, i) =>
         (surface.biome === 'plains' || surface.biome === 'forest') &&
         hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, i, 71) <
-          Math.min(
-            1,
-            surface.grassDensity * 1.35 * Math.max(1, Math.sqrt(grassSettings.density)),
-          ),
+          Math.min(1, surface.grassDensity * 1.35),
       (surface, i) =>
         lerp(
           grassSettings.minScale,

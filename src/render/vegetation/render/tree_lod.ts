@@ -28,6 +28,8 @@ export function createTreeLodAsset(): InstancedAsset {
 
   return {
     baseOffsetY: 0,
+    boundsHalfExtents: [CONE_RADIUS, CONE_HEIGHT * 0.5, CONE_RADIUS],
+    collisionCenter: [0, CONE_HEIGHT * 0.5, 0],
     parts: [{ geometry, material }],
   };
 }

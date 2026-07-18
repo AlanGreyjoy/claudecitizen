@@ -652,6 +652,16 @@ body.ed-resize-row * {
   background: rgba(8, 18, 32, 0.7);
 }
 
+.ed-planet-veg-assets {
+  display: grid;
+  gap: 6px;
+}
+
+.ed-planet-veg-asset-row {
+  display: grid;
+  gap: 6px;
+}
+
 .ed-planet-spawn-layer-title {
   color: var(--accent);
   font: 700 11px/1.2 var(--sc-font);
@@ -694,6 +704,15 @@ body.ed-resize-row * {
 .ed-planet-remove-layer {
   justify-self: start;
   margin-top: 4px;
+}
+
+.ed-spawn-catalog-warning {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 180, 72, 0.45);
+  border-radius: 4px;
+  background: rgba(80, 48, 8, 0.55);
+  color: #ffd59a;
+  font: 600 11px/1.4 var(--sc-font);
 }
 
 .ed-planet-color {
