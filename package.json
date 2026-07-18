@@ -49,7 +49,7 @@
     "eslint-plugin-sonarjs": "^4.1.0",
     "globals": "^17.7.0",
     "tsx": "^4.20.3",
-    "typescript": "^5.9.2",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
