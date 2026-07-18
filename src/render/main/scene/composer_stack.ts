@@ -9,6 +9,7 @@ import {
 import { SpeedBlurEffect } from '../effects/speed_blur';
 import { MotionBlurEffect } from '../effects/motion_blur';
 import { ColorCorrectionEffect } from '../effects/color_correction';
+import { SURFACE_FOG_RAY_STEPS } from '../domain/constants';
 import { resolveRenderQuality } from '../domain/render_quality';
 import { resolveSsaoSettings } from '../domain/ssao_settings';
 import { createSpaceSkybox, type SpaceSkybox } from './space_skybox';
@@ -116,7 +117,15 @@ export function createComposerStack(
   }
 
   const spaceSkybox = createSpaceSkybox();
-  const volumetricClouds = createVolumetricCloudManager(renderer, scene, camera, planet, sun, normalPass);
+  const volumetricClouds = createVolumetricCloudManager(
+    renderer,
+    scene,
+    camera,
+    planet,
+    sun,
+    normalPass,
+    renderScale,
+  );
   const starField = createStarField(scene);
 
   const atmospherePass = new EffectPass(
@@ -126,9 +135,11 @@ export function createComposerStack(
   );
   composer.addPass(atmospherePass);
 
+  // Fog only composites while planetFogActive (surface / low atmosphere). Cap
+  // steps here — STEPS is baked into the shader at construction time.
   const volumetricFogEffect = new VolumetricFogEffect(camera, {
     useLogarithmicDepth: renderer.capabilities.logarithmicDepthBuffer,
-    raySteps: renderQuality.fogRaySteps,
+    raySteps: Math.min(renderQuality.fogRaySteps, SURFACE_FOG_RAY_STEPS),
   });
   const volumetricFogPass = new EffectPass(camera, volumetricFogEffect);
   composer.addPass(volumetricFogPass);

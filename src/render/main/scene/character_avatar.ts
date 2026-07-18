@@ -10,7 +10,6 @@ interface CharacterAvatar {
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
-    firstPerson?: boolean,
   ) => void;
   setEquippedInventory: (inventory: InventoryState | null) => void;
 }
@@ -28,13 +27,12 @@ export function createCharacterAvatar(
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
-    firstPerson = false,
   ): void {
     if (!character || instance.hasLoadError()) {
       instance.root.visible = false;
       return;
     }
-    instance.root.visible = !firstPerson;
+    instance.root.visible = true;
     instance.setPose(character, focusPosition, renderScale);
     instance.setAnimation(character.animation);
     instance.updateMixer(nowSeconds);

@@ -30,6 +30,14 @@
 - **Station runtime** (`src/world/prefabs/station_runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
 - **Game loop** (`src/app/game_loop.ts`) owns `stationAnimationStates` (per-animation blend values) and the F-key interaction dispatch.
 
+### Friendly station NPCs
+
+- Ambient populations use `npc-spawner` markers connected to an undirected graph of `npc-waypoint` markers. Named/service characters use `npc-placement`.
+- `station_runtime.ts` flattens those components into station-local NPC specs. `src/world/npc.ts` validates duplicate/missing ids, cross-floor links, missing route groups, and disconnected graphs.
+- `src/npc/station_population.ts` currently runs a deterministic, cosmetic, non-colliding local population. `src/render/main/scene/station_npcs.ts` renders it through the existing character avatar pipeline with distance activation.
+- NPC definitions and weighted populations live in `src/npc/catalog.ts`; station prefabs reference ids instead of embedding appearance data.
+- Local NPCs must remain non-authoritative. Before adding dialogue outcomes, persistence, inventory, combat, or player collision, promote NPCs to real backend cell entities and snapshot them with an explicit entity kind; do not model them as fake players.
+
 ### Animation → collider → interaction wiring
 
 This is the most common source of "door doesn't work" bugs. Trace these paths:
@@ -119,33 +127,58 @@ Bounded contexts (do not leak across):
 | `world/` | `src/world/` | Planet, terrain, coordinates, surface queries, prefabs |
 | `flight/` | `src/flight/` | Ship physics, body dynamics |
 | `player/` | `src/player/` | Character, deck, ship interaction, mode transitions |
+| `npc/` | `src/npc/` | Non-player definitions, population lifecycle, behavior state |
 | `render/` | `src/render/` | Three.js presentation — reads domain, never mutates simulation |
 
 **Dependency direction:**
 ```
 math/  ←  world/  ←  flight/, player/
-                ↑
-              render/  (reads domain; never owns simulation rules)
-                ↑
-              app/bootstrap.ts   (wires everything; minimal logic)
+           ↑               ↑
+           └──── npc/ ─────┘  (reads station data + character appearance data)
+                    ↑
+                  render/  (reads domain; never owns simulation rules)
+                    ↑
+                  app/bootstrap.ts   (wires everything; minimal logic)
 ```
 
 **Import rules:**
-- `world/`, `flight/`, `player/` must not import `three`, `render/`, or DOM APIs
-- `render/` may read from `world/`/`player/` but must not mutate simulation state
+- `world/`, `flight/`, `player/`, `npc/` must not import `three`, `render/`, or DOM APIs
+- `npc/` may reuse player character-appearance data, but must not own or mutate player state
+- `render/` may read from `world/`/`player/`/`npc/` but must not mutate simulation state
 - `app/bootstrap.ts` orchestrates only — no domain logic inline
 
 ## Terrain mesh vs foot placement (critical)
 
 The visible terrain mesh and on-foot physics **must sample the same LOD grid**. If they diverge, the character floats or sinks.
 
-- Mesh uses `sampleRenderablePlanetSurface()` at the tile's LOD. Foot placement uses **`sampleFootPlanetSurface()`** (`world/planet_surface.ts`) — it reads the LOD level from **`getFootSurfaceSampleLevel()`** (`world/foot_surface_level.ts`).
+- Mesh grid vertices use `sampleAnalyticPlanetSurface()` with the band-limited spacing from `renderableGridSampleSpacingMeters()`. Foot placement uses **`sampleFootPlanetSurface()`** (`world/planet_surface.ts`) at the level from **`getFootSurfaceSampleLevel()`** (`world/foot_surface_level.ts`); both paths must resolve the same canonical nested grid heights.
 - Each frame, the tile manager sets that level from `finestSelectedTileLevel` (`render/planet_tiles/domain/tile_coverage.ts`). Character update runs *before* render, so foot sampling uses the **previous frame's** level (one-frame lag is OK).
-- Below ~2 km altitude, `shouldSplitTile` forces max detail only for **nearby facing tiles** (`GROUND_DETAIL_RADIUS_METERS` in `render/planet_tiles/domain/lod.ts`).
+- Below ~2 km altitude, `shouldSplitTile` forces L17 detail only for **nearby facing tiles** (`GROUND_DETAIL_RADIUS_METERS` in `render/planet_tiles/domain/lod.ts`). The 450 m radius keeps max-detail tile pressure close to the former L16/900 m budget while halving on-foot triangle span.
+- Band-limited terrain vertices canonicalize to the coarsest LOD grid that owns that vertex before choosing an octave cutoff. This keeps shared vertices bit-identical across LODs while finer levels add only newly resolvable detail; do not replace it with a tile-wide cutoff.
+- Terrain tiles append radially inset, two-sided skirt walls on all four edges to cover mixed-LOD T-junctions from either viewing side while the main material remains `FrontSide`. Changing skirt layout requires updating `TERRAIN_TILE_VERTEX_COUNT` and bumping `TERRAIN_CACHE_VERSION`.
+- The terrain fallback chain must reach L0, and the six synchronously built L0 roots must remain pinned in `mesh_cache.ts`. This is the no-hole coverage guarantee when disk/worker tiles are cold, delayed, or over budget.
+- `world/base_elevation.ts` owns the terrain recipe through lake carving. `world/rivers.ts` builds one cached, spatially indexed downhill drainage graph from that pre-river surface; vertex sampling only queries the graph. Preserve its acyclic confluences and non-increasing water levels—do not put route solving back in the per-vertex hot path.
 - **Do not vary `TILE_SEGMENTS` / `RENDER_SURFACE_SEGMENTS` per quality preset.** The low-poly triangle layout, foot sampler, lake mesh, and disk cache assume a fixed count. Validate cached tiles with `isValidTerrainTileBuffers()`.
 - Terrain tiles are non-indexed, flat-shaded triangles with baked per-face palette colors. `terrain_triangulation.ts` owns the alternating diagonal rule shared by mesh generation and foot sampling; do not reintroduce smooth normals or photographic terrain splat textures without an explicit art-direction change.
 - **Do not bypass** the per-frame tile build budget in `mesh_cache.ts` — unbounded sync builds freeze at 0 FPS.
-- **Debugging:** `scripts/measure_desync.ts` compares analytic/mesh heights. `?quality=balanced|performance|high` toggles render presets.
+- **Debugging:** `npm run terrain:validate` checks horizon coverage, cold-cache/root fallback, packed mesh/foot height and normal agreement, canonical shared vertices, same- and mixed-LOD seams across cube faces, two-sided skirt coverage, routed-water invariants, and finest triangle span. `scripts/measure_desync.ts` compares analytic/mesh heights. `?quality=balanced|performance|high` toggles render presets.
+
+## Terrain & vegetation disk cache invalidation
+
+IndexedDB keys live in `src/cache/cache_keys.ts` (`TERRAIN_CACHE_VERSION`, `VEGETATION_CACHE_VERSION`, `planetCacheId()`, `hashVegetationSettings()`). Cursor rule: `.cursor/rules/terrain-cache.mdc`.
+
+**Planet Authoring / `*.planet.json` — no manual version bump.** Height, regions, hydrology, seed, radius, amplitude → `terrainFingerprint()`; palette → `paletteHash()`; vegetation density/gap/scale → settings hash. New keys miss cache automatically.
+
+**Code/algorithm edits — bump the matching version** (or extend the key) when:
+
+| Change | Action |
+|--------|--------|
+| Terrain mesh layout, skirts, triangulation, vertex count, worker buffer format | Bump `TERRAIN_CACHE_VERSION` (and vertex-count constants when skirts/layout change) |
+| Veg placement formula, LOD sample multipliers, grass/tree assets, stored veg tile schema | Bump `VEGETATION_CACHE_VERSION` |
+| Biome/climate accept rules that change instances without changing height probes | Bump `VEGETATION_CACHE_VERSION` (fingerprint only samples heights) |
+| Quality sample budgets (`grassSampleCount` / `treeSampleCount`) | Not in the veg key today — bump `VEGETATION_CACHE_VERSION` and/or add those budgets to the storage key so quality presets cannot share tiles |
+
+When unsure whether probes catch a code change, bump. Stale veg tiles with wrong instance counts tank FPS; stale terrain tiles desync feet from mesh.
 
 ## Protected assets security
 
@@ -193,6 +226,10 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/world/prefabs/schema.ts` | Component type definitions + validators |
 | `src/world/prefabs/ship_runtime.ts` | Ship prefab → ShipLayout + collider animation binding |
 | `src/world/prefabs/station_runtime.ts` | Station prefab → StationLayoutOverride + collider animation binding |
+| `src/world/npc.ts` | Station NPC authoring specs + route validation |
+| `src/npc/catalog.ts` | Reusable friendly NPC definitions and population pools |
+| `src/npc/station_population.ts` | Deterministic cosmetic station population + waypoint movement |
+| `src/render/main/scene/station_npcs.ts` | Station NPC avatar lifecycle, animation, and distance activation |
 | `src/physics/prefab_colliders.ts` | Bakes `collider` components into `GameplayCollider` objects |
 | `src/physics/ship_physics.ts` | Ship-local Rapier world for collider-deck walking (doors/ramp enable toggles) |
 | `src/physics/colliders.ts` | GameplayCollider types, mesh BVH bake/ground sample, legacy custom capsule push |
@@ -220,6 +257,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `scripts/inspect_glb.mjs` | CLI GLB node hierarchy dump |
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/IFCS symptoms) |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab editor skill |
+| `.cursor/skills/prd/SKILL.md` | PRD handoff packs under `prds/<slug>/` (README, PRD, phases, checklist) |
 
 ## Utility scripts
 
@@ -227,6 +265,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 |--------|---------|
 | `scripts/inspect_glb.mjs` | List node names/bindings in a GLB (for `ship-door` bindings) |
 | `scripts/measure_desync.ts` | Compare analytic vs mesh height at a landing site |
+| `scripts/validate_terrain_system.ts` | Validate terrain LOD, seams, mesh/foot fidelity, and routed hydrology |
 | `scripts/spike-demo.ts` | Headless scripted takeoff/orbit/landing (`npm run demo`) |
 | `scripts/bake_ship_textures.py` | Fix Unity trim-sheet materials for Three.js PBR |
 | `scripts/check_page.mjs` | Page validation |
@@ -234,6 +273,6 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 ## Other conventions
 
 - `.cursor/rules/agent-conventions.mdc` exists and defers to this file as the primary source — update both if changing architecture boundaries.
-- Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/` — read when editing those domains.
+- Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/`, `.cursor/skills/prd/` — read when editing those domains (PRD packs when creating `prds/` handoffs).
 - Export **factories + pure functions** from domain modules (not classes). Three.js objects never appear in `world/` or `flight/`.
 - Prefab JSON lives in `src/world/prefabs/data/<id>.prefab.json` and is committed (metadata only). The game bundles them via `import.meta.glob`.

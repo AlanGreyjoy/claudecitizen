@@ -1,0 +1,463 @@
+import type {
+  Biome,
+  LandingSiteHint,
+  Planet,
+  PlanetSpawnLayer,
+  SurfaceSpawnCollider,
+  VegetationSettings,
+} from '../../types';
+
+const DEFAULT_VEGETATION: VegetationSettings = Object.freeze({
+  grass: Object.freeze({ density: 1, gapMeters: 0, minScale: 0.35, maxScale: 1.0 }),
+  tree: Object.freeze({ density: 1, gapMeters: 0, minScale: 1.1, maxScale: 3.5 }),
+});
+
+/**
+ * Planet documents are the contract between the Planet Authoring editor and
+ * runtime generation: identity, physics, height recipe, hydrology, biome
+ * palette, vegetation defaults, and surface spawn layers. Files live under
+ * src/world/planets/data/<id>.planet.json.
+ */
+
+export type { PlanetSpawnLayer, SurfaceSpawnCollider };
+
+export interface PlanetHeightRecipe {
+  continentScale: number;
+  continentWeight: number;
+  detailScale: number;
+  detailWeight: number;
+  ridgeScale: number;
+  ridgeWeight: number;
+  localRidgeScale: number;
+  localRidgeWeight: number;
+  mountainBaseUplift: number;
+  hillScale: number;
+  hillBaseWeight: number;
+  hillRegionWeight: number;
+  landMaskBias: number;
+  landMaskScale: number;
+}
+
+export interface PlanetRegionRecipe {
+  noiseSeedOffset: number;
+  noiseScale: number;
+  noiseOctaves: number;
+  contrast: number;
+  mountainRegionStart: number;
+  mountainRegionFull: number;
+  hillRegionStart: number;
+  hillRegionFull: number;
+}
+
+export interface PlanetHydrologyRecipe {
+  lakeNoiseSeedOffset: number;
+  lakeMaskThreshold: number;
+  lakeMaxCarveNormalized: number;
+  lakeMinLandElevation: number;
+  inlandLakeMoistureThreshold: number;
+  inlandLakeMaxNormalized: number;
+  inlandLakeMaxDepthMeters: number;
+  riverNoiseSeedOffset: number;
+  riverFieldScale: number;
+  riverFieldOctaves: number;
+  riverHalfWidth: number;
+  riverMaxCarveNormalized: number;
+  riverMinLandElevation: number;
+  riverMaxLandElevation: number;
+  riverMinStrength: number;
+}
+
+/** CSS hex colors, e.g. "#173653". */
+export type PlanetBiomePalette = Record<Biome, string>;
+
+export interface PlanetDocument {
+  id: string;
+  name: string;
+  seed: number;
+  radiusMeters: number;
+  gravityMetersPerSecond2: number;
+  atmosphereHeightMeters: number;
+  terrainAmplitudeMeters: number;
+  dragSeaLevel: number;
+  height: PlanetHeightRecipe;
+  regions: PlanetRegionRecipe;
+  hydrology: PlanetHydrologyRecipe;
+  palette: PlanetBiomePalette;
+  vegetation: VegetationSettings;
+  /** Authored GLB scatter layers (rocks, props, etc.). */
+  spawning: PlanetSpawnLayer[];
+  spawnHint?: LandingSiteHint;
+}
+
+export const DEFAULT_SPAWN_COLLIDER: SurfaceSpawnCollider = Object.freeze({
+  shape: 'box' as const,
+  halfExtents: [0.5, 0.5, 0.5] as [number, number, number],
+});
+
+function seedOffsetFromId(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (Math.imul(hash, 31) + id.charCodeAt(i)) >>> 0;
+  }
+  return hash % 10_000;
+}
+
+export function createDefaultSpawnLayer(
+  id: string,
+  name = 'Spawn layer',
+): PlanetSpawnLayer {
+  return {
+    id,
+    name,
+    assetUrl: '',
+    enabled: true,
+    density: 1,
+    gapMeters: 4,
+    minScale: 0.8,
+    maxScale: 1.4,
+    biomes: ['beach', 'plains'],
+    minNormalizedHeight: 0,
+    maxNormalizedHeight: 1,
+    alignToNormal: true,
+    collider: {
+      shape: 'box',
+      halfExtents: [0.5, 0.5, 0.5],
+    },
+    seedOffset: seedOffsetFromId(id),
+  };
+}
+
+export const PLANET_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export const DEFAULT_HEIGHT_RECIPE: PlanetHeightRecipe = Object.freeze({
+  continentScale: 1.2,
+  continentWeight: 0.4,
+  detailScale: 8000,
+  detailWeight: 0.01,
+  ridgeScale: 3.5,
+  ridgeWeight: 0.45,
+  localRidgeScale: 400,
+  localRidgeWeight: 0.15,
+  mountainBaseUplift: 0.1,
+  hillScale: 1200,
+  hillBaseWeight: 0.02,
+  hillRegionWeight: 0.13,
+  landMaskBias: 0.05,
+  landMaskScale: 4,
+});
+
+export const DEFAULT_REGION_RECIPE: PlanetRegionRecipe = Object.freeze({
+  noiseSeedOffset: 4242,
+  noiseScale: 0.9,
+  noiseOctaves: 4,
+  contrast: 1.6,
+  mountainRegionStart: 0.55,
+  mountainRegionFull: 0.75,
+  hillRegionStart: 0.3,
+  hillRegionFull: 0.5,
+});
+
+export const DEFAULT_HYDROLOGY_RECIPE: PlanetHydrologyRecipe = Object.freeze({
+  lakeNoiseSeedOffset: 9012,
+  lakeMaskThreshold: 0.64,
+  lakeMaxCarveNormalized: 0.14,
+  lakeMinLandElevation: 0.02,
+  inlandLakeMoistureThreshold: 0.55,
+  inlandLakeMaxNormalized: 0.05,
+  inlandLakeMaxDepthMeters: 8,
+  riverNoiseSeedOffset: 7777,
+  riverFieldScale: 7,
+  riverFieldOctaves: 3,
+  riverHalfWidth: 0.018,
+  riverMaxCarveNormalized: 0.045,
+  riverMinLandElevation: 0.02,
+  riverMaxLandElevation: 0.55,
+  riverMinStrength: 0.05,
+});
+
+export const DEFAULT_BIOME_PALETTE: PlanetBiomePalette = Object.freeze({
+  ocean: '#173653',
+  lake: '#53665a',
+  river: '#776f50',
+  beach: '#d8c58e',
+  desert: '#c89b62',
+  plains: '#719447',
+  forest: '#3e6c42',
+  tundra: '#9eaa91',
+  highlands: '#7f895f',
+  peak: '#e7e6dc',
+  rock: '#737887',
+});
+
+/** Shallow ocean blend target used by the terrain facet shader. */
+export const DEFAULT_OCEAN_SHALLOW = '#3f7898';
+
+export const DEFAULT_PLANET_SEED = 20061;
+
+export function planetPhysicsFromDocument(doc: Pick<
+  PlanetDocument,
+  | 'name'
+  | 'radiusMeters'
+  | 'gravityMetersPerSecond2'
+  | 'atmosphereHeightMeters'
+  | 'terrainAmplitudeMeters'
+  | 'dragSeaLevel'
+>): Planet {
+  return {
+    name: doc.name,
+    radiusMeters: doc.radiusMeters,
+    gravityMetersPerSecond2: doc.gravityMetersPerSecond2,
+    atmosphereHeightMeters: doc.atmosphereHeightMeters,
+    terrainAmplitudeMeters: doc.terrainAmplitudeMeters,
+    dragSeaLevel: doc.dragSeaLevel,
+  };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function readNumber(value: unknown, fallback: number): number {
+  return isFiniteNumber(value) ? value : fallback;
+}
+
+function readHexColor(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) return fallback;
+  return trimmed.toLowerCase();
+}
+
+function readHeight(raw: unknown): PlanetHeightRecipe {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    continentScale: readNumber(src.continentScale, DEFAULT_HEIGHT_RECIPE.continentScale),
+    continentWeight: readNumber(src.continentWeight, DEFAULT_HEIGHT_RECIPE.continentWeight),
+    detailScale: readNumber(src.detailScale, DEFAULT_HEIGHT_RECIPE.detailScale),
+    detailWeight: readNumber(src.detailWeight, DEFAULT_HEIGHT_RECIPE.detailWeight),
+    ridgeScale: readNumber(src.ridgeScale, DEFAULT_HEIGHT_RECIPE.ridgeScale),
+    ridgeWeight: readNumber(src.ridgeWeight, DEFAULT_HEIGHT_RECIPE.ridgeWeight),
+    localRidgeScale: readNumber(src.localRidgeScale, DEFAULT_HEIGHT_RECIPE.localRidgeScale),
+    localRidgeWeight: readNumber(src.localRidgeWeight, DEFAULT_HEIGHT_RECIPE.localRidgeWeight),
+    mountainBaseUplift: readNumber(src.mountainBaseUplift, DEFAULT_HEIGHT_RECIPE.mountainBaseUplift),
+    hillScale: readNumber(src.hillScale, DEFAULT_HEIGHT_RECIPE.hillScale),
+    hillBaseWeight: readNumber(src.hillBaseWeight, DEFAULT_HEIGHT_RECIPE.hillBaseWeight),
+    hillRegionWeight: readNumber(src.hillRegionWeight, DEFAULT_HEIGHT_RECIPE.hillRegionWeight),
+    landMaskBias: readNumber(src.landMaskBias, DEFAULT_HEIGHT_RECIPE.landMaskBias),
+    landMaskScale: readNumber(src.landMaskScale, DEFAULT_HEIGHT_RECIPE.landMaskScale),
+  };
+}
+
+function readRegions(raw: unknown): PlanetRegionRecipe {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    noiseSeedOffset: readNumber(src.noiseSeedOffset, DEFAULT_REGION_RECIPE.noiseSeedOffset),
+    noiseScale: readNumber(src.noiseScale, DEFAULT_REGION_RECIPE.noiseScale),
+    noiseOctaves: Math.max(1, Math.round(readNumber(src.noiseOctaves, DEFAULT_REGION_RECIPE.noiseOctaves))),
+    contrast: readNumber(src.contrast, DEFAULT_REGION_RECIPE.contrast),
+    mountainRegionStart: readNumber(src.mountainRegionStart, DEFAULT_REGION_RECIPE.mountainRegionStart),
+    mountainRegionFull: readNumber(src.mountainRegionFull, DEFAULT_REGION_RECIPE.mountainRegionFull),
+    hillRegionStart: readNumber(src.hillRegionStart, DEFAULT_REGION_RECIPE.hillRegionStart),
+    hillRegionFull: readNumber(src.hillRegionFull, DEFAULT_REGION_RECIPE.hillRegionFull),
+  };
+}
+
+function readHydrology(raw: unknown): PlanetHydrologyRecipe {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    lakeNoiseSeedOffset: readNumber(src.lakeNoiseSeedOffset, DEFAULT_HYDROLOGY_RECIPE.lakeNoiseSeedOffset),
+    lakeMaskThreshold: readNumber(src.lakeMaskThreshold, DEFAULT_HYDROLOGY_RECIPE.lakeMaskThreshold),
+    lakeMaxCarveNormalized: readNumber(
+      src.lakeMaxCarveNormalized,
+      DEFAULT_HYDROLOGY_RECIPE.lakeMaxCarveNormalized,
+    ),
+    lakeMinLandElevation: readNumber(src.lakeMinLandElevation, DEFAULT_HYDROLOGY_RECIPE.lakeMinLandElevation),
+    inlandLakeMoistureThreshold: readNumber(
+      src.inlandLakeMoistureThreshold,
+      DEFAULT_HYDROLOGY_RECIPE.inlandLakeMoistureThreshold,
+    ),
+    inlandLakeMaxNormalized: readNumber(
+      src.inlandLakeMaxNormalized,
+      DEFAULT_HYDROLOGY_RECIPE.inlandLakeMaxNormalized,
+    ),
+    inlandLakeMaxDepthMeters: readNumber(
+      src.inlandLakeMaxDepthMeters,
+      DEFAULT_HYDROLOGY_RECIPE.inlandLakeMaxDepthMeters,
+    ),
+    riverNoiseSeedOffset: readNumber(src.riverNoiseSeedOffset, DEFAULT_HYDROLOGY_RECIPE.riverNoiseSeedOffset),
+    riverFieldScale: readNumber(src.riverFieldScale, DEFAULT_HYDROLOGY_RECIPE.riverFieldScale),
+    riverFieldOctaves: Math.max(
+      1,
+      Math.round(readNumber(src.riverFieldOctaves, DEFAULT_HYDROLOGY_RECIPE.riverFieldOctaves)),
+    ),
+    riverHalfWidth: readNumber(src.riverHalfWidth, DEFAULT_HYDROLOGY_RECIPE.riverHalfWidth),
+    riverMaxCarveNormalized: readNumber(
+      src.riverMaxCarveNormalized,
+      DEFAULT_HYDROLOGY_RECIPE.riverMaxCarveNormalized,
+    ),
+    riverMinLandElevation: readNumber(
+      src.riverMinLandElevation,
+      DEFAULT_HYDROLOGY_RECIPE.riverMinLandElevation,
+    ),
+    riverMaxLandElevation: readNumber(
+      src.riverMaxLandElevation,
+      DEFAULT_HYDROLOGY_RECIPE.riverMaxLandElevation,
+    ),
+    riverMinStrength: readNumber(src.riverMinStrength, DEFAULT_HYDROLOGY_RECIPE.riverMinStrength),
+  };
+}
+
+function readPalette(raw: unknown): PlanetBiomePalette {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const palette = { ...DEFAULT_BIOME_PALETTE };
+  for (const biome of Object.keys(DEFAULT_BIOME_PALETTE) as Biome[]) {
+    palette[biome] = readHexColor(src[biome], DEFAULT_BIOME_PALETTE[biome]);
+  }
+  return palette;
+}
+
+function readVegetation(raw: unknown): VegetationSettings {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const grass = src.grass && typeof src.grass === 'object' ? (src.grass as Record<string, unknown>) : {};
+  const tree = src.tree && typeof src.tree === 'object' ? (src.tree as Record<string, unknown>) : {};
+  return {
+    grass: {
+      density: readNumber(grass.density, DEFAULT_VEGETATION.grass.density),
+      gapMeters: readNumber(grass.gapMeters, DEFAULT_VEGETATION.grass.gapMeters),
+      minScale: readNumber(grass.minScale, DEFAULT_VEGETATION.grass.minScale),
+      maxScale: readNumber(grass.maxScale, DEFAULT_VEGETATION.grass.maxScale),
+    },
+    tree: {
+      density: readNumber(tree.density, DEFAULT_VEGETATION.tree.density),
+      gapMeters: readNumber(tree.gapMeters, DEFAULT_VEGETATION.tree.gapMeters),
+      minScale: readNumber(tree.minScale, DEFAULT_VEGETATION.tree.minScale),
+      maxScale: readNumber(tree.maxScale, DEFAULT_VEGETATION.tree.maxScale),
+    },
+  };
+}
+
+function readSpawnHint(raw: unknown): LandingSiteHint | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const src = raw as Record<string, unknown>;
+  if (!isFiniteNumber(src.latRadians) || !isFiniteNumber(src.lonRadians)) return undefined;
+  return { latRadians: src.latRadians, lonRadians: src.lonRadians };
+}
+
+const ALL_BIOMES = Object.keys(DEFAULT_BIOME_PALETTE) as Biome[];
+
+function readCollider(raw: unknown): SurfaceSpawnCollider {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const shape = src.shape === 'capsule' ? 'capsule' : 'box';
+  if (shape === 'capsule') {
+    return {
+      shape: 'capsule',
+      radius: Math.max(0.05, readNumber(src.radius, 0.4)),
+      halfHeight: Math.max(0.05, readNumber(src.halfHeight, 0.5)),
+    };
+  }
+  const extents = Array.isArray(src.halfExtents) ? src.halfExtents : [];
+  return {
+    shape: 'box',
+    halfExtents: [
+      Math.max(0.05, readNumber(extents[0], 0.5)),
+      Math.max(0.05, readNumber(extents[1], 0.5)),
+      Math.max(0.05, readNumber(extents[2], 0.5)),
+    ],
+  };
+}
+
+function readSpawnLayer(raw: unknown, index: number): PlanetSpawnLayer | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  const id =
+    typeof src.id === 'string' && src.id.trim()
+      ? src.id.trim()
+      : `spawn-${index + 1}`;
+  const name =
+    typeof src.name === 'string' && src.name.trim() ? src.name.trim() : id;
+  const assetUrl = typeof src.assetUrl === 'string' ? src.assetUrl.trim() : '';
+  const biomesRaw = Array.isArray(src.biomes) ? src.biomes : [];
+  const biomes = biomesRaw.filter(
+    (value): value is Biome =>
+      typeof value === 'string' && (ALL_BIOMES as string[]).includes(value),
+  );
+  const minH = readNumber(src.minNormalizedHeight, 0);
+  const maxH = readNumber(src.maxNormalizedHeight, 1);
+  return {
+    id,
+    name,
+    assetUrl,
+    enabled: src.enabled !== false,
+    density: Math.max(0, readNumber(src.density, 1)),
+    gapMeters: Math.max(0, readNumber(src.gapMeters, 4)),
+    minScale: Math.max(0.01, readNumber(src.minScale, 0.8)),
+    maxScale: Math.max(0.01, readNumber(src.maxScale, 1.4)),
+    biomes,
+    minNormalizedHeight: Math.min(minH, maxH),
+    maxNormalizedHeight: Math.max(minH, maxH),
+    alignToNormal: src.alignToNormal !== false,
+    collider: readCollider(src.collider),
+    seedOffset: Math.round(readNumber(src.seedOffset, seedOffsetFromId(id))),
+  };
+}
+
+function readSpawning(raw: unknown): PlanetSpawnLayer[] {
+  if (!Array.isArray(raw)) return [];
+  const layers: PlanetSpawnLayer[] = [];
+  for (let i = 0; i < raw.length; i += 1) {
+    const layer = readSpawnLayer(raw[i], i);
+    if (layer) layers.push(layer);
+  }
+  return layers;
+}
+
+/** Validates and normalizes unknown JSON into a PlanetDocument. */
+export function parsePlanetDocument(raw: unknown): PlanetDocument | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  const id = typeof src.id === 'string' ? src.id.trim() : '';
+  if (!PLANET_ID_PATTERN.test(id)) return null;
+  const name = typeof src.name === 'string' && src.name.trim() ? src.name.trim() : id;
+  return {
+    id,
+    name,
+    seed: Math.round(readNumber(src.seed, DEFAULT_PLANET_SEED)),
+    radiusMeters: readNumber(src.radiusMeters, 6_371_000),
+    gravityMetersPerSecond2: readNumber(src.gravityMetersPerSecond2, 9.8),
+    atmosphereHeightMeters: readNumber(src.atmosphereHeightMeters, 110_000),
+    terrainAmplitudeMeters: readNumber(src.terrainAmplitudeMeters, 7_500),
+    dragSeaLevel: readNumber(src.dragSeaLevel, 0.015),
+    height: readHeight(src.height),
+    regions: readRegions(src.regions),
+    hydrology: readHydrology(src.hydrology),
+    palette: readPalette(src.palette),
+    vegetation: readVegetation(src.vegetation),
+    spawning: readSpawning(src.spawning),
+    spawnHint: readSpawnHint(src.spawnHint),
+  };
+}
+
+export function createDefaultPlanetDocument(
+  id = 'asteron',
+  name = 'Asteron',
+): PlanetDocument {
+  return {
+    id,
+    name,
+    seed: DEFAULT_PLANET_SEED,
+    radiusMeters: 6_371_000,
+    gravityMetersPerSecond2: 9.8,
+    atmosphereHeightMeters: 110_000,
+    terrainAmplitudeMeters: 7_500,
+    dragSeaLevel: 0.015,
+    height: { ...DEFAULT_HEIGHT_RECIPE },
+    regions: { ...DEFAULT_REGION_RECIPE },
+    hydrology: { ...DEFAULT_HYDROLOGY_RECIPE },
+    palette: { ...DEFAULT_BIOME_PALETTE },
+    vegetation: {
+      grass: { ...DEFAULT_VEGETATION.grass },
+      tree: { ...DEFAULT_VEGETATION.tree },
+    },
+    spawning: [],
+  };
+}

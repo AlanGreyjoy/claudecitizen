@@ -3,13 +3,27 @@ import { RENDER_SURFACE_LEVEL, RENDER_SURFACE_SEGMENTS } from '../../../world/re
 // Mesh segment count must stay fixed: the low-poly triangle layout, foot sampler,
 // lake mesh, and disk cache all assume this shared grid resolution.
 export const TILE_SEGMENTS = RENDER_SURFACE_SEGMENTS;
-export const TILE_BUILD_BUDGET_PER_FRAME = 12;
+export const TERRAIN_SURFACE_VERTEX_COUNT = TILE_SEGMENTS * TILE_SEGMENTS * 6;
+// Each skirt quad has two triangles facing outward and the same two facing
+// inward. Terrain keeps FrontSide rendering while a seam remains covered from
+// either adjacent tile, including when the higher edge is nearest the camera.
+export const TERRAIN_SKIRT_VERTICES_PER_SEGMENT = 12;
+export const TERRAIN_SKIRT_VERTEX_COUNT =
+  TILE_SEGMENTS * 4 * TERRAIN_SKIRT_VERTICES_PER_SEGMENT;
+export const TERRAIN_TILE_VERTEX_COUNT =
+  TERRAIN_SURFACE_VERTEX_COUNT + TERRAIN_SKIRT_VERTEX_COUNT;
+/** How many selected/missed tiles may enter the build/disk pipeline per frame. */
+export const TILE_BUILD_BUDGET_PER_FRAME = 20;
 export const MAX_CACHED_TILES = 384;
 export const TILE_CACHE_STALE_FRAMES = 90;
 export const MIN_LEVEL = 2;
 export const MAX_LEVEL = RENDER_SURFACE_LEVEL;
 export const PLANET_RENDER_SCALE = 1 / 500;
-export const HORIZON_MARGIN_RADIANS = 0.03;
+// Tight horizon pad: extra margin kept tiles far past the limb alive and
+// forced a lot of useless fine-LOD work. Skirts cover mixed-LOD seams.
+export const HORIZON_MARGIN_RADIANS = 0.004;
+/** Cull tiles whose center faces away from the camera more than this (level > 0). */
+export const BACKFACE_CULL_DOT = 0.06;
 
 let minProjectedErrorValue = 1.35;
 

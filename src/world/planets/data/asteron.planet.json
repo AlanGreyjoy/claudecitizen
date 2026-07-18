@@ -1,0 +1,138 @@
+{
+  "id": "asteron",
+  "name": "Asteron",
+  "seed": 20061,
+  "radiusMeters": 6371000,
+  "gravityMetersPerSecond2": 9.8,
+  "atmosphereHeightMeters": 110000,
+  "terrainAmplitudeMeters": 7500,
+  "dragSeaLevel": 0.015,
+  "height": {
+    "continentScale": 1.2,
+    "continentWeight": 0.4,
+    "detailScale": 8000,
+    "detailWeight": 0.01,
+    "ridgeScale": 3.5,
+    "ridgeWeight": 0.45,
+    "localRidgeScale": 400,
+    "localRidgeWeight": 0.15,
+    "mountainBaseUplift": 0.1,
+    "hillScale": 1200,
+    "hillBaseWeight": 0.02,
+    "hillRegionWeight": 0.13,
+    "landMaskBias": 0.05,
+    "landMaskScale": 4
+  },
+  "regions": {
+    "noiseSeedOffset": 4242,
+    "noiseScale": 0.9,
+    "noiseOctaves": 4,
+    "contrast": 1.6,
+    "mountainRegionStart": 0.55,
+    "mountainRegionFull": 0.75,
+    "hillRegionStart": 0.3,
+    "hillRegionFull": 0.5
+  },
+  "hydrology": {
+    "lakeNoiseSeedOffset": 9012,
+    "lakeMaskThreshold": 0.64,
+    "lakeMaxCarveNormalized": 0.14,
+    "lakeMinLandElevation": 0.02,
+    "inlandLakeMoistureThreshold": 0.55,
+    "inlandLakeMaxNormalized": 0.05,
+    "inlandLakeMaxDepthMeters": 8,
+    "riverNoiseSeedOffset": 7777,
+    "riverFieldScale": 7,
+    "riverFieldOctaves": 3,
+    "riverHalfWidth": 0.018,
+    "riverMaxCarveNormalized": 0.045,
+    "riverMinLandElevation": 0.02,
+    "riverMaxLandElevation": 0.55,
+    "riverMinStrength": 0.05
+  },
+  "palette": {
+    "ocean": "#173653",
+    "lake": "#53665a",
+    "river": "#776f50",
+    "beach": "#d8c58e",
+    "desert": "#c89b62",
+    "plains": "#719447",
+    "forest": "#3e6c42",
+    "tundra": "#9eaa91",
+    "highlands": "#7f895f",
+    "peak": "#e7e6dc",
+    "rock": "#737887"
+  },
+  "vegetation": {
+    "grass": {
+      "density": 1,
+      "gapMeters": 0,
+      "minScale": 0.55,
+      "maxScale": 1.35
+    },
+    "tree": {
+      "density": 0.2,
+      "gapMeters": 0,
+      "minScale": 1.1,
+      "maxScale": 3.5
+    }
+  },
+  "spawning": [
+    {
+      "id": "spawn-1",
+      "name": "Spawn 1",
+      "assetUrl": "/src/assets/protected/props/env/SM_Env_Asteroid_Rock_01.glb",
+      "enabled": true,
+      "density": 0.45,
+      "gapMeters": 15,
+      "minScale": 0.1,
+      "maxScale": 0.5,
+      "biomes": [
+        "plains",
+        "forest"
+      ],
+      "minNormalizedHeight": 0,
+      "maxNormalizedHeight": 1,
+      "alignToNormal": true,
+      "collider": {
+        "shape": "box",
+        "halfExtents": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "seedOffset": 6943
+    },
+    {
+      "id": "spawn-2",
+      "name": "Spawn 2",
+      "assetUrl": "/src/assets/protected/props/env/SM_Env_Asteroid_Rock_02.glb",
+      "enabled": true,
+      "density": 1,
+      "gapMeters": 4,
+      "minScale": 0.1,
+      "maxScale": 0.5,
+      "biomes": [
+        "beach",
+        "plains"
+      ],
+      "minNormalizedHeight": 0,
+      "maxNormalizedHeight": 1,
+      "alignToNormal": true,
+      "collider": {
+        "shape": "box",
+        "halfExtents": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "seedOffset": 6944
+    }
+  ],
+  "spawnHint": {
+    "latRadians": -0.852,
+    "lonRadians": 2.190407
+  }
+}

@@ -80,19 +80,23 @@ export function createBuildTerminal(elements: BuildTerminalElements, options: Bu
         row.className = 'sc-avms-ship-row';
         if (entry.id === context.selectedDefinitionId) row.classList.add('is-selected');
 
-        const name = document.createElement('span');
+        const metaWrap = document.createElement('div');
+        metaWrap.className = 'sc-avms-ship-meta-wrap';
+
+        const name = document.createElement('div');
         name.className = 'sc-avms-ship-name';
         name.textContent = entry.name;
 
-        const meta = document.createElement('span');
+        const meta = document.createElement('div');
         meta.className = 'sc-avms-ship-meta';
         meta.textContent = entry.prefabId;
+        metaWrap.append(name, meta);
 
         const qty = document.createElement('span');
         qty.className = 'sc-build-qty';
         qty.textContent = `×${inventoryQuantity(context, entry.id)}`;
 
-        row.append(name, meta, qty);
+        row.append(metaWrap, qty);
         row.addEventListener('click', () => {
           controller.selectDefinition(entry.id);
           renderPropList();

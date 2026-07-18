@@ -56,8 +56,8 @@ export const DEFAULT_VEGETATION_SETTINGS: VegetationSettings = Object.freeze({
   grass: Object.freeze({
     density: 1,
     gapMeters: 0,
-    minScale: 0.35,
-    maxScale: 1.0,
+    minScale: 0.55,
+    maxScale: 1.35,
   }),
   tree: Object.freeze({
     density: 1,
@@ -72,7 +72,7 @@ export function normalizeVegetationSettings(
 ): VegetationSettings {
   return {
     grass: normalizeLayer(settings.grass, DEFAULT_VEGETATION_SETTINGS.grass, {
-      density: [0, 4],
+      density: [0, 12],
       gapMeters: [0, 24],
       scale: [0.15, 6],
     }),

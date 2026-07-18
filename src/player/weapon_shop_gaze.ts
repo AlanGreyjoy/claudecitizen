@@ -6,8 +6,8 @@ import {
   type StationWeaponShopMarker,
 } from "../world/station";
 import {
-  FIRST_PERSON_EYE_HEIGHT_METERS,
-  FIRST_PERSON_PITCH_LIMIT,
+  CHARACTER_EYE_HEIGHT_METERS,
+  ORBIT_PITCH_LIMIT,
 } from "./character_controller";
 
 /**
@@ -15,8 +15,8 @@ import {
  * (same ray-vs-marker math as bunk entertainment-system).
  */
 
-/** Matches character_controller first-person forward nudge. */
-const FIRST_PERSON_FORWARD_OFFSET_METERS = 0.22;
+/** Keeps the interaction ray just ahead of the animated character capsule. */
+const CHARACTER_AIM_FORWARD_OFFSET_METERS = 0.22;
 
 export interface WeaponShopGazeHit {
   shop: StationWeaponShopMarker;
@@ -45,8 +45,8 @@ export function resolveStationWalkView(
   );
   const right = normalize(cross(planarForward, up));
   const clampedPitch = Math.max(
-    -FIRST_PERSON_PITCH_LIMIT,
-    Math.min(FIRST_PERSON_PITCH_LIMIT, pitchRadians),
+    -ORBIT_PITCH_LIMIT,
+    Math.min(ORBIT_PITCH_LIMIT, pitchRadians),
   );
   return {
     forward: normalize(rotateAroundAxis(planarForward, right, clampedPitch)),
@@ -68,10 +68,10 @@ export function weaponShopWorldPosition(
 }
 
 /**
- * Approximate first-person eye for station walk (matches camera_rig /
- * resolveFirstPersonCameraRig with station-frame orbit).
+ * Character-relative aim origin for over-the-shoulder station interactions.
+ * The ray follows the camera view while its origin stays close to the body.
  */
-export function stationWalkEyeWorld(
+export function stationWalkAimOriginWorld(
   characterPosition: Vec3,
   stationUp: Vec3,
   viewForward: Vec3,
@@ -83,8 +83,8 @@ export function stationWalkEyeWorld(
   return add(
     characterPosition,
     add(
-      scale(up, FIRST_PERSON_EYE_HEIGHT_METERS),
-      scale(planarForward, FIRST_PERSON_FORWARD_OFFSET_METERS),
+      scale(up, CHARACTER_EYE_HEIGHT_METERS),
+      scale(planarForward, CHARACTER_AIM_FORWARD_OFFSET_METERS),
     ),
   );
 }

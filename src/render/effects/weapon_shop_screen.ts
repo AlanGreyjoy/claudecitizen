@@ -73,7 +73,7 @@ export function createWeaponShopScreen(
   const glass = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), glassMat);
   glass.visible = false;
   glass.renderOrder = 1;
-  glass.frustumCulled = false;
+  glass.geometry.computeBoundingSphere();
   anchor.add(glass);
 
   let parent: THREE.Object3D | null = null;

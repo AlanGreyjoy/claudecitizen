@@ -15,6 +15,7 @@ export interface AvmsTerminalElements {
   deliverBtnEl: HTMLButtonElement;
   storeBtnEl: HTMLButtonElement;
   closeBtnEl: HTMLButtonElement;
+  powerBtnEl?: HTMLButtonElement;
 }
 
 export interface AvmsOpenOptions {
@@ -44,6 +45,11 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
   let onDeliver: AvmsOpenOptions['onDeliver'] | null = null;
   let onStore: AvmsOpenOptions['onStore'] | null = null;
 
+  function setStatus(message: string, kind: 'info' | 'error' | 'ok' = 'info'): void {
+    elements.statusEl.textContent = message;
+    elements.statusEl.dataset.kind = kind;
+  }
+
   function renderShipList(): void {
     elements.shipListEl.replaceChildren();
     if (ships.length === 0) {
@@ -61,13 +67,18 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       row.className = 'sc-avms-ship-row';
       if (index === selectedIndex) row.classList.add('is-selected');
 
-      const name = document.createElement('span');
+      const meta = document.createElement('div');
+      meta.className = 'sc-avms-ship-meta-wrap';
+
+      const name = document.createElement('div');
       name.className = 'sc-avms-ship-name';
       name.textContent = ship.displayName;
 
-      const meta = document.createElement('span');
-      meta.className = 'sc-avms-ship-meta';
-      meta.textContent = ship.prefabId;
+      const detail = document.createElement('div');
+      detail.className = 'sc-avms-ship-meta';
+      detail.textContent = ship.prefabId;
+
+      meta.append(name, detail);
 
       const bars = document.createElement('span');
       bars.className = 'sc-avms-ship-bars';
@@ -76,7 +87,7 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
         <span class="sc-avms-mini-bar sc-avms-mini-bar-shield" style="width:${barWidth(ship.shields, ship.maxShields)}"></span>
       `;
 
-      row.append(name, meta, bars);
+      row.append(meta, bars);
       row.addEventListener('click', () => {
         selectedIndex = index;
         renderShipList();
@@ -108,10 +119,6 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
     elements.detailShieldValueEl.textContent = `${Math.round(ship.shields)} / ${Math.round(ship.maxShields)} (${formatPercent(ship.shields, ship.maxShields)})`;
   }
 
-  function setStatus(message: string): void {
-    elements.statusEl.textContent = message;
-  }
-
   function setOpen(next: boolean): void {
     if (open === next) return;
     open = next;
@@ -121,10 +128,15 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       document.exitPointerLock?.();
       renderShipList();
       renderDetail();
-      setStatus(canStore ? 'Select a vehicle, request delivery, or store the current ship.' : 'Select a vehicle and request hangar delivery.');
+      setStatus(
+        canStore
+          ? 'Select a vehicle, request delivery, or store the current ship.'
+          : 'Select a vehicle and request hangar delivery.',
+      );
       elements.deliverBtnEl.disabled = ships.length === 0 || delivering || storing;
       elements.storeBtnEl.disabled = !canStore || delivering || storing;
-      elements.closeBtnEl.focus();
+      const focusEl = elements.powerBtnEl ?? elements.closeBtnEl;
+      focusEl.focus({ preventScroll: true });
       return;
     }
     delivering = false;
@@ -132,7 +144,7 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
     canStore = false;
     onDeliver = null;
     onStore = null;
-    elements.rootEl.blur();
+    (elements.powerBtnEl ?? elements.closeBtnEl).blur();
   }
 
   async function handleDeliver(): Promise<void> {
@@ -149,7 +161,7 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       delivering = false;
       elements.deliverBtnEl.disabled = ships.length === 0;
       elements.storeBtnEl.disabled = !canStore;
-      setStatus(error instanceof Error ? error.message : 'Delivery failed.');
+      setStatus(error instanceof Error ? error.message : 'Delivery failed.', 'error');
     }
   }
 
@@ -165,12 +177,12 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       canStore = false;
       elements.deliverBtnEl.disabled = ships.length === 0;
       elements.storeBtnEl.disabled = true;
-      setStatus('Ship stored. Select a vehicle and request delivery.');
+      setStatus('Ship stored. Select a vehicle and request delivery.', 'ok');
     } catch (error) {
       storing = false;
       elements.deliverBtnEl.disabled = ships.length === 0;
       elements.storeBtnEl.disabled = !canStore;
-      setStatus(error instanceof Error ? error.message : 'Store failed.');
+      setStatus(error instanceof Error ? error.message : 'Store failed.', 'error');
     }
   }
 
@@ -181,6 +193,7 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
     void handleStore();
   });
   elements.closeBtnEl.addEventListener('click', () => setOpen(false));
+  elements.powerBtnEl?.addEventListener('click', () => setOpen(false));
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (!open || event.key !== 'Escape') return;

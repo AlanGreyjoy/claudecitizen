@@ -87,9 +87,10 @@ export function createDebugMenu(
     input.addEventListener('change', () => {
       const key = input.dataset.debugKey as
         | 'showStatsPanel'
-        | 'showVegetationPanel'
         | 'showControlsReference'
         | 'showTutorialBanner'
+        | 'renderGrass'
+        | 'renderTrees'
         | undefined;
       if (!key) return;
       debugSettings.setSetting(key, input.checked);

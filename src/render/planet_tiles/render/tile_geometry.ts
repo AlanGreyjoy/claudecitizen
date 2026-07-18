@@ -12,7 +12,7 @@ export function createTileGeometry(buffers: TerrainTileBuffers): THREE.BufferGeo
 export function createReadyMesh(
   info: TileInfo,
   buffers: TerrainTileBuffers,
-  material: THREE.MeshStandardMaterial,
+  material: THREE.MeshLambertMaterial,
   tileGroup: THREE.Group,
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(createTileGeometry(buffers), material);

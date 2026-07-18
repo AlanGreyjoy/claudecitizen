@@ -158,12 +158,9 @@ export function createStatsPanel(elements: StatsPanelElements) {
       } else if (world.prompt) {
         elements.statusEl.textContent =
           'Use the ramp controls at the tail, then walk up the ramp to board.';
-      } else if (world.cameraView === 'first-person') {
-        elements.statusEl.textContent =
-          'First-person traversal is active. Look with the mouse and walk the terrain toward the ship. Press V for third person.';
       } else {
         elements.statusEl.textContent =
-          'Third-person traversal is active. Orbit the camera with the mouse and walk the terrain toward the ship. Press V for first person.';
+          'Over-the-shoulder traversal is active. Orbit with the mouse and walk the terrain toward the ship.';
       }
     } else if (world.mode === MODE_IN_SHIP && world.flightMode === 'nav' && world.quantum.phase === 'idle') {
       elements.statusEl.textContent =

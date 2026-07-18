@@ -1,28 +1,35 @@
-import type { Biome, CubeFace, Planet, PlanetSurfaceSample, TerrainTileBuffers, TileInfo } from '../../../types';
+import type {
+  Biome,
+  CubeFace,
+  Planet,
+  PlanetSurfaceSample,
+  TerrainTileBuffers,
+  TileInfo,
+  Vec3,
+} from '../../../types';
 import { scale } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
-import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
+import { getActivePlanetConfig } from '../../../world/planets/runtime';
+import { sampleAnalyticPlanetSurface } from '../../../world/planet_surface';
+import { renderableGridSampleSpacingMeters } from '../../../world/renderable_surface';
 import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../world/terrain_triangulation';
-import { TILE_SEGMENTS } from '../domain/constants';
+import { TERRAIN_TILE_VERTEX_COUNT, TILE_SEGMENTS } from '../domain/constants';
 
 type RgbColor = [number, number, number];
 
-// The palette is deliberately compact and texture-free. Lighting and the
-// triangle normals provide the fine variation; biome, height, and slope only
-// choose broad art-directed color families.
-const OCEAN_DEEP_COLOR = hexToRgb(0x173653);
-const OCEAN_SHALLOW_COLOR = hexToRgb(0x3f7898);
-const LAKE_BED_COLOR = hexToRgb(0x53665a);
-const RIVER_BED_COLOR = hexToRgb(0x776f50);
-const BEACH_COLOR = hexToRgb(0xd8c58e);
-const DESERT_COLOR = hexToRgb(0xc89b62);
-const PLAINS_COLOR = hexToRgb(0x719447);
-const FOREST_COLOR = hexToRgb(0x3e6c42);
-const TUNDRA_COLOR = hexToRgb(0x9eaa91);
-const ALPINE_COLOR = hexToRgb(0x7f895f);
-const ROCK_COLOR = hexToRgb(0x737887);
-const SNOW_COLOR = hexToRgb(0xe7e6dc);
 const scratchColor: RgbColor = [0, 0, 0];
+const oceanDeepColor: RgbColor = [0, 0, 0];
+const oceanShallowColor: RgbColor = [0, 0, 0];
+const lakeBedColor: RgbColor = [0, 0, 0];
+const riverBedColor: RgbColor = [0, 0, 0];
+const beachColor: RgbColor = [0, 0, 0];
+const desertColor: RgbColor = [0, 0, 0];
+const plainsColor: RgbColor = [0, 0, 0];
+const forestColor: RgbColor = [0, 0, 0];
+const tundraColor: RgbColor = [0, 0, 0];
+const alpineColor: RgbColor = [0, 0, 0];
+const rockColor: RgbColor = [0, 0, 0];
+const snowColor: RgbColor = [0, 0, 0];
 
 interface TerrainGrid {
   colors: Float32Array;
@@ -48,13 +55,32 @@ interface TriangleWriteContext {
 
 const NORTHWEST_SOUTHEAST_TRIANGLES = [0, 1, 3, 0, 3, 2] as const;
 const NORTHEAST_SOUTHWEST_TRIANGLES = [0, 1, 2, 1, 3, 2] as const;
+const TERRAIN_SKIRT_DEPTH_FACTOR = 0.75;
+const TERRAIN_SKIRT_MIN_AMPLITUDE_RATIO = 0.12;
+const TERRAIN_SKIRT_MAX_AMPLITUDE_RATIO = 0.75;
 
-function hexToRgb(hex: number): RgbColor {
-  return [
-    ((hex >> 16) & 255) / 255,
-    ((hex >> 8) & 255) / 255,
-    (hex & 255) / 255,
-  ];
+function hexStringToRgb(hex: string, target: RgbColor): void {
+  const normalized = hex.startsWith('#') ? hex.slice(1) : hex;
+  const value = Number.parseInt(normalized, 16);
+  target[0] = ((value >> 16) & 255) / 255;
+  target[1] = ((value >> 8) & 255) / 255;
+  target[2] = (value & 255) / 255;
+}
+
+function refreshPaletteColors(): void {
+  const { oceanShallow, palette } = getActivePlanetConfig();
+  hexStringToRgb(palette.ocean, oceanDeepColor);
+  hexStringToRgb(oceanShallow, oceanShallowColor);
+  hexStringToRgb(palette.lake, lakeBedColor);
+  hexStringToRgb(palette.river, riverBedColor);
+  hexStringToRgb(palette.beach, beachColor);
+  hexStringToRgb(palette.desert, desertColor);
+  hexStringToRgb(palette.plains, plainsColor);
+  hexStringToRgb(palette.forest, forestColor);
+  hexStringToRgb(palette.tundra, tundraColor);
+  hexStringToRgb(palette.highlands, alpineColor);
+  hexStringToRgb(palette.rock, rockColor);
+  hexStringToRgb(palette.peak, snowColor);
 }
 
 function clamp01(value: number): number {
@@ -91,38 +117,38 @@ function writeSurfaceBaseColor(
 ): void {
   if (surface.biome === 'ocean') {
     const depth = clamp01(surface.normalizedHeight + 1);
-    lerpColor(scratchColor, OCEAN_DEEP_COLOR, OCEAN_SHALLOW_COLOR, depth);
+    lerpColor(scratchColor, oceanDeepColor, oceanShallowColor, depth);
   } else if (surface.biome === 'lake') {
-    copyColor(scratchColor, LAKE_BED_COLOR);
+    copyColor(scratchColor, lakeBedColor);
   } else if (surface.biome === 'river') {
-    copyColor(scratchColor, RIVER_BED_COLOR);
+    copyColor(scratchColor, riverBedColor);
   } else if (surface.biome === 'beach') {
-    copyColor(scratchColor, BEACH_COLOR);
+    copyColor(scratchColor, beachColor);
   } else if (surface.biome === 'forest') {
-    copyColor(scratchColor, FOREST_COLOR);
+    copyColor(scratchColor, forestColor);
   } else if (surface.biome === 'plains') {
-    copyColor(scratchColor, PLAINS_COLOR);
+    copyColor(scratchColor, plainsColor);
   } else if (surface.biome === 'desert') {
-    copyColor(scratchColor, DESERT_COLOR);
+    copyColor(scratchColor, desertColor);
   } else if (surface.biome === 'tundra') {
-    copyColor(scratchColor, TUNDRA_COLOR);
+    copyColor(scratchColor, tundraColor);
   } else if (surface.biome === 'highlands') {
-    copyColor(scratchColor, ALPINE_COLOR);
+    copyColor(scratchColor, alpineColor);
     blendColor(
       scratchColor,
-      ROCK_COLOR,
+      rockColor,
       smoothstep(0.42, 0.68, surface.normalizedHeight) * 0.88,
     );
-    blendColor(scratchColor, SNOW_COLOR, smoothstep(0.68, 0.92, surface.normalizedHeight));
+    blendColor(scratchColor, snowColor, smoothstep(0.68, 0.92, surface.normalizedHeight));
   } else if (surface.biome === 'peak') {
     lerpColor(
       scratchColor,
-      ROCK_COLOR,
-      SNOW_COLOR,
+      rockColor,
+      snowColor,
       smoothstep(0.52, 0.78, surface.normalizedHeight),
     );
   } else {
-    copyColor(scratchColor, ROCK_COLOR);
+    copyColor(scratchColor, rockColor);
   }
 
   colors[offset] = scratchColor[0];
@@ -224,7 +250,7 @@ function writeTriangle(
   const rockAffinity =
     (grid.rockAffinity[ia] + grid.rockAffinity[ib] + grid.rockAffinity[ic]) / 3;
   const exposedRock = smoothstep(0.08, 0.34, 1 - upwardness) * rockAffinity;
-  blendColor(scratchColor, ROCK_COLOR, exposedRock * 0.82);
+  blendColor(scratchColor, rockColor, exposedRock * 0.82);
 
   // A restrained deterministic value shift makes adjacent facets readable in
   // diffuse light without adding noisy textures. Quantization keeps the final
@@ -253,6 +279,205 @@ function writeTriangle(
   return outputVertex + 3;
 }
 
+function terrainSkirtDepthMeters(info: TileInfo, planet: Planet): number {
+  const cellSpanMeters = info.spanMeters / TILE_SEGMENTS;
+  const minimumDepthMeters = Math.max(
+    16,
+    planet.terrainAmplitudeMeters * TERRAIN_SKIRT_MIN_AMPLITUDE_RATIO,
+  );
+  const maximumDepthMeters = Math.max(
+    500,
+    planet.terrainAmplitudeMeters * TERRAIN_SKIRT_MAX_AMPLITUDE_RATIO,
+  );
+  return Math.max(
+    minimumDepthMeters,
+    Math.min(maximumDepthMeters, cellSpanMeters * TERRAIN_SKIRT_DEPTH_FACTOR),
+  );
+}
+
+function terrainGridPosition(grid: TerrainGrid, index: number): Vec3 {
+  const offset = index * 3;
+  return {
+    x: grid.positions[offset],
+    y: grid.positions[offset + 1],
+    z: grid.positions[offset + 2],
+  };
+}
+
+function extrudeSkirtVertex(
+  vertex: Vec3,
+  info: TileInfo,
+  depthMeters: number,
+): Vec3 {
+  const worldX = info.centerPosition.x + vertex.x;
+  const worldY = info.centerPosition.y + vertex.y;
+  const worldZ = info.centerPosition.z + vertex.z;
+  const inverseLength = 1 / Math.max(Math.hypot(worldX, worldY, worldZ), 1e-9);
+  return {
+    x: vertex.x - worldX * inverseLength * depthMeters,
+    y: vertex.y - worldY * inverseLength * depthMeters,
+    z: vertex.z - worldZ * inverseLength * depthMeters,
+  };
+}
+
+function writeSkirtTriangle(
+  buffers: TerrainTileBuffers,
+  vertices: readonly [Vec3, Vec3, Vec3],
+  outward: Vec3,
+  color: readonly [number, number, number],
+  outputVertex: number,
+): number {
+  const a = vertices[0];
+  let b = vertices[1];
+  let c = vertices[2];
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const abz = b.z - a.z;
+  const acx = c.x - a.x;
+  const acy = c.y - a.y;
+  const acz = c.z - a.z;
+  let nx = aby * acz - abz * acy;
+  let ny = abz * acx - abx * acz;
+  let nz = abx * acy - aby * acx;
+  const inverseNormalLength = 1 / Math.max(Math.hypot(nx, ny, nz), 1e-9);
+  nx *= inverseNormalLength;
+  ny *= inverseNormalLength;
+  nz *= inverseNormalLength;
+
+  if (nx * outward.x + ny * outward.y + nz * outward.z < 0) {
+    [b, c] = [c, b];
+    nx *= -1;
+    ny *= -1;
+    nz *= -1;
+  }
+
+  const orientedVertices = [a, b, c];
+  for (let localVertex = 0; localVertex < 3; localVertex += 1) {
+    const vertex = orientedVertices[localVertex];
+    const outputOffset = (outputVertex + localVertex) * 3;
+    buffers.positions[outputOffset] = vertex.x;
+    buffers.positions[outputOffset + 1] = vertex.y;
+    buffers.positions[outputOffset + 2] = vertex.z;
+    buffers.colors[outputOffset] = color[0];
+    buffers.colors[outputOffset + 1] = color[1];
+    buffers.colors[outputOffset + 2] = color[2];
+    buffers.normals[outputOffset] = Math.round(nx * 32767);
+    buffers.normals[outputOffset + 1] = Math.round(ny * 32767);
+    buffers.normals[outputOffset + 2] = Math.round(nz * 32767);
+  }
+  return outputVertex + 3;
+}
+
+function appendTerrainSkirts(
+  buffers: TerrainTileBuffers,
+  grid: TerrainGrid,
+  info: TileInfo,
+  planet: Planet,
+  outputVertex: number,
+): number {
+  const edgeIndices = [
+    Array.from({ length: grid.width }, (_, index) => index),
+    Array.from(
+      { length: grid.width },
+      (_, index) => TILE_SEGMENTS * grid.width + index,
+    ),
+    Array.from({ length: grid.width }, (_, index) => index * grid.width),
+    Array.from(
+      { length: grid.width },
+      (_, index) => index * grid.width + TILE_SEGMENTS,
+    ),
+  ];
+  const depthMeters = terrainSkirtDepthMeters(info, planet);
+
+  for (const edge of edgeIndices) {
+    for (let segment = 0; segment < TILE_SEGMENTS; segment += 1) {
+      const indexA = edge[segment];
+      const indexB = edge[segment + 1];
+      const topA = terrainGridPosition(grid, indexA);
+      const topB = terrainGridPosition(grid, indexB);
+      const bottomA = extrudeSkirtVertex(topA, info, depthMeters);
+      const bottomB = extrudeSkirtVertex(topB, info, depthMeters);
+      const worldMidX = info.centerPosition.x + (topA.x + topB.x) * 0.5;
+      const worldMidY = info.centerPosition.y + (topA.y + topB.y) * 0.5;
+      const worldMidZ = info.centerPosition.z + (topA.z + topB.z) * 0.5;
+      const inverseWorldMidLength =
+        1 / Math.max(Math.hypot(worldMidX, worldMidY, worldMidZ), 1e-9);
+      const edgeDirection = {
+        x: worldMidX * inverseWorldMidLength,
+        y: worldMidY * inverseWorldMidLength,
+        z: worldMidZ * inverseWorldMidLength,
+      };
+      const centerFacing =
+        edgeDirection.x * info.centerDirection.x +
+        edgeDirection.y * info.centerDirection.y +
+        edgeDirection.z * info.centerDirection.z;
+      const outwardRaw = {
+        x: edgeDirection.x * centerFacing - info.centerDirection.x,
+        y: edgeDirection.y * centerFacing - info.centerDirection.y,
+        z: edgeDirection.z * centerFacing - info.centerDirection.z,
+      };
+      const inverseOutwardLength =
+        1 / Math.max(Math.hypot(outwardRaw.x, outwardRaw.y, outwardRaw.z), 1e-9);
+      const outward = {
+        x: outwardRaw.x * inverseOutwardLength,
+        y: outwardRaw.y * inverseOutwardLength,
+        z: outwardRaw.z * inverseOutwardLength,
+      };
+      const inward = {
+        x: -outward.x,
+        y: -outward.y,
+        z: -outward.z,
+      };
+      const colorAOffset = indexA * 3;
+      const colorBOffset = indexB * 3;
+      const color = [
+        Math.round(
+          clamp01((grid.colors[colorAOffset] + grid.colors[colorBOffset]) * 0.36) * 255,
+        ),
+        Math.round(
+          clamp01((grid.colors[colorAOffset + 1] + grid.colors[colorBOffset + 1]) * 0.36) *
+            255,
+        ),
+        Math.round(
+          clamp01((grid.colors[colorAOffset + 2] + grid.colors[colorBOffset + 2]) * 0.36) *
+            255,
+        ),
+      ] as const;
+
+      outputVertex = writeSkirtTriangle(
+        buffers,
+        [topA, topB, bottomB],
+        outward,
+        color,
+        outputVertex,
+      );
+      outputVertex = writeSkirtTriangle(
+        buffers,
+        [topA, bottomB, bottomA],
+        outward,
+        color,
+        outputVertex,
+      );
+      outputVertex = writeSkirtTriangle(
+        buffers,
+        [topA, topB, bottomB],
+        inward,
+        color,
+        outputVertex,
+      );
+      outputVertex = writeSkirtTriangle(
+        buffers,
+        [topA, bottomB, bottomA],
+        inward,
+        color,
+        outputVertex,
+      );
+    }
+  }
+
+  return outputVertex;
+}
+
 function buildTerrainGrid(
   info: TileInfo,
   planet: Planet,
@@ -272,7 +497,21 @@ function buildTerrainGrid(
       const u = u0 + ((u1 - u0) * ix) / TILE_SEGMENTS;
       const direction = directionFromCubeFace(info.face, u, v);
       const samplePosition = scale(direction, planet.radiusMeters);
-      const surface = sampleRenderablePlanetSurface(planet, seed, samplePosition);
+      const globalGridX = info.x * TILE_SEGMENTS + ix;
+      const globalGridY = info.y * TILE_SEGMENTS + iy;
+      // Tile vertices already lie on the canonical nested cube-face grid. The
+      // visible-frame sampler would fetch four max-LOD heights to reconstruct a
+      // normal that this builder discards before calculating flat facet normals.
+      // Sampling the canonical analytic height once produces the same grid
+      // vertex without the three redundant neighboring height evaluations.
+      const surface = sampleAnalyticPlanetSurface(planet, seed, samplePosition, {
+        sampleSpacingMeters: renderableGridSampleSpacingMeters(
+          planet,
+          info.level,
+          globalGridX,
+          globalGridY,
+        ),
+      });
       const renderSurface: PlanetSurfaceSample =
         surface.lakeWaterLevelMeters != null &&
         surface.heightMeters < surface.lakeWaterLevelMeters - 0.5
@@ -298,12 +537,16 @@ function buildTerrainGrid(
   return { colors, positions, rockAffinity, width: gridWidth };
 }
 
-function triangulateTerrainGrid(grid: TerrainGrid, info: TileInfo, seed: number): TerrainTileBuffers {
-  const triangleVertexCount = TILE_SEGMENTS * TILE_SEGMENTS * 6;
+function triangulateTerrainGrid(
+  grid: TerrainGrid,
+  info: TileInfo,
+  planet: Planet,
+  seed: number,
+): TerrainTileBuffers {
   const buffers: TerrainTileBuffers = {
-    colors: new Uint8Array(triangleVertexCount * 3),
-    normals: new Int16Array(triangleVertexCount * 3),
-    positions: new Float32Array(triangleVertexCount * 3),
+    colors: new Uint8Array(TERRAIN_TILE_VERTEX_COUNT * 3),
+    normals: new Int16Array(TERRAIN_TILE_VERTEX_COUNT * 3),
+    positions: new Float32Array(TERRAIN_TILE_VERTEX_COUNT * 3),
   };
   const context = { buffers, grid, info, seed };
   let outputVertex = 0;
@@ -343,6 +586,12 @@ function triangulateTerrainGrid(grid: TerrainGrid, info: TileInfo, seed: number)
     }
   }
 
+  const finalVertex = appendTerrainSkirts(buffers, grid, info, planet, outputVertex);
+  if (finalVertex !== TERRAIN_TILE_VERTEX_COUNT) {
+    throw new Error(
+      `Terrain tile vertex layout mismatch: wrote ${finalVertex}, expected ${TERRAIN_TILE_VERTEX_COUNT}.`,
+    );
+  }
   return buffers;
 }
 
@@ -351,5 +600,6 @@ export function buildTerrainTileBuffers(
   planet: Planet,
   seed: number,
 ): TerrainTileBuffers {
-  return triangulateTerrainGrid(buildTerrainGrid(info, planet, seed), info, seed);
+  refreshPaletteColors();
+  return triangulateTerrainGrid(buildTerrainGrid(info, planet, seed), info, planet, seed);
 }

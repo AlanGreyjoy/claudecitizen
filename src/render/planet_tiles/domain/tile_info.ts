@@ -1,7 +1,6 @@
 import type { CubeFace, Planet, TileInfo } from '../../../types';
 import { distance, scale } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
-import { MIN_LEVEL } from './constants';
 import { tileBounds, tileKey } from './tile_key';
 
 export function makeTileInfo(face: CubeFace, level: number, x: number, y: number, planet: Planet): TileInfo {
@@ -27,7 +26,11 @@ export function makeTileInfo(face: CubeFace, level: number, x: number, y: number
 }
 
 export function parentTileInfo(info: TileInfo, planet: Planet): TileInfo | null {
-  if (info.level <= MIN_LEVEL) return null;
+  // Selection never stops above MIN_LEVEL, but fallback coverage must be able
+  // to reach the six synchronously-built L0 roots. Stopping this chain at L2
+  // allowed a cold disk cache or exhausted frame budget to leave a selected
+  // region with no renderable ancestor at all.
+  if (info.level <= 0) return null;
   return makeTileInfo(
     info.face,
     info.level - 1,

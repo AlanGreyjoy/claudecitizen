@@ -10,8 +10,13 @@ export const SPACE_FOG_COLOR = new THREE.Color(0x050915);
 export const NIGHT_SKY_COLOR = new THREE.Color(0x0c1730);
 export const NIGHT_FOG_COLOR = new THREE.Color(0x0b1526);
 
-export const DAY_LENGTH_SECONDS = 240;
+/** Full sun cycle (day + night). 3600s ≈ 30 min day / 30 min night. */
+export const DAY_LENGTH_SECONDS = 3600;
 export const PLANET_FOG_MAX_ALTITUDE_METERS = 72_000;
+/** Volumetric fog only runs on the planet surface path; keep ray steps cheap. */
+export const SURFACE_FOG_RAY_STEPS = 8;
+/** Cap High's 2× DPR while on the surface so look-down fill-rate stays playable. */
+export const SURFACE_MAX_PIXEL_RATIO = 1.25;
 
 export const DEFAULT_FOG_NEAR = 240;
 export const DEFAULT_FOG_FAR = 2600;

@@ -19,6 +19,12 @@ import {
   attachParticleSystemToEntity,
   setupUpdateParticles,
 } from '../particles';
+import {
+  bindObjectAnimationComponent,
+  setupUpdateObjectAnimations,
+} from './object_animation';
+import { applyDefaultFrustumCulling } from '../frustum_policy';
+import { deduplicateObjectTextures } from '../assets/texture_dedup';
 
 /**
  * Builds Three.js scene graphs from prefab documents. Shared by the runtime
@@ -254,11 +260,9 @@ function configureSpotLightShadow(
 }
 
 function prepareModelMaterials(root: THREE.Object3D): void {
+  applyDefaultFrustumCulling(root);
   root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) {
-      object.frustumCulled = false;
-      return;
-    }
+    if (!(object instanceof THREE.Mesh)) return;
     object.castShadow = true;
     object.receiveShadow = true;
     configureShipMaterial(object.material);
@@ -314,6 +318,7 @@ export async function loadPrefabModel(url: string): Promise<THREE.Object3D> {
   if (!pending) {
     pending = gltfLoader.loadAsync(url).then((gltf) => {
       prepareModelMaterials(gltf.scene);
+      deduplicateObjectTextures(gltf.scene);
       return gltf.scene;
     });
     pending.catch(() => modelCache.delete(url));
@@ -340,7 +345,7 @@ export function createPrimitiveMesh(
   const mesh = new THREE.Mesh(geometry, material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.frustumCulled = false;
+  geometry.computeBoundingSphere();
   return mesh;
 }
 
@@ -522,7 +527,6 @@ function buildEntity(
   const group = new THREE.Group();
   group.name = entity.name;
   group.userData.entityId = entity.id;
-  group.frustumCulled = false;
   applyEntityTransform(group, entity);
 
   if (entity.primitive) {
@@ -554,6 +558,16 @@ function buildEntity(
             if (component.type === "animation") {
               bindAnimationComponent(options.rootGroup, model, component);
             }
+            if (
+              component.type === "object-animation" &&
+              (component.nodes?.length ?? 0) > 0
+            ) {
+              bindObjectAnimationComponent(
+                options.rootGroup,
+                model,
+                component,
+              );
+            }
           }
           for (const child of curr.children ?? []) {
             bindAllDescendantAnimations(child);
@@ -568,6 +582,9 @@ function buildEntity(
     for (const component of entity.components ?? []) {
       if (component.type === "animation") {
         bindAnimationComponent(options.rootGroup, group, component);
+      }
+      if (component.type === "object-animation") {
+        bindObjectAnimationComponent(options.rootGroup, group, component);
       }
     }
   }
@@ -586,6 +603,13 @@ function buildEntity(
     }
     if (component.type === 'particle-system') {
       attachParticleSystemToEntity(options.rootGroup, group, component);
+    }
+    if (component.type === 'object-animation' && entity.asset) {
+      // Asset entities bind after the GLB loads (see above). Empty-node hover
+      // can also start immediately on the entity group.
+      if ((component.nodes?.length ?? 0) === 0) {
+        bindObjectAnimationComponent(options.rootGroup, group, component);
+      }
     }
   }
 
@@ -609,6 +633,7 @@ export function createPrefabStationGroup(
   group.name = `prefab:${doc.id}`;
   setupUpdateAnimations(group);
   setupUpdateParticles(group);
+  setupUpdateObjectAnimations(group);
   group.add(buildEntity(doc.root, {
     lightScale: renderScale,
     localLightShadowMapSize: options.localLightShadowMapSize ?? 0,
@@ -616,7 +641,7 @@ export function createPrefabStationGroup(
     rootGroup: group,
   }));
   group.scale.setScalar(renderScale);
-  group.frustumCulled = false;
+  applyDefaultFrustumCulling(group);
   return group;
 }
 
@@ -626,13 +651,14 @@ export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
   group.name = `prop:${doc.id}`;
   setupUpdateAnimations(group);
   setupUpdateParticles(group);
+  setupUpdateObjectAnimations(group);
   group.add(buildEntity(doc.root, {
     lightScale: 1,
     localLightShadowMapSize: 256,
     localLightShadowsEnabled: true,
     rootGroup: group,
   }));
-  group.frustumCulled = false;
+  applyDefaultFrustumCulling(group);
   return group;
 }
 

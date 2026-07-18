@@ -5,6 +5,7 @@
 import { CLAUDECITIZEN_PLANET as planet } from '../src/world/planet';
 import {
   getRenderableSurfaceCacheStats,
+  RENDER_SURFACE_LEVEL,
   samplePlanetSurface,
   sampleRenderablePlanetSurface,
 } from '../src/world/planet_surface';
@@ -31,7 +32,7 @@ function tileMeshHeightAt(level: number, pu: number, pv: number): number {
   return sampleVisibleSurfaceFrame(planet, seed, scale(direction, R), level).heightMeters;
 }
 
-for (const level of [6, 7, 8, 9, 16]) {
+for (const level of [6, 7, 8, 9, RENDER_SURFACE_LEVEL]) {
   const meshH = tileMeshHeightAt(level, u, v);
   const desync = samplerHeight - meshH;
   console.log(

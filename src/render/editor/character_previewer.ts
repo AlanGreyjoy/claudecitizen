@@ -9,6 +9,7 @@ import {
   retargetUnityHumanoidAnimations,
   UNIVERSAL_ANIMATION_LIBRARY_URL,
 } from '../characters/unity_humanoid_retarget';
+import { applyDefaultFrustumCulling } from '../frustum_policy';
 
 export interface CharacterAnimationPreviewer {
   loadAnimationSource: (url: string) => Promise<void>;
@@ -47,8 +48,8 @@ function isSelectedBodyMeshName(objectName: string, bodyName: string): boolean {
 
 function prepareCharacterScene(sceneRoot: THREE.Object3D, url: string): void {
   const visibleBodyName = modelBodyName(url);
+  applyDefaultFrustumCulling(sceneRoot);
   sceneRoot.traverse((object: THREE.Object3D) => {
-    object.frustumCulled = false;
     if (object instanceof THREE.Mesh) {
       if (
         visibleBodyName.startsWith('SM_Chr_ScifiWorlds_') &&

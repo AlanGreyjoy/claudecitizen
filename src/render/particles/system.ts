@@ -123,6 +123,7 @@ export function createParticleSystem(
 
   let mesh = new THREE.InstancedMesh(activeGeometry, material, maxParticles);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  // Instance positions move every frame; geometry bounds do not cover them.
   mesh.frustumCulled = false;
   mesh.count = 0;
 
@@ -207,6 +208,7 @@ export function createParticleSystem(
     activeGeometry = baseGeometry.clone();
     mesh = new THREE.InstancedMesh(activeGeometry, material, maxParticles);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // Instance positions move every frame; geometry bounds do not cover them.
     mesh.frustumCulled = false;
     mesh.count = 0;
     attachInstanceAttributes(mesh, maxParticles);

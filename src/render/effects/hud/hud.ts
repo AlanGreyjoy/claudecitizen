@@ -19,7 +19,6 @@ export interface HudElements {
   debugBtnEl: HTMLButtonElement;
   debugMenuEl: HTMLElement;
   statsPanelEl: HTMLElement;
-  vegetationMenuEl: HTMLElement;
   tutorialBannerEl: HTMLElement | null;
   promptEl: HTMLElement;
   readoutsEl: HTMLElement;
@@ -63,6 +62,7 @@ export interface HudCallbacks {
   onTimeOverrideChange?: (mode: 'auto' | 'day' | 'night') => void;
   onChatSend?: (text: string) => void;
   onSsaoSettingsChange?: (settings: Partial<SsaoSettings>) => void;
+  onVegetationLayersChange?: (layers: { grass: boolean; trees: boolean }) => void;
 }
 
 export function createHud(
@@ -94,11 +94,14 @@ export function createHud(
   debugSettings.subscribe((settings) => {
     debugSettings.applyVisibility({
       statsPanelEl: elements.statsPanelEl,
-      vegetationMenuEl: elements.vegetationMenuEl,
       controlsEl: elements.controlsEl,
       tutorialBannerEl: elements.tutorialBannerEl,
     });
     callbacks.onTimeOverrideChange?.(settings.timeOverride);
+    callbacks.onVegetationLayersChange?.({
+      grass: settings.renderGrass,
+      trees: settings.renderTrees,
+    });
   });
 
   function update(params: HudUpdateParams): void {

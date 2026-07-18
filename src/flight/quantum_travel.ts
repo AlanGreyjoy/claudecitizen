@@ -9,10 +9,14 @@ import {
   getQuantumDestination,
   listQuantumDestinations,
   SPIKE_QUANTUM_DESTINATION_ID,
+  systemPlanetDestinationId,
+  systemStationDestinationId,
+  type QuantumDestination,
 } from '../world/quantum_destinations';
 import type { FlightBody, Planet, Vec3 } from '../types';
 import type { ShipFlightMode } from './flight_modes';
 import { FLIGHT_CONFIG } from './flight_config';
+import { clearNavRoute, getNavRoute } from './nav_route';
 
 export interface NavDestinationMarker {
   id: string;
@@ -37,7 +41,8 @@ export type QuantumBlockReason =
   | 'too-far'
   | 'no-destination'
   | 'already-traveling'
-  | 'misaligned';
+  | 'misaligned'
+  | 'already-here';
 
 export interface QuantumRoute {
   startDir: Vec3;
@@ -57,6 +62,8 @@ export interface QuantumTravelState {
   dropOutElapsed: number;
   entryFlash: number;
   exitFlash: number;
+  /** Set when drop-out completes a planet handoff; consumed by play/game loop. */
+  pendingHandoffPlanetId: string | null;
 }
 
 export interface QuantumEligibilityContext {
@@ -78,6 +85,7 @@ export function createQuantumTravelState(): QuantumTravelState {
     dropOutElapsed: 0,
     entryFlash: 0,
     exitFlash: 0,
+    pendingHandoffPlanetId: null,
   };
 }
 
@@ -136,16 +144,33 @@ export function spikeDestinationId(): string {
   return SPIKE_QUANTUM_DESTINATION_ID;
 }
 
+/** Map HaloBand Set Route target → quantum destination id. */
+export function quantumDestinationIdFromNavRoute(): string | null {
+  const route = getNavRoute();
+  if (!route) return null;
+  if (route.kind === 'system-station') return systemStationDestinationId(route.id);
+  if (route.kind === 'system-planet') return systemPlanetDestinationId(route.id);
+  if (route.kind === 'surface-poi') return route.id;
+  return null;
+}
+
 /**
  * Pick the destination the ship nose is most aligned with (planar bearing).
- * Does not enforce the 15° eligibility gate — callers check that separately.
+ * Prefers an active System Map route when set.
  */
 export function resolveNavDestinationId(
   body: FlightBody,
   planet: Planet,
   seed: number,
 ): string | null {
-  const destinations = listQuantumDestinations(planet, seed);
+  const routed = quantumDestinationIdFromNavRoute();
+  if (routed && getQuantumDestination(planet, seed, routed)) {
+    return routed;
+  }
+
+  const destinations = listQuantumDestinations(planet, seed).filter(
+    (dest) => !(dest.kind === 'system-planet' && !dest.handoff),
+  );
   if (destinations.length === 0) return null;
 
   let bestId: string | null = null;
@@ -194,8 +219,15 @@ export function evaluateQuantumEligibility(
   if (!destination) {
     return { ok: false, reason: 'no-destination' };
   }
+  if (destination.kind === 'system-planet' && !destination.handoff) {
+    return { ok: false, reason: 'already-here' };
+  }
   if (!isOutsideAtmosphere(ctx.body.position, ctx.planet)) {
     return { ok: false, reason: 'in-atmosphere' };
+  }
+  if (destination.handoff) {
+    // Interplanetary handoff: no live body to align toward — engage when routed + in space.
+    return { ok: true, destinationId };
   }
   const destPosition = destinationWorldPosition(ctx.planet, ctx.seed, destination);
   const dist = distance(ctx.body.position, destPosition);
@@ -224,6 +256,8 @@ export function quantumBlockReasonLabel(reason: QuantumBlockReason): string {
       return 'Quantum drive active';
     case 'misaligned':
       return 'Align toward destination';
+    case 'already-here':
+      return 'Already at that planet';
   }
 }
 
@@ -266,7 +300,17 @@ export function tryBeginQuantumTravel(
   const destination = getQuantumDestination(planet, seed, destinationId);
   if (!destination) return quantum;
 
-  const endPosition = destinationWorldPosition(planet, seed, destination);
+  let endPosition = destinationWorldPosition(planet, seed, destination);
+  // Handoff targets have no live world body — travel outward then reload planet.
+  if (destination.handoff) {
+    const bearing = planarForward(body);
+    endPosition = {
+      x: body.position.x + bearing.x * 400_000,
+      y: body.position.y + bearing.y * 400_000,
+      z: body.position.z + bearing.z * 400_000,
+    };
+  }
+
   const dist = distance(body.position, endPosition);
   const startDir = normalize(body.position);
   const endDir = normalize(endPosition);
@@ -290,6 +334,7 @@ export function tryBeginQuantumTravel(
     dropOutElapsed: 0,
     entryFlash: 0,
     exitFlash: 0,
+    pendingHandoffPlanetId: null,
   };
 }
 
@@ -432,7 +477,17 @@ export function advanceQuantumTravel(
     screenFade = exitFlash * 0.85;
 
     if (dropOutElapsed >= QUANTUM_DROP_OUT_SECONDS) {
-      nextQuantum = createQuantumTravelState();
+      const handoffPlanetId =
+        destination?.handoff && destination.planetDocumentId
+          ? destination.planetDocumentId
+          : null;
+      if (!handoffPlanetId) {
+        clearNavRoute();
+      }
+      nextQuantum = {
+        ...createQuantumTravelState(),
+        pendingHandoffPlanetId: handoffPlanetId,
+      };
     } else {
       nextQuantum = { ...quantum, dropOutElapsed, exitFlash };
     }
@@ -446,9 +501,33 @@ export function listNavDestinationMarkers(
   planet: Planet,
   seed: number,
 ): NavDestinationMarker[] {
-  return listQuantumDestinations(planet, seed).map((dest) => ({
+  const routedId = quantumDestinationIdFromNavRoute();
+  const destinations = listQuantumDestinations(planet, seed).filter((dest) => {
+    if (dest.kind === 'system-planet' && !dest.handoff) return false;
+    // Always show the active route; otherwise surface POIs + local stations.
+    if (routedId && dest.id === routedId) return true;
+    if (dest.kind === 'system-station') return true;
+    if (dest.kind === 'surface-poi') return true;
+    if (dest.handoff && dest.id === routedId) return true;
+    return false;
+  });
+
+  return destinations.map((dest) => ({
     id: dest.id,
     name: dest.name,
     position: destinationWorldPosition(planet, seed, dest),
   }));
 }
+
+export function consumePendingHandoffPlanetId(
+  quantum: QuantumTravelState,
+): { quantum: QuantumTravelState; planetId: string | null } {
+  const planetId = quantum.pendingHandoffPlanetId;
+  if (!planetId) return { quantum, planetId: null };
+  return {
+    quantum: { ...quantum, pendingHandoffPlanetId: null },
+    planetId,
+  };
+}
+
+export type { QuantumDestination };

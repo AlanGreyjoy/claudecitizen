@@ -124,15 +124,19 @@ Station prefabs with `animation` components also get door toggle buttons.
 
 ## Scene tabs
 
-The center column has three modes:
+The center column switches between authoring surfaces:
 
 | Tab | Purpose |
 | --- | --- |
 | **Scene** | Main prefab viewport |
 | **Character Preview** | Skinned character + animation retargeting preview |
 | **Material Manager** | Batch material overrides across the scene |
+| **Base Characters** | Default character equipment |
+| **Planet Authoring** | Planet terrain / biome documents |
+| **System Map** | Star / planet / station ecliptic layout |
+| **Menu Manager** | Live HaloBand + play menu previews (File → Open Menus) |
 
-See [Character preview](./character-preview) and [Material manager](./material-manager).
+See [Character preview](./character-preview), [Material manager](./material-manager), [Planet authoring](./planet-authoring), [System Map](./system-map), and [Menu Manager](./menu-manager).
 
 ## Keyboard shortcuts
 

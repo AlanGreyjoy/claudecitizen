@@ -13,7 +13,7 @@ Before architectural or cross-cutting changes, read the project's agent docs:
 
 Also scan `.agents/` for any additional convention files. Use those docs for bounded-context ownership, import boundaries, terrain/foot sync, security, and performance pitfalls. Do not restate them here — read the source files.
 
-Project skills (read when the domain matches): `.cursor/skills/prefab-editor/SKILL.md`, `.cursor/skills/ship-flight/SKILL.md`.
+Project skills (read when the domain matches): `.cursor/skills/prefab-editor/SKILL.md`, `.cursor/skills/ship-flight/SKILL.md`, `.cursor/skills/prd/SKILL.md`.
 
 ## Performance — first-class requirement
 
@@ -25,7 +25,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 - Game loop, render path, terrain/LOD, vegetation, ship/station loading
 - UI that re-renders during play (HUD, menus, editor panels)
-- Per-frame or per-tick simulation (`world/`, `flight/`, `player/`)
+- Per-frame or per-tick simulation (`world/`, `flight/`, `player/`, `npc/`)
 - Asset size, mesh complexity, texture resolution, GLB/GLTF loads
 - Workers, caching, and anything that can block the main thread
 - Backend: tick rate, interest fan-out, payload size, DB hot paths
@@ -56,17 +56,20 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 ## Quick triggers
 
-- New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `render/`)
+- New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`)
+- Friendly station NPCs / waypoint routes / population definitions → `src/npc/` plus AGENTS.md "Friendly station NPCs"
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
+- Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache_keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (dev-only)"
 - Ship flight / mass / thrust / IFCS / dual-reticle / Preview Ship flight → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, and AGENTS.md "Ship flight"
+- PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 
 ## Key reminders
 
-- Domain logic lives in `world/`, `flight/`, `player/` — not in `render/` or `app.js`
-- Foot placement uses `sampleFootPlanetSurface()` / `getFootSurfaceSampleLevel()`, not always max LOD
+- Domain logic lives in `world/`, `flight/`, `player/`, `npc/` — not in `render/` or `app.js`
+- Terrain mesh and foot placement must share the canonical band-limited LOD grid; preserve `renderableGridSampleSpacingMeters()` ownership, two-sided edge skirts, pinned L0 fallback coverage, and the cached downhill river graph
 - Never commit or relocate `protected/` assets
 - No unit tests in this project
 - User owns interactive QA. Agents may run non-interactive build and static validation (`cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint`) when useful. Do not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. At the end of a multi-file feature or spike, run `npm run lint` and fix errors (and trivial warnings in touched files when practical). If relevant validation is skipped, say so in the handoff. For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.

@@ -16,8 +16,9 @@ After saving, the toolbar shows:
 | --- | --- | --- |
 | **Preview Station** | `kind: "station"` | Save → navigate to station playtest |
 | **Preview Ship** | `kind: "ship"` | Save → navigate to ship sandbox |
+| **Preview Planet** | Planet Authoring tab | Save → surface playtest |
 
-Other kinds show a toast: *"Preview in Play supports station and ship prefabs."*
+Other prefab kinds show a toast: *"Preview in Play supports station and ship prefabs."*
 
 Preview always **saves first** — you test the on-disk JSON, not unsaved buffer state.
 
@@ -27,14 +28,19 @@ Preview always **saves first** — you test the on-disk JSON, not unsaved buffer
 | --- | --- |
 | Station playtest | `http://localhost:4173/?stationPrefab=<id>` |
 | Ship sandbox | `http://localhost:4173/?shipPrefab=<id>` |
+| Planet surface playtest | `http://localhost:4173/?boot=play&planetId=<id>&spawn=surface&from=editor&debug=1` |
 | Reopen editor | `http://localhost:4173/?boot=editor&prefab=<id>` |
+| Reopen Planet Authoring | `http://localhost:4173/?boot=editor&tab=planet&planetId=<id>` |
+| Menu Manager (HaloBand preview) | `http://localhost:4173/?boot=editor&tab=menu` |
 
 ### Examples
 
 ```text
 ?stationPrefab=demo-station
 ?shipPrefab=phobos-starhopper
+?boot=play&planetId=asteron&spawn=surface&from=editor&debug=1
 ?boot=editor&prefab=demo-station
+?boot=editor&tab=planet&planetId=asteron
 ```
 
 ## Station playtest

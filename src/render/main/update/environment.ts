@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Planet } from '../../../types';
+import type { Planet, Vec3 } from '../../../types';
 import { VolumetricFogEffect } from '../../effects';
 import {
   HAZE_LOW_COLOR,
@@ -47,6 +47,7 @@ export interface EnvironmentUpdateInput {
   dt: number;
   nowSeconds: number;
   renderScale: number;
+  focusPosition: Vec3;
   volumetricEnabled: boolean;
   stationInteriorActive?: boolean;
 }
@@ -72,6 +73,7 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     dt,
     nowSeconds,
     renderScale,
+    focusPosition,
     volumetricEnabled,
     stationInteriorActive = false,
   } = input;
@@ -87,12 +89,13 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     spaceSkybox,
     volumetricClouds,
     starField,
-    ambientOcclusionEnabled,
   } = composerStack;
   const { ambient, sun } = lighting;
   const { sunDir, daylightFactor, rawDaylight, planetCenter } = sunState;
 
-  volumetricClouds.update(dt, altitudeMeters, volumetricEnabled);
+  volumetricClouds.update(dt, altitudeMeters, focusPosition, volumetricEnabled);
+  // isActive is false while the Takram composite is skipped, so the blue
+  // scene.background and planet fog stay on (avoids black "space" sky on foot).
   const volumetricSkyActive = volumetricClouds.isActive(altitudeMeters, volumetricEnabled);
   const planetFogActive =
     altitudeMeters < PLANET_FOG_MAX_ALTITUDE_METERS && spaceFactor < 0.9;
@@ -109,11 +112,11 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
 
   const spaceSkyboxActive =
     !volumetricSkyActive && altitudeMeters >= planet.atmosphereHeightMeters;
-  scene.background = volumetricSkyActive
-    ? null
-    : spaceSkyboxActive
-      ? spaceSkybox.getBackground(backgroundColor)
-      : backgroundColor;
+  // Keep a sky fill while volumetric clouds composite; aerial sky is disabled
+  // until WGS84/sphere height parity is solid.
+  scene.background = spaceSkyboxActive
+    ? spaceSkybox.getBackground(backgroundColor)
+    : backgroundColor;
   scene.fog = volumetricSkyActive || planetFogActive ? null : defaultFog;
   if (scene.fog) {
     const hazeTopMeters = Math.max(
@@ -129,9 +132,13 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     scene.fog.far = (hazeTopMeters + spanMeters) * renderScale;
   }
 
-  normalPass.setEnabled(volumetricSkyActive || ambientOcclusionEnabled);
+  // N8AO reconstructs normals from depth; NormalPass only feeds volumetric clouds.
+  normalPass.setEnabled(volumetricSkyActive);
   atmospherePass.setEnabled(volumetricSkyActive);
-  volumetricFogPass.setEnabled(planetFogActive);
+  // Takram aerial perspective already carries haze/sky when the volumetric
+  // stack is live; stacking our ground fog on top washes the cloud layer into
+  // a flat milky gradient.
+  volumetricFogPass.setEnabled(planetFogActive && !volumetricSkyActive);
 
   // The moon sits opposite the sun, so its elevation is the negated raw
   // daylight; a moonlit night gets a cool ambient lift so it isn't pitch black.

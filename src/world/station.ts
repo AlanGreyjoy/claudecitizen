@@ -1,9 +1,14 @@
 import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
 import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
 import { DEFAULT_SPAWN_SITE } from './landing_sites';
-import type { Planet, Vec3 } from '../types';
+import type { LandingSiteHint, Planet, Vec3 } from '../types';
 import type { GameplayCollider } from '../physics/colliders';
 import type { PrefabSoundSpec } from './prefabs/sound_runtime';
+import type {
+  StationNpcPlacementSpec,
+  StationNpcSpawnerSpec,
+  StationNpcWaypointSpec,
+} from './npc';
 
 /**
  * Orbital habitat station fixed above the default landing site. Gameplay uses
@@ -318,15 +323,62 @@ export function lobbyArrivalFromHangar(hangar: HangarSpec): ElevatorDestination 
 
 const frameCache = new Map<string, StationFrame>();
 
-export function getStationFrame(planet: Planet): StationFrame {
-  const key = `${planet.name ?? 'planet'}:${planet.radiusMeters}`;
+/** Optional orbit override set from System Map station entries (play bootstrap). */
+export interface StationOrbitHint {
+  latRadians: number;
+  lonRadians: number;
+  altitudeMeters: number;
+}
+
+let stationOrbitHint: StationOrbitHint | null = null;
+
+export function setStationOrbitHint(hint: StationOrbitHint | null): void {
+  stationOrbitHint = hint;
+  frameCache.clear();
+}
+
+export function getStationOrbitHint(): StationOrbitHint | null {
+  return stationOrbitHint;
+}
+
+/**
+ * Maps a system-ecliptic station offset into a stable orbital bearing around
+ * the planet. Direction of `offsetMeters` becomes a longitude offset from the
+ * default spawn site; altitude comes from the system entry.
+ */
+export function orbitHintFromSystemOffset(
+  offsetMeters: { x: number; z: number },
+  altitudeMeters: number,
+  base: LandingSiteHint = DEFAULT_SPAWN_SITE,
+): StationOrbitHint {
+  const bearing = Math.atan2(offsetMeters.x, offsetMeters.z);
+  return {
+    latRadians: base.latRadians,
+    lonRadians: base.lonRadians + bearing,
+    altitudeMeters,
+  };
+}
+
+export function getStationFrameAt(
+  planet: Planet,
+  latRadians: number,
+  lonRadians: number,
+  altitudeMeters: number,
+): StationFrame {
+  const key = [
+    planet.name ?? 'planet',
+    planet.radiusMeters,
+    latRadians.toFixed(6),
+    lonRadians.toFixed(6),
+    altitudeMeters.toFixed(1),
+  ].join(':');
   const cached = frameCache.get(key);
   if (cached) return cached;
 
   const origin = cartesianFromLatLonAlt(
-    DEFAULT_SPAWN_SITE.latRadians,
-    DEFAULT_SPAWN_SITE.lonRadians,
-    STATION_ALTITUDE_METERS,
+    latRadians,
+    lonRadians,
+    altitudeMeters,
     planet.radiusMeters,
   );
   const up = radialUp(origin);
@@ -335,6 +387,13 @@ export function getStationFrame(planet: Planet): StationFrame {
   const frame: StationFrame = { origin, right, up, forward };
   frameCache.set(key, frame);
   return frame;
+}
+
+export function getStationFrame(planet: Planet): StationFrame {
+  const latRadians = stationOrbitHint?.latRadians ?? DEFAULT_SPAWN_SITE.latRadians;
+  const lonRadians = stationOrbitHint?.lonRadians ?? DEFAULT_SPAWN_SITE.lonRadians;
+  const altitudeMeters = stationOrbitHint?.altitudeMeters ?? STATION_ALTITUDE_METERS;
+  return getStationFrameAt(planet, latRadians, lonRadians, altitudeMeters);
 }
 
 export function stationLocalToWorld(frame: StationFrame, local: StationLocalPoint): Vec3 {
@@ -455,6 +514,9 @@ export interface StationLayoutOverride {
   avmsMarkers: StationAvmsMarker[];
   weaponShops: StationWeaponShopMarker[];
   outfitters: StationOutfittersMarker[];
+  npcSpawners: StationNpcSpawnerSpec[];
+  npcWaypoints: StationNpcWaypointSpec[];
+  npcPlacements: StationNpcPlacementSpec[];
   sounds: PrefabSoundSpec[];
 }
 
@@ -597,4 +659,3 @@ export function sampleHangarRest(
 export function getHangarByIndex(index: number): HangarSpec | null {
   return getStationHangars().find((hangar) => hangar.index === index) ?? null;
 }
-

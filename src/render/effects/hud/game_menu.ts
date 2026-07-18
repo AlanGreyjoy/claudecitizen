@@ -2,8 +2,10 @@ import {
   applyAmbientOcclusionAndReload,
   applyMotionBlurAndReload,
   applyRenderQualityAndReload,
+  applyShadowQualityAndReload,
   loadGameSettings,
   saveGameSettings,
+  type CloudModeSetting,
   type GameSettings,
 } from '../../../settings/game_settings';
 import {
@@ -24,7 +26,10 @@ import {
   type InputSettings,
   type KeyboardActionId,
 } from '../../../flight/input_settings';
-import type { RenderQualityPreset } from '../../main/domain/render_quality';
+import type {
+  RenderQualityPreset,
+  ShadowQualitySetting,
+} from '../../main/domain/render_quality';
 import { createBindingAxisPreview } from './binding_axis_preview';
 
 export interface GameMenuElements {
@@ -128,14 +133,39 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   const panels = Array.from(
     elements.rootEl.querySelectorAll<HTMLElement>('[data-game-menu-panel]'),
   );
-  const controlsRoot = elements.rootEl.querySelector<HTMLElement>('#game-menu-controls');
+  const controlsRoot =
+    elements.rootEl.querySelector<HTMLElement>('[data-orig-id="game-menu-controls"]') ??
+    elements.rootEl.querySelector<HTMLElement>('#game-menu-controls');
   const qualityInputs = Array.from(
-    elements.rootEl.querySelectorAll<HTMLInputElement>('input[name="game-menu-quality"]'),
+    elements.rootEl.querySelectorAll<HTMLInputElement>(
+      'input[name="game-menu-quality"], input[name="ed-preview-game-menu-quality"]',
+    ),
+  );
+  const shadowInputs = Array.from(
+    elements.rootEl.querySelectorAll<HTMLInputElement>(
+      'input[name="game-menu-shadows"], input[name="ed-preview-game-menu-shadows"]',
+    ),
+  );
+  const cloudModeInputs = Array.from(
+    elements.rootEl.querySelectorAll<HTMLInputElement>(
+      'input[name="game-menu-clouds"], input[name="ed-preview-game-menu-clouds"]',
+    ),
   );
   const ambientOcclusionInput =
-    elements.rootEl.querySelector<HTMLInputElement>('#game-menu-ambient-occlusion');
+    elements.rootEl.querySelector<HTMLInputElement>(
+      '[data-orig-id="game-menu-ambient-occlusion"]',
+    ) ?? elements.rootEl.querySelector<HTMLInputElement>('#game-menu-ambient-occlusion');
   const motionBlurInput =
+    elements.rootEl.querySelector<HTMLInputElement>('[data-orig-id="game-menu-motion-blur"]') ??
     elements.rootEl.querySelector<HTMLInputElement>('#game-menu-motion-blur');
+  const grassDistanceInput =
+    elements.rootEl.querySelector<HTMLInputElement>(
+      '[data-orig-id="game-menu-grass-distance"]',
+    ) ?? elements.rootEl.querySelector<HTMLInputElement>('#game-menu-grass-distance');
+  const grassDistanceValueEl =
+    elements.rootEl.querySelector<HTMLElement>(
+      '[data-orig-id="game-menu-grass-distance-value"]',
+    ) ?? elements.rootEl.querySelector<HTMLElement>('#game-menu-grass-distance-value');
 
   function isCapturingControls(): boolean {
     return keyboardCaptureAction !== null || deviceCapture !== null;
@@ -147,12 +177,33 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     }
   }
 
+  function syncShadowRadios(): void {
+    for (const input of shadowInputs) {
+      input.checked = input.value === settings.shadowQuality;
+    }
+  }
+
+  function syncCloudModeRadios(): void {
+    for (const input of cloudModeInputs) {
+      input.checked = input.value === settings.cloudMode;
+    }
+  }
+
   function syncAmbientOcclusion(): void {
     if (ambientOcclusionInput) ambientOcclusionInput.checked = settings.ambientOcclusion;
   }
 
   function syncMotionBlur(): void {
     if (motionBlurInput) motionBlurInput.checked = settings.motionBlur;
+  }
+
+  function syncGrassDistance(): void {
+    if (grassDistanceInput) {
+      grassDistanceInput.value = String(settings.grassRenderDistanceMeters);
+    }
+    if (grassDistanceValueEl) {
+      grassDistanceValueEl.textContent = `${settings.grassRenderDistanceMeters} m`;
+    }
   }
 
   function syncAudioControls(): void {
@@ -183,8 +234,11 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     if (open) {
       document.exitPointerLock?.();
       syncQualityRadios();
+      syncShadowRadios();
+      syncCloudModeRadios();
       syncAmbientOcclusion();
       syncMotionBlur();
+      syncGrassDistance();
       syncAudioControls();
       renderControlsPanel();
       startTelemetry();
@@ -743,12 +797,42 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     });
   }
 
+  for (const input of shadowInputs) {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      const shadowQuality = input.value as ShadowQualitySetting;
+      if (shadowQuality === settings.shadowQuality) return;
+      applyShadowQualityAndReload(shadowQuality);
+    });
+  }
+
+  // Cloud mode applies immediately (no reload) so the two paths can be
+  // compared live; the renderer listens for the settings-changed event.
+  for (const input of cloudModeInputs) {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      const cloudMode = input.value as CloudModeSetting;
+      if (cloudMode === settings.cloudMode) return;
+      settings = saveGameSettings({ ...settings, cloudMode });
+    });
+  }
+
   ambientOcclusionInput?.addEventListener('change', () => {
     applyAmbientOcclusionAndReload(ambientOcclusionInput.checked);
   });
 
   motionBlurInput?.addEventListener('change', () => {
     applyMotionBlurAndReload(motionBlurInput.checked);
+  });
+
+  grassDistanceInput?.addEventListener('input', () => {
+    const meters = Number.parseInt(grassDistanceInput.value, 10);
+    if (!Number.isFinite(meters) || meters === settings.grassRenderDistanceMeters) {
+      syncGrassDistance();
+      return;
+    }
+    settings = saveGameSettings({ ...settings, grassRenderDistanceMeters: meters });
+    syncGrassDistance();
   });
 
   elements.masterVolumeEl.addEventListener('input', () => {
@@ -786,8 +870,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   window.addEventListener('keydown', handleKeyDown, true);
 
   syncQualityRadios();
+  syncCloudModeRadios();
   syncAmbientOcclusion();
   syncMotionBlur();
+  syncGrassDistance();
   syncAudioControls();
   renderControlsPanel();
 

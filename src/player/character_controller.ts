@@ -37,10 +37,7 @@ const JUMP_LAND_SECONDS = 0.18;
 const TURN_SPEED = 10;
 export const ORBIT_PITCH_LIMIT = 1.15;
 export const FIRST_PERSON_PITCH_LIMIT = 1.5;
-export const FIRST_PERSON_EYE_HEIGHT_METERS = 1.62;
-// Nudges the eye ahead of the neck so shoulders stay behind the near plane.
-const FIRST_PERSON_FORWARD_OFFSET_METERS = 0.22;
-const FIRST_PERSON_LOOK_DISTANCE_METERS = 10;
+export const CHARACTER_EYE_HEIGHT_METERS = 1.62;
 const CAMERA_REF_ZOOM = 7.4;
 
 interface TangentBasis {
@@ -302,24 +299,6 @@ export function resolveCharacterCameraRig(
   };
 }
 
-export function resolveFirstPersonCameraRig(
-  orbit: OrbitCamera,
-): CharacterCameraRig {
-  // Planar (yaw-only) forward, so pitching the view does not slide the eye.
-  const planarForward = normalize(cross(orbit.up, orbit.right));
-  const eyeOffset = add(
-    scale(orbit.up, FIRST_PERSON_EYE_HEIGHT_METERS),
-    scale(planarForward, FIRST_PERSON_FORWARD_OFFSET_METERS),
-  );
-  return {
-    positionOffset: eyeOffset,
-    targetOffset: add(
-      eyeOffset,
-      scale(orbit.forward, FIRST_PERSON_LOOK_DISTANCE_METERS),
-    ),
-  };
-}
-
 export function createCharacterState(
   position: Vec3,
   forward: Vec3 = eastVector(position),
@@ -356,12 +335,19 @@ export function placeCharacterOnSurface(
   };
 }
 
+export interface PlanetPropCollision {
+  filterMovement: (from: Vec3, desiredDelta: Vec3, up: Vec3) => Vec3;
+  /** Distance along -up from feet to a prop top, or null. */
+  probeSupport: (from: Vec3, up: Vec3) => number | null;
+}
+
 export function updateCharacterState(
   state: CharacterState,
   input: CharacterInput,
   dt: number,
   planet: Planet,
   seed: number,
+  propCollision?: PlanetPropCollision | null,
 ): CharacterState {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -390,16 +376,38 @@ export function updateCharacterState(
     {
       onGroundedStep: () => {
         const step = scale(desiredDirection, moveSpeed * dt);
-        let nextPosition = add(state.position, step);
+        const up0 = radialUp(state.position);
+        const nextPosition = propCollision
+          ? propCollision.filterMovement(state.position, step, up0)
+          : add(state.position, step);
         const nextSurface = sampleFootPlanetSurface(planet, seed, nextPosition);
-        nextPosition = clampToGround(
+        const terrainPos = clampToGround(
           nextPosition,
           nextSurface.surfaceRadiusMeters,
         );
-        return { position: nextPosition, up: radialUp(nextPosition) };
+        const up = radialUp(terrainPos);
+        const support = propCollision?.probeSupport(terrainPos, up) ?? null;
+        // Prefer prop tops that sit above the terrain skin.
+        if (support !== null && support > -0.05 && support < 1.25) {
+          const propPos = add(terrainPos, scale(up, -support));
+          if (length(propPos) > length(terrainPos) + 0.02) {
+            return { position: propPos, up: radialUp(propPos) };
+          }
+        }
+        return { position: terrainPos, up };
       },
       tryLand: (candidate) => {
         const nextSurface = sampleFootPlanetSurface(planet, seed, candidate);
+        const up = radialUp(candidate);
+        const support = propCollision?.probeSupport(candidate, up) ?? null;
+        if (support !== null && support < 0.85) {
+          const propped = add(candidate, scale(up, -support));
+          const terrainRadius =
+            nextSurface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
+          if (length(propped) >= terrainRadius - 0.05) {
+            return { position: propped, up: radialUp(propped) };
+          }
+        }
         const landingRadius =
           nextSurface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
         if (length(candidate) > landingRadius) return null;
@@ -413,9 +421,7 @@ export function updateCharacterState(
     },
   );
 
-  const desiredFacing = input.faceCameraYaw
-    ? forwardFromYaw(motion.position, input.cameraYawRadians ?? 0)
-    : desiredDirection;
+  const desiredFacing = desiredDirection;
   let forward = rotateToward(state.forward, desiredFacing, motion.up, dt);
 
   if (length(forward) < 1e-6) {

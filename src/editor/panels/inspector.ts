@@ -1,4 +1,4 @@
-import { clearChildren, el } from "../dom";
+import { clearChildren, chevronIcon, closeIcon, el } from "../dom";
 import { ASSET_DND_TYPE, ENTITY_DND_TYPE } from "../api";
 import {
   type EditorEntity,
@@ -496,10 +496,9 @@ export function createInspectorPanel(
       sub?.entityId === entity.id
         ? store.getGlbNodeName(entity.id, sub.nodeUuid)
         : null;
-    const caret = el("span", {
-      className: "ed-section-caret",
-      text: materialsSectionCollapsed ? "▸" : "▾",
-    });
+    const caret = el("span", { className: "ed-section-caret" }, [
+      chevronIcon(!materialsSectionCollapsed),
+    ]);
     const section = el("div", {
       className: `ed-section${materialsSectionCollapsed ? " is-collapsed" : ""}`,
     });
@@ -515,7 +514,7 @@ export function createInspectorPanel(
           click: () => {
             materialsSectionCollapsed = !materialsSectionCollapsed;
             section.classList.toggle("is-collapsed", materialsSectionCollapsed);
-            caret.textContent = materialsSectionCollapsed ? "▸" : "▾";
+            caret.replaceChildren(chevronIcon(!materialsSectionCollapsed));
             title.title = materialsSectionCollapsed
               ? "Expand Materials"
               : "Collapse Materials";
@@ -622,6 +621,162 @@ export function createInspectorPanel(
             ),
           ]),
         ];
+      case "npc-spawner":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id: id.trim() })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Population" }),
+            textInput(component.populationId, (populationId) =>
+              update({ ...component, populationId: populationId.trim() }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Floor" }),
+            selectInput(FLOOR_OPTIONS, component.floorId, (floorId) =>
+              update({ ...component, floorId: floorId as StationFloorId }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Route group" }),
+            textInput(component.routeGroup, (routeGroup) =>
+              update({ ...component, routeGroup: routeGroup.trim() }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Min alive" }),
+            numberInput(component.minAlive, (minAlive) => {
+              const nextMin = Math.max(0, Math.min(32, Math.round(minAlive)));
+              update({
+                ...component,
+                minAlive: nextMin,
+                maxAlive: Math.max(nextMin, component.maxAlive),
+              });
+            }, 1),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Max alive" }),
+            numberInput(component.maxAlive, (maxAlive) =>
+              update({
+                ...component,
+                maxAlive: Math.max(
+                  component.minAlive,
+                  Math.min(32, Math.round(maxAlive)),
+                ),
+              }), 1),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Radius" }),
+            numberInput(component.radius, (radius) =>
+              update({ ...component, radius: Math.max(0, Math.min(20, radius)) }),
+            ),
+          ]),
+        ];
+      case "npc-waypoint":
+        return [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id: id.trim() })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Floor" }),
+            selectInput(FLOOR_OPTIONS, component.floorId, (floorId) =>
+              update({ ...component, floorId: floorId as StationFloorId }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Route group" }),
+            textInput(component.routeGroup, (routeGroup) =>
+              update({ ...component, routeGroup: routeGroup.trim() }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Links" }),
+            textInput(component.links.join(", "), (raw) => {
+              const links = raw
+                .split(/[\s,]+/)
+                .map((id) => id.trim())
+                .filter((id, index, all) => id.length > 0 && all.indexOf(id) === index)
+                .slice(0, 16);
+              update({ ...component, links });
+            }),
+          ]),
+          el("div", {
+            className: "ed-hint",
+            text: "Comma-separated waypoint ids. Connections are undirected.",
+          }),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Wait min" }),
+            numberInput(component.waitMinSeconds, (waitMinSeconds) => {
+              const nextMin = Math.max(0, Math.min(120, waitMinSeconds));
+              update({
+                ...component,
+                waitMinSeconds: nextMin,
+                waitMaxSeconds: Math.max(nextMin, component.waitMaxSeconds),
+              });
+            }),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Wait max" }),
+            numberInput(component.waitMaxSeconds, (waitMaxSeconds) =>
+              update({
+                ...component,
+                waitMaxSeconds: Math.max(
+                  component.waitMinSeconds,
+                  Math.min(120, waitMaxSeconds),
+                ),
+              }),
+            ),
+          ]),
+        ];
+      case "npc-placement": {
+        const rows = [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id: id.trim() })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Definition" }),
+            textInput(component.npcDefinitionId, (npcDefinitionId) =>
+              update({ ...component, npcDefinitionId: npcDefinitionId.trim() }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Display name" }),
+            textInput(component.displayName ?? "", (displayName) =>
+              update({ ...component, displayName: displayName.trim() || undefined }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Floor" }),
+            selectInput(FLOOR_OPTIONS, component.floorId, (floorId) =>
+              update({ ...component, floorId: floorId as StationFloorId }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Behavior" }),
+            selectInput(["stationary", "wander", "patrol"], component.behavior, (behavior) =>
+              update({
+                ...component,
+                behavior: behavior as "stationary" | "wander" | "patrol",
+              }),
+            ),
+          ]),
+        ];
+        if (component.behavior !== "stationary") {
+          rows.push(
+            el("div", { className: "ed-field-row-wide" }, [
+              el("span", { className: "ed-field-label", text: "Route group" }),
+              textInput(component.routeGroup ?? "", (routeGroup) =>
+                update({ ...component, routeGroup: routeGroup.trim() || undefined }),
+              ),
+            ]),
+          );
+        }
+        return rows;
+      }
       case "elevator":
         return [
           el("div", { className: "ed-field-row-wide" }, [
@@ -819,7 +974,6 @@ export function createInspectorPanel(
                 }),
                 el("button", {
                   className: "ed-remove-btn",
-                  text: "✕",
                   title: "Remove node",
                   on: {
                     click: () => {
@@ -830,7 +984,7 @@ export function createInspectorPanel(
                       update({ ...component, nodes });
                     },
                   },
-                }),
+                }, [closeIcon()]),
               ]),
             ]),
           );
@@ -846,6 +1000,140 @@ export function createInspectorPanel(
                 update({
                   ...component,
                   nodes: [...component.nodes, { name: "", delta: 0 }],
+                }),
+            },
+          }),
+        );
+        return rows;
+      }
+      case "object-animation": {
+        const nodes = component.nodes ?? [];
+        const rows: HTMLElement[] = [
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Id" }),
+            textInput(component.id, (id) => update({ ...component, id })),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Mode" }),
+            selectInput(["hover", "spin"], component.mode, (mode) =>
+              update({
+                ...component,
+                mode: mode as "hover" | "spin",
+                speed:
+                  mode === "spin"
+                    ? (component.speed ?? 0.4)
+                    : (component.speed ?? 0.5),
+              }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Axis" }),
+            selectInput(["x", "y", "z"], component.axis, (axis) =>
+              update({ ...component, axis: axis as "x" | "y" | "z" }),
+            ),
+          ]),
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", {
+              className: "ed-field-label",
+              text: component.mode === "spin" ? "Speed (rad/s)" : "Speed (Hz)",
+            }),
+            numberInput(component.speed ?? (component.mode === "spin" ? 0.4 : 0.5), (speed) =>
+              update({ ...component, speed: Math.max(0, speed) }),
+            ),
+          ]),
+        ];
+        if (component.mode === "spin") {
+          rows.push(
+            el("label", { className: "ed-checkbox-row" }, [
+              (() => {
+                const checkbox = el("input", {
+                  attrs: { type: "checkbox" },
+                  on: {
+                    change: (event) =>
+                      update({
+                        ...component,
+                        reverse:
+                          (event.target as HTMLInputElement).checked ||
+                          undefined,
+                      }),
+                  },
+                });
+                checkbox.checked = component.reverse ?? false;
+                return checkbox;
+              })(),
+              el("span", { text: "Reverse spin" }),
+            ]),
+          );
+        }
+        if (component.mode === "hover") {
+          rows.push(
+            el("div", { className: "ed-field-row-wide" }, [
+              el("span", { className: "ed-field-label", text: "Amplitude (m)" }),
+              numberInput(component.amplitude ?? 0.08, (amplitude) =>
+                update({ ...component, amplitude: Math.max(0, amplitude) }),
+              ),
+            ]),
+          );
+        }
+        rows.push(
+          el("div", { className: "ed-field-row-wide" }, [
+            el("span", { className: "ed-field-label", text: "Phase (rad)" }),
+            numberInput(component.phase ?? 0, (phase) =>
+              update({ ...component, phase }),
+            ),
+          ]),
+        );
+
+        if (nodes.length === 0) {
+          rows.push(
+            el("div", {
+            className: "ed-hint",
+              text: "No GLB nodes — animates this entity root.",
+            }),
+          );
+        }
+
+        nodes.forEach((node, nodeIndex) => {
+          rows.push(
+            el("div", { className: "ed-field-row-wide" }, [
+              el("span", {
+                className: "ed-field-label",
+                text: `Node ${nodeIndex + 1}`,
+              }),
+              el("div", { className: "ed-door-node-row" }, [
+                textInput(node.name, (name) => {
+                  const nextNodes = nodes.map((entry, index) =>
+                    index === nodeIndex ? { ...entry, name } : entry,
+                  );
+                  update({ ...component, nodes: nextNodes });
+                }),
+                el("button", {
+                  className: "ed-remove-btn",
+                  title: "Remove node",
+                  on: {
+                    click: () => {
+                      const nextNodes = nodes.filter(
+                        (_, index) => index !== nodeIndex,
+                      );
+                      update({ ...component, nodes: nextNodes });
+                    },
+                  },
+                }, [closeIcon()]),
+              ]),
+            ]),
+          );
+        });
+
+        rows.push(
+          el("button", {
+            className: "ed-btn",
+            text: "+ Node",
+            title: "Animate a named GLB node (leave empty to animate entity root)",
+            on: {
+              click: () =>
+                update({
+                  ...component,
+                  nodes: [...nodes, { name: "" }],
                 }),
             },
           }),
@@ -1884,7 +2172,6 @@ export function createInspectorPanel(
                 }),
                 el("button", {
                   className: "ed-remove-btn",
-                  text: "✕",
                   title: "Remove node",
                   on: {
                     click: () => {
@@ -1895,7 +2182,7 @@ export function createInspectorPanel(
                       update({ ...component, nodes });
                     },
                   },
-                }),
+                }, [closeIcon()]),
               ]),
             ]),
             el("div", { className: "ed-field-row-wide" }, [
@@ -2549,9 +2836,39 @@ export function createInspectorPanel(
         : null;
 
     const isNodeContext = Boolean(subNodeName && entity.asset);
-    const components = isNodeContext
+    const nodeOverrideComponents = isNodeContext
       ? store.getNodeOverrideComponents(entity.id, subNodeName!)
-      : entity.components;
+      : [];
+
+    // Entity-level components that target this GLB node (Object Animation,
+    // Animation, Ship Door) live on entity.components — surface them while the
+    // node is selected so authors can still edit speed/axis/etc.
+    type ListedComponent = {
+      component: PrefabComponent;
+      source: "node" | "entity";
+      /** Index in nodeOverrideComponents or entity.components */
+      index: number;
+    };
+    const listed: ListedComponent[] = [];
+    if (isNodeContext && subNodeName) {
+      nodeOverrideComponents.forEach((component, index) => {
+        listed.push({ component, source: "node", index });
+      });
+      entity.components.forEach((component, index) => {
+        const targetsNode =
+          (component.type === "object-animation" ||
+            component.type === "animation" ||
+            component.type === "ship-door") &&
+          (component.nodes ?? []).some((node) => node.name === subNodeName);
+        if (targetsNode) {
+          listed.push({ component, source: "entity", index });
+        }
+      });
+    } else {
+      entity.components.forEach((component, index) => {
+        listed.push({ component, source: "entity", index });
+      });
+    }
 
     if (
       !isNodeContext &&
@@ -2565,19 +2882,18 @@ export function createInspectorPanel(
       );
     }
 
-    const setComponents = (next: PrefabComponent[]): void => {
-      if (isNodeContext) {
-        store.setNodeOverrideComponents(entity.id, subNodeName!, next);
-      } else {
-        store.setComponents(entity.id, next);
-      }
-    };
-
-    components.forEach((component, index) => {
+    for (const entry of listed) {
+      const { component, source, index } = entry;
       const update = (next: PrefabComponent): void => {
-        const list = structuredClone(components);
+        if (source === "node") {
+          const list = structuredClone(nodeOverrideComponents);
+          list[index] = next;
+          store.setNodeOverrideComponents(entity.id, subNodeName!, list);
+          return;
+        }
+        const list = structuredClone(entity.components);
         list[index] = next;
-        setComponents(list);
+        store.setComponents(entity.id, list);
       };
       const bodyEl = el(
         "div",
@@ -2594,28 +2910,40 @@ export function createInspectorPanel(
       const hint = getComponentDef(component.type)?.hint;
       if (hint)
         bodyEl.append(el("div", { className: "ed-empty-note", text: hint }));
-      const componentLabel = component.type;
+      const componentLabel =
+        source === "entity" && isNodeContext
+          ? `${component.type} (entity)`
+          : component.type;
       section.append(
         el("div", { className: "ed-component" }, [
           el("div", { className: "ed-component-head" }, [
             el("span", { text: componentLabel }),
             el("button", {
               className: "ed-remove-btn",
-              text: "✕",
               title: "Remove component",
               on: {
                 click: () => {
-                  const list = structuredClone(components);
+                  if (source === "node") {
+                    const list = structuredClone(nodeOverrideComponents);
+                    list.splice(index, 1);
+                    store.setNodeOverrideComponents(
+                      entity.id,
+                      subNodeName!,
+                      list,
+                    );
+                    return;
+                  }
+                  const list = structuredClone(entity.components);
                   list.splice(index, 1);
-                  setComponents(list);
+                  store.setComponents(entity.id, list);
                 },
               },
-            }),
+            }, [closeIcon()]),
           ]),
           bodyEl,
         ]),
       );
-    });
+    }
 
     section.append(
       el("div", { className: "ed-add-component" }, [

@@ -15,6 +15,8 @@ export interface PendingBuildJob {
   buildId: number;
   info: TileInfo;
   key: string;
+  /** Lower = sooner. Distance from focus in meters when known. */
+  priority: number;
 }
 
 export interface ResolvedTile {

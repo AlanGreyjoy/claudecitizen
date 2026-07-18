@@ -211,6 +211,16 @@ export function addComponentFromPalette(
   const components = structuredClone(entity.components);
   components.push(createComponentForEntity(def, entity, subNodeName));
   store.setComponents(targetEntityId, components);
+
+  // Object Animation (and similar entity-level components) attach to the entity,
+  // not the node override list. Clear GLB sub-selection so the inspector shows
+  // their settings instead of an empty node Components section.
+  if (subNodeName && def.type === 'object-animation') {
+    store.setEntitySelection(targetEntityId);
+    showToast(
+      `Added "${def.label}" targeting ${subNodeName} — tune speed/axis in the inspector.`,
+    );
+  }
 }
 
 function createComponentForEntity(
@@ -226,6 +236,16 @@ function createComponentForEntity(
       id: `anim-${idSafe}`,
       name: subNodeName,
       nodes: [{ name: subNodeName, delta: -1 }],
+    };
+  }
+  if (component.type === 'object-animation' && subNodeName) {
+    const idSafe = subNodeName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    return {
+      ...component,
+      id: `obj-anim-${idSafe}`,
+      mode: 'spin',
+      nodes: [{ name: subNodeName }],
+      speed: 0.4,
     };
   }
   if (component.type === 'ship-door' && subNodeName) {

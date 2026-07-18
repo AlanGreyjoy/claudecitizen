@@ -65,6 +65,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'release/**',
       'target/**',
       'node_modules/**',
       'vendor/**',

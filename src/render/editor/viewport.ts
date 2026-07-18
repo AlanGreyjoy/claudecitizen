@@ -9,6 +9,10 @@ import {
   createPrimitiveMesh,
 } from "../prefabs/prefab_renderer";
 import {
+  bindObjectAnimationComponent,
+  setupUpdateObjectAnimations,
+} from "../prefabs/object_animation";
+import {
   createParticleShapeHelper,
   createParticleSystem,
   type ParticleSystemHandle,
@@ -127,6 +131,7 @@ export function createEditorViewport(
   const entityRoot = new THREE.Group();
   entityRoot.name = "editor-entities";
   scene.add(entityRoot);
+  setupUpdateObjectAnimations(entityRoot);
 
   const particleHandles = new Map<string, ParticleSystemHandle[]>();
 
@@ -612,6 +617,88 @@ export function createEditorViewport(
           0.3,
         );
         group.add(cone, disc);
+        return group;
+      }
+      case "npc-spawner": {
+        const group = new THREE.Group();
+        const color = 0x7de7ff;
+        const radius = Math.max(0.15, component.radius);
+        const zone = makeHelperMesh(
+          new THREE.CylinderGeometry(radius, radius, 0.05, 32),
+          color,
+          0.18,
+          true,
+        );
+        zone.position.y = 0.025;
+        const body = makeHelperMesh(
+          new THREE.CapsuleGeometry(0.22, 0.75, 5, 10),
+          color,
+          0.72,
+        );
+        body.position.y = 0.7;
+        const head = makeHelperMesh(
+          new THREE.SphereGeometry(0.25, 14, 10),
+          color,
+          0.88,
+        );
+        head.position.y = 1.55;
+        group.add(zone, body, head);
+        return group;
+      }
+      case "npc-waypoint": {
+        const group = new THREE.Group();
+        const color = 0xc39bff;
+        const node = makeHelperMesh(
+          new THREE.OctahedronGeometry(0.28),
+          color,
+          0.86,
+        );
+        node.position.y = 0.28;
+        const stemGeometry = track(new THREE.BufferGeometry());
+        stemGeometry.setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0.28, 0),
+        ]);
+        const stemMaterial = track(
+          new THREE.LineBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.82,
+            depthWrite: false,
+          }),
+        );
+        group.add(node, new THREE.Line(stemGeometry, stemMaterial));
+        return group;
+      }
+      case "npc-placement": {
+        const group = new THREE.Group();
+        const color = component.behavior === "stationary" ? 0xffd37d : 0xffa97d;
+        const body = makeHelperMesh(
+          new THREE.CapsuleGeometry(0.24, 0.82, 5, 10),
+          color,
+          0.72,
+        );
+        body.position.y = 0.72;
+        const head = makeHelperMesh(
+          new THREE.SphereGeometry(0.27, 14, 10),
+          color,
+          0.9,
+        );
+        head.position.y = 1.62;
+        const facingGeometry = track(new THREE.BufferGeometry());
+        facingGeometry.setFromPoints([
+          new THREE.Vector3(0, 0.04, 0),
+          new THREE.Vector3(0, 0.04, 0.9),
+        ]);
+        const facingMaterial = track(
+          new THREE.LineBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.88,
+            depthWrite: false,
+          }),
+        );
+        group.add(body, head, new THREE.Line(facingGeometry, facingMaterial));
         return group;
       }
       case "elevator": {
@@ -1148,6 +1235,14 @@ export function createEditorViewport(
             const helper = buildComponentHelper(component, model);
             if (helper) model.add(helper);
           }
+          for (const component of entity.components) {
+            if (
+              component.type === "object-animation" &&
+              (component.nodes?.length ?? 0) > 0
+            ) {
+              bindObjectAnimationComponent(entityRoot, model, component);
+            }
+          }
           applyShipPreview();
         })
         .catch(() => {
@@ -1180,6 +1275,12 @@ export function createEditorViewport(
         hasVisual = true;
         continue;
       }
+      if (component.type === "object-animation") {
+        const nodeCount = component.nodes?.length ?? 0;
+        if (nodeCount === 0 || !entity.asset) {
+          bindObjectAnimationComponent(entityRoot, group, component);
+        }
+      }
       const helper = buildComponentHelper(component);
       if (helper) {
         group.add(helper);
@@ -1203,6 +1304,89 @@ export function createEditorViewport(
     return group;
   }
 
+  interface NpcRouteLine {
+    from: THREE.Object3D;
+    to: THREE.Object3D;
+    position: THREE.BufferAttribute;
+  }
+
+  const npcRouteLines: NpcRouteLine[] = [];
+  const npcRoutePointA = new THREE.Vector3();
+  const npcRoutePointB = new THREE.Vector3();
+
+  function updateNpcRouteLines(): void {
+    for (const route of npcRouteLines) {
+      route.from.getWorldPosition(npcRoutePointA);
+      route.to.getWorldPosition(npcRoutePointB);
+      entityRoot.worldToLocal(npcRoutePointA);
+      entityRoot.worldToLocal(npcRoutePointB);
+      route.position.setXYZ(0, npcRoutePointA.x, npcRoutePointA.y + 0.28, npcRoutePointA.z);
+      route.position.setXYZ(1, npcRoutePointB.x, npcRoutePointB.y + 0.28, npcRoutePointB.z);
+      route.position.needsUpdate = true;
+    }
+  }
+
+  function buildNpcRouteLines(): void {
+    npcRouteLines.length = 0;
+    const waypoints = new Map<
+      string,
+      {
+        component: Extract<PrefabComponent, { type: "npc-waypoint" }>;
+        object: THREE.Object3D;
+      }
+    >();
+    const visit = (entities: readonly EditorEntity[]): void => {
+      for (const entity of entities) {
+        const component = entity.components.find(
+          (candidate): candidate is Extract<PrefabComponent, { type: "npc-waypoint" }> =>
+            candidate.type === "npc-waypoint",
+        );
+        const object = objectsById.get(entity.id);
+        if (component && object) waypoints.set(component.id, { component, object });
+        visit(entity.children);
+      }
+    };
+    visit(store.getState().roots);
+
+    const material = track(
+      new THREE.LineBasicMaterial({
+        color: 0xc39bff,
+        transparent: true,
+        opacity: 0.58,
+        depthWrite: false,
+      }),
+    );
+    const edges = new Set<string>();
+    for (const [id, waypoint] of waypoints) {
+      for (const linkedId of waypoint.component.links) {
+        const linked = waypoints.get(linkedId);
+        if (
+          !linked ||
+          linked.component.routeGroup !== waypoint.component.routeGroup ||
+          linked.component.floorId !== waypoint.component.floorId
+        ) {
+          continue;
+        }
+        const edgeKey = [id, linkedId].sort().join("\u0000");
+        if (edges.has(edgeKey)) continue;
+        edges.add(edgeKey);
+        const geometry = track(new THREE.BufferGeometry());
+        const position = new THREE.BufferAttribute(new Float32Array(6), 3);
+        geometry.setAttribute("position", position);
+        const line = new THREE.Line(geometry, material);
+        line.frustumCulled = false;
+        line.renderOrder = 3;
+        entityRoot.add(line);
+        npcRouteLines.push({
+          from: waypoint.object,
+          to: linked.object,
+          position,
+        });
+      }
+    }
+    updateNpcRouteLines();
+  }
+
   function rebuildAll(): void {
     buildGeneration += 1;
     gizmo.detach();
@@ -1210,12 +1394,14 @@ export function createEditorViewport(
     objectsById.clear();
     store.clearGlbTrees();
     disposeParticleHandles();
+    setupUpdateObjectAnimations(entityRoot);
     for (const resource of disposables) resource.dispose();
     disposables.length = 0;
 
     for (const entity of store.getState().roots) {
       entityRoot.add(buildEntityObject(entity, buildGeneration));
     }
+    buildNpcRouteLines();
     syncSelectionHighlight();
     applyShipPreview();
   }
@@ -1788,6 +1974,12 @@ export function createEditorViewport(
     }
     if (draggingEntityId) store.endTransformGesture();
     if (draggingGlbNode) store.endGlbTransformGesture();
+    if (draggingEntityId) {
+      const object = objectsById.get(draggingEntityId);
+      if (object) {
+        entityRoot.userData.refreshObjectAnimationBase?.(object);
+      }
+    }
     draggingEntityId = null;
     draggingGlbNode = null;
   });
@@ -1916,6 +2108,7 @@ export function createEditorViewport(
       const object = objectsById.get(event.entityId);
       if (entity && object && draggingEntityId !== event.entityId) {
         applyEntityTransformToObject(object, entity);
+        entityRoot.userData.refreshObjectAnimationBase?.(object);
       }
       return;
     }
@@ -2007,8 +2200,12 @@ export function createEditorViewport(
     if (flying) updateFly(dt);
     else orbit.update();
     selectionBoxes.forEach((box) => box.update());
+    updateNpcRouteLines();
     for (const handles of particleHandles.values()) {
       for (const handle of handles) handle.update(dt, camera);
+    }
+    if (!draggingEntityId && !draggingGlbNode) {
+      entityRoot.userData.updateObjectAnimations?.(dt);
     }
     renderer.render(scene, camera);
   }

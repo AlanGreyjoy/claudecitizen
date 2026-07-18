@@ -4,8 +4,6 @@ export interface CharacterInput {
   cameraPitchRadians?: number;
   cameraYawRadians?: number;
   cameraZoomDistance?: number;
-  /** First person: keep the body aligned with the camera yaw instead of the move direction. */
-  faceCameraYaw?: boolean;
   moveX?: number;
   moveY?: number;
   sprint?: boolean;
@@ -48,8 +46,6 @@ export interface SeatLook {
   pitchRadians: number;
   yawRadians: number;
 }
-
-export type CameraView = 'first-person' | 'third-person';
 
 /** Piloting camera: seated cockpit eye or external chase view. */
 export type ShipCameraView = 'cockpit' | 'external';

@@ -11,6 +11,7 @@ import {
 } from '../../characters/unity_humanoid_retarget';
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
 import { createSidekickGameplayAvatar } from '../../characters/sidekick/gameplay_avatar';
+import { applyDefaultFrustumCulling } from '../../frustum_policy';
 
 const UAL_AVATAR_URL = UNIVERSAL_ANIMATION_LIBRARY_URL;
 const PROTECTED_CHARACTER_URL_PREFIX = '/src/assets/protected/characters/';
@@ -161,8 +162,8 @@ function isSelectedBodyMeshName(objectName: string, bodyName: string): boolean {
 
 function prepareTemplateScene(sceneRoot: THREE.Object3D, spec: CharacterAvatarSpec): void {
   const visibleBodyMeshNames = new Set(spec.visibleBodyMeshNames ?? []);
+  applyDefaultFrustumCulling(sceneRoot);
   sceneRoot.traverse((object: THREE.Object3D) => {
-    object.frustumCulled = false;
     if (object instanceof THREE.Mesh) {
       if (
         visibleBodyMeshNames.size > 0 &&

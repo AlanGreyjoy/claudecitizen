@@ -1,5 +1,18 @@
 export type RenderQualityPreset = 'performance' | 'balanced' | 'high';
 
+/**
+ * User-facing sun/moon shadow override. 'auto' follows the active quality
+ * preset's shadowMapSize; the rest pin the shadow map to a fixed size (or off).
+ */
+export type ShadowQualitySetting = 'auto' | 'off' | 'low' | 'medium' | 'high';
+
+const SHADOW_QUALITY_MAP_SIZES: Record<Exclude<ShadowQualitySetting, 'auto'>, number> = {
+  off: 0,
+  low: 512,
+  medium: 1024,
+  high: 2048,
+};
+
 export interface RenderQualitySettings {
   preset: RenderQualityPreset;
   maxPixelRatio: number;
@@ -51,7 +64,7 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     localLightShadowsEnabled: false,
     localLightShadowMapSize: 0,
     bloomMipmapBlur: false,
-    grassSampleCount: 120,
+    grassSampleCount: 280,
     treeSampleCount: 64,
     vegetationTileDistanceMeters: 32_000,
     motionBlurEnabled: false,
@@ -64,7 +77,8 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     useSmaa: true,
     shadowMapSize: 1024,
     minProjectedError: 1.35,
-    fogRaySteps: 12,
+    // Clamped to SURFACE_FOG_RAY_STEPS at composer build; keep preset ≤ that.
+    fogRaySteps: 8,
     cloudResolutionScale: 0.5,
     cloudQualityPreset: 'medium',
     cloudShadowCascades: 1,
@@ -77,7 +91,7 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     localLightShadowsEnabled: false,
     localLightShadowMapSize: 0,
     bloomMipmapBlur: true,
-    grassSampleCount: 220,
+    grassSampleCount: 400,
     treeSampleCount: 120,
     vegetationTileDistanceMeters: 48_000,
     motionBlurEnabled: true,
@@ -90,7 +104,7 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     useSmaa: true,
     shadowMapSize: 2048,
     minProjectedError: 0.9,
-    fogRaySteps: 20,
+    fogRaySteps: 8,
     cloudResolutionScale: 0.8,
     cloudQualityPreset: 'high',
     cloudShadowCascades: 3,
@@ -103,8 +117,9 @@ const QUALITY_PRESETS: Record<RenderQualityPreset, RenderQualitySettings> = {
     localLightShadowsEnabled: true,
     localLightShadowMapSize: 256,
     bloomMipmapBlur: true,
-    grassSampleCount: 500,
-    treeSampleCount: 500,
+    // Near-field grass only (L16+ / distance cull); L17 carries underfoot carpet.
+    grassSampleCount: 480,
+    treeSampleCount: 220,
     vegetationTileDistanceMeters: 72_000,
     motionBlurEnabled: true,
     motionBlurSamples: 16,
@@ -165,6 +180,31 @@ function parseMotionBlurOverride(): boolean | undefined {
   return undefined;
 }
 
+/**
+ * Reads the user's shadow-quality override from saved game settings. Returns
+ * `undefined` when unset or 'auto' so the active quality preset controls the
+ * sun/moon shadow map size by default.
+ */
+function parseShadowQualityOverride(): Exclude<ShadowQualitySetting, 'auto'> | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const stored = localStorage.getItem('claudecitizen-game-settings');
+    if (!stored) return undefined;
+    const parsed = JSON.parse(stored) as { shadowQuality?: unknown };
+    if (
+      parsed.shadowQuality === 'off' ||
+      parsed.shadowQuality === 'low' ||
+      parsed.shadowQuality === 'medium' ||
+      parsed.shadowQuality === 'high'
+    ) {
+      return parsed.shadowQuality;
+    }
+  } catch {
+    // Ignore malformed local settings.
+  }
+  return undefined;
+}
+
 export function resolveRenderQuality(): RenderQualitySettings {
   const settings = { ...QUALITY_PRESETS[parseQualityPreset()] };
   const ambientOcclusionOverride = parseAmbientOcclusionOverride();
@@ -174,6 +214,14 @@ export function resolveRenderQuality(): RenderQualitySettings {
   const motionBlurOverride = parseMotionBlurOverride();
   if (motionBlurOverride !== undefined) {
     settings.motionBlurEnabled = motionBlurOverride;
+  }
+  const shadowQualityOverride = parseShadowQualityOverride();
+  if (shadowQualityOverride !== undefined) {
+    settings.shadowMapSize = SHADOW_QUALITY_MAP_SIZES[shadowQualityOverride];
+    if (settings.shadowMapSize === 0) {
+      settings.localLightShadowsEnabled = false;
+      settings.localLightShadowMapSize = 0;
+    }
   }
   return settings;
 }

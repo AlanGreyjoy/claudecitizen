@@ -8,7 +8,8 @@ import {
   type AssetRoot,
 } from '../api';
 import { attachColumnSplitter, PANEL_SIZE_BOUNDS } from '../panel_resize';
-import { clearChildren, el, showToast } from '../dom';
+import { clearChildren, chevronIcon, el, showToast } from '../dom';
+import { createUiIcon, UiIcons } from '../../ui/icons';
 import type { EditorAudioPreviewController } from '../audio_preview';
 
 const MODEL_EXTENSIONS = ['.glb', '.gltf'];
@@ -173,7 +174,13 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
         },
       },
       [
-        el('span', { text: hasChildren ? (isExpanded ? '▾' : '▸') : '·' }),
+        hasChildren
+          ? chevronIcon(isExpanded)
+          : createUiIcon(UiIcons.chevronRight, {
+              className: 'ed-ui-icon ed-ui-icon-muted',
+              size: 12,
+              strokeWidth: 2,
+            }),
         el('span', { text: node.path === '' ? PROJECT_ROOT_LABEL : node.name }),
       ],
     );

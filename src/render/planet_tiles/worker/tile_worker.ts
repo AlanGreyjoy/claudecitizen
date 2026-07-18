@@ -1,4 +1,5 @@
 import { buildTerrainTileBuffers } from '../build/terrain_buffers';
+import { activatePlanetDocument } from '../../../world/planets/runtime';
 import type { TileWorkerInMessage, TileWorkerOutMessage } from '../../../types';
 
 // Announce liveness as soon as the module executes. Some embedded browsers
@@ -9,9 +10,13 @@ const readyMessage: TileWorkerOutMessage = { ready: true };
 globalThis.postMessage(readyMessage);
 
 globalThis.onmessage = (event: MessageEvent<TileWorkerInMessage>) => {
-  const { buildId, info, key, planet, seed } = event.data;
+  const { buildId, info, key, planet, planetDocument, seed } = event.data;
 
   try {
+    if (!planetDocument || typeof planetDocument !== 'object' || !('id' in planetDocument)) {
+      throw new Error('tile worker message missing planetDocument');
+    }
+    activatePlanetDocument(planetDocument);
     const { colors, normals, positions } = buildTerrainTileBuffers(
       info,
       planet,

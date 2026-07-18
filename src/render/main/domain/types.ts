@@ -1,10 +1,13 @@
 import type {
   ColorCorrectionSettings,
   FogSettings,
+  PlanetSpawnLayer,
   RenderStats,
   SpikeRenderWorld,
   SsaoSettings,
+  SurfaceSpawnInstance,
   VegetationSettings,
+  Vec3,
 } from '../../../types';
 
 export type RendererMode = 'log-depth' | 'default-depth' | 'compatibility';
@@ -18,6 +21,30 @@ export interface SpikeRenderer {
   render: (world: SpikeRenderWorld) => RenderStats;
   resize: (width: number, height: number) => void;
   setVegetationSettings: (nextSettings: Partial<VegetationSettings>) => void;
+  /** FPS-debug layer toggles; does not change planet-authored density. */
+  setVegetationLayers: (layers: { grass?: boolean; trees?: boolean }) => void;
+  setSurfaceSpawnLayers: (layers: readonly PlanetSpawnLayer[]) => void;
+  getNearbySurfaceSpawns: (
+    focus: Vec3,
+    radiusMeters: number,
+  ) => SurfaceSpawnInstance[];
+  getSurfaceSpawnLayers: () => readonly PlanetSpawnLayer[];
+  getSurfaceSpawnDebugStats: () => {
+    layerCount: number;
+    enabledLayers: number;
+    cachedTiles: number;
+    readyTiles: number;
+    pendingTiles: number;
+    totalInstances: number;
+    loadedAssets: number;
+    failedAssets: number;
+    meshCounts: number[];
+    rootVisible: boolean;
+    rootInScene: boolean;
+    sampleRenderPos: { x: number; y: number; z: number } | null;
+    rootPos: { x: number; y: number; z: number };
+    rootScale: number;
+  };
   setFogSettings: (settings: FogSettings) => void;
   setColorCorrectionSettings: (settings: Partial<ColorCorrectionSettings>) => void;
   setSsaoSettings: (settings: Partial<SsaoSettings>) => void;
@@ -27,6 +54,15 @@ export interface SpikeRenderer {
   setEquippedInventory: (
     inventory: import('../../../player/inventory/types').InventoryState | null,
   ) => void;
+  /** Prefetch + wait for spawn-corridor terrain/veg around a surface focus. */
+  warmSpawnCorridor: (
+    focus: import('../../../types').Vec3,
+    options?: {
+      radiusMeters?: number;
+      timeoutMs?: number;
+      onProgress?: (fraction: number, label: string) => void;
+    },
+  ) => Promise<void>;
   getStationRoot: () => import('three').Object3D;
   getActiveShipGroup: () => import('three').Object3D;
   getCamera: () => import('three').Camera;

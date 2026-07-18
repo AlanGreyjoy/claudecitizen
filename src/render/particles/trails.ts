@@ -51,6 +51,7 @@ export function createParticleTrails(
     blending: THREE.AdditiveBlending,
   });
   const lines = new THREE.LineSegments(geometry, material);
+  // Trail points rewrite every frame; static geometry bounds are meaningless.
   lines.frustumCulled = false;
   group.add(lines);
 

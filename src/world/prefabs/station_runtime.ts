@@ -23,6 +23,12 @@ import {
   validateMeshColliders,
 } from '../../physics/colliders';
 import { buildPrefabSounds } from './sound_runtime';
+import {
+  type StationNpcPlacementSpec,
+  type StationNpcSpawnerSpec,
+  type StationNpcWaypointSpec,
+  validateStationNpcLayout,
+} from '../npc';
 
 /**
  * Derives gameplay layout (spawn, elevators, hangar pads, info prompts) from a
@@ -125,6 +131,9 @@ interface FlattenedComponents {
     axis: "x" | "y" | "z";
     nodes: { name: string; delta: number }[];
   }[];
+  npcSpawners: StationNpcSpawnerSpec[];
+  npcWaypoints: StationNpcWaypointSpec[];
+  npcPlacements: StationNpcPlacementSpec[];
 }
 
 function sceneToStationDir2(worldRotation: Quat): StationDir2 {
@@ -169,6 +178,48 @@ function collect(
       case 'spawn-point':
         out.spawnCandidates.push({
           floorId: component.floorId,
+          right,
+          up: position.y,
+          forward,
+          face: sceneToStationDir2(rotation),
+        });
+        break;
+      case 'npc-spawner':
+        out.npcSpawners.push({
+          id: component.id,
+          populationId: component.populationId,
+          floorId: component.floorId,
+          minAlive: component.minAlive,
+          maxAlive: component.maxAlive,
+          routeGroup: component.routeGroup,
+          radius: component.radius,
+          right,
+          up: position.y,
+          forward,
+          face: sceneToStationDir2(rotation),
+        });
+        break;
+      case 'npc-waypoint':
+        out.npcWaypoints.push({
+          id: component.id,
+          floorId: component.floorId,
+          routeGroup: component.routeGroup,
+          links: component.links,
+          waitMinSeconds: component.waitMinSeconds,
+          waitMaxSeconds: component.waitMaxSeconds,
+          right,
+          up: position.y,
+          forward,
+        });
+        break;
+      case 'npc-placement':
+        out.npcPlacements.push({
+          id: component.id,
+          npcDefinitionId: component.npcDefinitionId,
+          displayName: component.displayName,
+          floorId: component.floorId,
+          behavior: component.behavior,
+          routeGroup: component.routeGroup,
           right,
           up: position.y,
           forward,
@@ -338,8 +389,18 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     weaponShopSeeds: [],
     outfittersSeeds: [],
     animationSpecs: [],
+    npcSpawners: [],
+    npcWaypoints: [],
+    npcPlacements: [],
   };
   collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
+  for (const issue of validateStationNpcLayout({
+    spawners: out.npcSpawners,
+    waypoints: out.npcWaypoints,
+    placements: out.npcPlacements,
+  })) {
+    console.warn(`Prefab "${doc.id}" NPC authoring: ${issue}`);
+  }
   const colliders = bindStationColliderAnimations(
     await buildPrefabColliders(doc),
     out.animationSpecs,
@@ -480,6 +541,9 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     avmsMarkers,
     weaponShops,
     outfitters,
+    npcSpawners: out.npcSpawners,
+    npcWaypoints: out.npcWaypoints,
+    npcPlacements: out.npcPlacements,
     sounds: buildPrefabSounds(doc),
   };
 }

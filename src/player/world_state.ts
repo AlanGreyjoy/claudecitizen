@@ -1,6 +1,5 @@
 import type {
   CameraOrbit,
-  CameraView,
   CharacterState,
   FlightBody,
   GameMode,
@@ -19,8 +18,8 @@ import type { DeckCharacterState } from './ship_deck';
 import type { ShipRigState } from './ship_rig';
 import type { StationElevatorRide } from './station_interaction';
 import type { StationCharacterState } from './station_walk';
-import { MODE_IN_STATION } from './modes';
-import { createSpawnShip } from './spawn';
+import { MODE_IN_STATION, MODE_ON_FOOT } from './modes';
+import { createSpawnCharacter, createSpawnShip, initialCameraYaw } from './spawn';
 import { createStationSpawnCharacter, initialStationCameraYaw } from './station_walk';
 import {
   DEFAULT_SHIP_LAYOUT,
@@ -32,6 +31,7 @@ import {
   createQuantumTravelState,
   type QuantumTravelState,
 } from '../flight/quantum_travel';
+import { createPlayerVitals, type PlayerVitals } from './vitals';
 
 export type TransitionType = 'sit' | 'stand' | 'lie' | 'get-up';
 
@@ -54,7 +54,6 @@ export type WorldCharacter = CharacterState &
 
 export interface WorldState {
   cameraOrbit: CameraOrbit;
-  cameraView: CameraView;
   /** Piloting camera: seated cockpit eye (default) or external chase view. */
   shipCameraView: ShipCameraView;
   shipCameraZoom: number;
@@ -74,6 +73,12 @@ export interface WorldState {
   /** Piloting sub-mode: traverse, combat, or nav (quantum). */
   flightMode: ShipFlightMode;
   quantum: QuantumTravelState;
+  /** Active SystemDocument id (System Map). */
+  systemId: string;
+  /** Primary interactable system station instance id, when authored. */
+  activeStationInstanceId: string | null;
+  /** Personal status for HaloBand / HUD (presentation; non-lethal for now). */
+  vitals: PlayerVitals;
 }
 
 export const PLAYER_SHIP_INSTANCE_ID = 'player-ship-primary';
@@ -94,33 +99,45 @@ export function getActiveShipRig(world: WorldState): ShipRigState {
   return getActiveShip(world).rig;
 }
 
-export function createWorldState(planet: Planet, seed: number): WorldState {
+export function createWorldState(
+  planet: Planet,
+  seed: number,
+  options: {
+    spawn?: 'station' | 'surface';
+    planetId?: string;
+    systemId?: string;
+    activeStationInstanceId?: string | null;
+  } = {},
+): WorldState {
   clearShipWorld();
   const prefabId = DEFAULT_SHIP_PREFAB_ID;
   const layout = getShipLayoutForPrefab(prefabId) ?? DEFAULT_SHIP_LAYOUT;
   const body = createSpawnShip(planet, seed);
+  const planetId = options.planetId ?? 'asteron';
   const instance = createShipInstance({
     id: PLAYER_SHIP_INSTANCE_ID,
     prefabId,
     layout,
     body,
-    instanceId: 'planet:asteron',
+    instanceId: `planet:${planetId}`,
     rig: { gearDown: true, rampDown: false },
   });
   registerShipInstance(instance);
 
-  const character = createStationSpawnCharacter(planet);
+  const spawnSurface = options.spawn === 'surface';
+  const character = spawnSurface
+    ? createSpawnCharacter(planet, seed, body)
+    : createStationSpawnCharacter(planet);
   return {
     cameraOrbit: {
       pitchRadians: -0.12,
-      yawRadians: initialStationCameraYaw(),
+      yawRadians: spawnSurface ? initialCameraYaw(character) : initialStationCameraYaw(),
       zoomDistance: 5.2,
     },
-    cameraView: 'first-person',
     shipCameraView: 'cockpit',
     shipCameraZoom: 1.0,
     character,
-    mode: MODE_IN_STATION,
+    mode: spawnSurface ? MODE_ON_FOOT : MODE_IN_STATION,
     prompt: '',
     activeShipId: instance.id,
     activeBedId: null,
@@ -130,5 +147,8 @@ export function createWorldState(planet: Planet, seed: number): WorldState {
     screenFade: 0,
     flightMode: 'traverse',
     quantum: createQuantumTravelState(),
+    systemId: options.systemId ?? 'default',
+    activeStationInstanceId: options.activeStationInstanceId ?? null,
+    vitals: createPlayerVitals(),
   };
 }

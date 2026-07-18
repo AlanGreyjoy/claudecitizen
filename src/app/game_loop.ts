@@ -29,6 +29,7 @@ import { cycleFlightMode } from "../flight/flight_modes";
 import {
   advanceQuantumTravel,
   buildNavPrompt,
+  consumePendingHandoffPlanetId,
   evaluateQuantumEligibility,
   tryBeginQuantumTravel,
 } from "../flight/quantum_travel";
@@ -91,6 +92,11 @@ import {
   teleportShipPlayerLocal,
   type ShipPhysics,
 } from "../physics/ship_physics";
+import {
+  createPlanetPhysics,
+  planetPhysicsColliderRadiusMeters,
+  type PlanetPhysics,
+} from "../physics/planet_physics";
 import { createLoopingSfxController, playSfx } from "../audio/sfx";
 import {
   beginElevatorRide,
@@ -114,6 +120,8 @@ import {
   updateTransition,
 } from "../player/transitions";
 import { createWorldState, getActiveShip, getActiveShipBody, getActiveShipRig, PLAYER_SHIP_INSTANCE_ID, type WorldState } from "../player/world_state";
+import { atmosphere01FromAltitude } from "../player/environment_status";
+import { updatePlayerVitals } from "../player/vitals";
 import {
   createEntertainmentCameraState,
   updateEntertainmentCameraFeel,
@@ -146,7 +154,7 @@ import {
 import {
   resolveStationWalkView,
   resolveWeaponShopGazeTarget,
-  stationWalkEyeWorld,
+  stationWalkAimOriginWorld,
   weaponShopLabel,
   weaponShopWorldPosition,
 } from "../player/weapon_shop_gaze";
@@ -169,6 +177,7 @@ import {
 } from "../world/station";
 import { cross, dot, length, normalize } from "../math/vec3";
 import { createSoundSceneController, type SoundListenerPose } from "../audio/sound_scene";
+import { createStationNpcPopulation } from "../npc/station_population";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from "../world/planet_surface";
 import { surfacePointFromPosition } from "../world/coordinates";
@@ -218,6 +227,11 @@ const INVENTORY_CAMERA_ZOOM = 4.1;
 export interface GameLoopOptions {
   planet: Planet;
   seed: number;
+  /** When `surface`, start on-foot at the landing site (planet authoring playtest). */
+  spawn?: 'station' | 'surface';
+  planetId?: string;
+  systemId?: string;
+  activeStationInstanceId?: string | null;
   controls: PlayerControls;
   renderer: SpikeRenderer | null;
   rendererError: unknown;
@@ -241,6 +255,10 @@ export interface GameLoopOptions {
 export function createGameLoop({
   planet,
   seed,
+  spawn = 'station',
+  planetId = 'asteron',
+  systemId = 'default',
+  activeStationInstanceId = null,
   controls,
   renderer,
   rendererError,
@@ -289,9 +307,15 @@ export function createGameLoop({
 
   const weaponShopCameraState = createEntertainmentCameraState();
   const outfittersCameraState = createEntertainmentCameraState();
-  let world: WorldState = createWorldState(planet, seed);
+  let world: WorldState = createWorldState(planet, seed, {
+    spawn,
+    planetId,
+    systemId,
+    activeStationInstanceId,
+  });
   let shipPhysics: ShipPhysics | null = null;
   let shipPhysicsWarming = false;
+  let planetPhysics: PlanetPhysics | null = null;
   const flightCameraFeelState = createFlightCameraFeelState();
   const esCameraState = createEntertainmentCameraState();
   let entertainmentCameraFeelFrame: EntertainmentCameraFeel | null = null;
@@ -414,6 +438,11 @@ export function createGameLoop({
   let running = false;
   let frameRendererError: unknown = rendererError;
   const stationFrame = getStationFrame(planet);
+  const stationNpcPopulation = createStationNpcPopulation(
+    getStationLayoutOverride(),
+    stationFrame,
+    seed,
+  );
 
   function sceneVectorFromStation(vector: Vec3): Vec3 {
     return {
@@ -569,10 +598,46 @@ export function createGameLoop({
     setSsaoSettings: (settings: Partial<SsaoSettings>) => renderer?.setSsaoSettings(settings),
     setSsaoIntensity: (intensity: number) => renderer?.setSsaoSettings({ intensity }),
     setSsaoColor: (color: string | null) => renderer?.setSsaoColor(color),
+    getSurfaceSpawnDebug: () => {
+      const focus = world.character.position;
+      const layers = renderer?.getSurfaceSpawnLayers() ?? [];
+      const nearby = renderer?.getNearbySurfaceSpawns(focus, 120) ?? [];
+      const wide = renderer?.getNearbySurfaceSpawns(focus, 5_000) ?? [];
+      let minDist = Infinity;
+      for (const inst of wide) {
+        const dx = inst.position.x - focus.x;
+        const dy = inst.position.y - focus.y;
+        const dz = inst.position.z - focus.z;
+        const d = Math.hypot(dx, dy, dz);
+        if (d < minDist) minDist = d;
+      }
+      return {
+        layerCount: layers.length,
+        layers: layers.map((layer) => ({
+          id: layer.id,
+          enabled: layer.enabled,
+          assetUrl: layer.assetUrl,
+          biomes: layer.biomes,
+          minH: layer.minNormalizedHeight,
+          maxH: layer.maxNormalizedHeight,
+          density: layer.density,
+        })),
+        nearbyCount: nearby.length,
+        within5km: wide.length,
+        minDistMeters: Number.isFinite(minDist) ? Math.round(minDist) : null,
+        sample: nearby.slice(0, 3),
+        stats: renderer?.getSurfaceSpawnDebugStats() ?? null,
+      };
+    },
   };
 
   function resetWorld(): void {
-    world = createWorldState(planet, seed);
+    world = createWorldState(planet, seed, {
+      spawn,
+      planetId,
+      systemId,
+      activeStationInstanceId,
+    });
     controls.setMode(MODE_ON_FOOT);
     controls.setOrbitFacing(
       world.cameraOrbit.yawRadians,
@@ -584,6 +649,7 @@ export function createGameLoop({
         bootstrap.spawn.stationRoomId,
       );
     }
+    stationNpcPopulation.reset(seed);
     onResetPeak();
   }
 
@@ -1014,7 +1080,7 @@ export function createGameLoop({
       world.cameraOrbit.yawRadians,
       world.cameraOrbit.pitchRadians,
     );
-    const shopEye = stationWalkEyeWorld(
+    const shopEye = stationWalkAimOriginWorld(
       world.character.position,
       stationFrame.up,
       walkView.forward,
@@ -1269,7 +1335,6 @@ export function createGameLoop({
       result.state.position,
       world.cameraOrbit.yawRadians,
       world.cameraOrbit.pitchRadians,
-      world.cameraView,
       world.cameraOrbit.zoomDistance,
     );
     const bedNearby = nearestBed(deckLocal, doorAim);
@@ -1331,7 +1396,6 @@ export function createGameLoop({
 
   function applyInventoryCameraFrame(): void {
     if (!personalInventory?.isOpen()) return;
-    world.cameraView = "third-person";
     world.cameraOrbit = {
       pitchRadians: INVENTORY_CAMERA_PITCH,
       yawRadians: world.cameraOrbit.yawRadians,
@@ -1370,7 +1434,6 @@ export function createGameLoop({
         yawRadians: camera.yawRadians,
         zoomDistance: camera.zoomDistance,
       };
-      world.cameraView = camera.cameraView;
       world.shipCameraView = camera.shipCameraView;
       world.shipCameraZoom = camera.shipZoomDistance;
       applyInventoryCameraFrame();
@@ -1383,6 +1446,17 @@ export function createGameLoop({
         flightCameraFeelFrame = null;
         boostSfx.stop();
         thrustSfx.stop();
+        if (!planetPhysics && renderer) {
+          planetPhysics = createPlanetPhysics(world.character.position);
+        }
+        if (planetPhysics && renderer) {
+          const radius = planetPhysicsColliderRadiusMeters();
+          planetPhysics.syncNearby(
+            world.character.position,
+            renderer.getNearbySurfaceSpawns(world.character.position, radius),
+            renderer.getSurfaceSpawnLayers(),
+          );
+        }
         world.character = updateCharacterState(
           world.character,
           {
@@ -1392,6 +1466,7 @@ export function createGameLoop({
           dt,
           planet,
           seed,
+          planetPhysics,
         );
         if (!tryMountRamp()) {
           world.prompt = handleRampOutside(actions.interactPressed) ?? "";
@@ -1433,12 +1508,27 @@ export function createGameLoop({
           instance.body = quantumResult.body;
           world.quantum = quantumResult.quantum;
           world.screenFade = quantumResult.screenFade;
+          if (world.quantum.phase === "idle" && world.quantum.pendingHandoffPlanetId) {
+            const handoff = consumePendingHandoffPlanetId(world.quantum);
+            world.quantum = handoff.quantum;
+            if (handoff.planetId) {
+              const params = new URLSearchParams(window.location.search);
+              params.set("boot", "play");
+              params.set("planetId", handoff.planetId);
+              if (!params.get("systemId")) params.set("systemId", world.systemId);
+              params.delete("spawn");
+              window.location.href = `/?${params.toString()}`;
+              return;
+            }
+          }
           world.prompt =
             world.quantum.phase === "spooling"
               ? "Spooling…"
               : world.quantum.phase === "traveling"
                 ? "Quantum travel"
-                : "Drop out";
+                : world.quantum.phase === "idle"
+                  ? ""
+                  : "Drop out";
           flightCameraFeelFrame = updateFlightCameraFeel(
             flightCameraFeelState,
             { throttle01: 0, strafe01: 0, lift01: 0, boost01: 0 },
@@ -1647,9 +1737,15 @@ export function createGameLoop({
       if (world.quantum.phase !== "traveling") {
         updateStationAnimations(dt);
         renderer?.getStationRoot()?.userData.updateParticles?.(dt);
+        renderer?.getStationRoot()?.userData.updateObjectAnimations?.(dt);
+        for (const runtime of buildRuntimes()) {
+          runtime.propRenderer.update(dt);
+        }
       }
       network?.publishPresence(world);
     }
+
+    stationNpcPopulation.update(STATION_SOUND_MODES.has(world.mode) ? dt : 0);
 
     const activeShip = getActiveShipBody(world);
     const focusUsesShip =
@@ -1714,7 +1810,7 @@ export function createGameLoop({
         world.cameraOrbit.yawRadians,
         world.cameraOrbit.pitchRadians,
       );
-      const eye = stationWalkEyeWorld(
+      const eye = stationWalkAimOriginWorld(
         world.character.position,
         stationFrame.up,
         walkView.forward,
@@ -1782,7 +1878,6 @@ export function createGameLoop({
       renderStats =
         renderer?.render({
           cameraOrbit: world.cameraOrbit,
-          cameraView: world.cameraView,
           shipCameraView: world.shipCameraView,
           shipCameraZoom: world.shipCameraZoom,
           seatLook: camera.seatLook,
@@ -1823,6 +1918,9 @@ export function createGameLoop({
             doors: doorBlends(getActiveShipRig(world)),
           },
           networkEntities: network?.getRemoteEntities(nowMs) ?? [],
+          stationNpcs: STATION_SOUND_MODES.has(world.mode)
+            ? stationNpcPopulation.getRenderStates()
+            : [],
           shipZoneId: world.character.deckZone ?? null,
           stationRoomId: world.character.stationRoomId ?? null,
           timeSeconds: nowMs / 1000,
@@ -1918,7 +2016,7 @@ export function createGameLoop({
         world.cameraOrbit.yawRadians,
         world.cameraOrbit.pitchRadians,
       );
-      const eye = stationWalkEyeWorld(
+      const eye = stationWalkAimOriginWorld(
         world.character.position,
         stationFrame.up,
         walkView.forward,
@@ -2079,6 +2177,25 @@ export function createGameLoop({
       }
     }
 
+    if (dt > 0) {
+      const atmosphere01 = atmosphere01FromAltitude(
+        focusSurface.altitudeMeters,
+        planet.atmosphereHeightMeters,
+      );
+      const sprinting =
+        Boolean(controls.sampleCharacterInput().sprint) &&
+        (world.mode === MODE_ON_FOOT ||
+          world.mode === MODE_ON_SHIP_DECK ||
+          world.mode === MODE_IN_STATION);
+      world.vitals = updatePlayerVitals(world.vitals, dt, {
+        grounded: world.character.grounded,
+        sprinting,
+        altitudeMeters: focusSurface.altitudeMeters,
+        atmosphere01,
+        timeSeconds: nowMs / 1000,
+      });
+    }
+
     onHudUpdate({
       world,
       focusSurface,
@@ -2123,6 +2240,8 @@ export function createGameLoop({
     boostSfx.stop();
     thrustSfx.stop();
     disposeShipDeckPhysics();
+    planetPhysics?.dispose();
+    planetPhysics = null;
     soundScene.dispose();
     renderer?.getStationRoot()?.userData.disposeParticleSystems?.();
   }

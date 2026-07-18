@@ -1,22 +1,50 @@
 import { cartesianFromLatLonAlt } from './coordinates';
 import { resolveLandingSite } from './landing_sites';
 import { samplePlanetSurface } from './planet_surface';
+import { getActivePlanetConfig } from './planets/runtime';
 import type { Biome, Planet, Vec3 } from '../types';
+import {
+  getActiveSystemDocument,
+  getSystemStationEntriesForPlanetDocument,
+  resolveStationAltitudeMeters,
+} from './systems/runtime';
+import { orbitHintFromSystemOffset } from './station';
+import type { SystemPlanetEntry, SystemStationEntry } from './systems/schema';
 
 const OP1_SURFACE_OFFSET_METERS = 90_000;
 const PAD_OFFSET_METERS = 3;
 const POI_COUNT = 12;
 const MAX_DRY_ATTEMPTS = 48;
 
+/** Stand-off outside the station hull along the orbital altitude. */
+const STATION_APPROACH_EXTRA_METERS = 2_000;
+
+export type QuantumDestinationKind = 'surface-poi' | 'system-station' | 'system-planet';
+
 export interface QuantumDestination {
   id: string;
   name: string;
   latRadians: number;
   lonRadians: number;
+  kind: QuantumDestinationKind;
+  /** Orbital altitude for stations; surface POIs omit this and use terrain height. */
+  altitudeMeters?: number;
+  /** Planet document id for handoff destinations. */
+  planetDocumentId?: string;
+  /** When true, quantum completes with a planet activation handoff. */
+  handoff?: boolean;
 }
 
 /** Legacy id for the first outpost near the landing site. */
 export const SPIKE_QUANTUM_DESTINATION_ID = 'asteron-op-1';
+
+export function systemStationDestinationId(stationInstanceId: string): string {
+  return `sys-station:${stationInstanceId}`;
+}
+
+export function systemPlanetDestinationId(planetEntryId: string): string {
+  return `sys-planet:${planetEntryId}`;
+}
 
 const destinationListCache = new Map<string, QuantumDestination[]>();
 const destinationPositionCache = new WeakMap<Planet, Map<string, Vec3>>();
@@ -61,6 +89,7 @@ function resolveOp1Placement(planet: Planet, seed: number): QuantumDestination {
     name: 'Asteron OP-1',
     latRadians,
     lonRadians,
+    kind: 'surface-poi',
   };
 }
 
@@ -72,7 +101,6 @@ function pickDryLatLon(
   for (let attempt = 0; attempt < MAX_DRY_ATTEMPTS; attempt += 1) {
     const u = hash01(seed, index, attempt, 1);
     const v = hash01(seed, index, attempt, 2);
-    // Uniform on sphere: lat = asin(2u-1), lon = 2πv
     const latRadians = Math.asin(2 * u - 1);
     const lonRadians = (v * 2 - 1) * Math.PI;
     if (isDryBiome(sampleBiome(planet, seed, latRadians, lonRadians))) {
@@ -80,7 +108,6 @@ function pickDryLatLon(
     }
   }
 
-  // Fallback: nudge from landing site if every attempt landed in water.
   const landing = resolveLandingSite(planet, seed);
   const nudge = ((index + 1) * 120_000) / planet.radiusMeters;
   return {
@@ -109,13 +136,61 @@ function generateAsteronPois(planet: Planet, seed: number): QuantumDestination[]
       name: siteName(index),
       latRadians,
       lonRadians,
+      kind: 'surface-poi',
     });
   }
 
   return destinations;
 }
 
-export function listQuantumDestinations(planet: Planet, seed: number): QuantumDestination[] {
+function stationDestination(station: SystemStationEntry): QuantumDestination {
+  const hint = orbitHintFromSystemOffset(
+    station.offsetMeters,
+    resolveStationAltitudeMeters(station),
+  );
+  return {
+    id: systemStationDestinationId(station.id),
+    name: station.name,
+    latRadians: hint.latRadians,
+    lonRadians: hint.lonRadians,
+    kind: 'system-station',
+    altitudeMeters: hint.altitudeMeters + STATION_APPROACH_EXTRA_METERS,
+  };
+}
+
+function planetDestination(
+  entry: SystemPlanetEntry,
+  activePlanetDocumentId: string,
+): QuantumDestination {
+  const isActive = entry.planetId === activePlanetDocumentId;
+  return {
+    id: systemPlanetDestinationId(entry.id),
+    name: entry.name ?? entry.planetId,
+    latRadians: 0,
+    lonRadians: 0,
+    kind: 'system-planet',
+    planetDocumentId: entry.planetId,
+    handoff: !isActive,
+    altitudeMeters: isActive ? undefined : 250_000,
+  };
+}
+
+/** System Map bodies that participate in Nav / quantum. */
+export function listSystemQuantumDestinations(
+  activePlanetDocumentId: string,
+): QuantumDestination[] {
+  const system = getActiveSystemDocument();
+  const destinations: QuantumDestination[] = [];
+  for (const planet of system.planets) {
+    destinations.push(planetDestination(planet, activePlanetDocumentId));
+  }
+  for (const station of getSystemStationEntriesForPlanetDocument(system, activePlanetDocumentId)) {
+    destinations.push(stationDestination(station));
+  }
+  return destinations;
+}
+
+function listSurfaceDestinations(planet: Planet, seed: number): QuantumDestination[] {
   const cacheKey = `${planet.name}:${seed}`;
   const cached = destinationListCache.get(cacheKey);
   if (cached) return cached;
@@ -123,6 +198,14 @@ export function listQuantumDestinations(planet: Planet, seed: number): QuantumDe
   const destinations = generateAsteronPois(planet, seed);
   destinationListCache.set(cacheKey, destinations);
   return destinations;
+}
+
+export function listQuantumDestinations(planet: Planet, seed: number): QuantumDestination[] {
+  const activeId = getActivePlanetConfig().planetId;
+  return [
+    ...listSurfaceDestinations(planet, seed),
+    ...listSystemQuantumDestinations(activeId),
+  ];
 }
 
 export function getQuantumDestination(
@@ -143,9 +226,20 @@ export function destinationWorldPosition(
     planetCache = new Map<string, Vec3>();
     destinationPositionCache.set(planet, planetCache);
   }
-  const cacheKey = `${seed}:${destination.id}:${destination.latRadians}:${destination.lonRadians}`;
+  const cacheKey = `${seed}:${destination.id}:${destination.latRadians}:${destination.lonRadians}:${destination.altitudeMeters ?? 'surface'}`;
   const cached = planetCache.get(cacheKey);
   if (cached) return cached;
+
+  if (destination.altitudeMeters != null) {
+    const position = cartesianFromLatLonAlt(
+      destination.latRadians,
+      destination.lonRadians,
+      destination.altitudeMeters,
+      planet.radiusMeters,
+    );
+    planetCache.set(cacheKey, position);
+    return position;
+  }
 
   const probe = cartesianFromLatLonAlt(
     destination.latRadians,

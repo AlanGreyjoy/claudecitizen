@@ -4,7 +4,10 @@ import { scale, sub } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
 import { classifyBiome, vegetationDensitiesForBiome } from '../../../world/climate';
 import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
-import { sampleVisibleSurfaceFrame } from '../../../world/renderable_surface';
+import {
+  sampleRenderableSurfaceHeightDetails,
+  sampleVisibleSurfaceFrame,
+} from '../../../world/renderable_surface';
 import {
   FACE_INDEX,
   getGrassSampleCount,
@@ -81,22 +84,26 @@ function createTileSurfaceSampler(
       climateCells[cellIndex] = climate;
     }
 
-    const frame = sampleVisibleSurfaceFrame(
+    // Height/details only for accept/reject. Normals are filled in after
+    // placement is accepted (corners stay cache-warm from this sample).
+    const heightSample = sampleRenderableSurfaceHeightDetails(
       planet,
       seed,
       scale(direction, planet.radiusMeters),
     );
-    const normalizedHeight = frame.heightMeters / planet.terrainAmplitudeMeters;
+    const normalizedHeight =
+      heightSample.heightMeters / planet.terrainAmplitudeMeters;
     // The coarse cell's biome can differ from the instance's real biome near
     // shorelines, lakes, and peaks (a cell centered on plains extends into
     // ocean). Re-classify with the exact per-instance height so vegetation
     // never lands on beaches or under water; temperature/moisture/lake level
     // still come from the cheap coarse sample.
     const biome = classifyBiome({
-      heightMeters: frame.heightMeters,
+      heightMeters: heightSample.heightMeters,
       lakeWaterLevelMeters: climate.lakeWaterLevelMeters,
       moisture: climate.moisture,
-      mountainRegion: climate.mountainRegion,
+      mountainRegion:
+        heightSample.heightDetails.mountainRegion ?? climate.mountainRegion,
       normalizedHeight,
       riverWaterLevelMeters: climate.riverWaterLevelMeters,
       temperature: climate.temperature,
@@ -107,10 +114,12 @@ function createTileSurfaceSampler(
       biome,
       fertility: densities.fertility,
       grassDensity: densities.grassDensity,
-      heightMeters: frame.heightMeters,
-      normal: frame.normal,
+      heightMeters: heightSample.heightMeters,
+      mountainRegion:
+        heightSample.heightDetails.mountainRegion ?? climate.mountainRegion,
+      normal: direction,
       normalizedHeight,
-      surfaceRadiusMeters: planet.radiusMeters + frame.heightMeters,
+      surfaceRadiusMeters: planet.radiusMeters + heightSample.heightMeters,
       treeDensity: densities.treeDensity,
     };
   };
@@ -169,8 +178,15 @@ function buildInstanceEntries(
       y: direction.y * surface.surfaceRadiusMeters,
       z: direction.z * surface.surfaceRadiusMeters,
     };
+    // Reject path used a radial placeholder normal. Resolve the triangle
+    // normal only for accepted grass (trees usually pass makeBasisNormal).
     const basisNormal =
-      makeBasisNormal?.(surface, direction, i) ?? surface.normal ?? direction;
+      makeBasisNormal?.(surface, direction, i) ??
+      sampleVisibleSurfaceFrame(
+        planet,
+        seed,
+        scale(direction, planet.radiusMeters),
+      ).normal;
     const normal = normalizeVec3(basisNormal.x, basisNormal.y, basisNormal.z);
     let localPosition = sub(worldPosition, anchor.position);
     if (!canPlaceWithGap(placementGrid, localPosition)) continue;
@@ -216,9 +232,15 @@ export function collectTileVegetationData(
   const anchor = createAnchorFromTile(tileInfo, planet, seed);
   const grassSettings = vegetationSettings.grass;
   const treeSettings = vegetationSettings.tree;
+  // Density is authored as a feel multiplier: use a mild super-linear curve so
+  // 2×–4× reads as clearly denser, not "barely more attempts."
+  const grassDensityScale =
+    grassSettings.density <= 0
+      ? 0
+      : Math.pow(grassSettings.density, 1.35);
   const grassSampleCount = scaledSampleCount(
     getGrassSampleCount() * grassSampleMultiplier(tileInfo.level),
-    grassSettings.density,
+    grassDensityScale,
   );
   const treeSampleCount = scaledSampleCount(
     getTreeSampleCount() * treeSampleMultiplier(tileInfo.level),
@@ -236,7 +258,10 @@ export function collectTileVegetationData(
       (surface, i) =>
         (surface.biome === 'plains' || surface.biome === 'forest') &&
         hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, i, 71) <
-          Math.min(1, surface.grassDensity * 1.35),
+          Math.min(
+            1,
+            surface.grassDensity * 1.35 * Math.max(1, Math.sqrt(grassSettings.density)),
+          ),
       (surface, i) =>
         lerp(
           grassSettings.minScale,

@@ -12,14 +12,14 @@ Living checklist — not a contract. Priorities shift with the vibe.
 | --- | --- | --- |
 | **I — Planet** | Procedural world, LOD terrain, biomes, water | Mostly done |
 | **II — Presence** | On-foot play, ship flight, surface ↔ orbit | Mostly done |
-| **III — Combat** | FPS weapons, character controller for aim & fire | **Current — Phase 1** |
+| **III — Combat** | Third-person weapons, character controller for aim & fire | **Current — Phase 1** |
 | **IV — Universe** | More ships, sites, exploration depth | Planned |
 | **V — Online** | Backend, persistence, multiplayer | Future |
 
-## Phase 1 — FPS combat _(current)_
+## Phase 1 — Third-person combat _(current)_
 
-- [ ] FPS weapon system — equip, fire, reload, weapon swap
-- [ ] Character controller — first-person camera rig and aim/look while armed
+- [ ] Third-person weapon system — equip, fire, reload, weapon swap
+- [ ] Character controller — over-the-shoulder aim/look while armed
 - [ ] Character controller — movement while armed (strafe, sprint/ADS modifiers, recoil)
 - [ ] Weapon models, muzzle flash, and hitscan / projectile hits
 - [ ] Combat HUD — crosshair, ammo, weapon state
@@ -37,7 +37,7 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Procedural lakes with water shaders
 - [ ] Ocean-scale water and shoreline polish
 - [ ] Weather and time-of-day cycles
-- [ ] Additional planets / moons
+- [ ] Additional planets / moons (System Map + handoff path ready; more planet docs still open)
 
 ## Flight & ships
 
@@ -46,16 +46,16 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Pirate ship GLTF with walkable deck and landing pad
 - [ ] Additional ship hulls and interiors
 - [ ] Deeper flight model — SCM/cruise speeds, afterburner tuning, landing gear
-- [ ] Quantum / long-range travel between sites
-- [ ] Space stations and orbital structures
+- [x] Quantum / long-range travel between sites (surface POIs + System Map stations; planet handoff when a second planet exists)
+- [x] Space stations and orbital structures (System Map placement; dual station roots in play)
 
 ## Player & exploration
 
 - [x] Third-person character with walk, sprint, and jump animations
 - [x] Enter / exit ship and pilot-seat transitions (mode FSM)
 - [x] Procedural landing-site resolution on dry terrain
-- [x] Instanced vegetation — grass, trees, rocks, runtime tuning panel
-- [ ] First-person ↔ third-person camera toggle (see Phase 1)
+- [x] Instanced vegetation — grass, trees, rocks
+- [x] Over-the-shoulder camera for on-foot and ship-deck traversal
 - [ ] Points of interest — outposts, wrecks, landmarks
 - [ ] Inventory, interaction, and mission hooks
 - [ ] EVA / zero-g outside the ship

@@ -366,9 +366,17 @@ function copyReferencedGameAssets(): Plugin {
  *   POST /__editor/prefab                                — save prefab JSON
  *   GET  /__editor/base-characters                       — base character equipment JSON
  *   POST /__editor/base-characters                       — save base character equipment JSON
+ *   GET  /__editor/planets                               — saved planet metadata (id, name)
+ *   GET  /__editor/planet?id=<id>                        — planet JSON
+ *   POST /__editor/planet                                — save planet JSON
+ *   GET  /__editor/systems                               — saved system metadata (id, name)
+ *   GET  /__editor/system?id=<id>                        — system JSON
+ *   POST /__editor/system                                — save system JSON
  *
  * Prefabs are written to src/world/prefabs/data/<id>.prefab.json so the game
- * bundles them via import.meta.glob.
+ * bundles them via import.meta.glob. Planets write to
+ * src/world/planets/data/<id>.planet.json. Systems write to
+ * src/world/systems/data/<id>.system.json.
  */
 function editorDevApi(): Plugin {
   const ASSET_ROOTS = [EDITOR_ASSET_ROOT, SOURCE_ASSET_ROOT];
@@ -408,6 +416,14 @@ function editorDevApi(): Plugin {
 
   function prefabDataDir(): string {
     return resolve(projectRoot, 'src/world/prefabs/data');
+  }
+
+  function planetDataDir(): string {
+    return resolve(projectRoot, 'src/world/planets/data');
+  }
+
+  function systemDataDir(): string {
+    return resolve(projectRoot, 'src/world/systems/data');
   }
 
   function baseCharacterEquipmentPath(): string {
@@ -636,6 +652,132 @@ function editorDevApi(): Plugin {
     sendJson(res, 200, { saved: true, path: relative(projectRoot, filePath) });
   }
 
+  async function handleListPlanets(res: ServerResponse): Promise<void> {
+    const planets: { id: string; name: string }[] = [];
+    try {
+      const filenames = (await readdir(planetDataDir())).filter((name) =>
+        name.endsWith('.planet.json'),
+      );
+      for (const filename of filenames) {
+        const id = filename.replace('.planet.json', '');
+        try {
+          const contents = await readFile(join(planetDataDir(), filename), 'utf8');
+          const doc = JSON.parse(contents) as { name?: unknown };
+          const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.trim() : id;
+          planets.push({ id, name });
+        } catch {
+          planets.push({ id, name: id });
+        }
+      }
+    } catch {
+      // Missing data dir means no planets yet.
+    }
+    planets.sort(
+      (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+    );
+    sendJson(res, 200, { planets });
+  }
+
+  async function handleGetPlanet(url: URL, res: ServerResponse): Promise<void> {
+    const id = url.searchParams.get('id') ?? '';
+    if (!PREFAB_ID_PATTERN.test(id)) {
+      sendJson(res, 400, { error: 'invalid planet id' });
+      return;
+    }
+    try {
+      const contents = await readFile(join(planetDataDir(), `${id}.planet.json`), 'utf8');
+      sendJson(res, 200, { document: JSON.parse(contents) });
+    } catch {
+      sendJson(res, 404, { error: `planet "${id}" not found` });
+    }
+  }
+
+  async function handleSavePlanet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let document: { id?: unknown };
+    try {
+      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
+      if (typeof parsed.document !== 'object' || parsed.document === null) {
+        throw new Error('missing document');
+      }
+      document = parsed.document as { id?: unknown };
+    } catch (error) {
+      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
+      return;
+    }
+    const id = typeof document.id === 'string' ? document.id : '';
+    if (!PREFAB_ID_PATTERN.test(id)) {
+      sendJson(res, 400, { error: 'document.id must be a lowercase slug (a-z, 0-9, -)' });
+      return;
+    }
+    await mkdir(planetDataDir(), { recursive: true });
+    const filePath = join(planetDataDir(), `${id}.planet.json`);
+    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+    sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
+  }
+
+  async function handleListSystems(res: ServerResponse): Promise<void> {
+    const systems: { id: string; name: string }[] = [];
+    try {
+      const filenames = (await readdir(systemDataDir())).filter((name) =>
+        name.endsWith('.system.json'),
+      );
+      for (const filename of filenames) {
+        const id = filename.replace('.system.json', '');
+        try {
+          const contents = await readFile(join(systemDataDir(), filename), 'utf8');
+          const doc = JSON.parse(contents) as { name?: unknown };
+          const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.trim() : id;
+          systems.push({ id, name });
+        } catch {
+          systems.push({ id, name: id });
+        }
+      }
+    } catch {
+      // Missing data dir means no systems yet.
+    }
+    systems.sort(
+      (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+    );
+    sendJson(res, 200, { systems });
+  }
+
+  async function handleGetSystem(url: URL, res: ServerResponse): Promise<void> {
+    const id = url.searchParams.get('id') ?? '';
+    if (!PREFAB_ID_PATTERN.test(id)) {
+      sendJson(res, 400, { error: 'invalid system id' });
+      return;
+    }
+    try {
+      const contents = await readFile(join(systemDataDir(), `${id}.system.json`), 'utf8');
+      sendJson(res, 200, { document: JSON.parse(contents) });
+    } catch {
+      sendJson(res, 404, { error: `system "${id}" not found` });
+    }
+  }
+
+  async function handleSaveSystem(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let document: { id?: unknown };
+    try {
+      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
+      if (typeof parsed.document !== 'object' || parsed.document === null) {
+        throw new Error('missing document');
+      }
+      document = parsed.document as { id?: unknown };
+    } catch (error) {
+      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
+      return;
+    }
+    const id = typeof document.id === 'string' ? document.id : '';
+    if (!PREFAB_ID_PATTERN.test(id)) {
+      sendJson(res, 400, { error: 'document.id must be a lowercase slug (a-z, 0-9, -)' });
+      return;
+    }
+    await mkdir(systemDataDir(), { recursive: true });
+    const filePath = join(systemDataDir(), `${id}.system.json`);
+    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+    sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
+  }
+
   return {
     name: 'claudecitizen-editor-dev-api',
     apply: 'serve',
@@ -662,6 +804,12 @@ function editorDevApi(): Plugin {
           if (route === 'POST /prefab') return handleSavePrefab(req, res);
           if (route === 'GET /base-characters') return handleGetBaseCharacters(res);
           if (route === 'POST /base-characters') return handleSaveBaseCharacters(req, res);
+          if (route === 'GET /planets') return handleListPlanets(res);
+          if (route === 'GET /planet') return handleGetPlanet(url, res);
+          if (route === 'POST /planet') return handleSavePlanet(req, res);
+          if (route === 'GET /systems') return handleListSystems(res);
+          if (route === 'GET /system') return handleGetSystem(url, res);
+          if (route === 'POST /system') return handleSaveSystem(req, res);
           sendJson(res, 404, { error: `unknown editor api route: ${route}` });
         })();
         handled.catch((error) => {
@@ -684,6 +832,8 @@ export default defineConfig({
       // is needed for these files.
       ignored: [
         '**/src/world/prefabs/data/**',
+        '**/src/world/planets/data/**',
+        '**/src/world/systems/data/**',
         '**/src/player/equipment/data/base-characters.json',
       ],
     },

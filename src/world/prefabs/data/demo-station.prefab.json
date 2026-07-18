@@ -10115,51 +10115,6 @@
             ]
           },
           {
-            "id": "e-e463eaa5",
-            "name": "Animation (SM_Bld_Crew_Shower_Door_01)",
-            "transform": {
-              "position": {
-                "x": 5.25,
-                "y": 0,
-                "z": -14.25
-              },
-              "rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "w": 1
-              },
-              "scale": {
-                "x": 1,
-                "y": 1,
-                "z": 1
-              }
-            },
-            "components": [
-              {
-                "type": "animation",
-                "id": "anim-sm_bld_crew_shower_door_01",
-                "name": "SM_Bld_Crew_Shower_Door_01",
-                "motion": "slide",
-                "axis": "x",
-                "nodes": [
-                  {
-                    "name": "SM_Bld_Crew_Shower_Door_01",
-                    "delta": -1
-                  }
-                ],
-                "duration": 1
-              },
-              {
-                "type": "interaction",
-                "id": "info-1",
-                "prompt": "Press F — open",
-                "radius": 1,
-                "floorId": "lobby"
-              }
-            ]
-          },
-          {
             "id": "e-d6ef6f67",
             "name": "Empty (SM_Prop_Chr_Male_Cryo_01_(3))",
             "transform": {
@@ -12880,6 +12835,210 @@
                   "y": -0.0997378975,
                   "z": 2.50000024
                 }
+              }
+            ]
+          },
+          {
+            "id": "npc-spawner-hab-civilians",
+            "name": "NPC Spawner (Hab Civilians)",
+            "transform": {
+              "position": {
+                "x": -34.75,
+                "y": 0,
+                "z": 64
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "npc-spawner",
+                "id": "hab-civilians",
+                "populationId": "station-civilians",
+                "floorId": "hab",
+                "minAlive": 3,
+                "maxAlive": 4,
+                "routeGroup": "hab-corridor",
+                "radius": 0.35
+              }
+            ]
+          },
+          {
+            "id": "npc-waypoint-hab-a",
+            "name": "NPC Waypoint (Hab A)",
+            "transform": {
+              "position": {
+                "x": -34.75,
+                "y": 0,
+                "z": 62.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "npc-waypoint",
+                "id": "hab-a",
+                "floorId": "hab",
+                "routeGroup": "hab-corridor",
+                "links": [
+                  "hab-b"
+                ],
+                "waitMinSeconds": 0.5,
+                "waitMaxSeconds": 2.5
+              }
+            ]
+          },
+          {
+            "id": "npc-waypoint-hab-b",
+            "name": "NPC Waypoint (Hab B)",
+            "transform": {
+              "position": {
+                "x": -34.75,
+                "y": 0,
+                "z": 67
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "npc-waypoint",
+                "id": "hab-b",
+                "floorId": "hab",
+                "routeGroup": "hab-corridor",
+                "links": [
+                  "hab-c"
+                ],
+                "waitMinSeconds": 0.75,
+                "waitMaxSeconds": 3
+              }
+            ]
+          },
+          {
+            "id": "npc-waypoint-hab-c",
+            "name": "NPC Waypoint (Hab C)",
+            "transform": {
+              "position": {
+                "x": -34.75,
+                "y": 0,
+                "z": 71.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "npc-waypoint",
+                "id": "hab-c",
+                "floorId": "hab",
+                "routeGroup": "hab-corridor",
+                "links": [
+                  "hab-d"
+                ],
+                "waitMinSeconds": 0.75,
+                "waitMaxSeconds": 3
+              }
+            ]
+          },
+          {
+            "id": "npc-waypoint-hab-d",
+            "name": "NPC Waypoint (Hab D)",
+            "transform": {
+              "position": {
+                "x": -34.75,
+                "y": 0,
+                "z": 76
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "npc-waypoint",
+                "id": "hab-d",
+                "floorId": "hab",
+                "routeGroup": "hab-corridor",
+                "links": [],
+                "waitMinSeconds": 1,
+                "waitMaxSeconds": 4
+              }
+            ]
+          },
+          {
+            "id": "npc-placement-hab-steward",
+            "name": "NPC Placement (Hab Steward)",
+            "transform": {
+              "position": {
+                "x": -33.25,
+                "y": 0,
+                "z": 69.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "npc-placement",
+                "id": "hab-steward",
+                "npcDefinitionId": "station-staff",
+                "displayName": "Hab Steward",
+                "floorId": "hab",
+                "behavior": "stationary"
               }
             ]
           },

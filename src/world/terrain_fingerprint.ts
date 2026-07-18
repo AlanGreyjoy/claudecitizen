@@ -1,5 +1,6 @@
 import { normalize, vec3 } from '../math/vec3';
 import { sampleSurfaceHeight } from './elevation';
+import { getActivePlanetConfig } from './planets/runtime';
 import type { Planet, Vec3 } from '../types';
 
 // Fixed probe directions spread across all six cube faces. Sampling the terrain
@@ -29,7 +30,17 @@ function fnv1a32(text: string): string {
 }
 
 export function terrainFingerprint(planet: Planet, seed: number): string {
-  const cacheKey = `${planet.name ?? 'planet'}:${planet.radiusMeters}:${planet.terrainAmplitudeMeters}:${seed}`;
+  const { height, hydrology, planetId, regions } = getActivePlanetConfig();
+  const cacheKey = [
+    planetId,
+    planet.name ?? 'planet',
+    planet.radiusMeters,
+    planet.terrainAmplitudeMeters,
+    seed,
+    JSON.stringify(height),
+    JSON.stringify(regions),
+    JSON.stringify(hydrology),
+  ].join(':');
   const cached = fingerprintCache.get(cacheKey);
   if (cached) return cached;
 

@@ -1,9 +1,8 @@
 import type { TerrainTileBuffers } from '../../../types';
-import { TILE_SEGMENTS } from './constants';
+import { TERRAIN_TILE_VERTEX_COUNT } from './constants';
 
 export function isValidTerrainTileBuffers(buffers: TerrainTileBuffers): boolean {
-  const expectedVertices = TILE_SEGMENTS * TILE_SEGMENTS * 6;
-  const expectedLength = expectedVertices * 3;
+  const expectedLength = TERRAIN_TILE_VERTEX_COUNT * 3;
   return (
     buffers.positions instanceof Float32Array &&
     buffers.normals instanceof Int16Array &&

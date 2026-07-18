@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { VegetationAssetCatalog } from '../domain/asset_catalog';
+import { createGrassBillboardAssets } from './grass_billboard';
 import { applyWindToMaterial } from './wind';
+import { deduplicateObjectTextures } from '../../assets/texture_dedup';
 
 export type VegetationWindProfile = 'grass' | 'tree';
 
@@ -101,14 +103,16 @@ function disposeMaterial(
     material.forEach(disposeMaterial);
     return;
   }
-  const meshMaterial = material as THREE.MeshStandardMaterial | undefined;
-  meshMaterial?.map?.dispose();
-  meshMaterial?.normalMap?.dispose();
-  meshMaterial?.roughnessMap?.dispose();
-  meshMaterial?.metalnessMap?.dispose();
-  meshMaterial?.alphaMap?.dispose();
-  meshMaterial?.dispose?.();
+  if (!material) return;
+  const meshMaterial = material as THREE.MeshStandardMaterial;
+  meshMaterial.map?.dispose();
+  meshMaterial.normalMap?.dispose();
+  meshMaterial.roughnessMap?.dispose();
+  meshMaterial.metalnessMap?.dispose();
+  meshMaterial.alphaMap?.dispose();
+  meshMaterial.dispose?.();
 }
+
 
 export function disposeInstancedAssets(assets: InstancedAsset[]): void {
   assets.forEach((asset) => {
@@ -130,12 +134,9 @@ export function loadInstancedAssetCatalog(
   const catalog = createEmptyAssetCatalog();
   const loader = new GLTFLoader();
 
-  const grassPaths = [
-    '../../../assets/stylized-nature-magakit/Grass_Common_Short.gltf',
-    '../../../assets/stylized-nature-magakit/Grass_Common_Tall.gltf',
-    '../../../assets/stylized-nature-magakit/Grass_Wispy_Short.gltf',
-    '../../../assets/stylized-nature-magakit/Grass_Wispy_Tall.gltf',
-  ];
+  // Grass is procedural Y-locked billboards (no Magakit mesh loads).
+  catalog.grass.push(...createGrassBillboardAssets());
+
   const pinePaths = [
     '../../../assets/stylized-nature-magakit/Pine_1.gltf',
     '../../../assets/stylized-nature-magakit/Pine_2.gltf',
@@ -143,7 +144,7 @@ export function loadInstancedAssetCatalog(
     '../../../assets/stylized-nature-magakit/Pine_4.gltf',
     '../../../assets/stylized-nature-magakit/Pine_5.gltf',
   ];
-  const totalAssetLoads = grassPaths.length + pinePaths.length;
+  const totalAssetLoads = pinePaths.length;
   let loadedAssetCount = 0;
 
   function markAssetLoaded(): void {
@@ -161,6 +162,7 @@ export function loadInstancedAssetCatalog(
     loader.load(
       url,
       (gltf) => {
+        deduplicateObjectTextures(gltf.scene);
         const asset = extractInstancedAsset(gltf, windProfile);
         if (asset.parts.length > 0) target.push(asset);
         markAssetLoaded();
@@ -173,9 +175,6 @@ export function loadInstancedAssetCatalog(
     );
   }
 
-  grassPaths.forEach((path) => {
-    load(path, catalog.grass, 'grass', 'grass');
-  });
   pinePaths.forEach((path) => {
     load(path, catalog.trees, 'pine', 'tree');
   });

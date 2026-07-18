@@ -1,9 +1,12 @@
-import { fetchPrefab, fetchPrefabList, savePrefab } from './api';
+import { fetchPlanetList, fetchPrefab, fetchPrefabList, savePrefab } from './api';
 import { createEditorStore, createEmptyEntity } from './document';
 import { el, showConfirmDialog, showToast } from './dom';
 import { createHierarchyPanel } from './panels/hierarchy';
 import { createInspectorPanel } from './panels/inspector';
 import { createMaterialManagerPanel } from './panels/material_manager';
+import { createPlanetAuthoringEditor, type PlanetAuthoringEditor } from './panels/planet_authoring';
+import { createSystemMapEditor, type SystemMapEditor } from './panels/system_map';
+import { createMenuManagerEditor, type MenuManagerEditor } from './panels/menu_manager';
 import { createProjectPanel } from './panels/project';
 import { createToolbar, type ToolbarGizmoMode } from './panels/toolbar';
 import { fromPrefabDocument, toPrefabDocument } from './serialize';
@@ -29,7 +32,14 @@ import { getComponentDef } from '../world/prefabs/component_registry';
 const AUDIO_EXTENSIONS = /\.(ogg|mp3|wav|m4a)(?:[?#].*)?$/i;
 
 let started = false;
-type SceneEditorTab = 'scene' | 'character-preview' | 'material-manager' | 'base-characters';
+type SceneEditorTab =
+  | 'scene'
+  | 'character-preview'
+  | 'material-manager'
+  | 'base-characters'
+  | 'planet-authoring'
+  | 'system-map'
+  | 'menu-manager';
 
 function entityNameFromUrl(url: string): string {
   const fileName = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
@@ -82,6 +92,21 @@ export function startEditorSession(): void {
     text: 'Base Characters',
     on: { click: () => setSceneEditorTab('base-characters') },
   });
+  const sceneTabPlanetBtn = el('button', {
+    className: 'ed-scene-tab',
+    text: 'Planet Authoring',
+    on: { click: () => setSceneEditorTab('planet-authoring') },
+  });
+  const sceneTabSystemBtn = el('button', {
+    className: 'ed-scene-tab',
+    text: 'System Map',
+    on: { click: () => setSceneEditorTab('system-map') },
+  });
+  const sceneTabMenuBtn = el('button', {
+    className: 'ed-scene-tab',
+    text: 'Menu Manager',
+    on: { click: () => setSceneEditorTab('menu-manager') },
+  });
   const viewportEl = el('div', { className: 'ed-viewport' }, [
     viewportToolbarEl,
     el('div', {
@@ -92,18 +117,27 @@ export function startEditorSession(): void {
   const characterPreviewEl = el('div', { className: 'ed-scene-panel ed-character-preview is-hidden' });
   const materialManagerEl = el('div', { className: 'ed-scene-panel ed-material-manager is-hidden' });
   const baseCharactersEl = el('div', { className: 'ed-scene-panel ed-base-characters is-hidden' });
+  const planetAuthoringEl = el('div', { className: 'ed-scene-panel ed-planet-authoring-host is-hidden' });
+  const systemMapEl = el('div', { className: 'ed-scene-panel ed-system-map-host is-hidden' });
+  const menuManagerEl = el('div', { className: 'ed-scene-panel ed-menu-manager-host is-hidden' });
   const sceneShellEl = el('div', { className: 'ed-scene-shell' }, [
     el('div', { className: 'ed-scene-tabs' }, [
       sceneTabSceneBtn,
       sceneTabPreviewBtn,
       sceneTabMaterialBtn,
       sceneTabBaseCharactersBtn,
+      sceneTabPlanetBtn,
+      sceneTabSystemBtn,
+      sceneTabMenuBtn,
     ]),
     el('div', { className: 'ed-scene-body' }, [
       viewportEl,
       characterPreviewEl,
       materialManagerEl,
       baseCharactersEl,
+      planetAuthoringEl,
+      systemMapEl,
+      menuManagerEl,
     ]),
   ]);
   const inspectorEl = el('div', { className: 'ed-panel ed-inspector-panel' });
@@ -141,14 +175,30 @@ export function startEditorSession(): void {
   const audioPreview = createEditorAudioPreviewController();
   const characterPreviewer = createCharacterAnimationPreviewer(characterPreviewEl);
   let baseCharacterEditor: BaseCharacterEquipmentEditor | null = null;
+  let planetAuthoringEditor: PlanetAuthoringEditor | null = null;
+  let systemMapEditor: SystemMapEditor | null = null;
+  let menuManagerEditor: MenuManagerEditor | null = null;
   let sceneEditorTab: SceneEditorTab = 'scene';
 
   function setSceneEditorTab(tab: SceneEditorTab): void {
     if (sceneEditorTab === 'base-characters' && tab !== sceneEditorTab && !baseCharacterEditor?.canLeave()) {
       return;
     }
+    if (
+      sceneEditorTab === 'planet-authoring' &&
+      tab !== sceneEditorTab &&
+      !planetAuthoringEditor?.canLeave()
+    ) {
+      return;
+    }
+    if (sceneEditorTab === 'system-map' && tab !== sceneEditorTab && !systemMapEditor?.canLeave()) {
+      return;
+    }
     sceneEditorTab = tab;
     root.classList.toggle('is-base-characters', sceneEditorTab === 'base-characters');
+    root.classList.toggle('is-planet-authoring', sceneEditorTab === 'planet-authoring');
+    root.classList.toggle('is-system-map', sceneEditorTab === 'system-map');
+    root.classList.toggle('is-menu-manager', sceneEditorTab === 'menu-manager');
     sceneTabSceneBtn.classList.toggle('is-active', sceneEditorTab === 'scene');
     sceneTabPreviewBtn.classList.toggle(
       'is-active',
@@ -159,6 +209,9 @@ export function startEditorSession(): void {
       sceneEditorTab === 'material-manager',
     );
     sceneTabBaseCharactersBtn.classList.toggle('is-active', sceneEditorTab === 'base-characters');
+    sceneTabPlanetBtn.classList.toggle('is-active', sceneEditorTab === 'planet-authoring');
+    sceneTabSystemBtn.classList.toggle('is-active', sceneEditorTab === 'system-map');
+    sceneTabMenuBtn.classList.toggle('is-active', sceneEditorTab === 'menu-manager');
     viewportEl.classList.toggle('is-hidden', sceneEditorTab !== 'scene');
     characterPreviewEl.classList.toggle(
       'is-hidden',
@@ -169,11 +222,32 @@ export function startEditorSession(): void {
       sceneEditorTab !== 'material-manager',
     );
     baseCharactersEl.classList.toggle('is-hidden', sceneEditorTab !== 'base-characters');
+    planetAuthoringEl.classList.toggle('is-hidden', sceneEditorTab !== 'planet-authoring');
+    systemMapEl.classList.toggle('is-hidden', sceneEditorTab !== 'system-map');
+    menuManagerEl.classList.toggle('is-hidden', sceneEditorTab !== 'menu-manager');
     if (sceneEditorTab === 'base-characters') {
       baseCharacterEditor ??= createBaseCharacterEquipmentEditor(baseCharactersEl);
       baseCharacterEditor.activate();
     } else {
       baseCharacterEditor?.deactivate();
+    }
+    if (sceneEditorTab === 'planet-authoring') {
+      planetAuthoringEditor ??= createPlanetAuthoringEditor(planetAuthoringEl);
+      planetAuthoringEditor.activate();
+    } else {
+      planetAuthoringEditor?.deactivate();
+    }
+    if (sceneEditorTab === 'system-map') {
+      systemMapEditor ??= createSystemMapEditor(systemMapEl);
+      systemMapEditor.activate();
+    } else {
+      systemMapEditor?.deactivate();
+    }
+    if (sceneEditorTab === 'menu-manager') {
+      menuManagerEditor ??= createMenuManagerEditor(menuManagerEl);
+      menuManagerEditor.activate();
+    } else {
+      menuManagerEditor?.deactivate();
     }
   }
 
@@ -445,6 +519,18 @@ export function startEditorSession(): void {
 
   async function exitToTitle(): Promise<void> {
     if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and exit?'))) return;
+    if (
+      planetAuthoringEditor?.isDirty() &&
+      !(await confirmDiscard('Discard unsaved planet changes and exit?'))
+    ) {
+      return;
+    }
+    if (
+      systemMapEditor?.isDirty() &&
+      !(await confirmDiscard('Discard unsaved system map changes and exit?'))
+    ) {
+      return;
+    }
     audioPreview.stop();
     allowUnload = true;
     window.location.href = '/';
@@ -458,13 +544,29 @@ export function startEditorSession(): void {
     onAddBox: addBox,
     onAddEmpty: addEmpty,
     onNew: () => void newDocument(),
-    onSave: () => void saveCurrent(),
+    onSave: () => {
+      if (sceneEditorTab === 'system-map') void systemMapEditor?.save();
+      else if (sceneEditorTab === 'planet-authoring') void planetAuthoringEditor?.save();
+      else if (sceneEditorTab === 'base-characters') void baseCharacterEditor?.save();
+      else void saveCurrent();
+    },
     onLoad: (id) => void loadById(id),
+    onLoadPlanet: (id) => {
+      setSceneEditorTab('planet-authoring');
+      void planetAuthoringEditor?.loadPlanet(id);
+    },
+    onOpenMenu: (id) => {
+      setSceneEditorTab('menu-manager');
+      menuManagerEditor ??= createMenuManagerEditor(menuManagerEl);
+      menuManagerEditor.openMenu(id);
+    },
     onDuplicate: duplicateSelection,
     onDelete: deleteSelection,
     onPreview: () => void previewInPlay(),
+    onPreviewPlanet: () => void planetAuthoringEditor?.previewPlanet(),
     onExit: () => void exitToTitle(),
     onShipPreviewChange: (state) => viewport.setShipPreview(state),
+    isPlanetAuthoring: () => sceneEditorTab === 'planet-authoring',
   });
 
   createHierarchyPanel(hierarchyEl, store, {
@@ -501,10 +603,28 @@ export function startEditorSession(): void {
     onCreateItemPrefab: createItemPrefab,
   });
   void refreshPrefabList();
+  void fetchPlanetList()
+    .then((planets) => toolbar.setPlanetOptions(planets))
+    .catch(() => toolbar.setPlanetOptions([{ id: 'asteron', name: 'Asteron' }]));
 
   // Round trip from Play preview: /?boot=editor&prefab=<id> reopens the prefab.
-  const prefabParam = new URLSearchParams(window.location.search).get('prefab');
+  const bootParams = new URLSearchParams(window.location.search);
+  const prefabParam = bootParams.get('prefab');
   if (prefabParam) void loadById(prefabParam);
+  if (bootParams.get('tab') === 'planet') {
+    setSceneEditorTab('planet-authoring');
+  }
+  if (bootParams.get('tab') === 'system') {
+    setSceneEditorTab('system-map');
+  }
+  if (bootParams.get('tab') === 'menu') {
+    setSceneEditorTab('menu-manager');
+    const menuId = bootParams.get('menu');
+    if (menuId) {
+      menuManagerEditor ??= createMenuManagerEditor(menuManagerEl);
+      menuManagerEditor.openMenu(menuId);
+    }
+  }
 
   // --- keyboard -------------------------------------------------------------------
   function isTypingTarget(target: EventTarget | null): boolean {
@@ -535,6 +655,8 @@ export function startEditorSession(): void {
       if (key === 's') {
         event.preventDefault();
         if (sceneEditorTab === 'base-characters') void baseCharacterEditor?.save();
+        else if (sceneEditorTab === 'planet-authoring') void planetAuthoringEditor?.save();
+        else if (sceneEditorTab === 'system-map') void systemMapEditor?.save();
         else void saveCurrent();
       } else if (key === 'd') {
         event.preventDefault();
@@ -575,7 +697,15 @@ export function startEditorSession(): void {
   });
 
   window.addEventListener('beforeunload', (event) => {
-    if (allowUnload || (!store.isDirty() && !baseCharacterEditor?.isDirty())) return;
+    if (
+      allowUnload ||
+      (!store.isDirty() &&
+        !baseCharacterEditor?.isDirty() &&
+        !planetAuthoringEditor?.isDirty() &&
+        !systemMapEditor?.isDirty())
+    ) {
+      return;
+    }
     event.preventDefault();
   });
 }

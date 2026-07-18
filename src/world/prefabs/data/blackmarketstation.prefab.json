@@ -60,17 +60,7 @@
             "components": [
               {
                 "type": "collider",
-                "shape": "box",
-                "size": {
-                  "x": 5,
-                  "y": 0.2374295,
-                  "z": 5
-                },
-                "offset": {
-                  "x": 2.5,
-                  "y": -0.11871475,
-                  "z": 2.5
-                }
+                "shape": "mesh"
               }
             ]
           },
@@ -92,6 +82,2140 @@
                 }
               }
             ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(12)",
+            "transform": {
+              "position": {
+                "x": 14.5,
+                "y": 0.5,
+                "z": 47
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Env_Core_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(11)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_02_(13)",
+            "transform": {
+              "position": {
+                "x": 12,
+                "y": 1.75,
+                "z": 52
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Platform_Large_05_(5)",
+            "transform": {
+              "position": {
+                "x": -2.75,
+                "y": -0.11,
+                "z": -12.75
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(31)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(5)",
+            "transform": {
+              "position": {
+                "x": 13.25,
+                "y": -0.75,
+                "z": 35.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.2750561225,
+                  "y": 0.5028055333,
+                  "z": 0.2375857533
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.2750561225000019,
+                  "y": 0.5028055333,
+                  "z": 0.2375857533000071
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.2750561225,
+                  "y": 0.5028055333,
+                  "z": 0.2375857533
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.2750561225,
+                  "y": 0.5028055333,
+                  "z": 0.2375857533
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.2750561225,
+                  "y": 0.5028055333,
+                  "z": 0.2375857533
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.275056122499993,
+                  "y": 0.5028055333000009,
+                  "z": 0.2375857532999929
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.4162652494
+                },
+                "offset": {
+                  "x": 1.2750561225000068,
+                  "y": 0.5028055333,
+                  "z": 0.23758575329999998
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.2750561225,
+                  "y": 0.5028055333,
+                  "z": 0.2375857533
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Barrier_Short_01_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.1014060949999998,
+                  "y": 1.0292073534000001,
+                  "z": 0.41626524940000004
+                },
+                "offset": {
+                  "x": 1.2750561225,
+                  "y": 0.5028055333,
+                  "z": 0.23758575330000178
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_07_(7)",
+            "transform": {
+              "position": {
+                "x": 18.25,
+                "y": -0.25,
+                "z": 35.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_07_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_07_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.4999999999999996,
+                  "y": 0.23742950000000002,
+                  "z": 2.4999999999999996
+                },
+                "offset": {
+                  "x": 1.2500000000000007,
+                  "y": -0.1187147500000017,
+                  "z": 1.2500000000000033
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_07_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_07_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_02_2",
+            "transform": {
+              "position": {
+                "x": 15.75,
+                "y": -0.75,
+                "z": 35.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05",
+            "transform": {
+              "position": {
+                "x": 13.25,
+                "y": -0.75,
+                "z": 35.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(29)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(35)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000000000000001,
+                  "y": 0.23742950000000002,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.500000000000004,
+                  "y": -0.11871475000000012,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(33)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.499999999999999,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(41)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295000000003,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871474999999818,
+                  "z": 2.500000000000007
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(38)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000000000000001,
+                  "y": 0.2374295000000001,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5000000000000004,
+                  "y": -0.11871474999999994,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(36)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(39)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 4.999999999999999,
+                  "y": 0.23742950000000007,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.499999999999996,
+                  "y": -0.11871475000000004,
+                  "z": 2.500000000000001
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(42)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 4.999999999999999,
+                  "y": 0.23742950000000035,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.499999999999997,
+                  "y": -0.11871475000000004,
+                  "z": 2.499999999999993
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(22)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.23742950000000013,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.499999999999999,
+                  "y": -0.1187147500000004,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(19)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(26)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(32)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.23742950000000007,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475000000026,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(40)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5.000000000000001,
+                  "y": 0.23742950000000002,
+                  "z": 5.000000000000001
+                },
+                "offset": {
+                  "x": 2.5000000000000004,
+                  "y": -0.11871474999999987,
+                  "z": 2.5000000000000004
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Large_04_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 0.2374295,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.11871475,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "BlackMarketStation_1",
+            "transform": {
+              "position": {
+                "x": 369.81674,
+                "y": -63.26032,
+                "z": 271.89438
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01",
+            "transform": {
+              "position": {
+                "x": 4.749,
+                "y": 2.123,
+                "z": -1.443
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1.41141,
+                "y": 1.41141,
+                "z": 1.41141
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(25)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(9)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.1011303649999982
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(18)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.3490900000000001,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -2.9999999995311555e-7,
+                  "y": 0.593995871315,
+                  "z": 1.1011303650000013
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(29)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.3490900000000001,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000013964055e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(28)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(19)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(27)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(16)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(24)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.2022607300000003
+                },
+                "offset": {
+                  "x": -2.9999999823226986e-7,
+                  "y": 0.5939958713150002,
+                  "z": 1.1011303650000002
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(23)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.2022607300000003
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.5939958713150002,
+                  "z": 1.1011303650000002
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(15)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.3490900000000001,
+                  "y": 1.20234811737,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -2.9999999651142417e-7,
+                  "y": 0.5939958713149999,
+                  "z": 1.1011303649999964
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(1)_1",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_1",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.3490900000000001,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -2.999999928476882e-7,
+                  "y": 0.593995871315,
+                  "z": 1.1011303650000017
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(26)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.3490900000000003,
+                  "y": 1.2023481173700001,
+                  "z": 2.2022607300000003
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.1011303650000037
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(22)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(21)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.5939958713150002,
+                  "z": 1.1011303650000035
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_2",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.1011303650000035
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(10)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.3490900000000003,
+                  "y": 1.2023481173700001,
+                  "z": 2.2022607300000003
+                },
+                "offset": {
+                  "x": -3.0000000711405406e-7,
+                  "y": 0.593995871315,
+                  "z": 1.1011303650000037
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(17)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(30)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(14)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.3490900000000001,
+                  "y": 1.20234811737,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.0000001416397026e-7,
+                  "y": 0.5939958713149999,
+                  "z": 1.101130364999999
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(20)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.34909,
+                  "y": 1.2023481173700001,
+                  "z": 2.20226073
+                },
+                "offset": {
+                  "x": -3.000000000086267e-7,
+                  "y": 0.593995871315,
+                  "z": 1.101130365
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Stairs_01_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_(3)",
+            "transform": {
+              "position": {
+                "x": 16.75,
+                "y": 2.5,
+                "z": -2
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_1",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_(4)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_2",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.5,
+                  "y": 0.2374295,
+                  "z": 2.5
+                },
+                "offset": {
+                  "x": 1.25,
+                  "y": -0.11871475,
+                  "z": 1.25
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Small_05_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 2.4999999999999996,
+                  "y": 0.2374295,
+                  "z": 2.4999999999999996
+                },
+                "offset": {
+                  "x": 1.2500000000000016,
+                  "y": -0.11871475,
+                  "z": 1.2499999999999998
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Vending_Machine_02_Sign_01_2",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Prop_Vending_Machine_02_Sign_01_(1)",
+            "transform": {
+              "position": {
+                "x": 22.35109,
+                "y": 13.66,
+                "z": -1.91432
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1.73232,
+                "y": 1.12461,
+                "z": 1.73232
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_WindMill_Top_01_1",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 12.24576,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_WindMill_Blade_01_1",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Prop_Vending_Machine_02_Sign_01_(2)",
+            "transform": {
+              "position": {
+                "x": 22.349,
+                "y": 8.42,
+                "z": -1.9137
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.595173,
+                "z": 0,
+                "w": 0.803597
+              },
+              "scale": {
+                "x": 2.29166,
+                "y": 1.55335,
+                "z": 2.29166
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Core_Vent_01_(1)",
+            "transform": {
+              "position": {
+                "x": 0.01,
+                "y": 0.04,
+                "z": -147.4
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": -1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Core_Vent_Blade_01_1",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 1.39
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Core_Vent_Blade_01_(1)_1",
+            "transform": {
+              "position": {
+                "x": 0.00001,
+                "y": 0,
+                "z": -12.34
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": -0.382683,
+                "w": 0.92388
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Prop_Holosign_SynKyng_01_Head_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Prop_Holosign_SynKyng_01_Bottles_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Prop_Holosign_SynKyng_01_Preset",
+            "transform": {
+              "position": {
+                "x": -31.403,
+                "y": 5.3,
+                "z": 5.4654
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.31444,
+                "z": 0,
+                "w": 0.949277
+              },
+              "scale": {
+                "x": 0.43697,
+                "y": 0.43697,
+                "z": 0.43697
+              }
+            }
+          },
+          {
+            "node": "SM_Prop_Holosign_SynKyng_01_Stars_01",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Platform_Large_01_2",
+            "transform": {
+              "position": {
+                "x": 7.25,
+                "y": -0.67,
+                "z": 22.25
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 1.2826401,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.64132005,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Platform_Base_Large_02_11",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Platform_Large_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 1.2826401,
+                  "z": 5
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": -0.64132005,
+                  "z": 2.5
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Core_Vent_Blade_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          }
+        ],
+        "hiddenNodes": [
+          "SM_Generic_CloudRing_03",
+          "SM_Generic_CloudRing_01",
+          "SM_Generic_CloudRing_02",
+          "SM_FX_Skydome_01",
+          "GameObject_Planet_Pivot_01",
+          "GameObject_Planet_Pivot_02",
+          "GameObject_Sun_Pivot",
+          "GameObject_Planet_Pivot_02_(1)",
+          "SkyDome",
+          "SM_Generic_CloudRing_03_1",
+          "SM_Generic_CloudRing_01_1",
+          "SM_Generic_CloudRing_02_1",
+          "SkyDome_1",
+          "SM_Veh_Scav_Lifter_01"
+        ],
+        "components": [
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_veh_vendor_01",
+            "mode": "hover",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Veh_Vendor_01"
+              }
+            ],
+            "speed": 0.4,
+            "amplitude": 0.08,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_prop_vending_machine_02_sign_01__1_",
+            "mode": "spin",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Prop_Vending_Machine_02_Sign_01_(1)"
+              }
+            ],
+            "speed": 0.4,
+            "amplitude": 0.08,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_prop_vending_machine_02_sign_01__3_",
+            "mode": "spin",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Prop_Vending_Machine_02_Sign_01_(3)"
+              }
+            ],
+            "speed": 0.4,
+            "amplitude": 0.08,
+            "phase": 0,
+            "reverse": true
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_bld_windmill_top_01_1",
+            "mode": "spin",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Bld_WindMill_Top_01_1"
+              }
+            ],
+            "speed": 0.1,
+            "amplitude": 0.08,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_bld_windmill_blade_01_1",
+            "mode": "spin",
+            "axis": "z",
+            "nodes": [
+              {
+                "name": "SM_Bld_WindMill_Blade_01_1"
+              }
+            ],
+            "speed": 2,
+            "amplitude": 0.08,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_prop_vending_machine_02_sign_01__2_",
+            "mode": "spin",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Prop_Vending_Machine_02_Sign_01_(2)"
+              }
+            ],
+            "speed": 0.4,
+            "amplitude": 0.08,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_bld_core_vent_blade_01_1",
+            "mode": "spin",
+            "axis": "z",
+            "nodes": [
+              {
+                "name": "SM_Bld_Core_Vent_Blade_01_1"
+              }
+            ],
+            "speed": 1,
+            "amplitude": 0.08,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_prop_holosign_synkyng_01_head_01",
+            "mode": "hover",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Prop_Holosign_SynKyng_01_Head_01"
+              }
+            ],
+            "speed": 0.4,
+            "amplitude": 0.5,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_prop_holosign_synkyng_01_bottles_01",
+            "mode": "spin",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Prop_Holosign_SynKyng_01_Bottles_01"
+              }
+            ],
+            "speed": 0.4,
+            "amplitude": 0.08,
+            "phase": 0
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_prop_holosign_synkyng_01_stars_01",
+            "mode": "spin",
+            "axis": "y",
+            "nodes": [
+              {
+                "name": "SM_Prop_Holosign_SynKyng_01_Stars_01"
+              }
+            ],
+            "speed": 0.4,
+            "amplitude": 0.08,
+            "phase": 0,
+            "reverse": true
+          },
+          {
+            "type": "object-animation",
+            "id": "obj-anim-sm_bld_core_vent_blade_01",
+            "mode": "spin",
+            "axis": "z",
+            "nodes": [
+              {
+                "name": "SM_Bld_Core_Vent_Blade_01"
+              }
+            ],
+            "speed": 1,
+            "amplitude": 0.08,
+            "phase": 0
           }
         ]
       },

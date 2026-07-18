@@ -6,7 +6,7 @@ description: How SRP, DRY, and SOLID guide ClaudeCitizen code.
 
 # Design Principles
 
-ClaudeCitizen is vibe-coded, but not chaos-coded. These principles keep the codebase navigable as features pile on — procedural planets, ship interiors, FPS combat, and authoritative multiplayer.
+ClaudeCitizen is vibe-coded, but not chaos-coded. These principles keep the codebase navigable as features pile on — procedural planets, ship interiors, third-person combat, and authoritative multiplayer.
 
 ## At a glance
 

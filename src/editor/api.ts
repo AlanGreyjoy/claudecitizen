@@ -3,6 +3,8 @@ import {
   parseBaseCharacterEquipment,
   type BaseCharacterEquipmentV1,
 } from '../player/equipment/base_character_equipment';
+import { parsePlanetDocument, type PlanetDocument } from '../world/planets/schema';
+import { parseSystemDocument, type SystemDocument } from '../world/systems/schema';
 
 export interface PrefabListEntry {
   id: string;
@@ -81,6 +83,62 @@ export async function saveBaseCharacterEquipment(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: parsed }),
+  });
+  return payload.path;
+}
+
+export interface PlanetListEntry {
+  id: string;
+  name: string;
+}
+
+export async function fetchPlanetList(): Promise<PlanetListEntry[]> {
+  const payload = await requestJson<{ planets: PlanetListEntry[] }>('/__editor/planets');
+  return payload.planets;
+}
+
+export async function fetchPlanet(id: string): Promise<PlanetDocument> {
+  const payload = await requestJson<{ document: unknown }>(
+    `/__editor/planet?id=${encodeURIComponent(id)}`,
+  );
+  const document = parsePlanetDocument(payload.document);
+  if (!document) throw new Error(`invalid planet document for "${id}"`);
+  return document;
+}
+
+export async function savePlanet(document: PlanetDocument): Promise<string> {
+  const payload = await requestJson<{ path: string }>('/__editor/planet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document }),
+  });
+  return payload.path;
+}
+
+export interface SystemListEntry {
+  id: string;
+  name: string;
+}
+
+export async function fetchSystemList(): Promise<SystemListEntry[]> {
+  const payload = await requestJson<{ systems: SystemListEntry[] }>('/__editor/systems');
+  return payload.systems;
+}
+
+export async function fetchSystem(id: string): Promise<SystemDocument> {
+  const payload = await requestJson<{ document: unknown }>(
+    `/__editor/system?id=${encodeURIComponent(id)}`,
+  );
+  const document = parseSystemDocument(payload.document);
+  if (!document) throw new Error(`invalid system document for "${id}"`);
+  return document;
+}
+
+export async function saveSystem(document: SystemDocument): Promise<string> {
+  const payload = await requestJson<{ path: string }>('/__editor/system', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document }),
   });
   return payload.path;
 }

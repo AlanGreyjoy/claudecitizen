@@ -17,8 +17,21 @@ import {
 } from '../player/hangar_build/prop_colliders';
 import { createHangarPropRenderer, pickStationFloorPoint } from '../render/hangar/prop_instances';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
-import { createVegetationControls } from '../render/vegetation';
-import { CLAUDECITIZEN_PLANET } from '../world/planet';
+import { hydrateSpawnPackFromUrl } from '../cache/spawn_pack';
+import { CLAUDECITIZEN_PLANET, DEFAULT_PLANET_ID, DEFAULT_PLANET_SEED } from '../world/planet';
+import { activatePlanetDocument } from '../world/planets/runtime';
+import { loadPlanetDocument } from '../world/planets/loader';
+import { createDefaultPlanetDocument } from '../world/planets/schema';
+import { loadSystemDocument } from '../world/systems/loader';
+import {
+  activateSystemDocument,
+  DEFAULT_SYSTEM_ID,
+  getSystemStationEntriesForPlanetDocument,
+  pickPrimarySystemStation,
+  resolveStationAltitudeMeters,
+} from '../world/systems/runtime';
+import { warmPlanetSpawnCaches } from '../world/spawn_warm';
+import { normalizeVegetationSettings } from '../render/vegetation/settings';
 import { buildRoomForArea } from '../player/hangar_build/validation';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
@@ -26,9 +39,13 @@ import { applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
 import {
   getStationColliders,
   getStationFrame,
+  getStationFrameAt,
   getStationSpawn,
+  orbitHintFromSystemOffset,
   setStationLayoutOverride,
+  setStationOrbitHint,
   stationLocalToWorld,
+  type StationFrame,
 } from '../world/station';
 import { createStationPhysics, type StationPhysics } from '../physics/station_physics';
 import type { PrefabDocument } from '../world/prefabs/schema';
@@ -47,7 +64,9 @@ import { createWorldClient, type WorldClient } from '../net/world_client';
 import type { GameMenuController } from '../render/effects/hud/game_menu';
 import type { AvmsTerminalController } from '../render/effects/hud/avms_terminal';
 import type { BuildTerminalController } from '../render/effects/hud/build_terminal';
+import { collectHaloBandElements } from '../render/effects/hud/haloband_dom';
 import type { HaloBandController } from '../render/effects/hud/haloband';
+import { createUiIcon, UiIcons } from '../ui/icons';
 import type { PersonalInventoryController } from '../render/effects/hud/personal_inventory';
 import type { HangarPropRenderer } from '../render/hangar/prop_instances';
 
@@ -63,15 +82,14 @@ const DEFAULT_STATION_PREFAB_ID = 'demo-station';
 
 /**
  * Loads the station prefab that drives the in-game station layout and
- * renderer. The default is demo-station; in dev mode, ?stationPrefab=<id>
- * overrides it for ad-hoc editor previews. Falls back to the procedural
- * station if the prefab can't be loaded or walked.
+ * renderer. Prefers an explicit `?stationPrefab=` override (dev), else the
+ * preferred id from the active system document, else demo-station.
  */
-async function resolveStationPrefab(): Promise<PrefabDocument | null> {
+async function resolveStationPrefab(preferredId?: string | null): Promise<PrefabDocument | null> {
   const params = new URLSearchParams(window.location.search);
   const id = import.meta.env.DEV
-    ? params.get('stationPrefab') ?? DEFAULT_STATION_PREFAB_ID
-    : DEFAULT_STATION_PREFAB_ID;
+    ? params.get('stationPrefab') ?? preferredId ?? DEFAULT_STATION_PREFAB_ID
+    : preferredId ?? DEFAULT_STATION_PREFAB_ID;
 
   const doc = await loadPrefabDocument(id);
   if (!doc) {
@@ -92,14 +110,20 @@ async function resolveStationPrefab(): Promise<PrefabDocument | null> {
 function mountEditorReturnButton(prefabId: string): HTMLButtonElement {
   const button = document.createElement('button');
   button.type = 'button';
-  button.textContent = `◂ Back to Editor (${prefabId})`;
   button.title = 'Return to the editor with this prefab loaded (press Esc first to unlock the mouse)';
+  button.append(
+    createUiIcon(UiIcons.chevronLeft, { className: 'sc-ui-icon', size: 14, strokeWidth: 2 }),
+    document.createTextNode(` Back to Editor (${prefabId})`),
+  );
   Object.assign(button.style, {
     position: 'fixed',
     top: '18px',
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: '250',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
     padding: '9px 18px',
     border: '1px solid rgba(255, 206, 111, 0.5)',
     background: 'rgba(6, 12, 26, 0.88)',
@@ -116,6 +140,39 @@ function mountEditorReturnButton(prefabId: string): HTMLButtonElement {
   return button;
 }
 
+function mountPlanetEditorReturnButton(planetId: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.title = 'Return to Planet Authoring with this planet loaded';
+  button.append(
+    createUiIcon(UiIcons.chevronLeft, { className: 'sc-ui-icon', size: 14, strokeWidth: 2 }),
+    document.createTextNode(` Back to Editor (${planetId})`),
+  );
+  Object.assign(button.style, {
+    position: 'fixed',
+    top: '18px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: '250',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '9px 18px',
+    border: '1px solid rgba(111, 206, 255, 0.5)',
+    background: 'rgba(6, 12, 26, 0.88)',
+    color: 'var(--accent, #8bd8ff)',
+    font: "600 13px/1 'Rajdhani', sans-serif",
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+  } satisfies Partial<CSSStyleDeclaration>);
+  button.addEventListener('click', () => {
+    window.location.href = `/?boot=editor&tab=planet&planetId=${encodeURIComponent(planetId)}`;
+  });
+  document.body.appendChild(button);
+  return button;
+}
+
 let started = false;
 
 interface PlaySessionCleanup {
@@ -123,7 +180,6 @@ interface PlaySessionCleanup {
   controls: ReturnType<typeof createPlayerControls>;
   renderer: SpikeRenderer | null;
   networkClient: WorldClient | null;
-  vegetationControls: ReturnType<typeof createVegetationControls>;
   gameMenu: GameMenuController;
   avmsTerminal: AvmsTerminalController;
   entertainmentSystem: ReturnType<typeof createEntertainmentSystem>;
@@ -164,7 +220,6 @@ export function stopPlaySession(): void {
   cleanup.renderer?.dispose();
   cleanup.networkClient?.leave();
   cleanup.networkClient?.close();
-  cleanup.vegetationControls.dispose();
   window.removeEventListener('resize', cleanup.resize);
   cleanup.editorReturnButton?.remove();
   started = false;
@@ -202,15 +257,97 @@ export async function startPlaySession(
   // The ship layout must be active before the renderer (hull, doors) and the
   // world state (rig doors) are created.
   await applyDefaultShipPrefab();
-  const stationPrefab = await resolveStationPrefab();
   loading?.setProgress(0.15);
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
+  const playParams = new URLSearchParams(window.location.search);
+  const planetId = playParams.get('planetId') ?? DEFAULT_PLANET_ID;
+  const systemId = playParams.get('systemId') ?? DEFAULT_SYSTEM_ID;
+  const spawnSurface = playParams.get('spawn') === 'surface';
+  const fromEditor = playParams.get('from') === 'editor';
+  const stationPrefabOverride = import.meta.env.DEV ? playParams.get('stationPrefab') : null;
+
+  const planetDocument =
+    (await loadPlanetDocument(planetId)) ?? createDefaultPlanetDocument(planetId, planetId);
+  const planetConfig = activatePlanetDocument(planetDocument);
+  const seed = planetConfig.seed || DEFAULT_PLANET_SEED;
+  const planet = planetConfig.planet.name ? planetConfig.planet : { ...CLAUDECITIZEN_PLANET, ...planetConfig.planet };
+
+  loading?.setStatus('Seeding spawn tile cache...');
+  await hydrateSpawnPackFromUrl(planetDocument.id);
+  loading?.setProgress(0.22);
+
+  const systemDocument =
+    (await loadSystemDocument(systemId)) ??
+    (systemId !== DEFAULT_SYSTEM_ID ? await loadSystemDocument(DEFAULT_SYSTEM_ID) : null);
+  if (systemDocument) {
+    activateSystemDocument(systemDocument);
+    console.info(`System active: "${systemDocument.id}" (${systemDocument.name}).`);
+  } else {
+    console.warn(
+      `System "${systemId}" not found; station placement falls back to the default orbital frame.`,
+    );
+    setStationOrbitHint(null);
+  }
+
+  const systemStations = systemDocument
+    ? getSystemStationEntriesForPlanetDocument(systemDocument, planetDocument.id)
+    : [];
+  const primaryStation = pickPrimarySystemStation(systemStations, stationPrefabOverride);
+  if (primaryStation) {
+    setStationOrbitHint(
+      orbitHintFromSystemOffset(
+        primaryStation.offsetMeters,
+        resolveStationAltitudeMeters(primaryStation),
+      ),
+    );
+    console.info(
+      `Primary station instance "${primaryStation.id}" (${primaryStation.stationPrefabId}) from system map.`,
+    );
+  } else {
+    setStationOrbitHint(null);
+  }
+
+  const stationPrefab = await resolveStationPrefab(
+    primaryStation?.stationPrefabId ?? DEFAULT_STATION_PREFAB_ID,
+  );
+
+  const additionalStations: Array<{ prefab: PrefabDocument; frame: StationFrame }> = [];
+  for (const entry of systemStations) {
+    if (primaryStation && entry.id === primaryStation.id) continue;
+    const prefab = await loadPrefabDocument(entry.stationPrefabId);
+    if (!prefab) {
+      console.warn(`Secondary station prefab "${entry.stationPrefabId}" missing; skipping.`);
+      continue;
+    }
+    const hint = orbitHintFromSystemOffset(
+      entry.offsetMeters,
+      resolveStationAltitudeMeters(entry),
+    );
+    additionalStations.push({
+      prefab,
+      frame: getStationFrameAt(planet, hint.latRadians, hint.lonRadians, hint.altitudeMeters),
+    });
+  }
+  if (additionalStations.length > 0) {
+    console.info(
+      `Spawned ${additionalStations.length} secondary system station(s) as visual roots (primary owns walk physics).`,
+    );
+  }
+
+  console.info(
+    `Planet active: "${planetDocument.id}" seed=${seed}${spawnSurface ? ' (surface spawn)' : ''}.`,
+  );
+
   let editorReturnButton: HTMLButtonElement | null = null;
-  if (stationPrefab && import.meta.env.DEV) {
-    const previewId = new URLSearchParams(window.location.search).get('stationPrefab');
-    if (previewId) {
-      editorReturnButton = mountEditorReturnButton(stationPrefab.id);
+  if (import.meta.env.DEV) {
+    if (fromEditor && planetId) {
+      editorReturnButton = mountPlanetEditorReturnButton(planetId);
+    } else if (stationPrefab) {
+      const previewId = playParams.get('stationPrefab');
+      if (previewId) {
+        editorReturnButton = mountEditorReturnButton(stationPrefab.id);
+      }
     }
   }
 
@@ -221,8 +358,6 @@ export async function startPlaySession(
   const debugBtnEl = requireElement<HTMLButtonElement>('hud-debug-btn');
   const debugMenuEl = requireElement<HTMLElement>('hud-debug-menu');
   const statsPanelEl = requireElement<HTMLElement>('hud-stats');
-  const vegetationMenuEl = requireElement<HTMLElement>('vegetation-menu');
-  const vegetationResetEl = requireElement<HTMLElement>('vegetation-reset');
   const tutorialBannerEl = document.getElementById('hud-tutorial-banner');
   const promptEl = requireElement<HTMLElement>('prompt');
   const readoutsEl = requireElement<HTMLElement>('readouts');
@@ -254,6 +389,7 @@ export async function startPlaySession(
   const avmsDeliverBtn = requireElement<HTMLButtonElement>('avms-deliver-btn');
   const avmsStoreBtn = requireElement<HTMLButtonElement>('avms-store-btn');
   const avmsCloseBtn = requireElement<HTMLButtonElement>('avms-close-btn');
+  const avmsPowerBtn = requireElement<HTMLButtonElement>('avms-power-btn');
   const buildTerminalEl = requireElement<HTMLElement>('build-terminal');
   const buildKickerEl = requireElement<HTMLElement>('build-kicker');
   const buildVersionEl = requireElement<HTMLElement>('build-version');
@@ -271,25 +407,13 @@ export async function startPlaySession(
   const buildDeleteBtn = requireElement<HTMLButtonElement>('build-delete-btn');
   const buildCloseBtn = requireElement<HTMLButtonElement>('build-close-btn');
   const halobandEl = requireElement<HTMLElement>('haloband');
-  const halobandChatMessagesEl = requireElement<HTMLElement>('haloband-chat-messages');
-  const halobandChatInputEl = requireElement<HTMLInputElement>('haloband-chat-input');
-  const halobandChatSendBtn = requireElement<HTMLButtonElement>('haloband-chat-send');
-  const halobandShipStatusEl = requireElement<HTMLElement>('haloband-ship-status');
-  const halobandInventoryFiltersEl = requireElement<HTMLElement>('haloband-inventory-filters');
-  const halobandInventoryGridEl = requireElement<HTMLElement>('haloband-inventory-grid');
-  const halobandInventoryDetailEl = requireElement<HTMLElement>('haloband-inventory-detail');
-  const halobandBalanceEl = requireElement<HTMLElement>('haloband-balance');
-  const halobandBalanceValueEl = requireElement<HTMLElement>('haloband-balance-value');
-  const halobandHoloCanvasEl = requireElement<HTMLCanvasElement>('haloband-holo');
-
-  const seed = 20061;
-  const planet = CLAUDECITIZEN_PLANET;
 
   let renderer: SpikeRenderer | null = null;
   let rendererError: unknown = null;
   try {
     renderer = createSpikeRenderer(canvas, planet, seed, {
       stationPrefab,
+      additionalStations,
       characterAppearance: bootstrap?.player.characterAppearance ?? null,
     });
   } catch (error) {
@@ -298,7 +422,29 @@ export async function startPlaySession(
   }
   loading?.setProgress(0.45);
 
-  const vegetationControls = createVegetationControls(vegetationMenuEl, vegetationResetEl, renderer);
+  renderer?.setVegetationSettings(normalizeVegetationSettings(planetDocument.vegetation));
+  const spawnLayers = planetDocument.spawning ?? [];
+  renderer?.setSurfaceSpawnLayers(spawnLayers);
+  console.info(
+    `ClaudeCitizen surface spawns: ${spawnLayers.length} layer(s)`,
+    spawnLayers.map((layer) => `${layer.id}:${layer.assetUrl ? 'asset' : 'no-asset'}`),
+  );
+  if (fromEditor || playParams.get('debug') === '1') {
+    statsPanelEl.classList.remove('is-hidden');
+  }
+
+  loading?.setStatus('Warming planet surface...');
+  const spawnFocus = warmPlanetSpawnCaches(planet, seed);
+  loading?.setProgress(0.52);
+  if (renderer) {
+    await renderer.warmSpawnCorridor(spawnFocus, {
+      onProgress: (fraction, label) => {
+        loading?.setStatus(label);
+        loading?.setProgress(0.52 + fraction * 0.2);
+      },
+    });
+  }
+  loading?.setProgress(0.72);
 
   let networkClient: WorldClient | null = null;
   let haloBand: HaloBandController | null = null;
@@ -311,7 +457,6 @@ export async function startPlaySession(
       debugBtnEl,
       debugMenuEl,
       statsPanelEl,
-      vegetationMenuEl,
       tutorialBannerEl,
       promptEl,
       readoutsEl,
@@ -327,6 +472,7 @@ export async function startPlaySession(
       onChatSend: (text) => networkClient?.sendChat(text),
       onTimeOverrideChange: (mode) => renderer?.setTimeOverride(mode),
       onSsaoSettingsChange: (settings) => renderer?.setSsaoSettings(settings),
+      onVegetationLayersChange: (layers) => renderer?.setVegetationLayers(layers),
     },
   );
 
@@ -364,19 +510,7 @@ export async function startPlaySession(
     ? normalizeInventoryState(bootstrap.inventory)
     : null;
   haloBand = createHaloBand(
-    {
-      rootEl: halobandEl,
-      chatMessagesEl: halobandChatMessagesEl,
-      chatInputEl: halobandChatInputEl,
-      sendBtnEl: halobandChatSendBtn,
-      shipStatusEl: halobandShipStatusEl,
-      inventoryFiltersEl: halobandInventoryFiltersEl,
-      inventoryGridEl: halobandInventoryGridEl,
-      inventoryDetailEl: halobandInventoryDetailEl,
-      balanceEl: halobandBalanceEl,
-      balanceValueEl: halobandBalanceValueEl,
-      holoCanvasEl: halobandHoloCanvasEl,
-    },
+    collectHaloBandElements(halobandEl),
     {
       onSendMessage: (text) => networkClient?.sendChat(text),
       playerControls: controls,
@@ -416,6 +550,7 @@ export async function startPlaySession(
     deliverBtnEl: avmsDeliverBtn,
     storeBtnEl: avmsStoreBtn,
     closeBtnEl: avmsCloseBtn,
+    powerBtnEl: avmsPowerBtn,
   });
 
   const entertainmentSystemEl = requireElement<HTMLElement>('entertainment-system');
@@ -651,6 +786,10 @@ export async function startPlaySession(
   const gameLoop = createGameLoop({
     planet,
     seed,
+    spawn: spawnSurface ? 'surface' : 'station',
+    planetId: planetDocument.id,
+    systemId: systemDocument?.id ?? systemId,
+    activeStationInstanceId: primaryStation?.id ?? null,
     controls,
     renderer,
     rendererError,
@@ -712,7 +851,6 @@ export async function startPlaySession(
     controls,
     renderer,
     networkClient,
-    vegetationControls,
     gameMenu,
     avmsTerminal,
     entertainmentSystem,

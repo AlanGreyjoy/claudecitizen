@@ -21,6 +21,9 @@ function componentTargetsGlbNode(component: PrefabComponent, nodeName: string): 
   if (component.type === 'animation' && Array.isArray(component.nodes)) {
     return component.nodes.some((n) => n.name === nodeName);
   }
+  if (component.type === 'object-animation' && Array.isArray(component.nodes)) {
+    return component.nodes.some((n) => n.name === nodeName);
+  }
   if (component.type === 'collider' && component.node === nodeName) {
     return true;
   }
@@ -43,6 +46,9 @@ export function entityBoundToAnyGlbNode(
       if (component.nodes.some((n) => n.name && glbNodeNames.has(n.name))) return true;
     }
     if (component.type === 'animation' && Array.isArray(component.nodes)) {
+      if (component.nodes.some((n) => n.name && glbNodeNames.has(n.name))) return true;
+    }
+    if (component.type === 'object-animation' && Array.isArray(component.nodes)) {
       if (component.nodes.some((n) => n.name && glbNodeNames.has(n.name))) return true;
     }
     if (component.type === 'collider' && component.node && glbNodeNames.has(component.node)) {

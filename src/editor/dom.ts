@@ -1,5 +1,7 @@
 /** Tiny DOM builder used by the editor panels. */
 
+import { createUiIcon, UiIcons, type CreateUiIconOptions, type UiIconNode } from '../ui/icons';
+
 type ElementProps = {
   className?: string;
   text?: string;
@@ -8,10 +10,12 @@ type ElementProps = {
   on?: Partial<Record<string, (event: Event) => void>>;
 };
 
+type DomChild = HTMLElement | SVGElement | string;
+
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props: ElementProps = {},
-  children: (HTMLElement | string)[] = [],
+  children: DomChild[] = [],
 ): HTMLElementTagNameMap[K] {
   const element = document.createElement(tag);
   if (props.className) element.className = props.className;
@@ -31,6 +35,28 @@ export function el<K extends keyof HTMLElementTagNameMap>(
     element.append(child);
   }
   return element;
+}
+
+export function iconEl(
+  icon: UiIconNode,
+  options: CreateUiIconOptions = { className: 'ed-ui-icon', size: 14 },
+): SVGElement {
+  return createUiIcon(icon, {
+    className: options.className ?? 'ed-ui-icon',
+    size: options.size ?? 14,
+    strokeWidth: options.strokeWidth ?? 2,
+  });
+}
+
+export function chevronIcon(expanded: boolean): SVGElement {
+  return iconEl(expanded ? UiIcons.chevronDown : UiIcons.chevronRight, {
+    className: 'ed-ui-icon',
+    size: 14,
+  });
+}
+
+export function closeIcon(): SVGElement {
+  return iconEl(UiIcons.x, { className: 'ed-ui-icon', size: 12 });
 }
 
 export function clearChildren(element: HTMLElement): void {
@@ -94,7 +120,7 @@ export function showContextMenu(x: number, y: number, entries: ContextMenuEntry[
           { className: 'ed-menu-item ed-menu-submenu-trigger' },
           [
             el('span', { className: 'ed-menu-item-label', text: entry.label }),
-            el('span', { className: 'ed-menu-item-shortcut', text: '▸' }),
+            chevronIcon(false),
           ],
         );
         const flyout = el('div', {

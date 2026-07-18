@@ -2,6 +2,7 @@ export * from './math';
 export * from './planet';
 export * from './terrain';
 export * from './vegetation';
+export * from './surface_spawn';
 export * from './flight';
 export * from './character';
 export * from './render';

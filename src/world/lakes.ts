@@ -1,14 +1,7 @@
 import { radialUp } from './coordinates';
+import { getActivePlanetConfig } from './planets/runtime';
 import { clamp01, fbm3d, getNoise3D } from './terrain_noise';
 import type { Planet, Vec3 } from '../types';
-
-const LAKE_NOISE_SEED_OFFSET = 9012;
-const LAKE_MASK_THRESHOLD = 0.64;
-const LAKE_MAX_CARVE_NORMALIZED = 0.14;
-const LAKE_MIN_LAND_ELEVATION = 0.02;
-const INLAND_LAKE_MOISTURE_THRESHOLD = 0.55;
-const INLAND_LAKE_MAX_NORMALIZED = 0.05;
-const INLAND_LAKE_MAX_DEPTH_METERS = 8;
 
 interface LakeCarvingResult {
   elevation: number;
@@ -22,13 +15,25 @@ export interface LakeSurfaceResult {
   lakeWaterLevelMeters: number | null;
 }
 
-function sampleLakeMask(seed: number, nx: number, ny: number, nz: number): number {
-  const lakeNoise = getNoise3D(seed + LAKE_NOISE_SEED_OFFSET);
+export interface LakeSurfaceInput {
+  heightMeters: number;
+  lakeMask?: number;
+  moisture: number;
+  normalizedHeight: number;
+  planet: Planet;
+  position: Vec3;
+  seed: number;
+}
+
+export function sampleLakeMask(seed: number, nx: number, ny: number, nz: number): number {
+  const { hydrology } = getActivePlanetConfig();
+  const lakeNoise = getNoise3D(seed + hydrology.lakeNoiseSeedOffset);
   return fbm3d(lakeNoise, nx, ny, nz, 4, 0.5, 2.0, 0.55);
 }
 
 function applyLakeCarving(elevation: number, lakeMask: number): LakeCarvingResult {
-  if (elevation < LAKE_MIN_LAND_ELEVATION || lakeMask < LAKE_MASK_THRESHOLD) {
+  const { hydrology } = getActivePlanetConfig();
+  if (elevation < hydrology.lakeMinLandElevation || lakeMask < hydrology.lakeMaskThreshold) {
     return {
       elevation,
       lakeStrength: 0,
@@ -36,8 +41,10 @@ function applyLakeCarving(elevation: number, lakeMask: number): LakeCarvingResul
     };
   }
 
-  const lakeStrength = clamp01((lakeMask - LAKE_MASK_THRESHOLD) / (1 - LAKE_MASK_THRESHOLD));
-  const carveDepth = lakeStrength * LAKE_MAX_CARVE_NORMALIZED;
+  const lakeStrength = clamp01(
+    (lakeMask - hydrology.lakeMaskThreshold) / (1 - hydrology.lakeMaskThreshold),
+  );
+  const carveDepth = lakeStrength * hydrology.lakeMaxCarveNormalized;
   const waterLevelNormalized = elevation - carveDepth * 0.22;
 
   return {
@@ -47,27 +54,32 @@ function applyLakeCarving(elevation: number, lakeMask: number): LakeCarvingResul
   };
 }
 
-export function sampleLakeSurface(
-  planet: Planet,
-  seed: number,
-  position: Vec3,
-  heightMeters: number,
-  normalizedHeight: number,
-  moisture: number,
-): LakeSurfaceResult {
+export function sampleLakeSurface(input: LakeSurfaceInput): LakeSurfaceResult {
+  const {
+    heightMeters,
+    lakeMask: cachedLakeMask,
+    moisture,
+    normalizedHeight,
+    planet,
+    position,
+    seed,
+  } = input;
+  const { hydrology } = getActivePlanetConfig();
   const unit = radialUp(position);
-  const lakeNoise = getNoise3D(seed + LAKE_NOISE_SEED_OFFSET);
-  const lakeMask = sampleLakeMask(seed, unit.x, unit.y, unit.z);
-  const lakeStrength = clamp01((lakeMask - LAKE_MASK_THRESHOLD) / (1 - LAKE_MASK_THRESHOLD));
-  const carveDepthNorm = lakeStrength * LAKE_MAX_CARVE_NORMALIZED;
+  const lakeNoise = getNoise3D(seed + hydrology.lakeNoiseSeedOffset);
+  const lakeMask = cachedLakeMask ?? sampleLakeMask(seed, unit.x, unit.y, unit.z);
+  const lakeStrength = clamp01(
+    (lakeMask - hydrology.lakeMaskThreshold) / (1 - hydrology.lakeMaskThreshold),
+  );
+  const carveDepthNorm = lakeStrength * hydrology.lakeMaxCarveNormalized;
   const preCarveNormalized = normalizedHeight + carveDepthNorm;
   const waterTableNormalized =
     0.025 +
     clamp01(fbm3d(lakeNoise, unit.x, unit.y, unit.z, 2, 0.5, 2.0, 0.35) * 0.5 + 0.5) * 0.04;
   const wetLowland =
     normalizedHeight > 0 &&
-    normalizedHeight < INLAND_LAKE_MAX_NORMALIZED &&
-    moisture >= INLAND_LAKE_MOISTURE_THRESHOLD;
+    normalizedHeight < hydrology.inlandLakeMaxNormalized &&
+    moisture >= hydrology.inlandLakeMoistureThreshold;
 
   if (lakeStrength < 0.18 && !wetLowland) {
     return {
@@ -89,7 +101,7 @@ export function sampleLakeSurface(
     // shallow instead of lifting it to the absolute 345-488 m water table.
     lakeWaterLevelMeters = Math.min(
       waterTableNormalized * planet.terrainAmplitudeMeters,
-      heightMeters + INLAND_LAKE_MAX_DEPTH_METERS,
+      heightMeters + hydrology.inlandLakeMaxDepthMeters,
     );
   }
   const lakeDepth = clamp01(
@@ -111,5 +123,9 @@ export function carveLakeElevation(
   nz: number,
   elevation: number,
 ): number {
-  return applyLakeCarving(elevation, sampleLakeMask(seed, nx, ny, nz)).elevation;
+  return carveLakeElevationFromMask(elevation, sampleLakeMask(seed, nx, ny, nz));
+}
+
+export function carveLakeElevationFromMask(elevation: number, lakeMask: number): number {
+  return applyLakeCarving(elevation, lakeMask).elevation;
 }

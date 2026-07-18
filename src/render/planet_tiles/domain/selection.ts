@@ -2,15 +2,22 @@ import type { CubeFace, Planet, TileInfo, Vec3 } from '../../../types';
 import { CUBE_FACES, faceUvFromDirection } from '../../../world/cube_sphere';
 import { radialUp } from '../../../world/coordinates';
 import { MIN_LEVEL } from './constants';
-import { shouldCullTile, shouldSplitTile } from './lod';
+import {
+  shouldCullTile,
+  shouldSplitTile,
+  type TileSelectionView,
+} from './lod';
 import { makeTileInfo } from './tile_info';
 import { clamp } from './tile_key';
+
+export type { TileSelectionView };
 
 export function visitSelectedTiles(
   planet: Planet,
   bodyPosition: Vec3,
   altitudeMeters: number,
   visitTile: (info: TileInfo) => void,
+  view?: TileSelectionView | null,
 ): void {
   const cameraUp = radialUp(bodyPosition);
   const cameraFace = faceUvFromDirection(cameraUp);
@@ -47,22 +54,32 @@ export function visitSelectedTiles(
     return children;
   }
 
-  function traverse(face: CubeFace, level: number, x: number, y: number): void {
+  function traverse(face: CubeFace, level: number, x: number, y: number): boolean {
     const info = makeTileInfo(face, level, x, y, planet);
     if (level <= 1 && face !== cameraFace.face && level < MIN_LEVEL) {
+      let any = false;
       for (const child of orderedChildren(face, level, x, y)) {
-        traverse(face, level + 1, child.x, child.y);
+        if (traverse(face, level + 1, child.x, child.y)) any = true;
       }
-      return;
+      return any;
     }
-    if (shouldCullTile(info, planet, cameraUp, altitudeMeters)) return;
-    if (shouldSplitTile(info, bodyPosition, cameraUp, altitudeMeters)) {
+    if (shouldCullTile(info, planet, cameraUp, altitudeMeters, bodyPosition, view)) {
+      return false;
+    }
+    if (shouldSplitTile(info, planet, bodyPosition, cameraUp, altitudeMeters)) {
+      let anyChild = false;
       for (const child of orderedChildren(face, level, x, y)) {
-        traverse(face, level + 1, child.x, child.y);
+        if (traverse(face, level + 1, child.x, child.y)) anyChild = true;
       }
-      return;
+      // If every child was culled, keep the parent so we never show a hole.
+      if (!anyChild) {
+        visitTile(info);
+        return true;
+      }
+      return true;
     }
     visitTile(info);
+    return true;
   }
 
   for (const face of faceOrder) {

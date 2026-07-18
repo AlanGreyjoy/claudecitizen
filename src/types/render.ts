@@ -1,6 +1,5 @@
 import type {
   CameraOrbit,
-  CameraView,
   CharacterRenderState,
   GameMode,
   SeatLook,
@@ -120,6 +119,13 @@ export interface RenderShipInstance {
 
 export type NetworkLod = 'full' | 'medium' | 'marker';
 
+/** Cosmetic station NPC pose produced by the local ambient population runtime. */
+export interface StationNpcRenderState extends CharacterRenderState {
+  id: string;
+  displayName: string;
+  appearance: PlayerCharacterAppearanceV1;
+}
+
 export interface NetworkRenderEntity {
   id: string;
   playerId: string;
@@ -143,7 +149,6 @@ export interface SpikeRenderWorld {
   activeShipId?: string;
   character?: CharacterRenderState | null;
   cameraOrbit?: CameraOrbit;
-  cameraView?: CameraView;
   /** Piloting camera view; cockpit first person is the default. */
   shipCameraView?: ShipCameraView;
   /** Cockpit free-look offset while holding F in the pilot seat. */
@@ -182,6 +187,8 @@ export interface SpikeRenderWorld {
   shipRig?: { gear01: number; ramp01: number; doors: Record<string, number> };
   /** Remote players/ships received from WebTransport cell snapshots. */
   networkEntities?: NetworkRenderEntity[];
+  /** Authored ambient station NPCs. Local/cosmetic until NPCs become cell entities. */
+  stationNpcs?: StationNpcRenderState[];
   /** Piloting sub-mode for ship HUD / quantum VFX. */
   flightMode?: import('../flight/flight_modes').ShipFlightMode;
   quantum?: import('../flight/quantum_travel').QuantumTravelState;

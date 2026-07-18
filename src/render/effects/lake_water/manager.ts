@@ -7,6 +7,7 @@ import type {
   WaterWorkerInMessage,
   WaterWorkerOutMessage,
 } from '../../../types';
+import { getActivePlanetConfig } from '../../../world/planets/runtime';
 import { buildLakeWaterGeometry } from './build/buffers';
 import { createLakeWaterMaterial } from './render/material';
 import { createLakeWaterBuildWorker } from './worker/create_worker';
@@ -174,6 +175,7 @@ export function createPlanetLakeWaterManager(
       info: entry.info,
       key: job.key,
       planet,
+      planetDocument: getActivePlanetConfig().document,
       seed,
     };
     activeWorkerJob = job;

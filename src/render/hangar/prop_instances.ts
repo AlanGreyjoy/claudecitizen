@@ -114,8 +114,16 @@ export function createHangarPropRenderer(options: HangarPropRendererOptions) {
     ghostGroup.clear();
   }
 
+  function update(dt: number): void {
+    for (const group of instanceGroups.values()) {
+      group.userData.updateObjectAnimations?.(dt);
+      group.userData.updateParticles?.(dt);
+    }
+  }
+
   return {
     dispose,
+    update,
     setPlacements,
     setGhost,
     updateGhostTransform,

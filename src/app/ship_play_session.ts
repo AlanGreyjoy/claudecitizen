@@ -12,7 +12,6 @@ import {
   integrateCharacterLocomotion,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-  resolveFirstPersonCameraRig,
   SPRINT_SPEED_METERS_PER_SECOND,
   WALK_SPEED_METERS_PER_SECOND,
 } from "../player/character_controller";
@@ -68,6 +67,7 @@ import { resolveRenderQuality } from "../render/main/domain/render_quality";
 import { createShipModel } from "../render/main/scene/ship_model";
 import { updateShipPlacement } from "../render/main/update/sun_system";
 import { attachPrefabParticleSystems } from "../render/particles";
+import { attachPrefabObjectAnimations } from "../render/prefabs/object_animation";
 import { loadPrefabDocument } from "../world/prefabs/loader";
 import { buildShipLayoutFromPrefab } from "../world/prefabs/ship_runtime";
 import {
@@ -81,6 +81,7 @@ import {
   vec3,
 } from "../math/vec3";
 import type { CharacterState, FlightBody, Pose, Vec3 } from "../types";
+import { createUiIcon, UiIcons } from "../ui/icons";
 import { createSoundSceneController } from "../audio/sound_scene";
 import { createLoopingSfxController, playSfx } from "../audio/sfx";
 import {
@@ -250,15 +251,21 @@ function mountBanner(
 ): void {
   const button = document.createElement("button");
   button.type = "button";
-  button.textContent = `◂ Back to Editor (${prefabId})`;
   button.title =
     "Return to the editor with this prefab loaded (Esc opens the menu and unlocks the mouse)";
+  button.append(
+    createUiIcon(UiIcons.chevronLeft, { className: "sc-ui-icon", size: 14, strokeWidth: 2 }),
+    document.createTextNode(` Back to Editor (${prefabId})`),
+  );
   Object.assign(button.style, {
     position: "fixed",
     top: "18px",
     left: "50%",
     transform: "translateX(-50%)",
     zIndex: "250",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
     padding: "9px 18px",
     border: "1px solid rgba(255, 206, 111, 0.5)",
     background: "rgba(6, 12, 26, 0.88)",
@@ -546,6 +553,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   window.__claudecitizenShipModel = shipModel;
   if (doc && prefabApplied) {
     attachPrefabParticleSystems(doc, shipModel.group);
+    attachPrefabObjectAnimations(doc, shipModel.group);
   }
 
   const avatar = createCharacterAvatar(scene, 1);
@@ -717,7 +725,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       result.state.position,
       cameraState.yawRadians,
       cameraState.pitchRadians,
-      cameraState.cameraView,
       cameraState.zoomDistance,
     );
     const bedNearby = nearestBed(deckLocal, doorAim);
@@ -841,7 +848,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       },
     );
 
-    const desiredFacing = input.faceCameraYaw ? orbit.forward : moveDir;
+    const desiredFacing = moveDir;
     let forward = character.forward;
     if (Math.hypot(desiredFacing.x, desiredFacing.z) > 1e-4) {
       const target = normalize({
@@ -1460,16 +1467,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     camera.fov = camera.userData.baseFovDeg as number;
     camera.updateProjectionMatrix();
 
-    const firstPerson =
-      cameraState.cameraView === "first-person" &&
-      mode !== "sitting" &&
-      mode !== "standing" &&
-      mode !== "lying" &&
-      mode !== "getting-up";
-    const pitchLimit = firstPerson
-      ? FIRST_PERSON_PITCH_LIMIT
-      : ORBIT_PITCH_LIMIT;
-
     // On the hull, orbit relative to ship frame so a pitched ship leans the camera too.
     const onShip =
       mode === "deck" ||
@@ -1483,17 +1480,15 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           ship.up,
           cameraState.yawRadians,
           cameraState.pitchRadians,
-          pitchLimit,
+          ORBIT_PITCH_LIMIT,
         )
       : resolveSandboxOrbit(
           cameraState.yawRadians,
           cameraState.pitchRadians,
-          pitchLimit,
+          ORBIT_PITCH_LIMIT,
         );
     const orbitUp = onShip ? ship.up : WORLD_UP;
-    const rigOffsets = firstPerson
-      ? resolveFirstPersonCameraRig(orbit)
-      : resolveCharacterCameraRig(orbit, cameraState.zoomDistance);
+    const rigOffsets = resolveCharacterCameraRig(orbit, cameraState.zoomDistance);
 
     const desiredPos = new THREE.Vector3(
       character.position.x + rigOffsets.positionOffset.x,
@@ -1509,24 +1504,13 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     if (!camera.userData.smoothedPos) {
       camera.userData.smoothedPos = new THREE.Vector3().copy(desiredPos);
     }
-
-    if (firstPerson) {
-      smoothVector(camera.userData.smoothedPos, desiredPos, dt, 0.05);
-      camera.position.copy(camera.userData.smoothedPos);
-
-      // Keep look direction instantaneous to avoid mouse latency
-      const lookDir = new THREE.Vector3(orbit.forward.x, orbit.forward.y, orbit.forward.z);
-      cameraTarget.copy(camera.position).addScaledVector(lookDir, 10);
-      camera.userData.smoothedTarget = null;
-    } else {
-      if (!camera.userData.smoothedTarget) {
-        camera.userData.smoothedTarget = new THREE.Vector3().copy(desiredTarget);
-      }
-      smoothVector(camera.userData.smoothedPos, desiredPos, dt, 0.05);
-      smoothVector(camera.userData.smoothedTarget, desiredTarget, dt, 0.04);
-      camera.position.copy(camera.userData.smoothedPos);
-      cameraTarget.copy(camera.userData.smoothedTarget);
+    if (!camera.userData.smoothedTarget) {
+      camera.userData.smoothedTarget = new THREE.Vector3().copy(desiredTarget);
     }
+    smoothVector(camera.userData.smoothedPos, desiredPos, dt, 0.05);
+    smoothVector(camera.userData.smoothedTarget, desiredTarget, dt, 0.04);
+    camera.position.copy(camera.userData.smoothedPos);
+    cameraTarget.copy(camera.userData.smoothedTarget);
 
     camera.up.set(orbitUp.x, orbitUp.y, orbitUp.z);
     camera.lookAt(cameraTarget);
@@ -1590,15 +1574,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       });
       updateShipPlacement(shipModel.group, ship, vec3(0, 0, 0), 1);
       shipModel.group.userData.updateParticles?.(dt);
+      shipModel.group.userData.updateObjectAnimations?.(dt);
 
-      const firstPersonActive =
-        mode !== "pilot" &&
-        mode !== "in-bed" &&
-        mode !== "sitting" &&
-        mode !== "standing" &&
-        mode !== "lying" &&
-        mode !== "getting-up" &&
-        controls.sampleCameraState(0).cameraView === "first-person";
       avatar.update(
         mode === "pilot" || mode === "in-bed"
           ? null
@@ -1610,7 +1587,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
             },
         vec3(0, 0, 0),
         nowMs / 1000,
-        firstPersonActive,
       );
 
       updateCamera(dt);

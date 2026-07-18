@@ -11,6 +11,7 @@ import {
   type StationSide,
   type StationWindow,
 } from '../../../world/station';
+import { applyDefaultFrustumCulling } from '../../frustum_policy';
 
 /**
  * Procedural station interior/hull built from the shared layout in
@@ -726,7 +727,7 @@ export function createStationModel(renderScale: number): THREE.Group {
     const mesh = new THREE.Mesh(merged, materials[materialId]);
     mesh.castShadow = false;
     mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
+    merged.computeBoundingSphere();
     group.add(mesh);
     for (const geometry of geometries) geometry.dispose();
   }
@@ -745,7 +746,7 @@ export function createStationModel(renderScale: number): THREE.Group {
       const mesh = new THREE.Mesh(merged, glassMaterial);
       mesh.castShadow = false;
       mesh.receiveShadow = false;
-      mesh.frustumCulled = false;
+      merged.computeBoundingSphere();
       group.add(mesh);
     }
   }
@@ -760,5 +761,6 @@ export function createStationModel(renderScale: number): THREE.Group {
   }
 
   group.scale.setScalar(renderScale);
+  applyDefaultFrustumCulling(group);
   return group;
 }

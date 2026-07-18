@@ -10,3 +10,20 @@ export function createTileBuildWorker(): Worker | null {
     return null;
   }
 }
+
+/** Parallel tile builds — leave a core for the main thread / other workers. */
+export function terrainWorkerPoolSize(): number {
+  if (typeof navigator === 'undefined') return 2;
+  const cores = navigator.hardwareConcurrency || 4;
+  return Math.max(2, Math.min(4, cores - 1));
+}
+
+export function createTileBuildWorkers(count = terrainWorkerPoolSize()): Worker[] {
+  const workers: Worker[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const worker = createTileBuildWorker();
+    if (!worker) break;
+    workers.push(worker);
+  }
+  return workers;
+}

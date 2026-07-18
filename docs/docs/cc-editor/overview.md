@@ -89,5 +89,8 @@ http://localhost:4173/?boot=editor&prefab=<prefab-id>
 - [Props and items](./props-and-items)
 - [Character preview](./character-preview)
 - [Material manager](./material-manager)
+- [Planet authoring](./planet-authoring)
+- [System Map](./system-map)
+- [Menu Manager](./menu-manager)
 - [Assets and GLB](./assets-and-glb)
 - [Preview and playtest](./preview-and-playtest)

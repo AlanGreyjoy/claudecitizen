@@ -165,9 +165,7 @@ export function updateCharacterInStation(
   const moveSpeed =
     (wantsSprint ? SPRINT_SPEED_METERS_PER_SECOND : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
 
-  const desiredFacing = input.faceCameraYaw
-    ? stationCameraForward(frame, input.cameraYawRadians ?? 0)
-    : desiredDirection;
+  const desiredFacing = desiredDirection;
 
   if (!physics) {
     // Physics is required for station locomotion once walk volumes are removed.

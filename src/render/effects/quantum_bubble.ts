@@ -292,6 +292,7 @@ export function createQuantumBubble(
   const markerSlots: MarkerSlot[] = [];
   // Unit octahedron; scaled each frame in world meters → render units.
   const diamondGeometry = new THREE.OctahedronGeometry(1);
+  diamondGeometry.computeBoundingSphere();
   for (let i = 0; i < MARKER_POOL_SIZE; i += 1) {
     const markerRoot = new THREE.Group();
     markerRoot.name = `quantum-destination-marker-${i}`;
@@ -309,7 +310,6 @@ export function createQuantumBubble(
       }),
     );
     diamond.renderOrder = 11;
-    diamond.frustumCulled = false;
     markerRoot.add(diamond);
     scene.add(markerRoot);
     markerSlots.push({ root: markerRoot, diamond, label: null, labelName: null });

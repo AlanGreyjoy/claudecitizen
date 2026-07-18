@@ -1,7 +1,9 @@
-import { clearChildren, el } from '../dom';
-import type { PrefabListEntry } from '../api';
+import { clearChildren, chevronIcon, el } from '../dom';
+import { createUiIcon, UiIcons } from '../../ui/icons';
+import type { PlanetListEntry, PrefabListEntry } from '../api';
 import { slugifyPrefabName, PREFAB_KINDS, type PrefabKind } from '../../world/prefabs/schema';
 import type { EditorEntity, EditorStore } from '../document';
+import { MENU_CATALOG } from '../menus/catalog';
 
 export type ToolbarGizmoMode = 'translate' | 'rotate' | 'scale';
 
@@ -20,17 +22,22 @@ export interface ToolbarActions {
   onNew: () => void;
   onSave: () => void;
   onLoad: (id: string) => void;
+  onLoadPlanet: (id: string) => void;
+  onOpenMenu: (id: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onPreview: () => void;
+  onPreviewPlanet: () => void;
   onExit: () => void;
   /** Ship kind: editor-viewport articulation preview (gear / ramp / doors). */
   onShipPreviewChange: (state: ShipPreviewToggles) => void;
+  isPlanetAuthoring: () => boolean;
 }
 
 export interface ToolbarHandle {
   setGizmoMode: (mode: ToolbarGizmoMode) => void;
   setPrefabOptions: (entries: PrefabListEntry[]) => void;
+  setPlanetOptions: (entries: PlanetListEntry[]) => void;
   /** Toggle a ship-door / animation open preview by id. */
   toggleDoorPreview: (doorId: string) => void;
 }
@@ -184,6 +191,133 @@ function createOpenPrefabPanel(
   return panel;
 }
 
+function createOpenPlanetPanel(
+  getPlanets: () => PlanetListEntry[],
+  onSelect: (id: string) => void,
+): OpenPrefabPanel {
+  let searchQuery = '';
+  const panel = el('div', { className: 'ed-open-panel' }) as OpenPrefabPanel;
+  const listWrap = el('div', { className: 'ed-open-list' });
+  const searchInput = el('input', {
+    className: 'ed-input ed-open-search',
+    attrs: { type: 'text', placeholder: 'Search planets…' },
+    on: {
+      input: () => {
+        searchQuery = searchInput.value.trim().toLowerCase();
+        renderList();
+      },
+      keydown: (event) => event.stopPropagation(),
+    },
+  });
+
+  function planetsForDisplay(): PlanetListEntry[] {
+    const planets = getPlanets();
+    if (!searchQuery) return planets;
+    return planets.filter(
+      (entry) =>
+        entry.id.toLowerCase().includes(searchQuery) ||
+        entry.name.toLowerCase().includes(searchQuery),
+    );
+  }
+
+  function renderList(): void {
+    clearChildren(listWrap);
+    const planets = planetsForDisplay();
+    if (planets.length === 0) {
+      listWrap.append(el('div', { className: 'ed-open-empty', text: 'No planets found' }));
+      return;
+    }
+    for (const entry of planets) {
+      listWrap.append(
+        el(
+          'button',
+          {
+            className: 'ed-open-item',
+            on: {
+              click: (event) => {
+                event.stopPropagation();
+                onSelect(entry.id);
+              },
+            },
+          },
+          [
+            el('span', { className: 'ed-open-item-name', text: entry.name }),
+            el('span', { className: 'ed-open-item-id', text: entry.id }),
+          ],
+        ),
+      );
+    }
+  }
+
+  panel.append(el('div', { className: 'ed-open-search-wrap' }, [searchInput]), listWrap);
+  panel.rerender = renderList;
+  panel.focusSearch = () => searchInput.focus();
+  renderList();
+  return panel;
+}
+
+function createOpenMenuPanel(onSelect: (id: string) => void): OpenPrefabPanel {
+  let searchQuery = '';
+  const panel = el('div', { className: 'ed-open-panel' }) as OpenPrefabPanel;
+  const listWrap = el('div', { className: 'ed-open-list' });
+  const searchInput = el('input', {
+    className: 'ed-input ed-open-search',
+    attrs: { type: 'text', placeholder: 'Search menus…' },
+    on: {
+      input: () => {
+        searchQuery = searchInput.value.trim().toLowerCase();
+        renderList();
+      },
+      keydown: (event) => event.stopPropagation(),
+    },
+  });
+
+  function menusForDisplay() {
+    if (!searchQuery) return MENU_CATALOG;
+    return MENU_CATALOG.filter(
+      (entry) =>
+        entry.id.toLowerCase().includes(searchQuery) ||
+        entry.name.toLowerCase().includes(searchQuery) ||
+        entry.description.toLowerCase().includes(searchQuery),
+    );
+  }
+
+  function renderList(): void {
+    clearChildren(listWrap);
+    const menus = menusForDisplay();
+    if (menus.length === 0) {
+      listWrap.append(el('div', { className: 'ed-open-empty', text: 'No menus found' }));
+      return;
+    }
+    for (const entry of menus) {
+      listWrap.append(
+        el(
+          'button',
+          {
+            className: 'ed-open-item',
+            on: {
+              click: (event) => {
+                event.stopPropagation();
+                onSelect(entry.id);
+              },
+            },
+          },
+          [
+            el('span', { className: 'ed-open-item-name', text: entry.name }),
+            el('span', { className: 'ed-open-item-id', text: entry.id }),
+          ],
+        ),
+      );
+    }
+  }
+
+  panel.append(el('div', { className: 'ed-open-search-wrap' }, [searchInput]), listWrap);
+  panel.rerender = renderList;
+  panel.focusSearch = () => searchInput.focus();
+  renderList();
+  return panel;
+}
+
 function closeAllMenus(menubar: HTMLElement): void {
   for (const menu of menubar.querySelectorAll('.ed-menu.is-open')) {
     menu.classList.remove('is-open');
@@ -244,7 +378,7 @@ function createMenuDropdown(
         const submenuWrap = el('div', { className: 'ed-menu-submenu' });
         const trigger = el('button', { className: 'ed-menu-item ed-menu-submenu-trigger' }, [
           el('span', { className: 'ed-menu-item-label', text: entry.submenu }),
-          el('span', { className: 'ed-menu-item-shortcut', text: '▸' }),
+          chevronIcon(false),
         ]);
 
         let panelEl: OpenPrefabPanel | undefined;
@@ -543,6 +677,7 @@ export function createToolbar(
 
   // -- document menubar --
   let prefabOptions: PrefabListEntry[] = [];
+  let planetOptions: PlanetListEntry[] = [];
 
   const nameInput = el('input', {
     className: 'ed-input ed-menubar-name',
@@ -600,6 +735,25 @@ export function createToolbar(
                 },
               ),
           },
+          {
+            submenu: 'Open Planets',
+            panel: ({ menubar }) =>
+              createOpenPlanetPanel(
+                () => planetOptions,
+                (id) => {
+                  actions.onLoadPlanet(id);
+                  closeAllMenus(menubar);
+                },
+              ),
+          },
+          {
+            submenu: 'Open Menus',
+            panel: ({ menubar }) =>
+              createOpenMenuPanel((id) => {
+                actions.onOpenMenu(id);
+                closeAllMenus(menubar);
+              }),
+          },
           'sep',
           { label: 'Save', shortcut: 'Ctrl+S', accent: true, action: () => actions.onSave() },
           'sep',
@@ -641,13 +795,18 @@ export function createToolbar(
         entries: () => [
           {
             label:
-              store.getState().kind === 'ship'
-                ? 'Preview Ship'
-                : store.getState().kind === 'station'
-                  ? 'Preview Station'
-                  : 'Preview in Play',
+              actions.isPlanetAuthoring()
+                ? 'Preview Planet'
+                : store.getState().kind === 'ship'
+                  ? 'Preview Ship'
+                  : store.getState().kind === 'station'
+                    ? 'Preview Station'
+                    : 'Preview in Play',
             accent: true,
-            action: () => actions.onPreview(),
+            action: () => {
+              if (actions.isPlanetAuthoring()) actions.onPreviewPlanet();
+              else actions.onPreview();
+            },
           },
         ],
       },
@@ -697,17 +856,28 @@ export function createToolbar(
   let collapsed = false;
   const toggleBtn = el('button', {
     className: 'ed-viewport-toolbar-toggle',
-    text: '◂',
     title: 'Collapse tools',
     on: {
       click: () => {
         collapsed = !collapsed;
         containers.viewport.classList.toggle('is-collapsed', collapsed);
-        toggleBtn.textContent = collapsed ? '▸ Tools' : '◂';
-        toggleBtn.title = collapsed ? 'Expand tools' : 'Collapse tools';
+        syncToggle();
       },
     },
   });
+
+  function syncToggle(): void {
+    toggleBtn.title = collapsed ? 'Expand tools' : 'Collapse tools';
+    toggleBtn.replaceChildren(
+      createUiIcon(collapsed ? UiIcons.chevronRight : UiIcons.chevronLeft, {
+        className: 'ed-ui-icon',
+        size: 14,
+        strokeWidth: 2,
+      }),
+      ...(collapsed ? [document.createTextNode(' Tools')] : []),
+    );
+  }
+  syncToggle();
 
   containers.viewport.append(toggleBtn, viewportBody);
   containers.doc.append(docBar);
@@ -735,6 +905,10 @@ export function createToolbar(
     setGizmoMode: (mode) => setGizmoMode(mode, false),
     setPrefabOptions(entries) {
       prefabOptions = entries;
+      rerenderMenus(menubar);
+    },
+    setPlanetOptions(entries) {
+      planetOptions = entries;
       rerenderMenus(menubar);
     },
     toggleDoorPreview,

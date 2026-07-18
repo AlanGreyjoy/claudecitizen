@@ -1,7 +1,16 @@
 import type * as THREE from 'three';
-import type { Planet, TerrainTileBuffers, TileInfo, TileWorkerInMessage, TileWorkerOutMessage } from '../../../types';
+import type {
+  Planet,
+  TerrainTileBuffers,
+  TileInfo,
+  TileWorkerInMessage,
+  TileWorkerOutMessage,
+  Vec3,
+} from '../../../types';
+import { distance } from '../../../math/vec3';
 import { CUBE_FACES } from '../../../world/cube_sphere';
 import { loadTerrainTile, saveTerrainTile } from '../../../cache/terrain_tile_cache';
+import { getActivePlanetConfig } from '../../../world/planets/runtime';
 import { buildTerrainTileBuffers } from '../build/terrain_buffers';
 import {
   MAX_CACHED_TILES,
@@ -18,7 +27,7 @@ import type {
   TileMeshEntry,
 } from '../domain/types';
 import { createReadyMesh } from '../render/tile_geometry';
-import { createTileBuildWorker } from '../worker/create_worker';
+import { createTileBuildWorkers } from '../worker/create_worker';
 
 export interface BuildBudget {
   remaining: number;
@@ -27,29 +36,41 @@ export interface BuildBudget {
 export interface TileMeshCache {
   countEntries: (status: TileEntryStatus) => number;
   dispose: () => void;
+  entryCount: () => number;
   evictTileMeshes: (selectedKeys: Set<string>) => void;
   hideInactiveMeshes: (activeKeys: Set<string>, previousActiveKeys: Set<string>) => void;
+  isTileReady: (key: string) => boolean;
   isWorkerEnabled: () => boolean;
+  prefetchTiles: (tiles: readonly TileInfo[]) => string[];
   requestBestAvailableTile: (info: TileInfo, buildBudget: BuildBudget) => ResolvedTile;
   resetFrameCounters: () => void;
+  setFocusPosition: (position: Vec3) => void;
   setFrameNumber: (frame: number) => void;
   snapshotFrameStats: () => TileFrameCounters;
   stats: () => TileCacheStatsAccumulator;
+  waitUntilReady: (keys: readonly string[], timeoutMs: number) => Promise<number>;
 }
 
 interface TileMeshCacheOptions {
-  material: THREE.MeshStandardMaterial;
+  material: THREE.MeshLambertMaterial;
   planet: Planet;
   seed: number;
   tileGroup: THREE.Group;
 }
 
-// How long the freshly constructed worker gets to post its ready handshake
-// before we give up on it. Generous enough for dev-server module compilation
-// on a slow machine, short enough that a dead worker doesn't starve tile
-// builds for long.
+interface WorkerSlot {
+  busy: boolean;
+  worker: Worker;
+}
+
+// How long the freshly constructed workers get to post a ready handshake
+// before we give up on the pool. Generous enough for dev-server module
+// compilation on a slow machine, short enough that a dead pool doesn't starve
+// tile builds for long.
 const WORKER_LIVENESS_TIMEOUT_MS = 5_000;
 const SYNC_TILE_BUILD_BUDGET_PER_FRAME = 1;
+/** Fine underfoot LODs skip waiting on IDB before the worker starts. */
+const FAST_PATH_MIN_LEVEL = 15;
 
 export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCache {
   const { material, planet, seed, tileGroup } = options;
@@ -64,9 +85,14 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     workerErrors: 0,
   };
   const diskLoadsInFlight = new Set<string>();
+  // Session-local negative cache: after an IndexedDB miss with no build path
+  // (dead worker + fine LOD), do not re-query IDB every frame while standing.
+  const confirmedDiskMisses = new Set<string>();
   const pendingBuildQueue: PendingBuildJob[] = [];
-  let tileBuildWorker = createTileBuildWorker();
-  let workerBusy = false;
+  const workerPool: WorkerSlot[] = createTileBuildWorkers().map((worker) => ({
+    busy: false,
+    worker,
+  }));
   let workerAlive = false;
   let workerLivenessTimer: ReturnType<typeof setTimeout> | null = null;
   let frameNumber = 0;
@@ -76,6 +102,65 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
   let evictedThisFrame = 0;
   let queuedThisFrame = 0;
   let syncBuildBudgetRemaining = SYNC_TILE_BUILD_BUDGET_PER_FRAME;
+  let focusPosition: Vec3 | null = null;
+
+  function hasWorkers(): boolean {
+    return workerPool.length > 0;
+  }
+
+  /**
+   * Sync-build only when the worker pool is gone (or for L0 roots). Fine LODs
+   * must stay off the main thread while workers are healthy — but a dead pool
+   * must not leave permanent pending stubs with no escape hatch.
+   */
+  function maySyncBuild(info: TileInfo): boolean {
+    return !hasWorkers() || info.level === 0;
+  }
+
+  /** Keep a mesh-less stub so selection can fall back to parents without re-hitting IDB. */
+  function retainUnresolvedTile(info: TileInfo, key: string): void {
+    const existing = meshCache.get(key);
+    if (existing) {
+      existing.info = info;
+      existing.lastUsedFrame = frameNumber;
+      existing.mesh = null;
+      existing.buildId = null;
+      existing.status = 'pending';
+      return;
+    }
+    meshCache.set(key, {
+      buildId: null,
+      info,
+      lastUsedFrame: frameNumber,
+      mesh: null,
+      status: 'pending',
+    });
+    updateCachePeak();
+  }
+
+  function jobPriority(info: TileInfo): number {
+    // Lower sorts first. Prefer nearer tiles, then finer LODs underfoot.
+    if (!focusPosition) return 1_000_000 - info.level;
+    return distance(info.centerPosition, focusPosition) - info.level * 80;
+  }
+
+  function enqueuePendingBuild(job: PendingBuildJob): void {
+    let insertAt = pendingBuildQueue.length;
+    for (let i = 0; i < pendingBuildQueue.length; i += 1) {
+      if (pendingBuildQueue[i].priority > job.priority) {
+        insertAt = i;
+        break;
+      }
+    }
+    pendingBuildQueue.splice(insertAt, 0, job);
+  }
+
+  function resortPendingQueue(): void {
+    for (const job of pendingBuildQueue) {
+      job.priority = jobPriority(job.info);
+    }
+    pendingBuildQueue.sort((a, b) => a.priority - b.priority);
+  }
 
   function countEntries(status: TileEntryStatus): number {
     let count = 0;
@@ -90,6 +175,8 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
   }
 
   function persistTerrainBuffers(info: TileInfo, buffers: TerrainTileBuffers): void {
+    const key = tileKey(info.face, info.level, info.x, info.y);
+    confirmedDiskMisses.delete(key);
     saveTerrainTile(planet, seed, info.face, info.level, info.x, info.y, buffers);
   }
 
@@ -135,41 +222,60 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     clearWorkerLivenessTimer();
   }
 
-  // Drop the worker and forget every pending entry so the next request for
-  // those tiles goes through the synchronous build path instead.
+  // Drop the pool and clear worker job ids so the next request can sync-build
+  // (budgeted) instead of waiting forever on a dead queue.
   function abandonWorkerBuilds(reason: string): void {
     cacheStats.workerErrors += 1;
     console.error(`ClaudeCitizen terrain worker ${reason}, reverting future builds to sync.`);
     clearWorkerLivenessTimer();
-    if (tileBuildWorker) {
-      tileBuildWorker.terminate();
-      tileBuildWorker = null;
+    for (const slot of workerPool) {
+      slot.worker.terminate();
     }
-    workerBusy = false;
+    workerPool.length = 0;
     pendingBuildQueue.length = 0;
-    for (const [key, entry] of meshCache) {
-      if (entry.status === 'pending') meshCache.delete(key);
+    for (const entry of meshCache.values()) {
+      if (entry.status !== 'pending' || entry.mesh) continue;
+      entry.buildId = null;
     }
   }
 
   function pumpWorkerQueue(): void {
-    if (!tileBuildWorker || workerBusy) return;
+    if (!hasWorkers()) return;
 
-    while (pendingBuildQueue.length > 0) {
-      const job = pendingBuildQueue.shift()!;
-      const entry = meshCache.get(job.key);
-      if (!entry || entry.buildId !== job.buildId || entry.status !== 'pending') continue;
+    for (const slot of workerPool) {
+      if (slot.busy) continue;
 
-      workerBusy = true;
-      const message: TileWorkerInMessage = {
-        buildId: job.buildId,
-        info: job.info,
-        key: job.key,
-        planet,
-        seed,
-      };
-      tileBuildWorker.postMessage(message);
-      return;
+      while (pendingBuildQueue.length > 0) {
+        const job = pendingBuildQueue.shift()!;
+        const entry = meshCache.get(job.key);
+        if (!entry || entry.buildId !== job.buildId || entry.status !== 'pending') {
+          continue;
+        }
+
+        const planetDocument = getActivePlanetConfig().document;
+        if (!planetDocument?.id) {
+          // Without a document the worker cannot activate the terrain recipe and
+          // would error-loop into abandonWorkerBuilds → sync L17 stalls.
+          markAsyncBuildFailed(
+            job.key,
+            job.buildId,
+            'active planetDocument missing id',
+          );
+          continue;
+        }
+
+        slot.busy = true;
+        const message: TileWorkerInMessage = {
+          buildId: job.buildId,
+          info: job.info,
+          key: job.key,
+          planet,
+          planetDocument,
+          seed,
+        };
+        slot.worker.postMessage(message);
+        break;
+      }
     }
   }
 
@@ -182,6 +288,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     if (!entry || entry.status !== 'loading-disk') return;
 
     if (buffers) {
+      confirmedDiskMisses.delete(key);
       entry.mesh = createReadyMesh(info, buffers, material, tileGroup);
       entry.status = 'ready';
       cacheStats.diskHits += 1;
@@ -190,17 +297,35 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     }
 
     cacheStats.diskMisses += 1;
-    meshCache.delete(key);
-    if (tileBuildWorker && info.level > 0) {
+    if (hasWorkers() && info.level > 0) {
+      meshCache.delete(key);
       queueTileBuild(info);
       return;
     }
-    queueSyncTileBuild(info);
+    // No worker: remember the miss and leave a pending stub for budgeted sync.
+    confirmedDiskMisses.add(key);
+    entry.status = 'pending';
+    entry.buildId = null;
+    entry.mesh = null;
+    entry.lastUsedFrame = frameNumber;
   }
 
   function startTerrainDiskLoad(info: TileInfo): void {
     const key = tileKey(info.face, info.level, info.x, info.y);
     if (meshCache.has(key) || diskLoadsInFlight.has(key)) return;
+
+    if (confirmedDiskMisses.has(key)) {
+      // Already know IDB is empty for this key. Promote to a build if we can;
+      // otherwise keep a stub and rely on parent coverage.
+      if (hasWorkers() && info.level > 0) {
+        queueTileBuild(info);
+      } else if (maySyncBuild(info)) {
+        queueSyncTileBuild(info);
+      } else {
+        retainUnresolvedTile(info, key);
+      }
+      return;
+    }
 
     meshCache.set(key, {
       buildId: null,
@@ -272,6 +397,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     info: TileInfo,
     buildBudget: BuildBudget,
   ): TileMeshEntry | null {
+    if (!maySyncBuild(info)) return null;
     if (buildBudget.remaining <= 0 || syncBuildBudgetRemaining <= 0) return null;
     buildBudget.remaining -= 1;
     syncBuildBudgetRemaining -= 1;
@@ -295,15 +421,127 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     };
     nextBuildId += 1;
     meshCache.set(key, entry);
-    pendingBuildQueue.push({
+    enqueuePendingBuild({
       buildId: entry.buildId!,
       info,
       key,
+      priority: jobPriority(info),
     });
     queuedThisFrame += 1;
     updateCachePeak();
     pumpWorkerQueue();
     return entry;
+  }
+
+  function isTileReady(key: string): boolean {
+    const entry = meshCache.get(key);
+    return Boolean(entry?.mesh && entry.status === 'ready');
+  }
+
+  /**
+   * Warm-cache short-circuit for fine LODs that already started a worker build:
+   * if IndexedDB hits first, apply the mesh and drop the queued/in-flight job.
+   */
+  function peekTerrainDiskUpgrade(info: TileInfo): void {
+    const key = tileKey(info.face, info.level, info.x, info.y);
+    if (confirmedDiskMisses.has(key) || diskLoadsInFlight.has(key)) return;
+    diskLoadsInFlight.add(key);
+    void loadTerrainTile(planet, seed, info.face, info.level, info.x, info.y)
+      .then((stored) => {
+        diskLoadsInFlight.delete(key);
+        const entry = meshCache.get(key);
+        if (!entry || entry.mesh) {
+          if (stored) cacheStats.diskHits += 1;
+          else cacheStats.diskMisses += 1;
+          return;
+        }
+        if (!stored) {
+          confirmedDiskMisses.add(key);
+          cacheStats.diskMisses += 1;
+          return;
+        }
+        confirmedDiskMisses.delete(key);
+        discardPendingQueueForKey(key, entry.buildId ?? null);
+        entry.buildId = null;
+        entry.mesh = createReadyMesh(info, stored, material, tileGroup);
+        entry.status = 'ready';
+        entry.lastUsedFrame = frameNumber;
+        cacheStats.diskHits += 1;
+        updateCachePeak();
+      })
+      .catch(() => {
+        diskLoadsInFlight.delete(key);
+        confirmedDiskMisses.add(key);
+        cacheStats.diskMisses += 1;
+      });
+  }
+
+  function beginSelectedTileLoad(info: TileInfo): void {
+    const key = tileKey(info.face, info.level, info.x, info.y);
+    if (meshCache.has(key) || diskLoadsInFlight.has(key)) return;
+
+    // Fine underfoot tiles: start the worker immediately and race IndexedDB so
+    // a cold cache does not serialize every LOD behind a disk round-trip.
+    if (hasWorkers() && info.level >= FAST_PATH_MIN_LEVEL) {
+      if (confirmedDiskMisses.has(key)) {
+        queueTileBuild(info);
+        return;
+      }
+      queueTileBuild(info);
+      peekTerrainDiskUpgrade(info);
+      return;
+    }
+
+    startTerrainDiskLoad(info);
+  }
+
+  function prefetchTiles(tiles: readonly TileInfo[]): string[] {
+    const keys: string[] = [];
+    // Leave headroom for underfoot selection; never let prefetch fill the cache.
+    const softCap = Math.max(8, Math.floor(MAX_CACHED_TILES * 0.8));
+    let started = 0;
+    const maxStarts = 40;
+    for (const info of tiles) {
+      const key = tileKey(info.face, info.level, info.x, info.y);
+      keys.push(key);
+      if (isTileReady(key)) continue;
+      const entry = meshCache.get(key);
+      if (entry) {
+        entry.lastUsedFrame = frameNumber;
+        continue;
+      }
+      if (started >= maxStarts || meshCache.size + diskLoadsInFlight.size >= softCap) {
+        continue;
+      }
+      startTerrainDiskLoad(info);
+      started += 1;
+    }
+    pumpWorkerQueue();
+    return keys;
+  }
+
+  async function waitUntilReady(
+    keys: readonly string[],
+    timeoutMs: number,
+  ): Promise<number> {
+    if (keys.length === 0) return 0;
+    const deadline = performance.now() + Math.max(0, timeoutMs);
+    while (performance.now() < deadline) {
+      let ready = 0;
+      for (const key of keys) {
+        if (isTileReady(key)) ready += 1;
+      }
+      if (ready >= keys.length) return ready;
+      pumpWorkerQueue();
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 16);
+      });
+    }
+    let ready = 0;
+    for (const key of keys) {
+      if (isTileReady(key)) ready += 1;
+    }
+    return ready;
   }
 
   function requestBestAvailableTile(info: TileInfo, buildBudget: BuildBudget): ResolvedTile {
@@ -319,13 +557,13 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     let targetEntry = meshCache.get(targetKey);
 
     if (!targetEntry) {
-      startTerrainDiskLoad(target);
+      beginSelectedTileLoad(target);
       targetEntry = meshCache.get(targetKey);
     }
     if (targetEntry) targetEntry.lastUsedFrame = frameNumber;
 
     if (targetEntry && targetEntry.status !== 'loading-disk' && !targetEntry.mesh) {
-      if (!tileBuildWorker || target.level === 0) {
+      if (maySyncBuild(target)) {
         const builtEntry = tryBuildTileMeshSync(target, buildBudget);
         if (builtEntry) {
           return {
@@ -334,12 +572,19 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
             mesh: builtEntry.mesh!,
           };
         }
+      } else if (hasWorkers() && target.level > 0 && !targetEntry.buildId) {
+        // Disk miss left a sync-pending stub; promote to worker queue.
+        meshCache.delete(targetKey);
+        if (buildBudget.remaining > 0) {
+          buildBudget.remaining -= 1;
+          queueTileBuild(target);
+        }
       }
     } else if (!targetEntry && buildBudget.remaining > 0) {
-      if (tileBuildWorker && target.level > 0) {
+      if (hasWorkers() && target.level > 0) {
         buildBudget.remaining -= 1;
         queueTileBuild(target);
-      } else {
+      } else if (maySyncBuild(target)) {
         const builtEntry = tryBuildTileMeshSync(target, buildBudget);
         if (builtEntry) {
           return {
@@ -391,12 +636,13 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     }
 
     const fallbackQueuedInWorker =
-      Boolean(tileBuildWorker) &&
+      hasWorkers() &&
       fallbackEntry?.status === 'pending' &&
       fallbackEntry.buildId != null;
-    const builtFallbackEntry = fallbackQueuedInWorker
-      ? null
-      : tryBuildTileMeshSync(fallbackInfo, buildBudget);
+    const builtFallbackEntry =
+      fallbackQueuedInWorker || !maySyncBuild(fallbackInfo)
+        ? null
+        : tryBuildTileMeshSync(fallbackInfo, buildBudget);
     if (builtFallbackEntry) {
       return {
         info: fallbackInfo,
@@ -405,9 +651,8 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       };
     }
 
-    // No mesh available and no budget left: report a hole for this frame rather
-    // than reusing an unrelated mesh, which leaves ghost terrain visible with no
-    // owner in the active-key bookkeeping.
+    // The six pinned L0 roots should make this path unreachable. Keep the
+    // defensive request in case cache initialization ever changes.
     startTerrainDiskLoad(fallbackInfo);
     return {
       info: fallbackInfo,
@@ -418,7 +663,9 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
 
   function evictTileMeshes(selectedKeys: Set<string>): void {
     for (const [key, entry] of meshCache) {
-      if (selectedKeys.has(key)) continue;
+      // L0 roots are the final, synchronously-built coverage guarantee for a
+      // cold cache, worker failure, teleport, or exhausted frame budget.
+      if (selectedKeys.has(key) || entry.info.level === 0) continue;
       if (frameNumber - entry.lastUsedFrame > TILE_CACHE_STALE_FRAMES) {
         releaseTileEntry(key, entry);
       }
@@ -428,7 +675,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
 
     const inactiveEntries: [string, TileMeshEntry][] = [];
     for (const [key, entry] of meshCache) {
-      if (selectedKeys.has(key)) continue;
+      if (selectedKeys.has(key) || entry.info.level === 0) continue;
       inactiveEntries.push([key, entry]);
     }
     inactiveEntries.sort((a, b) => a[1].lastUsedFrame - b[1].lastUsedFrame);
@@ -451,64 +698,71 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     buildTileMeshSync(makeTileInfo(face, 0, 0, 0, planet));
   }
 
-  if (tileBuildWorker) {
+  if (hasWorkers()) {
     // Constructing a Worker can "succeed" in environments where the script
     // never actually executes and no error event ever fires (seen in embedded
     // browser tabs). Without this handshake timeout the build queue would
-    // starve forever while everything waits on a dead worker.
+    // starve forever while everything waits on a dead pool.
     workerLivenessTimer = setTimeout(() => {
       if (!workerAlive) abandonWorkerBuilds('never responded to startup handshake');
     }, WORKER_LIVENESS_TIMEOUT_MS);
 
-    tileBuildWorker.onmessage = (event: MessageEvent<TileWorkerOutMessage>) => {
-      markWorkerAlive();
-      if ('ready' in event.data) return;
+    for (const slot of workerPool) {
+      slot.worker.onmessage = (event: MessageEvent<TileWorkerOutMessage>) => {
+        markWorkerAlive();
+        if ('ready' in event.data) return;
 
-      workerBusy = false;
-      const { buildId, key } = event.data;
+        slot.busy = false;
+        const { buildId, key } = event.data;
 
-      if ('error' in event.data) {
-        markAsyncBuildFailed(key, buildId, event.data.error);
+        if ('error' in event.data) {
+          markAsyncBuildFailed(key, buildId, event.data.error);
+          pumpWorkerQueue();
+          return;
+        }
+
+        const { colors, normals, positions } = event.data;
+        const entry = meshCache.get(key);
+        if (entry && entry.buildId === buildId && entry.status === 'pending') {
+          const buffers = { colors, normals, positions };
+          entry.mesh = createReadyMesh(entry.info, buffers, material, tileGroup);
+          entry.status = 'ready';
+          cacheStats.totalBuilds += 1;
+          completedSinceLastUpdate += 1;
+          persistTerrainBuffers(entry.info, buffers);
+        }
+
         pumpWorkerQueue();
-        return;
-      }
+      };
 
-      const { colors, normals, positions } = event.data;
-      const entry = meshCache.get(key);
-      if (entry && entry.buildId === buildId && entry.status === 'pending') {
-        const buffers = { colors, normals, positions };
-        entry.mesh = createReadyMesh(entry.info, buffers, material, tileGroup);
-        entry.status = 'ready';
-        cacheStats.totalBuilds += 1;
-        completedSinceLastUpdate += 1;
-        persistTerrainBuffers(entry.info, buffers);
-      }
-
-      pumpWorkerQueue();
-    };
-
-    tileBuildWorker.onerror = (event: ErrorEvent) => {
-      abandonWorkerBuilds(`crashed (${event.message || 'unknown error'})`);
-    };
+      slot.worker.onerror = (event: ErrorEvent) => {
+        abandonWorkerBuilds(`crashed (${event.message || 'unknown error'})`);
+      };
+    }
   }
 
   return {
     countEntries,
     dispose() {
       clearWorkerLivenessTimer();
-      if (tileBuildWorker) {
-        tileBuildWorker.terminate();
-        tileBuildWorker = null;
+      for (const slot of workerPool) {
+        slot.worker.terminate();
       }
+      workerPool.length = 0;
 
       pendingBuildQueue.length = 0;
+      diskLoadsInFlight.clear();
+      confirmedDiskMisses.clear();
       for (const [key, entry] of meshCache) {
         releaseTileEntry(key, entry, false);
       }
     },
+    entryCount: () => meshCache.size,
     evictTileMeshes,
     hideInactiveMeshes,
-    isWorkerEnabled: () => Boolean(tileBuildWorker),
+    isTileReady,
+    isWorkerEnabled: () => hasWorkers(),
+    prefetchTiles,
     requestBestAvailableTile,
     resetFrameCounters() {
       builtThisFrame = completedSinceLastUpdate;
@@ -516,6 +770,10 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       evictedThisFrame = 0;
       queuedThisFrame = 0;
       syncBuildBudgetRemaining = SYNC_TILE_BUILD_BUDGET_PER_FRAME;
+    },
+    setFocusPosition(position) {
+      focusPosition = position;
+      if (pendingBuildQueue.length > 1) resortPendingQueue();
     },
     setFrameNumber(frame) {
       frameNumber = frame;
@@ -529,5 +787,6 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       };
     },
     stats: () => cacheStats,
+    waitUntilReady,
   };
 }

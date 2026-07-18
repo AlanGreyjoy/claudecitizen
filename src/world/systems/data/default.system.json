@@ -1,0 +1,42 @@
+{
+  "id": "default",
+  "name": "Asteron System",
+  "star": {
+    "name": "Asteron Prime"
+  },
+  "planets": [
+    {
+      "id": "asteron",
+      "planetId": "asteron",
+      "name": "Asteron",
+      "positionMeters": {
+        "x": 10000000000,
+        "z": 0
+      }
+    }
+  ],
+  "stations": [
+    {
+      "id": "demo-station-orbit",
+      "stationPrefabId": "demo-station",
+      "name": "Demo Station",
+      "parentBodyId": "asteron",
+      "offsetMeters": {
+        "x": 32581680.4748497,
+        "z": -36858168.12717646
+      },
+      "altitudeMeters": 200000
+    },
+    {
+      "id": "blackmarket-orbit",
+      "stationPrefabId": "blackmarketstation",
+      "name": "Black Market Station",
+      "parentBodyId": "asteron",
+      "offsetMeters": {
+        "x": -769418319.5251503,
+        "z": 183141831.87282354
+      },
+      "altitudeMeters": 200000
+    }
+  ]
+}

@@ -6,21 +6,30 @@ import type {
   VegetationSettings,
   Vec3,
 } from '../../types';
+import { distance } from '../../math/vec3';
+import { MAX_LEVEL } from '../planet_tiles/domain/constants';
+import { collectTilesNearPosition } from '../planet_tiles/domain/spawn_tiles';
 import { loadVegetationTile, saveVegetationTile } from './cache/tile_cache';
 import {
+  configureGrassDistanceMeters,
+  getGrassDistanceMeters,
+  GRASS_RADIUS_UPDATE_MIN_MOVE_METERS,
   MAX_CACHED_VEGETATION_TILES,
   TREE_LOD_DISTANCE_METERS,
   TREE_LOD_UPDATE_MIN_MOVE_METERS,
+  VEGETATION_BUILD_BUDGET_MS_PER_FRAME,
   VEGETATION_BUILD_BUDGET_PER_FRAME,
   VEGETATION_CACHE_STALE_FRAMES,
+  VEGETATION_MIN_TILE_LEVEL,
 } from './domain/constants';
 import { tileKey } from './domain/hash';
 import { collectLandingGroveData } from './domain/landing_grove_data';
 import { collectTileVegetationData } from './domain/tile_data';
-import type { StoredVegetationTile } from './domain/storage';
+import type { StoredVegetationInstance, StoredVegetationTile } from './domain/storage';
 import {
   isVegetationVisibleAtAltitude,
-  shouldDecorateTile,
+  selectVegetationTiles,
+  shouldShowGrassOnTile,
 } from './domain/visibility';
 import {
   disposeInstancedAssets,
@@ -46,12 +55,16 @@ import {
 interface VegetationTileEntry {
   group: THREE.Group;
   renderGroup: VegetationRenderGroup;
+  tileInfo: TileInfo | null;
+  /** Preserved so grass-only setting tweaks can re-save without regenerating trees. */
+  storedTrees: StoredVegetationInstance[];
   lastUsedFrame: number;
   status: 'loading-disk' | 'pending-build' | 'ready';
 }
 
 interface VegetationBuildJob {
   key: string;
+  priority: number;
   tileInfo: TileInfo;
 }
 
@@ -65,7 +78,14 @@ interface VegetationCacheStatsAccumulator {
 
 export interface PlanetVegetationManager {
   dispose: () => void;
+  prefetchAround: (
+    position: Vec3,
+    radiusMeters: number,
+    options?: { maxStarts?: number; minLevel?: number; maxLevel?: number },
+  ) => string[];
   setVisible: (visible: boolean) => void;
+  setLayerVisible: (layers: { grass?: boolean; trees?: boolean }) => void;
+  setGrassRenderDistanceMeters: (meters: number) => void;
   setSettings: (nextSettings: Partial<VegetationSettings>) => void;
   update: (
     bodyPosition: Vec3,
@@ -73,6 +93,8 @@ export interface PlanetVegetationManager {
     altitudeMeters: number,
     timeSeconds: number,
   ) => VegetationCacheStats;
+  waitForAssets: (timeoutMs?: number) => Promise<boolean>;
+  waitUntilReady: (keys: readonly string[], timeoutMs: number) => Promise<number>;
 }
 
 export function createPlanetVegetationManager(
@@ -105,16 +127,30 @@ export function createPlanetVegetationManager(
   let builtThisFrame = 0;
   let evictedThisFrame = 0;
   let frameNumber = 0;
+  let buildFocusPosition: Vec3 | null = null;
   let lastTreeLodFocus: Vec3 | null = null;
+  let lastGrassFocus: Vec3 | null = null;
+  let grassLayerVisible = true;
+  let treesLayerVisible = true;
+  /** Bumped on settings changes so in-flight IDB loads cannot apply stale tiles. */
+  let settingsEpoch = 0;
   const treeLodUpdateMinMoveSq =
     TREE_LOD_UPDATE_MIN_MOVE_METERS * TREE_LOD_UPDATE_MIN_MOVE_METERS;
   const treeLodNearCheckRadius =
     TREE_LOD_DISTANCE_METERS + TREE_LOD_UPDATE_MIN_MOVE_METERS;
+  const grassRadiusUpdateMinMoveSq =
+    GRASS_RADIUS_UPDATE_MIN_MOVE_METERS * GRASS_RADIUS_UPDATE_MIN_MOVE_METERS;
+  let resolveAssetsReady: (() => void) | null = null;
+  const assetsReadyPromise = new Promise<void>((resolve) => {
+    resolveAssetsReady = resolve;
+  });
 
   loadInstancedAssetCatalog(
     (catalog) => {
       assets = catalog;
       assetsReady = true;
+      resolveAssetsReady?.();
+      resolveAssetsReady = null;
       rebuildEverything();
     },
     (path, label, err) => {
@@ -188,6 +224,8 @@ export function createPlanetVegetationManager(
     tileCache.set(key, {
       group: renderGroup.group,
       renderGroup,
+      tileInfo,
+      storedTrees: data.trees,
       lastUsedFrame: frameNumber,
       status: 'ready',
     });
@@ -224,6 +262,8 @@ export function createPlanetVegetationManager(
       vegetationGroup.add(renderGroup.group);
       entry.group = renderGroup.group;
       entry.renderGroup = renderGroup;
+      entry.tileInfo = tileInfo;
+      entry.storedTrees = stored.trees;
       entry.status = 'ready';
       cacheStats.diskHits += 1;
       updateCachePeak();
@@ -248,8 +288,104 @@ export function createPlanetVegetationManager(
     vegetationGroup.add(placeholder.group);
     entry.group = placeholder.group;
     entry.renderGroup = placeholder;
+    entry.tileInfo = tileInfo;
+    entry.storedTrees = [];
     entry.status = 'pending-build';
-    pendingBuildQueue.push({ key, tileInfo });
+    enqueueVegetationBuild(key, tileInfo);
+  }
+
+  function jobPriority(tileInfo: TileInfo): number {
+    // Lower sorts first. Prefer nearer tiles, then finer LODs (grass).
+    if (!buildFocusPosition) return 1_000_000 - tileInfo.level;
+    return distance(tileInfo.centerPosition, buildFocusPosition) - tileInfo.level * 80;
+  }
+
+  function enqueueVegetationBuild(key: string, tileInfo: TileInfo): void {
+    const priority = jobPriority(tileInfo);
+    let insertAt = pendingBuildQueue.length;
+    for (let i = 0; i < pendingBuildQueue.length; i += 1) {
+      if (pendingBuildQueue[i].priority > priority) {
+        insertAt = i;
+        break;
+      }
+    }
+    pendingBuildQueue.splice(insertAt, 0, { key, priority, tileInfo });
+  }
+
+  function isVegetationTileReady(key: string): boolean {
+    const entry = tileCache.get(key);
+    return entry?.status === 'ready';
+  }
+
+  function prefetchAround(
+    position: Vec3,
+    radiusMeters: number,
+    options?: { maxStarts?: number; minLevel?: number; maxLevel?: number },
+  ): string[] {
+    buildFocusPosition = position;
+    const tiles = collectTilesNearPosition(planet, position, {
+      minLevel: options?.minLevel ?? Math.max(VEGETATION_MIN_TILE_LEVEL, 14),
+      maxLevel: options?.maxLevel ?? MAX_LEVEL,
+      radiusMeters,
+    })
+      .sort(
+        (a, b) =>
+          distance(a.centerPosition, position) -
+          distance(b.centerPosition, position),
+      )
+      .slice(0, MAX_CACHED_VEGETATION_TILES);
+    const keys: string[] = [];
+    let starts = 0;
+    for (const tileInfo of tiles) {
+      const key = tileKey(tileInfo.face, tileInfo.level, tileInfo.x, tileInfo.y);
+      keys.push(key);
+      if (isVegetationTileReady(key) || tileCache.has(key) || diskLoadsInFlight.has(key)) {
+        continue;
+      }
+      if (options?.maxStarts != null && starts >= options.maxStarts) continue;
+      startVegetationDiskLoad(tileInfo);
+      starts += 1;
+    }
+    return keys;
+  }
+
+  async function waitForAssets(timeoutMs = 15_000): Promise<boolean> {
+    if (assetsReady) return true;
+    let settled = false;
+    await Promise.race([
+      assetsReadyPromise.then(() => {
+        settled = true;
+      }),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+    return settled || assetsReady;
+  }
+
+  async function waitUntilReady(
+    keys: readonly string[],
+    timeoutMs: number,
+  ): Promise<number> {
+    if (keys.length === 0) return 0;
+    await waitForAssets(Math.min(timeoutMs, 15_000));
+    const deadline = performance.now() + Math.max(0, timeoutMs);
+    while (performance.now() < deadline) {
+      let ready = 0;
+      for (const key of keys) {
+        if (isVegetationTileReady(key)) ready += 1;
+      }
+      if (ready >= keys.length) return ready;
+      if (lastTreeLodFocus) drainBuildQueue(lastTreeLodFocus);
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 16);
+      });
+    }
+    let ready = 0;
+    for (const key of keys) {
+      if (isVegetationTileReady(key)) ready += 1;
+    }
+    return ready;
   }
 
   function startVegetationDiskLoad(tileInfo: TileInfo): void {
@@ -262,16 +398,20 @@ export function createPlanetVegetationManager(
     tileCache.set(key, {
       group: placeholder.group,
       renderGroup: placeholder,
+      tileInfo,
+      storedTrees: [],
       lastUsedFrame: frameNumber,
       status: 'loading-disk',
     });
     diskLoadsInFlight.add(key);
     updateCachePeak();
 
+    const epoch = settingsEpoch;
+    const settingsForLoad = vegetationSettings;
     void loadVegetationTile(
       planet,
       seed,
-      vegetationSettings,
+      settingsForLoad,
       tileInfo.face,
       tileInfo.level,
       tileInfo.x,
@@ -279,10 +419,27 @@ export function createPlanetVegetationManager(
     )
       .then((stored) => {
         diskLoadsInFlight.delete(key);
+        if (epoch !== settingsEpoch) {
+          // Grass/tree settings changed mid-flight; retry with the new hash.
+          const entry = tileCache.get(key);
+          if (entry?.status === 'loading-disk') {
+            releaseTileEntry(key, entry, false);
+            startVegetationDiskLoad(tileInfo);
+          }
+          return;
+        }
         completeVegetationDiskLoad(key, tileInfo, stored);
       })
       .catch(() => {
         diskLoadsInFlight.delete(key);
+        if (epoch !== settingsEpoch) {
+          const entry = tileCache.get(key);
+          if (entry?.status === 'loading-disk') {
+            releaseTileEntry(key, entry, false);
+            startVegetationDiskLoad(tileInfo);
+          }
+          return;
+        }
         completeVegetationDiskLoad(key, tileInfo, null);
       });
   }
@@ -297,8 +454,11 @@ export function createPlanetVegetationManager(
   }
 
   function rebuildEverything(): void {
+    settingsEpoch += 1;
     rebuildLandingGrove();
     lastTreeLodFocus = null;
+    buildFocusPosition = null;
+    lastGrassFocus = null;
 
     for (const [key, entry] of tileCache) {
       releaseTileEntry(key, entry, false);
@@ -351,6 +511,47 @@ export function createPlanetVegetationManager(
     const dy = bodyPosition.y - lastTreeLodFocus.y;
     const dz = bodyPosition.z - lastTreeLodFocus.z;
     return dx * dx + dy * dy + dz * dz >= treeLodUpdateMinMoveSq;
+  }
+
+  function hasGrassFocusMoved(bodyPosition: Vec3): boolean {
+    if (!lastGrassFocus) return true;
+    const dx = bodyPosition.x - lastGrassFocus.x;
+    const dy = bodyPosition.y - lastGrassFocus.y;
+    const dz = bodyPosition.z - lastGrassFocus.z;
+    return dx * dx + dy * dy + dz * dz >= grassRadiusUpdateMinMoveSq;
+  }
+
+  function updateGrassRadiusForVisible(
+    bodyPosition: Vec3,
+    selectedKeys: Set<string>,
+    newlyVisibleKeys: Set<string>,
+  ): void {
+    const focusMoved = hasGrassFocusMoved(bodyPosition);
+    if (!focusMoved && newlyVisibleKeys.size === 0) return;
+
+    if (focusMoved) {
+      lastGrassFocus = {
+        x: bodyPosition.x,
+        y: bodyPosition.y,
+        z: bodyPosition.z,
+      };
+    }
+
+    if (focusMoved || newlyVisibleKeys.has('landing-grove')) {
+      if (
+        distance(landingGrove.anchor, bodyPosition) < getGrassDistanceMeters() + 80
+      ) {
+        landingGrove.updateGrassRadius(bodyPosition);
+      }
+    }
+
+    for (const key of selectedKeys) {
+      if (!focusMoved && !newlyVisibleKeys.has(key)) continue;
+      const entry = tileCache.get(key);
+      if (entry?.status !== 'ready' || !entry.tileInfo) continue;
+      if (!shouldShowGrassOnTile(entry.tileInfo, bodyPosition)) continue;
+      entry.renderGroup.updateGrassRadius(bodyPosition);
+    }
   }
 
   function updateTreeLodForVisible(
@@ -412,18 +613,31 @@ export function createPlanetVegetationManager(
   }
 
   function drainBuildQueue(bodyPosition: Vec3): void {
+    if (!assetsReady) return;
     let budget = VEGETATION_BUILD_BUDGET_PER_FRAME;
+    const deadlineMs = performance.now() + VEGETATION_BUILD_BUDGET_MS_PER_FRAME;
     while (budget > 0 && pendingBuildQueue.length > 0) {
+      if (performance.now() >= deadlineMs) break;
       const job = pendingBuildQueue.shift()!;
       const entry = tileCache.get(job.key);
       if (!entry || entry.status !== 'pending-build') continue;
       const wasVisible = entry.group.visible;
       const renderGroup = buildAndCacheVegetation(job.tileInfo, job.key, wasVisible);
+      renderGroup.setTreesVisible(treesLayerVisible);
       // Queued builds finish after the tile's "newly visible" frame, so refresh
       // tree LOD here or nearby trees stay as low-poly imposters until the
       // player moves again.
-      if (shouldUpdateRenderGroupLod(renderGroup, bodyPosition)) {
+      if (
+        treesLayerVisible &&
+        shouldUpdateRenderGroupLod(renderGroup, bodyPosition)
+      ) {
         renderGroup.updateTreeLod(bodyPosition);
+      }
+      if (
+        grassLayerVisible &&
+        shouldShowGrassOnTile(job.tileInfo, bodyPosition)
+      ) {
+        renderGroup.updateGrassRadius(bodyPosition);
       }
       budget -= 1;
     }
@@ -439,20 +653,38 @@ export function createPlanetVegetationManager(
     updateVegetationWind(timeSeconds);
     builtThisFrame = 0;
     evictedThisFrame = 0;
-    drainBuildQueue(bodyPosition);
+    buildFocusPosition = bodyPosition;
     const selectedKeys = new Set<string>();
     const vegetationVisible =
       isVegetationVisibleAtAltitude(altitudeMeters) && assetsReady;
 
     if (vegetationVisible) {
-      for (const tileInfo of selectedTiles) {
-        if (!shouldDecorateTile(tileInfo, bodyPosition, altitudeMeters))
-          continue;
+      const decoratedTiles = selectVegetationTiles(
+        planet,
+        selectedTiles,
+        bodyPosition,
+        altitudeMeters,
+        MAX_CACHED_VEGETATION_TILES,
+      );
+
+      for (const tileInfo of decoratedTiles) {
         const { renderGroup, key } = ensureVegetation(tileInfo);
         renderGroup.group.visible = true;
+        renderGroup.setTreesVisible(treesLayerVisible);
+        // Trees use the long veg radius; grass is near-field only.
+        const showGrass =
+          grassLayerVisible &&
+          (shouldShowGrassOnTile(tileInfo, bodyPosition) ||
+            distance(renderGroup.anchor, bodyPosition) <
+              getGrassDistanceMeters() + tileInfo.spanMeters);
+        renderGroup.setGrassVisible(showGrass);
+        if (showGrass) renderGroup.updateGrassRadius(bodyPosition);
         selectedKeys.add(key);
       }
     }
+
+    // Drain after enqueue so newly visible tiles can build the same frame.
+    drainBuildQueue(bodyPosition);
 
     for (const key of activeKeys) {
       if (selectedKeys.has(key)) continue;
@@ -481,7 +713,18 @@ export function createPlanetVegetationManager(
     );
 
     if (vegetationVisible) {
-      updateTreeLodForVisible(bodyPosition, selectedKeys, newlyVisibleKeys);
+      landingGrove.setTreesVisible(treesLayerVisible);
+      const showGroveGrass =
+        grassLayerVisible &&
+        distance(landingGrove.anchor, bodyPosition) < getGrassDistanceMeters() + 80;
+      landingGrove.setGrassVisible(showGroveGrass);
+      if (showGroveGrass) landingGrove.updateGrassRadius(bodyPosition);
+      if (grassLayerVisible) {
+        updateGrassRadiusForVisible(bodyPosition, selectedKeys, newlyVisibleKeys);
+      }
+      if (treesLayerVisible) {
+        updateTreeLodForVisible(bodyPosition, selectedKeys, newlyVisibleKeys);
+      }
     }
 
     return {
@@ -510,16 +753,62 @@ export function createPlanetVegetationManager(
   }
 
   function setSettings(nextSettings: Partial<VegetationSettings>): void {
-    vegetationSettings = normalizeVegetationSettings(nextSettings);
-    if (assetsReady) rebuildEverything();
+    const next = normalizeVegetationSettings(nextSettings);
+    const unchanged =
+      next.grass.density === vegetationSettings.grass.density &&
+      next.grass.gapMeters === vegetationSettings.grass.gapMeters &&
+      next.grass.minScale === vegetationSettings.grass.minScale &&
+      next.grass.maxScale === vegetationSettings.grass.maxScale &&
+      next.tree.density === vegetationSettings.tree.density &&
+      next.tree.gapMeters === vegetationSettings.tree.gapMeters &&
+      next.tree.minScale === vegetationSettings.tree.minScale &&
+      next.tree.maxScale === vegetationSettings.tree.maxScale;
+    vegetationSettings = next;
+    if (!assetsReady || unchanged) return;
+    rebuildEverything();
+  }
+
+  function setGrassRenderDistanceMeters(meters: number): void {
+    const previous = getGrassDistanceMeters();
+    configureGrassDistanceMeters(meters);
+    if (getGrassDistanceMeters() === previous) return;
+    // Force the next update to re-pack the near-field grass disk.
+    lastGrassFocus = null;
+  }
+
+  function setLayerVisible(layers: { grass?: boolean; trees?: boolean }): void {
+    if (layers.grass !== undefined && layers.grass !== grassLayerVisible) {
+      grassLayerVisible = layers.grass;
+      if (!grassLayerVisible) {
+        landingGrove.setGrassVisible(false);
+        for (const entry of tileCache.values()) {
+          entry.renderGroup.setGrassVisible(false);
+        }
+      } else {
+        lastGrassFocus = null;
+      }
+    }
+    if (layers.trees !== undefined && layers.trees !== treesLayerVisible) {
+      treesLayerVisible = layers.trees;
+      landingGrove.setTreesVisible(treesLayerVisible);
+      for (const entry of tileCache.values()) {
+        entry.renderGroup.setTreesVisible(treesLayerVisible);
+      }
+      if (treesLayerVisible) lastTreeLodFocus = null;
+    }
   }
 
   return {
     dispose,
+    prefetchAround,
     setVisible(visible) {
       vegetationGroup.visible = visible;
     },
+    setLayerVisible,
+    setGrassRenderDistanceMeters,
     setSettings,
     update,
+    waitForAssets,
+    waitUntilReady,
   };
 }

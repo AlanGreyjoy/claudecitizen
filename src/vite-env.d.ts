@@ -21,6 +21,20 @@ declare global {
       setSsaoSettings: (settings: Partial<import('./types').SsaoSettings>) => void;
       setSsaoIntensity: (intensity: number) => void;
       setSsaoColor: (color: string | null) => void;
+      getSurfaceSpawnDebug?: () => {
+        layerCount: number;
+        layers: Array<{
+          id: string;
+          enabled: boolean;
+          assetUrl: string;
+          biomes: string[];
+          minH: number;
+          maxH: number;
+          density: number;
+        }>;
+        nearbyCount: number;
+        sample: unknown[];
+      };
     };
     __spikeScene?: import('three').Scene;
     __claudeCitizenCloudDebug?: unknown;

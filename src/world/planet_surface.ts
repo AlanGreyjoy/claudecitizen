@@ -1,8 +1,9 @@
 import { normalize, scale } from '../math/vec3';
 import { getFootSurfaceSampleLevel } from './foot_surface_level';
 import { sampleSurfaceClimate } from './climate';
-import { sampleSurfaceHeight } from './elevation';
+import { sampleSurfaceHeightDetails } from './elevation';
 import { sampleVisibleSurfaceFrame } from './renderable_surface';
+import type { SurfaceHeightSampleOptions } from './elevation';
 import type { Planet, PlanetSurfaceSample, Vec3 } from '../types';
 
 export { sampleSurfaceHeight } from './elevation';
@@ -22,9 +23,16 @@ export function sampleAnalyticPlanetSurface(
   planet: Planet,
   seed: number,
   position: Vec3,
+  options?: SurfaceHeightSampleOptions,
 ): PlanetSurfaceSample {
-  const heightMeters = sampleSurfaceHeight(planet, seed, position);
-  return sampleSurfaceClimate(planet, seed, position, heightMeters);
+  const heightDetails = sampleSurfaceHeightDetails(planet, seed, position, options);
+  return sampleSurfaceClimate(
+    planet,
+    seed,
+    position,
+    heightDetails.heightMeters,
+    heightDetails,
+  );
 }
 
 export function sampleFootPlanetSurface(
@@ -35,7 +43,13 @@ export function sampleFootPlanetSurface(
   const level = getFootSurfaceSampleLevel();
   const frame = sampleVisibleSurfaceFrame(planet, seed, position, level);
   return {
-    ...sampleSurfaceClimate(planet, seed, position, frame.heightMeters),
+    ...sampleSurfaceClimate(
+      planet,
+      seed,
+      position,
+      frame.heightMeters,
+      frame.heightDetails,
+    ),
     normal: frame.normal,
   };
 }
@@ -47,7 +61,13 @@ export function sampleVisiblePlanetSurface(
 ): PlanetSurfaceSample {
   const frame = sampleVisibleSurfaceFrame(planet, seed, position);
   return {
-    ...sampleSurfaceClimate(planet, seed, position, frame.heightMeters),
+    ...sampleSurfaceClimate(
+      planet,
+      seed,
+      position,
+      frame.heightMeters,
+      frame.heightDetails,
+    ),
     normal: frame.normal,
   };
 }

@@ -9,6 +9,8 @@ import {
   type ShipRampHingeSpec,
 } from '../../../player/ship_layout';
 import type { PrefabNodeOverride } from '../../../world/prefabs/schema';
+import { applyDefaultFrustumCulling } from '../../frustum_policy';
+import { deduplicateObjectTextures } from '../../assets/texture_dedup';
 
 const PROTECTED_SHIP_URL =
   '/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
@@ -234,14 +236,15 @@ export function createShipModel(
         const sceneRoot = gltf.scene;
         sceneRoot.rotation.y = SHIP_FORWARD_ALIGNMENT_RADIANS;
         sceneRoot.scale.setScalar(renderScale);
+        applyDefaultFrustumCulling(sceneRoot);
         sceneRoot.traverse((object) => {
-          object.frustumCulled = false;
           if (object instanceof THREE.Mesh) {
             configureShipMaterial(object.material);
             object.castShadow = true;
             object.receiveShadow = true;
           }
         });
+        deduplicateObjectTextures(sceneRoot);
         prepareShipHullGltf(sceneRoot, hullNodeOverrides, true);
         group.add(sceneRoot);
 

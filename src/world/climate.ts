@@ -4,6 +4,7 @@ import { sampleRiverSurface } from './rivers';
 import { clamp01, fbm3d, getNoise3D } from './terrain_noise';
 import { sampleTerrainRegions } from './terrain_regions';
 import type { Biome, Planet, PlanetSurfaceSample, Vec3 } from '../types';
+import type { SurfaceHeightDetails } from './elevation';
 
 const FOREST_NOISE_SEED_OFFSET = 4321;
 
@@ -73,6 +74,7 @@ export function sampleSurfaceClimate(
   seed: number,
   position: Vec3,
   heightMeters: number,
+  heightDetails?: SurfaceHeightDetails,
 ): PlanetSurfaceSample {
   const { latRadians } = latLonForPosition(position);
   const noise3D = getNoise3D(seed + 1234);
@@ -99,10 +101,29 @@ export function sampleSurfaceClimate(
   moisture += fbm3d(forestNoise, unit.x, unit.y, unit.z, 3, 0.5, 2.0, 3.0) * 0.25;
   moisture = clamp01(moisture);
 
-  const { mountainRegion } = sampleTerrainRegions(seed, unit.x, unit.y, unit.z);
+  const mountainRegion =
+    heightDetails?.mountainRegion ??
+    sampleTerrainRegions(seed, unit.x, unit.y, unit.z).mountainRegion;
 
-  const lake = sampleLakeSurface(planet, seed, position, heightMeters, normalizedHeight, moisture);
-  const river = sampleRiverSurface(planet, seed, position, heightMeters, normalizedHeight);
+  const lake = sampleLakeSurface({
+    heightMeters,
+    lakeMask: heightDetails?.lakeMask,
+    moisture,
+    normalizedHeight,
+    planet,
+    position,
+    seed,
+  });
+  const river = sampleRiverSurface({
+    heightMeters,
+    normalizedHeight,
+    planet,
+    position,
+    preRiverElevationNormalized: heightDetails?.preRiverElevationNormalized,
+    riverStrength: heightDetails?.riverStrength,
+    riverWaterLevelNormalized: heightDetails?.riverWaterLevelNormalized,
+    seed,
+  });
 
   // Rivers reuse the lake water fields so the lake water mesh system renders
   // them without changes; the higher water surface wins where they overlap.

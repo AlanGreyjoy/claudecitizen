@@ -6,6 +6,10 @@ import {
   RENDER_SURFACE_SEGMENTS,
   samplePlanetSurface,
 } from '../../../../world/planet_surface';
+import {
+  renderableCellSampleSpacingMeters,
+  renderableGridSampleSpacingMeters,
+} from '../../../../world/renderable_surface';
 
 const TILE_SEGMENTS = RENDER_SURFACE_SEGMENTS;
 const SHORE_PADDING_METERS = 28;
@@ -269,7 +273,19 @@ export function tileHasLakeWater(info: TileInfo, planet: Planet, seed: number): 
     for (let ix = 0; ix <= TILE_SEGMENTS; ix += stride) {
       const u = u0 + ((u1 - u0) * ix) / TILE_SEGMENTS;
       const direction = directionFromCubeFace(info.face, u, v);
-      const surface = samplePlanetSurface(planet, seed, scale(direction, planet.radiusMeters));
+      const surface = samplePlanetSurface(
+        planet,
+        seed,
+        scale(direction, planet.radiusMeters),
+        {
+          sampleSpacingMeters: renderableGridSampleSpacingMeters(
+            planet,
+            info.level,
+            info.x * TILE_SEGMENTS + ix,
+            info.y * TILE_SEGMENTS + iy,
+          ),
+        },
+      );
       if (isShorePadded(surface)) return true;
     }
   }
@@ -300,16 +316,22 @@ export function expandLakeWaterTiles(
   return [...expanded.values()];
 }
 
+interface GridSampleLocation {
+  sampleSpacingMeters: number;
+  u: number;
+  v: number;
+}
+
 function sampleGridCell(
   info: TileInfo,
   planet: Planet,
   seed: number,
-  u: number,
-  v: number,
+  location: GridSampleLocation,
 ): GridCell {
+  const { sampleSpacingMeters, u, v } = location;
   const direction = directionFromCubeFace(info.face, u, v);
   const samplePos = scale(direction, planet.radiusMeters);
-  const surface = samplePlanetSurface(planet, seed, samplePos);
+  const surface = samplePlanetSurface(planet, seed, samplePos, { sampleSpacingMeters });
   const padded = isShorePadded(surface);
   const depthMeters =
     surface.lakeWaterLevelMeters == null
@@ -356,7 +378,16 @@ export function buildLakeWaterGeometry(
     const v = v0 + ((v1 - v0) * iy) / TILE_SEGMENTS;
     for (let ix = 0; ix <= TILE_SEGMENTS; ix += 1) {
       const u = u0 + ((u1 - u0) * ix) / TILE_SEGMENTS;
-      const cell = sampleGridCell(info, planetRef, seed, u, v);
+      const cell = sampleGridCell(info, planetRef, seed, {
+        sampleSpacingMeters: renderableGridSampleSpacingMeters(
+          planetRef,
+          info.level,
+          info.x * TILE_SEGMENTS + ix,
+          info.y * TILE_SEGMENTS + iy,
+        ),
+        u,
+        v,
+      });
       if (cell.padded) paddedVertices += 1;
       grid[iy * gridWidth + ix] = cell;
     }
@@ -427,7 +458,11 @@ export function buildLakeWaterGeometry(
       const cornerIndices = cornerCoords.map(([cx, cy]) => vertexIndexForCell(cx, cy));
       const centerU = u0 + ((u1 - u0) * (x + 0.5)) / TILE_SEGMENTS;
       const centerV = v0 + ((v1 - v0) * (y + 0.5)) / TILE_SEGMENTS;
-      const centerSample = sampleGridCell(info, planetRef, seed, centerU, centerV);
+      const centerSample = sampleGridCell(info, planetRef, seed, {
+        sampleSpacingMeters: renderableCellSampleSpacingMeters(planetRef, info.level),
+        u: centerU,
+        v: centerV,
+      });
       const waterLevelMeters =
         centerSample.surface.lakeWaterLevelMeters ??
         corners.find((corner) => corner.padded)?.surface.lakeWaterLevelMeters;

@@ -3,6 +3,7 @@ import { restoreTitleScreen, showTitleScreen } from './title_screen';
 import { startPlaySession } from './play_session';
 import { fetchGameBootstrap, type AuthSession } from '../net/api';
 import { showCharacterCreationScreen } from './character_creation_screen';
+import { mountPlayChromeIcons } from '../ui/icons';
 
 /**
  * Boot dispatcher.
@@ -12,7 +13,13 @@ import { showCharacterCreationScreen } from './character_creation_screen';
  *
  * Deep links skip the title:
  *   ?boot=play              — jump into the game
+ *   ?boot=play&planetId=&spawn=surface — offline planet surface playtest
+ *   ?boot=play&systemId=    — load a System Map document (default `default`)
  *   ?boot=editor            — jump into the editor (dev only)
+ *   ?boot=editor&tab=planet&planetId= — Planet Authoring tab
+ *   ?boot=editor&tab=system&systemId= — System Map tab
+ *   ?boot=editor&tab=menu — Menu Manager (HaloBand / play menu preview)
+ *   ?boot=editor&tab=menu&menu=haloband — open a specific menu id
  *   ?stationPrefab=<id>     — jump into the game previewing a station prefab
  *   ?shipPrefab=<id>        — jump into the ship sandbox for a ship prefab (dev only)
  *   ?boot=sidekickPreview   — Sidekick modular character preview (dev only)
@@ -64,6 +71,8 @@ function startPlayWithLoading(options: { requireAuth: boolean; session?: AuthSes
 }
 
 export function bootstrap(): void {
+  mountPlayChromeIcons();
+
   const params = new URLSearchParams(window.location.search);
   const boot = params.get('boot');
 

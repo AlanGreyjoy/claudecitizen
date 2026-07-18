@@ -114,19 +114,6 @@
           aria-expanded="false"
           aria-controls="hud-debug-menu"
         >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 3l1.2 4.2L17 8l-3.8 1.2L12 13.5 10.8 9.2 7 8l3.8-0.8L12 3z"
-              stroke="currentColor"
-              stroke-width="1.2"
-            />
-            <path
-              d="M5 16h14M8 20h8M10 12h4"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-            />
-          </svg>
         </button>
         <div class="sc-hud-debug-menu" id="hud-debug-menu" role="menu">
           <p class="sc-hud-debug-menu-title">Debug Overlays</p>
@@ -135,16 +122,21 @@
             Performance stats
           </label>
           <label class="sc-hud-debug-option">
-            <input type="checkbox" data-debug-key="showVegetationPanel" />
-            Vegetation tuning
-          </label>
-          <label class="sc-hud-debug-option">
             <input type="checkbox" data-debug-key="showControlsReference" />
             Control reference
           </label>
           <label class="sc-hud-debug-option">
             <input type="checkbox" data-debug-key="showTutorialBanner" />
             Tutorial banner
+          </label>
+          <p class="sc-hud-debug-menu-title sc-hud-debug-menu-subtitle">Toggles</p>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="renderGrass" checked />
+            Grass
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="renderTrees" checked />
+            Trees
           </label>
           <p class="sc-hud-debug-menu-title sc-hud-debug-menu-subtitle">Time of Day</p>
           <label class="sc-hud-debug-option">
@@ -193,195 +185,6 @@
         planet-wide shell and a darker orbit sky.
       </div>
 
-      <details class="vegetation-menu sc-debug-panel" id="vegetation-menu">
-        <summary>
-          <div>
-            <h2 class="vegetation-menu-title">Terrain Vegetation</h2>
-            <div class="muted">Tune live grass and tree spawning</div>
-          </div>
-        </summary>
-        <div class="vegetation-menu-body">
-          <p class="muted">Unlock the mouse with <kbd>Esc</kbd>, then adjust density, gaps, and size ranges.</p>
-
-          <details class="vegetation-section" open>
-            <summary>Grass</summary>
-            <div class="vegetation-section-body">
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Density</span>
-                <span class="vegetation-control-value" data-output="grass.density"></span>
-                <input
-                  type="range"
-                  min="0"
-                  max="2.5"
-                  step="0.05"
-                  value="1"
-                  data-group="grass"
-                  data-key="density"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Gap</span>
-                <span class="vegetation-control-value" data-output="grass.gapMeters"></span>
-                <input
-                  type="range"
-                  min="0"
-                  max="8"
-                  step="0.25"
-                  value="0"
-                  data-group="grass"
-                  data-key="gapMeters"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Min Size</span>
-                <span class="vegetation-control-value" data-output="grass.minScale"></span>
-                <input
-                  type="range"
-                  min="0.25"
-                  max="3"
-                  step="0.05"
-                  value="0.8"
-                  data-group="grass"
-                  data-key="minScale"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Max Size</span>
-                <span class="vegetation-control-value" data-output="grass.maxScale"></span>
-                <input
-                  type="range"
-                  min="0.25"
-                  max="3"
-                  step="0.05"
-                  value="1.9"
-                  data-group="grass"
-                  data-key="maxScale"
-                />
-              </label>
-            </div>
-          </details>
-
-          <details class="vegetation-section" open>
-            <summary>Trees</summary>
-            <div class="vegetation-section-body">
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Density</span>
-                <span class="vegetation-control-value" data-output="tree.density"></span>
-                <input
-                  type="range"
-                  min="0"
-                  max="2.5"
-                  step="0.05"
-                  value="1"
-                  data-group="tree"
-                  data-key="density"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Gap</span>
-                <span class="vegetation-control-value" data-output="tree.gapMeters"></span>
-                <input
-                  type="range"
-                  min="0"
-                  max="28"
-                  step="0.5"
-                  value="0"
-                  data-group="tree"
-                  data-key="gapMeters"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Min Size</span>
-                <span class="vegetation-control-value" data-output="tree.minScale"></span>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="5"
-                  step="0.05"
-                  value="1.1"
-                  data-group="tree"
-                  data-key="minScale"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Max Size</span>
-                <span class="vegetation-control-value" data-output="tree.maxScale"></span>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="5"
-                  step="0.05"
-                  value="3.5"
-                  data-group="tree"
-                  data-key="maxScale"
-                />
-              </label>
-            </div>
-          </details>
-
-          <details class="vegetation-section" open>
-            <summary>Volumetric Fog</summary>
-            <div class="vegetation-section-body">
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Density</span>
-                <span class="vegetation-control-value" data-output="fog.density"></span>
-                <input
-                  type="range"
-                  min="0.001"
-                  max="0.05"
-                  step="0.001"
-                  value="0.008"
-                  data-group="fog"
-                  data-key="density"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Height Limit</span>
-                <span class="vegetation-control-value" data-output="fog.maxHeight"></span>
-                <input
-                  type="range"
-                  min="1000"
-                  max="15000"
-                  step="250"
-                  value="4000"
-                  data-group="fog"
-                  data-key="maxHeight"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Falloff Height</span>
-                <span class="vegetation-control-value" data-output="fog.heightFalloff"></span>
-                <input
-                  type="range"
-                  min="50"
-                  max="2000"
-                  step="25"
-                  value="350"
-                  data-group="fog"
-                  data-key="heightFalloff"
-                />
-              </label>
-              <label class="vegetation-control">
-                <span class="vegetation-control-label">Noise Detail</span>
-                <span class="vegetation-control-value" data-output="fog.noiseStrength"></span>
-                <input
-                  type="range"
-                  min="0.0"
-                  max="1.0"
-                  step="0.05"
-                  value="0.4"
-                  data-group="fog"
-                  data-key="noiseStrength"
-                />
-              </label>
-            </div>
-          </details>
-
-          <div class="vegetation-actions">
-            <button type="button" id="vegetation-reset">Reset Defaults</button>
-          </div>
-        </div>
-      </details>
       <section class="hud sc-debug-panel" id="hud-stats" aria-live="polite">
         <h1>ClaudeCitizen Spike</h1>
         <p class="muted">World-scale procedural planet, one ship, surface to orbit.</p>
@@ -485,6 +288,26 @@
                 High
               </label>
               <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="auto" />
+                Shadows: Auto
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="off" />
+                Shadows: Off
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="low" />
+                Shadows: Low
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="medium" />
+                Shadows: Medium
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="high" />
+                Shadows: High
+              </label>
+              <label class="sc-game-menu-option">
                 <input type="checkbox" id="game-menu-ambient-occlusion" />
                 Ambient Occlusion
               </label>
@@ -492,6 +315,32 @@
                 <input type="checkbox" id="game-menu-motion-blur" />
                 Motion Blur
               </label>
+              <p class="sc-game-menu-note">Clouds apply immediately.</p>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-clouds" value="off" />
+                Clouds: Off
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-clouds" value="shell" />
+                Clouds: 2D Shell
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-clouds" value="volumetric" />
+                Clouds: Volumetric (Experimental)
+              </label>
+              <p class="sc-game-menu-note">Grass distance applies immediately.</p>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">Grass Distance</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-grass-distance-value">20 m</span>
+                <input
+                  type="range"
+                  id="game-menu-grass-distance"
+                  min="5"
+                  max="80"
+                  step="1"
+                  value="20"
+                />
+              </div>
             </section>
             <section
               class="sc-game-menu-panel"
@@ -568,56 +417,61 @@
         aria-labelledby="avms-title"
         aria-modal="true"
       >
-        <div class="sc-avms-backdrop"></div>
-        <div class="sc-avms-bezel">
+        <div class="sc-avms-bezel" id="avms-bezel">
           <div class="sc-avms-screen">
-            <div class="sc-avms-scanlines" aria-hidden="true"></div>
             <header class="sc-avms-header">
               <div class="sc-avms-brand">
                 <span class="sc-avms-kicker">Asteron Vehicle Management System</span>
                 <h2 class="sc-avms-title" id="avms-title">AVMS</h2>
               </div>
-              <span class="sc-avms-version">v1.0</span>
+              <div class="sc-avms-header-meta">
+                <span class="sc-avms-version">v1.0</span>
+                <div class="sc-avms-header-actions">
+                  <button class="sc-avms-icon-btn" type="button" id="avms-power-btn" title="Power off">
+                  </button>
+                  <button class="sc-avms-icon-btn" type="button" id="avms-close-btn" title="Close">
+                  </button>
+                </div>
+              </div>
             </header>
             <div class="sc-avms-body">
-              <section class="sc-avms-panel" aria-label="Registered vehicles">
-                <h3 class="sc-avms-panel-title">Inventory</h3>
-                <div class="sc-avms-ship-list" id="avms-ship-list"></div>
-              </section>
-              <section class="sc-avms-panel sc-avms-detail" aria-label="Selected vehicle">
-                <h3 class="sc-avms-panel-title">Vehicle Status</h3>
-                <p class="sc-avms-detail-name" id="avms-detail-name">—</p>
-                <p class="sc-avms-detail-prefab" id="avms-detail-prefab">—</p>
-                <div class="sc-avms-stat">
-                  <span class="sc-avms-stat-label">Hull</span>
-                  <div class="sc-avms-stat-bar">
-                    <span class="sc-avms-stat-fill sc-avms-stat-fill-hp" id="avms-detail-hp-bar"></span>
+              <div class="sc-avms-columns">
+                <section class="sc-avms-panel" aria-label="Registered vehicles">
+                  <h3 class="sc-avms-panel-title">Inventory</h3>
+                  <div class="sc-avms-ship-list" id="avms-ship-list"></div>
+                </section>
+                <section class="sc-avms-panel sc-avms-detail" aria-label="Selected vehicle">
+                  <h3 class="sc-avms-panel-title">Vehicle Status</h3>
+                  <p class="sc-avms-detail-name" id="avms-detail-name">—</p>
+                  <p class="sc-avms-detail-prefab" id="avms-detail-prefab">—</p>
+                  <div class="sc-avms-stat">
+                    <span class="sc-avms-stat-label">Hull</span>
+                    <div class="sc-avms-stat-bar">
+                      <span class="sc-avms-stat-fill sc-avms-stat-fill-hp" id="avms-detail-hp-bar"></span>
+                    </div>
+                    <span class="sc-avms-stat-value" id="avms-detail-hp-value">—</span>
                   </div>
-                  <span class="sc-avms-stat-value" id="avms-detail-hp-value">—</span>
-                </div>
-                <div class="sc-avms-stat">
-                  <span class="sc-avms-stat-label">Shields</span>
-                  <div class="sc-avms-stat-bar">
-                    <span class="sc-avms-stat-fill sc-avms-stat-fill-shield" id="avms-detail-shield-bar"></span>
+                  <div class="sc-avms-stat">
+                    <span class="sc-avms-stat-label">Shields</span>
+                    <div class="sc-avms-stat-bar">
+                      <span class="sc-avms-stat-fill sc-avms-stat-fill-shield" id="avms-detail-shield-bar"></span>
+                    </div>
+                    <span class="sc-avms-stat-value" id="avms-detail-shield-value">—</span>
                   </div>
-                  <span class="sc-avms-stat-value" id="avms-detail-shield-value">—</span>
-                </div>
-              </section>
-            </div>
-            <footer class="sc-avms-footer">
-              <p class="sc-avms-status" id="avms-status">Awaiting input…</p>
-              <p class="sc-avms-note">Hangar bay assigned automatically by station dispatch.</p>
+                </section>
+              </div>
+              <p class="sc-avms-status" id="avms-status" data-kind="info">Awaiting input…</p>
               <div class="sc-avms-actions">
-                <button class="sc-title-btn sc-avms-deliver" type="button" id="avms-deliver-btn">
+                <button class="sc-avms-deliver" type="button" id="avms-deliver-btn">
                   Request Delivery
                 </button>
-                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="avms-store-btn">
+                <button class="sc-avms-store" type="button" id="avms-store-btn">
                   Store Ship
                 </button>
-                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="avms-close-btn">
-                  Close
-                </button>
               </div>
+            </div>
+            <footer class="sc-avms-footer">
+              <span>Esc — close · Hangar bay assigned automatically by station dispatch</span>
             </footer>
           </div>
         </div>
@@ -630,45 +484,47 @@
         aria-labelledby="build-title"
         aria-modal="true"
       >
-        <div class="sc-avms-backdrop"></div>
-        <div class="sc-avms-bezel">
+        <div class="sc-avms-bezel" id="build-bezel">
           <div class="sc-avms-screen">
-            <div class="sc-avms-scanlines" aria-hidden="true"></div>
             <header class="sc-avms-header">
               <div class="sc-avms-brand">
                 <span class="sc-avms-kicker" id="build-kicker">Workshop</span>
                 <h2 class="sc-avms-title" id="build-title">Build Mode</h2>
               </div>
-              <span class="sc-avms-version" id="build-version">Layout</span>
+              <div class="sc-avms-header-meta">
+                <span class="sc-avms-version" id="build-version">Layout</span>
+                <div class="sc-avms-header-actions">
+                  <button class="sc-avms-icon-btn" type="button" id="build-close-btn" title="Close">
+                  </button>
+                </div>
+              </div>
             </header>
             <div class="sc-avms-body">
-              <section class="sc-avms-panel" aria-label="Owned props">
-                <h3 class="sc-avms-panel-title">Inventory</h3>
-                <div class="sc-avms-ship-list" id="build-prop-list"></div>
-              </section>
-              <section class="sc-avms-panel sc-avms-detail" aria-label="Selected prop">
-                <h3 class="sc-avms-panel-title">Prop Details</h3>
-                <p class="sc-avms-detail-name" id="build-detail-name">—</p>
-                <p class="sc-avms-detail-prefab" id="build-detail-meta">—</p>
-                <p class="sc-build-desc" id="build-detail-desc">—</p>
-                <p class="sc-build-stat"><span>Owned</span> <strong id="build-detail-qty">—</strong></p>
-                <p class="sc-build-stat"><span>Cost</span> <strong id="build-detail-cost">—</strong></p>
-              </section>
-            </div>
-            <footer class="sc-avms-footer">
-              <p class="sc-avms-status" id="build-status">Select a prop or choose a tool.</p>
+              <div class="sc-avms-columns">
+                <section class="sc-avms-panel" aria-label="Owned props">
+                  <h3 class="sc-avms-panel-title">Inventory</h3>
+                  <div class="sc-avms-ship-list" id="build-prop-list"></div>
+                </section>
+                <section class="sc-avms-panel sc-avms-detail" aria-label="Selected prop">
+                  <h3 class="sc-avms-panel-title">Prop Details</h3>
+                  <p class="sc-avms-detail-name" id="build-detail-name">—</p>
+                  <p class="sc-avms-detail-prefab" id="build-detail-meta">—</p>
+                  <p class="sc-build-desc" id="build-detail-desc">—</p>
+                  <p class="sc-build-stat"><span>Owned</span> <strong id="build-detail-qty">—</strong></p>
+                  <p class="sc-build-stat"><span>Cost</span> <strong id="build-detail-cost">—</strong></p>
+                </section>
+              </div>
+              <p class="sc-avms-status" id="build-status" data-kind="info">Select a prop or choose a tool.</p>
               <p class="sc-avms-note" id="build-note">Place, move, rotate (R), and delete props in your private space.</p>
               <div class="sc-avms-actions sc-build-actions">
-                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-purchase-btn">
-                  Purchase
-                </button>
-                <button class="sc-title-btn" type="button" id="build-place-btn">Place</button>
-                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-move-btn">Move</button>
-                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-delete-btn">Delete</button>
-                <button class="sc-title-btn sc-title-btn-secondary" type="button" id="build-close-btn">
-                  Close
-                </button>
+                <button class="sc-avms-store" type="button" id="build-purchase-btn">Purchase</button>
+                <button class="sc-avms-deliver" type="button" id="build-place-btn">Place</button>
+                <button class="sc-avms-store" type="button" id="build-move-btn">Move</button>
+                <button class="sc-avms-store" type="button" id="build-delete-btn">Delete</button>
               </div>
+            </div>
+            <footer class="sc-avms-footer">
+              <span>Esc — close · Place, move, rotate (R), and delete props</span>
             </footer>
           </div>
         </div>
@@ -690,14 +546,11 @@
               </div>
               <div class="sc-es-header-actions">
                 <button class="sc-es-icon-btn" type="button" id="es-back-btn" hidden title="Back">
-                  ←
-                </button>
+                  </button>
                 <button class="sc-es-icon-btn" type="button" id="es-power-btn" title="Power off">
-                  ⌂
-                </button>
+                  </button>
                 <button class="sc-es-icon-btn" type="button" id="es-close-btn" title="Close">
-                  ✕
-                </button>
+                  </button>
               </div>
             </header>
             <div class="sc-es-body">
@@ -705,19 +558,19 @@
                 <p class="sc-es-home-hint">Choose an app</p>
                 <div class="sc-es-app-grid">
                   <button class="sc-es-app-tile" type="button" id="es-docs-tile" data-es-app="docs">
-                    <span class="sc-es-app-icon sc-es-app-icon-docs">Docs</span>
+                    <span class="sc-es-app-icon sc-es-app-icon-docs"></span>
                     <span class="sc-es-app-name">ClaudeCitizen Docs</span>
                   </button>
                   <button class="sc-es-app-tile" type="button" id="es-youtube-tile" data-es-app="youtube">
-                    <span class="sc-es-app-icon sc-es-app-icon-yt">YT</span>
+                    <span class="sc-es-app-icon sc-es-app-icon-yt"></span>
                     <span class="sc-es-app-name">YouTube</span>
                   </button>
                   <button class="sc-es-app-tile" type="button" id="es-nasa-tile" data-es-app="nasa">
-                    <span class="sc-es-app-icon sc-es-app-icon-nasa">NASA</span>
+                    <span class="sc-es-app-icon sc-es-app-icon-nasa"></span>
                     <span class="sc-es-app-name">NASA TV</span>
                   </button>
                   <button class="sc-es-app-tile" type="button" id="es-localnow-tile" data-es-app="localnow">
-                    <span class="sc-es-app-icon sc-es-app-icon-localnow">LN</span>
+                    <span class="sc-es-app-icon sc-es-app-icon-localnow"></span>
                     <span class="sc-es-app-name">Local Now</span>
                   </button>
                 </div>
@@ -807,10 +660,8 @@
                 <span class="sc-weapon-shop-balance" id="weapon-shop-balance">ARC —</span>
                 <div class="sc-weapon-shop-header-actions">
                   <button class="sc-weapon-shop-icon-btn" type="button" id="weapon-shop-power-btn" title="Power off">
-                    ⌂
                   </button>
                   <button class="sc-weapon-shop-icon-btn" type="button" id="weapon-shop-close-btn" title="Close">
-                    ✕
                   </button>
                 </div>
               </div>
@@ -844,10 +695,8 @@
                 <span class="sc-outfitters-balance" id="outfitters-balance">ARC —</span>
                 <div class="sc-outfitters-header-actions">
                   <button class="sc-outfitters-icon-btn" type="button" id="outfitters-power-btn" title="Power off">
-                    ⌂
                   </button>
                   <button class="sc-outfitters-icon-btn" type="button" id="outfitters-close-btn" title="Close">
-                    ✕
                   </button>
                 </div>
               </div>
@@ -899,8 +748,7 @@
                 id="personal-inventory-close"
                 title="Close"
               >
-                ✕
-              </button>
+                  </button>
             </div>
           </header>
           <div class="sc-personal-inv-capacity">
@@ -937,57 +785,86 @@
         <div class="sc-haloband-bezel">
           <div class="sc-haloband-screen">
             <canvas class="sc-haloband-holo" id="haloband-holo" aria-hidden="true"></canvas>
-            <header class="sc-haloband-header">
-              <div class="sc-haloband-brand">
-                <span class="sc-haloband-kicker">Asteron Personal Device</span>
-                <h2 class="sc-haloband-title" id="haloband-title">HaloBand</h2>
-              </div>
-              <div class="sc-haloband-meta">
-                <div class="sc-haloband-balance" id="haloband-balance">
-                  <span class="sc-haloband-balance-label">Balance</span>
-                  <span class="sc-haloband-balance-value" id="haloband-balance-value">—</span>
-                </div>
-                <span class="sc-haloband-version">v0.1</span>
-              </div>
-            </header>
+            <h2 class="sc-haloband-sr-title" id="haloband-title">HaloBand</h2>
+            <div class="sc-haloband-chrome-brand" aria-hidden="true">HaloBand</div>
             <div class="sc-haloband-shell">
-              <nav class="sc-haloband-nav" aria-label="HaloBand apps">
-                <button
-                  class="sc-haloband-nav-btn is-active"
-                  type="button"
-                  data-haloband-tab="comms"
-                  aria-controls="haloband-panel-comms"
-                >
-                  Comms
-                </button>
-                <button
-                  class="sc-haloband-nav-btn"
-                  type="button"
-                  data-haloband-tab="missions"
-                  aria-controls="haloband-panel-missions"
-                >
-                  Missions
-                </button>
-                <button
-                  class="sc-haloband-nav-btn"
-                  type="button"
-                  data-haloband-tab="inventory"
-                  aria-controls="haloband-panel-inventory"
-                >
-                  Inventory
-                </button>
-                <button
-                  class="sc-haloband-nav-btn sc-haloband-ship-only is-hidden"
-                  type="button"
-                  data-haloband-tab="ship"
-                  aria-controls="haloband-panel-ship"
-                >
-                  Ship Status
-                </button>
-              </nav>
               <div class="sc-haloband-main">
                 <section
                   class="sc-haloband-panel is-active"
+                  id="haloband-panel-home"
+                  data-haloband-panel="home"
+                >
+                  <div class="sc-haloband-home">
+                    <div class="sc-haloband-home-col sc-haloband-home-col-left">
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Contracts</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-contracts"
+                            id="haloband-home-contracts"
+                          ></div>
+                        </div>
+                      </article>
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Notifications</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-notifications"
+                            id="haloband-home-notifications"
+                          ></div>
+                        </div>
+                      </article>
+                    </div>
+                    <div class="sc-haloband-home-col sc-haloband-home-col-center">
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Vehicles</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-vehicles"
+                            id="haloband-home-vehicles"
+                          ></div>
+                        </div>
+                      </article>
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Environment</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-environment"
+                            id="haloband-home-environment"
+                          ></div>
+                        </div>
+                      </article>
+                    </div>
+                    <div class="sc-haloband-home-col sc-haloband-home-col-right">
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Status</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-vitals"
+                            id="haloband-home-vitals"
+                          ></div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
                   id="haloband-panel-comms"
                   data-haloband-panel="comms"
                 >
@@ -1023,6 +900,14 @@
                 </section>
                 <section
                   class="sc-haloband-panel"
+                  id="haloband-panel-map"
+                  data-haloband-panel="map"
+                >
+                  <h3 class="sc-haloband-panel-title">System Map</h3>
+                  <div class="sc-haloband-system-map-host" id="haloband-system-map"></div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
                   id="haloband-panel-inventory"
                   data-haloband-panel="inventory"
                 >
@@ -1043,8 +928,74 @@
                 </section>
               </div>
             </div>
-            <footer class="sc-haloband-footer">
-              <span class="sc-haloband-hint">Press F2 to close</span>
+            <footer class="sc-haloband-dock" id="haloband-dock">
+              <div class="sc-haloband-balance" id="haloband-balance">
+                <span class="sc-haloband-balance-label">ARC</span>
+                <span class="sc-haloband-balance-value" id="haloband-balance-value">—</span>
+              </div>
+              <nav class="sc-haloband-dock-nav" aria-label="HaloBand apps">
+                <button
+                  class="sc-haloband-dock-btn is-active"
+                  type="button"
+                  data-haloband-tab="home"
+                  aria-controls="haloband-panel-home"
+                  aria-label="Home"
+                  title="Home"
+                >
+                  <span class="sc-haloband-dock-label">Home</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="comms"
+                  aria-controls="haloband-panel-comms"
+                  aria-label="Comms"
+                  title="Comms"
+                >
+                  <span class="sc-haloband-dock-label">Comms</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="missions"
+                  aria-controls="haloband-panel-missions"
+                  aria-label="Missions"
+                  title="Missions"
+                >
+                  <span class="sc-haloband-dock-label">Missions</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="map"
+                  aria-controls="haloband-panel-map"
+                  aria-label="Map"
+                  title="Map"
+                >
+                  <span class="sc-haloband-dock-label">Map</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="inventory"
+                  aria-controls="haloband-panel-inventory"
+                  aria-label="Inventory"
+                  title="Inventory"
+                >
+                  <span class="sc-haloband-dock-label">Inventory</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn sc-haloband-ship-only is-hidden"
+                  type="button"
+                  data-haloband-tab="ship"
+                  aria-controls="haloband-panel-ship"
+                  aria-label="Ship"
+                  title="Ship"
+                >
+                  <span class="sc-haloband-dock-label">Ship</span>
+                </button>
+              </nav>
+              <span class="sc-haloband-hint">F2 close</span>
             </footer>
           </div>
         </div>

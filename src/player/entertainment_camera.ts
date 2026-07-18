@@ -43,9 +43,9 @@ function expBlend(current: number, target: number, rate: number, dt: number): nu
 
 /**
  * Updates focus and returns the camera feel for this frame when focus is
- * active. Returns null at focus 0 so callers can keep normal orbit / FP
- * cameras (critical on station — a zero-focus feel would pin the eye at
- * first-person height and kill third-person scroll zoom).
+ * active. Returns null at focus 0 so callers can keep their normal cameras
+ * (critical on station — a zero-focus feel would pin the eye at character
+ * height and kill over-the-shoulder scroll zoom).
  * Pass `dt` even while the sim is paused so open/close can ease.
  */
 export function updateEntertainmentCameraFeel(

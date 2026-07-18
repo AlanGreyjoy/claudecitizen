@@ -14,6 +14,7 @@ import {
   type SidekickAnimationRuntime,
 } from './animation_runtime';
 import { createEquipmentAttachmentController } from './equipment_attach';
+import { applyDefaultFrustumCulling } from '../../frustum_policy';
 
 const GAMEPLAY_ANIMATION_TIME_SCALE = 1.35;
 
@@ -86,6 +87,7 @@ export function createSidekickGameplayAvatar(
         return;
       }
       avatar.root.scale.setScalar(renderScale);
+      applyDefaultFrustumCulling(avatar.root);
       // Measure before parenting beneath the gameplay root. That root may already
       // be rotated into a planet/station frame while assets load; world-aligned
       // bounds from that frame cannot be reused as this model's local offset.

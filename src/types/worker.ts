@@ -1,11 +1,14 @@
 import type { Planet } from './planet';
 import type { LakeWaterBuffers, TileInfo } from './terrain';
+import type { PlanetDocument } from '../world/planets/schema';
 
 export interface TileWorkerInMessage {
   buildId: number;
   key: string;
   info: TileInfo;
   planet: Planet;
+  /** Full planet document so the worker activates the same generation knobs. */
+  planetDocument: PlanetDocument;
   seed: number;
 }
 

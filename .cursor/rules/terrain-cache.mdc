@@ -1,0 +1,48 @@
+---
+description: When to bump terrain/vegetation disk cache versions after code edits
+globs: src/cache/cache_keys.ts,src/world/**/*.ts,src/render/planet_tiles/**/*.ts,src/render/vegetation/**/*.ts,src/world/planets/**/*
+alwaysApply: false
+---
+
+# Terrain & vegetation disk cache
+
+IndexedDB tile caches key off versions + fingerprints in `src/cache/cache_keys.ts`. Stale hits cause wrong meshes, floating characters, or FPS death from oversized veg tiles. **Planet Authoring JSON edits do not need a manual bump** — code/algorithm edits often do.
+
+## Versions (bump in `src/cache/cache_keys.ts`)
+
+| Constant | Bump when |
+|----------|-----------|
+| `TERRAIN_CACHE_VERSION` | Mesh layout, triangulation, skirts, vertex count, palette baking path, worker buffer format, or anything `isValidTerrainTileBuffers()` assumes |
+| `VEGETATION_CACHE_VERSION` | Instance placement formula, LOD sample multipliers, grass/tree asset path, stored tile schema, or biome rules that change placement without changing height probes |
+| `SURFACE_SPAWN_CACHE_VERSION` | Surface spawn placement algorithm or stored spawn-tile schema changes |
+
+Also bump `TERRAIN_TILE_VERTEX_COUNT` (and related constants) when skirt/layout vertex counts change — see AGENTS.md "Terrain mesh vs foot placement".
+
+## Automatic invalidation (no version bump)
+
+These already change the storage key via `planetCacheId()` / hashes:
+
+- **Planet Authoring** height, regions, hydrology, seed, radius, amplitude → `terrainFingerprint()`
+- **Planet Authoring** palette → `paletteHash()`
+- **Planet Authoring** vegetation density / gap / scale → `hashVegetationSettings()`
+- Planet id changes → new key namespace
+
+Agents editing `*.planet.json` or Planet Authoring UI do **not** bump cache versions for those fields alone.
+
+## NOT in the cache key today (must bump version or extend the key)
+
+If you change any of these in code and leave versions alone, players keep serving old IDB tiles:
+
+- Render-quality sample budgets (`grassSampleCount` / `treeSampleCount` / `configureVegetationDensity`)
+- `grassSampleMultiplier` / `treeSampleMultiplier` / veg distance cutoffs that change instance counts
+- Biome/climate classification that alters grass/tree accept rules without changing probed heights
+- Switching grass/tree mesh or billboard generation
+
+Prefer: bump `VEGETATION_CACHE_VERSION`, **and** when adding quality-dependent placement, put those budgets into the veg storage key so `performance` / `balanced` / `high` cannot share tiles.
+
+## Agent checklist after terrain/veg code edits
+
+1. Did placement, mesh layout, or buffer schema change? → bump the matching `*_CACHE_VERSION`.
+2. Did only Planet Authoring / planet JSON knobs change? → no bump.
+3. Unsure whether height probes catch it? → bump. Orphan IDB rows are cheap; silent stale hits are not.
+4. Mention the bump in the handoff when relevant.

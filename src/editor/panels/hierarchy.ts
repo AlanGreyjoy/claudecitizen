@@ -1,5 +1,6 @@
 import {
   clearChildren,
+  chevronIcon,
   closeContextMenu,
   el,
   showContextMenu,
@@ -888,7 +889,6 @@ export function createHierarchyPanel(
     const toggle = hasChildren
       ? el('button', {
           className: `ed-tree-chevron${expanded ? ' is-expanded' : ''}`,
-          text: expanded ? '▾' : '▸',
           title: expanded ? 'Collapse' : 'Expand',
           on: {
             click: (event) => {
@@ -902,7 +902,7 @@ export function createHierarchyPanel(
               render();
             },
           },
-        })
+        }, [chevronIcon(expanded)])
       : el('span', { className: 'ed-tree-chevron-spacer' });
 
     const row = el(
@@ -976,7 +976,6 @@ export function createHierarchyPanel(
     const expanded = expandedGlbEntities.has(entity.id);
     const toggle = el('button', {
       className: `ed-tree-chevron ed-tree-chevron-asset${expanded ? ' is-expanded' : ''}`,
-      text: expanded ? '▾' : '▸',
       title: expanded ? 'Collapse model' : 'Expand model',
       on: {
         click: (event) => {
@@ -990,7 +989,7 @@ export function createHierarchyPanel(
           render();
         },
       },
-    });
+    }, [chevronIcon(expanded)]);
 
     const assetRow = el(
       'div',
@@ -1042,7 +1041,6 @@ export function createHierarchyPanel(
     const toggle = hasChildren
       ? el('button', {
           className: `ed-tree-chevron${expanded ? ' is-expanded' : ''}`,
-          text: expanded ? '▾' : '▸',
           title: expanded ? 'Collapse' : 'Expand',
           attrs: { 'aria-label': expanded ? 'Collapse' : 'Expand' },
           on: {
@@ -1056,7 +1054,7 @@ export function createHierarchyPanel(
               render();
             },
           },
-        })
+        }, [chevronIcon(expanded)])
       : el('span', { className: 'ed-tree-chevron-spacer' });
 
     const nameEl =

@@ -4,7 +4,6 @@ import {
   type GameSettings,
 } from '../settings/game_settings';
 import type {
-  CameraView,
   FlightAimState,
   FlightInput,
   GameMode,
@@ -111,7 +110,6 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     targetZoomDistance: DEFAULT_SHIP_CAMERA_ZOOM,
   };
   let mode: GameMode | 'on-foot' | 'in-ship' = 'on-foot';
-  let cameraView: CameraView = 'first-person';
   let shipCameraView: ShipCameraView = 'cockpit';
   let yHeldSinceMs: number | null = null;
   let exitSeatTriggered = false;
@@ -266,19 +264,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     return isSeatLookActive() || isBedLookActive();
   }
 
-  function toggleCameraView() {
-    if (mode === 'in-ship') {
-      shipCameraView = shipCameraView === 'cockpit' ? 'external' : 'cockpit';
-      return;
-    }
-    if (mode === 'in-bed') return;
-    cameraView = cameraView === 'first-person' ? 'third-person' : 'first-person';
-    if (cameraView === 'third-person') {
-      orbitLook.pitchRadians = Math.max(
-        -ORBIT_PITCH_LIMIT,
-        Math.min(ORBIT_PITCH_LIMIT, orbitLook.pitchRadians),
-      );
-    }
+  function toggleShipCameraView() {
+    if (mode !== 'in-ship') return;
+    shipCameraView = shipCameraView === 'cockpit' ? 'external' : 'cockpit';
   }
 
   function onKeyChange(event: KeyboardEvent, down: boolean) {
@@ -288,7 +276,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     if (down) {
       const wasDown = keys.has(event.code);
       if (isKeyboardCode('reset', event.code)) onReset?.();
-      if (!wasDown && isKeyboardCode('cycleCamera', event.code)) toggleCameraView();
+      if (!wasDown && isKeyboardCode('cycleCamera', event.code)) toggleShipCameraView();
       if (
         !wasDown &&
         isKeyboardCode('cycleFlightMode', event.code) &&
@@ -372,12 +360,11 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       );
       return;
     }
-    const pitchLimit = cameraView === 'first-person' ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
     orbitLook.targetYawRadians -= event.movementX * 0.0035 * lookSensitivity;
     orbitLook.targetPitchRadians = Math.max(
-      -pitchLimit,
+      -ORBIT_PITCH_LIMIT,
       Math.min(
-        pitchLimit,
+        ORBIT_PITCH_LIMIT,
         orbitLook.targetPitchRadians + event.movementY * pitchSign * 0.0028 * lookSensitivity,
       ),
     );
@@ -419,7 +406,6 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       return;
     }
     if (mode === 'in-bed') return;
-    if (cameraView === 'first-person') return;
     orbitLook.targetZoomDistance = applyWheelZoom(orbitLook.targetZoomDistance, delta);
   }
 
@@ -502,7 +488,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     }
     const cycleCameraPressed = consumeDeviceActionPress('cycleCamera');
     const resetPressed = consumeDeviceActionPress('reset');
-    if (cycleCameraPressed) toggleCameraView();
+    if (cycleCameraPressed) toggleShipCameraView();
     if (resetPressed) onReset?.();
 
     const hangarDigit = wasKeyboardActionPressed('hangar1') || consumeDeviceActionPress('hangar1')
@@ -543,11 +529,10 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     const yaw = readProfileAnalog('controller', 'yaw');
     const pitch = readProfileAnalog('controller', 'pitch');
     if (yaw === 0 && pitch === 0) return;
-    const pitchLimit = cameraView === 'first-person' ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
     orbitLook.targetYawRadians -= yaw * ORBIT_GAMEPAD_YAW_RATE * dt;
     orbitLook.targetPitchRadians = clampPitch(
       orbitLook.targetPitchRadians + pitch * ORBIT_GAMEPAD_PITCH_RATE * dt,
-      pitchLimit,
+      ORBIT_PITCH_LIMIT,
     );
   }
 
@@ -601,7 +586,6 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     }
 
     return {
-      cameraView,
       pitchRadians: orbitLook.pitchRadians,
       seatLook: { pitchRadians: seatLook.pitchRadians, yawRadians: seatLook.yawRadians },
       shipCameraView,
@@ -612,10 +596,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function sampleCharacterInput() {
-    const input = {
-      ...buildCharacterInput(keys, orbitLook, keyboardBindings()),
-      faceCameraYaw: cameraView === 'first-person',
-    };
+    const input = buildCharacterInput(keys, orbitLook, keyboardBindings());
     if (inputSuppressed) return input;
     input.moveX = mergeAxis(input.moveX, readProfileAnalog('controller', 'roll'));
     input.moveY = mergeAxis(input.moveY, readProfileAnalog('controller', 'throttle'));

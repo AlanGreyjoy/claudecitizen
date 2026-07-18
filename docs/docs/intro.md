@@ -14,7 +14,7 @@ The homeworld is **Asteron**: Earth-scale radius, deterministic terrain, lakes, 
 
 This project is **100% vibe coded** — built iteratively with AI-assisted development rather than a formal spec. It is a passion sandbox, not a production product.
 
-**Work in progress.** Phase 1 is FPS weapons and character-controller updates — see the [roadmap](/roadmap).
+**Work in progress.** Phase 1 is third-person weapons and over-the-shoulder character-controller updates — see the [roadmap](/roadmap).
 
 ![ClaudeCitizen gameplay screenshot](/img/screenshot.png)
 

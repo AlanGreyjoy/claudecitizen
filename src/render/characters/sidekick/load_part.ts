@@ -140,7 +140,7 @@ export function remapSkinnedMesh(
   mesh.receiveShadow = true;
   mesh.bind(skeleton, sourceMesh.bindMatrix);
   mesh.skeleton = skeleton;
-  mesh.frustumCulled = false;
+  mesh.geometry.computeBoundingSphere();
   if (sourceMesh.morphTargetInfluences) {
     // Older Sidekick GLBs may contain UnityGLTF's invalid string "NaN" as a
     // default morph weight. GLTFLoader carries that through as NaN, causing

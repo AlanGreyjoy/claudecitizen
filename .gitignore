@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+release/
 target/
 public/wasm/cc_sim_core.wasm
 *.tsbuildinfo
@@ -40,6 +41,11 @@ desktop.ini
 # Local tooling
 *.local
 .cache/
+
+# Generated spawn-corridor tile packs (run npm run bake:spawn-tiles)
+public/cache/spawn/*.bin
+public/cache/spawn/*.json
+!public/cache/spawn/README.md
 
 # Proprietary/local-only game assets.
 # Keep paid or otherwise non-redistributable models, textures, and packs here.

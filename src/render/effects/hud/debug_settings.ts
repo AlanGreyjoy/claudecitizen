@@ -3,9 +3,12 @@ export type TimeOverride = 'auto' | 'day' | 'night';
 export interface DebugSettings {
   debugEnabled: boolean;
   showStatsPanel: boolean;
-  showVegetationPanel: boolean;
   showControlsReference: boolean;
   showTutorialBanner: boolean;
+  /** When false, skip grass draw (FPS debug). */
+  renderGrass: boolean;
+  /** When false, skip tree draw (FPS debug). */
+  renderTrees: boolean;
   timeOverride: TimeOverride;
 }
 
@@ -14,18 +17,20 @@ const STORAGE_KEY = 'claudecitizen-debug-settings';
 const DEFAULT_SETTINGS: DebugSettings = {
   debugEnabled: false,
   showStatsPanel: false,
-  showVegetationPanel: false,
   showControlsReference: false,
   showTutorialBanner: false,
+  renderGrass: true,
+  renderTrees: true,
   timeOverride: 'auto',
 };
 
 const DEBUG_BOOT_SETTINGS: DebugSettings = {
   debugEnabled: true,
   showStatsPanel: true,
-  showVegetationPanel: true,
   showControlsReference: true,
   showTutorialBanner: false,
+  renderGrass: true,
+  renderTrees: true,
   timeOverride: 'auto',
 };
 
@@ -82,14 +87,11 @@ export function createDebugSettings() {
     subscribe,
     applyVisibility(elements: {
       statsPanelEl: HTMLElement;
-      vegetationMenuEl: HTMLElement;
       controlsEl: HTMLElement;
       tutorialBannerEl: HTMLElement | null;
     }): void {
-      const { showStatsPanel, showVegetationPanel, showControlsReference, showTutorialBanner } =
-        settings;
+      const { showStatsPanel, showControlsReference, showTutorialBanner } = settings;
       elements.statsPanelEl.classList.toggle('is-visible', showStatsPanel);
-      elements.vegetationMenuEl.classList.toggle('is-visible', showVegetationPanel);
       elements.controlsEl.classList.toggle('is-visible', showControlsReference);
       if (elements.tutorialBannerEl) {
         elements.tutorialBannerEl.classList.toggle('is-visible', showTutorialBanner);

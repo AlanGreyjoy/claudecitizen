@@ -6,4 +6,3 @@ export {
   DEFAULT_VEGETATION_SETTINGS,
   normalizeVegetationSettings,
 } from './settings';
-export { createVegetationControls } from './controls';

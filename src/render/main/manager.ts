@@ -7,11 +7,13 @@ import type {
   SsaoSettings,
   Vec3,
 } from '../../types';
-import { normalize } from '../../math/vec3';
+import { distance, normalize } from '../../math/vec3';
 import { createCharacterAvatar } from './scene/character_avatar';
 import { createCloudShell, createPlanetLakeWaterManager } from '../effects';
 import { createPlanetTileManager } from '../planet_tiles';
+import { planApproachPrefetch } from '../planet_tiles/domain/approach_prefetch';
 import { createPlanetVegetationManager, normalizeVegetationSettings } from '../vegetation';
+import { createSurfaceSpawnManager } from '../surface_spawns';
 import { radialUp } from '../../world/coordinates';
 import {
   getRenderableSurfaceCacheStats,
@@ -19,9 +21,9 @@ import {
 } from '../../world/planet_surface';
 import { clamp01 } from './domain/math';
 import { applyRenderQualitySettings } from './domain/apply_render_quality';
-import { DAY_LENGTH_SECONDS } from './domain/constants';
+import { DAY_LENGTH_SECONDS, SURFACE_MAX_PIXEL_RATIO } from './domain/constants';
 import type { RenderMode, SpikeRenderer, TimeOverride } from './domain/types';
-import { getStationFrame } from '../../world/station';
+import { getStationFrame, type StationFrame } from '../../world/station';
 import { getShipLayout } from '../../player/ship_layout';
 import {
   createPrefabStationGroup,
@@ -32,6 +34,7 @@ import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
 import { createComposerStack } from './scene/composer_stack';
 import { createShipRenderPool } from './scene/ship_render_pool';
 import { createRemotePresenceRenderer } from './scene/remote_presence';
+import { createStationNpcRenderer } from './scene/station_npcs';
 import { createStationModel } from './scene/station_model';
 import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene_lighting';
 import { createWebGlRenderer } from './scene/webgl_renderer';
@@ -51,10 +54,20 @@ import {
   resolveNavDestinationId,
 } from '../../flight/quantum_travel';
 import type { PlayerCharacterAppearanceV1 } from '../../player/character_creator/player_character_appearance';
+import {
+  GAME_SETTINGS_CHANGED_EVENT,
+  loadGameSettings,
+  type CloudModeSetting,
+  type GameSettings,
+} from '../../settings/game_settings';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 const QUANTUM_RENDER_LAYER = 1;
 const QUANTUM_BACKGROUND = new THREE.Color(0x01030a);
+// A full protected station can carry multiple gigabytes of decoded atlas data.
+// Distant stations already have System Map/nav markers, so load their detailed
+// prefab only once the player is close enough for the mesh to matter.
+const SECONDARY_STATION_LOAD_DISTANCE_METERS = 75_000;
 
 function enableRenderLayer(root: THREE.Object3D, layer: number): void {
   root.traverse((object) => object.layers.enable(layer));
@@ -129,6 +142,11 @@ function resolveDayNightInfluence(altitudeMeters: number, atmosphereHeightMeters
 export interface SpikeRendererOptions {
   /** Dev preview: render this prefab as the orbital station instead of the procedural model. */
   stationPrefab?: PrefabDocument | null;
+  /**
+   * Extra station prefab roots for other System Map instances around the active
+   * planet. Visual + placement only — primary station still owns walk physics.
+   */
+  additionalStations?: Array<{ prefab: PrefabDocument; frame: StationFrame }> | null;
   characterAppearance?: PlayerCharacterAppearanceV1 | null;
 }
 
@@ -175,7 +193,28 @@ export function createSpikeRenderer(
     seed,
     tileManager.renderScale,
   );
+  const surfaceSpawnManager = createSurfaceSpawnManager(
+    scene,
+    planet,
+    seed,
+    tileManager.renderScale,
+  );
   const cloudShell = createCloudShell(scene, planet, seed, tileManager.renderScale);
+
+  // Cloud path is player-selectable (Video settings): cheap planet-anchored
+  // 2D shell by default, Takram volumetric composite on demand. Live-switches.
+  // Grass render distance is the same: live apply, no reload.
+  const initialGameSettings = loadGameSettings();
+  let cloudMode: CloudModeSetting = initialGameSettings.cloudMode;
+  vegetationManager.setGrassRenderDistanceMeters(
+    initialGameSettings.grassRenderDistanceMeters,
+  );
+  const handleGameSettingsChanged = (event: Event) => {
+    const next = (event as CustomEvent<GameSettings>).detail ?? loadGameSettings();
+    cloudMode = next.cloudMode;
+    vegetationManager.setGrassRenderDistanceMeters(next.grassRenderDistanceMeters);
+  };
+  window.addEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
 
   const composerStack = createComposerStack(
     renderer,
@@ -200,8 +239,29 @@ export function createSpikeRenderer(
         localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
       })
     : createStationModel(tileManager.renderScale);
-  stationMesh.frustumCulled = false;
   scene.add(stationMesh);
+
+  const additionalStationMeshes = (options?.additionalStations ?? []).map((entry) => ({
+    ...entry,
+    mesh: null as THREE.Group | null,
+  }));
+
+  function ensureAdditionalStationMesh(
+    entry: (typeof additionalStationMeshes)[number],
+    focusPosition: Vec3,
+  ): THREE.Group | null {
+    if (entry.mesh) return entry.mesh;
+    if (distance(entry.frame.origin, focusPosition) > SECONDARY_STATION_LOAD_DISTANCE_METERS) {
+      return null;
+    }
+
+    entry.mesh = createPrefabStationGroup(entry.prefab, tileManager.renderScale, {
+      localLightShadowMapSize: renderQuality.localLightShadowMapSize,
+      localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
+    });
+    scene.add(entry.mesh);
+    return entry.mesh;
+  }
 
   const avatar = createCharacterAvatar(
     scene,
@@ -209,6 +269,7 @@ export function createSpikeRenderer(
     options?.characterAppearance ?? null,
   );
   const remotePresence = createRemotePresenceRenderer(scene, tileManager.renderScale);
+  const stationNpcs = createStationNpcRenderer(scene, tileManager.renderScale);
   const quantumBubble = createQuantumBubble(scene, tileManager.renderScale);
   quantumBubble.enableRenderLayer(QUANTUM_RENDER_LAYER);
 
@@ -218,6 +279,7 @@ export function createSpikeRenderer(
   let quantumPreloadPosition: Vec3 | null = null;
   let quantumPreloadSurface: PlanetSurfaceSample | null = null;
   let quantumPreloadTileState: ReturnType<typeof tileManager.update> | null = null;
+  let lastVegetationApproachPrefetchSeconds = -Infinity;
   let lastQuantumPreloadUpdateSeconds = -Infinity;
   let wasQuantumTraveling = false;
 
@@ -245,35 +307,61 @@ export function createSpikeRenderer(
     return (theta / (Math.PI * 2)) * DAY_LENGTH_SECONDS;
   }
 
-  function resize(width: number, height: number): void {
+  let lastResizeWidth = canvas.clientWidth || 1;
+  let lastResizeHeight = canvas.clientHeight || 1;
+  let appliedPixelRatio = renderer.getPixelRatio();
+  let lastSurfaceAltitudeMeters: number | null = null;
+
+  function applyViewportSize(width: number, height: number, pixelRatio: number): void {
+    lastResizeWidth = width;
+    lastResizeHeight = height;
+    appliedPixelRatio = pixelRatio;
+    renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    composerStack.resize(width, height, renderer.getPixelRatio());
+    composerStack.resize(width, height, pixelRatio);
+  }
+
+  function syncSurfacePixelRatio(altitudeMeters: number): void {
+    lastSurfaceAltitudeMeters = altitudeMeters;
+    const onSurface = altitudeMeters < planet.atmosphereHeightMeters;
+    const maxPixelRatio = onSurface
+      ? Math.min(renderQuality.maxPixelRatio, SURFACE_MAX_PIXEL_RATIO)
+      : renderQuality.maxPixelRatio;
+    const targetPixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+    if (Math.abs(targetPixelRatio - appliedPixelRatio) < 1e-4) return;
+    applyViewportSize(lastResizeWidth, lastResizeHeight, targetPixelRatio);
+  }
+
+  function resize(width: number, height: number): void {
+    const onSurface =
+      lastSurfaceAltitudeMeters != null &&
+      lastSurfaceAltitudeMeters < planet.atmosphereHeightMeters;
+    const maxPixelRatio = onSurface
+      ? Math.min(renderQuality.maxPixelRatio, SURFACE_MAX_PIXEL_RATIO)
+      : renderQuality.maxPixelRatio;
+    applyViewportSize(
+      width,
+      height,
+      Math.min(window.devicePixelRatio || 1, maxPixelRatio),
+    );
   }
 
   function render(world: SpikeRenderWorld): RenderStats {
     const {
-      cameraView = 'first-person',
       character = null,
       mode = 'in-ship',
       ship,
       timeSeconds: nowSeconds = 0,
     } = world;
 
-    // First person only applies while the player walks; transitions and flight
-    // keep the third-person framing so animated poses stay visible.
-    const firstPersonActive =
-      cameraView === 'first-person' &&
-      character != null &&
-      (mode === 'on-foot' || mode === 'on-ship-deck' || mode === 'in-station' || mode === 'riding-elevator');
-
     const renderMode = mode as RenderMode;
     const dt = Math.max(0.0001, Math.min(nowSeconds - lastTime, 0.1));
     lastTime = nowSeconds;
 
     const focusBody = mode === 'in-ship' || mode === 'in-bed' || !character ? ship : character;
-    const volumetricEnabled = true;
+    const volumetricEnabled = cloudMode === 'volumetric';
     const quantumState = world.quantum ?? createQuantumTravelState();
     const quantumTraveling = quantumState.phase === 'traveling';
     const quantumBusy =
@@ -306,6 +394,7 @@ export function createSpikeRenderer(
       quantumTraveling && quantumPreloadSurface
         ? quantumPreloadSurface
         : sampleRenderablePlanetSurface(planet, seed, focusBody.position);
+    syncSurfacePixelRatio(surface.altitudeMeters);
     const up = radialUp(focusBody.position);
     const shipUp = normalize(ship.up ?? radialUp(ship.position));
     const shipForward = normalize(ship.forward);
@@ -333,6 +422,47 @@ export function createSpikeRenderer(
     );
     updateSunIntensity(lighting.sun, sunState.rawDaylight, spaceFactor);
 
+    // Camera before tile selection so frustum culling uses this frame's view.
+    updateCameraRig(
+      camera,
+      cameraTarget,
+      world,
+      renderScale,
+      altitudeFactor,
+      shipUp,
+      shipForward,
+      { frame: stationFrame, roomId: world.stationRoomId ?? null },
+      dt,
+    );
+
+    const viewForward = new THREE.Vector3();
+    const viewRight = new THREE.Vector3(1, 0, 0);
+    const viewUp = new THREE.Vector3(0, 1, 0);
+    const viewRotation = new THREE.Quaternion();
+    camera.getWorldDirection(viewForward);
+    camera.getWorldQuaternion(viewRotation);
+    viewRight.applyQuaternion(viewRotation);
+    viewUp.applyQuaternion(viewRotation);
+    const halfFovYRadians = THREE.MathUtils.degToRad(camera.fov * 0.5);
+    const tanHalfFovY = Math.tan(halfFovYRadians);
+    const tanHalfFovX = tanHalfFovY * camera.aspect;
+    const eyeWorld: Vec3 = {
+      x: focusBody.position.x + camera.position.x / renderScale,
+      y: focusBody.position.y + camera.position.y / renderScale,
+      z: focusBody.position.z + camera.position.z / renderScale,
+    };
+    const selectionView = {
+      eye: eyeWorld,
+      forward: { x: viewForward.x, y: viewForward.y, z: viewForward.z },
+      right: { x: viewRight.x, y: viewRight.y, z: viewRight.z },
+      up: { x: viewUp.x, y: viewUp.y, z: viewUp.z },
+      tanHalfFovX,
+      tanHalfFovY,
+    };
+    // Approach prefetch uses ship velocity (character render state has no
+    // velocity). On foot, selection alone covers the local ring.
+    const focusVelocity = ship.velocity;
+
     let tileState: ReturnType<typeof tileManager.update>;
     if (quantumTraveling && quantumPreloadPosition && quantumPreloadSurface) {
       if (!wasQuantumTraveling) {
@@ -342,6 +472,7 @@ export function createSpikeRenderer(
       // Poll terrain streaming at 12 Hz while the capsule itself renders at
       // the display rate. Workers still get a steady destination queue, but
       // selection/cache bookkeeping cannot dominate every tunnel frame.
+      // No frustum cull at the destination — the tunnel camera is elsewhere.
       if (
         !quantumPreloadTileState ||
         nowSeconds - lastQuantumPreloadUpdateSeconds >= 1 / 12
@@ -349,21 +480,26 @@ export function createSpikeRenderer(
         quantumPreloadTileState = tileManager.update(
           quantumPreloadPosition,
           quantumPreloadSurface,
+          { view: null, velocity: null },
         );
         lastQuantumPreloadUpdateSeconds = nowSeconds;
       }
       tileState = quantumPreloadTileState;
     } else {
-      tileState = tileManager.update(focusBody.position, surface);
+      tileState = tileManager.update(focusBody.position, surface, {
+        view: selectionView,
+        velocity: focusVelocity,
+      });
     }
     tileManager.setVisible(!quantumTraveling);
     lakeWaterManager.setVisible(!quantumTraveling);
-    cloudShell.setVisible(!quantumTraveling);
+    cloudShell.setVisible(!quantumTraveling && cloudMode === 'shell');
 
     // Skipping the vegetation update alone leaves the previously active
     // instanced grass/trees beside the camera. Hide the parent so those meshes
     // do not keep rendering throughout warp.
     vegetationManager.setVisible(!quantumTraveling);
+    surfaceSpawnManager.setVisible(!quantumTraveling);
     const vegetationStats = quantumTraveling
       ? IDLE_VEGETATION_STATS
       : vegetationManager.update(
@@ -373,7 +509,49 @@ export function createSpikeRenderer(
           nowSeconds,
         );
     if (!quantumTraveling) {
-      cloudShell.update(focusBody.position, nowSeconds, spaceFactor, surface.altitudeMeters);
+      surfaceSpawnManager.update(
+        focusBody.position,
+        tileState.selectedTiles,
+        surface.altitudeMeters,
+      );
+    }
+    if (
+      !quantumTraveling &&
+      surface.altitudeMeters < 8_000 &&
+      surface.altitudeMeters >= 1_500 &&
+      nowSeconds - lastVegetationApproachPrefetchSeconds >= 0.35
+    ) {
+      const vegPlan = planApproachPrefetch(
+        planet,
+        focusBody.position,
+        focusVelocity,
+        surface.altitudeMeters,
+      );
+      if (vegPlan && vegPlan.maxLevel >= 14) {
+        lastVegetationApproachPrefetchSeconds = nowSeconds;
+        for (const focus of vegPlan.focuses) {
+          vegetationManager.prefetchAround(focus, Math.min(vegPlan.radiusMeters, 800), {
+            // Vegetation builds on the main thread. Keep the total across the
+            // usual three approach foci near twelve speculative tiles/pass.
+            maxStarts: 4,
+            minLevel: Math.max(14, vegPlan.minLevel),
+            maxLevel: Math.min(16, vegPlan.maxLevel),
+          });
+        }
+      }
+    }
+    if (!quantumTraveling && cloudMode === 'shell') {
+      cloudShell.update(
+        focusBody.position,
+        nowSeconds,
+        spaceFactor,
+        surface.altitudeMeters,
+        {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z,
+        },
+      );
     }
 
     const renderInstances =
@@ -434,11 +612,27 @@ export function createSpikeRenderer(
         focusBody.position,
         renderScale,
       );
+      for (const extra of additionalStationMeshes) {
+        const mesh = ensureAdditionalStationMesh(extra, focusBody.position);
+        if (!mesh) continue;
+        updateShipPlacement(
+          mesh,
+          {
+            position: extra.frame.origin,
+            up: extra.frame.up,
+            forward: extra.frame.forward,
+          },
+          focusBody.position,
+          renderScale,
+        );
+      }
     }
-    // Prefab/procedural station meshes intentionally disable frustum culling.
-    // Once warp carries them off-screen they would otherwise keep submitting
-    // every draw call, even though none can contribute to the image.
+    // Hide stations during quantum; frustum culling handles off-screen draws
+    // during normal play.
     stationMesh.visible = !quantumTraveling;
+    for (const extra of additionalStationMeshes) {
+      if (extra.mesh) extra.mesh.visible = !quantumTraveling;
+    }
 
     let backgroundColor = QUANTUM_BACKGROUND;
     if (!quantumTraveling) {
@@ -457,13 +651,15 @@ export function createSpikeRenderer(
         dt,
         nowSeconds,
         renderScale,
+        focusPosition: focusBody.position,
         volumetricEnabled: volumetricEnabled && !quantumBusy,
         stationInteriorActive:
           renderMode === 'in-station' || renderMode === 'riding-elevator',
       }));
 
-      avatar.update(character, focusBody.position, nowSeconds, firstPersonActive);
+      avatar.update(character, focusBody.position, nowSeconds);
       remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
+      stationNpcs.update(world.stationNpcs ?? [], focusBody.position, nowSeconds);
     }
 
     if (!quantumTraveling) {
@@ -476,18 +672,6 @@ export function createSpikeRenderer(
       );
     }
 
-    updateCameraRig(
-      camera,
-      cameraTarget,
-      world,
-      renderScale,
-      altitudeFactor,
-      shipUp,
-      shipForward,
-      firstPersonActive,
-      { frame: stationFrame, roomId: world.stationRoomId ?? null },
-      dt,
-    );
     if (!quantumTraveling) {
       updateSpeedBlur(composerStack.speedBlurEffect, world);
     }
@@ -578,6 +762,52 @@ export function createSpikeRenderer(
     setVegetationSettings(nextSettings) {
       vegetationManager.setSettings(normalizeVegetationSettings(nextSettings));
     },
+    setVegetationLayers(layers) {
+      vegetationManager.setLayerVisible(layers);
+    },
+    setSurfaceSpawnLayers(layers) {
+      surfaceSpawnManager.setLayers(layers);
+    },
+    getNearbySurfaceSpawns(focus, radiusMeters) {
+      return surfaceSpawnManager.getNearbyInstances(focus, radiusMeters);
+    },
+    getSurfaceSpawnLayers() {
+      return surfaceSpawnManager.getLayers();
+    },
+    getSurfaceSpawnDebugStats() {
+      return surfaceSpawnManager.getDebugStats();
+    },
+    async warmSpawnCorridor(focus, options) {
+      const radiusMeters = options?.radiusMeters ?? 700;
+      const timeoutMs = options?.timeoutMs ?? 8_000;
+      const onProgress = options?.onProgress;
+      onProgress?.(0.05, 'Prefetching terrain near spawn...');
+      const terrainKeys = tileManager.prefetchAround(focus, radiusMeters, {
+        minLevel: 12,
+        maxLevel: 17,
+      });
+      onProgress?.(0.25, 'Waiting for spawn terrain...');
+      const terrainReady = await tileManager.waitUntilReady(
+        terrainKeys,
+        timeoutMs * 0.7,
+      );
+      onProgress?.(0.55, 'Loading vegetation assets...');
+      await vegetationManager.waitForAssets(Math.min(timeoutMs, 12_000));
+      onProgress?.(0.65, 'Prefetching vegetation near spawn...');
+      const vegetationKeys = vegetationManager.prefetchAround(focus, radiusMeters, {
+        minLevel: 14,
+        maxLevel: 17,
+      });
+      onProgress?.(0.75, 'Waiting for spawn vegetation...');
+      const vegetationReady = await vegetationManager.waitUntilReady(
+        vegetationKeys,
+        timeoutMs * 0.3,
+      );
+      onProgress?.(1, 'Spawn corridor ready');
+      console.info(
+        `ClaudeCitizen spawn warm: terrain ${terrainReady}/${terrainKeys.length}, veg ${vegetationReady}/${vegetationKeys.length}.`,
+      );
+    },
     setFogSettings(settings) {
       applyFogSettings(composerStack.volumetricFogEffect, settings);
     },
@@ -605,10 +835,13 @@ export function createSpikeRenderer(
       avatar.setEquippedInventory(inventory);
     },
     dispose() {
+      window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
       cloudShell.dispose();
       lakeWaterManager.dispose();
       vegetationManager.dispose();
+      surfaceSpawnManager.dispose();
       remotePresence.dispose();
+      stationNpcs.dispose();
       quantumBubble.dispose();
       avatar.dispose();
       shipRenderPool.dispose();

@@ -3,10 +3,10 @@ import * as THREE from 'three';
 /**
  * GPU wind sway for instanced vegetation.
  *
- * Materials are patched via onBeforeCompile so the stock MeshStandardMaterial
- * lighting/fog pipeline is preserved. All patched materials share a single
- * time uniform object, so one `updateVegetationWind` call per frame animates
- * every grass blade and tree on screen.
+ * Materials are patched via onBeforeCompile (MeshStandardMaterial trees /
+ * MeshLambertMaterial grass). All patched materials share a single time uniform
+ * object, so one `updateVegetationWind` call per frame animates every grass
+ * blade and tree on screen.
  *
  * Displacement happens in object space (before the instance matrix is
  * applied), so plants bend relative to their own "up" no matter where they
@@ -23,7 +23,7 @@ export interface WindMaterialOptions {
   speed?: number;
 }
 
-const sharedWindTime: THREE.IUniform<number> = { value: 0 };
+export const sharedWindTime: THREE.IUniform<number> = { value: 0 };
 
 const WIND_VERTEX_COMMON = /* glsl */ `
 uniform float uWindTime;

@@ -1,0 +1,47 @@
+{
+  "name": "claudecitizen-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "description": "ClaudeCitizen desktop game client",
+  "author": "ClaudeCitizen",
+  "license": "UNLICENSED",
+  "build": {
+    "appId": "com.claudecitizen.game",
+    "productName": "ClaudeCitizen",
+    "electronVersion": "43.1.1",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "beforeBuild": "./desktop/before-build.cjs",
+    "directories": {
+      "output": "../release/desktop"
+    },
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "game",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "zip"
+    },
+    "linux": {
+      "category": "Game",
+      "executableName": "claudecitizen",
+      "target": "AppImage"
+    },
+    "mac": {
+      "category": "public.app-category.games",
+      "target": "zip"
+    }
+  }
+}

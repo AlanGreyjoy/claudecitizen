@@ -76,9 +76,11 @@ export function collectLandingGroveData(
 
   const grassSettings = vegetationSettings.grass;
   const treeSettings = vegetationSettings.tree;
+  const grassDensityScale =
+    grassSettings.density <= 0 ? 0 : Math.pow(grassSettings.density, 1.35);
   const grassSampleCount = scaledSampleCount(
     getLandingGrassCount(),
-    grassSettings.density,
+    grassDensityScale,
   );
   const treeSampleCount = scaledSampleCount(
     getLandingTreeCount(),
@@ -103,8 +105,15 @@ export function collectLandingGroveData(
       );
       const surface = sampleRenderablePlanetSurface(planet, seed, worldPoint);
       if (!(surface.biome === 'plains' || surface.biome === 'forest')) continue;
-      if (hash01(seed, 7005, i) > Math.min(1, surface.grassDensity * 1.4))
+      if (
+        hash01(seed, 7005, i) >
+        Math.min(
+          1,
+          surface.grassDensity * 1.4 * Math.max(1, Math.sqrt(grassSettings.density)),
+        )
+      ) {
         continue;
+      }
 
       const placementDirection: Vec3 = {
         x: worldPoint.x,

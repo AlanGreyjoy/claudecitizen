@@ -243,6 +243,8 @@ export interface PrefabParticleRenderer {
 
 export const PARTICLE_MAX_PARTICLES_HARD_CAP = 2048;
 
+export type NpcPlacementBehavior = "stationary" | "wander" | "patrol";
+
 export type PrefabComponent =
   | { type: "station-frame" }
   | { type: "prop-frame" }
@@ -255,6 +257,42 @@ export type PrefabComponent =
       accepts: WeaponSlotType;
     }
   | { type: "spawn-point"; floorId: StationFloorId }
+  | {
+      type: "npc-spawner";
+      /** Unique within the station prefab. */
+      id: string;
+      /** Reusable population definition resolved by the NPC catalog. */
+      populationId: string;
+      floorId: StationFloorId;
+      minAlive: number;
+      maxAlive: number;
+      /** Waypoint route group used by spawned NPCs. */
+      routeGroup: string;
+      /** Horizontal spawn jitter around the marker, in meters. */
+      radius: number;
+    }
+  | {
+      type: "npc-waypoint";
+      /** Unique waypoint id within the station prefab. */
+      id: string;
+      floorId: StationFloorId;
+      routeGroup: string;
+      /** Undirected connections to other waypoint ids. */
+      links: string[];
+      waitMinSeconds: number;
+      waitMaxSeconds: number;
+    }
+  | {
+      type: "npc-placement";
+      /** Stable authored instance id within the station prefab. */
+      id: string;
+      npcDefinitionId: string;
+      displayName?: string;
+      floorId: StationFloorId;
+      behavior: NpcPlacementBehavior;
+      /** Required by wander/patrol; omitted for stationary placements. */
+      routeGroup?: string;
+    }
   | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
   | { type: "hangar-pad"; hangarId: string; padIndex: number; floorId?: StationFloorId }
   | {
@@ -278,6 +316,27 @@ export type PrefabComponent =
       nodes: { name: string; delta: number }[];
       defaultOpen?: boolean;
       duration?: number;
+    }
+  /**
+   * Continuous cosmetic motion (spin / hover). Empty `nodes` animates the
+   * host entity visual root; otherwise named GLB nodes are driven.
+   * Visual only — does not move colliders.
+   */
+  | {
+      type: "object-animation";
+      id: string;
+      mode: "spin" | "hover";
+      axis: "x" | "y" | "z";
+      /** GLB node names. Empty / omitted = animate the host entity root. */
+      nodes?: { name: string }[];
+      /** Spin: rad/s. Hover: cycles per second. */
+      speed?: number;
+      /** Hover only: meters peak displacement from rest. */
+      amplitude?: number;
+      /** Radians phase offset so neighbors don't sync. */
+      phase?: number;
+      /** Spin only: reverse rotation direction. */
+      reverse?: boolean;
     }
   | { type: "avms-terminal"; id: string; radius: number; floorId: StationFloorId }
   /**
@@ -1396,6 +1455,79 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
     }
     case "spawn-point":
       return { type, floorId: parseFloorId(value.floorId, `${path}.floorId`) };
+    case "npc-spawner": {
+      const minAlive = Math.min(
+        32,
+        Math.max(0, Math.round(parseFiniteNumber(value.minAlive, `${path}.minAlive`))),
+      );
+      const maxAlive = Math.min(
+        32,
+        Math.max(minAlive, Math.round(parseFiniteNumber(value.maxAlive, `${path}.maxAlive`))),
+      );
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        populationId: parseString(value.populationId, `${path}.populationId`, 64),
+        floorId: parseFloorId(value.floorId, `${path}.floorId`),
+        minAlive,
+        maxAlive,
+        routeGroup: parseString(value.routeGroup, `${path}.routeGroup`, 64),
+        radius: Math.min(
+          20,
+          Math.max(0, parseFiniteNumber(value.radius, `${path}.radius`)),
+        ),
+      };
+    }
+    case "npc-waypoint": {
+      if (!Array.isArray(value.links)) {
+        fail(`${path}.links`, "expected array of waypoint ids");
+      }
+      if (value.links.length > 16) {
+        fail(`${path}.links`, "too many waypoint links (max 16)");
+      }
+      const links = value.links
+        .map((link, index) => parseString(link, `${path}.links[${index}]`, 64))
+        .filter((link, index, all) => link.length > 0 && all.indexOf(link) === index);
+      const waitMinSeconds = Math.min(
+        120,
+        Math.max(0, parseFiniteNumber(value.waitMinSeconds, `${path}.waitMinSeconds`)),
+      );
+      const waitMaxSeconds = Math.min(
+        120,
+        Math.max(
+          waitMinSeconds,
+          parseFiniteNumber(value.waitMaxSeconds, `${path}.waitMaxSeconds`),
+        ),
+      );
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        floorId: parseFloorId(value.floorId, `${path}.floorId`),
+        routeGroup: parseString(value.routeGroup, `${path}.routeGroup`, 64),
+        links,
+        waitMinSeconds,
+        waitMaxSeconds,
+      };
+    }
+    case "npc-placement": {
+      const behavior = value.behavior;
+      if (behavior !== "stationary" && behavior !== "wander" && behavior !== "patrol") {
+        fail(`${path}.behavior`, 'expected "stationary", "wander", or "patrol"');
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        npcDefinitionId: parseString(value.npcDefinitionId, `${path}.npcDefinitionId`, 64),
+        ...(value.displayName === undefined
+          ? {}
+          : { displayName: parseString(value.displayName, `${path}.displayName`, 64) }),
+        floorId: parseFloorId(value.floorId, `${path}.floorId`),
+        behavior,
+        ...(value.routeGroup === undefined
+          ? {}
+          : { routeGroup: parseString(value.routeGroup, `${path}.routeGroup`, 64) }),
+      };
+    }
     case "elevator":
       return {
         type,
@@ -1493,6 +1625,63 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
                   parseFiniteNumber(value.duration, `${path}.duration`),
                 ),
               ),
+      };
+    }
+    case "object-animation": {
+      const mode = value.mode;
+      if (mode !== "spin" && mode !== "hover") {
+        fail(`${path}.mode`, 'expected "spin" or "hover"');
+      }
+      const axis = value.axis;
+      if (axis !== "x" && axis !== "y" && axis !== "z") {
+        fail(`${path}.axis`, 'expected "x", "y", or "z"');
+      }
+      let nodes: { name: string }[] | undefined;
+      if (value.nodes !== undefined) {
+        if (!Array.isArray(value.nodes)) {
+          fail(`${path}.nodes`, "expected array of {name}");
+        }
+        if (value.nodes.length > 8) {
+          fail(`${path}.nodes`, "too many object-animation nodes (max 8)");
+        }
+        nodes = value.nodes.map((node, index) => {
+          if (!isRecord(node)) {
+            fail(`${path}.nodes[${index}]`, "expected {name}");
+          }
+          return {
+            name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
+          };
+        });
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        mode,
+        axis,
+        ...(nodes !== undefined ? { nodes } : {}),
+        speed:
+          value.speed === undefined
+            ? undefined
+            : Math.min(
+                100,
+                Math.max(0, parseFiniteNumber(value.speed, `${path}.speed`)),
+              ),
+        amplitude:
+          value.amplitude === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(
+                  0,
+                  parseFiniteNumber(value.amplitude, `${path}.amplitude`),
+                ),
+              ),
+        phase:
+          value.phase === undefined
+            ? undefined
+            : parseFiniteNumber(value.phase, `${path}.phase`),
+        reverse:
+          value.reverse === undefined ? undefined : Boolean(value.reverse),
       };
     }
     case "avms-terminal":

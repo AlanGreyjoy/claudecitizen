@@ -38,6 +38,7 @@ Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship
 | [Collider](./collider) | Box or mesh geometry that blocks walking characters |
 | [Interaction](./interaction) | Prompt bubble when the player is within range |
 | [Animation](./animation) | Authored slide or hinge motion of GLB nodes |
+| [Object Animation](./object-animation) | Continuous spin or hover on an entity or GLB nodes |
 | [Point light](./point-light) | Omnidirectional light source |
 | [Area light](./area-light) | Rectangular soft panel light |
 | [Spot light](./spot-light) | Directional cone beam |

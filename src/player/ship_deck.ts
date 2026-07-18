@@ -12,10 +12,8 @@ import {
 import {
   JUMP_SPEED_METERS_PER_SECOND,
   animationFromState,
-  FIRST_PERSON_PITCH_LIMIT,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-  resolveFirstPersonCameraRig,
   SPRINT_SPEED_METERS_PER_SECOND,
   WALK_SPEED_METERS_PER_SECOND,
 } from "./character_controller";
@@ -44,7 +42,6 @@ import {
 } from "./ship_interaction";
 import { resolveDeckCameraOrbit } from "../flight/flight_aim";
 import type {
-  CameraView,
   CharacterInput,
   CharacterState,
   FlightBody,
@@ -450,21 +447,16 @@ export function resolveDoorInteractAim(
   characterPosition: Vec3,
   yawRadians: number,
   pitchRadians: number,
-  cameraView: CameraView,
   zoomDistance = 7.4,
 ): DoorInteractAim {
-  const firstPerson = cameraView === "first-person";
-  const pitchLimit = firstPerson ? FIRST_PERSON_PITCH_LIMIT : ORBIT_PITCH_LIMIT;
   const orbit = resolveDeckCameraOrbit(
     ship.forward,
     ship.up,
     yawRadians,
     pitchRadians,
-    pitchLimit,
+    ORBIT_PITCH_LIMIT,
   );
-  const rig = firstPerson
-    ? resolveFirstPersonCameraRig(orbit)
-    : resolveCharacterCameraRig(orbit, zoomDistance);
+  const rig = resolveCharacterCameraRig(orbit, zoomDistance);
   return {
     ship,
     cameraPos: add(characterPosition, rig.positionOffset),
@@ -637,9 +629,7 @@ function updateCharacterOnDeckRapier(
     (wantsSprint
       ? SPRINT_SPEED_METERS_PER_SECOND
       : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
-  const desiredFacing = input.faceCameraYaw
-    ? deckCameraForward(ship, input.cameraYawRadians ?? 0)
-    : desiredDirection;
+  const desiredFacing = desiredDirection;
 
   let verticalVelocity = state.shipVerticalVelocity ?? 0;
   const groundedBefore = isShipPlayerGrounded(physics);

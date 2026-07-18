@@ -140,6 +140,7 @@ export function createStarField(scene: THREE.Scene): StarField {
   });
 
   const points = new THREE.Points(undefined, material);
+  // Celestial field is camera-relative / sky-scale — never frustum-cull.
   points.frustumCulled = false;
   points.renderOrder = 100;
   scene.add(points);
