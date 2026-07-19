@@ -1,5 +1,5 @@
 import type { Planet } from './planet';
-import type { LakeWaterBuffers, TileInfo } from './terrain';
+import type { SurfaceWaterBuffers, TileInfo } from './terrain';
 import type { PlanetDocument } from '../world/planets/schema';
 
 export interface TileWorkerInMessage {
@@ -41,7 +41,7 @@ export type WaterWorkerInMessage = TileWorkerInMessage;
 export interface WaterWorkerSuccessMessage {
   buildId: number;
   key: string;
-  buffers: LakeWaterBuffers | null;
+  buffers: SurfaceWaterBuffers | null;
 }
 
 export type WaterWorkerErrorMessage = TileWorkerErrorMessage;

@@ -29,15 +29,19 @@ export interface TerrainTileBuffers {
   normals: Int16Array;
 }
 
-export interface LakeWaterBuffers {
+export interface SurfaceWaterBuffers {
   // Water mirrors the terrain's faceted layout: triangles do not share vertices,
   // so each face keeps one palette color and one flat geometric normal. The
-  // remaining attributes drive shallow caustics and the shoreline foam ribbon.
+  // radial directions let the shader animate the surface without making it
+  // conform to terrain height. The remaining attributes drive shallow caustics
+  // and the shoreline foam ribbon.
   positions: Float32Array;
   barycentrics: Uint8Array;
   colors: Uint8Array;
   effectDetails: Uint8Array;
-  normals: Int16Array;
+  radialDirections: Float32Array;
   shores: Uint8Array;
+  /** Ocean surf strength. Inland lakes and rivers intentionally pack zero. */
+  surfStrengths: Uint8Array;
   waterDepths: Float32Array;
 }

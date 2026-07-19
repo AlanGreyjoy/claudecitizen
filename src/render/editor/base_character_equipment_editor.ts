@@ -38,7 +38,7 @@ const ATTACHMENT_BONES = ['backAttach', 'hipAttach_l', 'hipAttach_r', 'hipAttach
 const EQUIPMENT_DND_TYPE = 'application/x-claudecitizen-equipment-definition';
 
 type CatalogDefinition = WeaponDefinition | BackpackDefinition;
-type CharacterPreviewPose = 'reference' | 'idle';
+type CharacterPreviewPose = 'reference' | 'animated';
 type EquipmentGizmoMode = 'translate' | 'rotate' | 'scale';
 
 export interface BaseCharacterEquipmentEditor {
@@ -242,7 +242,7 @@ export function createBaseCharacterEquipmentEditor(
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
   const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
-  camera.position.set(0, 1.25, 2.8);
+  camera.position.set(0, 1.05, 4.2);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.target.set(0, 1, 0);
@@ -269,6 +269,7 @@ export function createBaseCharacterEquipmentEditor(
   let initialized = false;
   let avatar: SidekickAvatarInstance | null = null;
   let animation: SidekickAnimationRuntime | null = null;
+  let animationObjectUrl: string | null = null;
   let defaultDefinition: SidekickCharacterDefinitionV2 | null = null;
   let mountPivots = new Map<string, THREE.Group>();
   let activeBackpackPrefabId: string | null = null;
@@ -301,7 +302,7 @@ export function createBaseCharacterEquipmentEditor(
     resize();
     controls.update();
     const deltaSeconds = clock.getDelta();
-    if (previewPose === 'idle') animation?.update(deltaSeconds);
+    if (previewPose === 'animated') animation?.update(deltaSeconds);
     renderer.render(scene, camera);
   };
   requestAnimationFrame(renderFrame);
@@ -492,19 +493,34 @@ export function createBaseCharacterEquipmentEditor(
     await rebuildEquipmentPreview();
   };
 
+  const revokeAnimationObjectUrl = (): void => {
+    if (!animationObjectUrl) return;
+    URL.revokeObjectURL(animationObjectUrl);
+    animationObjectUrl = null;
+  };
+
   const setPreviewPose = async (nextPose: CharacterPreviewPose): Promise<void> => {
     if (previewPose === nextPose) return;
     previewPose = nextPose;
     renderLeft();
     if (!avatar) return;
     if (previewPose === 'reference') {
+      animation?.setPlaying(false);
       setStageStatus('Reference pose active. Character mounts now use a stable bind-pose basis.');
       await applyCharacterType();
       return;
     }
-    animation?.setAnimation('Idle_Loop', 0);
+    animation?.setPlaying(true);
+    const clip = animation?.activeClipName || animation?.clipNames[0] || 'Idle_Loop';
+    animation?.setAnimation(clip, 0);
     animation?.update(0);
-    setStageStatus('Idle_Loop preview active. Equipment follows the animated attachment bones.');
+    setStageStatus(
+      `Animation preview · ${clip}. Equipment follows animated attachment bones.`,
+    );
+  };
+
+  const ensureAnimatedPose = async (): Promise<void> => {
+    if (previewPose !== 'animated') await setPreviewPose('animated');
   };
 
   const ensureAvatar = async (): Promise<void> => {
@@ -526,8 +542,8 @@ export function createBaseCharacterEquipmentEditor(
       return null;
     });
     animation?.setAnimation('Idle_Loop', 0);
-    controls.target.set(0, 1, 0);
-    camera.position.set(0, 1.2, 2.75);
+    controls.target.set(0, 0.95, 0);
+    camera.position.set(0, 1.05, 4.2);
     controls.update();
   };
 
@@ -579,11 +595,118 @@ export function createBaseCharacterEquipmentEditor(
     poseLabel.textContent = 'Authoring pose';
     const poses = document.createElement('div');
     poses.className = 'ed-base-type-toggle';
-    for (const [label, pose] of [['Reference Pose', 'reference'], ['Idle Preview', 'idle']] as const) {
+    for (const [label, pose] of [
+      ['Reference Pose', 'reference'],
+      ['Animation Preview', 'animated'],
+    ] as const) {
       const node = button(label, () => void setPreviewPose(pose));
       node.classList.toggle('is-active', previewPose === pose);
       poses.append(node);
     }
+
+    const animLabel = document.createElement('div');
+    animLabel.className = 'ed-base-subtitle';
+    animLabel.textContent = 'Animation';
+    const animPanel = document.createElement('div');
+    animPanel.className = 'ed-base-anim-panel';
+    const clipSelect = select(
+      animation?.activeClipName ?? '',
+      (animation?.clipNames ?? []).map((name) => ({ value: name, label: name })),
+      (value) => {
+        void ensureAnimatedPose().then(() => {
+          animation?.setAnimation(value, 0.12);
+          animation?.setPlaying(true);
+          setStageStatus(`Playing ${value}. Equipment follows animated attachment bones.`);
+          renderLeft();
+        });
+      },
+    );
+    clipSelect.disabled = !animation || animation.clipNames.length === 0;
+    clipSelect.title = 'Animation clip';
+    const playBtn = button(animation?.playing === false ? 'Play' : 'Pause', () => {
+      void ensureAnimatedPose().then(() => {
+        const next = !(animation?.playing ?? true);
+        animation?.setPlaying(next);
+        setStageStatus(next ? `Playing ${animation?.activeClipName ?? 'clip'}.` : 'Animation paused.');
+        renderLeft();
+      });
+    });
+    playBtn.disabled = !animation;
+    const ualBtn = button('UAL', () => {
+      void (async () => {
+        if (!animation) return;
+        try {
+          setStageStatus('Loading UAL locomotion…');
+          await animation.loadDefaultLibrary();
+          await ensureAnimatedPose();
+          setStageStatus(`UAL loaded · ${animation.clipNames.length} clip(s).`);
+        } catch (error) {
+          setStageStatus(error instanceof Error ? error.message : 'UAL load failed.', true);
+        }
+        renderLeft();
+      })();
+    });
+    ualBtn.title = 'Load Universal Animation Library locomotion clips';
+    ualBtn.disabled = !animation;
+    const loadGlbBtn = button('Load GLB…', () => {
+      const picker = document.createElement('input');
+      picker.type = 'file';
+      picker.accept = '.glb,.gltf,model/gltf-binary,model/gltf+json';
+      picker.addEventListener('change', () => {
+        const file = picker.files?.[0];
+        if (!file || !animation) return;
+        void (async () => {
+          try {
+            setStageStatus(`Loading ${file.name}…`);
+            revokeAnimationObjectUrl();
+            animationObjectUrl = URL.createObjectURL(file);
+            await animation.loadAnimationSource(animationObjectUrl, file.name);
+            // Re-bind Sidekick after retarget so a prior bad Mixamo pose cannot leave NaNs.
+            if (avatar && defaultDefinition) await applyCharacterType();
+            await ensureAnimatedPose();
+            animation.setAnimation(animation.activeClipName || 'Rifle_Idle', 0);
+            animation.setPlaying(true);
+            animation.update(0);
+            setStageStatus(
+              `Loaded ${file.name} · ${animation.clipNames.length} clip(s) retargeted to Sidekick.`,
+            );
+          } catch (error) {
+            setStageStatus(error instanceof Error ? error.message : 'Animation GLB load failed.', true);
+          }
+          renderLeft();
+        })();
+      });
+      picker.click();
+    });
+    loadGlbBtn.title = 'Load Mixamo/Unity animation GLB and retarget onto this Sidekick';
+    loadGlbBtn.disabled = !animation;
+    const animActions = document.createElement('div');
+    animActions.className = 'ed-base-actions';
+    animActions.append(playBtn, ualBtn, loadGlbBtn);
+    const speed = document.createElement('input');
+    speed.className = 'ed-input ed-base-anim-speed';
+    speed.type = 'range';
+    speed.min = '0';
+    speed.max = '2';
+    speed.step = '0.05';
+    speed.value = String(animation?.timeScale ?? 1);
+    speed.disabled = !animation;
+    speed.title = 'Playback speed';
+    speed.addEventListener('input', () => {
+      animation?.setTimeScale(Number(speed.value));
+    });
+    const sourceNote = document.createElement('div');
+    sourceNote.className = 'ed-base-note';
+    sourceNote.textContent = animation
+      ? `Source: ${animation.sourceLabel}`
+      : 'Animation runtime unavailable.';
+    animPanel.append(
+      field('Clip', clipSelect),
+      animActions,
+      field('Speed', speed),
+      sourceNote,
+    );
+
     const slots = document.createElement('div');
     slots.className = 'ed-base-slot-list';
     for (const slot of documentState?.slots ?? []) {
@@ -626,7 +749,7 @@ export function createBaseCharacterEquipmentEditor(
       renderInspector();
       void rebuildEquipmentPreview();
     });
-    left.append(title, toolbar, types, poseLabel, poses, slots, add);
+    left.append(title, toolbar, types, poseLabel, poses, animLabel, animPanel, slots, add);
   }
 
   function renderInspector(): void {
@@ -908,6 +1031,7 @@ export function createBaseCharacterEquipmentEditor(
       controls.dispose();
       gizmo.dispose();
       animation?.dispose();
+      revokeAnimationObjectUrl();
       avatar?.dispose();
       environmentTarget.dispose();
       renderer.dispose();

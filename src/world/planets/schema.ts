@@ -7,6 +7,7 @@ import type {
   PlanetSpawnLayer,
   SurfaceSpawnCollider,
   VegetationSettings,
+  WaterBody,
 } from '../../types';
 
 const DEFAULT_GRASS_COLOR = '#7a9f42';
@@ -34,7 +35,7 @@ export const DEFAULT_SPAWN_SAMPLES_PER_TILE = 96;
 
 /**
  * Planet documents are the contract between the Planet Authoring editor and
- * runtime generation: identity, physics, height recipe, hydrology, biome
+ * runtime generation: identity, physics, height recipe, hydrology, surface
  * palette, vegetation defaults, and surface spawn catalog. Files live under
  * src/world/planets/data/<id>.planet.json.
  */
@@ -80,8 +81,7 @@ export interface PlanetHydrologyRecipe {
   lakeMaxCarveNormalized: number;
   lakeMinLandElevation: number;
   inlandLakeMoistureThreshold: number;
-  inlandLakeMaxNormalized: number;
-  inlandLakeMaxDepthMeters: number;
+  inlandLakeWaterLevelNormalized: number;
   riverNoiseSeedOffset: number;
   riverFieldScale: number;
   riverFieldOctaves: number;
@@ -92,8 +92,30 @@ export interface PlanetHydrologyRecipe {
   riverMinStrength: number;
 }
 
-/** CSS hex colors, e.g. "#173653". */
-export type PlanetBiomePalette = Record<Biome, string>;
+/**
+ * Authorable land-biome and ocean-shore classification. Hydrology remains a
+ * separate generated feature: lakes and rivers are not biomes.
+ */
+export interface PlanetBiomeRecipe {
+  enabled: Biome[];
+  fallbackBiome: Biome;
+  forestMoistureMin: number;
+  plainsMoistureMin: number;
+  arcticLatitudeStart: number;
+  arcticTemperatureMax: number;
+  mountainRegionThreshold: number;
+  highlandNormalizedHeight: number;
+  extremeHighlandNormalizedHeight: number;
+  peakTemperatureMax: number;
+  oceanWaterLevelMeters: number;
+  coastMaxHeightMeters: number;
+  coastalShelfHalfWidthNormalized: number;
+}
+
+export type SurfacePaletteKey = Biome | WaterBody | 'coast';
+
+/** CSS hex colors for land biomes, water bodies, and the derived ocean coast. */
+export type PlanetSurfacePalette = Record<SurfacePaletteKey, string>;
 
 export interface PlanetDocument {
   id: string;
@@ -107,7 +129,8 @@ export interface PlanetDocument {
   height: PlanetHeightRecipe;
   regions: PlanetRegionRecipe;
   hydrology: PlanetHydrologyRecipe;
-  palette: PlanetBiomePalette;
+  biomes: PlanetBiomeRecipe;
+  palette: PlanetSurfacePalette;
   vegetation: VegetationSettings;
   /** Authored surface spawn catalog (rocks, props, etc.). */
   spawning: PlanetSpawnCatalog;
@@ -141,7 +164,7 @@ export function createDefaultSpawnEntry(
     gapMeters: 4,
     minScale: 0.8,
     maxScale: 1.4,
-    biomes: ['beach', 'plains'],
+    biomes: ['plains'],
     minNormalizedHeight: 0,
     maxNormalizedHeight: 1,
     alignToNormal: true,
@@ -208,8 +231,7 @@ export const DEFAULT_HYDROLOGY_RECIPE: PlanetHydrologyRecipe = Object.freeze({
   lakeMaxCarveNormalized: 0.14,
   lakeMinLandElevation: 0.02,
   inlandLakeMoistureThreshold: 0.55,
-  inlandLakeMaxNormalized: 0.05,
-  inlandLakeMaxDepthMeters: 8,
+  inlandLakeWaterLevelNormalized: 0.05,
   riverNoiseSeedOffset: 7777,
   riverFieldScale: 7,
   riverFieldOctaves: 3,
@@ -220,17 +242,58 @@ export const DEFAULT_HYDROLOGY_RECIPE: PlanetHydrologyRecipe = Object.freeze({
   riverMinStrength: 0.05,
 });
 
-export const DEFAULT_BIOME_PALETTE: PlanetBiomePalette = Object.freeze({
+export const BIOME_KEYS: readonly Biome[] = Object.freeze([
+  'desert',
+  'plains',
+  'forest',
+  'tundra',
+  'highlands',
+  'peak',
+  'rock',
+]);
+
+export const DEFAULT_BIOME_RECIPE: PlanetBiomeRecipe = Object.freeze({
+  enabled: Object.freeze([
+    'desert',
+    'plains',
+    'forest',
+    'tundra',
+    'highlands',
+    'peak',
+  ]) as unknown as Biome[],
+  fallbackBiome: 'plains',
+  forestMoistureMin: 0.6,
+  plainsMoistureMin: 0.3,
+  arcticLatitudeStart: 0.65,
+  arcticTemperatureMax: 0.28,
+  mountainRegionThreshold: 0.35,
+  highlandNormalizedHeight: 0.45,
+  extremeHighlandNormalizedHeight: 0.75,
+  peakTemperatureMax: 0.3,
+  oceanWaterLevelMeters: 20,
+  coastMaxHeightMeters: 30,
+  coastalShelfHalfWidthNormalized: 0.04,
+});
+
+export const SURFACE_PALETTE_KEYS: readonly SurfacePaletteKey[] = Object.freeze([
+  'ocean',
+  'lake',
+  'river',
+  'coast',
+  ...BIOME_KEYS,
+]);
+
+export const DEFAULT_SURFACE_PALETTE: PlanetSurfacePalette = Object.freeze({
   ocean: '#173653',
   lake: '#53665a',
   river: '#776f50',
-  beach: '#d8c58e',
+  coast: '#d8c58e',
   desert: '#c89b62',
   plains: '#719447',
   forest: '#3e6c42',
-  tundra: '#9eaa91',
-  highlands: '#7f895f',
-  peak: '#e7e6dc',
+  tundra: '#ffffff',
+  highlands: '#8b9088',
+  peak: '#f8fbff',
   rock: '#737887',
 });
 
@@ -321,13 +384,15 @@ function readHydrology(raw: unknown): PlanetHydrologyRecipe {
       src.inlandLakeMoistureThreshold,
       DEFAULT_HYDROLOGY_RECIPE.inlandLakeMoistureThreshold,
     ),
-    inlandLakeMaxNormalized: readNumber(
-      src.inlandLakeMaxNormalized,
-      DEFAULT_HYDROLOGY_RECIPE.inlandLakeMaxNormalized,
-    ),
-    inlandLakeMaxDepthMeters: readNumber(
-      src.inlandLakeMaxDepthMeters,
-      DEFAULT_HYDROLOGY_RECIPE.inlandLakeMaxDepthMeters,
+    // Legacy planet files called this a maximum and paired it with a
+    // terrain-relative depth. Preserve their authored level while normalizing
+    // the runtime model to one explicit lake plane.
+    inlandLakeWaterLevelNormalized: readNumber(
+      src.inlandLakeWaterLevelNormalized,
+      readNumber(
+        src.inlandLakeMaxNormalized,
+        DEFAULT_HYDROLOGY_RECIPE.inlandLakeWaterLevelNormalized,
+      ),
     ),
     riverNoiseSeedOffset: readNumber(src.riverNoiseSeedOffset, DEFAULT_HYDROLOGY_RECIPE.riverNoiseSeedOffset),
     riverFieldScale: readNumber(src.riverFieldScale, DEFAULT_HYDROLOGY_RECIPE.riverFieldScale),
@@ -352,11 +417,94 @@ function readHydrology(raw: unknown): PlanetHydrologyRecipe {
   };
 }
 
-function readPalette(raw: unknown): PlanetBiomePalette {
+function readBiomes(raw: unknown): PlanetBiomeRecipe {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const palette = { ...DEFAULT_BIOME_PALETTE };
-  for (const biome of Object.keys(DEFAULT_BIOME_PALETTE) as Biome[]) {
-    palette[biome] = readHexColor(src[biome], DEFAULT_BIOME_PALETTE[biome]);
+  const authoredEnabled = Array.isArray(src.enabled)
+    ? src.enabled.filter(
+        (value): value is Biome =>
+          typeof value === 'string' && (BIOME_KEYS as readonly string[]).includes(value),
+      )
+    : [];
+  const enabled = [...new Set(
+    authoredEnabled.length > 0 ? authoredEnabled : DEFAULT_BIOME_RECIPE.enabled,
+  )];
+  const authoredFallback =
+    typeof src.fallbackBiome === 'string' &&
+    (BIOME_KEYS as readonly string[]).includes(src.fallbackBiome)
+      ? (src.fallbackBiome as Biome)
+      : DEFAULT_BIOME_RECIPE.fallbackBiome;
+  const fallbackBiome = enabled.includes(authoredFallback)
+    ? authoredFallback
+    : (enabled[0] ?? DEFAULT_BIOME_RECIPE.fallbackBiome);
+  return {
+    enabled,
+    fallbackBiome,
+    forestMoistureMin: readNumber(
+      src.forestMoistureMin,
+      DEFAULT_BIOME_RECIPE.forestMoistureMin,
+    ),
+    plainsMoistureMin: readNumber(
+      src.plainsMoistureMin,
+      DEFAULT_BIOME_RECIPE.plainsMoistureMin,
+    ),
+    arcticLatitudeStart: readNumber(
+      src.arcticLatitudeStart,
+      DEFAULT_BIOME_RECIPE.arcticLatitudeStart,
+    ),
+    arcticTemperatureMax: readNumber(
+      src.arcticTemperatureMax,
+      DEFAULT_BIOME_RECIPE.arcticTemperatureMax,
+    ),
+    mountainRegionThreshold: readNumber(
+      src.mountainRegionThreshold,
+      DEFAULT_BIOME_RECIPE.mountainRegionThreshold,
+    ),
+    highlandNormalizedHeight: readNumber(
+      src.highlandNormalizedHeight,
+      DEFAULT_BIOME_RECIPE.highlandNormalizedHeight,
+    ),
+    extremeHighlandNormalizedHeight: readNumber(
+      src.extremeHighlandNormalizedHeight,
+      DEFAULT_BIOME_RECIPE.extremeHighlandNormalizedHeight,
+    ),
+    peakTemperatureMax: readNumber(
+      src.peakTemperatureMax,
+      DEFAULT_BIOME_RECIPE.peakTemperatureMax,
+    ),
+    oceanWaterLevelMeters: readNumber(
+      src.oceanWaterLevelMeters,
+      DEFAULT_BIOME_RECIPE.oceanWaterLevelMeters,
+    ),
+    coastMaxHeightMeters: readNumber(
+      src.coastMaxHeightMeters,
+      DEFAULT_BIOME_RECIPE.coastMaxHeightMeters,
+    ),
+    coastalShelfHalfWidthNormalized: readNumber(
+      src.coastalShelfHalfWidthNormalized,
+      DEFAULT_BIOME_RECIPE.coastalShelfHalfWidthNormalized,
+    ),
+  };
+}
+
+function readPalette(raw: unknown): PlanetSurfacePalette {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const palette = { ...DEFAULT_SURFACE_PALETTE };
+  for (const key of SURFACE_PALETTE_KEYS) {
+    const authoredValue = key === 'coast' ? (src.coast ?? src.beach) : src[key];
+    palette[key] = readHexColor(authoredValue, DEFAULT_SURFACE_PALETTE[key]);
+  }
+  // Pre-arctic defaults were sage/olive; migrate so arctic reads as snow and
+  // alpine as rock/lichen without forcing authors to hand-edit every planet.
+  const tundraHex = palette.tundra.toLowerCase();
+  if (tundraHex === '#9eaa91' || tundraHex === '#e8eef4' || tundraHex === '#f4f7fb') {
+    palette.tundra = DEFAULT_SURFACE_PALETTE.tundra;
+  }
+  if (palette.highlands.toLowerCase() === '#7f895f') {
+    palette.highlands = DEFAULT_SURFACE_PALETTE.highlands;
+  }
+  const peakHex = palette.peak.toLowerCase();
+  if (peakHex === '#e7e6dc' || peakHex === '#f2f4f6' || peakHex === '#f7f8fa') {
+    palette.peak = DEFAULT_SURFACE_PALETTE.peak;
   }
   return palette;
 }
@@ -427,7 +575,7 @@ function readSpawnHint(raw: unknown): LandingSiteHint | undefined {
   return { latRadians: src.latRadians, lonRadians: src.lonRadians };
 }
 
-const ALL_BIOMES = Object.keys(DEFAULT_BIOME_PALETTE) as Biome[];
+const ALL_BIOMES = BIOME_KEYS;
 
 function readCollider(raw: unknown): SurfaceSpawnCollider {
   const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
@@ -552,6 +700,7 @@ export function parsePlanetDocument(raw: unknown): PlanetDocument | null {
     height: readHeight(src.height),
     regions: readRegions(src.regions),
     hydrology: readHydrology(src.hydrology),
+    biomes: readBiomes(src.biomes),
     palette: readPalette(src.palette),
     vegetation: readVegetation(src.vegetation),
     spawning: readSpawning(src.spawning),
@@ -575,7 +724,11 @@ export function createDefaultPlanetDocument(
     height: { ...DEFAULT_HEIGHT_RECIPE },
     regions: { ...DEFAULT_REGION_RECIPE },
     hydrology: { ...DEFAULT_HYDROLOGY_RECIPE },
-    palette: { ...DEFAULT_BIOME_PALETTE },
+    biomes: {
+      ...DEFAULT_BIOME_RECIPE,
+      enabled: [...DEFAULT_BIOME_RECIPE.enabled],
+    },
+    palette: { ...DEFAULT_SURFACE_PALETTE },
     vegetation: {
       grass: {
         ...DEFAULT_VEGETATION.grass,

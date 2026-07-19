@@ -8,27 +8,38 @@ import {
   savePlanet,
   type PlanetListEntry,
 } from '../api';
+import { biomeDisplayName } from '../../world/climate';
+import {
+  findSurfaceDestinationVariant,
+  surfaceDestinationDisplayName,
+  type SurfaceDestination,
+} from '../../world/biome_teleport';
+import { oceanWaterLevelMeters } from '../../world/coastal_profile';
 import { cartesianFromLatLonAlt } from '../../world/coordinates';
 import { sampleSurfaceHeight } from '../../world/elevation';
 import { activatePlanetDocument } from '../../world/planets/runtime';
 import {
+  BIOME_KEYS,
+  SURFACE_PALETTE_KEYS,
   createDefaultPlanetDocument,
   createDefaultSpawnCatalog,
   createDefaultSpawnEntry,
   parsePlanetDocument,
   planetPhysicsFromDocument,
-  type PlanetBiomePalette,
+  type PlanetSurfacePalette,
+  type PlanetBiomeRecipe,
   type PlanetDocument,
+  type SurfacePaletteKey,
 } from '../../world/planets/schema';
 import { samplePlanetSurface } from '../../world/planet_surface';
 import type {
   Biome,
+  LandingSiteHint,
   PlanetSpawnEntry,
   PlanetSpawnLayer,
   VegetationLayerSettings,
 } from '../../types';
 import {
-  PREVIEW_HALF_EXTENT_RADIANS,
   PREVIEW_HEIGHT_SCALE,
   PREVIEW_PATCH_EXTENT_METERS,
   buildPreviewVegetation,
@@ -38,6 +49,24 @@ import {
   buildPreviewSpawns,
   type PreviewSpawnHandle,
 } from './planet_preview_spawns';
+
+const PREVIEW_SEGMENTS = 96;
+const DIAGNOSTIC_FEATURES: readonly SurfaceDestination[] = [
+  'coast',
+  'lake',
+  'river',
+];
+
+interface PreviewDiagnostics {
+  centerBiome: Biome;
+  centerWater: string;
+  coverage: number;
+  maxHeight: number;
+  maxSlopeDegrees: number;
+  meanMoisture: number;
+  meanTemperature: number;
+  minHeight: number;
+}
 
 function isModelAssetUrl(url: string): boolean {
   return /\.(glb|gltf)(\?|$)/i.test(url);
@@ -94,19 +123,11 @@ export interface PlanetAuthoringEditor {
   previewPlanet: () => Promise<boolean>;
 }
 
-const BIOME_KEYS: Biome[] = [
-  'ocean',
-  'lake',
-  'river',
-  'beach',
-  'desert',
-  'plains',
-  'forest',
-  'tundra',
-  'highlands',
-  'peak',
-  'rock',
-];
+function paletteDisplayName(key: SurfacePaletteKey): string {
+  if (key === 'coast') return 'coast';
+  if (key === 'ocean' || key === 'lake' || key === 'river') return key;
+  return biomeDisplayName(key);
+}
 
 function cloneDocument(doc: PlanetDocument): PlanetDocument {
   return structuredClone(doc);
@@ -276,6 +297,7 @@ function grassImageAssetField(
 function biomeMultiSelect(
   selected: readonly Biome[],
   onChange: (next: Biome[]) => void,
+  label = 'Biomes',
 ): HTMLElement {
   const selectedSet = new Set(selected);
   const chips = el('div', { className: 'ed-planet-biome-chips' });
@@ -284,8 +306,8 @@ function biomeMultiSelect(
     chips.append(
       el('button', {
         className: `ed-planet-biome-chip${active ? ' is-active' : ''}`,
-        text: biome,
-        attrs: { type: 'button' },
+        text: biomeDisplayName(biome),
+        attrs: { type: 'button', title: biome },
         on: {
           click: () => {
             const next = new Set(selectedSet);
@@ -298,8 +320,36 @@ function biomeMultiSelect(
     );
   }
   return el('div', { className: 'ed-planet-biome-row' }, [
-    el('span', { className: 'ed-planet-biome-label', text: 'Biomes' }),
+    el('span', { className: 'ed-planet-biome-label', text: label }),
     chips,
+  ]);
+}
+
+function fallbackBiomeField(
+  recipe: PlanetBiomeRecipe,
+  onChange: (biome: Biome) => void,
+): HTMLElement {
+  const select = el('select', {
+    className: 'ed-input',
+    on: {
+      change: () => onChange(select.value as Biome),
+      keydown: (event) => event.stopPropagation(),
+    },
+  }) as HTMLSelectElement;
+  for (const biome of recipe.enabled) {
+    select.append(
+      el('option', {
+        text: biomeDisplayName(biome),
+        attrs: {
+          value: biome,
+          ...(recipe.fallbackBiome === biome ? { selected: 'true' } : {}),
+        },
+      }),
+    );
+  }
+  return el('label', { className: 'ed-planet-field' }, [
+    el('span', { text: 'Fallback biome' }),
+    select,
   ]);
 }
 
@@ -526,6 +576,10 @@ function vegetationAssetListEditor(
 }
 
 export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringEditor {
+  const defaultPreviewLocation: LandingSiteHint = {
+    latRadians: -0.946,
+    lonRadians: 2.176407,
+  };
   let active = false;
   let initialized = false;
   let documentState: PlanetDocument = createDefaultPlanetDocument();
@@ -614,6 +668,65 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
   let previewSpawnsLoad: { cancel: () => void } | null = null;
   let previewSpawnsGeneration = 0;
   let vegetationPreviewTimer = 0;
+  let diagnosticScanTimer = 0;
+  let activePreviewLocation: LandingSiteHint = { ...defaultPreviewLocation };
+  let activePreviewDestination: SurfaceDestination | null = null;
+  let activePreviewVariant = 0;
+  let previewDiagnostics: PreviewDiagnostics | null = null;
+  const destinationAvailability = new Map<SurfaceDestination, boolean>();
+
+  const diagnosticPanel = el('div', { className: 'ed-planet-diagnostics' });
+  const diagnosticTitle = el('div', {
+    className: 'ed-planet-diagnostics-title',
+    text: '512 m terrain diagnostic',
+  });
+  const destinationChips = el('div', {
+    className: 'ed-planet-destination-chips',
+  });
+  const variantLabel = el('span', {
+    className: 'ed-planet-variant-label',
+    text: 'Spawn hint',
+  });
+  const metricsHost = el('div', { className: 'ed-planet-metrics' });
+  const previousVariantButton = el('button', {
+    className: 'ed-btn',
+    text: 'Previous',
+    attrs: { type: 'button' },
+  }) as HTMLButtonElement;
+  const nextVariantButton = el('button', {
+    className: 'ed-btn',
+    text: 'Next',
+    attrs: { type: 'button' },
+  }) as HTMLButtonElement;
+  const setSpawnButton = el('button', {
+    className: 'ed-btn',
+    text: 'Set Spawn Here',
+    attrs: { type: 'button' },
+  }) as HTMLButtonElement;
+  const testHereButton = el('button', {
+    className: 'ed-btn ed-btn-accent',
+    text: 'Test Play Here',
+    attrs: { type: 'button' },
+  }) as HTMLButtonElement;
+  diagnosticPanel.append(
+    diagnosticTitle,
+    el('div', {
+      className: 'ed-planet-diagnostics-note',
+      text: 'Land biomes are recipe-driven. Coast, lake, and river are generated features.',
+    }),
+    destinationChips,
+    el('div', { className: 'ed-planet-variant-row' }, [
+      previousVariantButton,
+      variantLabel,
+      nextVariantButton,
+    ]),
+    metricsHost,
+    el('div', { className: 'ed-planet-diagnostic-actions' }, [
+      setSpawnButton,
+      testHereButton,
+    ]),
+  );
+  previewHost.append(diagnosticPanel);
 
   const orbit = new OrbitControls(camera, canvas);
   orbit.enableDamping = true;
@@ -765,9 +878,203 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     statusEl.classList.toggle('is-error', isError);
   }
 
+  function previewPatch(location = activePreviewLocation) {
+    const halfExtentMeters = PREVIEW_PATCH_EXTENT_METERS / 2;
+    const halfLatExtentRadians = halfExtentMeters / documentState.radiusMeters;
+    return {
+      halfLatExtentRadians,
+      halfLonExtentRadians:
+        halfLatExtentRadians / Math.max(Math.cos(location.latRadians), 0.1),
+      heightScale: PREVIEW_HEIGHT_SCALE,
+      hint: location,
+      patchExtentMeters: PREVIEW_PATCH_EXTENT_METERS,
+    };
+  }
+
+  function diagnosticTargets(): SurfaceDestination[] {
+    return [...documentState.biomes.enabled, ...DIAGNOSTIC_FEATURES];
+  }
+
+  function refreshDestinationAvailability(): void {
+    destinationAvailability.clear();
+    for (const biome of documentState.biomes.enabled) {
+      destinationAvailability.set(biome, false);
+    }
+    let hasDryLand = false;
+    let hasOcean = false;
+    const probeCount = 768;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const planet = planetPhysicsFromDocument(documentState);
+    activatePlanetDocument(documentState);
+    for (let index = 0; index < probeCount; index += 1) {
+      const y = 1 - (2 * (index + 0.5)) / probeCount;
+      const latRadians = Math.asin(y);
+      const lonRadians = ((index * goldenAngle + Math.PI) % (Math.PI * 2)) - Math.PI;
+      const surface = samplePlanetSurface(
+        planet,
+        documentState.seed,
+        cartesianFromLatLonAlt(latRadians, lonRadians, 0, planet.radiusMeters),
+      );
+      if (surface.waterBody == null) {
+        hasDryLand = true;
+        destinationAvailability.set(surface.biome, true);
+      } else {
+        if (surface.waterBody === 'lake' || surface.waterBody === 'river') {
+          destinationAvailability.set(surface.waterBody, true);
+        }
+        if (surface.waterBody === 'ocean') hasOcean = true;
+      }
+    }
+    destinationAvailability.set('coast', hasDryLand && hasOcean);
+  }
+
+  function renderDiagnosticPanel(): void {
+    clearChildren(destinationChips);
+    for (const destination of diagnosticTargets()) {
+      const selected = destination === activePreviewDestination;
+      const available = destinationAvailability.get(destination);
+      destinationChips.append(
+        el('button', {
+          className: `ed-planet-destination-chip${selected ? ' is-active' : ''}${available === false ? ' is-missing' : ''}`,
+          text: surfaceDestinationDisplayName(destination),
+          attrs: {
+            type: 'button',
+            title:
+              available === false
+                ? `${surfaceDestinationDisplayName(destination)} was not found in the global probe`
+                : `Preview ${surfaceDestinationDisplayName(destination)}`,
+          },
+          on: {
+            click: () => selectPreviewDestination(destination, 0),
+          },
+        }),
+      );
+    }
+
+    const variantEnabled = activePreviewDestination != null;
+    previousVariantButton.disabled = !variantEnabled || activePreviewVariant <= 0;
+    nextVariantButton.disabled = !variantEnabled;
+    variantLabel.textContent = activePreviewDestination
+      ? `${surfaceDestinationDisplayName(activePreviewDestination)} · sample ${activePreviewVariant + 1}`
+      : 'Spawn hint';
+
+    clearChildren(metricsHost);
+    if (!previewDiagnostics) {
+      metricsHost.append(el('span', { text: 'Building terrain metrics…' }));
+      return;
+    }
+    const latDegrees = (activePreviewLocation.latRadians * 180) / Math.PI;
+    const lonDegrees = (activePreviewLocation.lonRadians * 180) / Math.PI;
+    const metrics: readonly [string, string][] = [
+      ['Location', `${latDegrees.toFixed(4)}°, ${lonDegrees.toFixed(4)}°`],
+      [
+        'Center',
+        previewDiagnostics.centerWater === 'dry'
+          ? biomeDisplayName(previewDiagnostics.centerBiome)
+          : previewDiagnostics.centerWater,
+      ],
+      [
+        'Elevation',
+        `${previewDiagnostics.minHeight.toFixed(1)}–${previewDiagnostics.maxHeight.toFixed(1)} m`,
+      ],
+      ['Moisture', previewDiagnostics.meanMoisture.toFixed(3)],
+      ['Temperature', previewDiagnostics.meanTemperature.toFixed(3)],
+      ['Max slope', `${previewDiagnostics.maxSlopeDegrees.toFixed(1)}°`],
+      [
+        'Target coverage',
+        activePreviewDestination == null
+          ? '—'
+          : `${(previewDiagnostics.coverage * 100).toFixed(1)}%`,
+      ],
+    ];
+    for (const [label, value] of metrics) {
+      metricsHost.append(
+        el('span', { className: 'ed-planet-metric-label', text: label }),
+        el('strong', { text: value }),
+      );
+    }
+  }
+
+  function selectPreviewDestination(
+    destination: SurfaceDestination,
+    variant: number,
+  ): void {
+    activatePlanetDocument(documentState);
+    setStatus(`Finding ${surfaceDestinationDisplayName(destination)} sample ${variant + 1}…`);
+    const location = findSurfaceDestinationVariant(
+      planetPhysicsFromDocument(documentState),
+      documentState.seed,
+      destination,
+      Math.max(0, variant),
+    );
+    if (!location) {
+      destinationAvailability.set(destination, false);
+      renderDiagnosticPanel();
+      setStatus(
+        `No ${surfaceDestinationDisplayName(destination)} location was generated by this recipe.`,
+        true,
+      );
+      return;
+    }
+    destinationAvailability.set(destination, true);
+    activePreviewDestination = destination;
+    activePreviewVariant = Math.max(0, variant);
+    activePreviewLocation = {
+      latRadians: location.latRadians,
+      lonRadians: location.lonRadians,
+    };
+    previewDiagnostics = null;
+    resetCameraOnRebuild = true;
+    previewDirty = true;
+    renderDiagnosticPanel();
+    setStatus(
+      `Previewing ${surfaceDestinationDisplayName(destination)} sample ${activePreviewVariant + 1}.`,
+    );
+  }
+
+  function resetDiagnosticLocation(): void {
+    activePreviewLocation = {
+      ...(documentState.spawnHint ?? defaultPreviewLocation),
+    };
+    activePreviewDestination = null;
+    activePreviewVariant = 0;
+    previewDiagnostics = null;
+    refreshDestinationAvailability();
+    renderDiagnosticPanel();
+  }
+
+  previousVariantButton.addEventListener('click', () => {
+    if (!activePreviewDestination || activePreviewVariant <= 0) return;
+    selectPreviewDestination(activePreviewDestination, activePreviewVariant - 1);
+  });
+  nextVariantButton.addEventListener('click', () => {
+    if (!activePreviewDestination) return;
+    selectPreviewDestination(activePreviewDestination, activePreviewVariant + 1);
+  });
+  setSpawnButton.addEventListener('click', () => {
+    documentState.spawnHint = { ...activePreviewLocation };
+    setStatus(
+      `Spawn set to ${((activePreviewLocation.latRadians * 180) / Math.PI).toFixed(4)}°, ${((activePreviewLocation.lonRadians * 180) / Math.PI).toFixed(4)}° — unsaved.`,
+    );
+  });
+  testHereButton.addEventListener('click', () => {
+    documentState.spawnHint = { ...activePreviewLocation };
+    void previewPlanet();
+  });
+
   function markDirty(): void {
     previewDirty = true;
     setStatus(`${documentState.name} — unsaved`);
+    window.clearTimeout(diagnosticScanTimer);
+    diagnosticScanTimer = window.setTimeout(() => {
+      if (!active) return;
+      refreshDestinationAvailability();
+      renderDiagnosticPanel();
+    }, 250);
+  }
+
+  function markBiomeDirty(): void {
+    markDirty();
   }
 
   /**
@@ -794,6 +1101,10 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
 
     formHost.append(
       section('Identity', [
+        el('div', {
+          className: 'ed-empty-note',
+          text: 'Saving creates a reusable planet document. System Map can place it by this planet id.',
+        }),
         textField('Id', doc.id, (value) => {
           doc.id = value.trim().toLowerCase();
           markDirty();
@@ -882,6 +1193,15 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
           doc.hydrology.lakeMaxCarveNormalized = value;
           markDirty();
         }),
+        numberField(
+          'Lake water level',
+          doc.hydrology.inlandLakeWaterLevelNormalized,
+          (value) => {
+            doc.hydrology.inlandLakeWaterLevelNormalized = value;
+            markDirty();
+          },
+          0.001,
+        ),
         numberField('River half-width', doc.hydrology.riverHalfWidth, (value) => {
           doc.hydrology.riverHalfWidth = value;
           markDirty();
@@ -891,12 +1211,82 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
           markDirty();
         }),
       ]),
+      section('Biome recipe', [
+        el('div', {
+          className: 'ed-empty-note',
+          text: 'Enabled land biomes are classified by the shared runtime recipe. Ocean, coast, lakes, and rivers are generated geography, not biomes.',
+        }),
+        biomeMultiSelect(
+          doc.biomes.enabled,
+          (biomes) => {
+            if (biomes.length === 0) {
+              setStatus('A planet needs at least one enabled land biome.', true);
+              return;
+            }
+            doc.biomes.enabled = biomes;
+            if (!biomes.includes(doc.biomes.fallbackBiome)) {
+              doc.biomes.fallbackBiome = biomes[0]!;
+            }
+            markBiomeDirty();
+            rebuildForm();
+          },
+          'Enabled',
+        ),
+        fallbackBiomeField(doc.biomes, (biome) => {
+          doc.biomes.fallbackBiome = biome;
+          markBiomeDirty();
+        }),
+        numberField('Forest moisture min', doc.biomes.forestMoistureMin, (value) => {
+          doc.biomes.forestMoistureMin = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Plains moisture min', doc.biomes.plainsMoistureMin, (value) => {
+          doc.biomes.plainsMoistureMin = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Arctic latitude 0–1', doc.biomes.arcticLatitudeStart, (value) => {
+          doc.biomes.arcticLatitudeStart = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Arctic temperature max', doc.biomes.arcticTemperatureMax, (value) => {
+          doc.biomes.arcticTemperatureMax = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Mountain region gate', doc.biomes.mountainRegionThreshold, (value) => {
+          doc.biomes.mountainRegionThreshold = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Highland height 0–1', doc.biomes.highlandNormalizedHeight, (value) => {
+          doc.biomes.highlandNormalizedHeight = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Extreme highland 0–1', doc.biomes.extremeHighlandNormalizedHeight, (value) => {
+          doc.biomes.extremeHighlandNormalizedHeight = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Peak temperature max', doc.biomes.peakTemperatureMax, (value) => {
+          doc.biomes.peakTemperatureMax = value;
+          markBiomeDirty();
+        }, 0.01),
+        numberField('Ocean level (m)', doc.biomes.oceanWaterLevelMeters, (value) => {
+          doc.biomes.oceanWaterLevelMeters = value;
+          markBiomeDirty();
+        }, 1),
+        numberField('Coast max height (m)', doc.biomes.coastMaxHeightMeters, (value) => {
+          doc.biomes.coastMaxHeightMeters = value;
+          markBiomeDirty();
+        }, 1),
+        numberField('Shelf half-width 0–1', doc.biomes.coastalShelfHalfWidthNormalized, (value) => {
+          doc.biomes.coastalShelfHalfWidthNormalized = value;
+          markBiomeDirty();
+        }, 0.001),
+      ]),
       section('Vegetation', buildVegetationSection(doc)),
       section(
-        'Palette',
-        BIOME_KEYS.map((biome) =>
-          colorField(biome, doc.palette[biome], (value) => {
-            doc.palette[biome] = value;
+        'Surface Palette',
+        SURFACE_PALETTE_KEYS.map((key) =>
+          colorField(paletteDisplayName(key), doc.palette[key], (value) => {
+            doc.palette[key] = value;
             markDirty();
           }),
         ),
@@ -994,7 +1384,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
       }),
       el('div', {
         className: 'ed-empty-note',
-        text: 'Drag .glb props from Project. Height is normalized 0–1 (sea→peak). Plains/forest usually need min≈0, max≈1 — not min=1. Shore: beach + max≈0.012. Colliders: box/capsule only. Preview shows catalog props on the heightfield.',
+        text: 'Drag .glb props from Project. Height is normalized 0–1 (sea→peak). Props target land biomes; coast, lake, and river are derived hydrology rather than biomes. Colliders: box/capsule only. Preview shows catalog props on the heightfield.',
       }),
     ];
     if (entries.length > 50) {
@@ -1080,51 +1470,107 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     activatePlanetDocument(documentState);
     const planet = planetPhysicsFromDocument(documentState);
     const seed = documentState.seed;
-    const hint = documentState.spawnHint ?? { latRadians: -0.946, lonRadians: 2.176407 };
-    const segments = 48;
-    const halfExtentRadians = PREVIEW_HALF_EXTENT_RADIANS;
-    const heightScale = PREVIEW_HEIGHT_SCALE;
-    const patchExtentMeters = PREVIEW_PATCH_EXTENT_METERS;
+    const hint = activePreviewLocation;
+    const patch = previewPatch(hint);
+    const segments = PREVIEW_SEGMENTS;
+    const { halfLatExtentRadians, halfLonExtentRadians, heightScale, patchExtentMeters } = patch;
     const gridWidth = segments + 1;
     const positions: number[] = [];
     const colors: number[] = [];
     const indices: number[] = [];
+    const heights = new Float64Array(gridWidth * gridWidth);
     const waterLevels = new Float64Array(gridWidth * gridWidth);
-    const waterKinds = new Uint8Array(gridWidth * gridWidth); // 0 none, 1 inland, 2 ocean
+    const waterKinds = new Uint8Array(gridWidth * gridWidth); // 0 none, 1 lake, 2 ocean, 3 river
+    let minHeight = Infinity;
+    let maxHeight = -Infinity;
+    let moistureTotal = 0;
+    let temperatureTotal = 0;
+    let targetMatches = 0;
+    let centerSurface: ReturnType<typeof samplePlanetSurface> | null = null;
+    const oceanLevel = oceanWaterLevelMeters();
 
     for (let y = 0; y <= segments; y += 1) {
       for (let x = 0; x <= segments; x += 1) {
         const u = x / segments;
         const v = y / segments;
-        const lat = hint.latRadians + (v - 0.5) * 2 * halfExtentRadians;
-        const lon = hint.lonRadians + (u - 0.5) * 2 * halfExtentRadians;
+        const lat = hint.latRadians + (v - 0.5) * 2 * halfLatExtentRadians;
+        const lon = hint.lonRadians + (u - 0.5) * 2 * halfLonExtentRadians;
         const probe = cartesianFromLatLonAlt(lat, lon, 0, planet.radiusMeters);
-        const height = sampleSurfaceHeight(planet, seed, probe);
         const surface = samplePlanetSurface(planet, seed, probe);
+        const height = surface.heightMeters;
         const localX = (u - 0.5) * patchExtentMeters;
         const localZ = (v - 0.5) * patchExtentMeters;
         const vertex = y * gridWidth + x;
+        heights[vertex] = height;
+        minHeight = Math.min(minHeight, height);
+        maxHeight = Math.max(maxHeight, height);
+        moistureTotal += surface.moisture;
+        temperatureTotal += surface.temperature;
+        if (x === segments / 2 && y === segments / 2) centerSurface = surface;
+        const isCoast =
+          surface.waterBody == null &&
+          surface.lakeWaterLevelMeters == null &&
+          surface.riverWaterLevelMeters == null &&
+          surface.heightMeters >= oceanLevel + 1.5 &&
+          surface.heightMeters <= documentState.biomes.coastMaxHeightMeters;
+        const matchesTarget =
+          activePreviewDestination === 'coast'
+            ? isCoast
+            : activePreviewDestination === 'lake' || activePreviewDestination === 'river'
+              ? surface.waterBody === activePreviewDestination
+              : activePreviewDestination != null
+                ? surface.waterBody == null && surface.biome === activePreviewDestination
+                : false;
+        if (matchesTarget) targetMatches += 1;
         positions.push(localX, height * heightScale, localZ);
         const [r, g, b] = hexToRgb(
-          (documentState.palette as PlanetBiomePalette)[surface.biome] ?? '#719447',
+          isCoast
+            ? documentState.palette.coast
+            : (documentState.palette as PlanetSurfacePalette)[surface.biome] ?? '#719447',
         );
         colors.push(r, g, b);
 
-        if (surface.biome === 'ocean' || height < 0) {
-          waterLevels[vertex] = 0;
-          waterKinds[vertex] = 2;
-        } else if (
-          surface.lakeWaterLevelMeters != null &&
-          height < surface.lakeWaterLevelMeters - 0.5
-        ) {
-          waterLevels[vertex] = surface.lakeWaterLevelMeters;
-          waterKinds[vertex] = 1;
+        if (surface.waterBody != null && surface.waterLevelMeters != null) {
+          waterLevels[vertex] = surface.waterLevelMeters;
+          waterKinds[vertex] =
+            surface.waterBody === 'ocean' ? 2 : surface.waterBody === 'river' ? 3 : 1;
         } else {
           waterLevels[vertex] = Number.NaN;
           waterKinds[vertex] = 0;
         }
       }
     }
+
+    const cellSpanMeters = patchExtentMeters / segments;
+    let maxSlopeRadians = 0;
+    for (let y = 1; y < segments; y += 1) {
+      for (let x = 1; x < segments; x += 1) {
+        const center = y * gridWidth + x;
+        const riseX = (heights[center + 1]! - heights[center - 1]!) / 2;
+        const riseZ =
+          (heights[center + gridWidth]! - heights[center - gridWidth]!) / 2;
+        maxSlopeRadians = Math.max(
+          maxSlopeRadians,
+          Math.atan(Math.hypot(riseX, riseZ) / cellSpanMeters),
+        );
+      }
+    }
+    const sampleCount = gridWidth * gridWidth;
+    const resolvedCenter = centerSurface ?? samplePlanetSurface(
+      planet,
+      seed,
+      cartesianFromLatLonAlt(hint.latRadians, hint.lonRadians, 0, planet.radiusMeters),
+    );
+    previewDiagnostics = {
+      centerBiome: resolvedCenter.biome,
+      centerWater: resolvedCenter.waterBody ?? 'dry',
+      coverage: targetMatches / sampleCount,
+      maxHeight,
+      maxSlopeDegrees: (maxSlopeRadians * 180) / Math.PI,
+      meanMoisture: moistureTotal / sampleCount,
+      meanTemperature: temperatureTotal / sampleCount,
+      minHeight,
+    };
 
     for (let y = 0; y < segments; y += 1) {
       for (let x = 0; x < segments; x += 1) {
@@ -1170,6 +1616,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     const waterIndices: number[] = [];
     const oceanRgb = hexToRgb(documentState.palette.ocean);
     const lakeRgb = hexToRgb(documentState.palette.lake);
+    const riverRgb = hexToRgb(documentState.palette.river);
     const shallowRgb = hexToRgb('#3f7898');
 
     for (let y = 0; y < segments; y += 1) {
@@ -1185,6 +1632,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
 
         const base = waterPositions.length / 3;
         let oceanCount = 0;
+        let riverCount = 0;
         for (const index of corners) {
           const u = (index % gridWidth) / segments;
           const v = Math.floor(index / gridWidth) / segments;
@@ -1196,6 +1644,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
           ) / wetCorners.length;
           waterPositions.push(localX, level * heightScale, localZ);
           if (waterKinds[index] === 2) oceanCount += 1;
+          if (waterKinds[index] === 3) riverCount += 1;
         }
 
         const useOcean = oceanCount >= 2;
@@ -1205,7 +1654,9 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
               oceanRgb[1] * 0.55 + shallowRgb[1] * 0.45,
               oceanRgb[2] * 0.55 + shallowRgb[2] * 0.45,
             ]
-          : lakeRgb;
+          : riverCount >= 2
+            ? riverRgb
+            : lakeRgb;
         for (let i = 0; i < 4; i += 1) {
           waterColors.push(tint[0], tint[1], tint[2]);
         }
@@ -1249,13 +1700,14 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
       ) * heightScale;
     if (resetCameraOnRebuild) {
       endFly();
-      camera.position.set(0, midHeight + 420, 780);
+      camera.position.set(0, midHeight + 230, 440);
       orbit.target.set(0, midHeight, 0);
       camera.lookAt(orbit.target);
       orbit.update();
       resetCameraOnRebuild = false;
     }
     previewDirty = false;
+    renderDiagnosticPanel();
   }
 
   function resize(): void {
@@ -1296,6 +1748,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
       documentState = loaded;
       savedSnapshot = cloneDocument(loaded);
       activatePlanetDocument(loaded);
+      resetDiagnosticLocation();
       rebuildForm();
       resetCameraOnRebuild = true;
       previewDirty = true;
@@ -1329,6 +1782,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
   }
 
   async function previewPlanet(): Promise<boolean> {
+    documentState.spawnHint = { ...activePreviewLocation };
     const ok = await save();
     if (!ok) return false;
     const id = documentState.id;
@@ -1338,11 +1792,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
 
   function framePreviewCameraForVegetation(): void {
     const planet = planetPhysicsFromDocument(documentState);
-    const hint =
-      documentState.spawnHint ?? {
-        latRadians: -0.946,
-        lonRadians: 2.176407,
-      };
+    const hint = activePreviewLocation;
     const midHeight =
       sampleSurfaceHeight(
         planet,
@@ -1350,8 +1800,8 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
         cartesianFromLatLonAlt(hint.latRadians, hint.lonRadians, 0, planet.radiusMeters),
       ) * PREVIEW_HEIGHT_SCALE;
     endFly();
-    camera.position.set(0, midHeight + 110, 220);
-    orbit.target.set(0, midHeight + 20, 0);
+    camera.position.set(0, midHeight + 85, 170);
+    orbit.target.set(0, midHeight + 15, 0);
     camera.lookAt(orbit.target);
     orbit.update();
   }
@@ -1367,17 +1817,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     rebuildPreviewMesh();
 
     const planet = planetPhysicsFromDocument(documentState);
-    const hint =
-      documentState.spawnHint ?? {
-        latRadians: -0.946,
-        lonRadians: 2.176407,
-      };
-    const patch = {
-      halfExtentRadians: PREVIEW_HALF_EXTENT_RADIANS,
-      heightScale: PREVIEW_HEIGHT_SCALE,
-      hint,
-      patchExtentMeters: PREVIEW_PATCH_EXTENT_METERS,
-    };
+    const patch = previewPatch(activePreviewLocation);
 
     let grassCount = 0;
     let treeCount = 0;
@@ -1493,6 +1933,8 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
           if (!id) return;
           documentState = createDefaultPlanetDocument(id, id);
           savedSnapshot = cloneDocument(documentState);
+          activatePlanetDocument(documentState);
+          resetDiagnosticLocation();
           rebuildForm();
           resetCameraOnRebuild = true;
           previewDirty = true;
@@ -1523,6 +1965,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     deactivate: () => {
       active = false;
       window.clearTimeout(vegetationPreviewTimer);
+      window.clearTimeout(diagnosticScanTimer);
       endFly();
       cancelAnimationFrame(raf);
       clearPreviewDecorations();

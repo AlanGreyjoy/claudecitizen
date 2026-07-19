@@ -510,12 +510,13 @@ body.ed-resize-row * {
   inset: 0;
 }
 
-#editor-root.is-base-characters,
 /* Planet Authoring keeps the Project asset browser for spawn-layer DnD. */
 #editor-root.is-planet-authoring {
   grid-template-rows: auto minmax(0, 1fr) 4px var(--ed-project-height, 240px);
 }
 
+/* Base Characters / System Map / Menu Manager hide Project — collapse its rows. */
+#editor-root.is-base-characters,
 #editor-root.is-system-map,
 #editor-root.is-menu-manager {
   grid-template-rows: auto minmax(0, 1fr) 0 0;
@@ -758,6 +759,103 @@ body.ed-resize-row * {
   pointer-events: none;
 }
 
+.ed-planet-diagnostics {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100% - 24px));
+  padding: 10px;
+  border: 1px solid rgba(90, 190, 255, 0.28);
+  border-radius: 5px;
+  background: rgba(5, 11, 24, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  color: var(--muted);
+  font: 600 11px/1.3 var(--sc-font);
+}
+
+.ed-planet-diagnostics-title {
+  color: var(--text);
+  font: 700 13px/1.2 var(--sc-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ed-planet-diagnostics-note {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.ed-planet-destination-chips,
+.ed-planet-diagnostic-actions,
+.ed-planet-variant-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.ed-planet-destination-chip {
+  padding: 4px 7px;
+  border: 1px solid rgba(90, 190, 255, 0.22);
+  border-radius: 3px;
+  background: rgba(20, 42, 66, 0.72);
+  color: var(--muted);
+  font: 700 10px/1.2 var(--sc-font);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ed-planet-destination-chip:hover,
+.ed-planet-destination-chip.is-active {
+  border-color: rgba(139, 216, 255, 0.75);
+  background: rgba(67, 148, 190, 0.28);
+  color: var(--accent);
+}
+
+.ed-planet-destination-chip.is-missing:not(.is-active) {
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+.ed-planet-variant-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.ed-planet-variant-label {
+  overflow: hidden;
+  color: var(--text);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-planet-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  padding: 7px;
+  border-radius: 3px;
+  background: rgba(7, 22, 38, 0.82);
+}
+
+.ed-planet-metrics strong {
+  color: var(--text);
+  font-weight: 700;
+  text-align: right;
+}
+
+.ed-planet-metric-label {
+  color: var(--muted);
+}
+
+.ed-planet-diagnostic-actions .ed-btn:last-child {
+  margin-left: auto;
+}
+
 .ed-system-map {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
@@ -988,6 +1086,25 @@ body.ed-resize-row * {
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+}
+
+.ed-base-anim-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px;
+  border: 1px solid rgba(90, 190, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ed-base-anim-panel .ed-base-actions {
+  margin-bottom: 0;
+}
+
+.ed-base-anim-speed {
+  width: 100%;
+  padding: 0;
 }
 
 .ed-base-type-toggle .is-active {

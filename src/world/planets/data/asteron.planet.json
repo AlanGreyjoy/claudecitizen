@@ -39,8 +39,7 @@
     "lakeMaxCarveNormalized": 0.14,
     "lakeMinLandElevation": 0.02,
     "inlandLakeMoistureThreshold": 0.55,
-    "inlandLakeMaxNormalized": 0.05,
-    "inlandLakeMaxDepthMeters": 8,
+    "inlandLakeWaterLevelNormalized": 0.05,
     "riverNoiseSeedOffset": 7777,
     "riverFieldScale": 7,
     "riverFieldOctaves": 3,
@@ -50,17 +49,39 @@
     "riverMaxLandElevation": 0.55,
     "riverMinStrength": 0.05
   },
+  "biomes": {
+    "enabled": [
+      "desert",
+      "plains",
+      "forest",
+      "tundra",
+      "highlands",
+      "peak"
+    ],
+    "fallbackBiome": "plains",
+    "forestMoistureMin": 0.6,
+    "plainsMoistureMin": 0.3,
+    "arcticLatitudeStart": 0.65,
+    "arcticTemperatureMax": 0.28,
+    "mountainRegionThreshold": 0.35,
+    "highlandNormalizedHeight": 0.45,
+    "extremeHighlandNormalizedHeight": 0.75,
+    "peakTemperatureMax": 0.3,
+    "oceanWaterLevelMeters": 20,
+    "coastMaxHeightMeters": 30,
+    "coastalShelfHalfWidthNormalized": 0.04
+  },
   "palette": {
     "ocean": "#173653",
     "lake": "#53665a",
     "river": "#776f50",
-    "beach": "#d8c58e",
+    "coast": "#d8c58e",
     "desert": "#c89b62",
     "plains": "#719447",
     "forest": "#3e6c42",
-    "tundra": "#9eaa91",
-    "highlands": "#7f895f",
-    "peak": "#e7e6dc",
+    "tundra": "#ffffff",
+    "highlands": "#8b9088",
+    "peak": "#f8fbff",
     "rock": "#737887"
   },
   "vegetation": {
@@ -104,7 +125,8 @@
         "maxScale": 0.5,
         "biomes": [
           "plains",
-          "forest"
+          "forest",
+          "highlands"
         ],
         "minNormalizedHeight": 0,
         "maxNormalizedHeight": 1,
@@ -131,8 +153,8 @@
         "minScale": 0.1,
         "maxScale": 0.5,
         "biomes": [
-          "beach",
-          "plains"
+          "plains",
+          "highlands"
         ],
         "minNormalizedHeight": 0,
         "maxNormalizedHeight": 1,

@@ -1,5 +1,4 @@
 import type {
-  Biome,
   CubeFace,
   Planet,
   PlanetSurfaceSample,
@@ -9,20 +8,28 @@ import type {
 } from '../../../types';
 import { scale } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
+import {
+  coastTreatmentMaxHeightMeters,
+  oceanWaterLevelMeters,
+} from '../../../world/coastal_profile';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
 import { sampleAnalyticPlanetSurface } from '../../../world/planet_surface';
 import { renderableGridSampleSpacingMeters } from '../../../world/renderable_surface';
 import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../world/terrain_triangulation';
-import { TERRAIN_TILE_VERTEX_COUNT, TILE_SEGMENTS } from '../domain/constants';
+import {
+  TERRAIN_SKIRT_DEPTH_FACTOR,
+  TERRAIN_SKIRT_MAX_DEPTH_METERS,
+  TERRAIN_SKIRT_MIN_DEPTH_METERS,
+  TERRAIN_TILE_VERTEX_COUNT,
+  TILE_SEGMENTS,
+} from '../domain/constants';
 
 type RgbColor = [number, number, number];
 
 const scratchColor: RgbColor = [0, 0, 0];
-const oceanDeepColor: RgbColor = [0, 0, 0];
-const oceanShallowColor: RgbColor = [0, 0, 0];
 const lakeBedColor: RgbColor = [0, 0, 0];
 const riverBedColor: RgbColor = [0, 0, 0];
-const beachColor: RgbColor = [0, 0, 0];
+const coastColor: RgbColor = [0, 0, 0];
 const desertColor: RgbColor = [0, 0, 0];
 const plainsColor: RgbColor = [0, 0, 0];
 const forestColor: RgbColor = [0, 0, 0];
@@ -55,10 +62,6 @@ interface TriangleWriteContext {
 
 const NORTHWEST_SOUTHEAST_TRIANGLES = [0, 1, 3, 0, 3, 2] as const;
 const NORTHEAST_SOUTHWEST_TRIANGLES = [0, 1, 2, 1, 3, 2] as const;
-const TERRAIN_SKIRT_DEPTH_FACTOR = 0.75;
-const TERRAIN_SKIRT_MIN_AMPLITUDE_RATIO = 0.12;
-const TERRAIN_SKIRT_MAX_AMPLITUDE_RATIO = 0.75;
-
 function hexStringToRgb(hex: string, target: RgbColor): void {
   const normalized = hex.startsWith('#') ? hex.slice(1) : hex;
   const value = Number.parseInt(normalized, 16);
@@ -68,12 +71,10 @@ function hexStringToRgb(hex: string, target: RgbColor): void {
 }
 
 function refreshPaletteColors(): void {
-  const { oceanShallow, palette } = getActivePlanetConfig();
-  hexStringToRgb(palette.ocean, oceanDeepColor);
-  hexStringToRgb(oceanShallow, oceanShallowColor);
+  const { palette } = getActivePlanetConfig();
   hexStringToRgb(palette.lake, lakeBedColor);
   hexStringToRgb(palette.river, riverBedColor);
-  hexStringToRgb(palette.beach, beachColor);
+  hexStringToRgb(palette.coast, coastColor);
   hexStringToRgb(palette.desert, desertColor);
   hexStringToRgb(palette.plains, plainsColor);
   hexStringToRgb(palette.forest, forestColor);
@@ -115,15 +116,21 @@ function writeSurfaceBaseColor(
   colors: Float32Array,
   offset: number,
 ): void {
-  if (surface.biome === 'ocean') {
-    const depth = clamp01(surface.normalizedHeight + 1);
-    lerpColor(scratchColor, oceanDeepColor, oceanShallowColor, depth);
-  } else if (surface.biome === 'lake') {
+  const oceanLevel = oceanWaterLevelMeters();
+  if (surface.waterBody === 'ocean') {
+    // This is seabed terrain, not the water surface. Keep it sand/rock so the
+    // separate transparent water mesh reads as an actual layer instead of a
+    // second blue tint over terrain that was already painted like water.
+    const floorDepth = smoothstep(
+      0,
+      900,
+      oceanLevel - surface.heightMeters,
+    );
+    lerpColor(scratchColor, coastColor, rockColor, floorDepth * 0.9);
+  } else if (surface.waterBody === 'lake') {
     copyColor(scratchColor, lakeBedColor);
-  } else if (surface.biome === 'river') {
+  } else if (surface.waterBody === 'river') {
     copyColor(scratchColor, riverBedColor);
-  } else if (surface.biome === 'beach') {
-    copyColor(scratchColor, beachColor);
   } else if (surface.biome === 'forest') {
     copyColor(scratchColor, forestColor);
   } else if (surface.biome === 'plains') {
@@ -131,24 +138,48 @@ function writeSurfaceBaseColor(
   } else if (surface.biome === 'desert') {
     copyColor(scratchColor, desertColor);
   } else if (surface.biome === 'tundra') {
+    // Arctic snowfield — keep albedo near-white so night/grazing sun still reads snow.
     copyColor(scratchColor, tundraColor);
+    blendColor(
+      scratchColor,
+      rockColor,
+      smoothstep(0.75, 0.98, surface.mountainRegion) * 0.1,
+    );
   } else if (surface.biome === 'highlands') {
+    // Alpine tundra: high elevation anywhere — rock/lichen with snow above treeline.
     copyColor(scratchColor, alpineColor);
     blendColor(
       scratchColor,
       rockColor,
-      smoothstep(0.42, 0.68, surface.normalizedHeight) * 0.88,
+      smoothstep(0.38, 0.72, surface.normalizedHeight) * 0.92,
     );
-    blendColor(scratchColor, snowColor, smoothstep(0.68, 0.92, surface.normalizedHeight));
+    blendColor(scratchColor, snowColor, smoothstep(0.52, 0.88, surface.normalizedHeight));
   } else if (surface.biome === 'peak') {
     lerpColor(
       scratchColor,
       rockColor,
       snowColor,
-      smoothstep(0.52, 0.78, surface.normalizedHeight),
+      smoothstep(0.48, 0.76, surface.normalizedHeight),
     );
   } else {
     copyColor(scratchColor, rockColor);
+  }
+
+  // Coast is a material treatment, not a biome. Inland lake and river shores
+  // retain their surrounding land biome instead of becoming a sandy coast.
+  if (
+    surface.waterBody == null &&
+    surface.lakeWaterLevelMeters == null &&
+    surface.riverWaterLevelMeters == null
+  ) {
+    const coastStrength =
+      1 -
+      smoothstep(
+        oceanLevel + 1.5,
+        coastTreatmentMaxHeightMeters(),
+        surface.heightMeters,
+      );
+    blendColor(scratchColor, coastColor, coastStrength);
   }
 
   colors[offset] = scratchColor[0];
@@ -156,10 +187,12 @@ function writeSurfaceBaseColor(
   colors[offset + 2] = scratchColor[2];
 }
 
-function rockAffinityForBiome(biome: Biome): number {
-  if (biome === 'ocean' || biome === 'lake' || biome === 'river') return 0;
-  if (biome === 'beach') return 0.12;
+function rockAffinityForSurface(surface: PlanetSurfaceSample): number {
+  if (surface.waterBody != null) return 0;
+  const { biome } = surface;
   if (biome === 'highlands' || biome === 'peak' || biome === 'rock') return 1;
+  // Arctic snow should dominate; only the steepest facets pick up rock tint.
+  if (biome === 'tundra') return 0.08;
   if (biome === 'desert') return 0.82;
   return 0.68;
 }
@@ -279,19 +312,14 @@ function writeTriangle(
   return outputVertex + 3;
 }
 
-function terrainSkirtDepthMeters(info: TileInfo, planet: Planet): number {
+function terrainSkirtDepthMeters(info: TileInfo): number {
   const cellSpanMeters = info.spanMeters / TILE_SEGMENTS;
-  const minimumDepthMeters = Math.max(
-    16,
-    planet.terrainAmplitudeMeters * TERRAIN_SKIRT_MIN_AMPLITUDE_RATIO,
-  );
-  const maximumDepthMeters = Math.max(
-    500,
-    planet.terrainAmplitudeMeters * TERRAIN_SKIRT_MAX_AMPLITUDE_RATIO,
-  );
   return Math.max(
-    minimumDepthMeters,
-    Math.min(maximumDepthMeters, cellSpanMeters * TERRAIN_SKIRT_DEPTH_FACTOR),
+    TERRAIN_SKIRT_MIN_DEPTH_METERS,
+    Math.min(
+      TERRAIN_SKIRT_MAX_DEPTH_METERS,
+      cellSpanMeters * TERRAIN_SKIRT_DEPTH_FACTOR,
+    ),
   );
 }
 
@@ -372,7 +400,6 @@ function appendTerrainSkirts(
   buffers: TerrainTileBuffers,
   grid: TerrainGrid,
   info: TileInfo,
-  planet: Planet,
   outputVertex: number,
 ): number {
   const edgeIndices = [
@@ -387,7 +414,7 @@ function appendTerrainSkirts(
       (_, index) => index * grid.width + TILE_SEGMENTS,
     ),
   ];
-  const depthMeters = terrainSkirtDepthMeters(info, planet);
+  const depthMeters = terrainSkirtDepthMeters(info);
 
   for (const edge of edgeIndices) {
     for (let segment = 0; segment < TILE_SEGMENTS; segment += 1) {
@@ -504,14 +531,6 @@ function buildTerrainGrid(
       const surface = sampleAnalyticPlanetSurface(planet, seed, samplePosition, {
         sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, info.level),
       });
-      const renderSurface: PlanetSurfaceSample =
-        surface.lakeWaterLevelMeters != null &&
-        surface.heightMeters < surface.lakeWaterLevelMeters - 0.5
-          ? {
-              ...surface,
-              biome: (surface.riverWaterLevelMeters != null ? 'river' : 'lake') as Biome,
-            }
-          : surface;
       const offset = gridVertex * 3;
 
       positions[offset] =
@@ -520,8 +539,8 @@ function buildTerrainGrid(
         direction.y * surface.surfaceRadiusMeters - info.centerPosition.y;
       positions[offset + 2] =
         direction.z * surface.surfaceRadiusMeters - info.centerPosition.z;
-      writeSurfaceBaseColor(renderSurface, colors, offset);
-      rockAffinity[gridVertex] = rockAffinityForBiome(renderSurface.biome);
+      writeSurfaceBaseColor(surface, colors, offset);
+      rockAffinity[gridVertex] = rockAffinityForSurface(surface);
       gridVertex += 1;
     }
   }
@@ -532,7 +551,6 @@ function buildTerrainGrid(
 function triangulateTerrainGrid(
   grid: TerrainGrid,
   info: TileInfo,
-  planet: Planet,
   seed: number,
 ): TerrainTileBuffers {
   const buffers: TerrainTileBuffers = {
@@ -578,7 +596,7 @@ function triangulateTerrainGrid(
     }
   }
 
-  const finalVertex = appendTerrainSkirts(buffers, grid, info, planet, outputVertex);
+  const finalVertex = appendTerrainSkirts(buffers, grid, info, outputVertex);
   if (finalVertex !== TERRAIN_TILE_VERTEX_COUNT) {
     throw new Error(
       `Terrain tile vertex layout mismatch: wrote ${finalVertex}, expected ${TERRAIN_TILE_VERTEX_COUNT}.`,
@@ -593,5 +611,5 @@ export function buildTerrainTileBuffers(
   seed: number,
 ): TerrainTileBuffers {
   refreshPaletteColors();
-  return triangulateTerrainGrid(buildTerrainGrid(info, planet, seed), info, planet, seed);
+  return triangulateTerrainGrid(buildTerrainGrid(info, planet, seed), info, seed);
 }

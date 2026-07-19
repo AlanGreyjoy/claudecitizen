@@ -29,8 +29,8 @@ function makeCacheKey(planet: Planet, seed: number, hint: LandingSiteHint): stri
   ].join(':');
 }
 
-function isDryBiome(biome: Biome): boolean {
-  return biome !== 'ocean' && biome !== 'beach' && biome !== 'lake';
+function isDrySurface(surface: PlanetSurfaceSample): boolean {
+  return surface.waterBody == null;
 }
 
 function biomePreference(biome: Biome): number {
@@ -59,7 +59,7 @@ function sampleCandidate(
     [0, 0.0015],
   ];
 
-  let dryNeighbors = isDryBiome(surface.biome) ? 1 : 0;
+  let dryNeighbors = isDrySurface(surface) ? 1 : 0;
   let heightDeltaMeters = 0;
   for (const [dLat, dLon] of offsets) {
     const nearbyProbe = cartesianFromLatLonAlt(
@@ -69,7 +69,7 @@ function sampleCandidate(
       planet.radiusMeters,
     );
     const nearbySurface = samplePlanetSurface(planet, seed, nearbyProbe);
-    if (isDryBiome(nearbySurface.biome)) dryNeighbors += 1;
+    if (isDrySurface(nearbySurface)) dryNeighbors += 1;
     heightDeltaMeters = Math.max(
       heightDeltaMeters,
       Math.abs(nearbySurface.heightMeters - surface.heightMeters),
@@ -94,7 +94,7 @@ function scoreCandidate(candidate: LandingCandidate): number {
     (1 - candidate.surface.mountainRegion) * 1_500 +
     (1 - candidate.surface.treeDensity) * 800 +
     candidate.surface.grassDensity * 200 -
-    // Mild preference for moderate elevation (not beach fringe, not alpine).
+    // Mild preference for moderate elevation (not shoreline fringe, not alpine).
     Math.abs(candidate.surface.normalizedHeight - 0.1) * 1_200
   );
 }

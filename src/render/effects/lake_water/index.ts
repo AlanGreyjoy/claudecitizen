@@ -1,4 +1,4 @@
 export {
-  createPlanetLakeWaterManager,
-  type PlanetLakeWaterManager,
+  createPlanetSurfaceWaterManager,
+  type PlanetSurfaceWaterManager,
 } from './manager';

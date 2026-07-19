@@ -164,8 +164,8 @@ export function createPlanetTileManager(
     );
     for (const resolved of orderedCandidates) {
       // A fallback ancestor and one of its ready descendants must never render
-      // together. Terrain skirts are intentionally deep crack covers; exposing
-      // the nested ancestor skirts turns a cold-cache refinement into walls.
+      // together. Terrain skirts are crack covers; exposing nested ancestor
+      // skirts still turns a cold-cache refinement into visible walls.
       // Keep the coarsest complete cover until every request in that subtree
       // can resolve without the fallback ancestor.
       if (hasSelectedTileAncestor(resolved.info, selectedKeys)) continue;

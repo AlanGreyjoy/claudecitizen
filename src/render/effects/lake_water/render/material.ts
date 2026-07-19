@@ -6,20 +6,25 @@ const vertexShader = /* glsl */ `
 #include <logdepthbuf_pars_vertex>
 
 uniform vec3 sunDirection;
+uniform float planetRadius;
+uniform float time;
 
 attribute vec3 barycentric;
 attribute vec3 color;
 attribute float effectDetail;
+attribute vec3 radialDirection;
 attribute float shore;
+attribute float surfStrength;
 attribute float waterDepth;
 
 varying vec3 vBarycentric;
 varying vec3 vFacetColor;
 varying vec3 vSunDirection;
-varying vec3 vViewNormal;
 varying vec3 vViewDir;
+varying vec3 vViewPosition;
 varying float vEffectDetail;
 varying float vShore;
+varying float vSurfStrength;
 varying float vWaterDepth;
 
 void main() {
@@ -27,11 +32,23 @@ void main() {
   vFacetColor = color;
   vEffectDetail = effectDetail;
   vShore = shore;
+  vSurfStrength = surfStrength;
   vWaterDepth = waterDepth;
-  vViewNormal = normalize(normalMatrix * normal);
   vSunDirection = normalize((viewMatrix * vec4(sunDirection, 0.0)).xyz);
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vec3 radial = normalize(radialDirection);
+  float wavePhaseA = dot(radial, vec3(0.73, -0.21, 0.65)) * planetRadius / 18.0;
+  float wavePhaseB = dot(radial, vec3(-0.37, 0.88, 0.29)) * planetRadius / 31.0;
+  float wave =
+    sin(wavePhaseA + time * 1.15) * 0.46 +
+    sin(wavePhaseB - time * 0.82) * 0.28;
+  // The base geometry is the still-water plane/shell. Only this deliberately
+  // small faceted wave moves it; shore vertices stay calmer and coarse orbital
+  // tiles fade the deformation out.
+  float waveAmplitude = mix(0.08, 0.72, effectDetail) * (1.0 - shore * 0.72);
+  vec3 animatedPosition = position + radial * wave * waveAmplitude;
+  vec4 mvPosition = modelViewMatrix * vec4(animatedPosition, 1.0);
   vViewDir = -mvPosition.xyz;
+  vViewPosition = mvPosition.xyz;
   gl_Position = projectionMatrix * mvPosition;
   #include <logdepthbuf_vertex>
   #include <fog_vertex>
@@ -50,17 +67,22 @@ uniform vec3 skyColor;
 varying vec3 vBarycentric;
 varying vec3 vFacetColor;
 varying vec3 vSunDirection;
-varying vec3 vViewNormal;
 varying vec3 vViewDir;
+varying vec3 vViewPosition;
 varying float vEffectDetail;
 varying float vShore;
+varying float vSurfStrength;
 varying float vWaterDepth;
 
 void main() {
   #include <logdepthbuf_fragment>
 
   vec3 viewDir = normalize(vViewDir);
-  vec3 normal = normalize(vViewNormal);
+  // Rebuild the normal from the animated triangle. Since water vertices are
+  // intentionally duplicated per facet, this stays crisp instead of turning
+  // the stylized surface into a smooth sine sheet.
+  vec3 normal = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+  if (!gl_FrontFacing) normal = -normal;
   vec3 lightDirection = normalize(vSunDirection);
   float facing = max(dot(viewDir, normal), 0.0);
   float fresnel = pow(1.0 - facing, 2.5);
@@ -89,7 +111,7 @@ void main() {
   color = mix(color, vec3(0.46, 0.86, 0.78), caustic * causticPulse * 0.24);
 
   float foamThreshold = 0.48 + sin(time * 0.85 + facetPhase * 2.7) * 0.07;
-  float foam = smoothstep(foamThreshold, foamThreshold + 0.2, vShore);
+  float foam = smoothstep(foamThreshold, foamThreshold + 0.2, vSurfStrength);
   float foamBreakup =
     0.78 + sin((vBarycentric.x * 1.7 + vBarycentric.y * 2.3) * 8.0 + facetPhase) * 0.22;
   foam *= foamBreakup * vEffectDetail;
@@ -106,7 +128,7 @@ void main() {
 }
 `;
 
-export function createLakeWaterMaterial(): THREE.ShaderMaterial {
+export function createSurfaceWaterMaterial(planetRadiusMeters: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     depthWrite: false,
     fog: true,
@@ -122,6 +144,7 @@ export function createLakeWaterMaterial(): THREE.ShaderMaterial {
       fogDensity: { value: 0.00025 },
       fogFar: { value: 2000 },
       fogNear: { value: 1 },
+      planetRadius: { value: planetRadiusMeters },
       skyColor: { value: new THREE.Color(0x7eb8e8) },
       sunColor: { value: new THREE.Color(0xffffff) },
       sunDirection: { value: new THREE.Vector3(0.4, 0.85, 0.2).normalize() },

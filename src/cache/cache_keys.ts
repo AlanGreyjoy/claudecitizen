@@ -12,11 +12,11 @@ import { getActivePlanetConfig } from '../world/planets/runtime';
 // Low-poly tiles use a non-indexed triangle layout with baked facet colors.
 // Keep this explicit because the height fingerprint does not capture buffer
 // layout or palette-only changes.
-export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v7';
-// v15: quality sample budgets (grass/tree counts) are part of the storage key.
-export const VEGETATION_CACHE_VERSION = 'v15';
+export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v16';
+// v21: land biomes are classified independently from generated hydrology.
+export const VEGETATION_CACHE_VERSION = 'v21';
 /** Bump when surface-spawn placement algorithm or stored spawn-tile schema changes. */
-export const SURFACE_SPAWN_CACHE_VERSION = 'v3-idb';
+export const SURFACE_SPAWN_CACHE_VERSION = 'v8-hydrology-separated';
 
 function paletteHash(): string {
   const { oceanShallow, palette, planetId } = getActivePlanetConfig();

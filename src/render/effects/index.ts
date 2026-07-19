@@ -13,6 +13,6 @@ export {
 export { VolumetricFogEffect } from './fog';
 export { createStarField, type StarField, type StarFieldUpdateParams } from './stars';
 export {
-  createPlanetLakeWaterManager,
-  type PlanetLakeWaterManager,
+  createPlanetSurfaceWaterManager,
+  type PlanetSurfaceWaterManager,
 } from './lake_water';

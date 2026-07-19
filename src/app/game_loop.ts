@@ -188,12 +188,15 @@ import { createSoundSceneController, type SoundListenerPose } from "../audio/sou
 import { createStationNpcPopulation } from "../npc/station_population";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from "../world/planet_surface";
-import { findBiomeLocation } from "../world/biome_teleport";
+import {
+  findSurfaceDestination,
+  type SurfaceDestination,
+} from "../world/biome_teleport";
 import { cartesianFromLatLonAlt, radialUp, surfacePointFromPosition } from "../world/coordinates";
 import { warmRenderableHeightRing } from "../world/spawn_warm";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
-import type { Biome, ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
+import type { ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 import {
@@ -578,8 +581,8 @@ export function createGameLoop({
       .join(' / ');
   }
 
-  function teleportToBiome(biome: Biome): boolean {
-    const location = findBiomeLocation(planet, seed, biome);
+  function teleportToSurface(destination: SurfaceDestination): boolean {
+    const location = findSurfaceDestination(planet, seed, destination);
     if (!location) return false;
 
     const probe = cartesianFromLatLonAlt(
@@ -696,7 +699,7 @@ export function createGameLoop({
         stats: renderer?.getSurfaceSpawnDebugStats() ?? null,
       };
     },
-    teleportToBiome,
+    teleportToSurface,
   };
 
   function resetWorld(): void {
@@ -2480,6 +2483,6 @@ export function createGameLoop({
     setEquippedLoadout,
     start,
     stop,
-    teleportToBiome,
+    teleportToSurface,
   };
 }

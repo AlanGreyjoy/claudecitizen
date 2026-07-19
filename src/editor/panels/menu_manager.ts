@@ -73,6 +73,8 @@ const MOCK_SHIP_SURFACE: PlanetSurfaceSample = {
   surfaceRadiusMeters: 6_371_120,
   temperature: 0.55,
   treeDensity: 0.1,
+  waterBody: null,
+  waterLevelMeters: null,
 };
 
 const HALOBAND_TABS: Array<{ id: HaloBandTab; label: string }> = [

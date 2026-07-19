@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { sampleSurfaceHeight } from '../src/world/elevation';
 import { sampleSurfaceClimate } from '../src/world/climate';
 import { CLAUDECITIZEN_PLANET } from '../src/world/planet';
-import type { Biome, Vec3 } from '../src/types';
+import type { Biome, Vec3, WaterBody } from '../src/types';
 
 const seed = 20061;
 const planet = CLAUDECITIZEN_PLANET;
@@ -12,17 +12,19 @@ const WIDTH = 720;
 const HEIGHT = 360;
 
 const BIOME_COLORS: Record<Biome, [number, number, number]> = {
-  ocean: [26, 58, 90],
-  lake: [42, 90, 122],
-  river: [80, 140, 190],
-  beach: [214, 198, 151],
   forest: [45, 90, 39],
   plains: [96, 128, 56],
   desert: [194, 178, 128],
-  tundra: [170, 188, 184],
-  highlands: [138, 126, 102],
-  peak: [255, 255, 255],
+  tundra: [255, 255, 255],
+  highlands: [139, 144, 136],
+  peak: [248, 251, 255],
   rock: [127, 114, 95],
+};
+
+const WATER_COLORS: Record<WaterBody, [number, number, number]> = {
+  ocean: [26, 58, 90],
+  lake: [42, 90, 122],
+  river: [80, 140, 190],
 };
 
 const rowSize = Math.ceil((WIDTH * 3) / 4) * 4;
@@ -55,11 +57,13 @@ for (let py = 0; py < HEIGHT; py += 1) {
     };
     const height = sampleSurfaceHeight(planet, seed, pos);
     const sample = sampleSurfaceClimate(planet, seed, pos, height);
-    let [r, g, b] = BIOME_COLORS[sample.biome];
+    let [r, g, b] = sample.waterBody
+      ? WATER_COLORS[sample.waterBody]
+      : BIOME_COLORS[sample.biome];
     // Shade land by height so mountain relief is visible.
     if (sample.normalizedHeight > 0) {
       const shade = 1 - Math.min(0.45, sample.normalizedHeight * 0.9);
-      if (sample.biome !== 'peak') {
+      if (sample.waterBody == null && sample.biome !== 'peak') {
         r = Math.round(r * shade + 255 * (1 - shade) * 0.5);
         g = Math.round(g * shade + 255 * (1 - shade) * 0.5);
         b = Math.round(b * shade + 255 * (1 - shade) * 0.5);

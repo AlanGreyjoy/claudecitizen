@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import * as THREE from 'three';
 import { normalize } from '../src/math/vec3';
+import { buildSurfaceWaterGeometry } from '../src/render/effects/lake_water/build/buffers';
 import { buildTerrainTileBuffers } from '../src/render/planet_tiles/build/terrain_buffers';
 import { createTileMeshCache } from '../src/render/planet_tiles/cache/mesh_cache';
 import { isValidTerrainTileBuffers } from '../src/render/planet_tiles/domain/buffer_validation';
 import {
   TERRAIN_SKIRT_VERTICES_PER_SEGMENT,
+  TERRAIN_SKIRT_MIN_DEPTH_METERS,
   TERRAIN_SURFACE_VERTEX_COUNT,
   TILE_SEGMENTS,
 } from '../src/render/planet_tiles/domain/constants';
@@ -17,9 +19,16 @@ import {
   tileKey,
 } from '../src/render/planet_tiles/domain/tile_info';
 import { createTerrainMaterial } from '../src/render/planet_tiles/render/terrain_material';
-import type { CubeFace, TerrainTileBuffers, TileInfo, Vec3 } from '../src/types';
+import type { CubeFace, TerrainTileBuffers, TileInfo, Vec3, WaterBody } from '../src/types';
+import { findSurfaceDestination } from '../src/world/biome_teleport';
 import { sampleSurfaceClimate } from '../src/world/climate';
-import { CUBE_FACES, directionFromCubeFace } from '../src/world/cube_sphere';
+import { OCEAN_WATER_LEVEL_METERS } from '../src/world/coastal_profile';
+import { cartesianFromLatLonAlt } from '../src/world/coordinates';
+import {
+  CUBE_FACES,
+  directionFromCubeFace,
+  faceUvFromDirection,
+} from '../src/world/cube_sphere';
 import { sampleSurfaceHeightDetails } from '../src/world/elevation';
 import {
   CLAUDECITIZEN_PLANET,
@@ -90,15 +99,27 @@ interface MeshTriangleSample {
 }
 
 interface TerrainValidationSummary {
+  coastTeleportHeightMeters: number;
+  coastTeleportOceanNeighbors: number;
+  coastTeleportReliefMeters: number;
+  coastTeleportWaterDepthMeters: number;
+  coastWaterGeometryVertices: number;
+  maxCoastWaterSurfaceLevelErrorMeters: number;
   coldCacheFallbackLevel: number;
   fallbackChainMinimumLevel: number;
   finestSelectedTiles: number;
+  finestSkirtDepthMeters: number;
   finestTriangleSpanMeters: number;
   horizonTileCounts: number[];
   highlandProbeHeightMeters: number;
   highlandSelectedLevel: number;
   highlandSelectedTiles: number;
   hydrology: ReturnType<typeof getRiverNetworkDiagnostics>;
+  lakeSurfaceLevelMeters: number;
+  lakeSurfaceSamples: number;
+  lakeUnderlyingBiome: string;
+  maxLakeSurfStrength: number;
+  maxLakeSurfaceLevelErrorMeters: number;
   maxMixedLodGapToSkirtRatio: number;
   maxGroundMeshFootHeightErrorMeters: number;
   maxMeshFootHeightErrorMeters: number;
@@ -135,6 +156,266 @@ function scaleDirection(direction: Vec3, radiusMeters: number): Vec3 {
     x: direction.x * radiusMeters,
     y: direction.y * radiusMeters,
     z: direction.z * radiusMeters,
+  };
+}
+
+function validateLevelLakeSurfaces(): {
+  lakeSurfaceLevelMeters: number;
+  lakeSurfaceSamples: number;
+  lakeUnderlyingBiome: string;
+  maxLakeSurfStrength: number;
+  maxLakeSurfaceLevelErrorMeters: number;
+} {
+  let lakeSurfaceLevelMeters: number | null = null;
+  let lakeSurfaceSamples = 0;
+  let lakeDirection: Vec3 | null = null;
+  let lakeUnderlyingBiome: string | null = null;
+  let maxLakeSurfaceLevelErrorMeters = 0;
+
+  for (let latitudeIndex = 0; latitudeIndex < 36; latitudeIndex += 1) {
+    const latitude = Math.PI / 2 - (Math.PI * (latitudeIndex + 0.5)) / 36;
+    for (let longitudeIndex = 0; longitudeIndex < 72; longitudeIndex += 1) {
+      const longitude = -Math.PI + (2 * Math.PI * (longitudeIndex + 0.5)) / 72;
+      const direction = {
+        x: Math.cos(latitude) * Math.cos(longitude),
+        y: Math.sin(latitude),
+        z: Math.cos(latitude) * Math.sin(longitude),
+      };
+      const position = scaleDirection(direction, planet.radiusMeters);
+      const heightDetails = sampleSurfaceHeightDetails(planet, seed, position);
+      const surface = sampleSurfaceClimate(
+        planet,
+        seed,
+        position,
+        heightDetails.heightMeters,
+        heightDetails,
+      );
+      if (surface.waterBody !== 'lake' || surface.lakeWaterLevelMeters == null) continue;
+
+      lakeSurfaceLevelMeters ??= surface.lakeWaterLevelMeters;
+      lakeDirection ??= direction;
+      lakeUnderlyingBiome ??= surface.biome;
+      maxLakeSurfaceLevelErrorMeters = Math.max(
+        maxLakeSurfaceLevelErrorMeters,
+        Math.abs(surface.lakeWaterLevelMeters - lakeSurfaceLevelMeters),
+      );
+      lakeSurfaceSamples += 1;
+    }
+  }
+
+  assert.ok(lakeSurfaceSamples > 0, 'lake plane validation did not find a lake sample');
+  assert.ok(
+    maxLakeSurfaceLevelErrorMeters <= Number.EPSILON,
+    `lake water followed terrain by ${maxLakeSurfaceLevelErrorMeters.toFixed(6)} m`,
+  );
+  assert.ok(lakeDirection);
+  assert.ok(lakeUnderlyingBiome);
+  const faceUv = faceUvFromDirection(lakeDirection);
+  const tileCount = 2 ** RENDER_SURFACE_LEVEL;
+  const waterInfo = makeTileInfo(
+    faceUv.face,
+    RENDER_SURFACE_LEVEL,
+    Math.max(0, Math.min(tileCount - 1, Math.floor(((faceUv.u + 1) * tileCount) / 2))),
+    Math.max(0, Math.min(tileCount - 1, Math.floor(((faceUv.v + 1) * tileCount) / 2))),
+    planet,
+  );
+  const waterBuffers = buildSurfaceWaterGeometry(waterInfo, planet, seed);
+  assert.ok(waterBuffers, 'generated lake emitted no water geometry');
+  let maxLakeSurfStrength = 0;
+  for (const strength of waterBuffers.surfStrengths) {
+    maxLakeSurfStrength = Math.max(maxLakeSurfStrength, strength);
+  }
+  assert.equal(maxLakeSurfStrength, 0, 'inland lake emitted ocean surf');
+  return {
+    lakeSurfaceLevelMeters: lakeSurfaceLevelMeters!,
+    lakeSurfaceSamples,
+    lakeUnderlyingBiome,
+    maxLakeSurfStrength,
+    maxLakeSurfaceLevelErrorMeters,
+  };
+}
+
+function validateHydrologyDestination(destination: 'lake' | 'river'): void {
+  const location = findSurfaceDestination(planet, seed, destination);
+  assert.ok(location, `${destination} destination was not found`);
+  const center = sampleSurfaceClimate(
+    planet,
+    seed,
+    cartesianFromLatLonAlt(location.latRadians, location.lonRadians, 0, planet.radiusMeters),
+    sampleSurfaceHeightDetails(
+      planet,
+      seed,
+      cartesianFromLatLonAlt(location.latRadians, location.lonRadians, 0, planet.radiusMeters),
+    ).heightMeters,
+  );
+  assert.equal(center.waterBody, null, `${destination} destination was not on dry land`);
+
+  let waterNeighbors = 0;
+  for (const distanceMeters of [75, 150, 300, 600, 1_200]) {
+    for (const [north, east] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [0.707, 0.707],
+      [0.707, -0.707],
+      [-0.707, 0.707],
+      [-0.707, -0.707],
+    ] as const) {
+      const latitude = location.latRadians + (north * distanceMeters) / planet.radiusMeters;
+      const longitude =
+        location.lonRadians +
+        (east * distanceMeters) /
+          (planet.radiusMeters * Math.max(Math.cos(location.latRadians), 0.1));
+      const position = cartesianFromLatLonAlt(latitude, longitude, 0, planet.radiusMeters);
+      const details = sampleSurfaceHeightDetails(planet, seed, position);
+      const surface = sampleSurfaceClimate(
+        planet,
+        seed,
+        position,
+        details.heightMeters,
+        details,
+      );
+      if (surface.waterBody === (destination as WaterBody)) waterNeighbors += 1;
+    }
+  }
+  assert.ok(waterNeighbors > 0, `${destination} destination had no nearby ${destination} water`);
+}
+
+function validateCoastDestination(): {
+  coastTeleportHeightMeters: number;
+  coastTeleportOceanNeighbors: number;
+  coastTeleportReliefMeters: number;
+  coastTeleportWaterDepthMeters: number;
+  coastWaterGeometryVertices: number;
+  maxCoastWaterSurfaceLevelErrorMeters: number;
+} {
+  const location = findSurfaceDestination(planet, seed, 'coast');
+  assert.ok(location, 'coast destination did not find an ocean shoreline');
+  const centerPosition = cartesianFromLatLonAlt(
+    location.latRadians,
+    location.lonRadians,
+    0,
+    planet.radiusMeters,
+  );
+  const centerDetails = sampleSurfaceHeightDetails(planet, seed, centerPosition);
+  const center = sampleSurfaceClimate(
+    planet,
+    seed,
+    centerPosition,
+    centerDetails.heightMeters,
+    centerDetails,
+  );
+  assert.equal(center.waterBody, null, 'coast destination was not on dry land');
+  let maximumHeight = center.heightMeters;
+  let minimumHeight = center.heightMeters;
+  let oceanNeighbors = 0;
+  let waterDepthMeters = 0;
+  const directions = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [0.707, 0.707],
+    [0.707, -0.707],
+    [-0.707, 0.707],
+    [-0.707, -0.707],
+  ] as const;
+
+  for (const [north, east] of directions) {
+    const sampleAtDistance = (distanceMeters: number) => {
+      const latitude =
+        location.latRadians + (north * distanceMeters) / planet.radiusMeters;
+      const longitude =
+        location.lonRadians +
+        (east * distanceMeters) /
+          (planet.radiusMeters * Math.max(Math.cos(location.latRadians), 0.1));
+      const position = cartesianFromLatLonAlt(latitude, longitude, 0, planet.radiusMeters);
+      const details = sampleSurfaceHeightDetails(planet, seed, position);
+      return sampleSurfaceClimate(
+        planet,
+        seed,
+        position,
+        details.heightMeters,
+        details,
+      );
+    };
+    const nearby = sampleAtDistance(75);
+    if (nearby.waterBody == null) {
+      maximumHeight = Math.max(maximumHeight, nearby.heightMeters);
+      minimumHeight = Math.min(minimumHeight, nearby.heightMeters);
+    }
+    if (sampleAtDistance(300).waterBody === 'ocean') oceanNeighbors += 1;
+    const offshore = sampleAtDistance(1_000);
+    waterDepthMeters = Math.max(
+      waterDepthMeters,
+      OCEAN_WATER_LEVEL_METERS - offshore.heightMeters,
+    );
+  }
+
+  const reliefMeters = maximumHeight - minimumHeight;
+  assert.ok(
+    center.heightMeters >= OCEAN_WATER_LEVEL_METERS + 1.25,
+    'coast destination landed inside wave height',
+  );
+  assert.ok(
+    center.heightMeters <= OCEAN_WATER_LEVEL_METERS + 12,
+    `coast destination landed ${(
+      center.heightMeters - OCEAN_WATER_LEVEL_METERS
+    ).toFixed(2)} m above the shoreline`,
+  );
+  assert.ok(oceanNeighbors > 0, 'coast destination selected an inland lowland');
+  assert.ok(reliefMeters <= 20, `coast destination selected ${reliefMeters.toFixed(2)} m relief`);
+  assert.ok(
+    waterDepthMeters >= 10,
+    `coast only reached ${waterDepthMeters.toFixed(2)} m water depth within 1 km`,
+  );
+
+  const faceUv = faceUvFromDirection(normalize(centerPosition));
+  const tileCount = 2 ** RENDER_SURFACE_LEVEL;
+  const tileX = Math.max(
+    0,
+    Math.min(tileCount - 1, Math.floor(((faceUv.u + 1) * tileCount) / 2)),
+  );
+  const tileY = Math.max(
+    0,
+    Math.min(tileCount - 1, Math.floor(((faceUv.v + 1) * tileCount) / 2)),
+  );
+  const waterInfo = makeTileInfo(
+    faceUv.face,
+    RENDER_SURFACE_LEVEL,
+    tileX,
+    tileY,
+    planet,
+  );
+  const waterBuffers = buildSurfaceWaterGeometry(waterInfo, planet, seed);
+  assert.ok(waterBuffers, 'raised shoreline emitted no water geometry');
+  assert.ok(
+    waterBuffers.surfStrengths.some((strength) => strength > 0),
+    'ocean coast emitted no surf',
+  );
+  let maxCoastWaterSurfaceLevelErrorMeters = 0;
+  for (let offset = 0; offset < waterBuffers.positions.length; offset += 3) {
+    const worldX = waterBuffers.positions[offset] + waterInfo.centerPosition.x;
+    const worldY = waterBuffers.positions[offset + 1] + waterInfo.centerPosition.y;
+    const worldZ = waterBuffers.positions[offset + 2] + waterInfo.centerPosition.z;
+    const surfaceLevelMeters = Math.hypot(worldX, worldY, worldZ) - planet.radiusMeters;
+    maxCoastWaterSurfaceLevelErrorMeters = Math.max(
+      maxCoastWaterSurfaceLevelErrorMeters,
+      Math.abs(surfaceLevelMeters - OCEAN_WATER_LEVEL_METERS),
+    );
+  }
+  assert.ok(
+    maxCoastWaterSurfaceLevelErrorMeters < 0.01,
+    `coast water mesh missed its raised level by ${maxCoastWaterSurfaceLevelErrorMeters.toFixed(4)} m`,
+  );
+  return {
+    coastTeleportHeightMeters: center.heightMeters,
+    coastTeleportOceanNeighbors: oceanNeighbors,
+    coastTeleportReliefMeters: reliefMeters,
+    coastTeleportWaterDepthMeters: waterDepthMeters,
+    coastWaterGeometryVertices: waterBuffers.positions.length / 3,
+    maxCoastWaterSurfaceLevelErrorMeters,
   };
 }
 
@@ -1127,7 +1408,7 @@ function validateMixedLodSkirts(selected: TileInfo[]): {
 
 function validateTerrainTile(
   selected: TileInfo[],
-): { finestTriangleSpanMeters: number } {
+): { finestSkirtDepthMeters: number; finestTriangleSpanMeters: number } {
   const finest = selected
     .filter((info) => info.level === RENDER_SURFACE_LEVEL)
     .sort((left, right) => left.spanMeters - right.spanMeters)[0];
@@ -1149,7 +1430,14 @@ function validateTerrainTile(
     finestTriangleSpanMeters < 6,
     `finest triangle span remained ${finestTriangleSpanMeters.toFixed(2)} m`,
   );
-  return { finestTriangleSpanMeters };
+  const finestSkirtDepthMeters = Math.max(
+    ...[0, 1, 2, 3].map((edge) => edgeSkirtDepthMeters(finest, buffers, edge)),
+  );
+  assert.ok(
+    Math.abs(finestSkirtDepthMeters - TERRAIN_SKIRT_MIN_DEPTH_METERS) < 0.1,
+    `finest skirt depth regressed to ${finestSkirtDepthMeters.toFixed(2)} m`,
+  );
+  return { finestSkirtDepthMeters, finestTriangleSpanMeters };
 }
 
 function main(): TerrainValidationSummary {
@@ -1185,6 +1473,10 @@ function main(): TerrainValidationSummary {
   const meshFootAgreement = validateMeshFootAgreement(selected);
   const sameLodSeams = validateSameLodSeams();
   const hydrology = getRiverNetworkDiagnostics(planet, seed);
+  const lakeSurfaces = validateLevelLakeSurfaces();
+  validateHydrologyDestination('lake');
+  validateHydrologyDestination('river');
+  const coastTeleport = validateCoastDestination();
   assert.ok(hydrology.routes > 0);
   assert.ok(hydrology.confluences > 0);
   assert.equal(hydrology.centerlineSamplesBeyondCarveDepth, 0);
@@ -1207,20 +1499,34 @@ function main(): TerrainValidationSummary {
       result.minimumFrontFacingDot,
     );
   }
-  const { finestTriangleSpanMeters } = validateTerrainTile(selected);
+  const { finestSkirtDepthMeters, finestTriangleSpanMeters } =
+    validateTerrainTile(selected);
 
   return {
+    coastTeleportHeightMeters: coastTeleport.coastTeleportHeightMeters,
+    coastTeleportOceanNeighbors: coastTeleport.coastTeleportOceanNeighbors,
+    coastTeleportReliefMeters: coastTeleport.coastTeleportReliefMeters,
+    coastTeleportWaterDepthMeters: coastTeleport.coastTeleportWaterDepthMeters,
+    coastWaterGeometryVertices: coastTeleport.coastWaterGeometryVertices,
     coldCacheFallbackLevel: fallbackCoverage.coldCacheFallbackLevel,
     fallbackChainMinimumLevel: fallbackCoverage.fallbackChainMinimumLevel,
     finestSelectedTiles,
+    finestSkirtDepthMeters,
     finestTriangleSpanMeters,
     highlandProbeHeightMeters: highlandGroundDetail.heightMeters,
     highlandSelectedLevel: highlandGroundDetail.selectedLevel,
     highlandSelectedTiles: highlandGroundDetail.selectedTiles,
     horizonTileCounts,
     hydrology,
+    lakeSurfaceLevelMeters: lakeSurfaces.lakeSurfaceLevelMeters,
+    lakeSurfaceSamples: lakeSurfaces.lakeSurfaceSamples,
+    lakeUnderlyingBiome: lakeSurfaces.lakeUnderlyingBiome,
+    maxLakeSurfStrength: lakeSurfaces.maxLakeSurfStrength,
+    maxLakeSurfaceLevelErrorMeters: lakeSurfaces.maxLakeSurfaceLevelErrorMeters,
     maxGroundMeshFootHeightErrorMeters:
       meshFootAgreement.maximumGroundHeightErrorMeters,
+    maxCoastWaterSurfaceLevelErrorMeters:
+      coastTeleport.maxCoastWaterSurfaceLevelErrorMeters,
     maxMeshFootHeightErrorMeters: meshFootAgreement.maximumHeightErrorMeters,
     maxMixedLodGapToSkirtRatio: maximumRatio,
     maxSameLodSeamErrorMeters: sameLodSeams.maximumErrorMeters,

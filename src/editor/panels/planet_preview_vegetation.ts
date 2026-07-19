@@ -18,10 +18,9 @@ import {
 } from '../../render/vegetation/render/instanced_assets';
 import { grassScaleCoverageMultiplier } from '../../render/vegetation/settings';
 
-/** Match heightfield patch in planet_authoring.ts. */
-export const PREVIEW_HALF_EXTENT_RADIANS = 0.012;
-export const PREVIEW_PATCH_EXTENT_METERS = 2_400;
-export const PREVIEW_HEIGHT_SCALE = 0.08;
+/** Actual-scale diagnostic patch shared with planet_authoring.ts. */
+export const PREVIEW_PATCH_EXTENT_METERS = 512;
+export const PREVIEW_HEIGHT_SCALE = 1;
 
 /**
  * Bounded sample budgets so Preview never freezes the editor tab.
@@ -29,17 +28,13 @@ export const PREVIEW_HEIGHT_SCALE = 0.08;
  * Grass base is tuned so density=1 reads as a full carpet across the patch;
  * density=0.1 matches the old sparse density=1 look.
  */
-const PREVIEW_GRASS_BASE_SAMPLES = 22_000;
-const PREVIEW_TREE_BASE_SAMPLES = 400;
+const PREVIEW_GRASS_BASE_SAMPLES = 1_000;
+const PREVIEW_TREE_BASE_SAMPLES = 24;
 /** High enough for density=1 carpet at small authored scales (0.1–0.5). */
-const PREVIEW_MAX_GRASS = 120_000;
-const PREVIEW_MAX_TREES = 4_000;
-/**
- * Plant size multiplier for the compressed heightfield + orbit camera.
- * Play uses real meters; here ~1 m grass is invisible across a 2.4 km patch.
- */
-const PREVIEW_GRASS_VISUAL_SCALE = 30;
-const PREVIEW_TREE_VISUAL_SCALE = 12;
+const PREVIEW_MAX_GRASS = 8_000;
+const PREVIEW_MAX_TREES = 600;
+const PREVIEW_GRASS_VISUAL_SCALE = 1;
+const PREVIEW_TREE_VISUAL_SCALE = 1;
 /**
  * Fraction of the heightfield UV span used for planting (centered).
  * 1 = fill the whole preview square.
@@ -49,7 +44,8 @@ export const PREVIEW_PLANT_RADIUS_FRACTION = 1;
 const UP: Vec3 = { x: 0, y: 1, z: 0 };
 
 export interface PlanetPreviewPatch {
-  halfExtentRadians: number;
+  halfLatExtentRadians: number;
+  halfLonExtentRadians: number;
   heightScale: number;
   hint: { latRadians: number; lonRadians: number };
   patchExtentMeters: number;
@@ -99,9 +95,9 @@ function collectLayerInstances(
       0.5 +
       (unitHash(seed, salt, i, 2) - 0.5) * PREVIEW_PLANT_RADIUS_FRACTION;
     const lat =
-      patch.hint.latRadians + (v - 0.5) * 2 * patch.halfExtentRadians;
+      patch.hint.latRadians + (v - 0.5) * 2 * patch.halfLatExtentRadians;
     const lon =
-      patch.hint.lonRadians + (u - 0.5) * 2 * patch.halfExtentRadians;
+      patch.hint.lonRadians + (u - 0.5) * 2 * patch.halfLonExtentRadians;
     const localX = (u - 0.5) * patch.patchExtentMeters;
     const localZ = (v - 0.5) * patch.patchExtentMeters;
 

@@ -839,6 +839,24 @@ export function warmRiverNetwork(planet: Planet, seed: number): void {
   getRiverNetwork(planet, seed);
 }
 
+/** Deterministic routed-river centerline probe for feature lookup and tooling. */
+export function riverCenterlineDirectionAt(
+  planet: Planet,
+  seed: number,
+  sampleIndex: number,
+): Vec3 | null {
+  const segments = getRiverNetwork(planet, seed).segments;
+  if (segments.length === 0) return null;
+  const normalizedIndex = Math.max(0, Math.floor(sampleIndex));
+  const segment = segments[Math.floor(normalizedIndex / 3) % segments.length];
+  const t = [0.25, 0.5, 0.75][normalizedIndex % 3];
+  return normalize({
+    x: segment.start.x + (segment.end.x - segment.start.x) * t,
+    y: segment.start.y + (segment.end.y - segment.start.y) * t,
+    z: segment.start.z + (segment.end.z - segment.start.z) * t,
+  });
+}
+
 export function sampleRiverField(
   planet: Planet,
   seed: number,

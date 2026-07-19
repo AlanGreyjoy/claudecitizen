@@ -2,7 +2,11 @@ import type { VegetationAssetCatalog } from './asset_catalog';
 import type { Planet, TileInfo, VegetationSettings, Vec3 } from '../../../types';
 import { scale, sub } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube_sphere';
-import { classifyBiome, vegetationDensitiesForBiome } from '../../../world/climate';
+import {
+  classifyBiome,
+  classifyWaterBody,
+  vegetationDensitiesForBiome,
+} from '../../../world/climate';
 import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
 import {
   sampleRenderableSurfaceHeightDetails,
@@ -94,22 +98,28 @@ function createTileSurfaceSampler(
     );
     const normalizedHeight =
       heightSample.heightMeters / planet.terrainAmplitudeMeters;
-    // The coarse cell's biome can differ from the instance's real biome near
-    // shorelines, lakes, and peaks (a cell centered on plains extends into
-    // ocean). Re-classify with the exact per-instance height so vegetation
-    // never lands on beaches or under water; temperature/moisture/lake level
-    // still come from the cheap coarse sample.
+    // Re-classify the land biome and hydrology with the exact per-instance
+    // height. Climate and generated water levels still come from the cheap
+    // coarse sample.
+    const latFactor =
+      Math.abs(Math.asin(Math.min(1, Math.max(-1, direction.y)))) / (Math.PI / 2);
     const biome = classifyBiome({
-      heightMeters: heightSample.heightMeters,
-      lakeWaterLevelMeters: climate.lakeWaterLevelMeters,
+      latFactor,
       moisture: climate.moisture,
       mountainRegion:
         heightSample.heightDetails.mountainRegion ?? climate.mountainRegion,
       normalizedHeight,
-      riverWaterLevelMeters: climate.riverWaterLevelMeters,
       temperature: climate.temperature,
     });
-    const densities = vegetationDensitiesForBiome(biome, climate.moisture);
+    const { waterBody, waterLevelMeters } = classifyWaterBody({
+      heightMeters: heightSample.heightMeters,
+      lakeWaterLevelMeters: climate.lakeWaterLevelMeters,
+      riverWaterLevelMeters: climate.riverWaterLevelMeters,
+    });
+    const densities =
+      waterBody == null
+        ? vegetationDensitiesForBiome(biome, climate.moisture)
+        : { fertility: 0, grassDensity: 0, treeDensity: 0 };
     return {
       ...climate,
       biome,
@@ -122,6 +132,8 @@ function createTileSurfaceSampler(
       normalizedHeight,
       surfaceRadiusMeters: planet.radiusMeters + heightSample.heightMeters,
       treeDensity: densities.treeDensity,
+      waterBody,
+      waterLevelMeters,
     };
   };
 }

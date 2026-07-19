@@ -7,6 +7,7 @@ const seed = 20061;
 const planet = CLAUDECITIZEN_PLANET;
 const counts = new Map<string, number>();
 const landCounts = new Map<string, number>();
+const waterCounts = new Map<string, number>();
 const SAMPLES = 20000;
 
 let s = 12345;
@@ -29,8 +30,10 @@ for (let i = 0; i < SAMPLES; i += 1) {
   const height = sampleSurfaceHeight(planet, seed, pos);
   const sample = sampleSurfaceClimate(planet, seed, pos, height);
   counts.set(sample.biome, (counts.get(sample.biome) ?? 0) + 1);
-  if (sample.biome !== 'ocean') {
+  if (sample.waterBody == null) {
     landCounts.set(sample.biome, (landCounts.get(sample.biome) ?? 0) + 1);
+  } else {
+    waterCounts.set(sample.waterBody, (waterCounts.get(sample.waterBody) ?? 0) + 1);
   }
 }
 
@@ -42,4 +45,8 @@ for (const [biome, count] of [...counts.entries()].sort((a, b) => b[1] - a[1])) 
 console.log(`\n=== Land only (${land} samples) ===`);
 for (const [biome, count] of [...landCounts.entries()].sort((a, b) => b[1] - a[1])) {
   console.log(`${biome.padEnd(10)} ${((count / land) * 100).toFixed(1)}%`);
+}
+console.log('\n=== Hydrology ===');
+for (const [waterBody, count] of [...waterCounts.entries()].sort((a, b) => b[1] - a[1])) {
+  console.log(`${waterBody.padEnd(10)} ${((count / SAMPLES) * 100).toFixed(1)}%`);
 }

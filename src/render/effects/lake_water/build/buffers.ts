@@ -1,6 +1,14 @@
-import type { LakeWaterBuffers, Planet, PlanetSurfaceSample, TileInfo, Vec3 } from '../../../../types';
+import type {
+  SurfaceWaterBuffers,
+  Planet,
+  PlanetSurfaceSample,
+  TileInfo,
+  Vec3,
+  WaterBody,
+} from '../../../../types';
 import { distance, scale } from '../../../../math/vec3';
 import { directionFromCubeFace } from '../../../../world/cube_sphere';
+import { oceanWaterLevelMeters } from '../../../../world/coastal_profile';
 import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../../world/terrain_triangulation';
 import {
   RENDER_SURFACE_SEGMENTS,
@@ -33,6 +41,8 @@ interface GridCell {
   radius: number | null;
   shore: number;
   surface: PlanetSurfaceSample;
+  waterBody: WaterBody | null;
+  waterLevelMeters: number | null;
 }
 
 interface WaterSurfaceCell {
@@ -40,6 +50,7 @@ interface WaterSurfaceCell {
   direction: Vec3;
   radius: number;
   shore: number;
+  waterBody: WaterBody;
 }
 
 interface FacetedWaterSource {
@@ -47,6 +58,7 @@ interface FacetedWaterSource {
   indices: number[];
   positions: number[];
   shoreFactors: number[];
+  surfFactors: number[];
 }
 
 function clamp01(value: number): number {
@@ -59,7 +71,7 @@ function smoothstep(edge0: number, edge1: number, value: number): number {
 }
 
 function shoreFactorForDepth(depthMeters: number): number {
-  return 1 - smoothstep(0.75, 6, Math.abs(depthMeters));
+  return 1 - smoothstep(0.35, 2.5, Math.abs(depthMeters));
 }
 
 function nearestDryGridDistance(
@@ -89,9 +101,9 @@ function markGridShoreline(grid: GridCell[], gridWidth: number): void {
   for (let y = 0; y < gridWidth; y += 1) {
     for (let x = 0; x < gridWidth; x += 1) {
       const cell = grid[y * gridWidth + x];
-      if (!cell.padded) continue;
+      if (!cell.padded || cell.waterBody !== 'ocean') continue;
       const nearestDryCell = nearestDryGridDistance(grid, gridWidth, x, y);
-      const topologyShore = clamp01((2.5 - nearestDryCell) / 1.5);
+      const topologyShore = clamp01((1.6 - nearestDryCell) / 0.8);
       cell.shore = Math.max(cell.shore, topologyShore);
     }
   }
@@ -101,14 +113,15 @@ function packFacetedWaterBuffers(
   info: TileInfo,
   seed: number,
   source: FacetedWaterSource,
-): LakeWaterBuffers {
-  const { depths, indices, positions, shoreFactors } = source;
+): SurfaceWaterBuffers {
+  const { depths, indices, positions, shoreFactors, surfFactors } = source;
   const facetedPositions = new Float32Array(indices.length * 3);
   const barycentrics = new Uint8Array(indices.length * 3);
   const colors = new Uint8Array(indices.length * 3);
   const effectDetails = new Uint8Array(indices.length);
-  const normals = new Int16Array(indices.length * 3);
+  const radialDirections = new Float32Array(indices.length * 3);
   const shores = new Uint8Array(indices.length);
+  const surfStrengths = new Uint8Array(indices.length);
   const waterDepths = new Float32Array(indices.length);
   const cellSpanMeters = info.spanMeters / TILE_SEGMENTS;
   const effectDetail =
@@ -121,25 +134,6 @@ function packFacetedWaterBuffers(
 
   for (let facetIndex = 0; facetIndex < indices.length / 3; facetIndex += 1) {
     const color = WATER_FACET_PALETTE[facetPaletteIndex(info, seed, facetIndex)];
-    const sourceA = indices[facetIndex * 3];
-    const sourceB = indices[facetIndex * 3 + 1];
-    const sourceC = indices[facetIndex * 3 + 2];
-    const aOffset = sourceA * 3;
-    const bOffset = sourceB * 3;
-    const cOffset = sourceC * 3;
-    const abX = positions[bOffset] - positions[aOffset];
-    const abY = positions[bOffset + 1] - positions[aOffset + 1];
-    const abZ = positions[bOffset + 2] - positions[aOffset + 2];
-    const acX = positions[cOffset] - positions[aOffset];
-    const acY = positions[cOffset + 1] - positions[aOffset + 1];
-    const acZ = positions[cOffset + 2] - positions[aOffset + 2];
-    const normalX = abY * acZ - abZ * acY;
-    const normalY = abZ * acX - abX * acZ;
-    const normalZ = abX * acY - abY * acX;
-    const inverseNormalLength = 1 / Math.max(Math.hypot(normalX, normalY, normalZ), 1e-9);
-    const packedNormalX = Math.round(normalX * inverseNormalLength * 32_767);
-    const packedNormalY = Math.round(normalY * inverseNormalLength * 32_767);
-    const packedNormalZ = Math.round(normalZ * inverseNormalLength * 32_767);
     for (let corner = 0; corner < 3; corner += 1) {
       const outputVertex = facetIndex * 3 + corner;
       const sourceVertex = indices[outputVertex];
@@ -153,10 +147,15 @@ function packFacetedWaterBuffers(
       colors[outputOffset + 1] = color[1];
       colors[outputOffset + 2] = color[2];
       effectDetails[outputVertex] = packedEffectDetail;
-      normals[outputOffset] = packedNormalX;
-      normals[outputOffset + 1] = packedNormalY;
-      normals[outputOffset + 2] = packedNormalZ;
+      const positionX = positions[sourceOffset] + info.centerPosition.x;
+      const positionY = positions[sourceOffset + 1] + info.centerPosition.y;
+      const positionZ = positions[sourceOffset + 2] + info.centerPosition.z;
+      const inverseRadius = 1 / Math.max(Math.hypot(positionX, positionY, positionZ), 1e-9);
+      radialDirections[outputOffset] = positionX * inverseRadius;
+      radialDirections[outputOffset + 1] = positionY * inverseRadius;
+      radialDirections[outputOffset + 2] = positionZ * inverseRadius;
       shores[outputVertex] = Math.round(clamp01(shoreFactors[sourceVertex]) * 255);
+      surfStrengths[outputVertex] = Math.round(clamp01(surfFactors[sourceVertex]) * 255);
       waterDepths[outputVertex] = depths[sourceVertex];
     }
   }
@@ -165,9 +164,10 @@ function packFacetedWaterBuffers(
     barycentrics,
     colors,
     effectDetails,
-    normals,
     positions: facetedPositions,
+    radialDirections,
     shores,
+    surfStrengths,
     waterDepths,
   };
 }
@@ -192,11 +192,34 @@ function facetPaletteIndex(info: TileInfo, seed: number, facetIndex: number): nu
   return (hash >>> 0) % WATER_FACET_PALETTE.length;
 }
 
+interface WaterSurfaceSpec {
+  waterBody: WaterBody;
+  waterLevelMeters: number;
+}
+
+function waterSurfaceForSample(surface: PlanetSurfaceSample): WaterSurfaceSpec | null {
+  // The lifted plane gives the flattened coastal shelf immediate depth. Keep
+  // padding above it so terrain clips the mesh into a clean shoreline.
+  let result: WaterSurfaceSpec | null = null;
+  const consider = (waterBody: WaterBody, waterLevelMeters: number | null): void => {
+    if (
+      waterLevelMeters == null ||
+      surface.heightMeters >= waterLevelMeters + SHORE_PADDING_METERS
+    ) {
+      return;
+    }
+    if (result && waterLevelMeters <= result.waterLevelMeters) return;
+    result = { waterBody, waterLevelMeters };
+  };
+
+  consider('ocean', oceanWaterLevelMeters());
+  consider('lake', surface.lakeWaterLevelMeters);
+  consider('river', surface.riverWaterLevelMeters);
+  return result;
+}
+
 function isShorePadded(surface: PlanetSurfaceSample): boolean {
-  return (
-    surface.lakeWaterLevelMeters != null &&
-    surface.heightMeters < surface.lakeWaterLevelMeters + SHORE_PADDING_METERS
-  );
+  return waterSurfaceForSample(surface) != null;
 }
 
 function tileBounds(level: number, x: number, y: number) {
@@ -212,7 +235,7 @@ function tileBounds(level: number, x: number, y: number) {
   };
 }
 
-export function makeLakeWaterTileInfo(
+export function makeSurfaceWaterTileInfo(
   face: TileInfo['face'],
   level: number,
   x: number,
@@ -258,13 +281,13 @@ function inFaceNeighborTileInfos(info: TileInfo, planet: Planet): TileInfo[] {
     const nx = info.x + dx;
     const ny = info.y + dy;
     if (nx < 0 || ny < 0 || nx >= tileCount || ny >= tileCount) continue;
-    neighbors.push(makeLakeWaterTileInfo(info.face, info.level, nx, ny, planet));
+    neighbors.push(makeSurfaceWaterTileInfo(info.face, info.level, nx, ny, planet));
   }
 
   return neighbors;
 }
 
-export function tileHasLakeWater(info: TileInfo, planet: Planet, seed: number): boolean {
+export function tileHasSurfaceWater(info: TileInfo, planet: Planet, seed: number): boolean {
   const { u0, u1, v0, v1 } = info.bounds;
   const stride = Math.max(1, Math.floor(TILE_SEGMENTS / 6));
 
@@ -288,7 +311,7 @@ export function tileHasLakeWater(info: TileInfo, planet: Planet, seed: number): 
   return false;
 }
 
-export function expandLakeWaterTiles(
+export function expandSurfaceWaterTiles(
   selectedTiles: TileInfo[],
   planet: Planet,
   seed: number,
@@ -300,7 +323,7 @@ export function expandLakeWaterTiles(
   }
 
   for (const info of selectedTiles) {
-    if (!tileHasLakeWater(info, planet, seed)) continue;
+    if (!tileHasSurfaceWater(info, planet, seed)) continue;
 
     for (const neighbor of inFaceNeighborTileInfos(info, planet)) {
       const key = tileKey(neighbor.face, neighbor.level, neighbor.x, neighbor.y);
@@ -327,25 +350,30 @@ function sampleGridCell(
   const direction = directionFromCubeFace(info.face, u, v);
   const samplePos = scale(direction, planet.radiusMeters);
   const surface = samplePlanetSurface(planet, seed, samplePos, { sampleSpacingMeters });
-  const padded = isShorePadded(surface);
+  const waterSurface = waterSurfaceForSample(surface);
+  const waterLevelMeters = waterSurface?.waterLevelMeters ?? null;
+  const padded = waterSurface != null;
   const depthMeters =
-    surface.lakeWaterLevelMeters == null
+    waterLevelMeters == null
       ? -SHORE_PADDING_METERS
-      : surface.lakeWaterLevelMeters - surface.heightMeters;
+      : waterLevelMeters - surface.heightMeters;
 
   return {
     depthMeters,
     direction,
     padded,
-    radius: padded ? planet.radiusMeters + surface.lakeWaterLevelMeters! : null,
-    shore: surface.lakeWaterLevelMeters == null ? 0 : shoreFactorForDepth(depthMeters),
+    radius: padded ? planet.radiusMeters + waterLevelMeters! : null,
+    shore: waterLevelMeters == null ? 0 : shoreFactorForDepth(depthMeters),
     surface,
+    waterBody: waterSurface?.waterBody ?? null,
+    waterLevelMeters,
   };
 }
 
 function waterSurfaceCellFromLevel(
   cell: GridCell,
   waterLevelMeters: number,
+  waterBody: WaterBody,
   planetRef: Planet,
 ): WaterSurfaceCell {
   const depthMeters = waterLevelMeters - cell.surface.heightMeters;
@@ -354,14 +382,15 @@ function waterSurfaceCellFromLevel(
     direction: cell.direction,
     radius: planetRef.radiusMeters + waterLevelMeters,
     shore: Math.max(cell.padded ? cell.shore : 1, shoreFactorForDepth(depthMeters)),
+    waterBody,
   };
 }
 
-export function buildLakeWaterGeometry(
+export function buildSurfaceWaterGeometry(
   info: TileInfo,
   planetRef: Planet,
   seed: number,
-): LakeWaterBuffers | null {
+): SurfaceWaterBuffers | null {
   const { u0, u1, v0, v1 } = info.bounds;
   const gridWidth = TILE_SEGMENTS + 1;
   const cellSpanMeters = info.spanMeters / TILE_SEGMENTS;
@@ -389,6 +418,7 @@ export function buildLakeWaterGeometry(
   const positions: number[] = [];
   const depths: number[] = [];
   const shoreFactors: number[] = [];
+  const surfFactors: number[] = [];
   const indices: number[] = [];
   const indexLookup = new Int32Array(grid.length);
   indexLookup.fill(-1);
@@ -402,6 +432,7 @@ export function buildLakeWaterGeometry(
       cell.direction.z * cell.radius! - info.centerPosition.z,
     );
     shoreFactors.push(cell.shore);
+    surfFactors.push(cell.waterBody === 'ocean' ? cell.shore : 0);
     return positions.length / 3 - 1;
   }
 
@@ -453,11 +484,14 @@ export function buildLakeWaterGeometry(
         u: centerU,
         v: centerV,
       });
-      const waterLevelMeters =
-        centerSample.surface.lakeWaterLevelMeters ??
-        corners.find((corner) => corner.padded)?.surface.lakeWaterLevelMeters;
+      const fallbackWater = corners.find(
+        (corner): corner is GridCell & { waterBody: WaterBody; waterLevelMeters: number } =>
+          corner.waterBody != null && corner.waterLevelMeters != null,
+      );
+      const waterLevelMeters = centerSample.waterLevelMeters ?? fallbackWater?.waterLevelMeters;
+      const waterBody = centerSample.waterBody ?? fallbackWater?.waterBody;
 
-      if (waterLevelMeters == null) continue;
+      if (waterLevelMeters == null || waterBody == null) continue;
 
       if (allCornersPadded) {
         const globalCellX = info.x * TILE_SEGMENTS + x;
@@ -472,7 +506,12 @@ export function buildLakeWaterGeometry(
         continue;
       }
 
-      const centerCell = waterSurfaceCellFromLevel(centerSample, waterLevelMeters, planetRef);
+      const centerCell = waterSurfaceCellFromLevel(
+        centerSample,
+        waterLevelMeters,
+        waterBody,
+        planetRef,
+      );
       const centerIndex = vertexIndexForExtra(`center:${x}:${y}`, centerCell);
 
       for (let i = 0; i < 4; i += 1) {
@@ -484,5 +523,11 @@ export function buildLakeWaterGeometry(
   }
 
   if (indices.length === 0) return null;
-  return packFacetedWaterBuffers(info, seed, { depths, indices, positions, shoreFactors });
+  return packFacetedWaterBuffers(info, seed, {
+    depths,
+    indices,
+    positions,
+    shoreFactors,
+    surfFactors,
+  });
 }

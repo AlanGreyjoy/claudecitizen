@@ -16,7 +16,9 @@ declare global {
     __claudecitizenDev?: {
       callShip: () => Promise<number>;
       teleportToHangar: (index: number) => void;
-      teleportToBiome?: (biome: import('./types').Biome) => boolean;
+      teleportToSurface?: (
+        destination: import('./world/biome_teleport').SurfaceDestination,
+      ) => boolean;
       face: (yawRadians: number, pitchRadians?: number) => void;
       setColorCorrection: (settings: Partial<import('./types').ColorCorrectionSettings>) => void;
       setSsaoSettings: (settings: Partial<import('./types').SsaoSettings>) => void;

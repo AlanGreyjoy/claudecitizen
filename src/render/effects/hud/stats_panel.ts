@@ -1,4 +1,5 @@
 import { dot, length } from '../../../math/vec3';
+import { biomeDisplayName } from '../../../world/climate';
 import { radialUp } from '../../../world/coordinates';
 import {
   MODE_ENTERING_SHIP,
@@ -107,7 +108,10 @@ export function createStatsPanel(elements: StatsPanelElements) {
       ['Altitude', `${Math.round(focusSurface.altitudeMeters).toLocaleString()} m`],
       ['Speed', `${Math.round(speed).toLocaleString()} m/s`],
       ['Vertical', `${Math.round(verticalSpeed).toLocaleString()} m/s`],
-      ['Biome', focusSurface.biome],
+      ['Biome', biomeDisplayName(focusSurface.biome)],
+      ...(focusSurface.waterBody
+        ? ([['Water', focusSurface.waterBody]] as [string, string][])
+        : []),
       ['Atmosphere', `${Math.max(0, Math.round(atmospherePct))}%`],
       ['Ship Alt', `${Math.round(shipSurface.altitudeMeters).toLocaleString()} m`],
       ['Peak', `${Math.round(peakAltitudeMeters).toLocaleString()} m`],

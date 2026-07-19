@@ -3,7 +3,8 @@ import {
   createDefaultPlanetDocument,
   parsePlanetDocument,
   planetPhysicsFromDocument,
-  type PlanetBiomePalette,
+  type PlanetSurfacePalette,
+  type PlanetBiomeRecipe,
   type PlanetDocument,
   type PlanetHeightRecipe,
   type PlanetHydrologyRecipe,
@@ -24,7 +25,8 @@ export interface PlanetRuntimeConfig {
   height: PlanetHeightRecipe;
   regions: PlanetRegionRecipe;
   hydrology: PlanetHydrologyRecipe;
-  palette: PlanetBiomePalette;
+  biomes: PlanetBiomeRecipe;
+  palette: PlanetSurfacePalette;
   /** Shallow ocean blend color (hex). */
   oceanShallow: string;
 }
@@ -40,6 +42,7 @@ function configFromDocument(document: PlanetDocument): PlanetRuntimeConfig {
     height: document.height,
     regions: document.regions,
     hydrology: document.hydrology,
+    biomes: document.biomes,
     palette: document.palette,
     oceanShallow: '#3f7898',
   };

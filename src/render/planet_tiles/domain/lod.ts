@@ -6,6 +6,7 @@ import {
   HORIZON_MARGIN_RADIANS,
   MAX_LEVEL,
   MIN_LEVEL,
+  TERRAIN_SKIRT_MAX_DEPTH_METERS,
   minProjectedError,
 } from './constants';
 import { clamp, clamp01 } from './tile_key';
@@ -73,9 +74,10 @@ function tilePlaneSupportMeters(
 ): number {
   const footprintSupport =
     tileFootprintRadiusMeters(info, planet) * Math.hypot(1, tanHalfFov);
-  // Surface heights are clamped to +/- amplitude. Skirts can extend another
-  // 0.75 amplitude inward, so 2x amplitude safely bounds the radial extrusion.
-  const heightEnvelope = Math.abs(planet.terrainAmplitudeMeters) * 2;
+  // Surface heights are clamped to +/- amplitude. Skirts extend inward by a
+  // bounded local-cell allowance rather than a fraction of total relief.
+  const heightEnvelope =
+    Math.abs(planet.terrainAmplitudeMeters) + TERRAIN_SKIRT_MAX_DEPTH_METERS;
   const radialProjection = Math.abs(
     sideSign * dot(info.centerDirection, sideAxis) -
       tanHalfFov * dot(info.centerDirection, forwardAxis),
@@ -141,7 +143,8 @@ export function shouldCullTile(
 
   const toCenter = sub(info.centerPosition, view.eye);
   const footprintRadius = tileFootprintRadiusMeters(info, planet);
-  const heightEnvelope = Math.abs(planet.terrainAmplitudeMeters) * 2;
+  const heightEnvelope =
+    Math.abs(planet.terrainAmplitudeMeters) + TERRAIN_SKIRT_MAX_DEPTH_METERS;
   const forwardDistance = dot(toCenter, view.forward);
   const forwardSupport =
     footprintRadius +

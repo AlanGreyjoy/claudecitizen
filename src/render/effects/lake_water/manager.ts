@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type {
-  LakeWaterBuffers,
+  SurfaceWaterBuffers,
   Planet,
   TileInfo,
   Vec3,
@@ -8,9 +8,9 @@ import type {
   WaterWorkerOutMessage,
 } from '../../../types';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
-import { buildLakeWaterGeometry } from './build/buffers';
-import { createLakeWaterMaterial } from './render/material';
-import { createLakeWaterBuildWorker } from './worker/create_worker';
+import { buildSurfaceWaterGeometry } from './build/buffers';
+import { createSurfaceWaterMaterial } from './render/material';
+import { createSurfaceWaterBuildWorker } from './worker/create_worker';
 
 const MAX_WATER_CACHE_ENTRIES = 256;
 const WATER_CACHE_STALE_FRAMES = 300;
@@ -33,7 +33,7 @@ interface WaterBuildJob {
   key: string;
 }
 
-export interface PlanetLakeWaterManager {
+export interface PlanetSurfaceWaterManager {
   dispose: () => void;
   setVisible: (visible: boolean) => void;
   update: (
@@ -54,21 +54,21 @@ function toThreeVector3(vector: Vec3): THREE.Vector3 {
   return new THREE.Vector3(vector.x, vector.y, vector.z);
 }
 
-export function createPlanetLakeWaterManager(
+export function createPlanetSurfaceWaterManager(
   scene: THREE.Scene,
   planet: Planet,
   seed: number,
   renderScale: number,
-): PlanetLakeWaterManager {
+): PlanetSurfaceWaterManager {
   const waterGroup = new THREE.Group();
   waterGroup.scale.setScalar(renderScale);
   scene.add(waterGroup);
 
-  const sharedMaterial = createLakeWaterMaterial();
+  const sharedMaterial = createSurfaceWaterMaterial(planet.radiusMeters);
   const cache = new Map<string, WaterCacheEntry>();
   const activeKeys = new Set<string>();
   const pendingBuilds: WaterBuildJob[] = [];
-  let waterBuildWorker = createLakeWaterBuildWorker();
+  let waterBuildWorker = createSurfaceWaterBuildWorker();
   let activeWorkerJob: WaterBuildJob | null = null;
   let workerBusy = false;
   let workerAlive = false;
@@ -79,7 +79,7 @@ export function createPlanetLakeWaterManager(
   let nextBuildId = 1;
   let syncBuildBudgetRemaining = WATER_SYNC_BUILD_BUDGET_PER_FRAME;
 
-  function createWaterMesh(info: TileInfo, buffers: LakeWaterBuffers): THREE.Mesh {
+  function createWaterMesh(info: TileInfo, buffers: SurfaceWaterBuffers): THREE.Mesh {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(buffers.positions, 3));
     geometry.setAttribute(
@@ -91,8 +91,15 @@ export function createPlanetLakeWaterManager(
       'effectDetail',
       new THREE.BufferAttribute(buffers.effectDetails, 1, true),
     );
-    geometry.setAttribute('normal', new THREE.BufferAttribute(buffers.normals, 3, true));
+    geometry.setAttribute(
+      'radialDirection',
+      new THREE.BufferAttribute(buffers.radialDirections, 3),
+    );
     geometry.setAttribute('shore', new THREE.BufferAttribute(buffers.shores, 1, true));
+    geometry.setAttribute(
+      'surfStrength',
+      new THREE.BufferAttribute(buffers.surfStrengths, 1, true),
+    );
     geometry.setAttribute('waterDepth', new THREE.BufferAttribute(buffers.waterDepths, 1));
     geometry.computeBoundingSphere();
 
@@ -124,7 +131,7 @@ export function createPlanetLakeWaterManager(
     cache.delete(key);
   }
 
-  function applyBuffers(entry: WaterCacheEntry, buffers: LakeWaterBuffers | null): void {
+  function applyBuffers(entry: WaterCacheEntry, buffers: SurfaceWaterBuffers | null): void {
     if (entry.water) {
       disposeWaterMesh(entry.water);
       entry.water = null;
@@ -142,7 +149,7 @@ export function createPlanetLakeWaterManager(
 
   function buildEntrySync(entry: WaterCacheEntry): void {
     try {
-      applyBuffers(entry, buildLakeWaterGeometry(entry.info, planet, seed));
+      applyBuffers(entry, buildSurfaceWaterGeometry(entry.info, planet, seed));
     } catch (error) {
       console.error(`ClaudeCitizen water build failed for ${entry.key}:`, error);
       applyBuffers(entry, null);

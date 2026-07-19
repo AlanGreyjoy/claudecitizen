@@ -2,7 +2,7 @@ import { cartesianFromLatLonAlt } from './coordinates';
 import { resolveLandingSite } from './landing_sites';
 import { samplePlanetSurface } from './planet_surface';
 import { getActivePlanetConfig } from './planets/runtime';
-import type { Biome, Planet, Vec3 } from '../types';
+import type { Planet, Vec3 } from '../types';
 import {
   getActiveSystemDocument,
   getSystemStationEntriesForPlanetDocument,
@@ -65,13 +65,9 @@ function hash01(seed: number, ...values: number[]): number {
   return (state >>> 0) / 0x1_0000_0000;
 }
 
-function isDryBiome(biome: Biome): boolean {
-  return biome !== 'ocean' && biome !== 'lake';
-}
-
-function sampleBiome(planet: Planet, seed: number, latRadians: number, lonRadians: number): Biome {
+function isDrySurface(planet: Planet, seed: number, latRadians: number, lonRadians: number): boolean {
   const probe = cartesianFromLatLonAlt(latRadians, lonRadians, 0, planet.radiusMeters);
-  return samplePlanetSurface(planet, seed, probe).biome;
+  return samplePlanetSurface(planet, seed, probe).waterBody == null;
 }
 
 function resolveOp1Placement(planet: Planet, seed: number): QuantumDestination {
@@ -80,7 +76,7 @@ function resolveOp1Placement(planet: Planet, seed: number): QuantumDestination {
   let latRadians = landing.latRadians;
   let lonRadians = landing.lonRadians + offsetRadians;
 
-  if (!isDryBiome(sampleBiome(planet, seed, latRadians, lonRadians))) {
+  if (!isDrySurface(planet, seed, latRadians, lonRadians)) {
     latRadians = landing.latRadians + offsetRadians * 0.35;
     lonRadians = landing.lonRadians + offsetRadians;
   }
@@ -104,7 +100,7 @@ function pickDryLatLon(
     const v = hash01(seed, index, attempt, 2);
     const latRadians = Math.asin(2 * u - 1);
     const lonRadians = (v * 2 - 1) * Math.PI;
-    if (isDryBiome(sampleBiome(planet, seed, latRadians, lonRadians))) {
+    if (isDrySurface(planet, seed, latRadians, lonRadians)) {
       return { latRadians, lonRadians };
     }
   }

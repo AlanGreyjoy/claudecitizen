@@ -1,5 +1,6 @@
 import type { Planet, Vec3 } from '../types';
 import { radialUp } from './coordinates';
+import { applyCoastalShelf } from './coastal_profile';
 import { carveLakeElevationFromMask, sampleLakeMask } from './lakes';
 import { getActivePlanetConfig } from './planets/runtime';
 import {
@@ -106,6 +107,7 @@ export function samplePreRiverHeightDetails(
   const localHillNoise = sampleFbm(10, 0.5, 2.0, height.hillScale);
   elevation += localHillNoise * (height.hillBaseWeight + height.hillRegionWeight * hillRegion);
   elevation += detailNoise * height.detailWeight;
+  elevation = applyCoastalShelf(elevation);
 
   const lakeMask = sampleLakeMask(seed, nx, ny, nz);
   elevation = carveLakeElevationFromMask(elevation, lakeMask);

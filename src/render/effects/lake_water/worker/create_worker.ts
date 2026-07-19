@@ -1,4 +1,4 @@
-export function createLakeWaterBuildWorker(): Worker | null {
+export function createSurfaceWaterBuildWorker(): Worker | null {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') return null;
 
   try {

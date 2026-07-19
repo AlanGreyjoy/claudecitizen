@@ -10,10 +10,6 @@ export interface Planet {
 }
 
 export type Biome =
-  | 'ocean'
-  | 'lake'
-  | 'river'
-  | 'beach'
   | 'forest'
   | 'plains'
   | 'desert'
@@ -21,6 +17,9 @@ export type Biome =
   | 'highlands'
   | 'peak'
   | 'rock';
+
+/** Hydrology is independent from the underlying land biome. */
+export type WaterBody = 'ocean' | 'lake' | 'river';
 
 export interface PlanetSurfaceSample {
   altitudeMeters: number;
@@ -38,6 +37,10 @@ export interface PlanetSurfaceSample {
   surfaceRadiusMeters: number;
   temperature: number;
   treeDensity: number;
+  /** Visible water covering this terrain sample, if any. */
+  waterBody: WaterBody | null;
+  /** Visible water-surface elevation for `waterBody`, in planet-local meters. */
+  waterLevelMeters: number | null;
   normal?: Vec3;
 }
 

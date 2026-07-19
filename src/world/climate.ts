@@ -1,47 +1,104 @@
 import { altitudeForPosition, latLonForPosition, radialUp } from './coordinates';
+import { oceanWaterLevelMeters } from './coastal_profile';
 import { sampleLakeSurface } from './lakes';
 import { sampleRiverSurface } from './rivers';
 import { clamp01, fbm3d, getNoise3D } from './terrain_noise';
 import { sampleTerrainRegions } from './terrain_regions';
-import type { Biome, Planet, PlanetSurfaceSample, Vec3 } from '../types';
+import type { Biome, Planet, PlanetSurfaceSample, Vec3, WaterBody } from '../types';
 import type { SurfaceHeightDetails } from './elevation';
+import { getActivePlanetConfig } from './planets/runtime';
+import type { PlanetBiomeRecipe } from './planets/schema';
 
 const FOREST_NOISE_SEED_OFFSET = 4321;
 
 export interface BiomeClassificationInput {
-  heightMeters: number;
-  lakeWaterLevelMeters: number | null;
+  /**
+   * Absolute latitude as 0 at the equator .. 1 at the poles.
+   * Arctic tundra is reserved for the polar belt; alpine tundra uses elevation.
+   */
+  latFactor: number;
   moisture: number;
   /** How mountainous this region is (0..1); gates highlands/peak so plains at moderate elevation stay plains. */
   mountainRegion: number;
   normalizedHeight: number;
-  /** Set only when a river (not a lake) governs the local water level. */
-  riverWaterLevelMeters: number | null;
   temperature: number;
 }
 
-export function classifyBiome(input: BiomeClassificationInput): Biome {
+export interface WaterClassificationInput {
+  heightMeters: number;
+  lakeWaterLevelMeters: number | null;
+  riverWaterLevelMeters: number | null;
+}
+
+export interface WaterClassification {
+  waterBody: WaterBody | null;
+  waterLevelMeters: number | null;
+}
+
+export function classifyBiome(
+  input: BiomeClassificationInput,
+  recipe: PlanetBiomeRecipe = getActivePlanetConfig().biomes,
+): Biome {
   const {
-    heightMeters,
-    lakeWaterLevelMeters,
+    latFactor,
     moisture,
     mountainRegion,
     normalizedHeight,
-    riverWaterLevelMeters,
     temperature,
   } = input;
-  if (normalizedHeight < 0.0) return 'ocean';
-  if (riverWaterLevelMeters != null && heightMeters < riverWaterLevelMeters - 0.5) return 'river';
-  if (lakeWaterLevelMeters != null && heightMeters < lakeWaterLevelMeters - 0.5) return 'lake';
-  if (normalizedHeight < 0.012) return 'beach';
-  // Rock/snow biomes are reserved for mountain regions (or truly extreme
-  // elevation), so rolling hills at moderate height stay green.
-  const highlandThreshold = mountainRegion > 0.35 ? 0.45 : 0.75;
-  if (normalizedHeight > highlandThreshold) return temperature < 0.3 ? 'peak' : 'highlands';
-  if (temperature < 0.2) return 'tundra';
-  if (moisture > 0.6) return 'forest';
-  if (moisture > 0.3) return 'plains';
-  return 'desert';
+  // Alpine tundra / peaks: high elevation anywhere (mountain regions preferred).
+  // Rock/snow biomes stay out of rolling mid-elevation hills.
+  const enabled = new Set(recipe.enabled);
+  const highlandThreshold =
+    mountainRegion > recipe.mountainRegionThreshold
+      ? recipe.highlandNormalizedHeight
+      : recipe.extremeHighlandNormalizedHeight;
+  if (normalizedHeight > highlandThreshold) {
+    if (temperature < recipe.peakTemperatureMax && enabled.has('peak')) return 'peak';
+    if (enabled.has('highlands')) return 'highlands';
+    if (enabled.has('rock')) return 'rock';
+  }
+  // Arctic tundra: polar belt between boreal forest and the poles — cold
+  // lowland that is not mountain alpine.
+  if (
+    latFactor >= recipe.arcticLatitudeStart &&
+    temperature < recipe.arcticTemperatureMax &&
+    enabled.has('tundra')
+  ) {
+    return 'tundra';
+  }
+  if (moisture > recipe.forestMoistureMin && enabled.has('forest')) return 'forest';
+  if (moisture > recipe.plainsMoistureMin && enabled.has('plains')) return 'plains';
+  if (enabled.has('desert')) return 'desert';
+  return enabled.has(recipe.fallbackBiome)
+    ? recipe.fallbackBiome
+    : (recipe.enabled[0] ?? 'plains');
+}
+
+/** Resolve the highest generated water surface covering this terrain sample. */
+export function classifyWaterBody(input: WaterClassificationInput): WaterClassification {
+  const { heightMeters, lakeWaterLevelMeters, riverWaterLevelMeters } = input;
+  let waterBody: WaterBody | null = null;
+  let waterLevelMeters: number | null = null;
+
+  const consider = (candidateBody: WaterBody, candidateLevel: number | null): void => {
+    if (candidateLevel == null || heightMeters >= candidateLevel - 0.5) return;
+    if (waterLevelMeters != null && candidateLevel <= waterLevelMeters) return;
+    waterBody = candidateBody;
+    waterLevelMeters = candidateLevel;
+  };
+
+  consider('ocean', oceanWaterLevelMeters());
+  consider('lake', lakeWaterLevelMeters);
+  consider('river', riverWaterLevelMeters);
+  return { waterBody, waterLevelMeters };
+}
+
+/** HUD / authoring label for land biomes. */
+export function biomeDisplayName(biome: Biome): string {
+  if (biome === 'tundra') return 'arctic';
+  if (biome === 'highlands') return 'alpine';
+  return biome;
 }
 
 export interface VegetationDensities {
@@ -54,7 +111,7 @@ export function vegetationDensitiesForBiome(biome: Biome, moisture: number): Veg
   let fertility = 0;
   if (biome === 'forest') fertility = 0.8 + moisture * 0.2;
   else if (biome === 'plains') fertility = 0.4 + moisture * 0.4;
-  else if (biome === 'beach' || biome === 'tundra' || biome === 'desert') fertility = 0.1;
+  else if (biome === 'tundra' || biome === 'desert') fertility = 0.1;
 
   const grassDensity = clamp01(fertility);
   // Plains fertility lands around 0.5-0.65, so the old `(fertility - 0.5) * 0.5`
@@ -125,41 +182,34 @@ export function sampleSurfaceClimate(
     seed,
   });
 
-  // Rivers reuse the lake water fields so the lake water mesh system renders
-  // them without changes; the higher water surface wins where they overlap.
-  let lakeWaterLevelMeters = lake.lakeWaterLevelMeters;
-  let lakeDepth = lake.lakeDepth;
-  let lakeStrength = lake.lakeStrength;
-  let riverWaterLevelMeters: number | null = null;
-  if (
-    river.riverWaterLevelMeters != null &&
-    (lakeWaterLevelMeters == null || river.riverWaterLevelMeters > lakeWaterLevelMeters)
-  ) {
-    lakeWaterLevelMeters = river.riverWaterLevelMeters;
-    lakeDepth = Math.max(lakeDepth, river.riverDepth);
-    lakeStrength = Math.max(lakeStrength, river.riverStrength);
-    riverWaterLevelMeters = river.riverWaterLevelMeters;
-  }
-
-  const biome = classifyBiome({
+  const lakeWaterLevelMeters = lake.lakeWaterLevelMeters;
+  const riverWaterLevelMeters = river.riverWaterLevelMeters;
+  const { waterBody, waterLevelMeters } = classifyWaterBody({
     heightMeters,
     lakeWaterLevelMeters,
+    riverWaterLevelMeters,
+  });
+
+  const biome = classifyBiome({
+    latFactor,
     moisture,
     mountainRegion,
     normalizedHeight,
-    riverWaterLevelMeters,
     temperature,
   });
-  const { fertility, grassDensity, treeDensity } = vegetationDensitiesForBiome(biome, moisture);
+  const densities =
+    waterBody == null
+      ? vegetationDensitiesForBiome(biome, moisture)
+      : { fertility: 0, grassDensity: 0, treeDensity: 0 };
 
   return {
     altitudeMeters,
     biome,
-    fertility,
-    grassDensity,
+    fertility: densities.fertility,
+    grassDensity: densities.grassDensity,
     heightMeters,
-    lakeDepth,
-    lakeStrength,
+    lakeDepth: lake.lakeDepth,
+    lakeStrength: lake.lakeStrength,
     lakeWaterLevelMeters,
     moisture,
     mountainRegion,
@@ -167,6 +217,8 @@ export function sampleSurfaceClimate(
     riverWaterLevelMeters,
     surfaceRadiusMeters,
     temperature,
-    treeDensity,
+    treeDensity: densities.treeDensity,
+    waterBody,
+    waterLevelMeters,
   };
 }

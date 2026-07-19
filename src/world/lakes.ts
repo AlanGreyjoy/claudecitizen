@@ -31,6 +31,13 @@ export function sampleLakeMask(seed: number, nx: number, ny: number, nz: number)
   return fbm3d(lakeNoise, nx, ny, nz, 4, 0.5, 2.0, 0.55);
 }
 
+function lakeWaterTableNormalized(): number {
+  // Inland lake water is a level surface, not a shallow copy of the terrain.
+  // Reuse the authored lowland ceiling as the planet-wide lake plane so water
+  // classification, shoreline generation, and rendering all agree exactly.
+  return getActivePlanetConfig().hydrology.inlandLakeWaterLevelNormalized;
+}
+
 function applyLakeCarving(elevation: number, lakeMask: number): LakeCarvingResult {
   const { hydrology } = getActivePlanetConfig();
   if (elevation < hydrology.lakeMinLandElevation || lakeMask < hydrology.lakeMaskThreshold) {
@@ -45,7 +52,7 @@ function applyLakeCarving(elevation: number, lakeMask: number): LakeCarvingResul
     (lakeMask - hydrology.lakeMaskThreshold) / (1 - hydrology.lakeMaskThreshold),
   );
   const carveDepth = lakeStrength * hydrology.lakeMaxCarveNormalized;
-  const waterLevelNormalized = elevation - carveDepth * 0.22;
+  const waterLevelNormalized = lakeWaterTableNormalized();
 
   return {
     elevation: elevation - carveDepth,
@@ -66,19 +73,14 @@ export function sampleLakeSurface(input: LakeSurfaceInput): LakeSurfaceResult {
   } = input;
   const { hydrology } = getActivePlanetConfig();
   const unit = radialUp(position);
-  const lakeNoise = getNoise3D(seed + hydrology.lakeNoiseSeedOffset);
   const lakeMask = cachedLakeMask ?? sampleLakeMask(seed, unit.x, unit.y, unit.z);
   const lakeStrength = clamp01(
     (lakeMask - hydrology.lakeMaskThreshold) / (1 - hydrology.lakeMaskThreshold),
   );
   const carveDepthNorm = lakeStrength * hydrology.lakeMaxCarveNormalized;
-  const preCarveNormalized = normalizedHeight + carveDepthNorm;
-  const waterTableNormalized =
-    0.025 +
-    clamp01(fbm3d(lakeNoise, unit.x, unit.y, unit.z, 2, 0.5, 2.0, 0.35) * 0.5 + 0.5) * 0.04;
   const wetLowland =
     normalizedHeight > 0 &&
-    normalizedHeight < hydrology.inlandLakeMaxNormalized &&
+    normalizedHeight < hydrology.inlandLakeWaterLevelNormalized &&
     moisture >= hydrology.inlandLakeMoistureThreshold;
 
   if (lakeStrength < 0.18 && !wetLowland) {
@@ -89,21 +91,9 @@ export function sampleLakeSurface(input: LakeSurfaceInput): LakeSurfaceResult {
     };
   }
 
-  let lakeWaterLevelMeters: number;
-  let strength: number;
-  if (lakeStrength >= 0.18) {
-    strength = lakeStrength;
-    lakeWaterLevelMeters =
-      (preCarveNormalized - carveDepthNorm * 0.22) * planet.terrainAmplitudeMeters;
-  } else {
-    strength = 0.35;
-    // Moist lowlands do not have a separately carved basin. Keep their water
-    // shallow instead of lifting it to the absolute 345-488 m water table.
-    lakeWaterLevelMeters = Math.min(
-      waterTableNormalized * planet.terrainAmplitudeMeters,
-      heightMeters + hydrology.inlandLakeMaxDepthMeters,
-    );
-  }
+  const strength = lakeStrength >= 0.18 ? lakeStrength : 0.35;
+  const lakeWaterLevelMeters =
+    lakeWaterTableNormalized() * planet.terrainAmplitudeMeters;
   const lakeDepth = clamp01(
     (lakeWaterLevelMeters - heightMeters) /
       Math.max(carveDepthNorm * planet.terrainAmplitudeMeters, 45),

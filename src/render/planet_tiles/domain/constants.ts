@@ -12,6 +12,12 @@ export const TERRAIN_SKIRT_VERTEX_COUNT =
   TILE_SEGMENTS * 4 * TERRAIN_SKIRT_VERTICES_PER_SEGMENT;
 export const TERRAIN_TILE_VERTEX_COUNT =
   TERRAIN_SURFACE_VERTEX_COUNT + TERRAIN_SKIRT_VERTEX_COUNT;
+// Skirts are a last-resort cover for temporarily uncovered edges. Active
+// mixed-LOD contacts are snapped together by seam_stitching.ts, so skirt depth
+// should follow the local cell scale instead of the planet's full relief.
+export const TERRAIN_SKIRT_DEPTH_FACTOR = 2;
+export const TERRAIN_SKIRT_MIN_DEPTH_METERS = 48;
+export const TERRAIN_SKIRT_MAX_DEPTH_METERS = 2_048;
 /** How many selected/missed tiles may enter the build/disk pipeline per frame. */
 export const TILE_BUILD_BUDGET_PER_FRAME = 20;
 export const MAX_CACHED_TILES = 384;

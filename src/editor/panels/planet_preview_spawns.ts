@@ -115,14 +115,15 @@ export function collectPreviewSpawns(
       0.5 +
       (unitHash(seedU, 9201, i, 2) - 0.5) * PREVIEW_PLANT_RADIUS_FRACTION;
     const lat =
-      patch.hint.latRadians + (v - 0.5) * 2 * patch.halfExtentRadians;
+      patch.hint.latRadians + (v - 0.5) * 2 * patch.halfLatExtentRadians;
     const lon =
-      patch.hint.lonRadians + (u - 0.5) * 2 * patch.halfExtentRadians;
+      patch.hint.lonRadians + (u - 0.5) * 2 * patch.halfLonExtentRadians;
     const localX = (u - 0.5) * patch.patchExtentMeters;
     const localZ = (v - 0.5) * patch.patchExtentMeters;
 
     const probe = cartesianFromLatLonAlt(lat, lon, 0, planet.radiusMeters);
     const surface = samplePlanetSurface(planet, seed, probe);
+    if (surface.waterBody != null) continue;
 
     acceptScratch.length = 0;
     weightScratch.length = 0;

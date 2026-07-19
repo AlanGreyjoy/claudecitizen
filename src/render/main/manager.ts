@@ -9,7 +9,7 @@ import type {
 } from '../../types';
 import { distance, normalize } from '../../math/vec3';
 import { createCharacterAvatar } from './scene/character_avatar';
-import { createCloudShell, createPlanetLakeWaterManager } from '../effects';
+import { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
 import { createPlanetTileManager } from '../planet_tiles';
 import { planApproachPrefetch } from '../planet_tiles/domain/approach_prefetch';
 import { createPlanetVegetationManager, normalizeVegetationSettings } from '../vegetation';
@@ -181,7 +181,7 @@ export function createSpikeRenderer(
   enableRenderLayer(lighting.moonLight, QUANTUM_RENDER_LAYER);
 
   const tileManager = createPlanetTileManager(scene, planet, seed);
-  const lakeWaterManager = createPlanetLakeWaterManager(
+  const surfaceWaterManager = createPlanetSurfaceWaterManager(
     scene,
     planet,
     seed,
@@ -469,7 +469,7 @@ export function createSpikeRenderer(
       });
     }
     tileManager.setVisible(!quantumTraveling);
-    lakeWaterManager.setVisible(!quantumTraveling);
+    surfaceWaterManager.setVisible(!quantumTraveling);
     cloudShell.setVisible(!quantumTraveling && cloudMode === 'shell');
 
     // Skipping the vegetation update alone leaves the previously active
@@ -640,7 +640,7 @@ export function createSpikeRenderer(
     }
 
     if (!quantumTraveling) {
-      lakeWaterManager.update(
+      surfaceWaterManager.update(
         focusBody.position,
         tileState.selectedTiles,
         sunState.sunDir,
@@ -823,7 +823,7 @@ export function createSpikeRenderer(
     dispose() {
       window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
       cloudShell.dispose();
-      lakeWaterManager.dispose();
+      surfaceWaterManager.dispose();
       vegetationManager.dispose();
       surfaceSpawnManager.dispose();
       remotePresence.dispose();

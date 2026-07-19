@@ -159,6 +159,7 @@ export function collectTileSurfaceSpawns(
     const direction = directionFromCubeFace(tileInfo.face, u, v);
     const probe = scale(direction, planet.radiusMeters);
     const surface = samplePlanetSurface(planet, planetSeed, probe);
+    if (surface.waterBody != null) continue;
 
     acceptScratch.length = 0;
     weightScratch.length = 0;
@@ -290,14 +291,13 @@ export function classifySpawnBiome(
   direction: Vec3,
 ): { biome: string; normalizedHeight: number } {
   const surface = samplePlanetSurface(planet, seed, scale(direction, planet.radiusMeters));
+  const latFactor = Math.abs(Math.asin(Math.min(1, Math.max(-1, direction.y)))) / (Math.PI / 2);
   return {
     biome: classifyBiome({
-      heightMeters: surface.heightMeters,
-      lakeWaterLevelMeters: surface.lakeWaterLevelMeters,
+      latFactor,
       moisture: surface.moisture,
       mountainRegion: surface.mountainRegion,
       normalizedHeight: surface.normalizedHeight,
-      riverWaterLevelMeters: surface.riverWaterLevelMeters,
       temperature: surface.temperature,
     }),
     normalizedHeight: surface.normalizedHeight,

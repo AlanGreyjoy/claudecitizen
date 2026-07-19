@@ -30,7 +30,7 @@ function fnv1a32(text: string): string {
 }
 
 export function terrainFingerprint(planet: Planet, seed: number): string {
-  const { height, hydrology, planetId, regions } = getActivePlanetConfig();
+  const { biomes, height, hydrology, planetId, regions } = getActivePlanetConfig();
   const cacheKey = [
     planetId,
     planet.name ?? 'planet',
@@ -40,6 +40,7 @@ export function terrainFingerprint(planet: Planet, seed: number): string {
     JSON.stringify(height),
     JSON.stringify(regions),
     JSON.stringify(hydrology),
+    JSON.stringify(biomes),
   ].join(':');
   const cached = fingerprintCache.get(cacheKey);
   if (cached) return cached;
@@ -53,7 +54,11 @@ export function terrainFingerprint(planet: Planet, seed: number): string {
     return sampleSurfaceHeight(planet, seed, position).toFixed(3);
   });
 
-  const fingerprint = fnv1a32(probedHeights.join('|'));
+  // Classification is baked into terrain colors and vegetation acceptance, so
+  // biome-only authoring edits must invalidate caches even when heights match.
+  const fingerprint = fnv1a32(
+    `${JSON.stringify(biomes)}|${probedHeights.join('|')}`,
+  );
   fingerprintCache.set(cacheKey, fingerprint);
   return fingerprint;
 }
