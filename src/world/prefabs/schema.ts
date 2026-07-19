@@ -256,6 +256,13 @@ export type PrefabComponent =
       /** Exact weapon compatibility accepted by this socket. */
       accepts: WeaponSlotType;
     }
+  | {
+      /**
+       * Per-weapon hand grip pose. Entity transform is the weapon root's local
+       * TRS when parented under the character drawn mount (typically prop_r).
+       */
+      type: "drawn-grip";
+    }
   | { type: "spawn-point"; floorId: StationFloorId }
   | {
       type: "npc-spawner";
@@ -1453,6 +1460,8 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
         accepts: value.accepts,
       };
     }
+    case "drawn-grip":
+      return { type };
     case "spawn-point":
       return { type, floorId: parseFloorId(value.floorId, `${path}.floorId`) };
     case "npc-spawner": {

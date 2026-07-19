@@ -63,7 +63,15 @@ function loadGltf(url: string): Promise<AnimationLibraryAsset> {
 }
 
 function isLoopingClip(name: string): boolean {
-  return LOOPING_CLIPS.has(name) || name.includes('_Loop') || /idle/i.test(name);
+  if (LOOPING_CLIPS.has(name) || name.includes('_Loop') || /_loop$/i.test(name)) return true;
+  // One-shots: deaths, jump takeoff/land, kneel transitions, in-place turns.
+  if (/^death[_-]/i.test(name) || /headshot/i.test(name)) return false;
+  if (/(?:^|_)jump(?:[_-]|$)/i.test(name) && !/_loop$/i.test(name)) return false;
+  if (/stand_to_kneel|kneel_to_stand/i.test(name) || /turn_\d+/i.test(name)) return false;
+  // UAL / rifle-8-way / handgun packs: idle*, walk*, run*, sprint*, strafe*.
+  if (/(?:^|_)idle(?:[_-]|$)/i.test(name)) return true;
+  if (/(?:^|_)(walk|run|sprint|strafe)(?:[_-]|$)/i.test(name)) return true;
+  return false;
 }
 
 export async function createSidekickAnimationRuntime(

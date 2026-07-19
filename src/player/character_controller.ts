@@ -23,6 +23,12 @@ import type {
   Planet,
   Vec3,
 } from "../types";
+import {
+  getDefaultAnimationController,
+  locomotionFromGameplay,
+  resolveControllerClip,
+} from "./animation";
+import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
 export const WALK_SPEED_METERS_PER_SECOND = 4.2;
@@ -34,7 +40,7 @@ export const JUMP_SPEED_METERS_PER_SECOND = 5.2;
 const FALL_GRAVITY_MULTIPLIER = 1.7;
 const JUMP_START_SECONDS = 0.18;
 const JUMP_LAND_SECONDS = 0.18;
-const TURN_SPEED = 10;
+const TURN_SPEED_RADIANS_PER_SECOND = 10;
 export const ORBIT_PITCH_LIMIT = 1.15;
 export const FIRST_PERSON_PITCH_LIMIT = 1.5;
 export const CHARACTER_EYE_HEIGHT_METERS = 1.62;
@@ -95,31 +101,51 @@ function movementDirection(
   return normalize(tangentDesired);
 }
 
+const UAL_FALLBACK: Record<string, string> = {
+  jump_start: "Jump_Start",
+  jump_loop: "Jump_Loop",
+  jump_land: "Jump_Land",
+  sprint: "Sprint_Loop",
+  walk: "Walk_Loop",
+  idle: "Idle_Loop",
+};
+
 export function animationFromState(
   state: Pick<CharacterState, "jumpPhase">,
   isMoving: boolean,
   isSprinting: boolean,
+  stanceId: WeaponAnimStanceId = "unarmed",
 ): string {
-  if (state.jumpPhase === "jump-start") return "Jump_Start";
-  if (state.jumpPhase === "jump-loop") return "Jump_Loop";
-  if (state.jumpPhase === "jump-land") return "Jump_Land";
-  if (isMoving && isSprinting) return "Sprint_Loop";
-  if (isMoving) return "Walk_Loop";
-  return "Idle_Loop";
+  const locomotion = locomotionFromGameplay(state.jumpPhase, isMoving, isSprinting);
+  const clip = resolveControllerClip(getDefaultAnimationController(), locomotion, stanceId);
+  return clip ?? UAL_FALLBACK[locomotion] ?? "Idle_Loop";
 }
 
-function rotateToward(
+/** Turn a character across the tangent plane without stalling at a 180-degree reversal. */
+export function rotateCharacterToward(
   currentForward: Vec3,
   desiredForward: Vec3,
   up: Vec3,
   dt: number,
 ): Vec3 {
-  if (length(desiredForward) < 1e-6) return normalize(currentForward);
-  const current = normalize(tangentize(currentForward, up));
-  const desired = normalize(tangentize(desiredForward, up));
-  const mixed = normalize(lerp(current, desired, clamp(dt * TURN_SPEED, 0, 1)));
-  if (length(mixed) < 1e-6) return desired;
-  return mixed;
+  const tangentDesired = tangentize(desiredForward, up);
+  if (length(tangentDesired) < 1e-6) {
+    return normalize(tangentize(currentForward, up));
+  }
+
+  const desired = normalize(tangentDesired);
+  const tangentCurrent = tangentize(currentForward, up);
+  if (length(tangentCurrent) < 1e-6) return desired;
+
+  const current = normalize(tangentCurrent);
+  const turnAxis = normalize(up);
+  const signedAngle = Math.atan2(
+    dot(turnAxis, cross(current, desired)),
+    clamp(dot(current, desired), -1, 1),
+  );
+  const maxTurn = Math.max(0, dt) * TURN_SPEED_RADIANS_PER_SECOND;
+  const turn = clamp(signedAngle, -maxTurn, maxTurn);
+  return normalize(rotateAroundAxis(current, turnAxis, turn));
 }
 
 function clampToGround(position: Vec3, surfaceRadiusMeters: number): Vec3 {
@@ -175,6 +201,7 @@ export function integrateCharacterLocomotion(
   initialUp: Vec3,
   gravityMetersPerSecond2: number,
   callbacks: LocomotionCallbacks,
+  stanceId: WeaponAnimStanceId = "unarmed",
 ): LocomotionIntegrationResult {
   let position = state.position;
   let velocity = state.velocity;
@@ -241,6 +268,7 @@ export function integrateCharacterLocomotion(
     { jumpPhase },
     motion.isMoving,
     motion.wantsSprint,
+    stanceId,
   );
 
   return {
@@ -348,6 +376,7 @@ export function updateCharacterState(
   planet: Planet,
   seed: number,
   propCollision?: PlanetPropCollision | null,
+  stanceId: WeaponAnimStanceId = "unarmed",
 ): CharacterState {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -419,10 +448,11 @@ export function updateCharacterState(
       },
       sampleAirborneUp: radialUp,
     },
+    stanceId,
   );
 
   const desiredFacing = desiredDirection;
-  let forward = rotateToward(state.forward, desiredFacing, motion.up, dt);
+  let forward = rotateCharacterToward(state.forward, desiredFacing, motion.up, dt);
 
   if (length(forward) < 1e-6) {
     forward = normalize(tangentize(state.forward, motion.up));

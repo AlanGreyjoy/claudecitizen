@@ -3,6 +3,10 @@ import {
   parseBaseCharacterEquipment,
   type BaseCharacterEquipmentV1,
 } from '../player/equipment/base_character_equipment';
+import {
+  parseAnimationController,
+  type AnimationControllerV1,
+} from '../player/animation/schema';
 import { parsePlanetDocument, type PlanetDocument } from '../world/planets/schema';
 import { parseSystemDocument, type SystemDocument } from '../world/systems/schema';
 
@@ -80,6 +84,35 @@ export async function saveBaseCharacterEquipment(
 ): Promise<string> {
   const parsed = parseBaseCharacterEquipment(document);
   const payload = await requestJson<{ path: string }>('/__editor/base-characters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: parsed }),
+  });
+  return payload.path;
+}
+
+export interface AnimationControllerListEntry {
+  id: string;
+  label: string;
+}
+
+export async function fetchAnimationControllerList(): Promise<AnimationControllerListEntry[]> {
+  const payload = await requestJson<{ controllers: AnimationControllerListEntry[] }>(
+    '/__editor/animation-controllers',
+  );
+  return payload.controllers;
+}
+
+export async function fetchAnimationController(id: string): Promise<AnimationControllerV1> {
+  const payload = await requestJson<{ document: unknown }>(
+    `/__editor/animation-controllers?id=${encodeURIComponent(id)}`,
+  );
+  return parseAnimationController(payload.document);
+}
+
+export async function saveAnimationController(document: AnimationControllerV1): Promise<string> {
+  const parsed = parseAnimationController(document);
+  const payload = await requestJson<{ path: string }>('/__editor/animation-controllers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: parsed }),

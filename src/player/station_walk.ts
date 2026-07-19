@@ -1,8 +1,9 @@
-import { add, cross, dot, length, lerp, normalize, scale, sub, vec3 } from '../math/vec3';
+import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
 import {
   animationFromState,
   CHARACTER_GROUND_OFFSET_METERS,
   JUMP_SPEED_METERS_PER_SECOND,
+  rotateCharacterToward,
   SPRINT_SPEED_METERS_PER_SECOND,
   WALK_SPEED_METERS_PER_SECOND,
 } from './character_controller';
@@ -26,6 +27,7 @@ import {
   type StationFrame,
 } from '../world/station';
 import type { CharacterInput, CharacterState, Planet, Vec3 } from '../types';
+import type { WeaponAnimStanceId } from './inventory/weapon_select';
 
 export interface StationLocal2 {
   right: number;
@@ -38,12 +40,6 @@ export interface StationCharacterState extends CharacterState {
   stationRoomId: string;
   /** Vertical velocity used by the Rapier kinematic character controller. */
   stationVerticalVelocity?: number;
-}
-
-const TURN_SPEED = 10;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }
 
 function tangentize(vector: Vec3, up: Vec3): Vec3 {
@@ -69,15 +65,6 @@ function stationMovementDirection(
   const tangentDesired = tangentize(desired, frame.up);
   if (length(tangentDesired) < 1e-6) return vec3(0, 0, 0);
   return normalize(tangentDesired);
-}
-
-function rotateToward(currentForward: Vec3, desiredForward: Vec3, up: Vec3, dt: number): Vec3 {
-  if (length(desiredForward) < 1e-6) return normalize(currentForward);
-  const current = normalize(tangentize(currentForward, up));
-  const desired = normalize(tangentize(desiredForward, up));
-  const mixed = normalize(lerp(current, desired, clamp(dt * TURN_SPEED, 0, 1)));
-  if (length(mixed) < 1e-6) return desired;
-  return mixed;
 }
 
 function stationWalkPose(
@@ -156,6 +143,7 @@ export function updateCharacterInStation(
   dt: number,
   gravityMetersPerSecond2: number,
   physics: StationPhysics | null,
+  stanceId: WeaponAnimStanceId = 'unarmed',
 ): StationCharacterState {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -191,11 +179,16 @@ export function updateCharacterInStation(
 
   const position = getStationPlayerPosition(physics, frame);
   const local = worldToStationLocal(frame, position);
-  const forward = rotateToward(state.forward, desiredFacing, frame.up, dt);
+  const forward = rotateCharacterToward(state.forward, desiredFacing, frame.up, dt);
 
   return {
     ...state,
-    animation: animationFromState({ jumpPhase: 'grounded' }, moveMagnitude > 0.08, wantsSprint),
+    animation: animationFromState(
+      { jumpPhase: 'grounded' },
+      moveMagnitude > 0.08,
+      wantsSprint,
+      stanceId,
+    ),
     forward: length(forward) < 1e-6 ? normalize(tangentize(state.forward, frame.up)) : normalize(tangentize(forward, frame.up)),
     grounded,
     jumpPhase: 'grounded',

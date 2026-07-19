@@ -28,8 +28,14 @@ export interface CharacterEquipmentSlotV1 {
 export interface BaseCharacterVariantV1 {
   type: BaseCharacterType;
   label: string;
+  /** Holster / resting mounts (backpack sockets may override for rifles). */
   mounts: Record<string, CharacterBoneMountV1>;
+  /** Optional hand mounts when the weapon slot is drawn (hotbar). Weapon slots only. */
+  drawnMounts?: Record<string, CharacterBoneMountV1>;
 }
+
+/** Default drawn-weapon bone (Synty prop socket under hand_r). */
+export const DEFAULT_DRAWN_WEAPON_BONE = 'prop_r';
 
 export interface BaseCharacterEquipmentV1 {
   schemaVersion: typeof BASE_CHARACTER_EQUIPMENT_SCHEMA_VERSION;
@@ -128,6 +134,7 @@ function slot(value: unknown, label: string): CharacterEquipmentSlotV1 {
 function variant(
   value: unknown,
   expectedType: BaseCharacterType,
+  weaponSlotIds: ReadonlySet<string>,
   slotIds: ReadonlySet<string>,
 ): BaseCharacterVariantV1 {
   const source = record(value, `variants.${expectedType}`);
@@ -137,10 +144,24 @@ function variant(
   for (const slotId of slotIds) {
     mounts[slotId] = mount(mountsSource[slotId], `variants.${expectedType}.mounts.${slotId}`);
   }
+  let drawnMounts: Record<string, CharacterBoneMountV1> | undefined;
+  if (source.drawnMounts !== undefined) {
+    const drawnSource = record(source.drawnMounts, `variants.${expectedType}.drawnMounts`);
+    drawnMounts = {};
+    for (const [slotId, entry] of Object.entries(drawnSource)) {
+      if (!weaponSlotIds.has(slotId)) {
+        throw new Error(
+          `variants.${expectedType}.drawnMounts.${slotId} must reference a weapon slot.`,
+        );
+      }
+      drawnMounts[slotId] = mount(entry, `variants.${expectedType}.drawnMounts.${slotId}`);
+    }
+  }
   return {
     type: expectedType,
     label: stringValue(source.label, `variants.${expectedType}.label`, 80),
     mounts,
+    ...(drawnMounts && Object.keys(drawnMounts).length > 0 ? { drawnMounts } : {}),
   };
 }
 
@@ -155,6 +176,7 @@ export function parseBaseCharacterEquipment(value: unknown): BaseCharacterEquipm
   const slots = source.slots.map((entry, index) => slot(entry, `slots[${index}]`));
   const slotIds = new Set(slots.map((entry) => entry.id));
   if (slotIds.size !== slots.length) throw new Error('Base character slot ids must be unique.');
+  const weaponSlotIds = new Set(slots.filter((entry) => entry.kind === 'weapon').map((entry) => entry.id));
   for (const entry of slots) {
     if (entry.requiresSlotId && !slotIds.has(entry.requiresSlotId)) {
       throw new Error(`Slot "${entry.id}" requires missing slot "${entry.requiresSlotId}".`);
@@ -168,8 +190,8 @@ export function parseBaseCharacterEquipment(value: unknown): BaseCharacterEquipm
     schemaVersion: BASE_CHARACTER_EQUIPMENT_SCHEMA_VERSION,
     slots,
     variants: {
-      '1': variant(variants['1'], 1, slotIds),
-      '2': variant(variants['2'], 2, slotIds),
+      '1': variant(variants['1'], 1, weaponSlotIds, slotIds),
+      '2': variant(variants['2'], 2, weaponSlotIds, slotIds),
     },
   };
 }

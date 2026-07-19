@@ -72,6 +72,15 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Attachment socket supplied by an item. Backpacks require rifle-primary and rifle-secondary sockets.",
   },
   {
+    type: "drawn-grip",
+    label: "Drawn Grip",
+    kinds: ITEM_KINDS,
+    marker: true,
+    singleton: true,
+    createDefault: () => ({ type: "drawn-grip" }),
+    hint: "Weapon hand pose when drawn. Entity transform is the mesh offset/rotation in the character's hand.",
+  },
+  {
     type: "spawn-point",
     label: "Spawn Point",
     kinds: ["station"],

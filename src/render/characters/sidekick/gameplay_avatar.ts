@@ -15,6 +15,10 @@ import {
 } from './animation_runtime';
 import { createEquipmentAttachmentController } from './equipment_attach';
 import { applyDefaultFrustumCulling } from '../../frustum_policy';
+import {
+  getDefaultAnimationController,
+  primaryStanceSources,
+} from '../../../player/animation';
 
 const GAMEPLAY_ANIMATION_TIME_SCALE = 1.35;
 
@@ -50,17 +54,26 @@ export function createSidekickGameplayAvatar(
   let lastNowSeconds: number | null = null;
   let headBone: THREE.Object3D | null = null;
   let pendingInventory: InventoryState | null = null;
+  let pendingActiveWeaponSlotId: string | null = null;
   const equipment = createEquipmentAttachmentController();
   const modelOffsetPosition = new THREE.Vector3();
   const characterType = appearance.type === 2 ? 2 : 1;
 
   function syncEquipment(): void {
     if (fallback) {
-      fallback.setEquippedInventory?.(pendingInventory);
+      fallback.setEquippedInventory?.(pendingInventory, pendingActiveWeaponSlotId);
       return;
     }
     if (!avatar || !ready) return;
-    equipment.sync(avatar.root, characterType, pendingInventory);
+    equipment.sync(avatar.root, characterType, pendingInventory, pendingActiveWeaponSlotId);
+  }
+
+  /** DEV: re-fetch Base Character mounts when returning from the editor tab. */
+  const onVisibilityRefresh = (): void => {
+    if (document.visibilityState === 'visible') syncEquipment();
+  };
+  if (import.meta.env.DEV) {
+    document.addEventListener('visibilitychange', onVisibilityRefresh);
   }
 
   void (async () => {
@@ -81,6 +94,23 @@ export function createSidekickGameplayAvatar(
       animation = await createSidekickAnimationRuntime(avatar.root);
       if (disposed) {
         animation.dispose();
+        animation = null;
+        avatar.dispose();
+        avatar = null;
+        return;
+      }
+      // Preload rifle + pistol primary locomotion packs (bounded; not full catalog).
+      const stanceSources = primaryStanceSources(getDefaultAnimationController());
+      for (const source of stanceSources) {
+        if (disposed || !animation) break;
+        try {
+          await animation.loadAnimationSource(source.url, source.label);
+        } catch (error) {
+          console.warn(`Failed to preload stance animation "${source.label}".`, error);
+        }
+      }
+      if (disposed) {
+        animation?.dispose();
         animation = null;
         avatar.dispose();
         avatar = null;
@@ -124,6 +154,9 @@ export function createSidekickGameplayAvatar(
     root,
     dispose: () => {
       disposed = true;
+      if (import.meta.env.DEV) {
+        document.removeEventListener('visibilitychange', onVisibilityRefresh);
+      }
       equipment.dispose();
       animation?.dispose();
       avatar?.dispose();
@@ -165,8 +198,9 @@ export function createSidekickGameplayAvatar(
       animation?.update(delta * timeScale);
       lastNowSeconds = nowSeconds;
     },
-    setEquippedInventory: (inventory) => {
+    setEquippedInventory: (inventory, activeWeaponSlotId = null) => {
       pendingInventory = inventory;
+      pendingActiveWeaponSlotId = activeWeaponSlotId ?? null;
       syncEquipment();
     },
   };

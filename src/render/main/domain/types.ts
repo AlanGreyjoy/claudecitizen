@@ -63,6 +63,7 @@ export interface SpikeRenderer {
   setTimeOverride: (mode: TimeOverride) => void;
   setEquippedInventory: (
     inventory: import('../../../player/inventory/types').InventoryState | null,
+    activeWeaponSlotId?: string | null,
   ) => void;
   /** Prefetch + wait for spawn-corridor terrain/veg around a surface focus. */
   warmSpawnCorridor: (

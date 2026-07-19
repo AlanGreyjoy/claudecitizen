@@ -11,7 +11,10 @@ interface CharacterAvatar {
     focusPosition: Vec3,
     nowSeconds: number,
   ) => void;
-  setEquippedInventory: (inventory: InventoryState | null) => void;
+  setEquippedInventory: (
+    inventory: InventoryState | null,
+    activeWeaponSlotId?: string | null,
+  ) => void;
 }
 
 export function createCharacterAvatar(
@@ -46,8 +49,8 @@ export function createCharacterAvatar(
   return {
     dispose,
     update,
-    setEquippedInventory: (inventory) => {
-      instance.setEquippedInventory?.(inventory);
+    setEquippedInventory: (inventory, activeWeaponSlotId = null) => {
+      instance.setEquippedInventory?.(inventory, activeWeaponSlotId);
     },
   };
 }

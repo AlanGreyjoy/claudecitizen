@@ -817,8 +817,8 @@ export function createSpikeRenderer(
     setTimeOverride(mode) {
       timeOverride = mode;
     },
-    setEquippedInventory(inventory) {
-      avatar.setEquippedInventory(inventory);
+    setEquippedInventory(inventory, activeWeaponSlotId = null) {
+      avatar.setEquippedInventory(inventory, activeWeaponSlotId);
     },
     dispose() {
       window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);

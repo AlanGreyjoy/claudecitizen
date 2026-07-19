@@ -54,6 +54,33 @@
         "asset": {
           "url": "/src/assets/protected/props/weapons/SM_Wep_Assault_01.glb"
         }
+      },
+      {
+        "id": "e-drawn-grip",
+        "name": "Drawn Grip",
+        "transform": {
+          "position": {
+            "x": -0.0012599950879345068,
+            "y": -0.03049361961230584,
+            "z": 0.009915564150196565
+          },
+          "rotation": {
+            "x": 0.7262074379929085,
+            "y": 0.12509278274935398,
+            "z": 0.6740629053522822,
+            "w": -0.05112487003249301
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "drawn-grip"
+          }
+        ]
       }
     ]
   }

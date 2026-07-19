@@ -54,6 +54,33 @@
         "asset": {
           "url": "/src/assets/protected/props/weapons/SM_Wep_Sniper_03.glb"
         }
+      },
+      {
+        "id": "e-drawn-grip",
+        "name": "Drawn Grip",
+        "transform": {
+          "position": {
+            "x": -0.00000545185058595458,
+            "y": -0.020025793612912936,
+            "z": 0.0008789717547605924
+          },
+          "rotation": {
+            "x": 0.05456455944384951,
+            "y": 0.0024626554820311166,
+            "z": 0.007701724366436751,
+            "w": -0.998477504815436
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "drawn-grip"
+          }
+        ]
       }
     ]
   }

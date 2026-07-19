@@ -121,6 +121,10 @@ import {
   type StationCharacterState,
 } from "../player/station_walk";
 import {
+  resolveWeaponSlotPress,
+  stanceIdForWeaponSlot,
+} from "../player/inventory/weapon_select";
+import {
   beginGetUpFromBedTransition,
   beginLieTransition,
   beginSitTransition,
@@ -326,6 +330,8 @@ export function createGameLoop({
     systemId,
     activeStationInstanceId,
   });
+  /** Local drawn weapon bar slot (`rifle-primary` / `rifle-secondary` / `handgun`) or holstered. */
+  let activeWeaponSlotId: string | null = null;
   let shipPhysics: ShipPhysics | null = null;
   let shipPhysicsWarming = false;
   let planetPhysics: PlanetPhysics | null = null;
@@ -575,10 +581,20 @@ export function createGameLoop({
     return `Hold ${keyLabel(action)} — ${text}`;
   }
 
-  function hangarDigitPrompt(): string {
-    return getStationHangars()
-      .map((hangar) => keyLabel(`hangar${hangar.index}` as KeyboardActionId))
-      .join(' / ');
+  function currentAnimStance() {
+    if (activeWeaponSlotId) {
+      const loadout = getInventory()?.loadout ?? getInventoryLoadout() ?? {};
+      if (!loadout[activeWeaponSlotId]) activeWeaponSlotId = null;
+    }
+    return stanceIdForWeaponSlot(activeWeaponSlotId);
+  }
+
+  function applyWeaponSlotPress(press: 1 | 2 | 3 | null): void {
+    if (!press) return;
+    const loadout =
+      getInventory()?.loadout ?? getInventoryLoadout() ?? {};
+    activeWeaponSlotId = resolveWeaponSlotPress(press, activeWeaponSlotId, loadout);
+    syncEquippedInventory();
   }
 
   function teleportToSurface(destination: SurfaceDestination): boolean {
@@ -784,8 +800,10 @@ export function createGameLoop({
           return avmsPrompt();
         case "hangar-bank":
           return world.assignedHangar === null
-            ? `Press ${hangarDigitPrompt()} — elevator to hangars`
-            : `Press ${hangarDigitPrompt()} — elevator to hangars (your ship: Hangar ${world.assignedHangar})`;
+            ? pressInteractPrompt("elevator to hangars")
+            : pressInteractPrompt(
+                `elevator to Hangar ${world.assignedHangar} (your ship)`,
+              );
         case "hangar-lift-up":
           return pressInteractPrompt("elevator to Lobby");
         case "prefab-elevator":
@@ -1107,6 +1125,7 @@ export function createGameLoop({
         dt,
         planet.gravityMetersPerSecond2 ?? 9.8,
         physics,
+        currentAnimStance(),
       );
       updateBuildTool(activeRuntime);
       const tool = activeRuntime.controller.getContext().toolMode;
@@ -1136,6 +1155,7 @@ export function createGameLoop({
       dt,
       planet.gravityMetersPerSecond2 ?? 9.8,
       physics,
+      currentAnimStance(),
     );
 
     if (tryEnterShipPadInterest()) return;
@@ -1324,11 +1344,9 @@ export function createGameLoop({
     }
 
     if (interaction.kind === "hangar-bank") {
-      if (actions.hangarDigit) {
-        const destination = elevatorDestinationFor(
-          interaction,
-          actions.hangarDigit,
-        );
+      if (actions.interactPressed) {
+        const hangarIndex = world.assignedHangar ?? 1;
+        const destination = elevatorDestinationFor(interaction, hangarIndex);
         if (destination) {
           beginElevatorRide(world, destination);
           announceElevatorTransition(interaction, destination);
@@ -1491,6 +1509,7 @@ export function createGameLoop({
         exteriorPlanetGrounded,
         suppressDeckExit: likelyExterior,
       },
+      currentAnimStance(),
     );
     world.character = result.state;
 
@@ -1607,7 +1626,10 @@ export function createGameLoop({
     const next = inventory
       ? normalizeInventoryState(inventory)
       : normalizeInventoryState(getInventory() ?? { catalog: [], items: [], loadout: getInventoryLoadout() });
-    renderer?.setEquippedInventory(next);
+    if (activeWeaponSlotId && !next.loadout[activeWeaponSlotId]) {
+      activeWeaponSlotId = null;
+    }
+    renderer?.setEquippedInventory(next, activeWeaponSlotId);
   }
 
   function setEquippedLoadout(loadout: LoadoutState): void {
@@ -1653,6 +1675,7 @@ export function createGameLoop({
             : MODE_ON_FOOT,
       );
       const actions = controls.consumeActions();
+      applyWeaponSlotPress(actions.weaponSlotPress);
       camera = controls.sampleCameraState(dt);
       world.cameraOrbit = {
         pitchRadians: camera.pitchRadians,
@@ -1697,6 +1720,7 @@ export function createGameLoop({
           planet,
           seed,
           planetPhysics,
+          currentAnimStance(),
         );
         if (!tryEnterShipPadInterest()) {
           world.prompt = handleRampOutside(actions.interactPressed) ?? "";

@@ -28,6 +28,11 @@ export interface ProjectPanelOptions {
   audioPreview: EditorAudioPreviewController;
 }
 
+export interface ProjectPanelHandle {
+  /** Select and expand a folder path in the Project tree (e.g. `protected/animations`). */
+  selectFolder: (folderPath: string) => void;
+}
+
 interface FolderNode {
   name: string;
   path: string;
@@ -100,9 +105,13 @@ function buildFolderTree(entries: ProjectAssetEntry[]): FolderNode {
   return root;
 }
 
-export function createProjectPanel(container: HTMLElement, options: ProjectPanelOptions): void {
+export function createProjectPanel(
+  container: HTMLElement,
+  options: ProjectPanelOptions,
+): ProjectPanelHandle {
   let tree: FolderNode = { name: '', path: '', children: new Map(), files: [] };
   let selectedFolder = '';
+  let pendingFolder: string | null = null;
   const expanded = new Set<string>(DEFAULT_EXPANDED_FOLDERS);
 
   const refreshBtn = el('button', {
@@ -362,10 +371,40 @@ export function createProjectPanel(container: HTMLElement, options: ProjectPanel
       showToast(`Asset listing failed: ${(error as Error).message}`, true);
       tree = { name: '', path: '', children: new Map(), files: [] };
     }
-    if (!findFolder(tree, selectedFolder)) selectedFolder = '';
+    if (pendingFolder && findFolder(tree, pendingFolder)) {
+      selectedFolder = pendingFolder;
+      expandAncestors(pendingFolder);
+      pendingFolder = null;
+    } else if (!findFolder(tree, selectedFolder)) {
+      selectedFolder = '';
+    }
+    renderFolders();
+    renderGrid();
+  }
+
+  function expandAncestors(folderPath: string): void {
+    expanded.add('');
+    const parts = folderPath.split('/').filter(Boolean);
+    let acc = '';
+    for (const part of parts) {
+      acc = acc ? `${acc}/${part}` : part;
+      expanded.add(acc);
+    }
+  }
+
+  function selectFolder(folderPath: string): void {
+    if (!findFolder(tree, folderPath)) {
+      pendingFolder = folderPath;
+      return;
+    }
+    pendingFolder = null;
+    selectedFolder = folderPath;
+    expandAncestors(folderPath);
     renderFolders();
     renderGrid();
   }
 
   void load();
+
+  return { selectFolder };
 }

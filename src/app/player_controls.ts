@@ -49,9 +49,9 @@ const PROFILE_IDS: readonly DeviceProfileId[] = ['controller', 'hotas'];
 const ONE_SHOT_KEYBOARD_ACTIONS: readonly KeyboardActionId[] = [
   'interact',
   'jump',
-  'hangar1',
-  'hangar2',
-  'hangar3',
+  'weaponPrimary',
+  'weaponSecondary',
+  'weaponPistol',
   'hangarBuild',
   'hangarRotate',
   'hangarCancel',
@@ -478,7 +478,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         hangarBuildPressed: false,
         hangarRotatePressed: false,
         hangarCancelPressed: false,
-        hangarDigit: null,
+        weaponSlotPress: null,
         cycleFlightModePressed: false,
         coupledToggled: false,
         quantumEngagePressed: false,
@@ -491,13 +491,14 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     if (cycleCameraPressed) toggleShipCameraView();
     if (resetPressed) onReset?.();
 
-    const hangarDigit = wasKeyboardActionPressed('hangar1') || consumeDeviceActionPress('hangar1')
-      ? 1
-      : wasKeyboardActionPressed('hangar2') || consumeDeviceActionPress('hangar2')
-        ? 2
-        : wasKeyboardActionPressed('hangar3') || consumeDeviceActionPress('hangar3')
-          ? 3
-          : null;
+    const weaponSlotPress =
+      wasKeyboardActionPressed('weaponPrimary') || consumeDeviceActionPress('weaponPrimary')
+        ? 1
+        : wasKeyboardActionPressed('weaponSecondary') || consumeDeviceActionPress('weaponSecondary')
+          ? 2
+          : wasKeyboardActionPressed('weaponPistol') || consumeDeviceActionPress('weaponPistol')
+            ? 3
+            : null;
     const interactPressed = wasKeyboardActionPressed('interact') || consumeDeviceActionPress('interact');
     const justPressedSnapshot = new Set(justPressed);
     const cycleFlightModeTap = cycleFlightModePressed;
@@ -513,7 +514,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       hangarBuildPressed: wasKeyboardActionPressed('hangarBuild'),
       hangarRotatePressed: wasKeyboardActionPressed('hangarRotate'),
       hangarCancelPressed: wasKeyboardActionPressed('hangarCancel'),
-      hangarDigit,
+      weaponSlotPress: weaponSlotPress as 1 | 2 | 3 | null,
       cycleFlightModePressed: cycleFlightModeTap,
       coupledToggled,
       quantumEngagePressed: updateQuantumEngageHold(),

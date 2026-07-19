@@ -611,6 +611,7 @@ export function createInspectorPanel(
       case "station-frame":
       case "prop-frame":
       case "item-frame":
+      case "drawn-grip":
         return [];
       case "spawn-point":
         return [

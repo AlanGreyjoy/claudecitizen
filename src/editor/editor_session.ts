@@ -7,7 +7,7 @@ import { createMaterialManagerPanel } from './panels/material_manager';
 import { createPlanetAuthoringEditor, type PlanetAuthoringEditor } from './panels/planet_authoring';
 import { createSystemMapEditor, type SystemMapEditor } from './panels/system_map';
 import { createMenuManagerEditor, type MenuManagerEditor } from './panels/menu_manager';
-import { createProjectPanel } from './panels/project';
+import { createProjectPanel, type ProjectPanelHandle } from './panels/project';
 import { createToolbar, type ToolbarGizmoMode } from './panels/toolbar';
 import { fromPrefabDocument, toPrefabDocument } from './serialize';
 import {
@@ -178,6 +178,7 @@ export function startEditorSession(): void {
   let planetAuthoringEditor: PlanetAuthoringEditor | null = null;
   let systemMapEditor: SystemMapEditor | null = null;
   let menuManagerEditor: MenuManagerEditor | null = null;
+  let projectPanel: ProjectPanelHandle | null = null;
   let sceneEditorTab: SceneEditorTab = 'scene';
 
   function setSceneEditorTab(tab: SceneEditorTab): void {
@@ -228,6 +229,7 @@ export function startEditorSession(): void {
     if (sceneEditorTab === 'base-characters') {
       baseCharacterEditor ??= createBaseCharacterEquipmentEditor(baseCharactersEl);
       baseCharacterEditor.activate();
+      projectPanel?.selectFolder('protected/animations');
     } else {
       baseCharacterEditor?.deactivate();
     }
@@ -589,10 +591,15 @@ export function startEditorSession(): void {
     onToggleShipDoorPreview: (doorId) => toolbar.toggleDoorPreview(doorId),
   });
   createMaterialManagerPanel(materialManagerEl, store);
-  createProjectPanel(projectEl, {
+  projectPanel = createProjectPanel(projectEl, {
     audioPreview,
     getModelThumbnail,
     onPreviewAnimationSource: async (url) => {
+      if (sceneEditorTab === 'base-characters') {
+        baseCharacterEditor ??= createBaseCharacterEquipmentEditor(baseCharactersEl);
+        await baseCharacterEditor.loadAnimationFromAsset(url);
+        return;
+      }
       setSceneEditorTab('character-preview');
       await characterPreviewer.loadAnimationSource(url);
     },

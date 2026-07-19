@@ -54,6 +54,33 @@
         "asset": {
           "url": "/src/assets/protected/props/weapons/SM_Wep_Pistol_04.glb"
         }
+      },
+      {
+        "id": "e-drawn-grip",
+        "name": "Drawn Grip",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": -0.6403416087687968,
+            "y": -0.06676517241775068,
+            "z": -0.7631294127377697,
+            "w": 0.056022631551222175
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "drawn-grip"
+          }
+        ]
       }
     ]
   }

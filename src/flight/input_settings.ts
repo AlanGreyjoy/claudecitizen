@@ -19,9 +19,9 @@ export type KeyboardActionId =
   | 'jump'
   | 'cycleCamera'
   | 'reset'
-  | 'hangar1'
-  | 'hangar2'
-  | 'hangar3'
+  | 'weaponPrimary'
+  | 'weaponSecondary'
+  | 'weaponPistol'
   | 'hangarBuild'
   | 'hangarRotate'
   | 'hangarCancel'
@@ -45,9 +45,9 @@ export type DeviceButtonActionId =
   | 'jump'
   | 'cycleCamera'
   | 'reset'
-  | 'hangar1'
-  | 'hangar2'
-  | 'hangar3';
+  | 'weaponPrimary'
+  | 'weaponSecondary'
+  | 'weaponPistol';
 
 export type DeviceProfileId = 'controller' | 'hotas';
 
@@ -145,9 +145,9 @@ export const KEYBOARD_ACTIONS: readonly KeyboardActionDefinition[] = [
   { id: 'jump', label: 'Jump', defaultBinding: { primary: 'Space' } },
   { id: 'cycleCamera', label: 'Ship Camera View', defaultBinding: { primary: 'KeyV' } },
   { id: 'reset', label: 'Reset Position', defaultBinding: { primary: 'KeyR' } },
-  { id: 'hangar1', label: 'Hangar Level 1', defaultBinding: { primary: 'Digit1' } },
-  { id: 'hangar2', label: 'Hangar Level 2', defaultBinding: { primary: 'Digit2' } },
-  { id: 'hangar3', label: 'Hangar Level 3', defaultBinding: { primary: 'Digit3' } },
+  { id: 'weaponPrimary', label: 'Primary Weapon', defaultBinding: { primary: 'Digit1' } },
+  { id: 'weaponSecondary', label: 'Secondary Weapon', defaultBinding: { primary: 'Digit2' } },
+  { id: 'weaponPistol', label: 'Pistol', defaultBinding: { primary: 'Digit3' } },
   { id: 'hangarBuild', label: 'Build Mode', defaultBinding: { primary: 'KeyH' } },
   { id: 'hangarRotate', label: 'Rotate Prop', defaultBinding: { primary: 'KeyG' } },
   { id: 'hangarCancel', label: 'Cancel Build Tool', defaultBinding: { primary: 'KeyX' } },
@@ -173,9 +173,9 @@ export const DEVICE_BUTTON_ACTIONS: readonly DeviceButtonActionDefinition[] = [
   { id: 'jump', label: 'Jump' },
   { id: 'cycleCamera', label: 'Ship Camera View' },
   { id: 'reset', label: 'Reset Position' },
-  { id: 'hangar1', label: 'Hangar Level 1' },
-  { id: 'hangar2', label: 'Hangar Level 2' },
-  { id: 'hangar3', label: 'Hangar Level 3' },
+  { id: 'weaponPrimary', label: 'Primary Weapon' },
+  { id: 'weaponSecondary', label: 'Secondary Weapon' },
+  { id: 'weaponPistol', label: 'Pistol' },
 ] as const;
 
 export const DEVICE_PROFILES: readonly DeviceProfileDefinition[] = [

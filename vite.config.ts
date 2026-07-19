@@ -366,6 +366,9 @@ function copyReferencedGameAssets(): Plugin {
  *   POST /__editor/prefab                                — save prefab JSON
  *   GET  /__editor/base-characters                       — base character equipment JSON
  *   POST /__editor/base-characters                       — save base character equipment JSON
+ *   GET  /__editor/animation-controllers                 — list animation controllers
+ *   GET  /__editor/animation-controllers?id=<id>         — animation controller JSON
+ *   POST /__editor/animation-controllers                 — save animation controller JSON
  *   GET  /__editor/planets                               — saved planet metadata (id, name)
  *   GET  /__editor/planet?id=<id>                        — planet JSON
  *   POST /__editor/planet                                — save planet JSON
@@ -428,6 +431,10 @@ function editorDevApi(): Plugin {
 
   function baseCharacterEquipmentPath(): string {
     return resolve(projectRoot, 'src/player/equipment/data/base-characters.json');
+  }
+
+  function animationControllerDataDir(): string {
+    return resolve(projectRoot, 'src/player/animation/data');
   }
 
   function editorAssetDir(): string {
@@ -652,6 +659,88 @@ function editorDevApi(): Plugin {
     sendJson(res, 200, { saved: true, path: relative(projectRoot, filePath) });
   }
 
+  async function handleListAnimationControllers(res: ServerResponse): Promise<void> {
+    const controllers: { id: string; label: string }[] = [];
+    try {
+      const filenames = (await readdir(animationControllerDataDir())).filter((name) =>
+        name.endsWith('.controller.json'),
+      );
+      for (const filename of filenames) {
+        const id = filename.replace(/\.controller\.json$/, '');
+        try {
+          const contents = await readFile(join(animationControllerDataDir(), filename), 'utf8');
+          const doc = JSON.parse(contents) as { label?: unknown };
+          const label = typeof doc.label === 'string' && doc.label.trim() ? doc.label.trim() : id;
+          controllers.push({ id, label });
+        } catch {
+          controllers.push({ id, label: id });
+        }
+      }
+    } catch {
+      // Directory may not exist yet.
+    }
+    controllers.sort((a, b) => a.id.localeCompare(b.id));
+    sendJson(res, 200, { controllers });
+  }
+
+  async function handleGetAnimationController(
+    url: URL,
+    res: ServerResponse,
+  ): Promise<void> {
+    const id = url.searchParams.get('id')?.trim() ?? '';
+    if (!PREFAB_ID_PATTERN.test(id)) {
+      sendJson(res, 400, { error: 'id must be a lowercase slug (a-z, 0-9, -)' });
+      return;
+    }
+    try {
+      const contents = await readFile(
+        join(animationControllerDataDir(), `${id}.controller.json`),
+        'utf8',
+      );
+      sendJson(res, 200, { document: JSON.parse(contents) });
+    } catch {
+      sendJson(res, 404, { error: `animation controller "${id}" not found` });
+    }
+  }
+
+  async function handleSaveAnimationController(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    let document: { id?: unknown; schemaVersion?: unknown; stances?: unknown; states?: unknown };
+    try {
+      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
+      if (typeof parsed.document !== 'object' || parsed.document === null) {
+        throw new Error('missing document');
+      }
+      document = parsed.document as {
+        id?: unknown;
+        schemaVersion?: unknown;
+        stances?: unknown;
+        states?: unknown;
+      };
+      if (
+        document.schemaVersion !== 1 ||
+        !Array.isArray(document.stances) ||
+        !Array.isArray(document.states)
+      ) {
+        throw new Error('invalid animation controller document');
+      }
+    } catch (error) {
+      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
+      return;
+    }
+    const id = typeof document.id === 'string' ? document.id : '';
+    if (!PREFAB_ID_PATTERN.test(id)) {
+      sendJson(res, 400, { error: 'document.id must be a lowercase slug (a-z, 0-9, -)' });
+      return;
+    }
+    await mkdir(animationControllerDataDir(), { recursive: true });
+    const filePath = join(animationControllerDataDir(), `${id}.controller.json`);
+    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+    sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
+  }
+
   async function handleListPlanets(res: ServerResponse): Promise<void> {
     const planets: { id: string; name: string }[] = [];
     try {
@@ -804,6 +893,14 @@ function editorDevApi(): Plugin {
           if (route === 'POST /prefab') return handleSavePrefab(req, res);
           if (route === 'GET /base-characters') return handleGetBaseCharacters(res);
           if (route === 'POST /base-characters') return handleSaveBaseCharacters(req, res);
+          if (route === 'GET /animation-controllers') {
+            return url.searchParams.has('id')
+              ? handleGetAnimationController(url, res)
+              : handleListAnimationControllers(res);
+          }
+          if (route === 'POST /animation-controllers') {
+            return handleSaveAnimationController(req, res);
+          }
           if (route === 'GET /planets') return handleListPlanets(res);
           if (route === 'GET /planet') return handleGetPlanet(url, res);
           if (route === 'POST /planet') return handleSavePlanet(req, res);
@@ -835,6 +932,7 @@ export default defineConfig({
         '**/src/world/planets/data/**',
         '**/src/world/systems/data/**',
         '**/src/player/equipment/data/base-characters.json',
+        '**/src/player/animation/data/**',
       ],
     },
   },

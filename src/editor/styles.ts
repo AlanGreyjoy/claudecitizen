@@ -515,8 +515,12 @@ body.ed-resize-row * {
   grid-template-rows: auto minmax(0, 1fr) 4px var(--ed-project-height, 240px);
 }
 
-/* Base Characters / System Map / Menu Manager hide Project — collapse its rows. */
-#editor-root.is-base-characters,
+/* Base Characters keeps Project for protected/animations assignment. */
+#editor-root.is-base-characters {
+  grid-template-rows: auto minmax(0, 1fr) 4px var(--ed-project-height, 280px);
+}
+
+/* System Map / Menu Manager hide Project — collapse its rows. */
 #editor-root.is-system-map,
 #editor-root.is-menu-manager {
   grid-template-rows: auto minmax(0, 1fr) 0 0;
@@ -540,8 +544,6 @@ body.ed-resize-row * {
 #editor-root.is-base-characters .ed-inspector-panel,
 #editor-root.is-base-characters .ed-hierarchy-splitter,
 #editor-root.is-base-characters .ed-inspector-splitter,
-#editor-root.is-base-characters .ed-project,
-#editor-root.is-base-characters .ed-project-splitter,
 #editor-root.is-planet-authoring .ed-hierarchy-panel,
 #editor-root.is-planet-authoring .ed-inspector-panel,
 #editor-root.is-planet-authoring .ed-hierarchy-splitter,
@@ -1059,6 +1061,46 @@ body.ed-resize-row * {
   background: rgba(5, 11, 24, 0.94);
 }
 
+.ed-base-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0 0 10px;
+  border: 1px solid rgba(90, 190, 255, 0.16);
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.ed-base-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid rgba(90, 190, 255, 0.16);
+  background: transparent;
+  color: var(--muted);
+  font: 700 9px/1 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 6px;
+  cursor: pointer;
+}
+
+.ed-base-tab:last-child {
+  border-right: none;
+}
+
+.ed-base-tab:hover,
+.ed-base-tab.is-active {
+  background: rgba(139, 216, 255, 0.12);
+  color: var(--accent);
+}
+
+.ed-base-tab-body {
+  min-width: 0;
+}
+
 .ed-base-inspector {
   border-right: 0;
   border-left: 1px solid rgba(90, 190, 255, 0.16);
@@ -1105,6 +1147,36 @@ body.ed-resize-row * {
 .ed-base-anim-speed {
   width: 100%;
   padding: 0;
+}
+
+.ed-base-controller-panel {
+  margin-bottom: 0;
+}
+
+.ed-base-controller-states {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.ed-base-controller-state-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.ed-base-controller-state-row > span {
+  color: var(--muted);
+  font: 600 10px/1.2 var(--sc-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ed-base-source-badge {
+  color: var(--muted);
+  font: 500 10px/1 var(--sc-font);
+  opacity: 0.85;
 }
 
 .ed-base-type-toggle .is-active {

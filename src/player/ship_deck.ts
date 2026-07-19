@@ -3,7 +3,6 @@ import {
   cross,
   dot,
   length,
-  lerp,
   normalize,
   scale,
   sub,
@@ -14,6 +13,7 @@ import {
   animationFromState,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
+  rotateCharacterToward,
   SPRINT_SPEED_METERS_PER_SECOND,
   WALK_SPEED_METERS_PER_SECOND,
 } from "./character_controller";
@@ -48,6 +48,7 @@ import type {
   Pose,
   Vec3,
 } from "../types";
+import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 
 /**
  * Walkable ship interior via ship-local Rapier colliders (including the ramp).
@@ -75,7 +76,6 @@ export interface DeckCharacterState extends CharacterState {
   shipVerticalVelocity?: number;
 }
 
-const TURN_SPEED = 10;
 /** Matches the offset baked into getDeckWorldPose. */
 export const DECK_FLOOR_OFFSET_METERS = 0.02;
 /** Max vertical step between collider floor samples when walking. */
@@ -262,20 +262,6 @@ function deckMovementDirection(
   const tangentDesired = tangentize(desired, up);
   if (length(tangentDesired) < 1e-6) return vec3(0, 0, 0);
   return normalize(tangentDesired);
-}
-
-function rotateToward(
-  currentForward: Vec3,
-  desiredForward: Vec3,
-  up: Vec3,
-  dt: number,
-): Vec3 {
-  if (length(desiredForward) < 1e-6) return normalize(currentForward);
-  const current = normalize(tangentize(currentForward, up));
-  const desired = normalize(tangentize(desiredForward, up));
-  const mixed = normalize(lerp(current, desired, clamp(dt * TURN_SPEED, 0, 1)));
-  if (length(mixed) < 1e-6) return desired;
-  return mixed;
 }
 
 function localDistance(
@@ -662,6 +648,7 @@ function updateCharacterOnDeckRapier(
   gravityMetersPerSecond2: number,
   physics: ShipPhysics,
   options?: DeckLocomotionOptions,
+  stanceId: WeaponAnimStanceId = 'unarmed',
 ): DeckUpdateResult {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
@@ -705,7 +692,7 @@ function updateCharacterOnDeckRapier(
   const position = getShipPlayerWorldPosition(physics, ship);
   const deckLocal = { right: localPose.right, forward: localPose.forward };
   const bound = findCameraBoundAt(deckLocal);
-  const forward = rotateToward(state.forward, desiredFacing, ship.up, dt);
+  const forward = rotateCharacterToward(state.forward, desiredFacing, ship.up, dt);
   const flags = options?.suppressDeckExit
     ? {
         leftDeck: false,
@@ -734,6 +721,7 @@ function updateCharacterOnDeckRapier(
         },
         moveMagnitude > 0.08,
         wantsSprint,
+        stanceId,
       ),
       deckLocal,
       deckZone: bound?.id ?? state.deckZone,
@@ -767,6 +755,7 @@ export function updateCharacterOnDeck(
   _colliderRig?: ShipColliderRigState,
   physics?: ShipPhysics | null,
   options?: DeckLocomotionOptions,
+  stanceId: WeaponAnimStanceId = 'unarmed',
 ): DeckUpdateResult {
   if (!physics) {
     return {
@@ -783,5 +772,6 @@ export function updateCharacterOnDeck(
     gravityMetersPerSecond2,
     physics,
     options,
+    stanceId,
   );
 }
