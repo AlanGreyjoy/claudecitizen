@@ -274,8 +274,12 @@ export async function startPlaySession(
   const seed = planetConfig.seed || DEFAULT_PLANET_SEED;
   const planet = planetConfig.planet.name ? planetConfig.planet : { ...CLAUDECITIZEN_PLANET, ...planetConfig.planet };
 
-  loading?.setStatus('Seeding spawn tile cache...');
-  await hydrateSpawnPackFromUrl(planetDocument.id);
+  if (spawnSurface) {
+    loading?.setStatus('Seeding spawn tile cache...');
+    await hydrateSpawnPackFromUrl(planetDocument.id);
+  } else {
+    loading?.setStatus('Loading orbital station...');
+  }
   loading?.setProgress(0.22);
 
   const systemDocument =
@@ -366,6 +370,7 @@ export async function startPlaySession(
   const controlsEl = requireElement<HTMLElement>('hud-controls');
   const interactPromptEl = requireElement<HTMLElement>('interact-prompt');
   const flightReticleEl = requireElement<HTMLElement>('flight-reticle');
+  const weaponCrosshairEl = requireElement<HTMLElement>('weapon-crosshair');
   const cockpitGazeEl = requireElement<HTMLElement>('cockpit-gaze');
   const cockpitSpeedEl = requireElement<HTMLElement>('cockpit-speed');
   const screenFadeEl = requireElement<HTMLElement>('screen-fade');
@@ -438,16 +443,20 @@ export async function startPlaySession(
     statsPanelEl.classList.remove('is-hidden');
   }
 
-  loading?.setStatus('Warming planet surface...');
-  const spawnFocus = warmPlanetSpawnCaches(planet, seed);
-  loading?.setProgress(0.52);
-  if (renderer) {
-    await renderer.warmSpawnCorridor(spawnFocus, {
-      onProgress: (fraction, label) => {
-        loading?.setStatus(label);
-        loading?.setProgress(0.52 + fraction * 0.2);
-      },
-    });
+  if (spawnSurface) {
+    loading?.setStatus('Warming planet surface...');
+    const spawnFocus = warmPlanetSpawnCaches(planet, seed);
+    loading?.setProgress(0.52);
+    if (renderer) {
+      await renderer.warmSpawnCorridor(spawnFocus, {
+        onProgress: (fraction, label) => {
+          loading?.setStatus(label);
+          loading?.setProgress(0.52 + fraction * 0.2);
+        },
+      });
+    }
+  } else {
+    loading?.setStatus('Preparing station interior...');
   }
   loading?.setProgress(0.72);
 
@@ -469,6 +478,7 @@ export async function startPlaySession(
       controlsEl,
       interactPromptEl,
       flightReticleEl,
+      weaponCrosshairEl,
       cockpitGazeEl,
       cockpitSpeedEl,
       screenFadeEl,

@@ -82,7 +82,14 @@ import {
 } from "../math/vec3";
 import type { CharacterState, FlightBody, Pose, Vec3 } from "../types";
 import { createUiIcon, UiIcons } from "../ui/icons";
-import { createSoundSceneController } from "../audio/sound_scene";
+import {
+  createSoundSceneController,
+  type SoundListenerPose,
+} from "../audio/sound_scene";
+import {
+  createFootstepController,
+  footstepGaitFromAnimation,
+} from "../audio/footsteps";
 import { createLoopingSfxController, playSfx } from "../audio/sfx";
 import {
   flightOptionsFromSpec,
@@ -342,6 +349,8 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   for (const selector of [
     ".sc-hud-chat",
     ".sc-hud-debug-wrap",
+    "#hud-build-btn",
+    "#weapon-crosshair",
   ]) {
     const element = document.querySelector<HTMLElement>(selector);
     if (element) element.style.display = "none";
@@ -535,6 +544,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
   const layout = getShipLayout();
   const soundScene = createSoundSceneController();
+  const footsteps = createFootstepController();
   const shipModel = createShipModel(1, {
     hullUrl: layout.hullUrl,
     hullNodeOverrides: layout.hullNodeOverrides,
@@ -568,10 +578,13 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     up: { ...WORLD_UP },
     velocity: vec3(0, 0, 0),
   };
-  const disposeSoundScene = () => soundScene.dispose();
+  const disposeAudio = () => {
+    soundScene.dispose();
+    footsteps.dispose();
+  };
   const disposeParticles = () =>
     shipModel.group.userData.disposeParticleSystems?.();
-  window.addEventListener("pagehide", disposeSoundScene, { once: true });
+  window.addEventListener("pagehide", disposeAudio, { once: true });
   window.addEventListener("pagehide", disposeParticles, { once: true });
   window.addEventListener("pagehide", () => {
     boostSfx.stop();
@@ -1614,17 +1627,25 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
       updateCamera(dt);
       camera.updateMatrixWorld();
+      const matrix = camera.matrixWorld.elements;
+      const worldForward = { x: -matrix[8], y: -matrix[9], z: -matrix[10] };
+      const worldUp = { x: matrix[4], y: matrix[5], z: matrix[6] };
+      let listenerPose: SoundListenerPose;
+      let footstepPosition: Vec3;
       if (mode === "ground") {
         soundScene.setScene(null, []);
+        listenerPose = {
+          position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+          forward: worldForward,
+          up: worldUp,
+        };
+        footstepPosition = character.position;
       } else {
         const local = worldToShipLocal(ship, {
           x: camera.position.x,
           y: camera.position.y,
           z: camera.position.z,
         });
-        const matrix = camera.matrixWorld.elements;
-        const worldForward = { x: -matrix[8], y: -matrix[9], z: -matrix[10] };
-        const worldUp = { x: matrix[4], y: matrix[5], z: matrix[6] };
         const shipRight = getShipRight(ship);
         const shipForward = normalize(ship.forward);
         const toSceneVector = (vector: Vec3): Vec3 => ({
@@ -1632,13 +1653,36 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           y: dot(vector, ship.up),
           z: dot(vector, shipForward),
         });
-        soundScene.setScene(`ship-preview:${prefabId}`, layout.sounds);
-        soundScene.update({
+        const characterLocal = worldToShipLocal(ship, character.position);
+        listenerPose = {
           position: { x: -local.right, y: local.up, z: local.forward },
           forward: toSceneVector(worldForward),
           up: toSceneVector(worldUp),
-        });
+        };
+        footstepPosition = {
+          x: -characterLocal.right,
+          y: characterLocal.up,
+          z: characterLocal.forward,
+        };
+        soundScene.setScene(`ship-preview:${prefabId}`, layout.sounds);
+        soundScene.update(listenerPose);
       }
+      footsteps.update(
+        dt,
+        listenerPose,
+        mode === "deck" || mode === "ground"
+          ? [
+              {
+                id: "ship-preview-player",
+                position: footstepPosition,
+                grounded: character.grounded,
+                gait: footstepGaitFromAnimation(character.animation),
+                surface: "metal",
+                spatial: false,
+              },
+            ]
+          : [],
+      );
     } else if (mode === "in-bed" || entertainmentSystem.isOpen()) {
       // Keep SC-style screen zoom easing while the ES UI pauses input.
       updateCamera(frameDt);

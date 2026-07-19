@@ -14,6 +14,49 @@ export interface SfxAudioGraph {
   bus: GainNode;
 }
 
+export interface SfxListenerPose {
+  position: { x: number; y: number; z: number };
+  forward: { x: number; y: number; z: number };
+  up: { x: number; y: number; z: number };
+}
+
+function setAudioParam(param: AudioParam | undefined, value: number, now: number): void {
+  param?.setValueAtTime(value, now);
+}
+
+/** Keep every spatial SFX controller on the shared Web Audio listener pose. */
+export function setSfxListenerPose(graph: SfxAudioGraph, pose: SfxListenerPose): void {
+  const listener = graph.context.listener;
+  const now = graph.context.currentTime;
+  if ('positionX' in listener) {
+    setAudioParam(listener.positionX, pose.position.x, now);
+    setAudioParam(listener.positionY, pose.position.y, now);
+    setAudioParam(listener.positionZ, pose.position.z, now);
+    setAudioParam(listener.forwardX, pose.forward.x, now);
+    setAudioParam(listener.forwardY, pose.forward.y, now);
+    setAudioParam(listener.forwardZ, pose.forward.z, now);
+    setAudioParam(listener.upX, pose.up.x, now);
+    setAudioParam(listener.upY, pose.up.y, now);
+    setAudioParam(listener.upZ, pose.up.z, now);
+    return;
+  }
+  const legacy = listener as AudioListener & {
+    setPosition?: (x: number, y: number, z: number) => void;
+    setOrientation?: (
+      ...values: [number, number, number, number, number, number]
+    ) => void;
+  };
+  legacy.setPosition?.(pose.position.x, pose.position.y, pose.position.z);
+  legacy.setOrientation?.(
+    pose.forward.x,
+    pose.forward.y,
+    pose.forward.z,
+    pose.up.x,
+    pose.up.y,
+    pose.up.z,
+  );
+}
+
 function installUnlockListeners(): void {
   if (unlockListenersInstalled || typeof window === 'undefined') return;
   unlockListenersInstalled = true;

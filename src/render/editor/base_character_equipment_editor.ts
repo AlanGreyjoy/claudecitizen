@@ -776,7 +776,7 @@ export function createBaseCharacterEquipmentEditor(
       while (taken.has(`${id}-${suffix}`)) suffix += 1;
       id = `${id}-${suffix}`;
     }
-    controllerState.sources.push({ id, url, label: labelFromUrl(url) });
+    controllerState.sources.push({ id, url, label: labelFromUrl(url), yawOffsetDegrees: 0 });
     lastLoadedSourceId = id;
     markControllerDirty();
     return id;
@@ -855,7 +855,11 @@ export function createBaseCharacterEquipmentEditor(
       const source = controllerState.sources.find((entry) => entry.id === state.sourceId);
       if (source && !animation.clipNames.includes(clipName)) {
         setStageStatus(`Loading source ${source.label}…`);
-        await animation.loadAnimationSource(source.url, source.label);
+        await animation.loadAnimationSource(
+          source.url,
+          source.label,
+          source.yawOffsetDegrees,
+        );
         lastLoadedSourceId = source.id;
       }
     }

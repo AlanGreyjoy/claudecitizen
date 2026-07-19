@@ -27,6 +27,7 @@ export interface HudElements {
   interactPromptEl: HTMLElement;
   screenFadeEl: HTMLElement;
   flightReticleEl: HTMLElement;
+  weaponCrosshairEl: HTMLElement;
   cockpitGazeEl: HTMLElement;
   cockpitSpeedEl: HTMLElement;
 }
@@ -42,6 +43,7 @@ export interface HudUpdateParams {
   planet: Planet;
   isPointerLocked: boolean;
   nowMs: number;
+  weaponCrosshairVisible: boolean;
   flightDual?: {
     aimOffsetPx: { x: number; y: number };
     noseOffsetPx: { x: number; y: number };
@@ -88,6 +90,7 @@ export function createHud(
     statusEl: elements.statusEl,
   });
   const flightReticle = createFlightReticle({ rootEl: elements.flightReticleEl });
+  elements.weaponCrosshairEl.classList.remove('is-visible');
   const cockpitGazeHud = createCockpitGazeHud({ rootEl: elements.cockpitGazeEl });
   const cockpitSpeedHud = createCockpitSpeedHud({ rootEl: elements.cockpitSpeedEl });
 
@@ -118,6 +121,10 @@ export function createHud(
       quantum: params.world.quantum,
       dual: params.flightDual,
     });
+    elements.weaponCrosshairEl.classList.toggle(
+      'is-visible',
+      params.weaponCrosshairVisible,
+    );
     cockpitGazeHud.update(
       params.cockpitGaze ?? { visible: false },
     );

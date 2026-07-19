@@ -70,8 +70,8 @@ function showPreviewShell(): HTMLCanvasElement {
   document.getElementById('loading-screen')?.classList.add('is-hidden');
   requireElement<HTMLElement>('app').classList.remove('is-hidden');
   for (const selector of [
-    '.sc-hud-chat', '.sc-hud-debug-wrap', '.hud',
-    '#interact-prompt', '#flight-reticle', '#cockpit-gaze', '#game-menu',
+    '.sc-hud-chat', '.sc-hud-debug-wrap', '#hud-build-btn', '.hud',
+    '#interact-prompt', '#flight-reticle', '#weapon-crosshair', '#cockpit-gaze', '#game-menu',
     '#avms-terminal', '#build-terminal', '#entertainment-system', '#weapon-shop', '#haloband',
   ]) {
     document.querySelector<HTMLElement>(selector)?.style.setProperty('display', 'none');

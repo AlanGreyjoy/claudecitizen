@@ -18,6 +18,8 @@ export interface AnimationControllerSourceV1 {
   id: string;
   url: string;
   label: string;
+  /** Clip-specific authored-forward correction around the character up axis. */
+  yawOffsetDegrees: number;
 }
 
 export interface AnimationControllerStanceV1 {
@@ -69,10 +71,15 @@ function isLocomotion(value: unknown): value is AnimationLocomotionKind {
 
 function parseSource(value: unknown, label: string): AnimationControllerSourceV1 {
   const source = record(value, label);
+  const yawOffsetDegrees = source.yawOffsetDegrees ?? 0;
+  if (typeof yawOffsetDegrees !== 'number' || !Number.isFinite(yawOffsetDegrees)) {
+    throw new Error(`${label}.yawOffsetDegrees must be a finite number.`);
+  }
   return {
     id: slug(source.id, `${label}.id`),
     url: stringValue(source.url, `${label}.url`, 512),
     label: stringValue(source.label, `${label}.label`, 80),
+    yawOffsetDegrees: Math.max(-180, Math.min(180, yawOffsetDegrees)),
   };
 }
 
@@ -182,11 +189,20 @@ export function locomotionStateSlug(locomotion: AnimationLocomotionKind): string
   return locomotion.replaceAll('_', '-');
 }
 
-const RIFLE_8WAY_ROOT = '/src/assets/protected/animations/rifle-8-way';
+const PRO_RIFLE_ROOT = '/src/assets/protected/animations/pro-rifle';
 const HANDGUN_LOCOMOTION_ROOT = '/src/assets/protected/animations/handgun-locomotions';
 
-/** Primary rifle locomotion → rifle-8-way clip (forward / jump axis). */
-const RIFLE_8WAY_LOCOMOTION: Record<AnimationLocomotionKind, string> = {
+/** Measured from each in-place clip's foot-travel axis; +Z is gameplay forward. */
+const PRO_RIFLE_YAW_OFFSETS: Readonly<Partial<Record<string, number>>> = {
+  walk_forward: -30,
+};
+const HANDGUN_YAW_OFFSETS: Readonly<Partial<Record<string, number>>> = {
+  pistol_walk: -27,
+  pistol_run: -19,
+};
+
+/** Primary rifle locomotion → Pro Rifle clip (forward / jump axis). */
+const PRO_RIFLE_LOCOMOTION: Record<AnimationLocomotionKind, string> = {
   idle: 'idle',
   walk: 'walk_forward',
   sprint: 'sprint_forward',
@@ -233,18 +249,20 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
     { id: 'pistol', label: 'Pistol' },
   ];
 
-  const rifleClips = [...new Set(Object.values(RIFLE_8WAY_LOCOMOTION))];
+  const rifleClips = [...new Set(Object.values(PRO_RIFLE_LOCOMOTION))];
   const handgunClips = [...new Set(Object.values(HANDGUN_LOCOMOTION))];
   const sources: AnimationControllerSourceV1[] = [
     ...rifleClips.map((clipStem) => ({
       id: packSourceId('r8', clipStem),
-      url: `${RIFLE_8WAY_ROOT}/${clipStem}.glb`,
+      url: `${PRO_RIFLE_ROOT}/${clipStem}.glb`,
       label: clipStem,
+      yawOffsetDegrees: PRO_RIFLE_YAW_OFFSETS[clipStem] ?? 0,
     })),
     ...handgunClips.map((clipStem) => ({
       id: packSourceId('hg', clipStem),
       url: `${HANDGUN_LOCOMOTION_ROOT}/${clipStem}.glb`,
       label: clipStem,
+      yawOffsetDegrees: HANDGUN_YAW_OFFSETS[clipStem] ?? 0,
     })),
   ];
 
@@ -263,7 +281,7 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
         continue;
       }
       if (stance.id === 'rifle') {
-        const clipStem = RIFLE_8WAY_LOCOMOTION[locomotion];
+        const clipStem = PRO_RIFLE_LOCOMOTION[locomotion];
         states.push({
           id: `${stance.id}-${locomotionStateSlug(locomotion)}`,
           label: `${stance.label} ${locomotionLabels[locomotion]}`,

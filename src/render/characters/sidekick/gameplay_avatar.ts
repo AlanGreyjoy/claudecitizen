@@ -16,11 +16,11 @@ import {
 import { createEquipmentAttachmentController } from './equipment_attach';
 import { applyDefaultFrustumCulling } from '../../frustum_policy';
 import {
-  getDefaultAnimationController,
+  loadCurrentDefaultAnimationController,
   primaryStanceSources,
 } from '../../../player/animation';
 
-const GAMEPLAY_ANIMATION_TIME_SCALE = 1.35;
+const GAMEPLAY_ANIMATION_TIME_SCALE = 1;
 
 function geometryBounds(root: THREE.Object3D): THREE.Box3 {
   const bounds = new THREE.Box3().makeEmpty();
@@ -100,11 +100,16 @@ export function createSidekickGameplayAvatar(
         return;
       }
       // Preload rifle + pistol primary locomotion packs (bounded; not full catalog).
-      const stanceSources = primaryStanceSources(getDefaultAnimationController());
+      const controller = await loadCurrentDefaultAnimationController();
+      const stanceSources = primaryStanceSources(controller);
       for (const source of stanceSources) {
         if (disposed || !animation) break;
         try {
-          await animation.loadAnimationSource(source.url, source.label);
+          await animation.loadAnimationSource(
+            source.url,
+            source.label,
+            source.yawOffsetDegrees,
+          );
         } catch (error) {
           console.warn(`Failed to preload stance animation "${source.label}".`, error);
         }

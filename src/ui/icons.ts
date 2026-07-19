@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   Film,
+  Hammer,
   PersonStanding,
   Power,
   Satellite,
@@ -60,6 +61,7 @@ export const UiIcons = {
   eye: Eye,
   eyeOff: EyeOff,
   film: Film,
+  hammer: Hammer,
   personStanding: PersonStanding,
   power: Power,
   bookOpen: BookOpen,
@@ -80,6 +82,7 @@ export function mountPlayChromeIcons(root: ParentNode = document): void {
   };
 
   fill('hud-debug-btn', Bug, 18);
+  fill('hud-build-btn', Hammer, 18);
   fill('avms-power-btn', Power);
   fill('avms-close-btn', X);
   fill('build-close-btn', X);

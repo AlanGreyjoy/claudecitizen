@@ -1,5 +1,6 @@
 import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
 import {
+  advanceJumpAnimationPhase,
   animationFromState,
   CHARACTER_GROUND_OFFSET_METERS,
   JUMP_SPEED_METERS_PER_SECOND,
@@ -160,12 +161,13 @@ export function updateCharacterInStation(
     return state;
   }
 
-  const grounded = isStationPlayerGrounded(physics);
+  const groundedBefore = isStationPlayerGrounded(physics);
   let verticalVelocity = state.stationVerticalVelocity ?? 0;
-  if (grounded && verticalVelocity <= 0) {
+  if (groundedBefore && verticalVelocity <= 0) {
     verticalVelocity = 0;
   }
-  if (input.jumpPressed && grounded) {
+  const startedJump = Boolean(input.jumpPressed && groundedBefore);
+  if (startedJump) {
     verticalVelocity = JUMP_SPEED_METERS_PER_SECOND;
   }
   verticalVelocity -= gravityMetersPerSecond2 * dt;
@@ -177,6 +179,9 @@ export function updateCharacterInStation(
   moveStationPlayer(physics, frame, velocity, dt);
   stepStationPhysics(physics);
 
+  const groundedAfter = isStationPlayerGrounded(physics);
+  const airborne = startedJump || !groundedAfter || verticalVelocity > 0.15;
+  const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   const position = getStationPlayerPosition(physics, frame);
   const local = worldToStationLocal(frame, position);
   const forward = rotateCharacterToward(state.forward, desiredFacing, frame.up, dt);
@@ -184,15 +189,15 @@ export function updateCharacterInStation(
   return {
     ...state,
     animation: animationFromState(
-      { jumpPhase: 'grounded' },
+      jump,
       moveMagnitude > 0.08,
       wantsSprint,
       stanceId,
     ),
     forward: length(forward) < 1e-6 ? normalize(tangentize(state.forward, frame.up)) : normalize(tangentize(forward, frame.up)),
-    grounded,
-    jumpPhase: 'grounded',
-    jumpPhaseTime: 0,
+    grounded: !airborne,
+    jumpPhase: jump.jumpPhase,
+    jumpPhaseTime: jump.jumpPhaseTime,
     position,
     stationLocal: { right: local.right, forward: local.forward },
     stationVerticalVelocity: verticalVelocity,

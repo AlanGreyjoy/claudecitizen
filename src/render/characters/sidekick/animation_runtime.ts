@@ -23,7 +23,11 @@ export interface SidekickAnimationRuntime {
   sourceLabel: string;
   dispose: () => void;
   loadDefaultLibrary: () => Promise<void>;
-  loadAnimationSource: (url: string, label?: string) => Promise<void>;
+  loadAnimationSource: (
+    url: string,
+    label?: string,
+    yawOffsetDegrees?: number,
+  ) => Promise<void>;
   setAnimation: (name: string, fadeSeconds?: number) => void;
   setPlaying: (playing: boolean) => void;
   setTimeScale: (scale: number) => void;
@@ -68,10 +72,42 @@ function isLoopingClip(name: string): boolean {
   if (/^death[_-]/i.test(name) || /headshot/i.test(name)) return false;
   if (/(?:^|_)jump(?:[_-]|$)/i.test(name) && !/_loop$/i.test(name)) return false;
   if (/stand_to_kneel|kneel_to_stand/i.test(name) || /turn_\d+/i.test(name)) return false;
-  // UAL / rifle-8-way / handgun packs: idle*, walk*, run*, sprint*, strafe*.
+  // UAL / Pro Rifle / handgun packs: idle*, walk*, run*, sprint*, strafe*.
   if (/(?:^|_)idle(?:[_-]|$)/i.test(name)) return true;
   if (/(?:^|_)(walk|run|sprint|strafe)(?:[_-]|$)/i.test(name)) return true;
   return false;
+}
+
+/** Rotate a clip's skeleton root so its measured travel axis matches gameplay +Z. */
+function applyRootYawOffset(
+  clips: readonly THREE.AnimationClip[],
+  yawOffsetDegrees: number,
+): THREE.AnimationClip[] {
+  if (!Number.isFinite(yawOffsetDegrees) || Math.abs(yawOffsetDegrees) < 1e-4) {
+    return [...clips];
+  }
+  const yaw = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    THREE.MathUtils.degToRad(yawOffsetDegrees),
+  );
+  const value = new THREE.Quaternion();
+  return clips.map((clip) => {
+    const tracks = clip.tracks.map((track) => {
+      if (
+        !(track instanceof THREE.QuaternionKeyframeTrack)
+        || track.name !== '.bones[root].quaternion'
+      ) {
+        return track;
+      }
+      const adjusted = track.clone();
+      for (let offset = 0; offset < adjusted.values.length; offset += 4) {
+        value.fromArray(adjusted.values, offset).premultiply(yaw).normalize();
+        value.toArray(adjusted.values, offset);
+      }
+      return adjusted;
+    });
+    return new THREE.AnimationClip(clip.name, clip.duration, tracks).optimize();
+  });
 }
 
 export async function createSidekickAnimationRuntime(
@@ -152,10 +188,17 @@ export async function createSidekickAnimationRuntime(
     if (preferred) setAnimation(preferred, 0);
   };
 
-  const loadAnimationSource = async (url: string, label?: string): Promise<void> => {
+  const loadAnimationSource = async (
+    url: string,
+    label?: string,
+    yawOffsetDegrees = 0,
+  ): Promise<void> => {
     const asset = await loadGltf(url);
     // Merge so UAL locomotion stays available beside Mixamo/combat packs.
-    registerClips(retargetFromAsset(asset), false);
+    registerClips(
+      applyRootYawOffset(retargetFromAsset(asset), yawOffsetDegrees),
+      false,
+    );
     const fileLabel = label ?? url.split(/[/?#]/).filter(Boolean).at(-1) ?? url;
     sourceLabel = sourceLabel === 'none' || sourceLabel === 'UAL locomotion'
       ? fileLabel

@@ -189,6 +189,12 @@ import {
 } from "../world/station";
 import { cross, dot, length, normalize, sub } from "../math/vec3";
 import { createSoundSceneController, type SoundListenerPose } from "../audio/sound_scene";
+import {
+  createFootstepController,
+  footstepGaitFromAnimation,
+  type FootstepActor,
+  type FootstepSurface,
+} from "../audio/footsteps";
 import { createStationNpcPopulation } from "../npc/station_population";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from "../world/planet_surface";
@@ -200,7 +206,15 @@ import { cartesianFromLatLonAlt, radialUp, surfacePointFromPosition } from "../w
 import { warmRenderableHeightRing } from "../world/spawn_warm";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
-import type { ColorCorrectionSettings, GameMode, Planet, SsaoSettings, Vec3 } from "../types";
+import type {
+  ColorCorrectionSettings,
+  GameMode,
+  NetworkRenderEntity,
+  Planet,
+  SsaoSettings,
+  StationNpcRenderState,
+  Vec3,
+} from "../types";
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 import {
@@ -322,6 +336,14 @@ export function createGameLoop({
   const onOutfittersResize = () => outfittersScreen?.resize();
   window.addEventListener("resize", onOutfittersResize);
 
+  const buildBtnEl = document.getElementById("hud-build-btn");
+  const onBuildBtnClick = () => {
+    const runtime = buildRuntimeForCurrentRoom();
+    if (!runtime || !build) return;
+    build.terminal.open(runtime.controller);
+  };
+  buildBtnEl?.addEventListener("click", onBuildBtnClick);
+
   const weaponShopCameraState = createEntertainmentCameraState();
   const outfittersCameraState = createEntertainmentCameraState();
   let world: WorldState = createWorldState(planet, seed, {
@@ -409,6 +431,7 @@ export function createGameLoop({
   }
   let lastNearbyPrefabInfoId: string | null = null;
   const soundScene = createSoundSceneController();
+  const footsteps = createFootstepController();
 
   function toggleStationAnimation(id: string): void {
     const anim = stationAnimationStates[id];
@@ -473,6 +496,11 @@ export function createGameLoop({
     };
   }
 
+  function scenePointFromStation(point: Vec3): Vec3 {
+    const local = worldToStationLocal(stationFrame, point);
+    return { x: -local.right, y: local.up, z: local.forward };
+  }
+
   function sceneVectorFromShip(vector: Vec3, ship: ReturnType<typeof getActiveShipBody>): Vec3 {
     const shipForward = normalize(ship.forward);
     return {
@@ -482,7 +510,88 @@ export function createGameLoop({
     };
   }
 
-  function updateSceneSounds(focusPosition: Vec3): void {
+  function scenePointFromShip(
+    point: Vec3,
+    ship: ReturnType<typeof getActiveShipBody>,
+  ): Vec3 {
+    const local = worldToShipLocal(ship, point);
+    return { x: -local.right, y: local.up, z: local.forward };
+  }
+
+  function localFootstepActor(
+    position: Vec3,
+    surface: FootstepSurface,
+  ): FootstepActor {
+    return {
+      id: "local-player",
+      position,
+      grounded: world.character.grounded,
+      gait: footstepGaitFromAnimation(world.character.animation),
+      surface,
+      spatial: false,
+    };
+  }
+
+  function stationFootstepActors(
+    stationNpcs: readonly StationNpcRenderState[],
+    networkEntities: readonly NetworkRenderEntity[],
+  ): FootstepActor[] {
+    const actors: FootstepActor[] = stationNpcs.map((npc) => ({
+      id: `station-npc:${npc.id}`,
+      position: scenePointFromStation(npc.position),
+      grounded: true,
+      gait: footstepGaitFromAnimation(npc.animation),
+      surface: "metal",
+      spatial: true,
+      volume01: 0.72,
+    }));
+    if (world.mode === MODE_IN_STATION) {
+      actors.push(
+        localFootstepActor(
+          scenePointFromStation(world.character.position),
+          "metal",
+        ),
+      );
+    }
+    actors.push(
+      ...remoteFootstepActors(
+        networkEntities,
+        "metal",
+        scenePointFromStation,
+        (entity) => entity.stationRoomId !== null,
+      ),
+    );
+    return actors;
+  }
+
+  function remoteFootstepActors(
+    networkEntities: readonly NetworkRenderEntity[],
+    surface: FootstepSurface,
+    transformPosition: (position: Vec3) => Vec3,
+    include: (entity: NetworkRenderEntity) => boolean,
+  ): FootstepActor[] {
+    const actors: FootstepActor[] = [];
+    for (const entity of networkEntities) {
+      if (!entity.character || !include(entity)) continue;
+      actors.push({
+        id: `remote-player:${entity.id}`,
+        position: transformPosition(entity.character.position),
+        grounded: true,
+        gait: footstepGaitFromAnimation(entity.character.animation),
+        surface,
+        spatial: true,
+        volume01: 0.85,
+      });
+    }
+    return actors;
+  }
+
+  function updateSceneSounds(
+    focusPosition: Vec3,
+    stationNpcs: readonly StationNpcRenderState[],
+    networkEntities: readonly NetworkRenderEntity[],
+    dtSeconds: number,
+  ): void {
     const camera = renderer?.getCamera();
     const renderScale = renderer?.getRenderScale() ?? 1;
     const listenerWorld = camera
@@ -513,6 +622,11 @@ export function createGameLoop({
         layout?.sounds ?? [],
       );
       soundScene.update(pose);
+      footsteps.update(
+        dtSeconds,
+        pose,
+        stationFootstepActors(stationNpcs, networkEntities),
+      );
       return;
     }
 
@@ -525,15 +639,59 @@ export function createGameLoop({
         `ship:${shipInstance.id}:${shipInstance.prefabId}`,
         layout.sounds,
       );
-      soundScene.update({
+      const pose: SoundListenerPose = {
         position: { x: -local.right, y: local.up, z: local.forward },
         forward: sceneVectorFromShip(listenerForward, ship),
         up: sceneVectorFromShip(listenerUp, ship),
-      });
+      };
+      soundScene.update(pose);
+      footsteps.update(
+        dtSeconds,
+        pose,
+        [
+          ...(world.mode === MODE_ON_SHIP_DECK
+            ? [
+                localFootstepActor(
+                  scenePointFromShip(world.character.position, ship),
+                  "metal",
+                ),
+              ]
+            : []),
+          ...remoteFootstepActors(
+            networkEntities,
+            "metal",
+            (position) => scenePointFromShip(position, ship),
+            (entity) => entity.shipZoneId !== null,
+          ),
+        ],
+      );
       return;
     }
 
     soundScene.setScene(null, []);
+    const pose: SoundListenerPose = {
+      position: listenerWorld,
+      forward: listenerForward,
+      up: listenerUp,
+    };
+    footsteps.update(
+      dtSeconds,
+      pose,
+      [
+        ...(world.mode === MODE_ON_FOOT
+          ? [localFootstepActor(world.character.position, "terrain")]
+          : []),
+        ...remoteFootstepActors(
+          networkEntities,
+          "terrain",
+          (position) => position,
+          (entity) =>
+            entity.mode === MODE_ON_FOOT &&
+            entity.stationRoomId === null &&
+            entity.shipZoneId === null,
+        ),
+      ],
+    );
   }
 
   const transitionContext = {
@@ -737,12 +895,14 @@ export function createGameLoop({
       );
     }
     stationNpcPopulation.reset(seed);
+    footsteps.reset();
     onResetPeak();
   }
 
   function cleanupForTitleReturn(): void {
     boostSfx.stop();
     thrustSfx.stop();
+    footsteps.reset();
     disposeShipDeckPhysics();
     let clearedHangar = false;
     for (const instance of listShipInstances()) {
@@ -824,10 +984,6 @@ export function createGameLoop({
           return promptText;
         }
       }
-    }
-    const area = buildAreaForCurrentRoom();
-    if (area && buildRuntimeForArea(area)) {
-      return `Press ${keyLabel("hangarBuild")} — ${buildAreaLabel(area)} build mode`;
     }
     return "";
   }
@@ -987,10 +1143,6 @@ export function createGameLoop({
     world.mode = MODE_ON_FOOT;
   }
 
-  function buildAreaLabel(area: BuildArea): string {
-    return area === "apartment" ? "apartment" : "hangar";
-  }
-
   function buildRuntimes(): BuildAreaRuntime[] {
     return [build?.areas.hangar, build?.areas.apartment].filter(
       (runtime): runtime is BuildAreaRuntime => Boolean(runtime),
@@ -1012,6 +1164,13 @@ export function createGameLoop({
   function buildRuntimeForCurrentRoom(): BuildAreaRuntime | null {
     const area = buildAreaForCurrentRoom();
     return area ? buildRuntimeForArea(area) : null;
+  }
+
+  function updateBuildBtnVisibility(): void {
+    if (!buildBtnEl) return;
+    const visible =
+      Boolean(buildRuntimeForCurrentRoom()) && !(build?.terminal.isOpen() ?? false);
+    buildBtnEl.classList.toggle("is-hidden", !visible);
   }
 
   function activeBuildRuntime(): BuildAreaRuntime | null {
@@ -1272,11 +1431,6 @@ export function createGameLoop({
     weaponShopScreen?.setPowered(false);
     outfittersScreen?.setInteractive(false);
     outfittersScreen?.setPowered(false);
-
-    const currentBuildRuntime = buildRuntimeForCurrentRoom();
-    if (currentBuildRuntime && actions.hangarBuildPressed) {
-      build?.terminal.open(currentBuildRuntime.controller);
-    }
 
     const interaction = resolveStationInteraction(
       world.character as StationCharacterState,
@@ -2000,6 +2154,10 @@ export function createGameLoop({
     }
 
     stationNpcPopulation.update(STATION_SOUND_MODES.has(world.mode) ? dt : 0);
+    const stationNpcRenderStates = STATION_SOUND_MODES.has(world.mode)
+      ? stationNpcPopulation.getRenderStates()
+      : [];
+    const remoteEntities = network?.getRemoteEntities(nowMs) ?? [];
 
     const activeShip = getActiveShipBody(world);
     const focusUsesShip =
@@ -2172,10 +2330,8 @@ export function createGameLoop({
             ramp01: getActiveShipRig(world).ramp01,
             doors: doorBlends(getActiveShipRig(world)),
           },
-          networkEntities: network?.getRemoteEntities(nowMs) ?? [],
-          stationNpcs: STATION_SOUND_MODES.has(world.mode)
-            ? stationNpcPopulation.getRenderStates()
-            : [],
+          networkEntities: remoteEntities,
+          stationNpcs: stationNpcRenderStates,
           shipZoneId: world.character.deckZone ?? null,
           stationRoomId: world.character.stationRoomId ?? null,
           timeSeconds: nowMs / 1000,
@@ -2188,7 +2344,7 @@ export function createGameLoop({
     }
     window.__claudecitizenRenderStats = renderStats;
     window.__claudecitizenWorld = world;
-    updateSceneSounds(focusPosition);
+    updateSceneSounds(focusPosition, stationNpcRenderStates, remoteEntities, dt);
 
     // CSS3D bunk screen — after WebGL so the camera matrix is final.
     if (esScreen && renderer && (world.mode === MODE_IN_BED || entertainmentSystem?.isOpen())) {
@@ -2462,10 +2618,17 @@ export function createGameLoop({
       planet,
       isPointerLocked: controls.isPointerLocked(),
       nowMs,
+      weaponCrosshairVisible:
+        !paused &&
+        activeWeaponSlotId !== null &&
+        (world.mode === MODE_ON_FOOT ||
+          world.mode === MODE_ON_SHIP_DECK ||
+          world.mode === MODE_IN_STATION),
       flightDual,
       cockpitGaze,
       cockpitSpeed,
     });
+    updateBuildBtnVisibility();
 
     requestAnimationFrame(frame);
   }
@@ -2486,6 +2649,8 @@ export function createGameLoop({
     weaponShop?.close();
     outfitters?.close();
     personalInventory?.close();
+    buildBtnEl?.removeEventListener("click", onBuildBtnClick);
+    buildBtnEl?.classList.add("is-hidden");
     window.removeEventListener("resize", onEsResize);
     window.removeEventListener("resize", onWeaponShopResize);
     window.removeEventListener("resize", onOutfittersResize);
@@ -2498,6 +2663,7 @@ export function createGameLoop({
     planetPhysics?.dispose();
     planetPhysics = null;
     soundScene.dispose();
+    footsteps.dispose();
     renderer?.getStationRoot()?.userData.disposeParticleSystems?.();
   }
 

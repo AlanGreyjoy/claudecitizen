@@ -156,12 +156,14 @@ export function createPlanetVegetationManager(
     resolveAssetsReady = resolve;
   });
   let assetLoadGeneration = 0;
+  let assetsLoading = false;
 
   function startAssetCatalogLoad(): void {
     const generation = ++assetLoadGeneration;
     const previousGrass = assets.grass;
     const previousTrees = assets.trees;
     assetsReady = false;
+    assetsLoading = true;
     if (!resolveAssetsReady) {
       assetsReadyPromise = new Promise<void>((resolve) => {
         resolveAssetsReady = resolve;
@@ -198,6 +200,7 @@ export function createPlanetVegetationManager(
         disposeInstancedAssets(previousTrees);
         assets = catalog;
         assetsReady = true;
+        assetsLoading = false;
         resolveAssetsReady?.();
         resolveAssetsReady = null;
         rebuildEverything();
@@ -207,8 +210,6 @@ export function createPlanetVegetationManager(
       },
     );
   }
-
-  startAssetCatalogLoad();
 
   function updateCachePeak(): void {
     cacheStats.peakCachedTiles = Math.max(
@@ -403,6 +404,7 @@ export function createPlanetVegetationManager(
 
   async function waitForAssets(timeoutMs = 15_000): Promise<boolean> {
     if (assetsReady) return true;
+    if (!assetsLoading) startAssetCatalogLoad();
     let settled = false;
     await Promise.race([
       assetsReadyPromise.then(() => {
@@ -752,8 +754,11 @@ export function createPlanetVegetationManager(
     buildFocusPosition = bodyPosition;
     const selectedKeys = new Set<string>();
     const keepKeys = new Set<string>();
-    const vegetationVisible =
-      isVegetationVisibleAtAltitude(altitudeMeters) && assetsReady;
+    const vegetationInRange = isVegetationVisibleAtAltitude(altitudeMeters);
+    if (vegetationInRange && !assetsReady && !assetsLoading) {
+      startAssetCatalogLoad();
+    }
+    const vegetationVisible = vegetationInRange && assetsReady;
 
     if (vegetationVisible) {
       const decoratedTiles = selectVegetationTiles(
@@ -892,7 +897,10 @@ export function createPlanetVegetationManager(
       next.tree.maxScale === vegetationSettings.tree.maxScale;
     vegetationSettings = next;
     if (assetsChanged) {
-      startAssetCatalogLoad();
+      // Before the player approaches the surface, retain only the authored
+      // settings. An explicit warm or the first in-range update starts the
+      // catalog load with the final URLs, avoiding orbital-spawn asset work.
+      if (assetsReady || assetsLoading) startAssetCatalogLoad();
       return;
     }
     if (!assetsReady || numbersUnchanged) return;

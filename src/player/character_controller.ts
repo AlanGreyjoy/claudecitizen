@@ -31,8 +31,8 @@ import {
 import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
-export const WALK_SPEED_METERS_PER_SECOND = 4.2;
-export const SPRINT_SPEED_METERS_PER_SECOND = 7.9;
+export const WALK_SPEED_METERS_PER_SECOND = 2.8;
+export const SPRINT_SPEED_METERS_PER_SECOND = 5.3;
 const AIR_CONTROL = 0.18;
 /** ~1.4 m apex at Earth gravity — snappy, not moon-bounce. */
 export const JUMP_SPEED_METERS_PER_SECOND = 5.2;
@@ -163,6 +163,42 @@ function updateGroundJumpState(
   return state.jumpPhaseTime + dt >= JUMP_LAND_SECONDS
     ? "grounded"
     : "jump-land";
+}
+
+export interface JumpAnimationPhaseState {
+  jumpPhase: JumpPhase;
+  jumpPhaseTime: number;
+}
+
+/** Advance animation-only jump phases for Rapier-controlled walkers. */
+export function advanceJumpAnimationPhase(
+  state: Pick<CharacterState, "jumpPhase" | "jumpPhaseTime">,
+  dt: number,
+  airborne: boolean,
+  startedJump: boolean,
+): JumpAnimationPhaseState {
+  if (startedJump) return { jumpPhase: "jump-start", jumpPhaseTime: 0 };
+
+  const elapsed = state.jumpPhase === "grounded"
+    ? 0
+    : state.jumpPhaseTime + Math.max(0, dt);
+  if (airborne) {
+    if (state.jumpPhase === "jump-start" && elapsed < JUMP_START_SECONDS) {
+      return { jumpPhase: "jump-start", jumpPhaseTime: elapsed };
+    }
+    return {
+      jumpPhase: "jump-loop",
+      jumpPhaseTime: state.jumpPhase === "jump-loop" ? elapsed : 0,
+    };
+  }
+
+  if (state.jumpPhase === "jump-start" || state.jumpPhase === "jump-loop") {
+    return { jumpPhase: "jump-land", jumpPhaseTime: 0 };
+  }
+  if (state.jumpPhase === "jump-land" && elapsed < JUMP_LAND_SECONDS) {
+    return { jumpPhase: "jump-land", jumpPhaseTime: elapsed };
+  }
+  return { jumpPhase: "grounded", jumpPhaseTime: 0 };
 }
 
 export interface LocomotionMotionInput {

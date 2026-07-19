@@ -17,5 +17,6 @@ export {
 } from './schema';
 export {
   getDefaultAnimationController,
+  loadCurrentDefaultAnimationController,
   locomotionFromGameplay,
 } from './default_controller';

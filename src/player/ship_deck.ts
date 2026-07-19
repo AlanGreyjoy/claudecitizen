@@ -9,6 +9,7 @@ import {
   vec3,
 } from "../math/vec3";
 import {
+  advanceJumpAnimationPhase,
   JUMP_SPEED_METERS_PER_SECOND,
   animationFromState,
   ORBIT_PITCH_LIMIT,
@@ -672,7 +673,8 @@ function updateCharacterOnDeckRapier(
   if (groundedBefore && verticalVelocity <= 0) {
     verticalVelocity = 0;
   }
-  if (input.jumpPressed && groundedBefore) {
+  const startedJump = Boolean(input.jumpPressed && groundedBefore);
+  if (startedJump) {
     verticalVelocity = JUMP_SPEED_METERS_PER_SECOND;
   }
   verticalVelocity -= gravityMetersPerSecond2 * dt;
@@ -706,19 +708,14 @@ function updateCharacterOnDeckRapier(
         state.deckExitGraceFrames ?? 0,
       );
 
-  const airborne = !grounded || verticalVelocity > 0.15;
+  const airborne = startedJump || !grounded || verticalVelocity > 0.15;
+  const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   return {
     dismounted: flags.leftDeck,
     fellOffDeck: flags.leftDeck,
     state: {
       animation: animationFromState(
-        {
-          jumpPhase: airborne
-            ? verticalVelocity > 0.5
-              ? "jump-start"
-              : "jump-loop"
-            : "grounded",
-        },
+        jump,
         moveMagnitude > 0.08,
         wantsSprint,
         stanceId,
@@ -730,12 +727,8 @@ function updateCharacterOnDeckRapier(
           ? normalize(tangentize(state.forward, ship.up))
           : normalize(tangentize(forward, ship.up)),
       grounded: !airborne,
-      jumpPhase: airborne
-        ? verticalVelocity > 0.5
-          ? "jump-start"
-          : "jump-loop"
-        : "grounded",
-      jumpPhaseTime: 0,
+      jumpPhase: jump.jumpPhase,
+      jumpPhaseTime: jump.jumpPhaseTime,
       position,
       up: ship.up,
       velocity,
