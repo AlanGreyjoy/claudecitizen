@@ -1,10 +1,17 @@
 import type { ItemDefinition, ItemType } from '../../../player/inventory/types';
+import {
+  getPartMeshUrl,
+  getPresetParts,
+  loadSidekickCatalog,
+} from '../../../player/character_creator/sidekick_catalog';
+import { wearablePartTypes } from '../../../player/inventory/wearable_visuals';
 import { getModelThumbnail } from '../../editor/thumbnails';
 import { loadPrefabDocument } from '../../../world/prefabs/loader';
 import type { PrefabEntity } from '../../../world/prefabs/schema';
 
 const prefabAssetCache = new Map<string, Promise<string | null>>();
 const prefabThumbCache = new Map<string, Promise<string>>();
+const wearableThumbCache = new Map<string, Promise<string>>();
 
 const TYPE_LABELS: Record<ItemType, string> = {
   consumable: 'CON',
@@ -47,6 +54,26 @@ function getPrefabThumbnail(prefabId: string): Promise<string> {
   return pending;
 }
 
+function getWearableThumbnail(definition: ItemDefinition): Promise<string> {
+  const presetId = definition.sidekickPartPresetId;
+  const slotType = definition.wearableSlotType;
+  if (typeof presetId !== 'number' || !slotType) return Promise.resolve('');
+  const cacheKey = `${presetId}:${slotType}`;
+  let pending = wearableThumbCache.get(cacheKey);
+  if (!pending) {
+    pending = loadSidekickCatalog().then(async (catalog) => {
+      const allowedTypes = wearablePartTypes([slotType]);
+      const representative = getPresetParts(catalog, presetId).find((part) =>
+        allowedTypes.has(part.type),
+      );
+      const meshUrl = representative ? getPartMeshUrl(catalog, representative.name) : null;
+      return meshUrl ? getModelThumbnail(meshUrl) : '';
+    }).catch(() => '');
+    wearableThumbCache.set(cacheKey, pending);
+  }
+  return pending;
+}
+
 function applyPlaceholder(slot: HTMLElement, itemType: ItemType): void {
   slot.replaceChildren();
   const placeholder = document.createElement('span');
@@ -77,6 +104,14 @@ function applyImage(slot: HTMLElement, src: string, itemType: ItemType): void {
 export function paintItemIcon(slot: HTMLElement, definition: ItemDefinition): void {
   if (definition.iconUrl) {
     applyImage(slot, definition.iconUrl, definition.itemType);
+    return;
+  }
+
+  if (definition.wearableSlotType && definition.sidekickPartPresetId) {
+    applyPlaceholder(slot, definition.itemType);
+    void getWearableThumbnail(definition).then((thumb) => {
+      if (thumb) applyImage(slot, thumb, definition.itemType);
+    });
     return;
   }
 

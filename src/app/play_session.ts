@@ -606,12 +606,15 @@ export async function startPlaySession(
     {
       rootEl: requireElement<HTMLElement>('personal-inventory'),
       searchEl: requireElement<HTMLInputElement>('personal-inventory-search'),
+      sortEl: requireElement<HTMLSelectElement>('personal-inventory-sort'),
       capacityFillEl: requireElement<HTMLElement>('personal-inventory-capacity-fill'),
       capacityLabelEl: requireElement<HTMLElement>('personal-inventory-capacity-label'),
       filtersEl: requireElement<HTMLElement>('personal-inventory-filters'),
       gridEl: requireElement<HTMLElement>('personal-inventory-grid'),
       weaponBarsEl: requireElement<HTMLElement>('personal-inventory-weapon-bars'),
       gearSlotsEl: requireElement<HTMLElement>('personal-inventory-gear-slots'),
+      detailEl: requireElement<HTMLElement>('personal-inventory-detail'),
+      avatarCanvasEl: requireElement<HTMLCanvasElement>('personal-inventory-avatar-canvas'),
       statusEl: requireElement<HTMLElement>('personal-inventory-status'),
       quickEquipBtnEl: requireElement<HTMLButtonElement>('personal-inventory-quick-equip'),
       closeBtnEl: requireElement<HTMLButtonElement>('personal-inventory-close'),
@@ -619,6 +622,7 @@ export async function startPlaySession(
     {
       playerControls: controls,
       getInventory: () => inventoryState,
+      characterAppearance: bootstrap?.player.characterAppearance ?? null,
       onInventoryResult: (inventory) => {
         inventoryState = normalizeInventoryState(inventory);
         personalInventory.refresh();

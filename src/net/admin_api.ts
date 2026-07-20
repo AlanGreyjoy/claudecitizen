@@ -1,5 +1,6 @@
 import { apiUrl } from './api';
 import type { WeaponSlotType } from '../types/equipment';
+import type { WearableSlotType } from '../player/inventory/types';
 
 export interface AdminSession {
   email: string;
@@ -115,6 +116,9 @@ export interface ItemDefinition {
   stackMax: number;
   costArc: number;
   rarity: string;
+  wearableSlotType?: WearableSlotType;
+  occupiedSlotTypes?: WearableSlotType[];
+  sidekickPartPresetId?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -161,6 +165,26 @@ export interface BackpackDefinitionInput {
   rarity: string;
   capacityLiters: number;
   emptyMassKg: number;
+}
+
+export interface WearableDefinition extends ItemDefinition {
+  wearableSlotType: WearableSlotType;
+  occupiedSlotTypes: WearableSlotType[];
+  sidekickPartPresetId: number;
+}
+
+export interface WearableDefinitionInput {
+  name: string;
+  description: string;
+  itemType: 'armor' | 'clothing';
+  subType: string;
+  prefabId: string | null;
+  iconUrl: string | null;
+  costArc: number;
+  rarity: string;
+  wearableSlotType: WearableSlotType;
+  occupiedSlotTypes: WearableSlotType[];
+  sidekickPartPresetId: number;
 }
 
 export interface PropDefinition {
@@ -421,6 +445,35 @@ export function updateBackpackDefinition(
 
 export function deleteBackpackDefinition(id: string): Promise<void> {
   return requestAdminJson<void>(`/admin/backpacks/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function listWearableDefinitions(): Promise<WearableDefinition[]> {
+  return requestAdminJson<WearableDefinition[]>('/admin/wearables', { method: 'GET' });
+}
+
+export function createWearableDefinition(
+  body: WearableDefinitionInput,
+): Promise<WearableDefinition> {
+  return requestAdminJson<WearableDefinition>('/admin/wearables', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateWearableDefinition(
+  id: string,
+  body: Partial<WearableDefinitionInput>,
+): Promise<WearableDefinition> {
+  return requestAdminJson<WearableDefinition>(`/admin/wearables/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteWearableDefinition(id: string): Promise<void> {
+  return requestAdminJson<void>(`/admin/wearables/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

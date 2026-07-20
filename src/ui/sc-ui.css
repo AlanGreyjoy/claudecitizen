@@ -3127,6 +3127,21 @@ kbd {
   max-width: 720px;
 }
 
+.sc-admin-check-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sc-admin-check-grid label {
+  padding: 8px;
+  border: 1px solid rgba(90, 190, 255, 0.2);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--admin-text);
+  font: 500 13px/1 var(--admin-font);
+  text-transform: capitalize;
+}
+
 .sc-admin-field {
   display: flex;
   flex-direction: column;
@@ -3138,6 +3153,43 @@ kbd {
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--admin-muted);
+}
+
+.sc-admin-icon-url {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sc-admin-icon-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sc-admin-icon-url-row .sc-admin-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sc-admin-icon-url-row .sc-admin-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.sc-admin-icon-preview {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  image-rendering: auto;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.08) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.08) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  border: 1px solid rgba(90, 190, 255, 0.28);
 }
 
 .sc-admin-input,
@@ -3350,13 +3402,93 @@ kbd {
 }
 
 .sc-personal-inv.is-embedded.is-open {
-  display: grid;
+  display: block;
   pointer-events: auto;
 }
 
-.sc-personal-inv.is-embedded .sc-personal-inv-left {
-  margin: 16px;
-  max-height: calc(100% - 32px);
+.sc-personal-inv.is-embedded .sc-personal-inv-shell {
+  inset: 8px;
+  overflow-y: auto;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-header {
+  padding: 10px 12px;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-workspace {
+  display: block;
+  min-height: auto;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-browser {
+  height: min(42vh, 320px);
+  border-right: 0;
+  border-bottom: 1px solid rgba(86, 153, 197, 0.22);
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-presentation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 40%);
+  gap: 8px;
+  padding: 8px;
+  overflow: visible;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-avatar-stage {
+  display: none;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  pointer-events: auto;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot {
+  position: static;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  width: auto;
+  height: 64px;
+  gap: 2px 6px;
+  text-align: left;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-icon {
+  grid-row: 1 / 4;
+  width: 40px;
+  height: 40px;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-label,
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-name,
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots .sc-personal-inv-loadout-linked {
+  grid-column: 2;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-name,
+.sc-personal-inv.is-embedded .sc-personal-inv-gear-slots .sc-personal-inv-loadout-linked {
+  display: block;
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-detail-panel {
+  position: static;
+  grid-column: 2;
+  grid-row: 1;
+  width: auto;
+  max-height: none;
+}
+
+.sc-personal-inv.is-embedded .sc-personal-inv-weapon-bars {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 8px 0 0;
 }
 
 .sc-weapon-shop.is-embedded,
@@ -5231,459 +5363,878 @@ kbd {
 
 /* —— Personal inventory (I key) —— */
 .sc-personal-inv {
+  --sc-personal-inv-panel-bg: linear-gradient(145deg, rgba(5, 13, 24, 0.84), rgba(5, 12, 21, 0.63));
   position: fixed;
   inset: 0;
   z-index: 80;
   display: none;
-  pointer-events: none;
-  color: rgba(210, 230, 255, 0.95);
+  color: rgba(220, 237, 255, 0.96);
   font-family: 'Rajdhani', 'Segoe UI', sans-serif;
 }
 
 .sc-personal-inv.is-open {
+  display: block;
+}
+
+.sc-personal-inv-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 9, 17, 0.2);
+  -webkit-backdrop-filter: blur(18px) saturate(0.72);
+  backdrop-filter: blur(18px) saturate(0.72);
+}
+
+.sc-personal-inv-shell {
+  position: absolute;
+  inset: clamp(14px, 2.2vw, 36px);
   display: grid;
-  grid-template-columns: minmax(320px, 42%) 1fr;
-  pointer-events: none;
-}
-
-.sc-personal-inv-left {
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 28px 0 28px 28px;
-  padding: 18px 18px 12px;
-  max-height: calc(100vh - 56px);
-  background:
-    linear-gradient(160deg, rgba(10, 18, 32, 0.92), rgba(8, 14, 24, 0.88)),
-    rgba(6, 10, 18, 0.85);
-  border: 1px solid rgba(90, 140, 200, 0.28);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  max-width: 1800px;
+  margin: auto;
   overflow: hidden;
+  pointer-events: auto;
+  border: 1px solid rgba(96, 174, 222, 0.34);
+  background: transparent;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58), inset 0 0 0 1px rgba(126, 205, 246, 0.03);
 }
 
-.sc-personal-inv-right {
+.sc-personal-inv-shell::before {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
-  position: relative;
-  min-height: 100%;
+  content: '';
+  background:
+    linear-gradient(90deg, rgba(102, 199, 245, 0.38), transparent 18%) top left / 46% 2px no-repeat,
+    linear-gradient(180deg, rgba(102, 199, 245, 0.2), transparent 12%) top left / 1px 60% no-repeat;
 }
 
 .sc-personal-inv-header {
+  z-index: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20px;
+  padding: 17px 20px 13px;
+  border-bottom: 1px solid rgba(91, 159, 205, 0.18);
+  background: var(--sc-personal-inv-panel-bg);
 }
 
 .sc-personal-inv-kicker {
   display: block;
-  font: 600 11px/1 var(--sc-mono, monospace);
-  letter-spacing: 0.16em;
+  font: 600 10px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(120, 180, 230, 0.7);
+  color: rgba(116, 190, 232, 0.72);
 }
 
 .sc-personal-inv-title {
-  margin: 4px 0 0;
-  font: 700 28px/1 'Rajdhani', sans-serif;
-  letter-spacing: 0.08em;
+  margin: 5px 0 0;
+  font: 700 clamp(25px, 2vw, 34px)/0.9 'Rajdhani', sans-serif;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .sc-personal-inv-header-tools {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.sc-personal-inv-search {
-  width: 140px;
-  padding: 6px 10px;
-  border: 1px solid rgba(90, 140, 200, 0.35);
-  background: rgba(0, 0, 0, 0.35);
-  color: inherit;
-  font: 500 13px/1.2 'Rajdhani', sans-serif;
-}
-
-.sc-personal-inv-quick-equip,
-.sc-personal-inv-close {
-  border: 1px solid rgba(90, 140, 200, 0.4);
-  background: rgba(30, 50, 80, 0.55);
-  color: inherit;
-  font: 600 12px/1 'Rajdhani', sans-serif;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 7px 10px;
-  cursor: pointer;
-}
-
-.sc-personal-inv-quick-equip:hover:not(:disabled),
-.sc-personal-inv-close:hover {
-  background: rgba(50, 90, 140, 0.65);
-}
-
-.sc-personal-inv-quick-equip:disabled {
-  opacity: 0.45;
-  cursor: default;
+  gap: 9px;
+  min-width: 0;
 }
 
 .sc-personal-inv-capacity {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
+  grid-template-columns: minmax(90px, 170px) auto;
+  gap: 9px;
   align-items: center;
+  margin-right: 6px;
 }
 
 .sc-personal-inv-capacity-track {
-  height: 8px;
-  background: rgba(20, 30, 48, 0.9);
-  border: 1px solid rgba(90, 140, 200, 0.25);
+  height: 5px;
   overflow: hidden;
+  border: 1px solid rgba(87, 156, 201, 0.33);
+  background: rgba(3, 9, 17, 0.86);
 }
 
 .sc-personal-inv-capacity-fill {
-  height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, rgba(70, 160, 220, 0.85), rgba(120, 210, 255, 0.95));
+  height: 100%;
+  background: linear-gradient(90deg, #4aa8d4, #77d8fc);
+  box-shadow: 0 0 9px rgba(90, 196, 242, 0.5);
   transition: width 120ms linear;
 }
 
 .sc-personal-inv-capacity-label {
-  font: 600 12px/1 var(--sc-mono, monospace);
-  letter-spacing: 0.04em;
-  color: rgba(160, 200, 240, 0.85);
   white-space: nowrap;
+  color: rgba(172, 211, 238, 0.84);
+  font: 600 10px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.04em;
 }
 
-.sc-personal-inv-filters {
+.sc-personal-inv-search,
+.sc-personal-inv-sort {
+  height: 34px;
+  border: 1px solid rgba(88, 157, 204, 0.36);
+  outline: 0;
+  background: rgba(2, 8, 16, 0.72);
+  color: rgba(220, 237, 255, 0.95);
+  font: 500 13px/1 'Rajdhani', sans-serif;
+}
+
+.sc-personal-inv-search {
+  width: clamp(130px, 14vw, 220px);
+  padding: 0 11px;
+}
+
+.sc-personal-inv-search:focus,
+.sc-personal-inv-sort:focus {
+  border-color: rgba(111, 204, 250, 0.88);
+  box-shadow: 0 0 0 1px rgba(111, 204, 250, 0.22);
+}
+
+.sc-personal-inv-sort-label {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
 }
 
-.sc-personal-inv-filter {
-  border: 1px solid rgba(90, 140, 200, 0.28);
-  background: rgba(0, 0, 0, 0.28);
-  color: rgba(170, 200, 230, 0.85);
-  font: 600 11px/1 'Rajdhani', sans-serif;
-  letter-spacing: 0.08em;
+.sc-personal-inv-sort-label > span {
+  position: absolute;
+  z-index: 1;
+  left: 9px;
+  pointer-events: none;
+  color: rgba(116, 171, 209, 0.66);
+  font: 600 8px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 6px 8px;
+}
+
+.sc-personal-inv-sort {
+  min-width: 110px;
+  padding: 10px 26px 0 8px;
+}
+
+.sc-personal-inv-close {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(96, 168, 214, 0.42);
+  background: rgba(20, 43, 66, 0.48);
+  color: inherit;
   cursor: pointer;
 }
 
+.sc-personal-inv-close:hover {
+  border-color: rgba(120, 213, 255, 0.86);
+  background: rgba(39, 80, 110, 0.62);
+}
+
+.sc-personal-inv-filters {
+  z-index: 1;
+  display: flex;
+  gap: 5px;
+  padding: 8px 20px 9px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(88, 154, 198, 0.2);
+  background: var(--sc-personal-inv-panel-bg);
+}
+
+.sc-personal-inv-filter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(81, 144, 187, 0.27);
+  background: rgba(4, 12, 22, 0.58);
+  color: rgba(158, 196, 224, 0.8);
+  cursor: pointer;
+  font: 600 10px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-personal-inv-filter:hover,
+.sc-personal-inv-filter:focus-visible {
+  border-color: rgba(103, 190, 235, 0.66);
+  color: rgba(225, 243, 255, 0.96);
+}
+
 .sc-personal-inv-filter.is-active {
-  border-color: rgba(120, 190, 255, 0.7);
-  background: rgba(40, 80, 130, 0.55);
-  color: #fff;
+  border-color: rgba(110, 204, 250, 0.9);
+  background: linear-gradient(180deg, rgba(47, 109, 148, 0.6), rgba(20, 56, 82, 0.64));
+  color: #f1fbff;
+  box-shadow: inset 0 -2px 0 rgba(116, 213, 255, 0.68);
+}
+
+.sc-personal-inv-filter-icon {
+  opacity: 0.88;
+}
+
+.sc-personal-inv-workspace {
+  display: grid;
+  grid-template-columns: minmax(380px, 46%) minmax(520px, 54%);
+  min-height: 0;
+}
+
+.sc-personal-inv-browser {
+  min-width: 0;
+  min-height: 0;
+  padding: 15px 13px 15px 20px;
+  overflow: hidden;
+  border-right: 1px solid rgba(86, 153, 197, 0.22);
+  background: var(--sc-personal-inv-panel-bg);
 }
 
 .sc-personal-inv-grid {
-  flex: 1;
-  min-height: 160px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
   align-content: start;
+  gap: 7px;
+  height: 100%;
+  min-height: 170px;
+  padding: 1px 6px 1px 1px;
   overflow: auto;
-  padding-right: 4px;
+  scrollbar-color: rgba(103, 178, 220, 0.46) rgba(3, 9, 17, 0.38);
 }
 
 .sc-personal-inv-grid.is-drop-ok {
-  outline: 1px dashed rgba(120, 210, 160, 0.7);
-  outline-offset: 2px;
+  outline: 1px dashed rgba(111, 225, 171, 0.74);
+  outline-offset: -3px;
 }
 
 .sc-personal-inv-empty {
   grid-column: 1 / -1;
-  margin: 12px 0;
-  color: rgba(150, 180, 210, 0.7);
-  font: 500 14px/1.3 'Rajdhani', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 18px 4px;
+  color: rgba(136, 174, 204, 0.64);
+}
+
+.sc-personal-inv-empty strong {
+  color: rgba(191, 218, 238, 0.83);
+  font: 600 16px/1 'Rajdhani', sans-serif;
 }
 
 .sc-personal-inv-grid-slot {
   position: relative;
   aspect-ratio: 1;
-  border: 1px solid rgba(90, 140, 200, 0.3);
-  background: rgba(12, 20, 34, 0.85);
-  cursor: grab;
+  min-width: 0;
   padding: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(75, 134, 176, 0.31);
+  outline: none;
+  background:
+    linear-gradient(135deg, rgba(27, 47, 67, 0.25), transparent 45%),
+    rgba(5, 13, 24, 0.78);
+  color: inherit;
+  cursor: grab;
+}
+
+.sc-personal-inv-grid-slot::after {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 11px;
+  height: 1px;
+  content: '';
+  background: rgba(110, 200, 244, 0.48);
+}
+
+.sc-personal-inv-grid-slot:hover,
+.sc-personal-inv-grid-slot:focus-visible {
+  border-color: rgba(111, 198, 242, 0.72);
+  background-color: rgba(17, 43, 63, 0.82);
 }
 
 .sc-personal-inv-grid-slot.is-selected {
-  border-color: rgba(140, 210, 255, 0.85);
-  box-shadow: inset 0 0 0 1px rgba(140, 210, 255, 0.35);
+  border-color: rgba(139, 220, 255, 0.98);
+  box-shadow: inset 0 0 0 2px rgba(94, 182, 229, 0.28), 0 0 14px rgba(68, 162, 211, 0.12);
 }
 
-.sc-personal-inv-grid-slot.is-dragging {
-  opacity: 0.45;
-}
+.sc-personal-inv-grid-slot.is-rarity-uncommon { border-bottom-color: rgba(83, 200, 141, 0.8); }
+.sc-personal-inv-grid-slot.is-rarity-rare { border-bottom-color: rgba(68, 147, 248, 0.9); }
+.sc-personal-inv-grid-slot.is-rarity-epic { border-bottom-color: rgba(177, 96, 241, 0.9); }
+.sc-personal-inv-grid-slot.is-rarity-legendary { border-bottom-color: rgba(241, 174, 69, 0.96); }
+.sc-personal-inv-grid-slot.is-dragging { opacity: 0.42; }
 
 .sc-personal-inv-grid-icon,
-.sc-personal-inv-slot-icon {
-  width: 100%;
-  height: 100%;
+.sc-personal-inv-loadout-slot-icon,
+.sc-personal-inv-detail-icon {
   display: grid;
   place-items: center;
+  overflow: hidden;
+}
+
+.sc-personal-inv-grid-icon {
+  width: 100%;
+  height: 100%;
 }
 
 .sc-personal-inv-grid-icon img,
 .sc-personal-inv-grid-icon .sc-haloband-inventory-icon,
-.sc-personal-inv-slot-icon img,
-.sc-personal-inv-slot-icon .sc-haloband-inventory-icon {
-  max-width: 100%;
-  max-height: 100%;
+.sc-personal-inv-loadout-slot-icon img,
+.sc-personal-inv-loadout-slot-icon .sc-haloband-inventory-icon,
+.sc-personal-inv-detail-icon img,
+.sc-personal-inv-detail-icon .sc-haloband-inventory-icon {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
 .sc-personal-inv-grid-qty {
   position: absolute;
-  right: 4px;
-  bottom: 3px;
-  font: 700 11px/1 var(--sc-mono, monospace);
-  color: rgba(230, 240, 255, 0.95);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  right: 6px;
+  bottom: 6px;
+  z-index: 1;
+  font: 700 10px/1 var(--sc-mono, monospace);
+  text-shadow: 0 1px 3px #000;
 }
 
 .sc-personal-inv-equipped-badge {
   position: absolute;
-  left: 4px;
-  top: 3px;
-  font: 700 10px/1 var(--sc-mono, monospace);
-  color: rgba(120, 230, 170, 0.95);
+  top: 5px;
+  left: 5px;
+  z-index: 1;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid rgba(104, 235, 169, 0.74);
+  background: rgba(7, 45, 34, 0.82);
+  color: rgba(139, 255, 196, 0.98);
+  font: 700 9px/1 var(--sc-mono, monospace);
 }
 
-.sc-personal-inv-weapon-bars {
+.sc-personal-inv-presentation {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--sc-personal-inv-panel-bg);
+}
+
+.sc-personal-inv-avatar-stage {
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 43%, rgba(49, 126, 162, 0.16), transparent 42%);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.sc-personal-inv-avatar-canvas {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: ew-resize;
+  touch-action: none;
+  transition: opacity 180ms ease;
+}
+
+.sc-personal-inv-avatar-canvas.is-active[data-state='ready'],
+.sc-personal-inv-avatar-canvas.is-active[data-state='loading'] {
+  opacity: 1;
+}
+
+.sc-personal-inv-avatar-stage.is-rotating {
+  cursor: grabbing;
+}
+
+.sc-personal-inv-avatar-label,
+.sc-personal-inv-avatar-rotate {
+  position: absolute;
+  z-index: 2;
+  left: 18px;
+  pointer-events: none;
+  color: rgba(115, 180, 215, 0.56);
+  font: 600 9px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.sc-personal-inv-avatar-label { top: 16px; }
+.sc-personal-inv-avatar-rotate { bottom: 13px; }
+
+.sc-personal-inv-gear-slots {
+  position: absolute;
+  z-index: 3;
+  inset: 45px 330px 108px 0;
+  pointer-events: none;
+}
+
+.sc-personal-inv-loadout-slot {
+  min-width: 0;
+  border: 1px solid rgba(78, 145, 187, 0.36);
+  outline: 0;
+  background: linear-gradient(145deg, rgba(8, 20, 34, 0.86), rgba(4, 11, 20, 0.72));
+  color: inherit;
+  cursor: pointer;
+}
+
+.sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot {
+  position: absolute;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 78px;
+  height: 78px;
+  padding: 5px;
+  border: none;
+  pointer-events: auto;
+}
+
+.sc-personal-inv-gear-slots > [data-slot-id='head'] { top: 1%; left: 6%; }
+.sc-personal-inv-gear-slots > [data-slot-id='torso'] { top: 25%; left: 1%; }
+.sc-personal-inv-gear-slots > [data-slot-id='arms'] { top: 49%; left: 4%; }
+.sc-personal-inv-gear-slots > [data-slot-id='legs'] { right: 4%; bottom: 23%; }
+.sc-personal-inv-gear-slots > [data-slot-id='feet'] { right: 10%; bottom: 1%; }
+.sc-personal-inv-gear-slots > [data-slot-id='backpack'] { top: 27%; right: 1%; }
+
+.sc-personal-inv-loadout-slot:hover,
+.sc-personal-inv-loadout-slot:focus-visible,
+.sc-personal-inv-loadout-slot.is-filled {
+  background: linear-gradient(145deg, rgba(12, 32, 48, 0.9), rgba(6, 16, 28, 0.78));
+}
+
+.sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot:hover,
+.sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot:focus-visible,
+.sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot.is-filled,
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot:hover,
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot:focus-visible,
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot.is-filled {
+  border: none;
+  background: linear-gradient(145deg, rgba(12, 32, 48, 0.9), rgba(6, 16, 28, 0.78));
+}
+
+.sc-personal-inv-loadout-slot.is-reserved {
+  background: rgba(24, 47, 63, 0.64);
+}
+
+.sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot.is-reserved,
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot.is-reserved {
+  border: none;
+}
+
+.sc-personal-inv-loadout-slot-label {
+  overflow: hidden;
+  color: rgba(135, 188, 222, 0.76);
+  font: 600 8px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sc-personal-inv-loadout-slot-icon {
+  width: 100%;
+  min-height: 0;
+}
+
+.sc-personal-inv-loadout-slot-name,
+.sc-personal-inv-loadout-linked {
+  display: none;
+}
+
+.sc-personal-inv-slot-ghost {
+  color: rgba(101, 151, 184, 0.42);
+  font: 600 8px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-personal-inv-loadout-slot.is-drop-ok {
+  box-shadow: 0 0 0 2px rgba(107, 239, 173, 0.22);
+}
+
+.sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot.is-drop-ok,
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot.is-drop-ok {
+  border: none;
+  box-shadow: 0 0 0 2px rgba(107, 239, 173, 0.22);
+}
+
+.sc-personal-inv-loadout-slot.is-drop-bad {
+  box-shadow: 0 0 0 2px rgba(255, 110, 110, 0.2);
+}
+
+.sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot.is-drop-bad,
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot.is-drop-bad {
+  border: none;
+  box-shadow: 0 0 0 2px rgba(255, 110, 110, 0.2);
+}
+
+.sc-personal-inv-detail-panel {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  right: 18px;
+  display: grid;
+  width: min(320px, 34%);
+  max-height: calc(100% - 130px);
+  padding: 13px;
+  overflow: auto;
+  border: 1px solid rgba(81, 150, 194, 0.31);
+  background: var(--sc-personal-inv-panel-bg);
+}
+
+.sc-personal-inv-detail {
+  min-width: 0;
+}
+
+.sc-personal-inv-detail-top {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+}
+
+.sc-personal-inv-detail-icon {
+  width: 68px;
+  height: 68px;
+  border: 1px solid rgba(83, 153, 196, 0.3);
+  background: rgba(3, 9, 17, 0.46);
+}
+
+.sc-personal-inv-detail-identity {
+  min-width: 0;
+}
+
+.sc-personal-inv-detail-rarity {
+  color: rgba(173, 206, 230, 0.78);
+  font: 700 9px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sc-personal-inv-detail-rarity.is-rarity-uncommon { color: #75dda6; }
+.sc-personal-inv-detail-rarity.is-rarity-rare { color: #75b9ff; }
+.sc-personal-inv-detail-rarity.is-rarity-epic { color: #c793fa; }
+.sc-personal-inv-detail-rarity.is-rarity-legendary { color: #f0bc69; }
+
+.sc-personal-inv-detail-identity h3 {
+  margin: 5px 0 3px;
+  overflow: hidden;
+  font: 700 20px/1 'Rajdhani', sans-serif;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+}
+
+.sc-personal-inv-detail-type {
+  color: rgba(122, 174, 208, 0.72);
+  font: 600 9px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-personal-inv-detail-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  flex: 0 0 auto;
-  padding-top: 8px;
-  border-top: 1px solid rgba(90, 140, 200, 0.22);
+  gap: 5px;
+  margin-top: 12px;
 }
 
-.sc-personal-inv-loadout-heading {
-  grid-column: 1 / -1;
+.sc-personal-inv-detail-stat {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  color: rgba(160, 200, 240, 0.88);
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 7px;
+  border-left: 1px solid rgba(97, 181, 224, 0.38);
+  background: rgba(12, 30, 45, 0.36);
+  color: rgba(117, 166, 197, 0.74);
+  font: 600 8px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sc-personal-inv-detail-stat strong {
+  overflow: hidden;
+  color: rgba(219, 237, 250, 0.92);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.sc-personal-inv-detail-description,
+.sc-personal-inv-detail-empty {
+  margin: 12px 0 0;
+  color: rgba(177, 205, 224, 0.78);
+  font: 500 12px/1.35 'Rajdhani', sans-serif;
+}
+
+.sc-personal-inv-quick-equip {
+  width: 100%;
+  min-height: 35px;
+  margin-top: 12px;
+  border: 1px solid rgba(230, 174, 78, 0.68);
+  background: linear-gradient(180deg, rgba(128, 88, 32, 0.72), rgba(75, 49, 19, 0.72));
+  color: rgba(255, 235, 194, 0.98);
+  cursor: pointer;
   font: 700 11px/1 var(--sc-mono, monospace);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.sc-personal-inv-loadout-hint {
-  color: rgba(120, 160, 200, 0.58);
-  font-size: 9px;
-  letter-spacing: 0.05em;
-  text-align: right;
+.sc-personal-inv-quick-equip:hover:not(:disabled) {
+  border-color: rgba(255, 207, 119, 0.96);
+  background: linear-gradient(180deg, rgba(156, 108, 39, 0.83), rgba(93, 61, 22, 0.82));
 }
 
-.sc-personal-inv-weapon-bar {
-  position: relative;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  grid-template-rows: auto 1fr auto;
-  grid-template-areas:
-    'preview label'
-    'preview name'
-    'preview attachments';
-  gap: 5px 10px;
-  min-height: 114px;
-  padding: 8px;
-  border: 1px solid rgba(90, 140, 200, 0.22);
-  background: linear-gradient(145deg, rgba(14, 25, 42, 0.88), rgba(7, 13, 23, 0.82));
+.sc-personal-inv-quick-equip:disabled {
+  opacity: 0.38;
   cursor: default;
 }
 
-.sc-personal-inv-weapon-bar.is-filled {
-  border-color: rgba(120, 190, 255, 0.48);
-  cursor: grab;
-}
-
-.sc-personal-inv-weapon-bar.is-dragging {
-  opacity: 0.45;
-}
-
-.sc-personal-inv-weapon-label {
-  grid-area: label;
-  font: 600 11px/1.1 var(--sc-mono, monospace);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(140, 180, 220, 0.75);
-}
-
-.sc-personal-inv-weapon-main {
-  grid-area: preview;
-  width: 100%;
-  height: 96px;
-  min-width: 0;
-  border: 1px solid rgba(90, 140, 200, 0.32);
-  background: rgba(8, 14, 24, 0.75);
+.sc-personal-inv-weapon-bars {
+  z-index: 5;
   display: grid;
-  place-items: center;
-  padding: 4px 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 12px 12px;
+  background: var(--sc-personal-inv-panel-bg);
+}
+
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot {
+  display: grid;
+  grid-template-columns: 43px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 3px 7px;
+  min-height: 60px;
+  padding: 6px;
+  border: none;
+  text-align: left;
+}
+
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot-label {
+  grid-column: 2;
+}
+
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot-icon {
+  grid-row: 1 / 3;
+  width: 43px;
+  height: 43px;
+}
+
+.sc-personal-inv-weapon-bars .sc-personal-inv-loadout-slot-name {
+  display: block;
+  grid-column: 2;
   overflow: hidden;
-}
-
-.sc-personal-inv-weapon-bar.is-filled .sc-personal-inv-weapon-main {
-  border-color: rgba(120, 190, 255, 0.55);
-}
-
-.sc-personal-inv-weapon-name {
-  grid-area: name;
-  min-width: 0;
   align-self: center;
-  overflow: hidden;
-  color: rgba(220, 235, 250, 0.92);
-  font: 600 13px/1.15 'Rajdhani', sans-serif;
-  letter-spacing: 0.03em;
+  color: rgba(203, 224, 239, 0.88);
+  font: 600 11px/1.05 'Rajdhani', sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sc-personal-inv-weapon-bar:not(.is-filled) .sc-personal-inv-weapon-name {
-  color: rgba(120, 160, 200, 0.45);
-}
-
-.sc-personal-inv-attachments {
-  grid-area: attachments;
+.sc-personal-inv-footer {
+  z-index: 6;
   display: flex;
-  gap: 4px;
-}
-
-.sc-personal-inv-attachment-ghost {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 14px;
-  border: 1px dashed rgba(90, 140, 200, 0.28);
-  background: rgba(0, 0, 0, 0.2);
-  opacity: 0.55;
-}
-
-.sc-personal-inv-slot-ghost {
-  font: 600 11px/1.2 'Rajdhani', sans-serif;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(120, 160, 200, 0.45);
-  text-align: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 35px;
+  padding: 7px 20px;
+  border-top: 1px solid rgba(87, 155, 199, 0.2);
+  background: var(--sc-personal-inv-panel-bg);
 }
 
 .sc-personal-inv-status {
+  min-width: 0;
   margin: 0;
-  min-height: 1.2em;
-  font: 500 12px/1.3 'Rajdhani', sans-serif;
-  color: rgba(160, 190, 220, 0.8);
+  overflow: hidden;
+  color: rgba(145, 185, 212, 0.76);
+  font: 500 11px/1.2 'Rajdhani', sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.sc-personal-inv-status[data-kind='error'] {
-  color: rgba(255, 140, 140, 0.95);
-}
+.sc-personal-inv-status[data-kind='error'] { color: rgba(255, 139, 132, 0.96); }
+.sc-personal-inv-status[data-kind='ok'] { color: rgba(132, 229, 174, 0.96); }
 
-.sc-personal-inv-status[data-kind='ok'] {
-  color: rgba(140, 230, 180, 0.95);
-}
-
-.sc-personal-inv-footer {
+.sc-personal-inv-hints {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  font: 600 11px/1 var(--sc-mono, monospace);
-  letter-spacing: 0.12em;
+  justify-content: flex-end;
+  gap: 13px;
+  color: rgba(117, 161, 191, 0.6);
+  font: 600 8px/1 var(--sc-mono, monospace);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(130, 170, 210, 0.65);
 }
 
-.sc-personal-inv-gear-slots {
-  pointer-events: auto;
-  position: absolute;
-  inset: 10% 8% 12% 18%;
-}
-
-.sc-personal-inv-gear-slot {
-  position: absolute;
-  width: 64px;
-  height: 64px;
-  border-radius: 999px;
-  border: 1px solid rgba(120, 180, 230, 0.45);
-  background: rgba(8, 14, 24, 0.55);
-  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.18);
-  cursor: pointer;
-  padding: 8px;
-  display: grid;
-  place-items: center;
-  color: inherit;
-}
-
-.sc-personal-inv-gear-slot.is-filled {
-  border-color: rgba(150, 220, 255, 0.8);
-  background: rgba(20, 40, 70, 0.65);
-}
-
-.sc-personal-inv-gear-slot.is-drop-ok,
-.sc-personal-inv-weapon-bar.is-drop-ok {
-  border-color: rgba(120, 230, 160, 0.9) !important;
-  box-shadow: 0 0 0 2px rgba(120, 230, 160, 0.35);
-}
-
-.sc-personal-inv-gear-slot.is-drop-bad,
-.sc-personal-inv-weapon-bar.is-drop-bad {
-  border-color: rgba(255, 110, 110, 0.9) !important;
-  box-shadow: 0 0 0 2px rgba(255, 110, 110, 0.3);
-}
-
-.sc-personal-inv-gear-backpack {
-  left: 8%;
-  top: 38%;
-}
-
-.sc-personal-inv-gear-rifle-primary {
-  right: 6%;
-  top: 18%;
-}
-
-.sc-personal-inv-gear-rifle-secondary {
-  right: 6%;
-  top: 34%;
-}
-
-.sc-personal-inv-gear-sword {
-  right: 10%;
-  top: 52%;
-}
-
-.sc-personal-inv-gear-handgun {
-  right: 10%;
-  top: 68%;
-}
-
-@media (max-width: 900px) {
-  .sc-personal-inv.is-open {
-    grid-template-columns: 1fr;
+@media (max-width: 1100px) {
+  .sc-personal-inv-shell {
+    overflow-y: auto;
   }
 
-  .sc-personal-inv-left {
-    margin: 12px;
-    max-height: calc(100vh - 24px);
+  .sc-personal-inv-header {
+    align-items: flex-start;
   }
 
-  .sc-personal-inv-right {
+  .sc-personal-inv-header-tools {
+    flex-wrap: wrap;
+  }
+
+  .sc-personal-inv-capacity {
+    order: 3;
+    width: 100%;
+  }
+
+  .sc-personal-inv-workspace {
+    display: block;
+    min-height: auto;
+  }
+
+  .sc-personal-inv-browser {
+    height: min(48vh, 470px);
+    border-right: 0;
+    border-bottom: 1px solid rgba(86, 153, 197, 0.22);
+  }
+
+  .sc-personal-inv-presentation {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 38%);
+    gap: 10px;
+    padding: 12px;
+    overflow: visible;
+  }
+
+  .sc-personal-inv-avatar-stage {
     display: none;
   }
-}
 
-@media (max-width: 560px) {
-  .sc-personal-inv-weapon-bars {
-    grid-template-columns: 1fr;
+  .sc-personal-inv-gear-slots {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    pointer-events: auto;
   }
 
-  .sc-personal-inv-loadout-hint {
+  .sc-personal-inv-gear-slots > .sc-personal-inv-loadout-slot {
+    position: static;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    width: auto;
+    height: 68px;
+    gap: 3px 7px;
+    padding: 6px;
+    text-align: left;
+  }
+
+  .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-icon {
+    grid-row: 1 / 4;
+    width: 44px;
+    height: 44px;
+  }
+
+  .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-label,
+  .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-name,
+  .sc-personal-inv-gear-slots .sc-personal-inv-loadout-linked {
+    grid-column: 2;
+  }
+
+  .sc-personal-inv-gear-slots .sc-personal-inv-loadout-slot-name {
+    display: block;
+    overflow: hidden;
+    font: 600 11px/1 'Rajdhani', sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sc-personal-inv-gear-slots .sc-personal-inv-loadout-linked {
+    display: block;
+    color: rgba(116, 180, 213, 0.68);
+    font: 600 8px/1 var(--sc-mono, monospace);
+    text-transform: uppercase;
+  }
+
+  .sc-personal-inv-detail-panel {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    max-height: none;
+  }
+
+  .sc-personal-inv-weapon-bars {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 8px 0 0;
+    background: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .sc-personal-inv-shell {
+    inset: 6px;
+  }
+
+  .sc-personal-inv-header {
+    flex-direction: column;
+    padding: 13px;
+  }
+
+  .sc-personal-inv-header-tools {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .sc-personal-inv-search {
+    flex: 1 1 150px;
+  }
+
+  .sc-personal-inv-close {
+    margin-left: auto;
+  }
+
+  .sc-personal-inv-filters {
+    padding-inline: 12px;
+  }
+
+  .sc-personal-inv-filter span:not(.sc-personal-inv-filter-icon) {
+    display: none;
+  }
+
+  .sc-personal-inv-browser {
+    height: 44vh;
+    padding: 10px;
+  }
+
+  .sc-personal-inv-grid {
+    grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  }
+
+  .sc-personal-inv-presentation {
+    display: block;
+  }
+
+  .sc-personal-inv-gear-slots,
+  .sc-personal-inv-weapon-bars {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sc-personal-inv-detail-panel,
+  .sc-personal-inv-weapon-bars {
+    margin-top: 10px;
+  }
+
+  .sc-personal-inv-footer {
+    align-items: flex-start;
+  }
+
+  .sc-personal-inv-hints {
     display: none;
   }
 }

@@ -139,7 +139,8 @@ pub async fn assign_ship(
     Path(user_id): Path<String>,
     Json(body): Json<Value>,
 ) -> ApiResult<(StatusCode, Json<Value>)> {
-    let definition_id = required_string(object(&body)?.get("shipDefinitionId"), "shipDefinitionId")?;
+    let definition_id =
+        required_string(object(&body)?.get("shipDefinitionId"), "shipDefinitionId")?;
     let user_row = sqlx::query(
         r#"SELECT u."id", p."id" AS "playerId"
            FROM "User" u LEFT JOIN "Player" p ON p."userId" = u."id"
@@ -403,10 +404,12 @@ pub async fn update_item(
     Json(body): Json<Value>,
 ) -> ApiResult<Json<Value>> {
     let current = sqlx::query(
-        r#"SELECT i."itemType", w."itemDefinitionId" AS "weaponId", b."itemDefinitionId" AS "backpackId"
+        r#"SELECT i."itemType", w."itemDefinitionId" AS "weaponId", b."itemDefinitionId" AS "backpackId",
+                  d."itemDefinitionId" AS "wearableId"
            FROM "ItemDefinition" i
            LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id"
            LEFT JOIN "BackpackDefinition" b ON b."itemDefinitionId"=i."id"
+           LEFT JOIN "WearableDefinition" d ON d."itemDefinitionId"=i."id"
            WHERE i."id"=$1"#,
     )
     .bind(&id)
@@ -416,6 +419,9 @@ pub async fn update_item(
     if current.try_get::<Option<String>, _>("weaponId")?.is_some()
         || current
             .try_get::<Option<String>, _>("backpackId")?
+            .is_some()
+        || current
+            .try_get::<Option<String>, _>("wearableId")?
             .is_some()
     {
         return Err(specialized_item_error());
@@ -583,6 +589,134 @@ pub async fn delete_backpack(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn list_wearables(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> ApiResult<Json<Vec<Value>>> {
+    let rows = sqlx::query(
+        r#"SELECT i.*, d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
+           FROM "ItemDefinition" i JOIN "WearableDefinition" d ON d."itemDefinitionId"=i."id"
+           ORDER BY i."createdAt", i."id""#,
+    )
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(
+        rows.into_iter()
+            .map(wearable_item_json)
+            .collect::<Result<Vec<_>, _>>()?,
+    ))
+}
+
+pub async fn create_wearable(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Json(mut body): Json<Value>,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let item_type = required_string(body.get("itemType"), "itemType")?;
+    if !matches!(item_type.as_str(), "armor" | "clothing") {
+        return Err(ApiError::BadRequest(
+            "Wearables must use the armor or clothing item type.".to_owned(),
+        ));
+    }
+    body["stackMax"] = json!(1);
+    let (slot, occupied, preset_id) = wearable_values(&body)?;
+    validate_item_fields(&body)?;
+    let mut tx = state.db.begin().await?;
+    let id = create_item_tx(&mut tx, &body, None).await?;
+    sqlx::query(
+        r#"INSERT INTO "WearableDefinition"
+           ("itemDefinitionId", "wearableSlotType", "occupiedSlotTypes", "sidekickPartPresetId", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, NOW(), NOW())"#,
+    )
+    .bind(&id)
+    .bind(slot)
+    .bind(occupied)
+    .bind(preset_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(wearable_by_id(&state, &id).await?),
+    ))
+}
+
+pub async fn update_wearable(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> ApiResult<Json<Value>> {
+    validate_item_fields(&body)?;
+    if let Some(item_type) = body.get("itemType") {
+        let item_type = required_string(Some(item_type), "itemType")?;
+        if !matches!(item_type.as_str(), "armor" | "clothing") {
+            return Err(ApiError::BadRequest(
+                "Wearables must use the armor or clothing item type.".to_owned(),
+            ));
+        }
+    }
+    let current = sqlx::query(
+        r#"SELECT "wearableSlotType", "occupiedSlotTypes", "sidekickPartPresetId"
+           FROM "WearableDefinition" WHERE "itemDefinitionId"=$1"#,
+    )
+    .bind(&id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| ApiError::NotFound(format!("Wearable definition \"{id}\" not found.")))?;
+    let slot = body
+        .get("wearableSlotType")
+        .map(|value| required_string(Some(value), "wearableSlotType"))
+        .transpose()?
+        .unwrap_or(current.try_get("wearableSlotType")?);
+    let occupied = body
+        .get("occupiedSlotTypes")
+        .map(|value| string_array(Some(value), "occupiedSlotTypes"))
+        .transpose()?
+        .unwrap_or(current.try_get("occupiedSlotTypes")?);
+    let preset_id = body
+        .get("sidekickPartPresetId")
+        .map(|value| integer(Some(value), "sidekickPartPresetId"))
+        .transpose()?
+        .map(|value| value as i32)
+        .unwrap_or(current.try_get("sidekickPartPresetId")?);
+    validate_wearable_configuration(&slot, &occupied, preset_id)?;
+    let mut tx = state.db.begin().await?;
+    update_item_tx(&mut tx, &id, &body).await?;
+    if let Some(item_type) = body.get("itemType") {
+        let item_type = required_string(Some(item_type), "itemType")?;
+        sqlx::query(
+            r#"UPDATE "ItemDefinition" SET "itemType"=$2, "stackMax"=1, "updatedAt"=NOW()
+               WHERE "id"=$1"#,
+        )
+        .bind(&id)
+        .bind(item_type)
+        .execute(&mut *tx)
+        .await?;
+    }
+    sqlx::query(
+        r#"UPDATE "WearableDefinition" SET "wearableSlotType"=$2, "occupiedSlotTypes"=$3,
+           "sidekickPartPresetId"=$4, "updatedAt"=NOW() WHERE "itemDefinitionId"=$1"#,
+    )
+    .bind(&id)
+    .bind(slot)
+    .bind(occupied)
+    .bind(preset_id)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(Json(wearable_by_id(&state, &id).await?))
+}
+
+pub async fn delete_wearable(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+    Path(id): Path<String>,
+) -> ApiResult<StatusCode> {
+    delete_item_definition(&state, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn settings(state: &AppState) -> ApiResult<Value> {
     sqlx::query(r#"INSERT INTO "GameSettings" ("id","startingArcBalance","starterShipDefinitionIds","starterPropDefinitionIds","starterItemDefinitionIds","createdAt","updatedAt") SELECT 'singleton',25000,ARRAY(SELECT "id" FROM "ShipDefinition" WHERE "prefabId"='phobos-starhopper' ORDER BY "createdAt" LIMIT 1),ARRAY[]::TEXT[],ARRAY[]::TEXT[],NOW(),NOW() WHERE NOT EXISTS (SELECT 1 FROM "GameSettings" WHERE "id"='singleton')"#).execute(&state.db).await?;
     let row = sqlx::query(r#"SELECT * FROM "GameSettings" WHERE "id"='singleton'"#)
@@ -639,10 +773,12 @@ fn prop_json(row: PgRow) -> Result<Value, sqlx::Error> {
 
 async fn list_item_rows(state: &AppState) -> ApiResult<Vec<Value>> {
     let rows = sqlx::query(
-        r#"SELECT i.*, w."weaponSlotType", b."capacityLiters", b."emptyMassKg"
+        r#"SELECT i.*, w."weaponSlotType", b."capacityLiters", b."emptyMassKg",
+                  d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
            FROM "ItemDefinition" i
            LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id"
            LEFT JOIN "BackpackDefinition" b ON b."itemDefinitionId"=i."id"
+           LEFT JOIN "WearableDefinition" d ON d."itemDefinitionId"=i."id"
            ORDER BY i."itemType",i."name",i."createdAt""#,
     )
     .fetch_all(&state.db)
@@ -654,10 +790,12 @@ async fn list_item_rows(state: &AppState) -> ApiResult<Vec<Value>> {
 }
 async fn item_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
     let row = sqlx::query(
-        r#"SELECT i.*, w."weaponSlotType", b."capacityLiters", b."emptyMassKg"
+        r#"SELECT i.*, w."weaponSlotType", b."capacityLiters", b."emptyMassKg",
+                  d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
            FROM "ItemDefinition" i
            LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id"
            LEFT JOIN "BackpackDefinition" b ON b."itemDefinitionId"=i."id"
+           LEFT JOIN "WearableDefinition" d ON d."itemDefinitionId"=i."id"
            WHERE i."id"=$1"#,
     )
     .bind(id)
@@ -675,6 +813,15 @@ fn item_json(row: PgRow) -> Result<Value, sqlx::Error> {
     }
     if let Ok(Some(mass)) = row.try_get::<Option<f64>, _>("emptyMassKg") {
         value["emptyMassKg"] = json!(mass);
+    }
+    if let Ok(Some(slot)) = row.try_get::<Option<String>, _>("wearableSlotType") {
+        value["wearableSlotType"] = json!(slot);
+        value["occupiedSlotTypes"] = json!(
+            row.try_get::<Option<Vec<String>>, _>("occupiedSlotTypes")?
+                .unwrap_or_default()
+        );
+        value["sidekickPartPresetId"] =
+            json!(row.try_get::<Option<i32>, _>("sidekickPartPresetId")?);
     }
     Ok(value)
 }
@@ -710,6 +857,26 @@ async fn backpack_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
         "capacityLiters",
         Some("emptyMassKg"),
     )?)
+}
+
+async fn wearable_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
+    let row = sqlx::query(
+        r#"SELECT i.*, d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
+           FROM "ItemDefinition" i JOIN "WearableDefinition" d ON d."itemDefinitionId"=i."id"
+           WHERE i."id"=$1"#,
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
+    wearable_item_json(row).map_err(Into::into)
+}
+
+fn wearable_item_json(row: PgRow) -> Result<Value, sqlx::Error> {
+    let mut value = item_json_from_ref(&row)?;
+    value["wearableSlotType"] = json!(row.try_get::<String, _>("wearableSlotType")?);
+    value["occupiedSlotTypes"] = json!(row.try_get::<Vec<String>, _>("occupiedSlotTypes")?);
+    value["sidekickPartPresetId"] = json!(row.try_get::<i32, _>("sidekickPartPresetId")?);
+    Ok(value)
 }
 
 async fn create_item_row(
@@ -810,7 +977,10 @@ async fn update_dynamic_tx(
 }
 
 async fn ensure_exists(state: &AppState, table: &str, id: &str) -> ApiResult<()> {
-    let column = if matches!(table, "WeaponDefinition" | "BackpackDefinition") {
+    let column = if matches!(
+        table,
+        "WeaponDefinition" | "BackpackDefinition" | "WearableDefinition"
+    ) {
         "itemDefinitionId"
     } else {
         "id"
@@ -829,13 +999,16 @@ async fn ensure_exists(state: &AppState, table: &str, id: &str) -> ApiResult<()>
     }
 }
 fn reject_specialized_item_type(value: Option<&Value>) -> ApiResult<()> {
-    if matches!(value.and_then(Value::as_str), Some("weapon" | "backpack")) {
+    if matches!(
+        value.and_then(Value::as_str),
+        Some("weapon" | "backpack" | "armor" | "clothing")
+    ) {
         return Err(specialized_item_error());
     }
     Ok(())
 }
 fn specialized_item_error() -> ApiError {
-    ApiError::BadRequest("Use the specialized weapon or backpack catalog.".to_owned())
+    ApiError::BadRequest("Use the specialized weapon, backpack, or wearable catalog.".to_owned())
 }
 fn validate_item_fields(body: &Value) -> ApiResult<()> {
     if let Some(item_type) = body.get("itemType") {
@@ -912,6 +1085,49 @@ fn validate_weapon_slot(slot: &str) -> ApiResult<()> {
             "weaponSlotType must be rifle, sword, or handgun.".to_owned(),
         ))
     }
+}
+fn validate_wearable_slot(slot: &str) -> ApiResult<()> {
+    if matches!(slot, "head" | "torso" | "arms" | "legs" | "feet") {
+        Ok(())
+    } else {
+        Err(ApiError::BadRequest(
+            "wearableSlotType must be head, torso, arms, legs, or feet.".to_owned(),
+        ))
+    }
+}
+fn validate_wearable_configuration(
+    slot: &str,
+    occupied: &[String],
+    preset_id: i32,
+) -> ApiResult<()> {
+    validate_wearable_slot(slot)?;
+    if occupied.is_empty() || !occupied.iter().any(|candidate| candidate == slot) {
+        return Err(ApiError::BadRequest(
+            "occupiedSlotTypes must include wearableSlotType.".to_owned(),
+        ));
+    }
+    let unique: std::collections::HashSet<&str> = occupied.iter().map(String::as_str).collect();
+    if unique.len() != occupied.len() {
+        return Err(ApiError::BadRequest(
+            "occupiedSlotTypes must not contain duplicates.".to_owned(),
+        ));
+    }
+    for occupied_slot in occupied {
+        validate_wearable_slot(occupied_slot)?;
+    }
+    if preset_id <= 0 {
+        return Err(ApiError::BadRequest(
+            "sidekickPartPresetId must be greater than zero.".to_owned(),
+        ));
+    }
+    Ok(())
+}
+fn wearable_values(body: &Value) -> ApiResult<(String, Vec<String>, i32)> {
+    let slot = required_string(body.get("wearableSlotType"), "wearableSlotType")?;
+    let occupied = string_array(body.get("occupiedSlotTypes"), "occupiedSlotTypes")?;
+    let preset_id = integer(body.get("sidekickPartPresetId"), "sidekickPartPresetId")? as i32;
+    validate_wearable_configuration(&slot, &occupied, preset_id)?;
+    Ok((slot, occupied, preset_id))
 }
 fn validate_positive(value: f64, name: &str) -> ApiResult<()> {
     if value > 0.0 {

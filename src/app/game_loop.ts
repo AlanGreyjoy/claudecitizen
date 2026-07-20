@@ -254,8 +254,6 @@ export interface BuildRuntime {
 
 import type { PrefabDocument, PrefabEntity } from "../world/prefabs/schema";
 
-const INVENTORY_CAMERA_PITCH = -0.16;
-const INVENTORY_CAMERA_ZOOM = 4.1;
 
 export interface GameLoopOptions {
   planet: Planet;
@@ -1865,15 +1863,6 @@ export function createGameLoop({
     syncEquippedInventory({ catalog: [], items: [], loadout });
   }
 
-  function applyInventoryCameraFrame(): void {
-    if (!personalInventory?.isOpen()) return;
-    world.cameraOrbit = {
-      pitchRadians: INVENTORY_CAMERA_PITCH,
-      yawRadians: world.cameraOrbit.yawRadians,
-      zoomDistance: INVENTORY_CAMERA_ZOOM,
-    };
-  }
-
   function frame(nowMs: number): void {
     if (!running) return;
 
@@ -1885,7 +1874,6 @@ export function createGameLoop({
     if (paused) {
       boostSfx.stop();
       thrustSfx.stop();
-      applyInventoryCameraFrame();
     }
 
     let camera = controls.sampleCameraState(0);
@@ -1908,7 +1896,6 @@ export function createGameLoop({
       };
       world.shipCameraView = camera.shipCameraView;
       world.shipCameraZoom = camera.shipZoomDistance;
-      applyInventoryCameraFrame();
 
       const characterInput = controls.sampleCharacterInput();
 

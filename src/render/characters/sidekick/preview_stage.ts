@@ -7,7 +7,9 @@ import { assembleSidekickCharacter } from './assemble_avatar';
 import { createSidekickAnimationRuntime } from './animation_runtime';
 
 export interface SidekickPreviewStage {
+  readonly avatarRoot: THREE.Group;
   dispose: () => void;
+  setActive: (active: boolean) => void;
   setAnimation: (clipName: string) => void;
   setDefinition: (definition: SidekickCharacterDefinitionV2) => void;
 }
@@ -16,6 +18,14 @@ export interface SidekickPreviewStageHooks {
   onAnimationsReady?: (clipNames: readonly string[], activeClipName: string) => void;
   onBusyChange?: (busy: boolean) => void;
   onError?: (error: unknown) => void;
+}
+
+export interface SidekickPreviewStageOptions {
+  transparent?: boolean;
+  showGround?: boolean;
+  horizontalRotationOnly?: boolean;
+  enableZoom?: boolean;
+  subjectHorizontalOffset?: number;
 }
 
 function visibleGeometryBounds(root: THREE.Object3D): THREE.Box3 {
@@ -36,8 +46,13 @@ export async function createSidekickPreviewStage(
   catalog: SidekickCatalog,
   initialDefinition: SidekickCharacterDefinitionV2,
   hooks: SidekickPreviewStageHooks = {},
+  options: SidekickPreviewStageOptions = {},
 ): Promise<SidekickPreviewStage> {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: options.transparent ?? false,
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -45,7 +60,8 @@ export async function createSidekickPreviewStage(
   renderer.toneMappingExposure = 1.05;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x08101d);
+  scene.background = options.transparent ? null : new THREE.Color(0x08101d);
+  if (options.transparent) renderer.setClearColor(0x000000, 0);
   const environmentScene = new RoomEnvironment();
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
   const environmentTarget = pmremGenerator.fromScene(environmentScene, 0.04);
@@ -59,6 +75,7 @@ export async function createSidekickPreviewStage(
   controls.minDistance = 1.2;
   controls.maxDistance = 5;
   controls.enablePan = false;
+  controls.enableZoom = options.enableZoom ?? true;
 
   scene.add(new THREE.HemisphereLight(0xc6dcff, 0x263047, 1.5));
   const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -69,13 +86,17 @@ export async function createSidekickPreviewStage(
   rimLight.position.set(-2.5, 2.5, -2);
   scene.add(rimLight);
 
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(3, 64),
-    new THREE.MeshStandardMaterial({ color: 0x17243a, roughness: 0.95 }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  const ground = options.showGround === false
+    ? null
+    : new THREE.Mesh(
+        new THREE.CircleGeometry(3, 64),
+        new THREE.MeshStandardMaterial({ color: 0x17243a, roughness: 0.95 }),
+      );
+  if (ground) {
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+  }
 
   hooks.onBusyChange?.(true);
   const avatar = await assembleSidekickCharacter(catalog, initialDefinition);
@@ -90,6 +111,11 @@ export async function createSidekickPreviewStage(
     center.z + Math.max(2.2, size.y * 1.3),
   );
   controls.update();
+  if (options.horizontalRotationOnly) {
+    const polarAngle = controls.getPolarAngle();
+    controls.minPolarAngle = polarAngle;
+    controls.maxPolarAngle = polarAngle;
+  }
 
   let animation: Awaited<ReturnType<typeof createSidekickAnimationRuntime>> | null = null;
   let desiredAnimation = 'Idle_Loop';
@@ -138,7 +164,20 @@ export async function createSidekickPreviewStage(
     const height = Math.max(1, canvas.clientHeight);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    const subjectHorizontalOffset = options.subjectHorizontalOffset ?? 0;
+    if (subjectHorizontalOffset === 0) {
+      camera.clearViewOffset();
+      camera.updateProjectionMatrix();
+    } else {
+      camera.setViewOffset(
+        width,
+        height,
+        -subjectHorizontalOffset * width,
+        0,
+        width,
+        height,
+      );
+    }
   };
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(canvas);
@@ -146,9 +185,14 @@ export async function createSidekickPreviewStage(
 
   const clock = new THREE.Clock();
   let frame = 0;
+  let active = true;
   const render = (): void => {
     if (disposed) return;
     frame = requestAnimationFrame(render);
+    if (!active) {
+      clock.getDelta();
+      return;
+    }
     animation?.update(clock.getDelta());
     controls.update();
     renderer.render(scene, camera);
@@ -157,6 +201,11 @@ export async function createSidekickPreviewStage(
   hooks.onBusyChange?.(false);
 
   return {
+    avatarRoot: avatar.root,
+    setActive: (nextActive) => {
+      active = nextActive;
+      if (active) resize();
+    },
     setAnimation: (clipName) => {
       desiredAnimation = clipName;
       animation?.setAnimation(clipName);
@@ -173,8 +222,8 @@ export async function createSidekickPreviewStage(
       animation?.dispose();
       avatar.dispose();
       environmentTarget.dispose();
-      ground.geometry.dispose();
-      (ground.material as THREE.Material).dispose();
+      ground?.geometry.dispose();
+      if (ground) (ground.material as THREE.Material).dispose();
       renderer.dispose();
     },
   };

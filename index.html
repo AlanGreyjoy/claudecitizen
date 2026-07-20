@@ -748,13 +748,19 @@
         aria-labelledby="personal-inventory-title"
         aria-modal="true"
       >
-        <div class="sc-personal-inv-left">
+        <div class="sc-personal-inv-backdrop" aria-hidden="true"></div>
+        <div class="sc-personal-inv-shell">
           <header class="sc-personal-inv-header">
             <div class="sc-personal-inv-brand">
-              <span class="sc-personal-inv-kicker">Personal / All</span>
               <h2 class="sc-personal-inv-title" id="personal-inventory-title">Inventory</h2>
             </div>
             <div class="sc-personal-inv-header-tools">
+              <div class="sc-personal-inv-capacity">
+                <div class="sc-personal-inv-capacity-track">
+                  <div class="sc-personal-inv-capacity-fill" id="personal-inventory-capacity-fill"></div>
+                </div>
+                <span class="sc-personal-inv-capacity-label" id="personal-inventory-capacity-label">—</span>
+              </div>
               <input
                 class="sc-personal-inv-search"
                 id="personal-inventory-search"
@@ -763,13 +769,15 @@
                 autocomplete="off"
                 maxlength="80"
               />
-              <button
-                class="sc-personal-inv-quick-equip"
-                type="button"
-                id="personal-inventory-quick-equip"
-              >
-                Quick Equip
-              </button>
+              <label class="sc-personal-inv-sort-label">
+                <span>Sort</span>
+                <select class="sc-personal-inv-sort" id="personal-inventory-sort">
+                  <option value="type">Type</option>
+                  <option value="name">Name</option>
+                  <option value="rarity">Rarity</option>
+                  <option value="quantity">Quantity</option>
+                </select>
+              </label>
               <button
                 class="sc-personal-inv-close"
                 type="button"
@@ -779,26 +787,45 @@
                   </button>
             </div>
           </header>
-          <div class="sc-personal-inv-capacity">
-            <div class="sc-personal-inv-capacity-track">
-              <div class="sc-personal-inv-capacity-fill" id="personal-inventory-capacity-fill"></div>
-            </div>
-            <span class="sc-personal-inv-capacity-label" id="personal-inventory-capacity-label"
-              >—</span
-            >
-          </div>
           <div class="sc-personal-inv-filters" id="personal-inventory-filters"></div>
-          <div class="sc-personal-inv-grid" id="personal-inventory-grid"></div>
-          <div class="sc-personal-inv-weapon-bars" id="personal-inventory-weapon-bars"></div>
-          <p class="sc-personal-inv-status" id="personal-inventory-status" data-kind="info"></p>
+          <main class="sc-personal-inv-workspace">
+            <section class="sc-personal-inv-browser" aria-label="Stored items">
+              <div class="sc-personal-inv-grid" id="personal-inventory-grid" role="grid"></div>
+            </section>
+            <section class="sc-personal-inv-presentation" aria-label="Character and loadout">
+              <div class="sc-personal-inv-avatar-stage" id="personal-inventory-avatar-stage">
+                <canvas
+                  class="sc-personal-inv-avatar-canvas"
+                  id="personal-inventory-avatar-canvas"
+                  aria-label="Rotatable character preview"
+                ></canvas>
+                <span class="sc-personal-inv-avatar-label">Live loadout link</span>
+                <span class="sc-personal-inv-avatar-rotate">Drag to rotate · 360°</span>
+              </div>
+              <div class="sc-personal-inv-gear-slots" id="personal-inventory-gear-slots"></div>
+              <div class="sc-personal-inv-detail-panel">
+                <div class="sc-personal-inv-detail" id="personal-inventory-detail"></div>
+                <button
+                  class="sc-personal-inv-quick-equip"
+                  type="button"
+                  id="personal-inventory-quick-equip"
+                >
+                  No action
+                </button>
+              </div>
+              <div class="sc-personal-inv-weapon-bars" id="personal-inventory-weapon-bars"></div>
+            </section>
+          </main>
           <footer class="sc-personal-inv-footer">
-            <span>Click &amp; drag</span>
-            <span>Quick equip</span>
-            <span>Close inventory [I]</span>
+            <p class="sc-personal-inv-status" id="personal-inventory-status" data-kind="info"></p>
+            <div class="sc-personal-inv-hints">
+              <span>Arrows — browse</span>
+              <span>Enter — action</span>
+              <span>/ — search</span>
+              <span>Drag — exact slot</span>
+              <span>Esc / I — close</span>
+            </div>
           </footer>
-        </div>
-        <div class="sc-personal-inv-right" aria-hidden="true">
-          <div class="sc-personal-inv-gear-slots" id="personal-inventory-gear-slots"></div>
         </div>
       </div>
       <div

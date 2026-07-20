@@ -477,8 +477,10 @@ pub async fn equip_inventory_item(
         ));
     }
     let definition = sqlx::query(
-        r#"SELECT i."itemType", w."weaponSlotType"
-           FROM "ItemDefinition" i LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId" = i."id"
+        r#"SELECT i."itemType", w."weaponSlotType", d."wearableSlotType", d."occupiedSlotTypes"
+           FROM "ItemDefinition" i
+           LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId" = i."id"
+           LEFT JOIN "WearableDefinition" d ON d."itemDefinitionId" = i."id"
            WHERE i."id" = $1"#,
     )
     .bind(&item_id)
@@ -517,6 +519,22 @@ pub async fn equip_inventory_item(
                 )));
             }
         }
+        LoadoutKind::Wearable if item_type != "armor" && item_type != "clothing" => {
+            return Err(ApiError::BadRequest(
+                "Only armor or clothing can fill wearable slots.".to_owned(),
+            ));
+        }
+        LoadoutKind::Wearable => {
+            let wearable_slot_type: Option<String> = definition.try_get("wearableSlotType")?;
+            if wearable_slot_type.as_deref() != slot.wearable_slot_type {
+                return Err(ApiError::BadRequest(format!(
+                    "This item belongs in the {} slot.",
+                    wearable_slot_type
+                        .as_deref()
+                        .unwrap_or("configured wearable")
+                )));
+            }
+        }
         LoadoutKind::Backpack => {}
     }
     if let Some(required) = slot.requires_slot_id
@@ -536,6 +554,40 @@ pub async fn equip_inventory_item(
         .collect();
     for occupied_slot in occupied {
         clear_loadout_slot(&mut loadout, &occupied_slot);
+    }
+    if matches!(slot.kind, LoadoutKind::Wearable) {
+        let new_occupied: Vec<String> = definition.try_get("occupiedSlotTypes")?;
+        let equipped_ids: Vec<String> = loadout
+            .iter()
+            .filter(|(slot_id, _)| {
+                LOADOUT_SLOTS.iter().any(|candidate| {
+                    candidate.id == slot_id.as_str()
+                        && matches!(candidate.kind, LoadoutKind::Wearable)
+                })
+            })
+            .map(|(_, equipped_item)| equipped_item.clone())
+            .collect();
+        if !equipped_ids.is_empty() {
+            let wearable_rows = sqlx::query(
+                r#"SELECT "itemDefinitionId", "occupiedSlotTypes"
+                   FROM "WearableDefinition" WHERE "itemDefinitionId" = ANY($1)"#,
+            )
+            .bind(&equipped_ids)
+            .fetch_all(&mut *tx)
+            .await?;
+            let conflicts: HashSet<String> = wearable_rows
+                .into_iter()
+                .filter_map(|row| {
+                    let equipped_item: String = row.try_get("itemDefinitionId").ok()?;
+                    let occupied_slots: Vec<String> = row.try_get("occupiedSlotTypes").ok()?;
+                    occupied_slots
+                        .iter()
+                        .any(|candidate| new_occupied.contains(candidate))
+                        .then_some(equipped_item)
+                })
+                .collect();
+            loadout.retain(|_, equipped_item| !conflicts.contains(equipped_item));
+        }
     }
     loadout.insert(slot.id.to_owned(), item_id);
     save_loadout(&mut tx, &player_id, &loadout).await?;
@@ -1021,10 +1073,12 @@ async fn build_state(state: &AppState, player_id: &str, area: BuildArea) -> ApiR
 async fn inventory_state(state: &AppState, player_id: &str) -> ApiResult<Value> {
     let catalog = sqlx::query(
         r#"SELECT i."id", i."name", i."description", i."itemType", i."subType", i."prefabId", i."iconUrl", i."stackMax", i."costArc", i."rarity",
-                  w."weaponSlotType", b."capacityLiters", b."emptyMassKg"
+                  w."weaponSlotType", b."capacityLiters", b."emptyMassKg",
+                  d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
            FROM "ItemDefinition" i
            LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId" = i."id"
            LEFT JOIN "BackpackDefinition" b ON b."itemDefinitionId" = i."id"
+           LEFT JOIN "WearableDefinition" d ON d."itemDefinitionId" = i."id"
            ORDER BY i."itemType", i."name", i."createdAt""#,
     )
     .fetch_all(&state.db)
@@ -1064,6 +1118,15 @@ fn item_row_json(row: sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
         value["capacityLiters"] = json!(capacity_liters);
         value["emptyMassKg"] = json!(row.try_get::<Option<f64>, _>("emptyMassKg")?);
     }
+    if let Some(wearable_slot_type) = row.try_get::<Option<String>, _>("wearableSlotType")? {
+        value["wearableSlotType"] = json!(wearable_slot_type);
+        value["occupiedSlotTypes"] = json!(
+            row.try_get::<Option<Vec<String>>, _>("occupiedSlotTypes")?
+                .unwrap_or_default()
+        );
+        value["sidekickPartPresetId"] =
+            json!(row.try_get::<Option<i32>, _>("sidekickPartPresetId")?);
+    }
     Ok(value)
 }
 
@@ -1071,6 +1134,7 @@ fn item_row_json(row: sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
 enum LoadoutKind {
     Weapon,
     Backpack,
+    Wearable,
 }
 
 #[derive(Clone, Copy)]
@@ -1079,15 +1143,57 @@ struct LoadoutSlot {
     label: &'static str,
     kind: LoadoutKind,
     weapon_slot_type: Option<&'static str>,
+    wearable_slot_type: Option<&'static str>,
     requires_slot_id: Option<&'static str>,
 }
 
-const LOADOUT_SLOTS: [LoadoutSlot; 5] = [
+const LOADOUT_SLOTS: [LoadoutSlot; 10] = [
+    LoadoutSlot {
+        id: "head",
+        label: "Head",
+        kind: LoadoutKind::Wearable,
+        weapon_slot_type: None,
+        wearable_slot_type: Some("head"),
+        requires_slot_id: None,
+    },
+    LoadoutSlot {
+        id: "torso",
+        label: "Torso",
+        kind: LoadoutKind::Wearable,
+        weapon_slot_type: None,
+        wearable_slot_type: Some("torso"),
+        requires_slot_id: None,
+    },
+    LoadoutSlot {
+        id: "arms",
+        label: "Arms",
+        kind: LoadoutKind::Wearable,
+        weapon_slot_type: None,
+        wearable_slot_type: Some("arms"),
+        requires_slot_id: None,
+    },
+    LoadoutSlot {
+        id: "legs",
+        label: "Legs",
+        kind: LoadoutKind::Wearable,
+        weapon_slot_type: None,
+        wearable_slot_type: Some("legs"),
+        requires_slot_id: None,
+    },
+    LoadoutSlot {
+        id: "feet",
+        label: "Feet",
+        kind: LoadoutKind::Wearable,
+        weapon_slot_type: None,
+        wearable_slot_type: Some("feet"),
+        requires_slot_id: None,
+    },
     LoadoutSlot {
         id: "backpack",
         label: "Backpack",
         kind: LoadoutKind::Backpack,
         weapon_slot_type: None,
+        wearable_slot_type: None,
         requires_slot_id: None,
     },
     LoadoutSlot {
@@ -1095,6 +1201,7 @@ const LOADOUT_SLOTS: [LoadoutSlot; 5] = [
         label: "Primary Rifle",
         kind: LoadoutKind::Weapon,
         weapon_slot_type: Some("rifle"),
+        wearable_slot_type: None,
         requires_slot_id: None,
     },
     LoadoutSlot {
@@ -1102,6 +1209,7 @@ const LOADOUT_SLOTS: [LoadoutSlot; 5] = [
         label: "Secondary Rifle",
         kind: LoadoutKind::Weapon,
         weapon_slot_type: Some("rifle"),
+        wearable_slot_type: None,
         requires_slot_id: Some("backpack"),
     },
     LoadoutSlot {
@@ -1109,6 +1217,7 @@ const LOADOUT_SLOTS: [LoadoutSlot; 5] = [
         label: "Sword",
         kind: LoadoutKind::Weapon,
         weapon_slot_type: Some("sword"),
+        wearable_slot_type: None,
         requires_slot_id: None,
     },
     LoadoutSlot {
@@ -1116,6 +1225,7 @@ const LOADOUT_SLOTS: [LoadoutSlot; 5] = [
         label: "Handgun",
         kind: LoadoutKind::Weapon,
         weapon_slot_type: Some("handgun"),
+        wearable_slot_type: None,
         requires_slot_id: None,
     },
 ];

@@ -5,7 +5,13 @@ import {
   type PlayerCharacterAppearanceV1,
 } from '../../../player/character_creator/player_character_appearance';
 import { loadSidekickCatalog } from '../../../player/character_creator/sidekick_catalog';
+import type { SidekickCatalog } from '../../../player/character_creator/sidekick_manifest';
+import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick_definition';
 import type { InventoryState } from '../../../player/inventory/types';
+import {
+  applyWearableLoadoutToDefinition,
+  wearableLoadoutVisualKey,
+} from '../../../player/inventory/wearable_visuals';
 import type {
   CharacterRenderState,
   CharacterUpperBodyAim,
@@ -65,17 +71,57 @@ export function createSidekickGameplayAvatar(
   let pendingInventory: InventoryState | null = null;
   let pendingActiveWeaponSlotId: string | null = null;
   let pendingUpperBodyAim: CharacterUpperBodyAim | null = null;
+  let sidekickCatalog: SidekickCatalog | null = null;
+  let baseDefinition: SidekickCharacterDefinitionV2 | null = null;
+  let appliedWearableKey = '';
+  let wearableSyncEpoch = 0;
+  const wearableAssetWarnings = new Set<string>();
   const equipment = createEquipmentAttachmentController();
   const modelOffsetPosition = new THREE.Vector3();
   const characterType = appearance.type === 2 ? 2 : 1;
 
-  function syncEquipment(): void {
+  async function syncSidekickEquipment(epoch: number): Promise<void> {
     if (fallback) {
       fallback.setEquippedInventory?.(pendingInventory, pendingActiveWeaponSlotId);
       return;
     }
-    if (!avatar || !ready) return;
+    if (!avatar || !ready || !sidekickCatalog || !baseDefinition) return;
+    const wearableKey = wearableLoadoutVisualKey(pendingInventory);
+    if (wearableKey !== appliedWearableKey) {
+      const definition = applyWearableLoadoutToDefinition(
+        baseDefinition,
+        sidekickCatalog,
+        pendingInventory,
+      );
+      try {
+        await avatar.applyDefinition(definition);
+        if (disposed || epoch !== wearableSyncEpoch) return;
+      } catch (error) {
+        if (disposed || epoch !== wearableSyncEpoch) return;
+        if (import.meta.env.DEV && !wearableAssetWarnings.has(wearableKey)) {
+          wearableAssetWarnings.add(wearableKey);
+          console.warn(
+            'Wearable Sidekick assets could not be loaded; using the base appearance.',
+            error,
+          );
+        }
+        try {
+          await avatar.applyDefinition(baseDefinition);
+        } catch (restoreError) {
+          if (import.meta.env.DEV) {
+            console.warn('Failed to restore the base Sidekick appearance.', restoreError);
+          }
+        }
+        if (disposed || epoch !== wearableSyncEpoch) return;
+      }
+      appliedWearableKey = wearableKey;
+    }
     equipment.sync(avatar.root, characterType, pendingInventory, pendingActiveWeaponSlotId);
+  }
+
+  function syncEquipment(): void {
+    const epoch = ++wearableSyncEpoch;
+    void syncSidekickEquipment(epoch);
   }
 
   /** DEV: re-fetch Base Character mounts when returning from the editor tab. */
@@ -91,6 +137,8 @@ export function createSidekickGameplayAvatar(
       const catalog = await loadSidekickCatalog();
       if (disposed) return;
       const definition = buildPlayerSidekickDefinition(catalog, appearance);
+      sidekickCatalog = catalog;
+      baseDefinition = definition;
       avatar = await assembleSidekickCharacter(catalog, definition);
       if (disposed) {
         avatar.dispose();
@@ -171,6 +219,7 @@ export function createSidekickGameplayAvatar(
     root,
     dispose: () => {
       disposed = true;
+      wearableSyncEpoch += 1;
       if (import.meta.env.DEV) {
         document.removeEventListener('visibilitychange', onVisibilityRefresh);
       }

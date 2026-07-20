@@ -8,9 +8,11 @@ import {
   createItemDefinition,
   createWeaponDefinition,
   createBackpackDefinition,
+  createWearableDefinition,
   deleteItemDefinition,
   deleteWeaponDefinition,
   deleteBackpackDefinition,
+  deleteWearableDefinition,
   getAdminSession,
   getAdminUser,
   getGameSettings,
@@ -18,12 +20,14 @@ import {
   listItemDefinitions,
   listWeaponDefinitions,
   listBackpackDefinitions,
+  listWearableDefinitions,
   listPropDefinitions,
   listShipDefinitions,
   updateGameSettings,
   updateItemDefinition,
   updateWeaponDefinition,
   updateBackpackDefinition,
+  updateWearableDefinition,
   updatePropDefinition,
   updateShipDefinition,
   type AdminSession,
@@ -35,6 +39,8 @@ import {
   type WeaponDefinitionInput,
   type BackpackDefinition,
   type BackpackDefinitionInput,
+  type WearableDefinition,
+  type WearableDefinitionInput,
   type PropDefinition,
   type PropDefinitionInput,
   type ShipDefinition,
@@ -43,12 +49,25 @@ import {
 import { listShipPrefabOptions, type ShipPrefabOption } from '../world/prefabs/list_ship_prefabs';
 import { listPropPrefabOptions, type PropPrefabOption } from '../world/prefabs/list_prop_prefabs';
 import { listItemPrefabOptions, type ItemPrefabOption } from '../world/prefabs/list_item_prefabs';
-import { ITEM_TYPES } from '../player/inventory/types';
+import {
+  ITEM_TYPES,
+  WEARABLE_SLOT_TYPES,
+  type WearableSlotType,
+} from '../player/inventory/types';
 import { WEAPON_SLOT_TYPES, type WeaponSlotType } from '../types/equipment';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { validateBackpackPrefab } from '../world/prefabs/item_runtime';
+import { generateItemPrefabScreenshot } from '../render/prefabs/item_prefab_screenshot';
 
-type AdminTab = 'users' | 'ships' | 'props' | 'items' | 'weapons' | 'backpacks' | 'settings';
+type AdminTab =
+  | 'users'
+  | 'ships'
+  | 'props'
+  | 'items'
+  | 'weapons'
+  | 'backpacks'
+  | 'wearables'
+  | 'settings';
 type AdminScene =
   | 'login'
   | 'users'
@@ -63,6 +82,8 @@ type AdminScene =
   | 'weapon-form'
   | 'backpacks'
   | 'backpack-form'
+  | 'wearables'
+  | 'wearable-form'
   | 'settings';
 
 const DEFAULT_ITEM_FORM: ItemDefinitionInput = {
@@ -98,6 +119,20 @@ const DEFAULT_BACKPACK_FORM: BackpackDefinitionInput = {
   rarity: 'common',
   capacityLiters: 0,
   emptyMassKg: 0,
+};
+
+const DEFAULT_WEARABLE_FORM: WearableDefinitionInput = {
+  name: '',
+  description: '',
+  itemType: 'clothing',
+  subType: 'generic',
+  prefabId: null,
+  iconUrl: null,
+  costArc: 0,
+  rarity: 'common',
+  wearableSlotType: 'torso',
+  occupiedSlotTypes: ['torso'],
+  sidekickPartPresetId: 1,
 };
 
 const DEFAULT_PROP_FORM: PropDefinitionInput = {
@@ -151,6 +186,72 @@ function createField(label: string, input: HTMLElement): HTMLLabelElement {
   labelEl.textContent = label;
   field.append(labelEl, input);
   return field;
+}
+
+/**
+ * Icon URL field with isometric prefab screenshot generation.
+ * Reads `prefabId` from the same form; writes a PNG data URL into `iconUrl`.
+ */
+function createIconUrlField(
+  form: HTMLFormElement,
+  initialValue: string,
+  setStatus: (message: string, isError?: boolean) => void,
+): HTMLLabelElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'sc-admin-icon-url';
+
+  const input = createTextInput('iconUrl', initialValue);
+  const row = document.createElement('div');
+  row.className = 'sc-admin-icon-url-row';
+  const generate = createSmallButton('Generate Screenshot');
+  generate.title =
+    'Load the selected item prefab and capture an isometric PNG with a transparent background';
+  row.append(input, generate);
+
+  const preview = document.createElement('img');
+  preview.className = 'sc-admin-icon-preview';
+  preview.alt = 'Item icon preview';
+  preview.hidden = true;
+
+  const syncPreview = (url: string) => {
+    if (!url) {
+      preview.removeAttribute('src');
+      preview.hidden = true;
+      return;
+    }
+    preview.src = url;
+    preview.hidden = false;
+  };
+  syncPreview(initialValue.trim());
+  input.addEventListener('input', () => syncPreview(input.value.trim()));
+
+  generate.addEventListener('click', () => {
+    const prefabId = formValue(form, 'prefabId');
+    if (!prefabId) {
+      setStatus('Select an item prefab before generating a screenshot.', true);
+      return;
+    }
+    generate.disabled = true;
+    setStatus(`Generating isometric screenshot for "${prefabId}"...`);
+    void generateItemPrefabScreenshot(prefabId)
+      .then((dataUrl) => {
+        input.value = dataUrl;
+        syncPreview(dataUrl);
+        setStatus('Screenshot generated. Save the definition to persist the icon.');
+      })
+      .catch((error) => {
+        setStatus(
+          error instanceof Error ? error.message : 'Screenshot generation failed.',
+          true,
+        );
+      })
+      .finally(() => {
+        generate.disabled = false;
+      });
+  });
+
+  wrap.append(row, preview);
+  return createField('Icon URL (optional)', wrap);
 }
 
 function createTextInput(name: string, value = ''): HTMLInputElement {
@@ -311,7 +412,8 @@ function isTabActive(tab: AdminTab, currentTab: AdminTab, currentScene: AdminSce
     currentScene !== 'prop-form' &&
     currentScene !== 'item-form' &&
     currentScene !== 'weapon-form' &&
-    currentScene !== 'backpack-form'
+    currentScene !== 'backpack-form' &&
+    currentScene !== 'wearable-form'
   );
 }
 
@@ -332,6 +434,7 @@ export function showAdminScreen(): void {
   let editingItemId: string | null = null;
   let editingWeaponId: string | null = null;
   let editingBackpackId: string | null = null;
+  let editingWearableId: string | null = null;
   let selectedUserId: string | null = null;
 
   function setStatus(message: string, isError = false): void {
@@ -406,6 +509,7 @@ export function showAdminScreen(): void {
           { id: 'items', label: 'Items' },
           { id: 'weapons', label: 'Weapons' },
           { id: 'backpacks', label: 'Backpacks' },
+          { id: 'wearables', label: 'Wearables' },
         ],
       },
       {
@@ -434,6 +538,7 @@ export function showAdminScreen(): void {
           else if (tab.id === 'items') void showItems();
           else if (tab.id === 'weapons') void showWeapons();
           else if (tab.id === 'backpacks') void showBackpacks();
+          else if (tab.id === 'wearables') void showWearables();
           else void showSettings();
         });
         nav.append(link);
@@ -1462,6 +1567,14 @@ export function showAdminScreen(): void {
         return;
       }
     }
+    if (item.itemType === 'armor' || item.itemType === 'clothing') {
+      const wearable = (await listWearableDefinitions()).find((entry) => entry.id === item.id);
+      if (wearable) {
+        editingWearableId = wearable.id;
+        await showWearableForm(wearable);
+        return;
+      }
+    }
     editingItemId = item.id;
     await showItemForm(item);
   }
@@ -1524,10 +1637,13 @@ export function showAdminScreen(): void {
         'Item type',
         createSelect(
           'itemType',
-          ITEM_TYPES.filter((type) => type !== 'weapon' && type !== 'backpack').map((type) => ({
-            value: type,
-            label: type,
-          })),
+          ITEM_TYPES.filter(
+            (type) =>
+              type !== 'weapon' &&
+              type !== 'backpack' &&
+              type !== 'armor' &&
+              type !== 'clothing',
+          ).map((type) => ({ value: type, label: type })),
           defaults.itemType,
         ),
       ),
@@ -1536,7 +1652,7 @@ export function showAdminScreen(): void {
         'Item prefab',
         createSelect('prefabId', prefabOptions, defaults.prefabId ?? ''),
       ),
-      createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),
+      createIconUrlField(form, defaults.iconUrl ?? '', setStatus),
       createField('Stack max', createNumberInput('stackMax', defaults.stackMax)),
       createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
       createField('Rarity', createTextInput('rarity', defaults.rarity)),
@@ -1723,7 +1839,7 @@ export function showAdminScreen(): void {
       ),
       createField('Sub-type', createTextInput('subType', defaults.subType)),
       createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId ?? undefined)),
-      createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),
+      createIconUrlField(form, defaults.iconUrl ?? '', setStatus),
       createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
       createField('Rarity', createTextInput('rarity', defaults.rarity)),
     );
@@ -1905,7 +2021,7 @@ export function showAdminScreen(): void {
       createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId ?? undefined)),
       createField('Capacity (liters)', createNumberInput('capacityLiters', defaults.capacityLiters, '0.1')),
       createField('Empty mass (kg)', createNumberInput('emptyMassKg', defaults.emptyMassKg, '0.1')),
-      createField('Icon URL (optional)', createTextInput('iconUrl', defaults.iconUrl ?? '')),
+      createIconUrlField(form, defaults.iconUrl ?? '', setStatus),
       createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
       createField('Rarity', createTextInput('rarity', defaults.rarity)),
     );
@@ -1964,6 +2080,264 @@ export function showAdminScreen(): void {
       ],
       'backpack-form',
       'backpacks',
+    );
+  }
+
+  function renderWearablesTable(wearables: WearableDefinition[]): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'sc-admin-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'sc-admin-table';
+    table.innerHTML = `
+      <thead><tr><th>Name</th><th>Type</th><th>Primary slot</th><th>Coverage</th><th>Sidekick preset</th></tr></thead>
+    `;
+    const body = document.createElement('tbody');
+    if (wearables.length === 0) {
+      const row = document.createElement('tr');
+      row.className = 'is-static';
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.className = 'sc-admin-empty';
+      cell.textContent = 'No wearable definitions match your search.';
+      row.append(cell);
+      body.append(row);
+    }
+    for (const wearable of wearables) {
+      const row = document.createElement('tr');
+      for (const value of [
+        wearable.name,
+        wearable.itemType,
+        wearable.wearableSlotType,
+        wearable.occupiedSlotTypes.join(', '),
+        String(wearable.sidekickPartPresetId),
+      ]) {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.append(cell);
+      }
+      row.addEventListener('click', () => {
+        editingWearableId = wearable.id;
+        void showWearableForm(wearable);
+      });
+      body.append(row);
+    }
+    table.append(body);
+    wrap.append(table);
+    return wrap;
+  }
+
+  async function showWearables(): Promise<void> {
+    renderShell([renderMessage('Loading wearable catalog...')], 'wearables', 'wearables');
+    try {
+      const wearables = await listWearableDefinitions();
+      let query = '';
+      const host = document.createElement('div');
+      const refresh = (): void => {
+        const needle = normalizeSearchQuery(query);
+        host.replaceChildren(
+          renderWearablesTable(
+            needle
+              ? wearables.filter((wearable) =>
+                  [
+                    wearable.name,
+                    wearable.itemType,
+                    wearable.subType,
+                    wearable.wearableSlotType,
+                    ...wearable.occupiedSlotTypes,
+                    String(wearable.sidekickPartPresetId),
+                  ].some((value) => value.toLowerCase().includes(needle)),
+                )
+              : wearables,
+          ),
+        );
+      };
+      const create = createButton('Create wearable definition');
+      create.addEventListener('click', () => {
+        editingWearableId = null;
+        void showWearableForm();
+      });
+      const search = createSearchInput('Search wearables…', (value) => {
+        query = value;
+        refresh();
+      });
+      refresh();
+      renderShell(
+        [
+          createPageHeader(
+            'Wearable definitions',
+            `${wearables.length} definition${wearables.length === 1 ? '' : 's'}`,
+          ),
+          createToolbar(search, create),
+          wrapInCard(host),
+          renderMessage(''),
+        ],
+        'wearables',
+        'wearables',
+      );
+    } catch (error) {
+      if (error instanceof AdminAuthError) return renderLogin(error.message);
+      renderShell(
+        [
+          createPageHeader('Wearable definitions'),
+          renderMessage(
+            error instanceof Error ? error.message : 'Failed to load wearables.',
+            true,
+          ),
+        ],
+        'wearables',
+        'wearables',
+      );
+    }
+  }
+
+  function readWearableForm(form: HTMLFormElement): WearableDefinitionInput {
+    const primaryRaw = formValue(form, 'wearableSlotType') as WearableSlotType;
+    const primary = WEARABLE_SLOT_TYPES.includes(primaryRaw) ? primaryRaw : 'torso';
+    const checked = Array.from(
+      form.querySelectorAll<HTMLInputElement>('input[name="occupiedSlotTypes"]:checked'),
+    )
+      .map((input) => input.value as WearableSlotType)
+      .filter((slot): slot is WearableSlotType => WEARABLE_SLOT_TYPES.includes(slot));
+    const occupiedSlotTypes = [
+      primary,
+      ...checked.filter((slot) => slot !== primary),
+    ];
+    const prefabId = formValue(form, 'prefabId');
+    const iconUrl = formValue(form, 'iconUrl');
+    const itemType = formValue(form, 'itemType');
+    return {
+      name: formValue(form, 'name'),
+      description: formValue(form, 'description'),
+      itemType: itemType === 'armor' ? 'armor' : 'clothing',
+      subType: formValue(form, 'subType') || 'generic',
+      prefabId: prefabId || null,
+      iconUrl: iconUrl || null,
+      costArc: Math.round(formNumber(form, 'costArc')),
+      rarity: formValue(form, 'rarity') || 'common',
+      wearableSlotType: primary,
+      occupiedSlotTypes,
+      sidekickPartPresetId: Math.round(formNumber(form, 'sidekickPartPresetId')),
+    };
+  }
+
+  async function showWearableForm(existing?: WearableDefinition): Promise<void> {
+    const prefabs = await ensureItemPrefabs();
+    const defaults = existing ?? DEFAULT_WEARABLE_FORM;
+    const form = document.createElement('form');
+    form.className = 'sc-admin-form sc-admin-form-wide';
+    const back = createButton('Back to wearables', 'secondary');
+    back.addEventListener('click', () => {
+      editingWearableId = null;
+      void showWearables();
+    });
+    const prefabOptions = [
+      { value: '', label: 'No item prefab' },
+      ...prefabs.map((prefab) => ({
+        value: prefab.id,
+        label: `${prefab.label} (${prefab.id})`,
+      })),
+    ];
+    const coverage = document.createElement('div');
+    coverage.className = 'sc-admin-check-grid';
+    for (const slot of WEARABLE_SLOT_TYPES) {
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = 'occupiedSlotTypes';
+      input.value = slot;
+      input.checked = defaults.occupiedSlotTypes.includes(slot);
+      label.append(input, document.createTextNode(` ${slot}`));
+      coverage.append(label);
+    }
+    form.append(
+      createField('Name', createTextInput('name', defaults.name)),
+      createField('Description', createTextArea('description', defaults.description)),
+      createField(
+        'Item type',
+        createSelect(
+          'itemType',
+          [
+            { value: 'clothing', label: 'Clothing' },
+            { value: 'armor', label: 'Armor' },
+          ],
+          defaults.itemType,
+        ),
+      ),
+      createField(
+        'Primary wearable slot',
+        createSelect(
+          'wearableSlotType',
+          WEARABLE_SLOT_TYPES.map((slot) => ({ value: slot, label: slot })),
+          defaults.wearableSlotType,
+        ),
+      ),
+      createField('Occupied slots', coverage),
+      createField(
+        'Sidekick part preset ID',
+        createNumberInput('sidekickPartPresetId', defaults.sidekickPartPresetId),
+      ),
+      createField('Sub-type', createTextInput('subType', defaults.subType)),
+      createField(
+        'Item prefab (optional)',
+        createSelect('prefabId', prefabOptions, defaults.prefabId ?? undefined),
+      ),
+      createIconUrlField(form, defaults.iconUrl ?? '', setStatus),
+      createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
+      createField('Rarity', createTextInput('rarity', defaults.rarity)),
+    );
+    const actions = document.createElement('div');
+    actions.className = 'sc-admin-actions';
+    const save = createButton(existing ? 'Save changes' : 'Create definition');
+    save.type = 'submit';
+    actions.append(save);
+    if (existing) {
+      const remove = createButton('Delete definition', 'secondary');
+      remove.addEventListener('click', () => {
+        if (!window.confirm(`Delete wearable "${existing.name}"? This cannot be undone.`)) return;
+        setStatus('Deleting wearable definition...');
+        deleteWearableDefinition(existing.id)
+          .then(() => {
+            editingWearableId = null;
+            void showWearables();
+          })
+          .catch((error) =>
+            setStatus(error instanceof Error ? error.message : 'Delete failed.', true),
+          );
+      });
+      actions.append(remove);
+    }
+    form.append(actions, renderMessage(''));
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const payload = readWearableForm(form);
+      if (payload.sidekickPartPresetId <= 0) {
+        setStatus('Sidekick preset ID must be positive.', true);
+        return;
+      }
+      setStatus('Saving wearable definition...');
+      const request = existing
+        ? updateWearableDefinition(existing.id, payload)
+        : createWearableDefinition(payload);
+      request
+        .then(() => {
+          editingWearableId = null;
+          void showWearables();
+        })
+        .catch((error) =>
+          setStatus(error instanceof Error ? error.message : 'Save failed.', true),
+        );
+    });
+    renderShell(
+      [
+        createPageHeader(
+          existing ? 'Edit wearable definition' : 'Create wearable definition',
+          existing?.name,
+          [back],
+        ),
+        wrapInCard(form),
+      ],
+      'wearable-form',
+      'wearables',
     );
   }
 
@@ -2196,11 +2570,20 @@ export function showAdminScreen(): void {
               else void showBackpacks();
             })
             .catch(() => void showBackpacks());
+        } else if (editingWearableId) {
+          listWearableDefinitions()
+            .then((wearables) => {
+              const wearable = wearables.find((entry) => entry.id === editingWearableId);
+              if (wearable) void showWearableForm(wearable);
+              else void showWearables();
+            })
+            .catch(() => void showWearables());
         } else if (currentTab === 'ships') void showShips();
         else if (currentTab === 'props') void showProps();
         else if (currentTab === 'items') void showItems();
         else if (currentTab === 'weapons') void showWeapons();
         else if (currentTab === 'backpacks') void showBackpacks();
+        else if (currentTab === 'wearables') void showWearables();
         else if (currentTab === 'settings') void showSettings();
         else void showUsers();
         return;

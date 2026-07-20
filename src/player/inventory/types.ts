@@ -12,6 +12,16 @@ export const ITEM_TYPES = [
 
 export type ItemType = (typeof ITEM_TYPES)[number];
 
+export const WEARABLE_SLOT_TYPES = [
+  'head',
+  'torso',
+  'arms',
+  'legs',
+  'feet',
+] as const;
+
+export type WearableSlotType = (typeof WEARABLE_SLOT_TYPES)[number];
+
 export interface ItemDefinition {
   id: string;
   name: string;
@@ -28,6 +38,10 @@ export interface ItemDefinition {
   /** Present for backpacks. */
   capacityLiters?: number;
   emptyMassKg?: number;
+  /** Present for armor and clothing backed by a Sidekick part preset. */
+  wearableSlotType?: WearableSlotType;
+  occupiedSlotTypes?: WearableSlotType[];
+  sidekickPartPresetId?: number;
 }
 
 export interface PlayerItemStack {
@@ -100,8 +114,9 @@ export function findQuickEquipSlot(
   itemDefinitionId: string,
   slots: ReadonlyArray<{
     id: string;
-    kind: 'weapon' | 'backpack';
+    kind: 'weapon' | 'backpack' | 'wearable';
     weaponSlotType?: WeaponSlotType;
+    wearableSlotType?: WearableSlotType;
     requiresSlotId?: string;
   }>,
 ): string | null {
@@ -111,6 +126,13 @@ export function findQuickEquipSlot(
     if (state.loadout[slot.id]) continue;
     if (slot.requiresSlotId && !state.loadout[slot.requiresSlotId]) continue;
     if (slot.kind === 'backpack' && definition.itemType === 'backpack') return slot.id;
+    if (
+      slot.kind === 'wearable' &&
+      definition.wearableSlotType === slot.wearableSlotType &&
+      (definition.itemType === 'armor' || definition.itemType === 'clothing')
+    ) {
+      return slot.id;
+    }
     if (
       slot.kind === 'weapon' &&
       definition.itemType === 'weapon' &&
@@ -125,14 +147,21 @@ export function findQuickEquipSlot(
 export function itemCompatibleWithSlot(
   definition: ItemDefinition,
   slot: {
-    kind: 'weapon' | 'backpack';
+    kind: 'weapon' | 'backpack' | 'wearable';
     weaponSlotType?: WeaponSlotType;
+    wearableSlotType?: WearableSlotType;
     requiresSlotId?: string;
   },
   loadout: LoadoutState,
 ): boolean {
   if (slot.requiresSlotId && !loadout[slot.requiresSlotId]) return false;
   if (slot.kind === 'backpack') return definition.itemType === 'backpack';
+  if (slot.kind === 'wearable') {
+    return (
+      (definition.itemType === 'armor' || definition.itemType === 'clothing') &&
+      definition.wearableSlotType === slot.wearableSlotType
+    );
+  }
   return (
     definition.itemType === 'weapon' && definition.weaponSlotType === slot.weaponSlotType
   );

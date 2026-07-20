@@ -520,70 +520,85 @@ function applyHiddenNodes(
   }
 }
 
+interface BuiltEntity {
+  group: THREE.Group;
+  /** Resolves once all GLB assets for this subtree are attached (or failed). */
+  ready: Promise<void>;
+}
+
+function attachLoadedAsset(
+  group: THREE.Group,
+  model: THREE.Object3D,
+  entity: PrefabEntity,
+  options: BuildEntityOptions,
+): void {
+  const asset = entity.asset;
+  if (!asset) return;
+  if (asset.node && !isolatePrefabModelNode(model, asset.node)) {
+    console.warn(
+      `Prefab asset node "${asset.node}" not found in ${asset.url}.`,
+    );
+    return;
+  }
+  if (!(asset.castShadow ?? true)) {
+    model.traverse((object) => {
+      object.castShadow = false;
+    });
+  }
+  applyPrefabMaterialOverrides(model, entity.materialOverrides);
+  applyNodeOverrides(model, entity.nodeOverrides);
+  applyHiddenNodes(model, entity.hiddenNodes);
+  group.add(model);
+
+  const bindAllDescendantAnimations = (curr: PrefabEntity) => {
+    for (const component of curr.components ?? []) {
+      if (component.type === 'animation') {
+        bindAnimationComponent(options.rootGroup, model, component);
+      }
+      if (
+        component.type === 'object-animation' &&
+        (component.nodes?.length ?? 0) > 0
+      ) {
+        bindObjectAnimationComponent(options.rootGroup, model, component);
+      }
+    }
+    for (const child of curr.children ?? []) {
+      bindAllDescendantAnimations(child);
+    }
+  };
+  bindAllDescendantAnimations(entity);
+}
+
 function buildEntity(
   entity: PrefabEntity,
   options: BuildEntityOptions,
-): THREE.Group {
+): BuiltEntity {
   const group = new THREE.Group();
   group.name = entity.name;
   group.userData.entityId = entity.id;
   applyEntityTransform(group, entity);
+  const pending: Promise<void>[] = [];
 
   if (entity.primitive) {
     group.add(createPrimitiveMesh(entity.primitive, entity.materialOverrides));
   }
   if (entity.asset) {
     const asset = entity.asset;
-    const castShadow = asset.castShadow ?? true;
-    void loadPrefabModel(asset.url)
-      .then((model) => {
-        if (asset.node && !isolatePrefabModelNode(model, asset.node)) {
-          console.warn(
-            `Prefab asset node "${asset.node}" not found in ${asset.url}.`,
-          );
-          return;
-        }
-        if (!castShadow) {
-          model.traverse((object) => {
-            object.castShadow = false;
-          });
-        }
-        applyPrefabMaterialOverrides(model, entity.materialOverrides);
-        applyNodeOverrides(model, entity.nodeOverrides);
-        applyHiddenNodes(model, entity.hiddenNodes);
-        group.add(model);
-
-        const bindAllDescendantAnimations = (curr: PrefabEntity) => {
-          for (const component of curr.components ?? []) {
-            if (component.type === "animation") {
-              bindAnimationComponent(options.rootGroup, model, component);
-            }
-            if (
-              component.type === "object-animation" &&
-              (component.nodes?.length ?? 0) > 0
-            ) {
-              bindObjectAnimationComponent(
-                options.rootGroup,
-                model,
-                component,
-              );
-            }
-          }
-          for (const child of curr.children ?? []) {
-            bindAllDescendantAnimations(child);
-          }
-        };
-        bindAllDescendantAnimations(entity);
-      })
-      .catch((error) => {
-        console.warn(`Prefab asset failed to load: ${asset.url}`, error);
-      });
+    pending.push(
+      loadPrefabModel(asset.url)
+        .then((model) => {
+          attachLoadedAsset(group, model, entity, options);
+        })
+        .catch((error) => {
+          console.warn(`Prefab asset failed to load: ${asset.url}`, error);
+        }),
+    );
   } else {
     for (const component of entity.components ?? []) {
-      if (component.type === "animation") {
+      if (component.type === 'animation') {
         bindAnimationComponent(options.rootGroup, group, component);
       }
-      if (component.type === "object-animation") {
+      if (component.type === 'object-animation') {
         bindObjectAnimationComponent(options.rootGroup, group, component);
       }
     }
@@ -614,9 +629,14 @@ function buildEntity(
   }
 
   for (const child of entity.children ?? []) {
-    group.add(buildEntity(child, options));
+    const built = buildEntity(child, options);
+    group.add(built.group);
+    pending.push(built.ready);
   }
-  return group;
+  return {
+    group,
+    ready: Promise.all(pending).then(() => undefined),
+  };
 }
 
 /**
@@ -639,7 +659,7 @@ export function createPrefabStationGroup(
     localLightShadowMapSize: options.localLightShadowMapSize ?? 0,
     localLightShadowsEnabled: options.localLightShadowsEnabled ?? false,
     rootGroup: group,
-  }));
+  }).group);
   group.scale.setScalar(renderScale);
   applyDefaultFrustumCulling(group);
   return group;
@@ -657,7 +677,31 @@ export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
     localLightShadowMapSize: 256,
     localLightShadowsEnabled: true,
     rootGroup: group,
-  }));
+  }).group);
+  applyDefaultFrustumCulling(group);
+  return group;
+}
+
+/**
+ * Like {@link createPropInstanceGroup}, but waits until every GLB asset in the
+ * tree is attached. Used for one-shot captures (admin icon screenshots).
+ */
+export async function createPropInstanceGroupAsync(
+  doc: PrefabDocument,
+): Promise<THREE.Group> {
+  const group = new THREE.Group();
+  group.name = `prop:${doc.id}`;
+  setupUpdateAnimations(group);
+  setupUpdateParticles(group);
+  setupUpdateObjectAnimations(group);
+  const built = buildEntity(doc.root, {
+    lightScale: 1,
+    localLightShadowMapSize: 256,
+    localLightShadowsEnabled: true,
+    rootGroup: group,
+  });
+  group.add(built.group);
+  await built.ready;
   applyDefaultFrustumCulling(group);
   return group;
 }

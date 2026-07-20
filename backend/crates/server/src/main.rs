@@ -183,6 +183,14 @@ fn router(state: AppState) -> Result<Router> {
             "/admin/backpacks/{id}",
             patch(admin::update_backpack).delete(admin::delete_backpack),
         )
+        .route(
+            "/admin/wearables",
+            get(admin::list_wearables).post(admin::create_wearable),
+        )
+        .route(
+            "/admin/wearables/{id}",
+            patch(admin::update_wearable).delete(admin::delete_wearable),
+        )
         .layer(RequestBodyLimitLayer::new(512 * 1024))
         .layer(CatchPanicLayer::new())
         .layer(TraceLayer::new_for_http())

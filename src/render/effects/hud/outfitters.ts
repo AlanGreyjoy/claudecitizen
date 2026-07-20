@@ -1,6 +1,5 @@
 /**
- * Station outfitters — ES-style flat panel with gear category tabs.
- * Back stocks backpacks; other categories are empty until catalog grows.
+ * Station outfitters — ES-style flat panel with wearable and backpack categories.
  */
 
 import { purchaseInventoryItem } from "../../../net/api";
@@ -15,10 +14,8 @@ import { paintItemIcon } from "./item_icon";
 
 export type OutfittersCategory =
   | "head"
-  | "shoulders"
+  | "torso"
   | "arms"
-  | "chest"
-  | "waist"
   | "legs"
   | "feet"
   | "back";
@@ -28,10 +25,8 @@ export const OUTFITTERS_CATEGORIES: readonly {
   label: string;
 }[] = [
   { id: "head", label: "Head" },
-  { id: "shoulders", label: "Shoulders" },
+  { id: "torso", label: "Torso" },
   { id: "arms", label: "Arms" },
-  { id: "chest", label: "Chest" },
-  { id: "waist", label: "Waist" },
   { id: "legs", label: "Legs" },
   { id: "feet", label: "Feet" },
   { id: "back", label: "Back" },
@@ -47,11 +42,12 @@ function filterCategoryOfferings(
   shop: StationOutfittersMarker,
   category: OutfittersCategory,
 ): ItemDefinition[] {
-  // Only Back is stocked for now (backpacks). Other body categories stay empty
-  // until armor/clothing slots and catalog entries exist.
-  if (category !== "back") return [];
-
-  let offerings = catalog.filter((entry) => entry.itemType === "backpack");
+  let offerings = catalog.filter((entry) =>
+    category === "back"
+      ? entry.itemType === "backpack"
+      : (entry.itemType === "armor" || entry.itemType === "clothing") &&
+        entry.wearableSlotType === category,
+  );
   if (shop.itemDefinitionIds.length > 0) {
     const allow = new Set(shop.itemDefinitionIds);
     offerings = offerings.filter((entry) => allow.has(entry.id));
