@@ -23,6 +23,9 @@ import {
 import { add, cross, dot, normalize, rotateAroundAxis, scale, sub } from '../../../math/vec3';
 import { v3 } from '../domain/math';
 
+const WEAPON_AIM_ZOOM_SCALE = 0.86;
+const WEAPON_AIM_ZOOM_HALF_LIFE_SECONDS = 0.07;
+
 function resolveShipDeckOrbit(
   shipForward: Vec3,
   shipUp: Vec3,
@@ -185,6 +188,17 @@ export function updateCameraRig(
     station !== null && (mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR);
   /** Outside hull/ramp near a parked ship — character camera, not ship-zone orbit. */
   const onShipDeckInterior = mode === MODE_ON_SHIP_DECK && !shipExteriorWalk;
+  const previousWeaponAimZoom =
+    typeof camera.userData.weaponAimZoom01 === 'number'
+      ? camera.userData.weaponAimZoom01 as number
+      : 0;
+  const weaponAimZoomTarget = world.weaponAimActive ? 1 : 0;
+  const weaponAimZoomBlend = dt <= 0
+    ? 0
+    : 1 - Math.exp((-Math.LN2 * dt) / WEAPON_AIM_ZOOM_HALF_LIFE_SECONDS);
+  const weaponAimZoom01 = previousWeaponAimZoom
+    + (weaponAimZoomTarget - previousWeaponAimZoom) * weaponAimZoomBlend;
+  camera.userData.weaponAimZoom01 = weaponAimZoom01;
 
   const focusPosition =
     mode === 'in-ship' || mode === MODE_IN_BED || !character
@@ -381,7 +395,9 @@ export function updateCameraRig(
                 ORBIT_PITCH_LIMIT,
               );
 
-      const zoomDistance = cameraOrbit.zoomDistance ?? 7.4;
+      const baseZoomDistance = cameraOrbit.zoomDistance ?? 7.4;
+      const zoomDistance = baseZoomDistance
+        * (1 - (1 - WEAPON_AIM_ZOOM_SCALE) * weaponAimZoom01);
       const rig = resolveCharacterCameraRig(orbit, zoomDistance);
       let positionOffset = rig.positionOffset;
       if (stationActive && station) {

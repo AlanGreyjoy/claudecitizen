@@ -97,6 +97,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   let coupledTogglePressed = false;
   const seatLook = { pitchRadians: 0, yawRadians: 0, targetPitchRadians: 0, targetYawRadians: 0 };
   let primaryClickPressed = false;
+  let secondaryClickHeld = false;
   const orbitLook = {
     pitchRadians: -0.35,
     yawRadians: 0,
@@ -375,10 +376,25 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   }
 
   function onPointerDown(event: PointerEvent) {
-    if (event.button !== 0) return;
     if (document.pointerLockElement !== canvas) return;
     if (inputSuppressed) return;
-    primaryClickPressed = true;
+    if (event.button === 0) {
+      primaryClickPressed = true;
+    } else if (event.button === 2) {
+      secondaryClickHeld = true;
+    }
+  }
+
+  function onPointerUp(event: PointerEvent) {
+    if (event.button === 2) secondaryClickHeld = false;
+  }
+
+  function onPointerLockChange() {
+    if (document.pointerLockElement !== canvas) secondaryClickHeld = false;
+  }
+
+  function onContextMenu(event: MouseEvent) {
+    event.preventDefault();
   }
 
   function onBlur() {
@@ -386,6 +402,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     justPressed.clear();
     deviceActionStates.clear();
     primaryClickPressed = false;
+    secondaryClickHeld = false;
     flightAim = createFlightAimState();
     resetSeatLookState();
   }
@@ -417,6 +434,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('click', onCanvasClick);
   canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('contextmenu', onContextMenu);
+  window.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointerlockchange', onPointerLockChange);
 
   function updateQuantumEngageHold(): boolean {
     if (mode !== 'in-ship' || !isKeyboardActionDown('cycleFlightMode')) {
@@ -463,6 +483,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       keys.clear();
       justPressed.clear();
       deviceActionStates.clear();
+      secondaryClickHeld = false;
       flightAim = createFlightAimState();
       resetSeatLookState();
     }
@@ -648,6 +669,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     canvas.removeEventListener('wheel', onWheel);
     canvas.removeEventListener('click', onCanvasClick);
     canvas.removeEventListener('pointerdown', onPointerDown);
+    canvas.removeEventListener('contextmenu', onContextMenu);
+    window.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('pointerlockchange', onPointerLockChange);
   }
 
   return {
@@ -658,6 +682,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     },
     isPointerLocked() {
       return document.pointerLockElement === canvas;
+    },
+    isSecondaryClickHeld() {
+      return !inputSuppressed && secondaryClickHeld && document.pointerLockElement === canvas;
     },
     isSeatLookActive,
     sampleCameraState,

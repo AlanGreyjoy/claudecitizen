@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type {
+  CharacterRenderState,
+  CharacterUpperBodyAim,
   Planet,
   PlanetSurfaceSample,
   RenderStats,
@@ -68,6 +70,8 @@ const QUANTUM_BACKGROUND = new THREE.Color(0x01030a);
 // Distant stations already have System Map/nav markers, so load their detailed
 // prefab only once the player is close enough for the mesh to matter.
 const SECONDARY_STATION_LOAD_DISTANCE_METERS = 75_000;
+const MAX_UPPER_BODY_AIM_YAW = THREE.MathUtils.degToRad(80);
+const MAX_UPPER_BODY_AIM_PITCH = THREE.MathUtils.degToRad(55);
 
 function enableRenderLayer(root: THREE.Object3D, layer: number): void {
   root.traverse((object) => object.layers.enable(layer));
@@ -168,6 +172,45 @@ export function createSpikeRenderer(
 
   const camera = createMainCamera();
   const cameraTarget = new THREE.Vector3();
+  const upperAimView = new THREE.Vector3();
+  const upperAimUp = new THREE.Vector3();
+  const upperAimForward = new THREE.Vector3();
+  const upperAimPlanarView = new THREE.Vector3();
+  const upperAimCross = new THREE.Vector3();
+
+  function resolveUpperBodyAim(character: CharacterRenderState): CharacterUpperBodyAim {
+    camera.getWorldDirection(upperAimView).normalize();
+    upperAimUp.set(character.up.x, character.up.y, character.up.z).normalize();
+    upperAimForward
+      .set(character.forward.x, character.forward.y, character.forward.z)
+      .addScaledVector(upperAimUp, -upperAimForward.dot(upperAimUp))
+      .normalize();
+    upperAimPlanarView
+      .copy(upperAimView)
+      .addScaledVector(upperAimUp, -upperAimView.dot(upperAimUp));
+
+    let yawRadians = 0;
+    if (upperAimPlanarView.lengthSq() > 1e-8 && upperAimForward.lengthSq() > 1e-8) {
+      upperAimPlanarView.normalize();
+      yawRadians = Math.atan2(
+        upperAimUp.dot(upperAimCross.crossVectors(upperAimForward, upperAimPlanarView)),
+        THREE.MathUtils.clamp(upperAimForward.dot(upperAimPlanarView), -1, 1),
+      );
+    }
+
+    return {
+      pitchRadians: THREE.MathUtils.clamp(
+        Math.asin(THREE.MathUtils.clamp(upperAimView.dot(upperAimUp), -1, 1)),
+        -MAX_UPPER_BODY_AIM_PITCH,
+        MAX_UPPER_BODY_AIM_PITCH,
+      ),
+      yawRadians: THREE.MathUtils.clamp(
+        yawRadians,
+        -MAX_UPPER_BODY_AIM_YAW,
+        MAX_UPPER_BODY_AIM_YAW,
+      ),
+    };
+  }
   const lighting = createSceneLighting(scene);
   const quantumLightingRoots = [
     lighting.ambient,
@@ -634,7 +677,12 @@ export function createSpikeRenderer(
           renderMode === 'in-station' || renderMode === 'riding-elevator',
       }));
 
-      avatar.update(character, focusBody.position, nowSeconds);
+      avatar.update(
+        character,
+        focusBody.position,
+        nowSeconds,
+        character && world.weaponAimActive ? resolveUpperBodyAim(character) : null,
+      );
       remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
       stationNpcs.update(world.stationNpcs ?? [], focusBody.position, nowSeconds);
     }

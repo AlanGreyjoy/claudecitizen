@@ -27,9 +27,19 @@ import {
   locomotionStateSlug,
   parseAnimationController,
   resolveControllerClip,
+  resolveControllerState,
   type AnimationControllerV1,
   type AnimationLocomotionKind,
 } from '../../player/animation/schema';
+import {
+  locomotionFromGameplay,
+} from '../../player/animation/default_controller';
+import {
+  JUMP_SPEED_METERS_PER_SECOND,
+  SPRINT_SPEED_METERS_PER_SECOND,
+  WALK_SPEED_METERS_PER_SECOND,
+  advanceJumpAnimationPhase,
+} from '../../player/character_controller';
 import { buildDefaultDefinition, findPreviewSpecies, loadSidekickCatalog } from '../../player/character_creator/sidekick_catalog';
 import type { SidekickCharacterDefinitionV2 } from '../../player/character_creator/sidekick_definition';
 import {
@@ -59,7 +69,12 @@ import {
   type PrefabTransform,
 } from '../../world/prefabs/schema';
 import type { WeaponSlotType } from '../../types/equipment';
-import { stanceIdForWeaponSlot } from '../../player/inventory/weapon_select';
+import type { JumpPhase } from '../../types/character';
+import {
+  WEAPON_SELECT_SLOT_IDS,
+  stanceIdForWeaponSlot,
+  type WeaponSelectSlotId,
+} from '../../player/inventory/weapon_select';
 
 const ATTACHMENT_BONES = [
   'backAttach',
@@ -80,6 +95,91 @@ type EquipmentGizmoMode = 'translate' | 'rotate' | 'scale';
 type BaseCharacterLeftTab = 'equipment' | 'animation' | 'controllers';
 /** holster = resting; drawn = character hand bone; weapon-grip = per-weapon prefab pose */
 type MountEditMode = 'holster' | 'drawn' | 'weapon-grip';
+
+interface PlayTestDefaultAssignment {
+  slotId: 'backpack' | WeaponSelectSlotId;
+  definition: CatalogDefinition;
+}
+
+const PLAY_TEST_DEFAULT_ASSIGNMENTS: readonly PlayTestDefaultAssignment[] = [
+  {
+    slotId: 'backpack',
+    definition: {
+      id: 'demo-backpack',
+      name: 'Demo Backpack',
+      description: 'Base Character play-test backpack.',
+      itemType: 'backpack',
+      subType: 'field',
+      prefabId: 'demo-backpack',
+      iconUrl: null,
+      stackMax: 1,
+      costArc: 0,
+      rarity: 'common',
+      createdAt: '',
+      updatedAt: '',
+      capacityLiters: 48,
+      emptyMassKg: 2.5,
+    },
+  },
+  {
+    slotId: 'rifle-primary',
+    definition: {
+      id: 'assault-01',
+      name: 'Assault 01',
+      description: 'Base Character primary-rifle play-test weapon.',
+      itemType: 'weapon',
+      subType: 'rifle',
+      prefabId: 'assault-01',
+      iconUrl: null,
+      stackMax: 1,
+      costArc: 0,
+      rarity: 'common',
+      createdAt: '',
+      updatedAt: '',
+      weaponSlotType: 'rifle',
+    },
+  },
+  {
+    slotId: 'rifle-secondary',
+    definition: {
+      id: 'brown-50',
+      name: 'Brown 50',
+      description: 'Base Character secondary-rifle play-test weapon.',
+      itemType: 'weapon',
+      subType: 'rifle',
+      prefabId: 'brown-50',
+      iconUrl: null,
+      stackMax: 1,
+      costArc: 0,
+      rarity: 'common',
+      createdAt: '',
+      updatedAt: '',
+      weaponSlotType: 'rifle',
+    },
+  },
+  {
+    slotId: 'handgun',
+    definition: {
+      id: 'twin-horned-pistol',
+      name: 'Twin Horned Pistol',
+      description: 'Base Character handgun play-test weapon.',
+      itemType: 'weapon',
+      subType: 'handgun',
+      prefabId: 'twin-horned-pistol',
+      iconUrl: null,
+      stackMax: 1,
+      costArc: 0,
+      rarity: 'common',
+      createdAt: '',
+      updatedAt: '',
+      weaponSlotType: 'handgun',
+    },
+  },
+] as const;
+
+const PLAY_TEST_GRAVITY_METERS_PER_SECOND_SQUARED = 9.81;
+const PLAY_TEST_FALL_GRAVITY_MULTIPLIER = 1.7;
+const PLAY_TEST_STAGE_RADIUS_METERS = 9;
 
 export interface BaseCharacterEquipmentEditor {
   activate: () => void;
@@ -283,9 +383,30 @@ export function createBaseCharacterEquipmentEditor(
   const stage = document.createElement('div');
   stage.className = 'ed-base-stage';
   const canvas = document.createElement('canvas');
+  canvas.tabIndex = 0;
+  canvas.setAttribute('aria-label', 'Base Character preview stage');
+  const playTestHud = document.createElement('div');
+  playTestHud.className = 'ed-base-playtest-hud';
+  playTestHud.hidden = true;
+  const playTestHudTitle = document.createElement('div');
+  playTestHudTitle.className = 'ed-base-playtest-title';
+  playTestHudTitle.textContent = 'Character Play Test';
+  const playTestHudState = document.createElement('div');
+  playTestHudState.className = 'ed-base-playtest-state';
+  const playTestHudLoadout = document.createElement('div');
+  playTestHudLoadout.className = 'ed-base-playtest-loadout';
+  const playTestHudHelp = document.createElement('div');
+  playTestHudHelp.className = 'ed-base-playtest-help';
+  playTestHudHelp.textContent = 'WASD move · Shift sprint · Space jump · drag to orbit · Esc stop';
+  playTestHud.append(
+    playTestHudTitle,
+    playTestHudState,
+    playTestHudLoadout,
+    playTestHudHelp,
+  );
   const stageStatus = document.createElement('div');
   stageStatus.className = 'ed-base-stage-status';
-  stage.append(canvas, stageStatus);
+  stage.append(canvas, playTestHud, stageStatus);
   const right = document.createElement('aside');
   right.className = 'ed-base-sidebar ed-base-inspector';
   container.append(left, stage, right);
@@ -308,11 +429,14 @@ export function createBaseCharacterEquipmentEditor(
   light.position.set(2.5, 4.5, 2);
   scene.add(light);
   const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(3, 64),
+    new THREE.CircleGeometry(12, 96),
     new THREE.MeshStandardMaterial({ color: 0x17243a, roughness: 0.95 }),
   );
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
+  const grid = new THREE.GridHelper(20, 20, 0x43749a, 0x233b58);
+  grid.position.y = 0.003;
+  scene.add(grid);
   const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
   camera.position.set(0, 1.05, 4.2);
   const controls = new OrbitControls(camera, canvas);
@@ -346,6 +470,17 @@ export function createBaseCharacterEquipmentEditor(
   let mountEditMode: MountEditMode = 'holster';
   /** When set, that weapon slot's preview mesh parents to its drawn mount. */
   let simulateDrawnSlotId: string | null = null;
+  let playTestActive = false;
+  let playTestWeaponSlotId: WeaponSelectSlotId | null = null;
+  let playTestJumpPhase: JumpPhase = 'grounded';
+  let playTestJumpPhaseTime = 0;
+  let playTestVerticalSpeed = 0;
+  let playTestAnimationKey = '';
+  let playTestAnimationGeneration = 0;
+  let playTestPoseBefore: CharacterPreviewPose = 'reference';
+  let playTestStanceBefore = 'unarmed';
+  let playTestLocomotionBefore: AnimationLocomotionKind = 'idle';
+  let playTestClipBefore = 'Idle_Loop';
   let dirty = false;
   let active = false;
   let disposed = false;
@@ -371,6 +506,16 @@ export function createBaseCharacterEquipmentEditor(
   let backpacks: BackpackDefinition[] = [];
   let previewGeneration = 0;
   let catalogMessage = 'Catalog not loaded.';
+  const playTestKeys = new Set<string>();
+  const playTestWeaponButtons = new Map<WeaponSelectSlotId, HTMLButtonElement>();
+  const playTestCameraPositionBefore = new THREE.Vector3();
+  const playTestCameraTargetBefore = new THREE.Vector3();
+  const playTestPreviousPosition = new THREE.Vector3();
+  const playTestCameraForward = new THREE.Vector3();
+  const playTestCameraRight = new THREE.Vector3();
+  const playTestMoveDirection = new THREE.Vector3();
+  const playTestCameraDelta = new THREE.Vector3();
+  const controllerSourceLoads = new Map<string, Promise<void>>();
   scene.add(previewRoot);
 
   const resize = (): void => {
@@ -388,8 +533,9 @@ export function createBaseCharacterEquipmentEditor(
     requestAnimationFrame(renderFrame);
     if (!active) return;
     resize();
+    const deltaSeconds = Math.min(clock.getDelta(), 0.05);
+    if (playTestActive) updatePlayTest(deltaSeconds);
     controls.update();
-    const deltaSeconds = clock.getDelta();
     if (previewPose === 'animated') animation?.update(deltaSeconds);
     renderer.render(scene, camera);
   };
@@ -425,6 +571,30 @@ export function createBaseCharacterEquipmentEditor(
     || controllerDirty
     || dirtyBackpackPrefabIds.size > 0
     || dirtyWeaponPrefabIds.size > 0;
+
+  const matchingCatalogDefinition = (
+    fallback: CatalogDefinition,
+  ): CatalogDefinition | null => {
+    const catalog = fallback.itemType === 'backpack' ? backpacks : weapons;
+    return catalog.find((definition) =>
+      definition.prefabId === fallback.prefabId
+      && definition.itemType === fallback.itemType
+    ) ?? null;
+  };
+
+  const equipDefaultPlayTestLoadout = (overwrite = false): boolean => {
+    let changed = false;
+    for (const entry of PLAY_TEST_DEFAULT_ASSIGNMENTS) {
+      const current = assignments.get(entry.slotId);
+      const shouldReplaceFallback = current === entry.definition;
+      if (!overwrite && current && !shouldReplaceFallback) continue;
+      const next = matchingCatalogDefinition(entry.definition) ?? entry.definition;
+      if (current === next) continue;
+      assignments.set(entry.slotId, next);
+      changed = true;
+    }
+    return changed;
+  };
 
   const ensureDrawnGripEntity = (doc: PrefabDocument): PrefabEntity => {
     const existing = collectDrawnGrip(doc);
@@ -525,6 +695,7 @@ export function createBaseCharacterEquipmentEditor(
   };
 
   const setGizmoMode = (mode: EquipmentGizmoMode): void => {
+    if (playTestActive) return;
     gizmoMode = mode;
     gizmo.setMode(mode);
     renderInspector();
@@ -650,8 +821,8 @@ export function createBaseCharacterEquipmentEditor(
       const item = createPropInstanceGroup(draft);
       weaponPreviewRoots.set(slot.id, item);
       weaponGripEntities.set(slot.id, gripEntity);
-      const drawnParent =
-        simulateDrawnSlotId === slot.id ? drawnPivots.get(slot.id) ?? null : null;
+      const drawnSlotId = playTestActive ? playTestWeaponSlotId : simulateDrawnSlotId;
+      const drawnParent = drawnSlotId === slot.id ? drawnPivots.get(slot.id) ?? null : null;
       if (drawnParent) {
         applyTransform(item, gripEntity.transform);
         drawnParent.add(item);
@@ -662,14 +833,20 @@ export function createBaseCharacterEquipmentEditor(
       if (socket && backpackRoot) socket.add(item);
       else if (!slot.requiresSlotId) mountPivots.get(slot.id)?.add(item);
     }
-    if (simulateDrawnSlotId && (mountEditMode === 'drawn' || mountEditMode === 'weapon-grip')) {
+    if (
+      !playTestActive
+      && simulateDrawnSlotId
+      && (mountEditMode === 'drawn' || mountEditMode === 'weapon-grip')
+    ) {
       setStageStatus(
         mountEditMode === 'weapon-grip'
           ? 'Editing this weapon’s drawn-grip. Save writes the weapon prefab.'
           : 'Editing character hand bone. Switch to Weapon grip for per-gun rotation.',
       );
     }
-    syncGizmo();
+    if (playTestActive) gizmo.detach();
+    else syncGizmo();
+    renderPlayTestHud();
     renderLeft();
     renderInspector();
   };
@@ -746,6 +923,7 @@ export function createBaseCharacterEquipmentEditor(
     try {
       [weapons, backpacks] = await Promise.all([listWeaponDefinitions(), listBackpackDefinitions()]);
       catalogMessage = `${weapons.length} weapons · ${backpacks.length} backpacks`;
+      if (equipDefaultPlayTestLoadout()) void rebuildEquipmentPreview();
     } catch (error) {
       catalogMessage = error instanceof AdminAuthError
         ? 'Admin authentication is required. Sign in through the Admin portal, then refresh.'
@@ -838,30 +1016,65 @@ export function createBaseCharacterEquipmentEditor(
     }
   };
 
-  const previewControllerState = async (): Promise<void> => {
-    if (!controllerState || !animation) return;
-    const clipName = resolveControllerClip(controllerState, previewLocomotion, selectedStanceId);
-    if (!clipName) {
-      setStageStatus(
-        `No clip assigned for ${selectedStanceId} / ${LOCOMOTION_LABELS[previewLocomotion]}.`,
-        true,
-      );
-      return;
-    }
-    const state = controllerState.states.find(
-      (entry) => entry.stanceId === selectedStanceId && entry.locomotion === previewLocomotion,
-    );
-    if (state && state.sourceId !== UAL_ANIMATION_SOURCE_ID) {
+  const loadControllerStateClip = async (
+    locomotion: AnimationLocomotionKind,
+    stanceId: string,
+  ): Promise<string | null> => {
+    if (!controllerState || !animation) return null;
+    const state = resolveControllerState(controllerState, locomotion, stanceId);
+    if (!state) return null;
+    if (
+      state.sourceId !== UAL_ANIMATION_SOURCE_ID
+      && !animation.clipNames.includes(state.clipName)
+    ) {
       const source = controllerState.sources.find((entry) => entry.id === state.sourceId);
-      if (source && !animation.clipNames.includes(clipName)) {
-        setStageStatus(`Loading source ${source.label}…`);
-        await animation.loadAnimationSource(
+      if (!source) return null;
+      let pending = controllerSourceLoads.get(source.id);
+      if (!pending) {
+        pending = animation.loadAnimationSource(
           source.url,
           source.label,
           source.yawOffsetDegrees,
         );
-        lastLoadedSourceId = source.id;
+        controllerSourceLoads.set(source.id, pending);
       }
+      try {
+        await pending;
+        lastLoadedSourceId = source.id;
+      } finally {
+        if (controllerSourceLoads.get(source.id) === pending) {
+          controllerSourceLoads.delete(source.id);
+        }
+      }
+    }
+    return animation.clipNames.includes(state.clipName) ? state.clipName : null;
+  };
+
+  const previewControllerState = async (): Promise<void> => {
+    if (!controllerState || !animation) return;
+    const configuredClip = resolveControllerClip(
+      controllerState,
+      previewLocomotion,
+      selectedStanceId,
+    );
+    let clipName: string | null;
+    try {
+      clipName = await loadControllerStateClip(previewLocomotion, selectedStanceId);
+    } catch (error) {
+      setStageStatus(
+        error instanceof Error ? error.message : 'Controller animation failed to load.',
+        true,
+      );
+      return;
+    }
+    if (!clipName) {
+      setStageStatus(
+        configuredClip
+          ? `Could not load ${configuredClip} for ${selectedStanceId} / ${LOCOMOTION_LABELS[previewLocomotion]}.`
+          : `No clip assigned for ${selectedStanceId} / ${LOCOMOTION_LABELS[previewLocomotion]}.`,
+        true,
+      );
+      return;
     }
     await ensureAnimatedPose();
     animation.setAnimation(clipName, 0.12);
@@ -869,6 +1082,287 @@ export function createBaseCharacterEquipmentEditor(
     setStageStatus(`Controller preview · ${selectedStanceId} / ${previewLocomotion} → ${clipName}`);
     renderLeft();
   };
+
+  const playTestMovementAxes = (): { x: number; y: number; moving: boolean } => {
+    const x = Number(playTestKeys.has('KeyD')) - Number(playTestKeys.has('KeyA'));
+    const y = Number(playTestKeys.has('KeyW')) - Number(playTestKeys.has('KeyS'));
+    return { x, y, moving: x !== 0 || y !== 0 };
+  };
+
+  const syncPlayTestAnimation = async (force = false): Promise<void> => {
+    if (!playTestActive || !animation || !controllerState) return;
+    const movement = playTestMovementAxes();
+    const isSprinting = movement.moving
+      && (playTestKeys.has('ShiftLeft') || playTestKeys.has('ShiftRight'));
+    const locomotion = locomotionFromGameplay(
+      playTestJumpPhase,
+      movement.moving,
+      isSprinting,
+    );
+    const stanceId = stanceIdForWeaponSlot(playTestWeaponSlotId);
+    const stateKey = `${stanceId}:${locomotion}`;
+    if (!force && stateKey === playTestAnimationKey) return;
+    playTestAnimationKey = stateKey;
+    previewLocomotion = locomotion;
+    selectedStanceId = stanceId;
+    const generation = ++playTestAnimationGeneration;
+    renderPlayTestHud();
+    try {
+      const clipName = await loadControllerStateClip(locomotion, stanceId);
+      if (!playTestActive || generation !== playTestAnimationGeneration) return;
+      if (!clipName) {
+        setStageStatus(
+          `Play test has no loadable ${stanceId} / ${LOCOMOTION_LABELS[locomotion]} clip.`,
+          true,
+        );
+        return;
+      }
+      await ensureAnimatedPose();
+      if (!playTestActive || generation !== playTestAnimationGeneration) return;
+      animation.setAnimation(clipName, 0.12);
+      animation.setPlaying(true);
+      renderPlayTestHud();
+      renderInspector();
+    } catch (error) {
+      if (!playTestActive || generation !== playTestAnimationGeneration) return;
+      setStageStatus(
+        error instanceof Error ? error.message : 'Play-test animation failed to load.',
+        true,
+      );
+    }
+  };
+
+  const selectPlayTestWeapon = async (
+    slotId: WeaponSelectSlotId | null,
+    toggle = true,
+  ): Promise<void> => {
+    if (!playTestActive) return;
+    equipDefaultPlayTestLoadout();
+    playTestWeaponSlotId = toggle && slotId === playTestWeaponSlotId ? null : slotId;
+    playTestAnimationKey = '';
+    renderPlayTestHud();
+    await rebuildEquipmentPreview();
+    if (!playTestActive) return;
+    await syncPlayTestAnimation(true);
+    canvas.focus();
+  };
+
+  function renderPlayTestHud(): void {
+    playTestHud.hidden = !playTestActive;
+    stage.classList.toggle('is-play-testing', playTestActive);
+    if (!playTestActive) return;
+    if (playTestWeaponButtons.size === 0) {
+      PLAY_TEST_DEFAULT_ASSIGNMENTS
+        .filter((entry): entry is PlayTestDefaultAssignment & { slotId: WeaponSelectSlotId } =>
+          entry.slotId !== 'backpack')
+        .forEach((entry, index) => {
+          const weaponButton = button(`${index + 1} ${entry.definition.name}`, () => {
+            void selectPlayTestWeapon(entry.slotId);
+          });
+          weaponButton.className = 'ed-base-playtest-weapon';
+          weaponButton.title = `Draw ${entry.definition.name}; press again to holster`;
+          playTestWeaponButtons.set(entry.slotId, weaponButton);
+          playTestHudLoadout.append(weaponButton);
+        });
+    }
+    for (const [slotId, weaponButton] of playTestWeaponButtons) {
+      const assignment = assignments.get(slotId);
+      const digit = WEAPON_SELECT_SLOT_IDS.indexOf(slotId) + 1;
+      weaponButton.textContent = `${digit} ${assignment?.name ?? slotId}`;
+      weaponButton.classList.toggle('is-active', slotId === playTestWeaponSlotId);
+    }
+    const weaponName = playTestWeaponSlotId
+      ? assignments.get(playTestWeaponSlotId)?.name ?? playTestWeaponSlotId
+      : 'Unarmed';
+    playTestHudState.textContent = [
+      weaponName,
+      LOCOMOTION_LABELS[previewLocomotion],
+      animation?.activeClipName || 'loading animation',
+    ].join(' · ');
+  }
+
+  function updatePlayTest(deltaSeconds: number): void {
+    const movement = playTestMovementAxes();
+    const isSprinting = movement.moving
+      && (playTestKeys.has('ShiftLeft') || playTestKeys.has('ShiftRight'));
+    playTestPreviousPosition.copy(previewRoot.position);
+
+    if (movement.moving) {
+      camera.getWorldDirection(playTestCameraForward);
+      playTestCameraForward.y = 0;
+      if (playTestCameraForward.lengthSq() < 1e-6) playTestCameraForward.set(0, 0, -1);
+      else playTestCameraForward.normalize();
+      playTestCameraRight.crossVectors(playTestCameraForward, THREE.Object3D.DEFAULT_UP).normalize();
+      playTestMoveDirection
+        .copy(playTestCameraForward)
+        .multiplyScalar(movement.y)
+        .addScaledVector(playTestCameraRight, movement.x)
+        .normalize();
+      const speed = isSprinting
+        ? SPRINT_SPEED_METERS_PER_SECOND
+        : WALK_SPEED_METERS_PER_SECOND;
+      previewRoot.position.addScaledVector(playTestMoveDirection, speed * deltaSeconds);
+      const horizontalDistance = Math.hypot(previewRoot.position.x, previewRoot.position.z);
+      if (horizontalDistance > PLAY_TEST_STAGE_RADIUS_METERS) {
+        const scale = PLAY_TEST_STAGE_RADIUS_METERS / horizontalDistance;
+        previewRoot.position.x *= scale;
+        previewRoot.position.z *= scale;
+      }
+      const targetYaw = Math.atan2(playTestMoveDirection.x, playTestMoveDirection.z);
+      const yawDelta = Math.atan2(
+        Math.sin(targetYaw - previewRoot.rotation.y),
+        Math.cos(targetYaw - previewRoot.rotation.y),
+      );
+      previewRoot.rotation.y += yawDelta * Math.min(1, deltaSeconds * 10);
+    }
+
+    const airborne = playTestJumpPhase === 'jump-start' || playTestJumpPhase === 'jump-loop';
+    if (airborne) {
+      const gravityScale = playTestVerticalSpeed < 0 ? PLAY_TEST_FALL_GRAVITY_MULTIPLIER : 1;
+      playTestVerticalSpeed -= PLAY_TEST_GRAVITY_METERS_PER_SECOND_SQUARED
+        * gravityScale
+        * deltaSeconds;
+      previewRoot.position.y += playTestVerticalSpeed * deltaSeconds;
+      if (previewRoot.position.y <= 0) {
+        previewRoot.position.y = 0;
+        playTestVerticalSpeed = 0;
+      }
+    }
+    const phase = advanceJumpAnimationPhase(
+      { jumpPhase: playTestJumpPhase, jumpPhaseTime: playTestJumpPhaseTime },
+      deltaSeconds,
+      previewRoot.position.y > 0.001,
+      false,
+    );
+    playTestJumpPhase = phase.jumpPhase;
+    playTestJumpPhaseTime = phase.jumpPhaseTime;
+
+    playTestCameraDelta.copy(previewRoot.position).sub(playTestPreviousPosition);
+    camera.position.add(playTestCameraDelta);
+    controls.target.add(playTestCameraDelta);
+    void syncPlayTestAnimation();
+  }
+
+  const startPlayTestJump = (): void => {
+    if (!playTestActive || previewRoot.position.y > 0.001) return;
+    if (playTestJumpPhase === 'jump-start' || playTestJumpPhase === 'jump-loop') return;
+    playTestVerticalSpeed = JUMP_SPEED_METERS_PER_SECOND;
+    playTestJumpPhase = 'jump-start';
+    playTestJumpPhaseTime = 0;
+    playTestAnimationKey = '';
+    void syncPlayTestAnimation(true);
+  };
+
+  const setPlayTestActive = async (nextActive: boolean): Promise<void> => {
+    if (nextActive === playTestActive) return;
+    if (nextActive) {
+      try {
+        await ensureAvatar();
+        if (!avatar || !documentState) throw new Error('Base Character is still loading.');
+        playTestPoseBefore = previewPose;
+        playTestStanceBefore = selectedStanceId;
+        playTestLocomotionBefore = previewLocomotion;
+        playTestClipBefore = animation?.activeClipName || 'Idle_Loop';
+        playTestCameraPositionBefore.copy(camera.position);
+        playTestCameraTargetBefore.copy(controls.target);
+        equipDefaultPlayTestLoadout();
+        playTestActive = true;
+        playTestWeaponSlotId = null;
+        playTestJumpPhase = 'grounded';
+        playTestJumpPhaseTime = 0;
+        playTestVerticalSpeed = 0;
+        playTestAnimationKey = '';
+        playTestKeys.clear();
+        previewRoot.position.set(0, 0, 0);
+        previewRoot.rotation.set(0, 0, 0);
+        camera.position.set(0, 1.7, 4.4);
+        controls.target.set(0, 0.95, 0);
+        controls.update();
+        renderPlayTestHud();
+        await setPreviewPose('animated');
+        await rebuildEquipmentPreview();
+        setStageStatus('Play test active. The stage has focus; press Esc to return to authoring.');
+        await syncPlayTestAnimation(true);
+        canvas.focus();
+        renderLeft();
+        renderInspector();
+      } catch (error) {
+        playTestActive = false;
+        renderPlayTestHud();
+        setStageStatus(
+          error instanceof Error ? error.message : 'Could not start Base Character play test.',
+          true,
+        );
+      }
+      return;
+    }
+
+    playTestActive = false;
+    playTestAnimationGeneration += 1;
+    playTestKeys.clear();
+    playTestWeaponSlotId = null;
+    playTestJumpPhase = 'grounded';
+    playTestJumpPhaseTime = 0;
+    playTestVerticalSpeed = 0;
+    playTestAnimationKey = '';
+    previewRoot.position.set(0, 0, 0);
+    previewRoot.rotation.set(0, 0, 0);
+    camera.position.copy(playTestCameraPositionBefore);
+    controls.target.copy(playTestCameraTargetBefore);
+    controls.update();
+    selectedStanceId = playTestStanceBefore;
+    previewLocomotion = playTestLocomotionBefore;
+    renderPlayTestHud();
+    await rebuildEquipmentPreview();
+    if (playTestPoseBefore === 'reference') {
+      await setPreviewPose('reference');
+    } else {
+      animation?.setPlaying(true);
+      animation?.setAnimation(playTestClipBefore, 0.12);
+    }
+    setStageStatus('Play test stopped. Authoring controls restored.');
+    renderLeft();
+    renderInspector();
+    syncGizmo();
+  };
+
+  const onPlayTestKeyDown = (event: KeyboardEvent): void => {
+    if (!playTestActive) return;
+    if (event.ctrlKey || event.metaKey) return;
+    event.stopPropagation();
+    if (event.code === 'Escape') {
+      event.preventDefault();
+      void setPlayTestActive(false);
+      return;
+    }
+    if (event.code === 'Space') {
+      event.preventDefault();
+      if (!event.repeat) startPlayTestJump();
+    }
+    const digitIndex = ['Digit1', 'Digit2', 'Digit3'].indexOf(event.code);
+    if (digitIndex >= 0 && !event.repeat) {
+      event.preventDefault();
+      void selectPlayTestWeapon(WEAPON_SELECT_SLOT_IDS[digitIndex]!);
+    }
+    playTestKeys.add(event.code);
+  };
+
+  const onPlayTestKeyUp = (event: KeyboardEvent): void => {
+    if (!playTestActive) return;
+    if (!event.ctrlKey && !event.metaKey) event.stopPropagation();
+    playTestKeys.delete(event.code);
+  };
+
+  const onPlayTestBlur = (): void => {
+    playTestKeys.clear();
+  };
+
+  canvas.addEventListener('pointerdown', () => {
+    if (playTestActive) canvas.focus();
+  });
+  canvas.addEventListener('keydown', onPlayTestKeyDown);
+  canvas.addEventListener('keyup', onPlayTestKeyUp);
+  canvas.addEventListener('blur', onPlayTestBlur);
 
   const assignClipToState = (stateId: string, clipName: string): void => {
     if (!controllerState) return;
@@ -1294,9 +1788,18 @@ export function createBaseCharacterEquipmentEditor(
     title.textContent = 'Base Characters';
     const saveButton = button(hasUnsavedChanges() ? 'Save *' : 'Save', () => void save());
     const reload = button('Reload', () => void loadDocument());
+    saveButton.disabled = playTestActive;
+    reload.disabled = playTestActive;
+    const playTestButton = button(playTestActive ? 'Stop Test' : 'Play Test', () => {
+      void setPlayTestActive(!playTestActive);
+    });
+    playTestButton.classList.toggle('is-active', playTestActive);
+    playTestButton.title = playTestActive
+      ? 'Stop character play test and restore authoring controls'
+      : 'Test locomotion, jumping, and the default backpack/weapon loadout';
     const toolbar = document.createElement('div');
     toolbar.className = 'ed-base-actions';
-    toolbar.append(saveButton, reload);
+    toolbar.append(saveButton, reload, playTestButton);
 
     const tabs = document.createElement('div');
     tabs.className = 'ed-base-tabs';
@@ -1313,6 +1816,7 @@ export function createBaseCharacterEquipmentEditor(
       });
       tab.className = 'ed-base-tab';
       tab.classList.toggle('is-active', leftTab === id);
+      tab.disabled = playTestActive;
       tab.setAttribute('role', 'tab');
       tab.setAttribute('aria-selected', leftTab === id ? 'true' : 'false');
       tabs.append(tab);
@@ -1320,7 +1824,24 @@ export function createBaseCharacterEquipmentEditor(
 
     const body = document.createElement('div');
     body.className = 'ed-base-tab-body';
-    if (leftTab === 'equipment') body.append(renderEquipmentTab());
+    if (playTestActive) {
+      const panel = document.createElement('div');
+      panel.className = 'ed-base-anim-panel ed-base-playtest-panel';
+      const note = document.createElement('p');
+      note.className = 'ed-base-note';
+      note.textContent =
+        'Click the stage, then use WASD, Shift, Space, and 1–3. Movement drives the active controller states in real time.';
+      const reset = button('Reset default loadout', () => {
+        equipDefaultPlayTestLoadout(true);
+        void rebuildEquipmentPreview().then(() => canvas.focus());
+      });
+      const stop = button('Stop Play Test', () => void setPlayTestActive(false));
+      const actions = document.createElement('div');
+      actions.className = 'ed-base-actions';
+      actions.append(reset, stop);
+      panel.append(note, actions);
+      body.append(panel);
+    } else if (leftTab === 'equipment') body.append(renderEquipmentTab());
     else if (leftTab === 'animation') body.append(renderAnimationTab());
     else body.append(renderControllerPanel());
 
@@ -1329,6 +1850,26 @@ export function createBaseCharacterEquipmentEditor(
 
   function renderInspector(): void {
     right.replaceChildren();
+    if (playTestActive) {
+      const heading = document.createElement('div');
+      heading.className = 'ed-base-panel-title';
+      heading.textContent = 'Play Test';
+      const section = document.createElement('section');
+      section.className = 'ed-base-section';
+      const state = document.createElement('p');
+      state.className = 'ed-base-note';
+      const weaponName = playTestWeaponSlotId
+        ? assignments.get(playTestWeaponSlotId)?.name ?? playTestWeaponSlotId
+        : 'Unarmed';
+      state.textContent = `${weaponName} · ${LOCOMOTION_LABELS[previewLocomotion]} · ${animation?.activeClipName || 'loading'}`;
+      const controlsNote = document.createElement('p');
+      controlsNote.className = 'ed-base-note';
+      controlsNote.textContent =
+        'WASD move · Shift sprint · Space jump · 1 Assault 01 · 2 Brown 50 · 3 Twin Horned Pistol';
+      section.append(state, controlsNote);
+      right.append(heading, section);
+      return;
+    }
     const slot = currentSlot();
     const mount = currentMount();
     const heading = document.createElement('div');
@@ -1679,6 +2220,7 @@ export function createBaseCharacterEquipmentEditor(
       mountEditMode = 'holster';
       simulateDrawnSlotId = null;
       assignments = new Map();
+      equipDefaultPlayTestLoadout();
       dirty = false;
       dirtyBackpackPrefabIds.clear();
       dirtyWeaponPrefabIds.clear();
@@ -1750,6 +2292,7 @@ export function createBaseCharacterEquipmentEditor(
     },
     deactivate: () => {
       active = false;
+      if (playTestActive) void setPlayTestActive(false);
     },
     canLeave: () =>
       !hasUnsavedChanges() ||
@@ -1761,6 +2304,11 @@ export function createBaseCharacterEquipmentEditor(
     dispose: () => {
       disposed = true;
       resizeObserver.disconnect();
+      canvas.removeEventListener('keydown', onPlayTestKeyDown);
+      canvas.removeEventListener('keyup', onPlayTestKeyUp);
+      canvas.removeEventListener('blur', onPlayTestBlur);
+      playTestKeys.clear();
+      controllerSourceLoads.clear();
       gizmo.detach();
       controls.dispose();
       gizmo.dispose();

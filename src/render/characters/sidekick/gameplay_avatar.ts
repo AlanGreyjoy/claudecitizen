@@ -6,7 +6,11 @@ import {
 } from '../../../player/character_creator/player_character_appearance';
 import { loadSidekickCatalog } from '../../../player/character_creator/sidekick_catalog';
 import type { InventoryState } from '../../../player/inventory/types';
-import type { CharacterRenderState, Vec3 } from '../../../types';
+import type {
+  CharacterRenderState,
+  CharacterUpperBodyAim,
+  Vec3,
+} from '../../../types';
 import type { CharacterAvatarInstance } from '../../main/scene/character_avatar_model';
 import { assembleSidekickCharacter } from './assemble_avatar';
 import {
@@ -15,6 +19,10 @@ import {
 } from './animation_runtime';
 import { createEquipmentAttachmentController } from './equipment_attach';
 import { applyDefaultFrustumCulling } from '../../frustum_policy';
+import {
+  createSidekickUpperBodyAimController,
+  type SidekickUpperBodyAimController,
+} from './upper_body_aim';
 import {
   loadCurrentDefaultAnimationController,
   primaryStanceSources,
@@ -48,6 +56,7 @@ export function createSidekickGameplayAvatar(
   let avatar: Awaited<ReturnType<typeof assembleSidekickCharacter>> | null = null;
   let animation: SidekickAnimationRuntime | null = null;
   let fallback: CharacterAvatarInstance | null = null;
+  let upperBodyAim: SidekickUpperBodyAimController | null = null;
   let ready = false;
   let disposed = false;
   let desiredAnimation = 'Idle_Loop';
@@ -55,6 +64,7 @@ export function createSidekickGameplayAvatar(
   let headBone: THREE.Object3D | null = null;
   let pendingInventory: InventoryState | null = null;
   let pendingActiveWeaponSlotId: string | null = null;
+  let pendingUpperBodyAim: CharacterUpperBodyAim | null = null;
   const equipment = createEquipmentAttachmentController();
   const modelOffsetPosition = new THREE.Vector3();
   const characterType = appearance.type === 2 ? 2 : 1;
@@ -122,6 +132,8 @@ export function createSidekickGameplayAvatar(
         return;
       }
       avatar.root.scale.setScalar(renderScale);
+      upperBodyAim = createSidekickUpperBodyAimController(root, avatar.root);
+      upperBodyAim?.setTarget(pendingUpperBodyAim);
       applyDefaultFrustumCulling(avatar.root);
       // Measure before parenting beneath the gameplay root. That root may already
       // be rotated into a planet/station frame while assets load; world-aligned
@@ -163,6 +175,7 @@ export function createSidekickGameplayAvatar(
         document.removeEventListener('visibilitychange', onVisibilityRefresh);
       }
       equipment.dispose();
+      upperBodyAim?.dispose();
       animation?.dispose();
       avatar?.dispose();
       fallback?.dispose();
@@ -200,8 +213,15 @@ export function createSidekickGameplayAvatar(
         return;
       }
       const delta = lastNowSeconds === null ? 0 : nowSeconds - lastNowSeconds;
+      upperBodyAim?.restore();
       animation?.update(delta * timeScale);
+      upperBodyAim?.update(delta);
       lastNowSeconds = nowSeconds;
+    },
+    setUpperBodyAim: (aim) => {
+      pendingUpperBodyAim = aim;
+      upperBodyAim?.setTarget(aim);
+      fallback?.setUpperBodyAim?.(aim);
     },
     setEquippedInventory: (inventory, activeWeaponSlotId = null) => {
       pendingInventory = inventory;

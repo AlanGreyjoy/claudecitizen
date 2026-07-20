@@ -1,7 +1,11 @@
 import type * as THREE from 'three';
 import { createCharacterAvatarInstance } from './character_avatar_model';
 import type { InventoryState } from '../../../player/inventory/types';
-import type { CharacterRenderState, Vec3 } from '../../../types';
+import type {
+  CharacterRenderState,
+  CharacterUpperBodyAim,
+  Vec3,
+} from '../../../types';
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
 
 interface CharacterAvatar {
@@ -10,6 +14,7 @@ interface CharacterAvatar {
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
+    upperBodyAim?: CharacterUpperBodyAim | null,
   ) => void;
   setEquippedInventory: (
     inventory: InventoryState | null,
@@ -30,14 +35,17 @@ export function createCharacterAvatar(
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
+    upperBodyAim: CharacterUpperBodyAim | null = null,
   ): void {
     if (!character || instance.hasLoadError()) {
+      instance.setUpperBodyAim?.(null);
       instance.root.visible = false;
       return;
     }
     instance.root.visible = true;
     instance.setPose(character, focusPosition, renderScale);
     instance.setAnimation(character.animation);
+    instance.setUpperBodyAim?.(upperBodyAim);
     instance.updateMixer(nowSeconds);
   }
 

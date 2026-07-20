@@ -2305,6 +2305,13 @@ export function createGameLoop({
                   position: world.character.position,
                   up: world.character.up,
                 },
+          weaponAimActive:
+            !paused &&
+            activeWeaponSlotId !== null &&
+            controls.isSecondaryClickHeld() &&
+            (world.mode === MODE_ON_FOOT ||
+              world.mode === MODE_ON_SHIP_DECK ||
+              world.mode === MODE_IN_STATION),
           mode: world.mode,
           shipExteriorWalk: world.shipExteriorWalk,
           prompt: world.prompt,

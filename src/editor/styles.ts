@@ -1232,6 +1232,90 @@ body.ed-resize-row * {
   height: 100%;
 }
 
+.ed-base-stage canvas:focus-visible {
+  outline: 1px solid rgba(139, 216, 255, 0.72);
+  outline-offset: -2px;
+}
+
+.ed-base-stage.is-play-testing canvas {
+  cursor: grab;
+}
+
+.ed-base-stage.is-play-testing canvas:active {
+  cursor: grabbing;
+}
+
+.ed-base-playtest-hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.ed-base-playtest-hud[hidden] {
+  display: none;
+}
+
+.ed-base-playtest-title,
+.ed-base-playtest-state,
+.ed-base-playtest-help {
+  padding: 6px 9px;
+  border: 1px solid rgba(90, 190, 255, 0.24);
+  border-radius: 3px;
+  background: rgba(4, 10, 20, 0.86);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.28);
+}
+
+.ed-base-playtest-title {
+  color: var(--accent);
+  font: 700 11px/1 var(--sc-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ed-base-playtest-state {
+  color: var(--text);
+  font: 600 11px/1.2 var(--sc-font);
+}
+
+.ed-base-playtest-help {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.ed-base-playtest-loadout {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: auto;
+}
+
+.ed-base-playtest-weapon {
+  border: 1px solid rgba(90, 190, 255, 0.28);
+  border-radius: 3px;
+  padding: 6px 8px;
+  background: rgba(4, 10, 20, 0.88);
+  color: var(--muted);
+  font: 600 10px/1 var(--sc-font);
+  cursor: pointer;
+}
+
+.ed-base-playtest-weapon:hover,
+.ed-base-playtest-weapon.is-active {
+  border-color: rgba(139, 216, 255, 0.75);
+  background: rgba(139, 216, 255, 0.18);
+  color: var(--accent);
+}
+
+.ed-base-playtest-panel {
+  margin-top: 4px;
+}
+
 .ed-base-stage-status {
   position: absolute;
   left: 12px;

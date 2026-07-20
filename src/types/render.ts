@@ -88,6 +88,12 @@ export interface NetworkShipRig {
   doors: Record<string, number>;
 }
 
+/** Local procedural pose layered over the animated character's spine chain. */
+export interface CharacterUpperBodyAim {
+  pitchRadians: number;
+  yawRadians: number;
+}
+
 /** Ship body fields received from authoritative cell snapshots. */
 export interface NetworkShipBody extends FlightBody {
   shipId?: string;
@@ -153,6 +159,8 @@ export interface SpikeRenderWorld {
   ships?: RenderShipInstance[];
   activeShipId?: string;
   character?: CharacterRenderState | null;
+  /** Local-only RMB weapon aim; never sourced from replicated character state. */
+  weaponAimActive?: boolean;
   cameraOrbit?: CameraOrbit;
   /** Piloting camera view; cockpit first person is the default. */
   shipCameraView?: ShipCameraView;
