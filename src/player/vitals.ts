@@ -1,17 +1,23 @@
 /**
  * Lightweight player vitals for HaloBand / status UI.
- * Presentation model only — does not drive damage, death, or locomotion yet.
+ * Hunger and thirst are persisted, but no vital drives damage, death, or
+ * locomotion yet.
  */
 
-export interface PlayerVitals {
+export interface PlayerSurvivalVitals {
+  /** Remaining food reserve. 1 = satisfied, 0 = empty. */
+  hungerReserve01: number;
+  /** Remaining hydration reserve. 1 = hydrated, 0 = empty. */
+  thirstReserve01: number;
+}
+
+export interface PlayerVitals extends PlayerSurvivalVitals {
   /** Overall integrity 0..1 */
   health01: number;
   /** Core body temperature °C */
   bodyTempC: number;
   /** Beats per minute */
   heartRateBpm: number;
-  /** Nourishment / fuel 0..1 */
-  nourishment01: number;
   /** Suit / lung oxygen 0..1 */
   oxygen01: number;
 }
@@ -32,8 +38,9 @@ const BASE_HR = 62;
 const SPRINT_HR = 108;
 const AIRBORNE_HR = 74;
 const VACUUM_O2_DRAIN = 0.015;
-const SPRINT_NOURISH_DRAIN = 0.008;
 const IDLE_RECOVER = 0.012;
+export const HUNGER_FULL_TO_EMPTY_SECONDS = 4 * 60 * 60;
+export const THIRST_FULL_TO_EMPTY_SECONDS = 2 * 60 * 60;
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
@@ -43,13 +50,42 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-export function createPlayerVitals(): PlayerVitals {
+export function createPlayerVitals(
+  survival: PlayerSurvivalVitals = {
+    hungerReserve01: 1,
+    thirstReserve01: 1,
+  },
+): PlayerVitals {
   return {
     health01: 1,
     bodyTempC: BASE_TEMP_C,
     heartRateBpm: BASE_HR,
-    nourishment01: 1,
+    hungerReserve01: clamp01(survival.hungerReserve01),
+    thirstReserve01: clamp01(survival.thirstReserve01),
     oxygen01: 1,
+  };
+}
+
+/**
+ * Project private survival reserves between server heartbeats.
+ * Sprint time is added once more because the baseline elapsed time already
+ * contains it, producing a 2x total drain while sprinting.
+ */
+export function drainPlayerSurvivalVitals(
+  vitals: PlayerSurvivalVitals,
+  elapsedSeconds: number,
+  sprintingSeconds: number,
+): PlayerSurvivalVitals {
+  const elapsed = Math.max(0, elapsedSeconds);
+  const sprinting = Math.min(elapsed, Math.max(0, sprintingSeconds));
+  const effectiveSeconds = elapsed + sprinting;
+  return {
+    hungerReserve01: clamp01(
+      vitals.hungerReserve01 - effectiveSeconds / HUNGER_FULL_TO_EMPTY_SECONDS,
+    ),
+    thirstReserve01: clamp01(
+      vitals.thirstReserve01 - effectiveSeconds / THIRST_FULL_TO_EMPTY_SECONDS,
+    ),
   };
 }
 
@@ -75,13 +111,6 @@ export function updatePlayerVitals(
   const targetTemp = BASE_TEMP_C - altitudeCool + (context.sprinting ? 0.35 : 0);
   const bodyTempC = lerp(vitals.bodyTempC, targetTemp, Math.min(1, dt * 0.9));
 
-  let nourishment01 = vitals.nourishment01;
-  if (context.sprinting) {
-    nourishment01 = clamp01(nourishment01 - SPRINT_NOURISH_DRAIN * dt);
-  } else {
-    nourishment01 = clamp01(nourishment01 + IDLE_RECOVER * 0.15 * dt);
-  }
-
   let oxygen01 = vitals.oxygen01;
   if (context.atmosphere01 < 0.35) {
     oxygen01 = clamp01(oxygen01 - VACUUM_O2_DRAIN * (1 - context.atmosphere01) * dt);
@@ -96,7 +125,8 @@ export function updatePlayerVitals(
     health01,
     bodyTempC,
     heartRateBpm,
-    nourishment01,
+    hungerReserve01: vitals.hungerReserve01,
+    thirstReserve01: vitals.thirstReserve01,
     oxygen01,
   };
 }

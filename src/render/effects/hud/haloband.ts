@@ -150,6 +150,13 @@ function makeVitalMetric(
 ): HTMLElement {
   const row = document.createElement('div');
   row.className = 'sc-haloband-vital';
+  if (
+    fill01 !== null &&
+    fill01 < 0.25 &&
+    (kind === 'hunger' || kind === 'thirst')
+  ) {
+    row.classList.add('is-warning');
+  }
   const top = document.createElement('div');
   top.className = 'sc-haloband-vital-top';
   const labelEl = document.createElement('span');
@@ -375,10 +382,16 @@ export function createHaloBand(
         'heart',
       ),
       makeVitalMetric(
-        'Nourishment',
-        formatPct01(vitals.nourishment01),
-        vitals.nourishment01,
-        'fuel',
+        'Hunger',
+        formatPct01(vitals.hungerReserve01),
+        vitals.hungerReserve01,
+        'hunger',
+      ),
+      makeVitalMetric(
+        'Thirst',
+        formatPct01(vitals.thirstReserve01),
+        vitals.thirstReserve01,
+        'thirst',
       ),
       makeVitalMetric('Oxygen', formatPct01(vitals.oxygen01), vitals.oxygen01, 'oxygen'),
     );

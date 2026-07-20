@@ -11,6 +11,7 @@ import {
   createCockpitSpeedHud,
   type CockpitSpeedInstrumentUpdate,
 } from './cockpit_speed_hud';
+import { createSurvivalVitalsHud } from './survival_vitals_hud';
 
 export interface HudElements {
   fpsEl: HTMLElement;
@@ -30,6 +31,8 @@ export interface HudElements {
   weaponCrosshairEl: HTMLElement;
   cockpitGazeEl: HTMLElement;
   cockpitSpeedEl: HTMLElement;
+  survivalVitalsEl: HTMLElement;
+  vitalsSyncWarningEl: HTMLElement;
 }
 
 export interface HudUpdateParams {
@@ -93,6 +96,7 @@ export function createHud(
   elements.weaponCrosshairEl.classList.remove('is-visible');
   const cockpitGazeHud = createCockpitGazeHud({ rootEl: elements.cockpitGazeEl });
   const cockpitSpeedHud = createCockpitSpeedHud({ rootEl: elements.cockpitSpeedEl });
+  const survivalVitalsHud = createSurvivalVitalsHud(elements.survivalVitalsEl);
 
   debugSettings.subscribe((settings) => {
     debugSettings.applyVisibility({
@@ -130,6 +134,14 @@ export function createHud(
     );
     cockpitSpeedHud.update(
       params.cockpitSpeed ?? { visible: false },
+    );
+    survivalVitalsHud.update(params.world.vitals);
+    elements.vitalsSyncWarningEl.textContent = params.world.vitalsSyncLocked
+      ? 'Vitals sync unavailable · Apartment exits locked'
+      : '';
+    elements.vitalsSyncWarningEl.classList.toggle(
+      'is-visible',
+      params.world.vitalsSyncLocked,
     );
 
     if (debugSettings.getSettings().showStatsPanel) {

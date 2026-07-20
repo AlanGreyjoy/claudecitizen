@@ -149,6 +149,7 @@ import type { EntertainmentSystemController } from "../render/effects/hud/entert
 import type { WeaponShopController } from "../render/effects/hud/weapon_shop";
 import type { OutfittersController } from "../render/effects/hud/outfitters";
 import type { PersonalInventoryController } from "../render/effects/hud/personal_inventory";
+import type { PlayerVitalsSessionController } from "./player_vitals_session";
 import type { InventoryState, LoadoutState } from "../player/inventory/types";
 import { normalizeInventoryState } from "../player/inventory/types";
 import {
@@ -185,6 +186,7 @@ import {
   getStationHangars,
   getStationLayoutOverride,
   sampleHangarRest,
+  STATION_SPAWN,
   worldToStationLocal,
 } from "../world/station";
 import { cross, dot, length, normalize, sub } from "../math/vec3";
@@ -281,6 +283,7 @@ export interface GameLoopOptions {
   isPaused?: () => boolean;
   getInventoryLoadout?: () => LoadoutState;
   getInventory?: () => InventoryState | null;
+  vitalsSession?: PlayerVitalsSessionController | null;
 }
 
 export function createGameLoop({
@@ -308,6 +311,7 @@ export function createGameLoop({
   isPaused,
   getInventoryLoadout = () => ({}),
   getInventory = () => null,
+  vitalsSession = null,
 }: GameLoopOptions) {
   const esBezelEl =
     document.getElementById("es-bezel") ??
@@ -351,6 +355,7 @@ export function createGameLoop({
     planetId,
     systemId,
     activeStationInstanceId,
+    vitals: vitalsSession?.getVitals() ?? bootstrap?.player.vitals,
   });
   /** Local drawn weapon bar slot (`rifle-primary` / `rifle-secondary` / `handgun`) or holstered. */
   let activeWeaponSlotId: string | null = null;
@@ -877,12 +882,15 @@ export function createGameLoop({
   };
 
   function resetWorld(): void {
+    const wasVitalsLocked = world.vitalsSyncLocked;
     world = createWorldState(planet, seed, {
       spawn,
       planetId,
       systemId,
       activeStationInstanceId,
+      vitals: vitalsSession?.getVitals() ?? world.vitals,
     });
+    world.vitalsSyncLocked = wasVitalsLocked;
     controls.setMode(MODE_ON_FOOT);
     controls.setOrbitFacing(
       world.cameraOrbit.yawRadians,
@@ -897,6 +905,50 @@ export function createGameLoop({
     stationNpcPopulation.reset(seed);
     footsteps.reset();
     onResetPeak();
+    if (wasVitalsLocked) returnToApartmentForVitalsFailure();
+  }
+
+  function setVitalsSyncLocked(locked: boolean): void {
+    world.vitalsSyncLocked = locked;
+    if (!locked && world.prompt.includes("Vitals sync")) world.prompt = "";
+  }
+
+  function syncApartmentInstanceForVitalsRecovery(): void {
+    if (!bootstrap) return;
+    network?.transition(bootstrap.spawn.apartmentInstanceId, STATION_SPAWN.roomId);
+  }
+
+  function returnToApartmentForVitalsFailure(): void {
+    world.vitalsSyncLocked = true;
+    world.character = createStationCharacterAt(
+      stationFrame,
+      STATION_SPAWN.roomId,
+      { right: STATION_SPAWN.right, forward: STATION_SPAWN.forward },
+      STATION_SPAWN.face,
+      STATION_SPAWN.up,
+    );
+    world.mode = MODE_IN_STATION;
+    world.shipExteriorWalk = false;
+    world.prompt = "";
+    world.activeBedId = null;
+    world.transition = null;
+    world.stationElevator = null;
+    world.screenFade = 0;
+    world.quantum = createQuantumTravelState();
+    controls.setMode(MODE_ON_FOOT);
+    controls.setOrbitFacing(
+      world.cameraOrbit.yawRadians,
+      world.cameraOrbit.pitchRadians,
+    );
+    disposeShipDeckPhysics();
+    planetPhysics?.dispose();
+    planetPhysics = null;
+    if (physics) {
+      teleportStationPlayer(physics, stationFrame, world.character.position);
+    }
+    syncApartmentInstanceForVitalsRecovery();
+    stationNpcPopulation.reset(seed);
+    footsteps.reset();
   }
 
   function cleanupForTitleReturn(): void {
@@ -950,6 +1002,9 @@ export function createGameLoop({
 
   function stationPrompt(interaction: StationInteraction | null): string {
     if (interaction) {
+      if (isVitalsLockedApartmentExit(interaction)) {
+        return "Vitals sync unavailable — apartment exit locked";
+      }
       switch (interaction.kind) {
         case "hab-lift-down":
           return pressInteractPrompt("elevator to Lobby");
@@ -986,6 +1041,20 @@ export function createGameLoop({
       }
     }
     return "";
+  }
+
+  function isVitalsLockedApartmentExit(
+    interaction: StationInteraction,
+  ): boolean {
+    if (!world.vitalsSyncLocked) return false;
+    if (interaction.kind === "hab-lift-down") return true;
+    if (interaction.kind === "prefab-elevator") {
+      return interaction.marker.targetFloor !== "hab";
+    }
+    return (
+      interaction.kind === "hangar-bank" ||
+      interaction.kind === "hangar-lift-up"
+    );
   }
 
   function networkInstanceForInteraction(
@@ -1446,6 +1515,7 @@ export function createGameLoop({
     }
     world.prompt = stationPrompt(interaction);
     if (!interaction) return;
+    if (isVitalsLockedApartmentExit(interaction)) return;
 
     if (interaction.kind === "terminal" || interaction.kind === "avms-terminal") {
       if (actions.interactPressed) {
@@ -2595,16 +2665,23 @@ export function createGameLoop({
       }
     }
 
+    const sprinting =
+      !paused &&
+      Boolean(controls.sampleCharacterInput().sprint) &&
+      (world.mode === MODE_ON_FOOT ||
+        world.mode === MODE_ON_SHIP_DECK ||
+        world.mode === MODE_IN_STATION);
+    const survivalVitals = vitalsSession?.update(nowMs, sprinting);
+    if (survivalVitals) {
+      world.vitals.hungerReserve01 = survivalVitals.hungerReserve01;
+      world.vitals.thirstReserve01 = survivalVitals.thirstReserve01;
+    }
+
     if (dt > 0) {
       const atmosphere01 = atmosphere01FromAltitude(
         focusSurface.altitudeMeters,
         planet.atmosphereHeightMeters,
       );
-      const sprinting =
-        Boolean(controls.sampleCharacterInput().sprint) &&
-        (world.mode === MODE_ON_FOOT ||
-          world.mode === MODE_ON_SHIP_DECK ||
-          world.mode === MODE_IN_STATION);
       world.vitals = updatePlayerVitals(world.vitals, dt, {
         grounded: world.character.grounded,
         sprinting,
@@ -2677,7 +2754,10 @@ export function createGameLoop({
   return {
     cleanupForTitleReturn,
     resetWorld,
+    returnToApartmentForVitalsFailure,
     setEquippedLoadout,
+    setVitalsSyncLocked,
+    syncApartmentInstanceForVitalsRecovery,
     start,
     stop,
     teleportToSurface,

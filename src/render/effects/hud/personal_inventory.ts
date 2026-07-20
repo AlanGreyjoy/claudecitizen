@@ -179,13 +179,14 @@ export function createPersonalInventory(
     host: HTMLElement,
     inventory: InventoryState,
     slot: CharacterEquipmentSlotV1,
+    emptyLabel = slot.label,
   ): void {
     host.replaceChildren();
     const itemId = inventory.loadout[slot.id];
     if (!itemId) {
       const ghost = document.createElement('span');
       ghost.className = 'sc-personal-inv-slot-ghost';
-      ghost.textContent = slot.label;
+      ghost.textContent = emptyLabel;
       host.append(ghost);
       return;
     }
@@ -265,21 +266,41 @@ export function createPersonalInventory(
 
   function renderWeaponBars(inventory: InventoryState): void {
     elements.weaponBarsEl.replaceChildren();
+
+    const heading = document.createElement('div');
+    heading.className = 'sc-personal-inv-loadout-heading';
+
+    const headingLabel = document.createElement('span');
+    headingLabel.textContent = 'Weapon loadout';
+
+    const headingHint = document.createElement('span');
+    headingHint.className = 'sc-personal-inv-loadout-hint';
+    headingHint.textContent = 'Drag to equip · Double-click to unequip';
+
+    heading.append(headingLabel, headingHint);
+    elements.weaponBarsEl.append(heading);
+
     for (const slotId of WEAPON_BAR_SLOT_IDS) {
       const slot = slotById(slotId);
       if (!slot) continue;
+      const itemId = inventory.loadout[slot.id];
+      const definition = itemId
+        ? findItemDefinition(inventory.catalog, itemId)
+        : undefined;
       const row = document.createElement('div');
       row.className = 'sc-personal-inv-weapon-bar';
       row.dataset.slotId = slot.id;
-      if (inventory.loadout[slot.id]) row.classList.add('is-filled');
+      row.title = itemId ? `${slot.label}: ${definition?.name ?? itemId}` : slot.label;
+      if (itemId) row.classList.add('is-filled');
 
       const main = document.createElement('div');
       main.className = 'sc-personal-inv-weapon-main';
-      paintSlotContents(main, inventory, slot);
-      bindDropTarget(main, slot, inventory);
-      makeDraggableEquipped(main, inventory, slot.id);
-      main.addEventListener('dblclick', () => {
-        if (inventory.loadout[slot.id]) void equipToSlot(slot.id, null);
+      paintSlotContents(main, inventory, slot, 'Empty');
+
+      bindDropTarget(row, slot, inventory);
+      makeDraggableEquipped(row, inventory, slot.id);
+      row.addEventListener('dblclick', () => {
+        if (itemId) void equipToSlot(slot.id, null);
       });
 
       const attachments = document.createElement('div');
@@ -295,7 +316,11 @@ export function createPersonalInventory(
       label.className = 'sc-personal-inv-weapon-label';
       label.textContent = slot.label;
 
-      row.append(label, main, attachments);
+      const itemName = document.createElement('span');
+      itemName.className = 'sc-personal-inv-weapon-name';
+      itemName.textContent = definition?.name ?? (itemId ? 'Unknown item' : 'Empty slot');
+
+      row.append(label, main, itemName, attachments);
       elements.weaponBarsEl.append(row);
     }
   }

@@ -31,7 +31,11 @@ import {
   createQuantumTravelState,
   type QuantumTravelState,
 } from '../flight/quantum_travel';
-import { createPlayerVitals, type PlayerVitals } from './vitals';
+import {
+  createPlayerVitals,
+  type PlayerSurvivalVitals,
+  type PlayerVitals,
+} from './vitals';
 
 export type TransitionType = 'sit' | 'stand' | 'lie' | 'get-up';
 
@@ -93,6 +97,8 @@ export interface WorldState {
   activeStationInstanceId: string | null;
   /** Personal status for HaloBand / HUD (presentation; non-lethal for now). */
   vitals: PlayerVitals;
+  /** Fail-closed state while the private survival record cannot be persisted. */
+  vitalsSyncLocked: boolean;
 }
 
 export const PLAYER_SHIP_INSTANCE_ID = 'player-ship-primary';
@@ -121,6 +127,7 @@ export function createWorldState(
     planetId?: string;
     systemId?: string;
     activeStationInstanceId?: string | null;
+    vitals?: PlayerSurvivalVitals;
   } = {},
 ): WorldState {
   clearShipWorld();
@@ -164,6 +171,7 @@ export function createWorldState(
     quantum: createQuantumTravelState(),
     systemId: options.systemId ?? 'default',
     activeStationInstanceId: options.activeStationInstanceId ?? null,
-    vitals: createPlayerVitals(),
+    vitals: createPlayerVitals(options.vitals),
+    vitalsSyncLocked: false,
   };
 }

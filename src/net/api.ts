@@ -1,4 +1,5 @@
 import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import type { PlayerSurvivalVitals } from '../player/vitals';
 import type {
   InventoryState as PlayerInventoryState,
   ItemDefinition,
@@ -25,6 +26,7 @@ export type BuildArea = 'hangar' | 'apartment';
 export interface GameBootstrap {
   player: AuthSession['player'] & {
     characterAppearance: PlayerCharacterAppearanceV1 | null;
+    vitals: PlayerSurvivalVitals;
   };
   economy: {
     arcBalance: number;
@@ -192,6 +194,57 @@ export function discordStartUrl(): string {
 
 export function fetchGameBootstrap(): Promise<GameBootstrap> {
   return requestJson<GameBootstrap>('/game/bootstrap', { method: 'GET' });
+}
+
+export interface PlayerVitalsSessionResponse {
+  sessionId: string;
+  acceptedSequence: number;
+  vitals: PlayerSurvivalVitals;
+}
+
+export function startPlayerVitalsSession(): Promise<PlayerVitalsSessionResponse> {
+  return requestJson<PlayerVitalsSessionResponse>('/game/vitals/session', {
+    method: 'POST',
+  });
+}
+
+export function pulsePlayerVitalsSession(
+  sessionId: string,
+  sequence: number,
+  sprintingSeconds: number,
+): Promise<PlayerVitalsSessionResponse> {
+  return requestJson<PlayerVitalsSessionResponse>(
+    `/game/vitals/session/${encodeURIComponent(sessionId)}/pulse`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ sequence, sprintingSeconds }),
+    },
+  );
+}
+
+export function resumePlayerVitalsSession(
+  sessionId: string,
+): Promise<PlayerVitalsSessionResponse> {
+  return requestJson<PlayerVitalsSessionResponse>(
+    `/game/vitals/session/${encodeURIComponent(sessionId)}/resume`,
+    { method: 'POST' },
+  );
+}
+
+export function stopPlayerVitalsSession(
+  sessionId: string,
+  sequence: number,
+  sprintingSeconds: number,
+): Promise<PlayerVitalsSessionResponse> {
+  return requestJson<PlayerVitalsSessionResponse>(
+    `/game/vitals/session/${encodeURIComponent(sessionId)}/stop`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ sequence, sprintingSeconds }),
+      keepalive: true,
+    },
+    false,
+  );
 }
 
 export interface WorldSession {

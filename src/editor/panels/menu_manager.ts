@@ -122,6 +122,7 @@ function createMockWorld(shipMode: boolean): WorldState {
     systemId: 'default',
     activeStationInstanceId: null,
     vitals: createPlayerVitals(),
+    vitalsSyncLocked: false,
   };
 }
 

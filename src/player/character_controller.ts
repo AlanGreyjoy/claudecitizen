@@ -45,6 +45,7 @@ export const ORBIT_PITCH_LIMIT = 1.15;
 export const FIRST_PERSON_PITCH_LIMIT = 1.5;
 export const CHARACTER_EYE_HEIGHT_METERS = 1.62;
 const CAMERA_REF_ZOOM = 7.4;
+const CLOSE_ZOOM_SHOULDER_BONUS_METERS = 0.18;
 
 interface TangentBasis {
   east: Vec3;
@@ -345,7 +346,9 @@ export function resolveCharacterCameraRig(
 ): CharacterCameraRig {
   const zoomRatio = clamp(zoomDistance / CAMERA_REF_ZOOM, 0.22, 1.35);
   const shoulderUp = 3.2 * zoomRatio;
-  const shoulderRight = 0.75 * Math.sqrt(zoomRatio);
+  const closeZoom01 = 1 - clamp(zoomDistance / CAMERA_REF_ZOOM, 0, 1);
+  const shoulderRight =
+    0.75 * Math.sqrt(zoomRatio) + CLOSE_ZOOM_SHOULDER_BONUS_METERS * closeZoom01;
   const targetUp = 1.75;
 
   return {

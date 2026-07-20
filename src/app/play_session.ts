@@ -1,6 +1,10 @@
 import { createPlayerControls } from './player_controls';
 import { createGameLoop, type BuildAreaRuntime } from './game_loop';
 import type { LoadingScreenHandle } from './loading_screen';
+import {
+  createPlayerVitalsSession,
+  type PlayerVitalsSessionController,
+} from './player_vitals_session';
 import { restoreTitleScreen } from './title_screen';
 import { createHud, createHaloBand } from '../render/effects';
 import { createSurfaceTeleportPanel } from '../render/effects/hud/biome_teleport_panel';
@@ -189,6 +193,7 @@ interface PlaySessionCleanup {
   personalInventory: PersonalInventoryController;
   buildTerminal: BuildTerminalController | null;
   haloBand: HaloBandController | null;
+  vitalsSession: PlayerVitalsSessionController;
   buildPropRenderers: HangarPropRenderer[];
   buildPropColliders: BuildPropColliderRuntime[];
   physics: StationPhysics | null;
@@ -212,6 +217,7 @@ export function stopPlaySession(): void {
   cleanup.personalInventory.dispose();
   cleanup.buildTerminal?.dispose();
   cleanup.haloBand?.dispose();
+  cleanup.vitalsSession.stop();
   for (const renderer of cleanup.buildPropRenderers) renderer.dispose();
   for (const colliders of cleanup.buildPropColliders) colliders.dispose();
   cleanup.physics?.dispose();
@@ -373,6 +379,8 @@ export async function startPlaySession(
   const weaponCrosshairEl = requireElement<HTMLElement>('weapon-crosshair');
   const cockpitGazeEl = requireElement<HTMLElement>('cockpit-gaze');
   const cockpitSpeedEl = requireElement<HTMLElement>('cockpit-speed');
+  const survivalVitalsEl = requireElement<HTMLElement>('survival-vitals');
+  const vitalsSyncWarningEl = requireElement<HTMLElement>('vitals-sync-warning');
   const screenFadeEl = requireElement<HTMLElement>('screen-fade');
   const gameMenuEl = requireElement<HTMLElement>('game-menu');
   const gameMenuResumeBtn = requireElement<HTMLButtonElement>('game-menu-resume-btn');
@@ -481,6 +489,8 @@ export async function startPlaySession(
       weaponCrosshairEl,
       cockpitGazeEl,
       cockpitSpeedEl,
+      survivalVitalsEl,
+      vitalsSyncWarningEl,
       screenFadeEl,
     },
     {
@@ -798,6 +808,39 @@ export async function startPlaySession(
     console.warn('Failed to initialize station physics; falling back to custom walker.', error);
   }
 
+  const closeGameplayOverlays = (): void => {
+    gameMenu.close();
+    avmsTerminal.close();
+    entertainmentSystem.close();
+    weaponShop.close();
+    outfitters.close();
+    personalInventory.close();
+    buildTerminal?.close();
+    haloBand?.close();
+  };
+  const vitalsSession = createPlayerVitalsSession({
+    initialVitals: bootstrap?.player.vitals ?? {
+      hungerReserve01: 1,
+      thirstReserve01: 1,
+    },
+    persistent: bootstrap !== null,
+    onLocked: (message) => {
+      closeGameplayOverlays();
+      hud.appendChatMessage('SYS', message);
+      haloBand?.appendChatMessage('SYS', message);
+      loopRef.loop?.setVitalsSyncLocked(true);
+      loopRef.loop?.returnToApartmentForVitalsFailure();
+    },
+    onUnlocked: () => {
+      loopRef.loop?.syncApartmentInstanceForVitalsRecovery();
+      loopRef.loop?.setVitalsSyncLocked(false);
+    },
+  });
+  if (bootstrap) {
+    loading?.setStatus('Synchronizing citizen vitals...');
+    await vitalsSession.begin();
+  }
+
   const gameLoop = createGameLoop({
     planet,
     seed,
@@ -839,9 +882,14 @@ export async function startPlaySession(
       (buildTerminal?.isPaused() ?? false),
     getInventoryLoadout: () => inventoryState?.loadout ?? {},
     getInventory: () => inventoryState,
+    vitalsSession,
   });
 
   loopRef.loop = gameLoop;
+  if (vitalsSession.isLocked()) {
+    gameLoop.setVitalsSyncLocked(true);
+    gameLoop.returnToApartmentForVitalsFailure();
+  }
 
   if (spawnSurface) {
     const biomeTeleportEl = requireElement<HTMLElement>('biome-teleport');
@@ -882,6 +930,7 @@ export async function startPlaySession(
     personalInventory,
     buildTerminal,
     haloBand,
+    vitalsSession,
     buildPropRenderers,
     buildPropColliders,
     physics,

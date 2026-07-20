@@ -80,6 +80,16 @@ pub struct AssignedBayBody {
     hangar_index: i32,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VitalsPulseBody {
+    sequence: i64,
+    sprinting_seconds: f64,
+}
+
+const HUNGER_FULL_TO_EMPTY_SECONDS: f64 = 4.0 * 60.0 * 60.0;
+const THIRST_FULL_TO_EMPTY_SECONDS: f64 = 2.0 * 60.0 * 60.0;
+
 pub async fn bootstrap(
     State(state): State<AppState>,
     access: AccessUser,
@@ -88,7 +98,7 @@ pub async fn bootstrap(
     grant_starter_loadout(&state, &player_id).await?;
     let player = sqlx::query(
         r#"SELECT "id", "handle", "displayName", "characterAppearance", "arcBalance",
-                  "currentInstanceId", "currentRoomId"
+                  "currentInstanceId", "currentRoomId", "hungerReserve", "thirstReserve"
            FROM "Player" WHERE "id" = $1"#,
     )
     .bind(&player_id)
@@ -104,6 +114,10 @@ pub async fn bootstrap(
             "handle": player.try_get::<String, _>("handle")?,
             "displayName": player.try_get::<String, _>("displayName")?,
             "characterAppearance": normalize_stored_appearance(player.try_get::<Option<Value>, _>("characterAppearance")?),
+            "vitals": vitals_json(
+                player.try_get::<f64, _>("hungerReserve")?,
+                player.try_get::<f64, _>("thirstReserve")?,
+            ),
         },
         "economy": { "arcBalance": player.try_get::<i32, _>("arcBalance")? },
         "spawn": {
@@ -121,6 +135,198 @@ pub async fn bootstrap(
             "serverAuthoritativePhysics": true,
         }
     })))
+}
+
+pub async fn start_vitals_session(
+    State(state): State<AppState>,
+    access: AccessUser,
+) -> ApiResult<Json<Value>> {
+    let player_id = require_player_id(&state, &access.user_id).await?;
+    let session_id = Uuid::new_v4().to_string();
+    let row = sqlx::query(
+        r#"UPDATE "Player"
+           SET "vitalsSessionId" = $2,
+               "vitalsSessionSequence" = 0,
+               "vitalsSessionSprintSeconds" = 0,
+               "vitalsHeartbeatAt" = NOW(),
+               "updatedAt" = NOW()
+           WHERE "id" = $1
+           RETURNING "hungerReserve", "thirstReserve""#,
+    )
+    .bind(&player_id)
+    .bind(&session_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("Player not found.".to_owned()))?;
+
+    Ok(Json(vitals_session_json(
+        &session_id,
+        0,
+        row.try_get("hungerReserve")?,
+        row.try_get("thirstReserve")?,
+    )))
+}
+
+pub async fn pulse_vitals_session(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Path(session_id): Path<String>,
+    Json(body): Json<VitalsPulseBody>,
+) -> ApiResult<Json<Value>> {
+    update_vitals_session(&state, &access, &session_id, body, false).await
+}
+
+pub async fn resume_vitals_session(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Path(session_id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let player_id = require_player_id(&state, &access.user_id).await?;
+    let row = sqlx::query(
+        r#"UPDATE "Player"
+           SET "vitalsSessionSequence" = 0,
+               "vitalsSessionSprintSeconds" = 0,
+               "vitalsHeartbeatAt" = NOW(),
+               "updatedAt" = NOW()
+           WHERE "id" = $1 AND "vitalsSessionId" = $2
+           RETURNING "vitalsSessionSequence", "hungerReserve", "thirstReserve""#,
+    )
+    .bind(&player_id)
+    .bind(&session_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some(row) = row else {
+        return Err(ApiError::Conflict(
+            "Vitals session was superseded by another play session.".to_owned(),
+        ));
+    };
+
+    Ok(Json(vitals_session_json(
+        &session_id,
+        row.try_get("vitalsSessionSequence")?,
+        row.try_get("hungerReserve")?,
+        row.try_get("thirstReserve")?,
+    )))
+}
+
+pub async fn stop_vitals_session(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Path(session_id): Path<String>,
+    Json(body): Json<VitalsPulseBody>,
+) -> ApiResult<Json<Value>> {
+    update_vitals_session(&state, &access, &session_id, body, true).await
+}
+
+async fn update_vitals_session(
+    state: &AppState,
+    access: &AccessUser,
+    session_id: &str,
+    body: VitalsPulseBody,
+    stop: bool,
+) -> ApiResult<Json<Value>> {
+    if body.sequence < 1 || !body.sprinting_seconds.is_finite() || body.sprinting_seconds < 0.0 {
+        return Err(ApiError::BadRequest("Vitals pulse is invalid.".to_owned()));
+    }
+
+    let player_id = require_player_id(state, &access.user_id).await?;
+    let mut tx = state.db.begin().await?;
+    let row = sqlx::query(
+        r#"SELECT "vitalsSessionId", "vitalsSessionSequence",
+                  "vitalsSessionSprintSeconds", "hungerReserve", "thirstReserve",
+                  GREATEST(0, EXTRACT(EPOCH FROM (NOW() - "vitalsHeartbeatAt")))::DOUBLE PRECISION AS "elapsedSeconds"
+           FROM "Player" WHERE "id" = $1 FOR UPDATE"#,
+    )
+    .bind(&player_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("Player not found.".to_owned()))?;
+
+    let active_session: Option<String> = row.try_get("vitalsSessionId")?;
+    if active_session.as_deref() != Some(session_id) {
+        return Err(ApiError::Conflict(
+            "Vitals session was superseded by another play session.".to_owned(),
+        ));
+    }
+
+    let accepted_sequence: i64 = row.try_get("vitalsSessionSequence")?;
+    let accepted_sprinting_seconds: f64 = row.try_get("vitalsSessionSprintSeconds")?;
+    let mut hunger: f64 = row.try_get("hungerReserve")?;
+    let mut thirst: f64 = row.try_get("thirstReserve")?;
+    let mut next_sequence = accepted_sequence;
+
+    if body.sequence > accepted_sequence {
+        let elapsed_seconds = row
+            .try_get::<Option<f64>, _>("elapsedSeconds")?
+            .unwrap_or_default()
+            .max(0.0);
+        let sprinting_seconds = (body.sprinting_seconds - accepted_sprinting_seconds)
+            .max(0.0)
+            .min(elapsed_seconds);
+        let effective_seconds = elapsed_seconds + sprinting_seconds;
+        hunger = (hunger - effective_seconds / HUNGER_FULL_TO_EMPTY_SECONDS).clamp(0.0, 1.0);
+        thirst = (thirst - effective_seconds / THIRST_FULL_TO_EMPTY_SECONDS).clamp(0.0, 1.0);
+        next_sequence = body.sequence;
+
+        sqlx::query(
+            r#"UPDATE "Player"
+               SET "hungerReserve" = $2,
+                   "thirstReserve" = $3,
+                   "vitalsSessionSequence" = $4,
+                   "vitalsSessionSprintSeconds" = GREATEST("vitalsSessionSprintSeconds", $6),
+                   "vitalsHeartbeatAt" = NOW(),
+                   "vitalsSessionId" = CASE WHEN $5 THEN NULL ELSE "vitalsSessionId" END,
+                   "updatedAt" = NOW()
+               WHERE "id" = $1"#,
+        )
+        .bind(&player_id)
+        .bind(hunger)
+        .bind(thirst)
+        .bind(next_sequence)
+        .bind(stop)
+        .bind(body.sprinting_seconds)
+        .execute(&mut *tx)
+        .await?;
+    } else if stop {
+        sqlx::query(
+            r#"UPDATE "Player"
+               SET "vitalsSessionId" = NULL,
+                   "vitalsHeartbeatAt" = NULL,
+                   "updatedAt" = NOW()
+               WHERE "id" = $1"#,
+        )
+        .bind(&player_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(Json(vitals_session_json(
+        session_id,
+        next_sequence,
+        hunger,
+        thirst,
+    )))
+}
+
+fn vitals_json(hunger: f64, thirst: f64) -> Value {
+    json!({
+        "hungerReserve01": hunger.clamp(0.0, 1.0),
+        "thirstReserve01": thirst.clamp(0.0, 1.0),
+    })
+}
+
+fn vitals_session_json(
+    session_id: &str,
+    accepted_sequence: i64,
+    hunger: f64,
+    thirst: f64,
+) -> Value {
+    json!({
+        "sessionId": session_id,
+        "acceptedSequence": accepted_sequence,
+        "vitals": vitals_json(hunger, thirst),
+    })
 }
 
 pub async fn save_character(

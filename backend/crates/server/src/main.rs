@@ -92,6 +92,19 @@ fn router(state: AppState) -> Result<Router> {
         .route("/auth/discord/callback", get(auth::discord_callback))
         .route("/game/bootstrap", get(game::bootstrap))
         .route("/game/character", put(game::save_character))
+        .route("/game/vitals/session", post(game::start_vitals_session))
+        .route(
+            "/game/vitals/session/{id}/pulse",
+            post(game::pulse_vitals_session),
+        )
+        .route(
+            "/game/vitals/session/{id}/resume",
+            post(game::resume_vitals_session),
+        )
+        .route(
+            "/game/vitals/session/{id}/stop",
+            post(game::stop_vitals_session),
+        )
         .route(
             "/game/inventory/purchase",
             post(game::purchase_inventory_item),
