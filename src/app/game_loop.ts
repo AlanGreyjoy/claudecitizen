@@ -96,6 +96,7 @@ import {
   createShipPhysics,
   getShipPlayerLocal,
   getShipPlayerWorldPosition,
+  occludeShipCamera,
   syncShipArticulationColliders,
   teleportShipPlayerLocal,
   type ShipPhysics,
@@ -220,6 +221,7 @@ import type {
 import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 import {
+  occludeStationCamera,
   syncDynamicColliders,
   teleportStationPlayer,
   type StationPhysics,
@@ -519,6 +521,45 @@ export function createGameLoop({
   ): Vec3 {
     const local = worldToShipLocal(ship, point);
     return { x: -local.right, y: local.up, z: local.forward };
+  }
+
+  /**
+   * Camera-collision query handed to the renderer: sphere-cast from the
+   * look pivot toward the desired camera position against every Rapier
+   * world the character may be walking in, and keep the closest blocking
+   * hit. Returns `to` unchanged when nothing blocks the line of sight.
+   */
+  function resolveCameraOcclusion(from: Vec3, to: Vec3): Vec3 {
+    let best = to;
+    let bestDistanceSq =
+      (to.x - from.x) * (to.x - from.x) +
+      (to.y - from.y) * (to.y - from.y) +
+      (to.z - from.z) * (to.z - from.z);
+    const consider = (candidate: Vec3): void => {
+      const dx = candidate.x - from.x;
+      const dy = candidate.y - from.y;
+      const dz = candidate.z - from.z;
+      const distanceSq = dx * dx + dy * dy + dz * dz;
+      if (distanceSq < bestDistanceSq) {
+        bestDistanceSq = distanceSq;
+        best = candidate;
+      }
+    };
+    const mode = world.mode;
+    if ((mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR) && physics) {
+      consider(occludeStationCamera(physics, stationFrame, from, to));
+    }
+    // Deck walking, hull/pad exterior walk, and seat/bed transitions all
+    // live in the ship-local Rapier world. On foot or in a hangar the
+    // parked hull can still block the orbit camera, so cast whenever the
+    // ship world exists (a distant ship simply misses the cast).
+    if (shipPhysics) {
+      consider(occludeShipCamera(shipPhysics, getActiveShipBody(world), from, to));
+    }
+    if (mode === MODE_ON_FOOT && planetPhysics) {
+      consider(planetPhysics.filterCamera(from, to));
+    }
+    return best;
   }
 
   function localFootstepActor(
@@ -1129,6 +1170,26 @@ export function createGameLoop({
   function tryEnterShipPadInterest(): boolean {
     if (!usesColliderDeck()) return false;
     const ship = getActiveShipBody(world);
+    // A parked ship only owns locomotion for players sharing its walkable
+    // area. Without this gate the raw ship-local proximity box reaches
+    // through station walls/floors: delivering a ship to the hangar (or
+    // walking past the lobby lift while a ship is parked) yanked players
+    // into the empty ship-local Rapier world and dropped them through the
+    // station.
+    const hangarRest = sampleHangarRest(
+      stationFrame,
+      ship.position,
+      getShipRestHeightMeters(),
+    );
+    if (world.mode === MODE_IN_STATION) {
+      if (!hangarRest) return false;
+      const roomId = (world.character as StationCharacterState).stationRoomId;
+      if (roomId !== hangarRest.hangar.roomId) return false;
+    } else if (hangarRest) {
+      // On foot outdoors: hangar-parked ships are boarded from the hangar
+      // deck (station mode), never by world-switching through station walls.
+      return false;
+    }
     if (!isNearParkedShipPad(world.character, ship)) return false;
     if (!shipPhysics) {
       void warmShipDeckPhysics();
@@ -2398,6 +2459,7 @@ export function createGameLoop({
           stationNpcs: stationNpcRenderStates,
           shipZoneId: world.character.deckZone ?? null,
           stationRoomId: world.character.stationRoomId ?? null,
+          cameraOcclusion: resolveCameraOcclusion,
           timeSeconds: nowMs / 1000,
           flightMode: world.flightMode,
           quantum: world.quantum,

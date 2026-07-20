@@ -31,7 +31,7 @@ import {
 import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
-export const WALK_SPEED_METERS_PER_SECOND = 2.8;
+export const WALK_SPEED_METERS_PER_SECOND = 2.0;
 export const SPRINT_SPEED_METERS_PER_SECOND = 5.3;
 const AIR_CONTROL = 0.18;
 /** ~1.4 m apex at Earth gravity — snappy, not moon-bounce. */

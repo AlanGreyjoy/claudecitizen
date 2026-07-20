@@ -41,6 +41,7 @@ import {
   createShipPhysics,
   getShipPlayerLocal,
   getShipPlayerWorldPosition,
+  occludeShipCamera,
   syncShipArticulationColliders,
   teleportShipPlayerLocal,
   type ShipPhysics,
@@ -1544,6 +1545,19 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     }
     smoothVector(camera.userData.smoothedPos, desiredPos, dt, 0.05);
     smoothVector(camera.userData.smoothedTarget, desiredTarget, dt, 0.04);
+    // Pull the camera in front of the first ship collider blocking the line
+    // from the look target, so the eye never clips the hull or pad.
+    if (shipPhysics) {
+      const smoothedPos = camera.userData.smoothedPos as THREE.Vector3;
+      const smoothedTarget = camera.userData.smoothedTarget as THREE.Vector3;
+      const clamped = occludeShipCamera(
+        shipPhysics,
+        ship,
+        { x: smoothedTarget.x, y: smoothedTarget.y, z: smoothedTarget.z },
+        { x: smoothedPos.x, y: smoothedPos.y, z: smoothedPos.z },
+      );
+      smoothedPos.set(clamped.x, clamped.y, clamped.z);
+    }
     camera.position.copy(camera.userData.smoothedPos);
     cameraTarget.copy(camera.userData.smoothedTarget);
 

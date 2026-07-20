@@ -674,6 +674,24 @@
           },
           {
             "node": "SM_Bld_Floor_011_(15)",
+            "transform": {
+              "position": {
+                "x": -5,
+                "y": 0,
+                "z": -5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
             "components": [
               {
                 "type": "collider",
@@ -4356,7 +4374,13 @@
                 "y": 1,
                 "z": 1
               }
-            }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
           },
           {
             "node": "SM_Bld_Ceiling_02_(31)",
@@ -9884,6 +9908,353 @@
                 "z": 1
               }
             }
+          },
+          {
+            "node": "SM_Prop_CornerTable_01_(1)",
+            "transform": {
+              "position": {
+                "x": 22,
+                "y": 0,
+                "z": -13
+              },
+              "rotation": {
+                "x": 0,
+                "y": -1,
+                "z": 0,
+                "w": 0
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(2)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.53697431,
+                  "y": 0.660096645,
+                  "z": 0.465033262
+                },
+                "offset": {
+                  "x": -3.3306690738754696e-15,
+                  "y": 0.3300483225,
+                  "z": 1.4210854715202004e-14
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.53697431,
+                  "y": 0.660096645,
+                  "z": 0.465033262
+                },
+                "offset": {
+                  "x": -4.218847493575595e-15,
+                  "y": 0.3300483225,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(6)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.53697431,
+                  "y": 0.660096645,
+                  "z": 0.46503326200000006
+                },
+                "offset": {
+                  "x": 7.105427357601002e-15,
+                  "y": 0.3300483225,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(5)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.53697431,
+                  "y": 0.660096645,
+                  "z": 0.46503326200000006
+                },
+                "offset": {
+                  "x": 7.105427357601002e-15,
+                  "y": 0.3300483225,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_CornerSeat_01_(3)",
+            "transform": {
+              "position": {
+                "x": 24,
+                "y": 0,
+                "z": -29
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_CornerSeat_01",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Plant_Vase_01_(3)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.92319496,
+                  "y": 1.15099037,
+                  "z": 0.8998512000000001
+                },
+                "offset": {
+                  "x": -0.017982520000000002,
+                  "y": 0.575495185,
+                  "z": -0.0653522
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Wall_Doorframe_02_(12)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Crew_Kitchen_01",
+            "transform": {
+              "position": {
+                "x": 15,
+                "y": 0,
+                "z": -15
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0.707107,
+                "z": 0,
+                "w": 0.707107
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 5,
+                  "y": 4.999999600000001,
+                  "z": 1.4408348
+                },
+                "offset": {
+                  "x": 2.5,
+                  "y": 1.5045592,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Bld_Wall_Door_01_16",
+            "transform": {
+              "position": {
+                "x": 2.49999,
+                "y": 2.632,
+                "z": 0
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            }
+          },
+          {
+            "node": "SM_Bld_Wall_Doorframe_02_(13)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "mesh"
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_SquareTable_01_(1)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 1.9561774,
+                  "y": 0.878062,
+                  "z": 1.9561816
+                },
+                "offset": {
+                  "x": 0,
+                  "y": 0.439031,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(7)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.5369743099999998,
+                  "y": 0.660096645,
+                  "z": 0.465033262
+                },
+                "offset": {
+                  "x": -1.7763568394002505e-15,
+                  "y": 0.3300483225,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(8)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.53697431,
+                  "y": 0.660096645,
+                  "z": 0.465033262
+                },
+                "offset": {
+                  "x": -8.881784197001252e-16,
+                  "y": 0.3300483225,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(19)",
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.5369743099999998,
+                  "y": 0.660096645,
+                  "z": 0.465033262
+                },
+                "offset": {
+                  "x": -3.552713678800501e-15,
+                  "y": 0.3300483225,
+                  "z": 0
+                }
+              }
+            ]
+          },
+          {
+            "node": "SM_Prop_Stool_01_(20)",
+            "transform": {
+              "position": {
+                "x": 23.11,
+                "y": 0,
+                "z": -21.929
+              },
+              "rotation": {
+                "x": 0,
+                "y": -0.241957,
+                "z": 0,
+                "w": 0.970287
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "collider",
+                "shape": "box",
+                "size": {
+                  "x": 0.53697431,
+                  "y": 0.660096645,
+                  "z": 0.465033262
+                },
+                "offset": {
+                  "x": 0,
+                  "y": 0.3300483225,
+                  "z": 0
+                }
+              }
+            ]
           }
         ],
         "hiddenNodes": [

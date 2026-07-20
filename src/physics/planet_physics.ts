@@ -13,6 +13,7 @@ import {
   removeCollider,
   type RapierWorldHandle,
 } from './rapier_world';
+import { castCameraOcclusion } from './camera_occlusion';
 
 const COLLIDER_RADIUS_METERS = 36;
 const MAX_ACTIVE_COLLIDERS = 220;
@@ -47,6 +48,11 @@ export interface PlanetPhysics {
    * along -up from `from` when a prop is hit within range; otherwise null.
    */
   probeSupport: (from: Vec3, up: Vec3) => number | null;
+  /**
+   * Pull a third-person camera in front of the first prop collider along the
+   * pivot→camera segment. World-space in/out; returns `to` when clear.
+   */
+  filterCamera: (from: Vec3, to: Vec3) => Vec3;
   /** Active prop collider count (debug). */
   getActiveColliderCount: () => number;
   dispose: () => void;
@@ -371,6 +377,19 @@ export function createPlanetPhysics(spawnPosition: Vec3): PlanetPhysics {
       if (!hit) return null;
       // Distance from feet (`from`) along -up to the hit.
       return Math.max(0, hit.timeOfImpact - 0.35);
+    },
+    filterCamera(from, to) {
+      if (active.size === 0) return to;
+      const localFrom = toLocal(from);
+      const localTo = toLocal(to);
+      const clamped = castCameraOcclusion(world, localFrom, localTo, {
+        excludeCollider: player.playerCollider,
+      });
+      return {
+        x: clamped.x + physicsOrigin.x,
+        y: clamped.y + physicsOrigin.y,
+        z: clamped.z + physicsOrigin.z,
+      };
     },
     getActiveColliderCount() {
       return active.size;

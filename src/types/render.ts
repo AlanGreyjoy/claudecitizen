@@ -194,6 +194,12 @@ export interface SpikeRenderWorld {
   prompt?: string;
   /** Current station room while in station modes; drives interior camera clamping. */
   stationRoomId?: string | null;
+  /**
+   * Collider-occlusion query wired by the app layer. Given the look-at
+   * pivot and desired camera position (world space), returns the camera
+   * position pulled in front of the first blocking collider.
+   */
+  cameraOcclusion?: (from: Vec3, to: Vec3) => Vec3;
   /** Current ship camera-bound id while on board; drives interior camera clamping. */
   shipZoneId?: string | null;
   /** Landing gear / ramp / door articulation, 0..1 each (doors by layout id). */

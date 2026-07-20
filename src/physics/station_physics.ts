@@ -12,6 +12,7 @@ import {
   removeStaticColliders,
   type RapierWorldHandle,
 } from "./rapier_world";
+import { castCameraOcclusion } from "./camera_occlusion";
 
 export interface StationPhysics {
   world: RAPIER.World;
@@ -149,4 +150,30 @@ export function teleportStationPlayer(
     { x: local.right, y: local.up, z: local.forward },
     true,
   );
+}
+
+/**
+ * Pull a third-person camera in front of the first station collider along
+ * the pivot→camera segment. `from`/`to` are world-space; the Rapier world
+ * is station-local, so transform in and back out.
+ */
+export function occludeStationCamera(
+  physics: StationPhysics,
+  frame: StationFrame,
+  from: Vec3,
+  to: Vec3,
+): Vec3 {
+  const pivotLocal = worldToStationLocal(frame, from);
+  const cameraLocal = worldToStationLocal(frame, to);
+  const clamped = castCameraOcclusion(
+    physics.world,
+    { x: pivotLocal.right, y: pivotLocal.up, z: pivotLocal.forward },
+    { x: cameraLocal.right, y: cameraLocal.up, z: cameraLocal.forward },
+    { excludeCollider: physics.player.playerCollider },
+  );
+  return stationLocalToWorld(frame, {
+    right: clamped.x,
+    up: clamped.y,
+    forward: clamped.z,
+  });
 }

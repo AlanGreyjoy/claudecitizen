@@ -1,10 +1,11 @@
 import * as RAPIER from "@dimforge/rapier3d";
 import type { FlightBody, Vec3 } from "../types";
-import { cross, dot, normalize } from "../math/vec3";
+import { add, cross, dot, normalize, scale, sub } from "../math/vec3";
 import {
   DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD,
   type GameplayCollider,
 } from "./colliders";
+import { castCameraOcclusion } from "./camera_occlusion";
 import {
   addCollider,
   createPlayerCharacter,
@@ -356,5 +357,38 @@ export function teleportShipPlayerLocal(
   physics.player.playerBody.setTranslation(
     { x: local.right, y: local.up, z: local.forward },
     true,
+  );
+}
+
+function worldToShipLocalPoint(ship: FlightBody, point: Vec3): Vec3 {
+  const right = shipRight(ship);
+  const delta = sub(point, ship.position);
+  return {
+    x: dot(delta, right),
+    y: dot(delta, ship.up),
+    z: dot(delta, ship.forward),
+  };
+}
+
+/**
+ * Pull a third-person camera in front of the first ship collider along the
+ * pivot→camera segment. `from`/`to` are world-space; the Rapier world is
+ * ship-local (x = right, y = up, z = forward), so transform in and back out.
+ */
+export function occludeShipCamera(
+  physics: ShipPhysics,
+  ship: FlightBody,
+  from: Vec3,
+  to: Vec3,
+): Vec3 {
+  const right = shipRight(ship);
+  const pivotLocal = worldToShipLocalPoint(ship, from);
+  const cameraLocal = worldToShipLocalPoint(ship, to);
+  const clamped = castCameraOcclusion(physics.world, pivotLocal, cameraLocal, {
+    excludeCollider: physics.player.playerCollider,
+  });
+  return add(
+    add(ship.position, scale(right, clamped.x)),
+    add(scale(ship.up, clamped.y), scale(ship.forward, clamped.z)),
   );
 }

@@ -431,6 +431,21 @@ export function updateCameraRig(
       smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
       smoothVector(camera.userData.smoothedWorldTarget, desiredWorldTarget, dt, 0.04);
 
+      // Pull the camera in front of the first collider blocking the line
+      // from the look target. Applied to the smoothed position (and written
+      // back) so the rendered eye never clips geometry: the clamp snaps in
+      // instantly, then the smoothing above eases back out once clear.
+      const occludeCamera = world.cameraOcclusion;
+      if (occludeCamera) {
+        const smoothedPos = camera.userData.smoothedWorldPos as THREE.Vector3;
+        const smoothedTarget = camera.userData.smoothedWorldTarget as THREE.Vector3;
+        const adjusted = occludeCamera(
+          { x: smoothedTarget.x, y: smoothedTarget.y, z: smoothedTarget.z },
+          { x: smoothedPos.x, y: smoothedPos.y, z: smoothedPos.z },
+        );
+        smoothedPos.set(adjusted.x, adjusted.y, adjusted.z);
+      }
+
       camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
       cameraTarget.copy(camera.userData.smoothedWorldTarget).sub(focusVec).multiplyScalar(renderScale);
       camera.up.copy(v3(orbit.up));
