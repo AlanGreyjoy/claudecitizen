@@ -7,6 +7,10 @@ import {
   parseAnimationController,
   type AnimationControllerV1,
 } from '../player/animation/schema';
+import {
+  parseCharacterSettings,
+  type CharacterSettingsV1,
+} from '../player/character_settings';
 import { parsePlanetDocument, type PlanetDocument } from '../world/planets/schema';
 import { parseSystemDocument, type SystemDocument } from '../world/systems/schema';
 
@@ -84,6 +88,23 @@ export async function saveBaseCharacterEquipment(
 ): Promise<string> {
   const parsed = parseBaseCharacterEquipment(document);
   const payload = await requestJson<{ path: string }>('/__editor/base-characters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: parsed }),
+  });
+  return payload.path;
+}
+
+export async function fetchCharacterSettings(): Promise<CharacterSettingsV1> {
+  const payload = await requestJson<{ document: unknown }>('/__editor/character-settings');
+  return parseCharacterSettings(payload.document);
+}
+
+export async function saveCharacterSettings(
+  document: CharacterSettingsV1,
+): Promise<string> {
+  const parsed = parseCharacterSettings(document);
+  const payload = await requestJson<{ path: string }>('/__editor/character-settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: parsed }),

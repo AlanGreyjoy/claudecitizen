@@ -366,6 +366,8 @@ function copyReferencedGameAssets(): Plugin {
  *   POST /__editor/prefab                                — save prefab JSON
  *   GET  /__editor/base-characters                       — base character equipment JSON
  *   POST /__editor/base-characters                       — save base character equipment JSON
+ *   GET  /__editor/character-settings                    — character locomotion settings JSON
+ *   POST /__editor/character-settings                    — save character locomotion settings JSON
  *   GET  /__editor/animation-controllers                 — list animation controllers
  *   GET  /__editor/animation-controllers?id=<id>         — animation controller JSON
  *   POST /__editor/animation-controllers                 — save animation controller JSON
@@ -431,6 +433,10 @@ function editorDevApi(): Plugin {
 
   function baseCharacterEquipmentPath(): string {
     return resolve(projectRoot, 'src/player/equipment/data/base-characters.json');
+  }
+
+  function characterSettingsPath(): string {
+    return resolve(projectRoot, 'src/player/data/character-settings.json');
   }
 
   function animationControllerDataDir(): string {
@@ -654,6 +660,47 @@ function editorDevApi(): Plugin {
       return;
     }
     const filePath = baseCharacterEquipmentPath();
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+    sendJson(res, 200, { saved: true, path: relative(projectRoot, filePath) });
+  }
+
+  async function handleGetCharacterSettings(res: ServerResponse): Promise<void> {
+    try {
+      const contents = await readFile(characterSettingsPath(), 'utf8');
+      sendJson(res, 200, { document: JSON.parse(contents) });
+    } catch {
+      sendJson(res, 404, { error: 'character settings document not found' });
+    }
+  }
+
+  async function handleSaveCharacterSettings(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    let document: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
+      if (typeof parsed.document !== 'object' || parsed.document === null) {
+        throw new Error('missing document');
+      }
+      document = parsed.document as Record<string, unknown>;
+      const speeds = [
+        document.walkSpeedMetersPerSecond,
+        document.sprintSpeedMetersPerSecond,
+        document.jumpSpeedMetersPerSecond,
+      ];
+      if (
+        document.schemaVersion !== 1
+        || speeds.some((value) => typeof value !== 'number' || !Number.isFinite(value))
+      ) {
+        throw new Error('invalid character settings document');
+      }
+    } catch (error) {
+      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
+      return;
+    }
+    const filePath = characterSettingsPath();
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
     sendJson(res, 200, { saved: true, path: relative(projectRoot, filePath) });
@@ -893,6 +940,10 @@ function editorDevApi(): Plugin {
           if (route === 'POST /prefab') return handleSavePrefab(req, res);
           if (route === 'GET /base-characters') return handleGetBaseCharacters(res);
           if (route === 'POST /base-characters') return handleSaveBaseCharacters(req, res);
+          if (route === 'GET /character-settings') return handleGetCharacterSettings(res);
+          if (route === 'POST /character-settings') {
+            return handleSaveCharacterSettings(req, res);
+          }
           if (route === 'GET /animation-controllers') {
             return url.searchParams.has('id')
               ? handleGetAnimationController(url, res)
@@ -933,6 +984,7 @@ export default defineConfig({
         '**/src/world/systems/data/**',
         '**/src/player/equipment/data/base-characters.json',
         '**/src/player/animation/data/**',
+        '**/src/player/data/**',
       ],
     },
   },

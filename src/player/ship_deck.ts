@@ -10,14 +10,12 @@ import {
 } from "../math/vec3";
 import {
   advanceJumpAnimationPhase,
-  JUMP_SPEED_METERS_PER_SECOND,
   animationFromState,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
   rotateCharacterToward,
-  SPRINT_SPEED_METERS_PER_SECOND,
-  WALK_SPEED_METERS_PER_SECOND,
 } from "./character_controller";
+import { getCharacterSettings } from "./character_settings";
 import {
   sampleColliderGroundHeight,
   type ShipColliderRigState,
@@ -661,10 +659,11 @@ function updateCharacterOnDeckRapier(
     input.cameraYawRadians ?? 0,
   );
   const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
+  const settings = getCharacterSettings();
   const moveSpeed =
     (wantsSprint
-      ? SPRINT_SPEED_METERS_PER_SECOND
-      : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
+      ? settings.sprintSpeedMetersPerSecond
+      : settings.walkSpeedMetersPerSecond) * moveMagnitude;
   const desiredFacing = desiredDirection;
 
   let verticalVelocity = state.shipVerticalVelocity ?? 0;
@@ -675,7 +674,7 @@ function updateCharacterOnDeckRapier(
   }
   const startedJump = Boolean(input.jumpPressed && groundedBefore);
   if (startedJump) {
-    verticalVelocity = JUMP_SPEED_METERS_PER_SECOND;
+    verticalVelocity = settings.jumpSpeedMetersPerSecond;
   }
   verticalVelocity -= gravityMetersPerSecond2 * dt;
 

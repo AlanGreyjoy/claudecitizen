@@ -35,11 +35,16 @@ import {
   locomotionFromGameplay,
 } from '../../player/animation/default_controller';
 import {
-  JUMP_SPEED_METERS_PER_SECOND,
-  SPRINT_SPEED_METERS_PER_SECOND,
-  WALK_SPEED_METERS_PER_SECOND,
   advanceJumpAnimationPhase,
 } from '../../player/character_controller';
+import {
+  cloneCharacterSettings,
+  DEFAULT_CHARACTER_SETTINGS,
+  getCharacterSettings,
+  parseCharacterSettings,
+  setCharacterSettings,
+  type CharacterSettingsV1,
+} from '../../player/character_settings';
 import { buildDefaultDefinition, findPreviewSpecies, loadSidekickCatalog } from '../../player/character_creator/sidekick_catalog';
 import type { SidekickCharacterDefinitionV2 } from '../../player/character_creator/sidekick_definition';
 import {
@@ -47,8 +52,10 @@ import {
   fetchAnimationController,
   fetchAnimationControllerList,
   fetchBaseCharacterEquipment,
+  fetchCharacterSettings,
   saveAnimationController,
   saveBaseCharacterEquipment,
+  saveCharacterSettings,
   savePrefab,
   type AnimationControllerListEntry,
 } from '../../editor/api';
@@ -92,7 +99,7 @@ const EQUIPMENT_DND_TYPE = 'application/x-claudecitizen-equipment-definition';
 type CatalogDefinition = WeaponDefinition | BackpackDefinition;
 type CharacterPreviewPose = 'reference' | 'animated';
 type EquipmentGizmoMode = 'translate' | 'rotate' | 'scale';
-type BaseCharacterLeftTab = 'equipment' | 'animation' | 'controllers';
+type BaseCharacterLeftTab = 'equipment' | 'animation' | 'controllers' | 'settings';
 /** holster = resting; drawn = character hand bone; weapon-grip = per-weapon prefab pose */
 type MountEditMode = 'holster' | 'drawn' | 'weapon-grip';
 
@@ -461,6 +468,8 @@ export function createBaseCharacterEquipmentEditor(
   let previewLocomotion: AnimationLocomotionKind = 'idle';
   let lastLoadedSourceId = UAL_ANIMATION_SOURCE_ID;
   let controllerDirty = false;
+  let settingsState: CharacterSettingsV1 = cloneCharacterSettings(getCharacterSettings());
+  let settingsDirty = false;
   let leftTab: BaseCharacterLeftTab = 'equipment';
   let selectedType: BaseCharacterType = 1;
   let previewPose: CharacterPreviewPose = 'reference';
@@ -556,6 +565,11 @@ export function createBaseCharacterEquipmentEditor(
     renderLeft();
   };
 
+  const markSettingsDirty = (): void => {
+    settingsDirty = true;
+    renderLeft();
+  };
+
   const markBackpackPrefabDirty = (prefabId: string): void => {
     dirtyBackpackPrefabIds.add(prefabId);
     renderLeft();
@@ -569,6 +583,7 @@ export function createBaseCharacterEquipmentEditor(
   const hasUnsavedChanges = (): boolean =>
     dirty
     || controllerDirty
+    || settingsDirty
     || dirtyBackpackPrefabIds.size > 0
     || dirtyWeaponPrefabIds.size > 0;
 
@@ -1198,9 +1213,10 @@ export function createBaseCharacterEquipmentEditor(
         .multiplyScalar(movement.y)
         .addScaledVector(playTestCameraRight, movement.x)
         .normalize();
+      const settings = getCharacterSettings();
       const speed = isSprinting
-        ? SPRINT_SPEED_METERS_PER_SECOND
-        : WALK_SPEED_METERS_PER_SECOND;
+        ? settings.sprintSpeedMetersPerSecond
+        : settings.walkSpeedMetersPerSecond;
       previewRoot.position.addScaledVector(playTestMoveDirection, speed * deltaSeconds);
       const horizontalDistance = Math.hypot(previewRoot.position.x, previewRoot.position.z);
       if (horizontalDistance > PLAY_TEST_STAGE_RADIUS_METERS) {
@@ -1246,7 +1262,7 @@ export function createBaseCharacterEquipmentEditor(
   const startPlayTestJump = (): void => {
     if (!playTestActive || previewRoot.position.y > 0.001) return;
     if (playTestJumpPhase === 'jump-start' || playTestJumpPhase === 'jump-loop') return;
-    playTestVerticalSpeed = JUMP_SPEED_METERS_PER_SECOND;
+    playTestVerticalSpeed = getCharacterSettings().jumpSpeedMetersPerSecond;
     playTestJumpPhase = 'jump-start';
     playTestJumpPhaseTime = 0;
     playTestAnimationKey = '';
@@ -1781,6 +1797,52 @@ export function createBaseCharacterEquipmentEditor(
     return animPanel;
   }
 
+  function renderSettingsPanel(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.className = 'ed-base-anim-panel ed-base-settings-panel';
+
+    const speedField = (
+      label: string,
+      key: 'walkSpeedMetersPerSecond' | 'sprintSpeedMetersPerSecond' | 'jumpSpeedMetersPerSecond',
+    ): HTMLLabelElement =>
+      field(label, input(String(settingsState[key]), (raw) => {
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value <= 0) return;
+        settingsState = { ...settingsState, [key]: value };
+        setCharacterSettings(settingsState);
+        markSettingsDirty();
+      }, 'number', 0.1));
+
+    const saveSettingsBtn = button(
+      settingsDirty ? 'Save Settings *' : 'Save Settings',
+      () => void save(),
+    );
+    const resetDefaults = button('Reset defaults', () => {
+      settingsState = cloneCharacterSettings(DEFAULT_CHARACTER_SETTINGS);
+      setCharacterSettings(settingsState);
+      markSettingsDirty();
+    });
+    const actions = document.createElement('div');
+    actions.className = 'ed-base-actions';
+    actions.append(saveSettingsBtn, resetDefaults);
+
+    const note = document.createElement('p');
+    note.className = 'ed-base-note';
+    note.textContent =
+      'On-foot locomotion for every character (planet, station, and ship decks). '
+      + 'Changes apply immediately — start a Play Test to feel them. '
+      + 'Save writes src/player/data/character-settings.json.';
+
+    panel.append(
+      speedField('Walk speed (m/s)', 'walkSpeedMetersPerSecond'),
+      speedField('Sprint speed (m/s)', 'sprintSpeedMetersPerSecond'),
+      speedField('Jump speed (m/s)', 'jumpSpeedMetersPerSecond'),
+      actions,
+      note,
+    );
+    return panel;
+  }
+
   function renderLeft(): void {
     left.replaceChildren();
     const title = document.createElement('div');
@@ -1797,9 +1859,16 @@ export function createBaseCharacterEquipmentEditor(
     playTestButton.title = playTestActive
       ? 'Stop character play test and restore authoring controls'
       : 'Test locomotion, jumping, and the default backpack/weapon loadout';
+    const charSettingsButton = button('Char Settings', () => {
+      leftTab = 'settings';
+      renderLeft();
+    });
+    charSettingsButton.classList.toggle('is-active', leftTab === 'settings');
+    charSettingsButton.title =
+      'Tune walk, sprint, and jump speeds — applies live, even during Play Test';
     const toolbar = document.createElement('div');
     toolbar.className = 'ed-base-actions';
-    toolbar.append(saveButton, reload, playTestButton);
+    toolbar.append(saveButton, reload, playTestButton, charSettingsButton);
 
     const tabs = document.createElement('div');
     tabs.className = 'ed-base-tabs';
@@ -1824,7 +1893,7 @@ export function createBaseCharacterEquipmentEditor(
 
     const body = document.createElement('div');
     body.className = 'ed-base-tab-body';
-    if (playTestActive) {
+    if (playTestActive && leftTab !== 'settings') {
       const panel = document.createElement('div');
       panel.className = 'ed-base-anim-panel ed-base-playtest-panel';
       const note = document.createElement('p');
@@ -1841,7 +1910,8 @@ export function createBaseCharacterEquipmentEditor(
       actions.append(reset, stop);
       panel.append(note, actions);
       body.append(panel);
-    } else if (leftTab === 'equipment') body.append(renderEquipmentTab());
+    } else if (leftTab === 'settings') body.append(renderSettingsPanel());
+    else if (leftTab === 'equipment') body.append(renderEquipmentTab());
     else if (leftTab === 'animation') body.append(renderAnimationTab());
     else body.append(renderControllerPanel());
 
@@ -2212,7 +2282,7 @@ export function createBaseCharacterEquipmentEditor(
   }
 
   async function loadDocument(): Promise<void> {
-    if (hasUnsavedChanges() && !window.confirm('Discard unsaved Base Character, controller, backpack socket, or weapon grip changes?')) return;
+    if (hasUnsavedChanges() && !window.confirm('Discard unsaved Base Character, controller, settings, backpack socket, or weapon grip changes?')) return;
     setStageStatus('Loading Base Character equipment…');
     try {
       documentState = cloneBaseCharacterEquipment(await fetchBaseCharacterEquipment());
@@ -2226,6 +2296,14 @@ export function createBaseCharacterEquipmentEditor(
       dirtyWeaponPrefabIds.clear();
       backpackPrefabDrafts.clear();
       weaponPrefabDrafts.clear();
+      try {
+        settingsState = await fetchCharacterSettings();
+      } catch {
+        // Keep the session's active settings when the document is missing.
+        settingsState = cloneCharacterSettings(getCharacterSettings());
+      }
+      setCharacterSettings(settingsState);
+      settingsDirty = false;
       await ensureAvatar();
       await applyCharacterType();
       await loadController(selectedControllerId, { force: true });
@@ -2234,6 +2312,15 @@ export function createBaseCharacterEquipmentEditor(
     } catch (error) {
       setStageStatus(error instanceof Error ? error.message : 'Base Character load failed.', true);
     }
+  }
+
+  async function persistSettings(savedPaths: string[]): Promise<void> {
+    if (!settingsDirty) return;
+    const parsed = parseCharacterSettings(settingsState);
+    savedPaths.push(await saveCharacterSettings(parsed));
+    settingsState = cloneCharacterSettings(parsed);
+    setCharacterSettings(settingsState);
+    settingsDirty = false;
   }
 
   async function save(): Promise<void> {
@@ -2255,6 +2342,7 @@ export function createBaseCharacterEquipmentEditor(
         controllerList = await fetchAnimationControllerList();
         savedPaths.push(path);
       }
+      await persistSettings(savedPaths);
       for (const prefabId of [...dirtyBackpackPrefabIds]) {
         const draft = backpackPrefabDrafts.get(prefabId);
         if (!draft) continue;
@@ -2296,7 +2384,7 @@ export function createBaseCharacterEquipmentEditor(
     },
     canLeave: () =>
       !hasUnsavedChanges() ||
-      window.confirm('Leave Base Characters with unsaved character, controller, backpack, or weapon grip changes?'),
+      window.confirm('Leave Base Characters with unsaved character, controller, settings, backpack, or weapon grip changes?'),
     isDirty: hasUnsavedChanges,
     setGizmoMode,
     save,

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "walkSpeedMetersPerSecond": 1.5,
+  "sprintSpeedMetersPerSecond": 5.3,
+  "jumpSpeedMetersPerSecond": 5.2
+}

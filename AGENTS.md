@@ -238,6 +238,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/player/ship_layout.ts` | `ShipSpec` + defaults (mass, thrust, torque) |
 | `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) |
 | `src/player/ship_deck.ts` | Ship deck walking + collider step resolution |
+| `src/player/character_settings.ts` | Editor-tunable walk/sprint/jump speeds; persisted in `src/player/data/character-settings.json` via the dev-only `/__editor/character-settings` endpoint (Base Characters → Char Settings) |
 | `src/player/station_walk.ts` | Station walking (Rapier character controller) |
 | `src/player/station_interaction.ts` | Resolves nearby station interactions from markers |
 | `src/flight/flight_config.ts` | Global IFCS / drag / damping / mouse aim knobs |

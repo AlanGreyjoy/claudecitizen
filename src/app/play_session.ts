@@ -16,6 +16,7 @@ import { createOutfitters } from '../render/effects/hud/outfitters';
 import { createPersonalInventory } from '../render/effects/hud/personal_inventory';
 import { createBuildTerminal } from '../render/effects/hud/build_terminal';
 import { createHangarBuildController } from '../player/hangar_build/build_controller';
+import { loadCurrentCharacterSettings } from '../player/character_settings';
 import {
   createBuildPropColliderRuntime,
   type BuildPropColliderRuntime,
@@ -260,6 +261,9 @@ export async function startPlaySession(
   }
 
   started = true;
+
+  // Dev: pick up any Base Character settings saved since page load.
+  await loadCurrentCharacterSettings();
 
   // The ship layout must be active before the renderer (hull, doors) and the
   // world state (rig doors) are created.

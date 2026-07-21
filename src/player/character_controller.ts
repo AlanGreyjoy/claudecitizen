@@ -29,13 +29,10 @@ import {
   resolveControllerClip,
 } from "./animation";
 import type { WeaponAnimStanceId } from "./inventory/weapon_select";
+import { getCharacterSettings } from "./character_settings";
 
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
-export const WALK_SPEED_METERS_PER_SECOND = 2.0;
-export const SPRINT_SPEED_METERS_PER_SECOND = 5.3;
 const AIR_CONTROL = 0.18;
-/** ~1.4 m apex at Earth gravity — snappy, not moon-bounce. */
-export const JUMP_SPEED_METERS_PER_SECOND = 5.2;
 /** Extra pull on the way down so hang time doesn't feel floaty. */
 const FALL_GRAVITY_MULTIPLIER = 1.7;
 const JUMP_START_SECONDS = 0.18;
@@ -259,7 +256,10 @@ export function integrateCharacterLocomotion(
       grounded = false;
       jumpPhase = "jump-start";
       jumpPhaseTime = 0;
-      velocity = add(velocity, scale(up, JUMP_SPEED_METERS_PER_SECOND));
+      velocity = add(
+        velocity,
+        scale(up, getCharacterSettings().jumpSpeedMetersPerSecond),
+      );
     } else {
       jumpPhase = updateGroundJumpState(state, dt);
       if (jumpPhase === "grounded") jumpPhaseTime = 0;
@@ -428,10 +428,11 @@ export function updateCharacterState(
     input.cameraYawRadians ?? 0,
   );
   const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
+  const settings = getCharacterSettings();
   const moveSpeed =
     (wantsSprint
-      ? SPRINT_SPEED_METERS_PER_SECOND
-      : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
+      ? settings.sprintSpeedMetersPerSecond
+      : settings.walkSpeedMetersPerSecond) * moveMagnitude;
 
   const isMoving = moveMagnitude > 0.08;
   const gravity = planet.gravityMetersPerSecond2 ?? 9.8;

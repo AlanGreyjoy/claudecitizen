@@ -12,9 +12,11 @@ import {
   integrateCharacterLocomotion,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-  SPRINT_SPEED_METERS_PER_SECOND,
-  WALK_SPEED_METERS_PER_SECOND,
 } from "../player/character_controller";
+import {
+  getCharacterSettings,
+  loadCurrentCharacterSettings,
+} from "../player/character_settings";
 import {
   bedInteractPrompt,
   createDeckCharacterState,
@@ -311,6 +313,9 @@ let started = false;
 export async function startShipPlaySession(prefabId: string): Promise<void> {
   if (started) return;
   started = true;
+
+  // Dev: pick up any Base Character settings saved since page load.
+  await loadCurrentCharacterSettings();
 
   // --- prefab layout ----------------------------------------------------------
   const doc = await loadPrefabDocument(prefabId);
@@ -872,10 +877,11 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const orbit = resolveSandboxOrbit(yaw, 0, ORBIT_PITCH_LIMIT);
     const moveDir = add(scale(orbit.right, moveX), scale(orbit.forward, moveY));
     const magnitude = Math.min(1, Math.hypot(moveX, moveY));
+    const settings = getCharacterSettings();
     const moveSpeed =
       (input.sprint
-        ? SPRINT_SPEED_METERS_PER_SECOND
-        : WALK_SPEED_METERS_PER_SECOND) * magnitude;
+        ? settings.sprintSpeedMetersPerSecond
+        : settings.walkSpeedMetersPerSecond) * magnitude;
     const isMoving = magnitude > 0.08;
     const desiredDirection =
       isMoving && Math.hypot(moveDir.x, moveDir.z) > 1e-4

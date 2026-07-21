@@ -3,11 +3,9 @@ import {
   advanceJumpAnimationPhase,
   animationFromState,
   CHARACTER_GROUND_OFFSET_METERS,
-  JUMP_SPEED_METERS_PER_SECOND,
   rotateCharacterToward,
-  SPRINT_SPEED_METERS_PER_SECOND,
-  WALK_SPEED_METERS_PER_SECOND,
 } from './character_controller';
+import { getCharacterSettings } from './character_settings';
 
 import type { StationPhysics } from '../physics/station_physics';
 import {
@@ -151,8 +149,10 @@ export function updateCharacterInStation(
   const wantsSprint = Boolean(input.sprint);
   const desiredDirection = stationMovementDirection(frame, moveX, moveY, input.cameraYawRadians ?? 0);
   const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
+  const settings = getCharacterSettings();
   const moveSpeed =
-    (wantsSprint ? SPRINT_SPEED_METERS_PER_SECOND : WALK_SPEED_METERS_PER_SECOND) * moveMagnitude;
+    (wantsSprint ? settings.sprintSpeedMetersPerSecond : settings.walkSpeedMetersPerSecond)
+    * moveMagnitude;
 
   const desiredFacing = desiredDirection;
 
@@ -168,7 +168,7 @@ export function updateCharacterInStation(
   }
   const startedJump = Boolean(input.jumpPressed && groundedBefore);
   if (startedJump) {
-    verticalVelocity = JUMP_SPEED_METERS_PER_SECOND;
+    verticalVelocity = settings.jumpSpeedMetersPerSecond;
   }
   verticalVelocity -= gravityMetersPerSecond2 * dt;
 
