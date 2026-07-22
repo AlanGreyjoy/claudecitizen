@@ -168,7 +168,7 @@ List all `ItemDefinition` rows.
 }
 ```
 
-Valid general `itemType` values include `consumable`, `armor`, `clothing`, `material`, and `misc`. Weapons and backpacks use their specialized endpoints.
+Valid general `itemType` values include `consumable`, `ammo`, `armor`, `clothing`, `material`, and `misc`. Weapons and backpacks use their specialized endpoints. Ammo definitions require a caliber-style `subType`, `stackMax` of at least 2, and a positive `costArc`.
 
 ### `PATCH /admin/items/:id`
 
@@ -182,6 +182,23 @@ Partial update. `prefabId` and `iconUrl` may be set to `null`.
 ### Weapon definitions
 
 `GET /admin/weapons`, `POST /admin/weapons`, `PATCH /admin/weapons/:id`, and `DELETE /admin/weapons/:id` manage unique weapon items. Create requests include `weaponSlotType` (`rifle`, `sword`, or `handgun`); the server fixes `itemType` to `weapon` and `stackMax` to `1`.
+
+Weapon create requests also include:
+
+```json
+{
+  "ammoItemDefinitionId": "ammo-rifle-556",
+  "magazineSize": 30,
+  "fireModes": ["single", "burst3", "auto"],
+  "roundsPerMinute": 700,
+  "muzzleVelocityMps": 880,
+  "bulletGravityMps2": 9.81,
+  "maxRangeMeters": 1200,
+  "damage": 24
+}
+```
+
+`ammoItemDefinitionId` may be `null`; otherwise it must reference an existing `ammo` item. Fire modes must be a non-empty, duplicate-free subset of `bolt`, `single`, `burst3`, and `auto`. Magazine size must be at least 1; cadence, velocity, and range must be positive; gravity and damage must be non-negative.
 
 ### Backpack definitions
 

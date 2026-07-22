@@ -62,6 +62,8 @@ import {
   type CloudModeSetting,
   type GameSettings,
 } from '../../settings/game_settings';
+import { createMuzzleFlashRenderer } from '../effects/muzzle_flash';
+import { createHitDecalRenderer } from '../effects/hit_decals';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 const QUANTUM_RENDER_LAYER = 1;
@@ -172,6 +174,9 @@ export function createSpikeRenderer(
 
   const camera = createMainCamera();
   const cameraTarget = new THREE.Vector3();
+  const weaponMarkerPosition = new THREE.Vector3();
+  const weaponMarkerForward = new THREE.Vector3();
+  const weaponMarkerQuaternion = new THREE.Quaternion();
   const upperAimView = new THREE.Vector3();
   const upperAimUp = new THREE.Vector3();
   const upperAimForward = new THREE.Vector3();
@@ -224,6 +229,8 @@ export function createSpikeRenderer(
   enableRenderLayer(lighting.moonLight, QUANTUM_RENDER_LAYER);
 
   const tileManager = createPlanetTileManager(scene, planet, seed);
+  const muzzleFlashRenderer = createMuzzleFlashRenderer(scene, tileManager.renderScale);
+  const hitDecalRenderer = createHitDecalRenderer(scene, tileManager.renderScale);
   const surfaceWaterManager = createPlanetSurfaceWaterManager(
     scene,
     planet,
@@ -317,6 +324,7 @@ export function createSpikeRenderer(
   quantumBubble.enableRenderLayer(QUANTUM_RENDER_LAYER);
 
   let lastTime = 0;
+  const lastFocusPosition: Vec3 = { x: 0, y: 0, z: 0 };
   let timeOverride: TimeOverride = 'auto';
   let quantumPreloadKey: string | null = null;
   let quantumPreloadPosition: Vec3 | null = null;
@@ -404,6 +412,9 @@ export function createSpikeRenderer(
     lastTime = nowSeconds;
 
     const focusBody = mode === 'in-ship' || mode === 'in-bed' || !character ? ship : character;
+    lastFocusPosition.x = focusBody.position.x;
+    lastFocusPosition.y = focusBody.position.y;
+    lastFocusPosition.z = focusBody.position.z;
     const volumetricEnabled = cloudMode === 'volumetric';
     const quantumState = world.quantum ?? createQuantumTravelState();
     const quantumTraveling = quantumState.phase === 'traveling';
@@ -411,6 +422,8 @@ export function createSpikeRenderer(
       quantumState.phase === 'spooling' ||
       quantumTraveling ||
       quantumState.phase === 'dropOut';
+    muzzleFlashRenderer.update(dt, focusBody.position, !quantumTraveling);
+    hitDecalRenderer.update(focusBody.position, !quantumTraveling);
 
     // Resolve this once at travel entry. During the tunnel, all world systems
     // can work against the destination instead of sampling every point along
@@ -871,6 +884,44 @@ export function createSpikeRenderer(
     setEquippedInventory(inventory, activeWeaponSlotId = null) {
       avatar.setEquippedInventory(inventory, activeWeaponSlotId);
     },
+    getActiveWeaponWorldPose() {
+      const attachment = avatar.getActiveWeaponAttachment();
+      if (!attachment) return null;
+      const resolveMarker = (object: THREE.Object3D | null) => {
+        if (!object) return null;
+        object.updateWorldMatrix(true, false);
+        object.getWorldPosition(weaponMarkerPosition);
+        object.getWorldQuaternion(weaponMarkerQuaternion);
+        weaponMarkerForward.set(0, 0, 1).applyQuaternion(weaponMarkerQuaternion).normalize();
+        return {
+          position: {
+            x: weaponMarkerPosition.x / tileManager.renderScale + lastFocusPosition.x,
+            y: weaponMarkerPosition.y / tileManager.renderScale + lastFocusPosition.y,
+            z: weaponMarkerPosition.z / tileManager.renderScale + lastFocusPosition.z,
+          },
+          forward: {
+            x: weaponMarkerForward.x,
+            y: weaponMarkerForward.y,
+            z: weaponMarkerForward.z,
+          },
+        };
+      };
+      return {
+        barrelEnd: resolveMarker(attachment.barrelEnd),
+        combat: attachment.combat ? { ...attachment.combat } : null,
+        muzzleFlash: resolveMarker(attachment.muzzleFlash),
+      };
+    },
+    presentWeaponShot(shot) {
+      if (shot.muzzleFlash) muzzleFlashRenderer.spawn(shot.muzzleFlash);
+      if (shot.hit) {
+        hitDecalRenderer.spawn({
+          normal: shot.hit.normal,
+          point: shot.hit.point,
+          textureUrl: shot.hitDecalUrl,
+        });
+      }
+    },
     dispose() {
       window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
       cloudShell.dispose();
@@ -881,6 +932,8 @@ export function createSpikeRenderer(
       stationNpcs.dispose();
       quantumBubble.dispose();
       avatar.dispose();
+      muzzleFlashRenderer.dispose();
+      hitDecalRenderer.dispose();
       shipRenderPool.dispose();
       tileManager.dispose();
       composerStack.dispose();

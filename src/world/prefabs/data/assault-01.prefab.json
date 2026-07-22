@@ -53,7 +53,16 @@
         },
         "asset": {
           "url": "/src/assets/protected/props/weapons/SM_Wep_Assault_01.glb"
-        }
+        },
+        "components": [
+          {
+            "type": "weapon-combat",
+            "fireSoundUrl": null,
+            "dryFireSoundUrl": null,
+            "reloadSoundUrl": null,
+            "hitDecalUrl": null
+          }
+        ]
       },
       {
         "id": "e-drawn-grip",
@@ -79,6 +88,60 @@
         "components": [
           {
             "type": "drawn-grip"
+          }
+        ]
+      },
+      {
+        "id": "e-barrel-end",
+        "name": "Barrel End (+Z Forward)",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0.0405,
+            "z": 0.665
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "barrel-end"
+          }
+        ]
+      },
+      {
+        "id": "e-muzzle-flash",
+        "name": "Muzzle Flash (+Z Forward)",
+        "transform": {
+          "position": {
+            "x": 0,
+            "y": 0.0405,
+            "z": 0.67
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "components": [
+          {
+            "type": "muzzle-flash"
           }
         ]
       }

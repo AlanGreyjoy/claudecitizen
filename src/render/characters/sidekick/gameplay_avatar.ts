@@ -240,6 +240,8 @@ export function createSidekickGameplayAvatar(
       root.clear();
     },
     getHeadBone: () => fallback?.getHeadBone() ?? headBone,
+    getActiveWeaponAttachment: () =>
+      fallback?.getActiveWeaponAttachment?.() ?? equipment.getActiveWeaponAttachment(),
     hasLoadError: () => fallback?.hasLoadError() ?? false,
     isReady: () => fallback?.isReady() ?? ready,
     setAnimation: (name) => {

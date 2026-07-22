@@ -11,12 +11,36 @@ import type {
   VegetationSettings,
   Vec3,
 } from '../../../types';
+import type { InventoryState } from '../../../player/inventory/types';
+import type { Camera, Object3D } from 'three';
 
 export type RendererMode = 'log-depth' | 'default-depth' | 'compatibility';
 
 export type RenderMode = SpikeRenderWorld['mode'] | 'on-ship-deck';
 
 export type TimeOverride = 'auto' | 'day' | 'night';
+
+export interface WeaponMarkerWorldPose {
+  forward: Vec3;
+  position: Vec3;
+}
+
+export interface ActiveWeaponWorldPose {
+  barrelEnd: WeaponMarkerWorldPose | null;
+  combat: {
+    dryFireSoundUrl: string | null;
+    fireSoundUrl: string | null;
+    hitDecalUrl: string | null;
+    reloadSoundUrl: string | null;
+  } | null;
+  muzzleFlash: WeaponMarkerWorldPose | null;
+}
+
+export interface WeaponCombatShotPresentation {
+  hit: { normal: Vec3; point: Vec3 } | null;
+  hitDecalUrl: string | null;
+  muzzleFlash: WeaponMarkerWorldPose | null;
+}
 
 export interface SpikeRenderer {
   rendererMode: RendererMode;
@@ -62,21 +86,23 @@ export interface SpikeRenderer {
   setSsaoColor: (color: string | null) => void;
   setTimeOverride: (mode: TimeOverride) => void;
   setEquippedInventory: (
-    inventory: import('../../../player/inventory/types').InventoryState | null,
+    inventory: InventoryState | null,
     activeWeaponSlotId?: string | null,
   ) => void;
+  getActiveWeaponWorldPose: () => ActiveWeaponWorldPose | null;
+  presentWeaponShot: (shot: WeaponCombatShotPresentation) => void;
   /** Prefetch + wait for spawn-corridor terrain/veg around a surface focus. */
   warmSpawnCorridor: (
-    focus: import('../../../types').Vec3,
+    focus: Vec3,
     options?: {
       radiusMeters?: number;
       timeoutMs?: number;
       onProgress?: (fraction: number, label: string) => void;
     },
   ) => Promise<void>;
-  getStationRoot: () => import('three').Object3D;
-  getActiveShipGroup: () => import('three').Object3D;
-  getCamera: () => import('three').Camera;
+  getStationRoot: () => Object3D;
+  getActiveShipGroup: () => Object3D;
+  getCamera: () => Camera;
   getRenderScale: () => number;
   dispose: () => void;
 }

@@ -2,6 +2,7 @@ import type { WeaponSlotType } from '../../types/equipment';
 
 export const ITEM_TYPES = [
   'consumable',
+  'ammo',
   'weapon',
   'backpack',
   'armor',
@@ -11,6 +12,10 @@ export const ITEM_TYPES = [
 ] as const;
 
 export type ItemType = (typeof ITEM_TYPES)[number];
+
+export const WEAPON_FIRE_MODES = ['bolt', 'single', 'burst3', 'auto'] as const;
+
+export type WeaponFireMode = (typeof WEAPON_FIRE_MODES)[number];
 
 export const WEARABLE_SLOT_TYPES = [
   'head',
@@ -39,6 +44,15 @@ export interface ItemDefinition {
   thirstRestore01?: number;
   /** Present for weapons. */
   weaponSlotType?: WeaponSlotType;
+  ammoItemDefinitionId?: string | null;
+  magazineSize?: number;
+  fireModes?: WeaponFireMode[];
+  roundsPerMinute?: number;
+  muzzleVelocityMps?: number;
+  bulletGravityMps2?: number;
+  maxRangeMeters?: number;
+  /** Authored for future entity combat; unused by world-only Weapon Combat. */
+  damage?: number;
   /** Present for backpacks. */
   capacityLiters?: number;
   emptyMassKg?: number;

@@ -859,6 +859,75 @@ kbd {
   transform: scale(1);
 }
 
+.sc-combat-ammo {
+  position: fixed;
+  right: 42px;
+  bottom: 42px;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: end;
+  gap: 12px;
+  padding: 10px 13px 9px;
+  border: 1px solid rgba(119, 206, 255, 0.28);
+  border-right: 3px solid rgba(119, 206, 255, 0.82);
+  background: linear-gradient(110deg, rgba(4, 13, 23, 0.78), rgba(6, 24, 38, 0.48));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), inset 0 0 24px rgba(54, 170, 229, 0.05);
+  color: rgba(222, 243, 255, 0.95);
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  z-index: 180;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 100ms ease, transform 120ms ease;
+}
+
+.sc-combat-ammo.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sc-combat-ammo-mode {
+  align-self: center;
+  min-width: 48px;
+  padding: 4px 7px 3px;
+  border: 1px solid rgba(119, 206, 255, 0.36);
+  color: rgba(127, 218, 255, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+.sc-combat-ammo-count,
+.sc-combat-ammo-reserve {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+
+.sc-combat-ammo-value {
+  min-width: 88px;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: right;
+}
+
+.sc-combat-ammo-reserve > :first-child {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.sc-combat-ammo-label {
+  margin-top: 3px;
+  color: rgba(147, 186, 207, 0.72);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+
 .sc-flight-reticle-aim {
   position: absolute;
   left: 50%;

@@ -1,6 +1,6 @@
 import { apiUrl } from './api';
 import type { WeaponSlotType } from '../types/equipment';
-import type { WearableSlotType } from '../player/inventory/types';
+import type { WeaponFireMode, WearableSlotType } from '../player/inventory/types';
 
 export interface AdminSession {
   email: string;
@@ -137,6 +137,14 @@ export interface ItemDefinitionInput {
 
 export interface WeaponDefinition extends ItemDefinition {
   weaponSlotType: WeaponSlotType;
+  ammoItemDefinitionId: string | null;
+  magazineSize: number;
+  fireModes: WeaponFireMode[];
+  roundsPerMinute: number;
+  muzzleVelocityMps: number;
+  bulletGravityMps2: number;
+  maxRangeMeters: number;
+  damage: number;
 }
 
 export interface WeaponDefinitionInput {
@@ -148,6 +156,14 @@ export interface WeaponDefinitionInput {
   costArc: number;
   rarity: string;
   weaponSlotType: WeaponSlotType;
+  ammoItemDefinitionId: string | null;
+  magazineSize: number;
+  fireModes: WeaponFireMode[];
+  roundsPerMinute: number;
+  muzzleVelocityMps: number;
+  bulletGravityMps2: number;
+  maxRangeMeters: number;
+  damage: number;
 }
 
 export interface BackpackDefinition extends ItemDefinition {

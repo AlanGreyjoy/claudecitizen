@@ -19,6 +19,8 @@ use crate::{
     state::AppState,
 };
 
+const WEAPON_FIRE_MODES: [&str; 4] = ["bolt", "single", "burst3", "auto"];
+
 #[derive(Deserialize)]
 pub struct AdminLoginBody {
     email: String,
@@ -428,6 +430,30 @@ pub async fn update_item(
     }
     reject_specialized_item_type(body.get("itemType"))?;
     validate_item_fields(&body)?;
+    let current_item_type: String = current.try_get("itemType")?;
+    let next_item_type = body
+        .get("itemType")
+        .map(|value| required_string(Some(value), "itemType"))
+        .transpose()?
+        .unwrap_or_else(|| current_item_type.clone());
+    if next_item_type == "ammo" && body.get("itemType").is_none() {
+        validate_ammo_fields(&body, false)?;
+    }
+    if current_item_type == "ammo" && next_item_type != "ammo" {
+        let is_referenced: bool = sqlx::query_scalar(
+            r#"SELECT EXISTS(
+                 SELECT 1 FROM "WeaponDefinition" WHERE "ammoItemDefinitionId"=$1
+               )"#,
+        )
+        .bind(&id)
+        .fetch_one(&state.db)
+        .await?;
+        if is_referenced {
+            return Err(ApiError::BadRequest(
+                "Ammunition referenced by a weapon cannot change itemType.".to_owned(),
+            ));
+        }
+    }
     update_dynamic(
         &state,
         "ItemDefinition",
@@ -463,11 +489,15 @@ pub async fn list_weapons(
     _admin: AdminUser,
 ) -> ApiResult<Json<Vec<Value>>> {
     let rows = sqlx::query(
-        r#"SELECT i.*, w."weaponSlotType" FROM "ItemDefinition" i JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id" ORDER BY i."createdAt",i."id""#,
+        r#"SELECT i.*, w."weaponSlotType", w."ammoItemDefinitionId", w."magazineSize", w."fireModes",
+                  w."roundsPerMinute", w."muzzleVelocityMps", w."bulletGravityMps2",
+                  w."maxRangeMeters", w."damage"
+           FROM "ItemDefinition" i JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id"
+           ORDER BY i."createdAt",i."id""#,
     ).fetch_all(&state.db).await?;
     Ok(Json(
         rows.into_iter()
-            .map(|row| specialized_item_json(row, "weaponSlotType", None))
+            .map(weapon_item_json)
             .collect::<Result<Vec<_>, _>>()?,
     ))
 }
@@ -487,10 +517,37 @@ pub async fn create_weapon(
         .to_owned();
     validate_weapon_slot(&slot)?;
     validate_item_fields(&body)?;
+    validate_weapon_fields(&state, &body, true).await?;
+    let values = ObjectValues(object(&body)?);
+    let ammo_item_definition_id = values.optional_string("ammoItemDefinitionId")?;
+    let magazine_size = values.int("magazineSize")?;
+    let fire_modes = string_array(body.get("fireModes"), "fireModes")?;
+    let rounds_per_minute = values.number("roundsPerMinute")?;
+    let muzzle_velocity_mps = values.number("muzzleVelocityMps")?;
+    let bullet_gravity_mps2 = values.number("bulletGravityMps2")?;
+    let max_range_meters = values.number("maxRangeMeters")?;
+    let damage = values.number("damage")?;
     let mut tx = state.db.begin().await?;
     let id = create_item_tx(&mut tx, &body, None).await?;
-    sqlx::query(r#"INSERT INTO "WeaponDefinition" ("itemDefinitionId","weaponSlotType","createdAt","updatedAt") VALUES ($1,$2,NOW(),NOW())"#)
-        .bind(&id).bind(slot).execute(&mut *tx).await?;
+    sqlx::query(
+        r#"INSERT INTO "WeaponDefinition"
+           ("itemDefinitionId","weaponSlotType","ammoItemDefinitionId","magazineSize","fireModes",
+            "roundsPerMinute","muzzleVelocityMps","bulletGravityMps2","maxRangeMeters","damage",
+            "createdAt","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())"#,
+    )
+    .bind(&id)
+    .bind(slot)
+    .bind(ammo_item_definition_id)
+    .bind(magazine_size)
+    .bind(json!(fire_modes))
+    .bind(rounds_per_minute)
+    .bind(muzzle_velocity_mps)
+    .bind(bullet_gravity_mps2)
+    .bind(max_range_meters)
+    .bind(damage)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(weapon_by_id(&state, &id).await?)))
 }
@@ -503,12 +560,14 @@ pub async fn update_weapon(
 ) -> ApiResult<Json<Value>> {
     ensure_exists(&state, "WeaponDefinition", &id).await?;
     validate_item_fields(&body)?;
+    validate_weapon_fields(&state, &body, false).await?;
     let mut tx = state.db.begin().await?;
     update_item_tx(&mut tx, &id, &body).await?;
     if let Some(slot) = body.get("weaponSlotType") {
         validate_weapon_slot(&required_string(Some(slot), "weaponSlotType")?)?;
         sqlx::query(r#"UPDATE "WeaponDefinition" SET "weaponSlotType"=$2,"updatedAt"=NOW() WHERE "itemDefinitionId"=$1"#).bind(&id).bind(required_string(Some(slot),"weaponSlotType")?).execute(&mut *tx).await?;
     }
+    update_weapon_fields_tx(&mut tx, &id, &body).await?;
     tx.commit().await?;
     Ok(Json(weapon_by_id(&state, &id).await?))
 }
@@ -773,7 +832,9 @@ fn prop_json(row: PgRow) -> Result<Value, sqlx::Error> {
 
 async fn list_item_rows(state: &AppState) -> ApiResult<Vec<Value>> {
     let rows = sqlx::query(
-        r#"SELECT i.*, w."weaponSlotType", b."capacityLiters", b."emptyMassKg",
+        r#"SELECT i.*, w."weaponSlotType", w."ammoItemDefinitionId", w."magazineSize", w."fireModes",
+                  w."roundsPerMinute", w."muzzleVelocityMps", w."bulletGravityMps2",
+                  w."maxRangeMeters", w."damage", b."capacityLiters", b."emptyMassKg",
                   d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
            FROM "ItemDefinition" i
            LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id"
@@ -790,7 +851,9 @@ async fn list_item_rows(state: &AppState) -> ApiResult<Vec<Value>> {
 }
 async fn item_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
     let row = sqlx::query(
-        r#"SELECT i.*, w."weaponSlotType", b."capacityLiters", b."emptyMassKg",
+        r#"SELECT i.*, w."weaponSlotType", w."ammoItemDefinitionId", w."magazineSize", w."fireModes",
+                  w."roundsPerMinute", w."muzzleVelocityMps", w."bulletGravityMps2",
+                  w."maxRangeMeters", w."damage", b."capacityLiters", b."emptyMassKg",
                   d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
            FROM "ItemDefinition" i
            LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id"
@@ -805,8 +868,9 @@ async fn item_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
 }
 fn item_json(row: PgRow) -> Result<Value, sqlx::Error> {
     let mut value = item_json_from_ref(&row)?;
-    if let Ok(Some(slot)) = row.try_get::<Option<String>, _>("weaponSlotType") {
+    if let Some(slot) = row.try_get::<Option<String>, _>("weaponSlotType")? {
         value["weaponSlotType"] = json!(slot);
+        add_weapon_combat_json(&mut value, &row)?;
     }
     if let Ok(Some(capacity)) = row.try_get::<Option<f64>, _>("capacityLiters") {
         value["capacityLiters"] = json!(capacity);
@@ -824,6 +888,24 @@ fn item_json(row: PgRow) -> Result<Value, sqlx::Error> {
             json!(row.try_get::<Option<i32>, _>("sidekickPartPresetId")?);
     }
     Ok(value)
+}
+fn weapon_item_json(row: PgRow) -> Result<Value, sqlx::Error> {
+    let mut value = item_json_from_ref(&row)?;
+    value["weaponSlotType"] = json!(row.try_get::<String, _>("weaponSlotType")?);
+    add_weapon_combat_json(&mut value, &row)?;
+    Ok(value)
+}
+fn add_weapon_combat_json(value: &mut Value, row: &PgRow) -> Result<(), sqlx::Error> {
+    value["ammoItemDefinitionId"] =
+        json!(row.try_get::<Option<String>, _>("ammoItemDefinitionId")?);
+    value["magazineSize"] = json!(row.try_get::<i32, _>("magazineSize")?);
+    value["fireModes"] = row.try_get::<Value, _>("fireModes")?;
+    value["roundsPerMinute"] = json!(row.try_get::<f64, _>("roundsPerMinute")?);
+    value["muzzleVelocityMps"] = json!(row.try_get::<f64, _>("muzzleVelocityMps")?);
+    value["bulletGravityMps2"] = json!(row.try_get::<f64, _>("bulletGravityMps2")?);
+    value["maxRangeMeters"] = json!(row.try_get::<f64, _>("maxRangeMeters")?);
+    value["damage"] = json!(row.try_get::<f64, _>("damage")?);
+    Ok(())
 }
 fn specialized_item_json(
     row: PgRow,
@@ -847,8 +929,17 @@ fn item_json_from_ref(row: &PgRow) -> Result<Value, sqlx::Error> {
     )
 }
 async fn weapon_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
-    let row=sqlx::query(r#"SELECT i.*,w."weaponSlotType" FROM "ItemDefinition" i JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id" WHERE i."id"=$1"#).bind(id).fetch_one(&state.db).await?;
-    Ok(specialized_item_json(row, "weaponSlotType", None)?)
+    let row = sqlx::query(
+        r#"SELECT i.*, w."weaponSlotType", w."ammoItemDefinitionId", w."magazineSize", w."fireModes",
+                  w."roundsPerMinute", w."muzzleVelocityMps", w."bulletGravityMps2",
+                  w."maxRangeMeters", w."damage"
+           FROM "ItemDefinition" i JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id"
+           WHERE i."id"=$1"#,
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
+    Ok(weapon_item_json(row)?)
 }
 async fn backpack_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
     let row=sqlx::query(r#"SELECT i.*,b."capacityLiters",b."emptyMassKg" FROM "ItemDefinition" i JOIN "BackpackDefinition" b ON b."itemDefinitionId"=i."id" WHERE i."id"=$1"#).bind(id).fetch_one(&state.db).await?;
@@ -917,6 +1008,62 @@ async fn update_item_tx(
         ("rarity", FieldKind::String),
     ];
     update_dynamic_tx(tx, "ItemDefinition", id, body, &fields).await
+}
+async fn update_weapon_fields_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    id: &str,
+    body: &Value,
+) -> ApiResult<()> {
+    if let Some(value) = body.get("ammoItemDefinitionId") {
+        sqlx::query(
+            r#"UPDATE "WeaponDefinition" SET "ammoItemDefinitionId"=$2,"updatedAt"=NOW()
+               WHERE "itemDefinitionId"=$1"#,
+        )
+        .bind(id)
+        .bind(optional_string(Some(value), "ammoItemDefinitionId")?)
+        .execute(&mut **tx)
+        .await?;
+    }
+    if let Some(value) = body.get("magazineSize") {
+        sqlx::query(
+            r#"UPDATE "WeaponDefinition" SET "magazineSize"=$2,"updatedAt"=NOW()
+               WHERE "itemDefinitionId"=$1"#,
+        )
+        .bind(id)
+        .bind(integer(Some(value), "magazineSize")? as i32)
+        .execute(&mut **tx)
+        .await?;
+    }
+    if body.get("fireModes").is_some() {
+        sqlx::query(
+            r#"UPDATE "WeaponDefinition" SET "fireModes"=$2,"updatedAt"=NOW()
+               WHERE "itemDefinitionId"=$1"#,
+        )
+        .bind(id)
+        .bind(json!(string_array(body.get("fireModes"), "fireModes")?))
+        .execute(&mut **tx)
+        .await?;
+    }
+    for (field, value) in [
+        ("roundsPerMinute", body.get("roundsPerMinute")),
+        ("muzzleVelocityMps", body.get("muzzleVelocityMps")),
+        ("bulletGravityMps2", body.get("bulletGravityMps2")),
+        ("maxRangeMeters", body.get("maxRangeMeters")),
+        ("damage", body.get("damage")),
+    ] {
+        let Some(value) = value else {
+            continue;
+        };
+        let sql = format!(
+            "UPDATE \"WeaponDefinition\" SET \"{field}\"=$2,\"updatedAt\"=NOW() WHERE \"itemDefinitionId\"=$1"
+        );
+        sqlx::query(&sql)
+            .bind(id)
+            .bind(number(Some(value), field)?)
+            .execute(&mut **tx)
+            .await?;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy)]
@@ -1015,9 +1162,19 @@ fn validate_item_fields(body: &Value) -> ApiResult<()> {
         let item_type = required_string(Some(item_type), "itemType")?;
         if !matches!(
             item_type.as_str(),
-            "consumable" | "weapon" | "backpack" | "armor" | "clothing" | "material" | "misc"
+            "consumable"
+                | "ammo"
+                | "weapon"
+                | "backpack"
+                | "armor"
+                | "clothing"
+                | "material"
+                | "misc"
         ) {
             return Err(ApiError::BadRequest("itemType is invalid.".to_owned()));
+        }
+        if item_type == "ammo" {
+            validate_ammo_fields(body, true)?;
         }
     }
     if let Some(value) = body.get("stackMax")
@@ -1033,6 +1190,123 @@ fn validate_item_fields(body: &Value) -> ApiResult<()> {
         return Err(ApiError::BadRequest(
             "costArc must be non-negative.".to_owned(),
         ));
+    }
+    Ok(())
+}
+fn validate_ammo_fields(body: &Value, require_all: bool) -> ApiResult<()> {
+    if require_all || body.get("subType").is_some() {
+        required_string(body.get("subType"), "subType")?;
+    }
+    let stack_max = if require_all {
+        Some(integer(body.get("stackMax"), "stackMax")?)
+    } else {
+        body.get("stackMax")
+            .map(|value| integer(Some(value), "stackMax"))
+            .transpose()?
+    };
+    if stack_max.is_some_and(|value| value < 2) {
+        return Err(ApiError::BadRequest(
+            "Ammo stackMax must be at least 2.".to_owned(),
+        ));
+    }
+    let cost_arc = if require_all {
+        Some(integer(body.get("costArc"), "costArc")?)
+    } else {
+        body.get("costArc")
+            .map(|value| integer(Some(value), "costArc"))
+            .transpose()?
+    };
+    if cost_arc.is_some_and(|value| value <= 0) {
+        return Err(ApiError::BadRequest(
+            "Ammo costArc must be greater than zero.".to_owned(),
+        ));
+    }
+    Ok(())
+}
+async fn validate_weapon_fields(
+    state: &AppState,
+    body: &Value,
+    require_all: bool,
+) -> ApiResult<()> {
+    let body = object(body)?;
+    let required_fields = [
+        "ammoItemDefinitionId",
+        "magazineSize",
+        "fireModes",
+        "roundsPerMinute",
+        "muzzleVelocityMps",
+        "bulletGravityMps2",
+        "maxRangeMeters",
+        "damage",
+    ];
+    if require_all {
+        for field in required_fields {
+            if !body.contains_key(field) {
+                return Err(ApiError::BadRequest(format!("{field} is required.")));
+            }
+        }
+    }
+
+    if let Some(value) = body.get("ammoItemDefinitionId")
+        && let Some(ammo_id) = optional_string(Some(value), "ammoItemDefinitionId")?
+    {
+        let item_type: Option<String> =
+            sqlx::query_scalar(r#"SELECT "itemType" FROM "ItemDefinition" WHERE "id"=$1"#)
+                .bind(&ammo_id)
+                .fetch_optional(&state.db)
+                .await?;
+        if item_type.as_deref() != Some("ammo") {
+            return Err(ApiError::BadRequest(
+                "ammoItemDefinitionId must reference an ammo item definition.".to_owned(),
+            ));
+        }
+    }
+    if let Some(value) = body.get("magazineSize")
+        && integer(Some(value), "magazineSize")? < 1
+    {
+        return Err(ApiError::BadRequest(
+            "magazineSize must be at least 1.".to_owned(),
+        ));
+    }
+    if body.get("fireModes").is_some() {
+        let modes = string_array(body.get("fireModes"), "fireModes")?;
+        if modes.is_empty() {
+            return Err(ApiError::BadRequest(
+                "fireModes must contain at least one mode.".to_owned(),
+            ));
+        }
+        let unique: std::collections::HashSet<&str> = modes.iter().map(String::as_str).collect();
+        if unique.len() != modes.len() {
+            return Err(ApiError::BadRequest(
+                "fireModes must not contain duplicates.".to_owned(),
+            ));
+        }
+        if let Some(invalid) = modes
+            .iter()
+            .find(|mode| !WEAPON_FIRE_MODES.contains(&mode.as_str()))
+        {
+            return Err(ApiError::BadRequest(format!(
+                "fireModes contains invalid mode \"{invalid}\"."
+            )));
+        }
+    }
+    for field in ["roundsPerMinute", "muzzleVelocityMps", "maxRangeMeters"] {
+        if let Some(value) = body.get(field)
+            && number(Some(value), field)? <= 0.0
+        {
+            return Err(ApiError::BadRequest(format!(
+                "{field} must be greater than zero."
+            )));
+        }
+    }
+    for field in ["bulletGravityMps2", "damage"] {
+        if let Some(value) = body.get(field)
+            && number(Some(value), field)? < 0.0
+        {
+            return Err(ApiError::BadRequest(format!(
+                "{field} must be non-negative."
+            )));
+        }
     }
     Ok(())
 }

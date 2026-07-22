@@ -1,7 +1,7 @@
 # Phase 01 — Ammo and weapon catalog
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Implemented — migration applied; signed-in API smoke pending
 **Depends on:** Nothing  
 **Unlocks:** Phase 02 (prefab FX can assume ammo ids exist), Phase 03 (fire needs catalog fields), Phase 05 (shop seed)
 
@@ -25,58 +25,58 @@ Introduce purchasable **`ammo`** inventory items and extend **`WeaponDefinition`
 
 ### Item type: ammo
 
-- [ ] Add `'ammo'` to client `ITEM_TYPES` in `src/player/inventory/types.ts`.
-- [ ] Backend admin `validate_item_fields` (and any itemType enums) accept `ammo`.
-- [ ] Ammo items: high `stackMax` (e.g. 120–240), `costArc` > 0, `subType` as caliber slug (e.g. `rifle-556`, `handgun-9mm`), `prefabId` null unless needed later.
-- [ ] Do **not** require a new shop endpoint — reuse `POST /game/inventory/purchase`.
+- [x] Add `'ammo'` to client `ITEM_TYPES` in `src/player/inventory/types.ts`.
+- [x] Backend admin `validate_item_fields` (and any itemType enums) accept `ammo`.
+- [x] Ammo items: high `stackMax` (e.g. 120–240), `costArc` > 0, `subType` as caliber slug (e.g. `rifle-556`, `handgun-9mm`), `prefabId` null unless needed later.
+- [x] Do **not** require a new shop endpoint — reuse `POST /game/inventory/purchase`.
 
 ### Purchase allowlist
 
-- [ ] In `purchase_inventory_item` (`game.rs`), treat `ammo` like `consumable` for stacking: allow buy while `owned < stackMax`, increment quantity by 1 per purchase (or document `roundsPerPurchase` in metadata if buying packs — default **+1 stack unit per buy**; pack size is just how you price/name the SKU).
-- [ ] Keep unique-gear rules for weapons unchanged.
-- [ ] Keep `material` / `misc` non-purchasable unless explicitly required (do not reopen).
+- [x] In `purchase_inventory_item` (`game.rs`), treat `ammo` like `consumable` for stacking: allow buy while `owned < stackMax`, increment quantity by 1 per purchase (or document `roundsPerPurchase` in metadata if buying packs — default **+1 stack unit per buy**; pack size is just how you price/name the SKU).
+- [x] Keep unique-gear rules for weapons unchanged.
+- [x] Keep `material` / `misc` non-purchasable unless explicitly required (do not reopen).
 
 ### WeaponDefinition combat fields
 
-Prefer **explicit columns** on `WeaponDefinition` (or a parallel table) over opaque JSON if SQLx stays clear. If columns are painful, store under `ItemDefinition.metadata` with a documented key set — record the choice in this file when implementing.
+Implementation choice: use **explicit columns** on `WeaponDefinition`. `ammoItemDefinitionId` is a nullable foreign key to `ItemDefinition` with `ON DELETE SET NULL`; combat tuning remains typed and queryable rather than living in opaque metadata.
 
 Required conceptual fields (PRD §8):
 
-- [ ] `ammoItemDefinitionId` (`TEXT NULL` FK-ish to `ItemDefinition.id`)
-- [ ] `magazineSize` (`INT`, default e.g. 30)
-- [ ] `fireModes` — non-empty list; store as JSONB array of `'bolt' | 'single' | 'burst3' | 'auto'`
-- [ ] `roundsPerMinute` (`DOUBLE` or `INT`)
-- [ ] `muzzleVelocityMps`
-- [ ] `bulletGravityMps2`
-- [ ] `maxRangeMeters`
-- [ ] `damage` (authored now; **unused** until entity-combat PRD)
+- [x] `ammoItemDefinitionId` (`TEXT NULL` FK-ish to `ItemDefinition.id`)
+- [x] `magazineSize` (`INT`, default e.g. 30)
+- [x] `fireModes` — non-empty list; store as JSONB array of `'bolt' | 'single' | 'burst3' | 'auto'`
+- [x] `roundsPerMinute` (`DOUBLE` or `INT`)
+- [x] `muzzleVelocityMps`
+- [x] `bulletGravityMps2`
+- [x] `maxRangeMeters`
+- [x] `damage` (authored now; **unused** until entity-combat PRD)
 
-- [ ] Migration backfills existing weapon rows with safe defaults (`ammoItemDefinitionId` NULL, `fireModes` `['single']`, sensible RPM/velocity/gravity/range).
-- [ ] Admin GET/POST/PATCH weapons read/write these fields.
-- [ ] `item_row_json` / catalog payload includes them on client `ItemDefinition` (or a typed weapon extension the fire module can read).
+- [x] Migration backfills existing weapon rows with safe defaults (`ammoItemDefinitionId` NULL, `fireModes` `['single']`, sensible RPM/velocity/gravity/range).
+- [x] Admin GET/POST/PATCH weapons read/write these fields.
+- [x] `item_row_json` / catalog payload includes them on client `ItemDefinition` (or a typed weapon extension the fire module can read).
 
 ### Client + admin UI
 
-- [ ] Update `WeaponDefinition` / `WeaponDefinitionInput` in `src/net/admin_api.ts`.
-- [ ] Admin Weapons screen: fields for ammo id, magazine, fire modes (multi-select), RPM, ballistics, damage.
-- [ ] Admin Items: allow creating `itemType: ammo` (or dedicated Ammo admin section if cleaner).
-- [ ] Personal inventory filters should not break (ammo appears under a sensible filter in a later phase if needed; at minimum catalog parses).
+- [x] Update `WeaponDefinition` / `WeaponDefinitionInput` in `src/net/admin_api.ts`.
+- [x] Admin Weapons screen: fields for ammo id, magazine, fire modes (multi-select), RPM, ballistics, damage.
+- [x] Admin Items: allow creating `itemType: ammo` (or dedicated Ammo admin section if cleaner).
+- [x] Personal inventory filters should not break (ammo appears under a sensible filter in a later phase if needed; at minimum catalog parses).
 
 ### Validation
 
-- [ ] Reject empty `fireModes`.
-- [ ] `magazineSize >= 1`.
-- [ ] If `ammoItemDefinitionId` set, target must exist and `itemType === 'ammo'` (on write).
-- [ ] Fire mode strings must be from the locked enum only.
+- [x] Reject empty `fireModes`.
+- [x] `magazineSize >= 1`.
+- [x] If `ammoItemDefinitionId` set, target must exist and `itemType === 'ammo'` (on write).
+- [x] Fire mode strings must be from the locked enum only.
 
 ## Acceptance criteria
 
-- [ ] Migration applies cleanly via existing SQLx runner (`npm run backend:migrate` when user applies).
+- [x] Migration applies cleanly via existing SQLx runner (`npm run backend:migrate` applied 2026-07-21).
 - [ ] Admin can create an ammo item and a weapon that references it with fire modes + magazine.
 - [ ] `POST /game/inventory/purchase` with an ammo id increments the stack (signed-in player with ARC).
-- [ ] Client catalog types include `ammo` and weapon combat fields without type errors.
-- [ ] No Three.js changes required in this phase.
-- [ ] `npm run typecheck` and `npm run lint` pass for touched files.
+- [x] Client catalog types include `ammo` and weapon combat fields without type errors.
+- [x] No Three.js changes required in this phase.
+- [x] `npm run typecheck` and `npm run lint` pass for touched files.
 
 ## Out of scope
 

@@ -15,6 +15,7 @@ const wearableThumbCache = new Map<string, Promise<string>>();
 
 const TYPE_LABELS: Record<ItemType, string> = {
   consumable: 'CON',
+  ammo: 'AMM',
   weapon: 'WPN',
   backpack: 'BPK',
   armor: 'ARM',

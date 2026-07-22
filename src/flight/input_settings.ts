@@ -24,6 +24,8 @@ export type KeyboardActionId =
   | 'weaponPrimary'
   | 'weaponSecondary'
   | 'weaponPistol'
+  | 'reloadWeapon'
+  | 'cycleWeaponFireMode'
   | 'hangarBuild'
   | 'hangarRotate'
   | 'hangarCancel'
@@ -160,6 +162,8 @@ export const KEYBOARD_ACTIONS: readonly KeyboardActionDefinition[] = [
   { id: 'weaponPrimary', label: 'Primary Weapon', defaultBinding: { primary: 'Digit1' } },
   { id: 'weaponSecondary', label: 'Secondary Weapon', defaultBinding: { primary: 'Digit2' } },
   { id: 'weaponPistol', label: 'Pistol', defaultBinding: { primary: 'Digit3' } },
+  { id: 'reloadWeapon', label: 'Reload Weapon', defaultBinding: { primary: 'KeyR' } },
+  { id: 'cycleWeaponFireMode', label: 'Cycle Weapon Fire Mode', defaultBinding: { primary: 'KeyB' } },
   { id: 'hangarBuild', label: 'Build Mode', defaultBinding: { primary: 'KeyH' } },
   { id: 'hangarRotate', label: 'Rotate Prop', defaultBinding: { primary: 'KeyG' } },
   { id: 'hangarCancel', label: 'Cancel Build Tool', defaultBinding: { primary: 'KeyX' } },

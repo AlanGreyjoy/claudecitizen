@@ -1,5 +1,5 @@
 /**
- * Station weapon shop — ES-style flat panel listing catalog weapons for ARC.
+ * Station weapon shop — ES-style flat panel listing catalog weapons and ammo for ARC.
  */
 
 import { purchaseInventoryItem } from "../../../net/api";
@@ -12,7 +12,7 @@ import {
 import type { StationWeaponShopMarker } from "../../../world/station";
 import { paintItemIcon } from "./item_icon";
 
-/** Weapon shop sells unique gear — one owned copy per catalog definition. */
+/** Weapons remain unique gear; ammunition is a normal stackable item. */
 function ownsWeapon(inventory: InventoryState, itemDefinitionId: string): boolean {
   return itemQuantity(inventory, itemDefinitionId) >= 1;
 }
@@ -42,14 +42,16 @@ function formatArc(cost: number): string {
   return `${cost.toLocaleString()} ARC`;
 }
 
-function filterShopWeapons(
+function filterShopOfferings(
   catalog: ItemDefinition[],
   shop: StationWeaponShopMarker,
 ): ItemDefinition[] {
-  const weapons = catalog.filter((entry) => entry.itemType === "weapon");
-  if (shop.itemDefinitionIds.length === 0) return weapons;
+  const offerings = catalog.filter(
+    (entry) => entry.itemType === "weapon" || entry.itemType === "ammo",
+  );
+  if (shop.itemDefinitionIds.length === 0) return offerings;
   const allow = new Set(shop.itemDefinitionIds);
-  return weapons.filter((entry) => allow.has(entry.id));
+  return offerings.filter((entry) => allow.has(entry.id));
 }
 
 export function createWeaponShop(
@@ -76,28 +78,30 @@ export function createWeaponShop(
     elements.listEl.replaceChildren();
     const inventory = callbacks.getInventory();
     if (!inventory || !currentShop) {
-      setStatus("Sign in to browse and buy weapons.", "error");
+      setStatus("Sign in to browse weapons and ammunition.", "error");
       return;
     }
 
-    const offerings = filterShopWeapons(inventory.catalog, currentShop);
+    const offerings = filterShopOfferings(inventory.catalog, currentShop);
     if (offerings.length === 0) {
-      setStatus("No weapons listed in the catalog.", "info");
+      setStatus("No weapons or ammunition listed in the catalog.", "info");
       return;
     }
 
-    setStatus("Select a weapon to purchase.", "info");
+    setStatus("Select a weapon or ammunition round to purchase.", "info");
     const balance = callbacks.getArcBalance() ?? 0;
 
     for (const definition of offerings) {
-      const owned = ownsWeapon(inventory, definition.id);
+      const quantity = itemQuantity(inventory, definition.id);
+      const uniqueOwned = definition.itemType === "weapon" && quantity >= 1;
+      const stackFull = definition.itemType === "ammo" && quantity >= definition.stackMax;
       const canAfford = balance >= definition.costArc;
-      const disabled = owned || !canAfford || buyingId !== null;
+      const disabled = uniqueOwned || stackFull || !canAfford || buyingId !== null;
 
       const row = document.createElement("div");
       row.className = "sc-weapon-shop-row";
-      if (owned) row.classList.add("is-owned");
-      if (!canAfford && !owned) row.classList.add("is-unaffordable");
+      if (uniqueOwned || stackFull) row.classList.add("is-owned");
+      if (!canAfford && !uniqueOwned && !stackFull) row.classList.add("is-unaffordable");
 
       const icon = document.createElement("div");
       icon.className = "sc-weapon-shop-icon";
@@ -110,9 +114,13 @@ export function createWeaponShop(
       name.textContent = definition.name;
       const detail = document.createElement("div");
       detail.className = "sc-weapon-shop-detail";
-      detail.textContent = owned
+      detail.textContent = uniqueOwned
         ? "Owned — already in inventory"
-        : definition.description || definition.subType || "Weapon";
+        : definition.itemType === "ammo"
+          ? stackFull
+            ? `Owned ${quantity} / ${definition.stackMax} — stack full`
+            : `Owned ${quantity} / ${definition.stackMax} · ${definition.description || definition.subType}`
+          : definition.description || definition.subType || "Weapon";
       meta.append(name, detail);
 
       const price = document.createElement("div");
@@ -122,7 +130,7 @@ export function createWeaponShop(
       const buy = document.createElement("button");
       buy.type = "button";
       buy.className = "sc-weapon-shop-buy";
-      buy.textContent = owned ? "Owned" : "Buy";
+      buy.textContent = uniqueOwned ? "Owned" : stackFull ? "Full" : "Buy";
       buy.disabled = disabled;
       buy.dataset.itemId = definition.id;
       buy.addEventListener("click", () => {
@@ -138,7 +146,7 @@ export function createWeaponShop(
     if (buyingId || !currentShop) return;
     const inventory = callbacks.getInventory();
     if (!inventory) {
-      setStatus("Sign in to browse and buy weapons.", "error");
+      setStatus("Sign in to browse weapons and ammunition.", "error");
       return;
     }
     const definition = findItemDefinition(inventory.catalog, itemDefinitionId);
@@ -146,8 +154,16 @@ export function createWeaponShop(
       setStatus("Item not found in catalog.", "error");
       return;
     }
-    if (ownsWeapon(inventory, itemDefinitionId)) {
+    if (definition.itemType === "weapon" && ownsWeapon(inventory, itemDefinitionId)) {
       setStatus("You already own this weapon.", "error");
+      renderList();
+      return;
+    }
+    if (
+      definition.itemType === "ammo" &&
+      itemQuantity(inventory, itemDefinitionId) >= definition.stackMax
+    ) {
+      setStatus("That ammunition stack is already full.", "error");
       renderList();
       return;
     }

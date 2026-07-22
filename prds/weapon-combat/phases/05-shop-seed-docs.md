@@ -1,7 +1,7 @@
 # Phase 05 — Shop seed and docs polish
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Implemented — migrations applied; signed-in gameplay QA pending
 **Depends on:** Phases 01–04 (gunplay works end-to-end)  
 **Unlocks:** Product acceptance for the Weapon Combat pack
 
@@ -26,38 +26,38 @@ Stock the **weapon shop** with purchasable **ammo**, seed catalog links so demo 
 
 ### Seed data
 
-- [ ] Insert at least two ammo definitions, e.g.:
+- [x] Insert at least two ammo definitions:
   - `ammo-rifle-556` — `subType: rifle-556`, stackMax 120+, costArc tuned for demo.
   - `ammo-handgun-9mm` — `subType: handgun-9mm`, similar.
-- [ ] Point existing demo firearms (`assault-01` weapon def, pistols, `starter-sidearm` if it should shoot) at the matching ammo id; set magazine + fire modes (rifle: single+burst3+auto; handgun: single or single+auto).
-- [ ] Ensure starter grant / ARC balance still lets a new player buy a mag’s worth of ammo in playtests (tune costs).
+- [x] Point demo firearms (`assault-01`, `twin-horned-pistol`, and `starter-sidearm`) at matching ammo ids with authored magazine and fire modes.
+- [x] Keep a magazine affordable against the existing 25,000 ARC starter grant (5.56 = 2 ARC/round; 9mm = 1 ARC/round).
 
 ### Weapon shop UI
 
-- [ ] Extend `weapon_shop.ts` to list `itemType === 'ammo'` (all, or intersect `itemDefinitionIds`).
-- [ ] Buying ammo uses the same `purchaseInventoryItem` path; show stack counts / Owned-at-cap like consumables.
-- [ ] Keep weapons unique-Owned behavior.
-- [ ] Update weapon-shop component docs: empty `itemDefinitionIds` ⇒ all weapons **and** all ammo (or document if ammo always appended — **prefer**: empty means all weapons + all ammo; non-empty is an explicit allowlist that may include both kinds).
-- [ ] Editor menu mocks reflect ammo rows if the Menu Manager clones the live panel.
+- [x] Extend `weapon_shop.ts` to list `itemType === 'ammo'` (all, or intersect `itemDefinitionIds`).
+- [x] Buying ammo uses the same `purchaseInventoryItem` path; show stack counts / Owned-at-cap like consumables.
+- [x] Keep weapons unique-Owned behavior.
+- [x] Update weapon-shop component docs: empty `itemDefinitionIds` means all weapons and all ammo; non-empty is an explicit allowlist for both kinds.
+- [x] Editor menu mocks include ammo rows and weapon combat links.
 
 ### Demo station
 
-- [ ] Confirm `weapon-shop-1` sells ammo in play (empty allowlist or explicit ids).
-- [ ] Manual QA owned by user — agents do not run browser QA unless asked.
+- [x] Confirm `weapon-shop-1` has an empty allowlist and therefore resolves seeded ammo statically.
+- [x] Manual QA remains user-owned and was not run.
 
 ### Docs + roadmap
 
-- [ ] Play controls: draw 1–3, RMB aim, LMB fire, mode cycle key, reload key, shop buy ammo.
-- [ ] Roadmap Phase III: mark equip/fire/reload/swap, muzzle/hitscan, combat HUD items appropriately (leave entity combat / online combat unchecked).
-- [ ] Cross-link PRD pack from roadmap or play doc if helpful (`prds/weapon-combat/`).
+- [x] Play controls: draw 1–3, RMB aim, LMB fire, mode cycle key, reload key, shop buy ammo.
+- [x] Roadmap Phase III: mark equip/fire/reload/swap, muzzle/hitscan, and combat HUD items; entity damage remains out of scope.
+- [x] Keep implementation truth in this PRD pack and link the public play/editor docs to their related workflows.
 
 ## Acceptance criteria
 
 - [ ] Signed-in player can buy ammo at the demo weapon shop and reload a seeded rifle/handgun.
-- [ ] Weapon shop docs describe ammo + allowlist behavior.
-- [ ] Roadmap Phase III checkboxes for this pack’s scope are updated.
+- [x] Weapon shop docs describe ammo + allowlist behavior.
+- [x] Roadmap Phase III checkboxes for this pack’s scope are updated.
 - [ ] Product-level acceptance in [PRD.md](../PRD.md) §12 can be checked off.
-- [ ] `npm run typecheck` and `npm run lint` pass for touched files.
+- [x] `npm run typecheck` and `npm run lint` pass for touched files.
 
 ## Out of scope
 

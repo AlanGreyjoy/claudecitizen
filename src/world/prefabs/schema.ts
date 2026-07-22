@@ -263,6 +263,22 @@ export type PrefabComponent =
        */
       type: "drawn-grip";
     }
+  | {
+      /** Flash origin/orientation. Entity local +Z points down the bore. */
+      type: "muzzle-flash";
+    }
+  | {
+      /** Ballistic ray origin. Entity local +Z points down the bore. */
+      type: "barrel-end";
+    }
+  | {
+      /** Prefab-owned presentation assets; combat balance lives in the catalog. */
+      type: "weapon-combat";
+      fireSoundUrl: string | null;
+      dryFireSoundUrl: string | null;
+      reloadSoundUrl: string | null;
+      hitDecalUrl: string | null;
+    }
   | { type: "spawn-point"; floorId: StationFloorId }
   | {
       type: "npc-spawner";
@@ -915,6 +931,21 @@ function parseAssetUrl(value: unknown, path: string): string {
   return url;
 }
 
+function parseNullableAssetUrl(value: unknown, path: string): string | null {
+  if (value === undefined || value === null) return null;
+  const url = parseString(value, path, 512).trim();
+  return url.length === 0 ? null : parseAssetUrl(url, path);
+}
+
+function assertOnlyFields(
+  value: Record<string, unknown>,
+  path: string,
+  allowed: readonly string[],
+): void {
+  const unknown = Object.keys(value).find((field) => !allowed.includes(field));
+  if (unknown) fail(`${path}.${unknown}`, "unknown field");
+}
+
 function parseColor(value: unknown, path: string): PrefabColor {
   const color = parseString(value, path, 32);
   if (!/^#[0-9a-fA-F]{6}$/.test(color)) fail(path, "expected CSS hex color");
@@ -1510,6 +1541,37 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
     }
     case "drawn-grip":
       return { type };
+    case "muzzle-flash":
+    case "barrel-end":
+      assertOnlyFields(value, path, ["type"]);
+      return { type };
+    case "weapon-combat":
+      assertOnlyFields(value, path, [
+        "type",
+        "fireSoundUrl",
+        "dryFireSoundUrl",
+        "reloadSoundUrl",
+        "hitDecalUrl",
+      ]);
+      return {
+        type,
+        fireSoundUrl: parseNullableAssetUrl(
+          value.fireSoundUrl,
+          `${path}.fireSoundUrl`,
+        ),
+        dryFireSoundUrl: parseNullableAssetUrl(
+          value.dryFireSoundUrl,
+          `${path}.dryFireSoundUrl`,
+        ),
+        reloadSoundUrl: parseNullableAssetUrl(
+          value.reloadSoundUrl,
+          `${path}.reloadSoundUrl`,
+        ),
+        hitDecalUrl: parseNullableAssetUrl(
+          value.hitDecalUrl,
+          `${path}.hitDecalUrl`,
+        ),
+      };
     case "spawn-point":
       return { type, floorId: parseFloorId(value.floorId, `${path}.floorId`) };
     case "npc-spawner": {

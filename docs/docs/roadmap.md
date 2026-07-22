@@ -18,11 +18,11 @@ Living checklist — not a contract. Priorities shift with the vibe.
 
 ## Phase 1 — Third-person combat _(current)_
 
-- [ ] Third-person weapon system — equip, fire, reload, weapon swap
-- [ ] Character controller — over-the-shoulder aim/look while armed
+- [x] Third-person weapon system — equip, fire, reload, weapon swap
+- [x] Character controller — over-the-shoulder aim/look while armed
 - [ ] Character controller — movement while armed (strafe, sprint/ADS modifiers, recoil)
-- [ ] Weapon models, muzzle flash, and hitscan / projectile hits
-- [ ] Combat HUD — crosshair, ammo, weapon state
+- [x] Weapon models, muzzle flash, and segmented bullet-drop hitscan against world geometry
+- [x] Combat HUD — crosshair, ammo, weapon state
 
 ## Planet & terrain
 

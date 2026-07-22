@@ -52,7 +52,7 @@ Interaction zone that opens the **Asteron Vehicle Management System** — lets p
 
 ### weapon-shop
 
-Gaze + **F** vendor screen (ES-style flat panel). Place an Empty on the display face with local **+Z** toward the player. Sells catalog weapons for ARC via `POST /game/inventory/purchase`. Optional `itemDefinitionIds` filter; empty = all weapons.
+Gaze + **F** vendor screen (ES-style flat panel). Place an Empty on the display face with local **+Z** toward the player. Sells catalog weapons and ammunition for ARC via `POST /game/inventory/purchase`. Optional `itemDefinitionIds` allowlist accepts both item kinds; empty = all weapons and all ammo.
 
 ### outfitters
 

@@ -19,9 +19,13 @@ import {
 } from '../../../player/inventory/types';
 import { PLAY_LOADOUT_SLOTS } from '../../../player/inventory/loadout_slots';
 import {
+  collectBarrelEnd,
   collectDrawnGrip,
   collectEquipmentSockets,
+  collectMuzzleFlash,
+  collectWeaponCombat,
   identityDrawnGripTransform,
+  type WeaponCombatLayout,
   validateBackpackPrefab,
 } from '../../../world/prefabs/item_runtime';
 import { loadPrefabDocument } from '../../../world/prefabs/loader';
@@ -123,7 +127,14 @@ export interface EquipmentAttachmentController {
     inventory: InventoryState | null,
     activeWeaponSlotId?: string | null,
   ) => void;
+  getActiveWeaponAttachment: () => ActiveWeaponAttachment | null;
   dispose: () => void;
+}
+
+export interface ActiveWeaponAttachment {
+  barrelEnd: THREE.Object3D | null;
+  combat: WeaponCombatLayout | null;
+  muzzleFlash: THREE.Object3D | null;
 }
 
 export function createEquipmentAttachmentController(): EquipmentAttachmentController {
@@ -136,6 +147,9 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
   const mountPivots = new Map<string, THREE.Group>();
   const drawnPivots = new Map<string, THREE.Group>();
   const weaponRoots = new Map<string, THREE.Object3D>();
+  const barrelEnds = new Map<string, THREE.Object3D>();
+  const muzzleFlashes = new Map<string, THREE.Object3D>();
+  const weaponCombat = new Map<string, WeaponCombatLayout>();
   const holsterParents = new Map<string, THREE.Object3D>();
   const weaponGrips = new Map<string, PrefabTransform>();
   const missingDrawnBoneWarned = new Set<string>();
@@ -152,6 +166,9 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
     mountPivots.clear();
     drawnPivots.clear();
     weaponRoots.clear();
+    barrelEnds.clear();
+    muzzleFlashes.clear();
+    weaponCombat.clear();
     holsterParents.clear();
     weaponGrips.clear();
   }
@@ -289,6 +306,18 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
       if (!holster) continue;
       holsterParents.set(slot.id, holster);
       weaponRoots.set(slot.id, item);
+      const barrelEnd = collectBarrelEnd(prefab);
+      const muzzleFlash = collectMuzzleFlash(prefab);
+      const combat = collectWeaponCombat(prefab);
+      if (barrelEnd) {
+        const object = findEntityObject(item, barrelEnd.entityId);
+        if (object) barrelEnds.set(slot.id, object);
+      }
+      if (muzzleFlash) {
+        const object = findEntityObject(item, muzzleFlash.entityId);
+        if (object) muzzleFlashes.set(slot.id, object);
+      }
+      if (combat) weaponCombat.set(slot.id, structuredClone(combat));
       applyTransform(item, IDENTITY_GRIP);
       holster.add(item);
     }
@@ -330,6 +359,14 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
   }
 
   return {
+    getActiveWeaponAttachment() {
+      if (!appliedDrawnSlotId || !weaponRoots.has(appliedDrawnSlotId)) return null;
+      return {
+        barrelEnd: barrelEnds.get(appliedDrawnSlotId) ?? null,
+        combat: weaponCombat.get(appliedDrawnSlotId) ?? null,
+        muzzleFlash: muzzleFlashes.get(appliedDrawnSlotId) ?? null,
+      };
+    },
     sync(avatarRoot, characterType, inventory, activeWeaponSlotId = null) {
       if (!avatarRoot || !inventory) {
         lastLoadoutKey = '';

@@ -12,6 +12,10 @@ import {
   type CockpitSpeedInstrumentUpdate,
 } from './cockpit_speed_hud';
 import { createSurvivalVitalsHud } from './survival_vitals_hud';
+import {
+  createCombatAmmoHud,
+  type CombatAmmoHudState,
+} from './combat_ammo';
 
 export interface HudElements {
   fpsEl: HTMLElement;
@@ -29,6 +33,7 @@ export interface HudElements {
   screenFadeEl: HTMLElement;
   flightReticleEl: HTMLElement;
   weaponCrosshairEl: HTMLElement;
+  combatAmmoEl: HTMLElement;
   cockpitGazeEl: HTMLElement;
   cockpitSpeedEl: HTMLElement;
   survivalVitalsEl: HTMLElement;
@@ -47,6 +52,7 @@ export interface HudUpdateParams {
   isPointerLocked: boolean;
   nowMs: number;
   weaponCrosshairVisible: boolean;
+  combatAmmo?: CombatAmmoHudState | null;
   flightDual?: {
     aimOffsetPx: { x: number; y: number };
     noseOffsetPx: { x: number; y: number };
@@ -94,6 +100,7 @@ export function createHud(
   });
   const flightReticle = createFlightReticle({ rootEl: elements.flightReticleEl });
   elements.weaponCrosshairEl.classList.remove('is-visible');
+  const combatAmmoHud = createCombatAmmoHud(elements.combatAmmoEl);
   const cockpitGazeHud = createCockpitGazeHud({ rootEl: elements.cockpitGazeEl });
   const cockpitSpeedHud = createCockpitSpeedHud({ rootEl: elements.cockpitSpeedEl });
   const survivalVitalsHud = createSurvivalVitalsHud(elements.survivalVitalsEl);
@@ -129,6 +136,7 @@ export function createHud(
       'is-visible',
       params.weaponCrosshairVisible,
     );
+    combatAmmoHud.update(params.combatAmmo ?? null);
     cockpitGazeHud.update(
       params.cockpitGaze ?? { visible: false },
     );

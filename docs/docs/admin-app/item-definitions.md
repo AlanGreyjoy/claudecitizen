@@ -6,7 +6,7 @@ description: Manage inventory item catalog entries for the online game.
 
 # Item definitions
 
-An **item definition** is a server-side catalog entry for player inventory — consumables, weapons, materials, and other stackable types. Items can optionally link to a bundled prefab for 3D representation and/or an icon URL for HUD display.
+An **item definition** is a server-side catalog entry for player inventory — consumables, ammunition, weapons, materials, and other stackable types. Items can optionally link to a bundled prefab for 3D representation and/or an icon URL for HUD display.
 
 Stored in `ItemDefinition`. Managed from the Admin App **Items** tab.
 
@@ -33,13 +33,14 @@ Click a row to edit. **Create item definition** adds a new entry.
 | Type | Typical use |
 | --- | --- |
 | `consumable` | Medpens, food, one-shot utilities |
+| `ammo` | Stackable reserve rounds, grouped by caliber in `subType` |
 | `weapon` | Guns, blades, deployables |
 | `armor` | Wearable protection |
 | `clothing` | Cosmetic wearables |
 | `material` | Crafting / trade goods |
 | `misc` | Catch-all |
 
-`subType` is a free-form string (max 40 chars, default `generic`) for finer grouping within a type — for example `medical` under `consumable`.
+`subType` is a free-form string (max 40 chars, default `generic`) for finer grouping within a type — for example `medical` under `consumable`. Ammo uses a stable caliber slug such as `rifle-556` or `handgun-9mm`; use a high stack maximum (typically 120–240) and a positive ARC cost.
 
 ## Create / edit form
 
@@ -56,6 +57,23 @@ Click a row to edit. **Create item definition** adds a new entry.
 | **Rarity** | Max 24 chars | Display tier (`common`, `rare`, etc.) |
 
 At least one of **prefab** or **icon URL** is usually needed for the client to render the item in the HUD. Icon-only items are valid for abstract goods.
+
+## Weapon combat fields
+
+Weapons use the specialized **Weapons** tab. In addition to `weaponSlotType`, each definition stores explicit Weapon Combat tuning:
+
+| Field | Validation | Notes |
+| --- | --- | --- |
+| **Ammo item definition** | Optional; when set, must reference an `ammo` item | `null` means the weapon cannot fire; valid for swords and unfinished firearms |
+| **Magazine size** | Integer at least 1 | Session-local loaded rounds |
+| **Fire modes** | Non-empty subset of `bolt`, `single`, `burst3`, `auto` | Duplicate or unknown modes are rejected |
+| **Rounds per minute** | Greater than 0 | Cadence for bolt, burst, and automatic fire |
+| **Muzzle velocity** | Greater than 0 m/s | Drives the segmented hitscan drop path |
+| **Bullet gravity** | Non-negative m/s² | Downward acceleration; `0` disables drop |
+| **Maximum range** | Greater than 0 m | Shot path cutoff |
+| **Damage** | Non-negative | Authored now but unused until entity combat ships |
+
+These values live as columns on `WeaponDefinition`, not in opaque item metadata. Existing weapons migrate to a single-fire, 30-round, 600 RPM baseline with no ammo link.
 
 ## Deleting definitions
 

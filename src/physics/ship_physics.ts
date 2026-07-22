@@ -8,10 +8,12 @@ import {
 import { castCameraOcclusion } from "./camera_occlusion";
 import {
   addCollider,
+  castRapierWorldRay,
   createPlayerCharacter,
   createRapierWorld,
   removeStaticColliders,
   type RapierWorldHandle,
+  type PhysicsRayHit,
 } from "./rapier_world";
 
 function shipRight(ship: FlightBody): Vec3 {
@@ -358,6 +360,43 @@ export function teleportShipPlayerLocal(
     { x: local.right, y: local.up, z: local.forward },
     true,
   );
+}
+
+export function castShipWorldRay(
+  physics: ShipPhysics,
+  ship: FlightBody,
+  origin: Vec3,
+  direction: Vec3,
+  maxDistance: number,
+): PhysicsRayHit | null {
+  const right = shipRight(ship);
+  const localOrigin = worldToShipLocalPoint(ship, origin);
+  const localDirection = {
+    x: dot(direction, right),
+    y: dot(direction, ship.up),
+    z: dot(direction, ship.forward),
+  };
+  const hit = castRapierWorldRay(
+    physics.world,
+    localOrigin,
+    localDirection,
+    maxDistance,
+    physics.player.playerCollider,
+  );
+  if (!hit) return null;
+  return {
+    distance: hit.distance,
+    point: add(
+      add(ship.position, scale(right, hit.point.x)),
+      add(scale(ship.up, hit.point.y), scale(ship.forward, hit.point.z)),
+    ),
+    normal: normalize(
+      add(
+        scale(right, hit.normal.x),
+        add(scale(ship.up, hit.normal.y), scale(ship.forward, hit.normal.z)),
+      ),
+    ),
+  };
 }
 
 function worldToShipLocalPoint(ship: FlightBody, point: Vec3): Vec3 {

@@ -94,6 +94,7 @@ import {
 } from "../physics/colliders";
 import {
   createShipPhysics,
+  castShipWorldRay,
   getShipPlayerLocal,
   getShipPlayerWorldPosition,
   occludeShipCamera,
@@ -160,8 +161,17 @@ import type { OutfittersController } from "../render/effects/hud/outfitters";
 import type { FoodShopController } from "../render/effects/hud/food_shop";
 import type { PersonalInventoryController } from "../render/effects/hud/personal_inventory";
 import type { PlayerVitalsSessionController } from "./player_vitals_session";
-import type { InventoryState, LoadoutState } from "../player/inventory/types";
-import { normalizeInventoryState } from "../player/inventory/types";
+import type {
+  InventoryState,
+  ItemDefinition,
+  LoadoutState,
+  WeaponFireMode,
+} from "../player/inventory/types";
+import {
+  findItemDefinition,
+  itemQuantity,
+  normalizeInventoryState,
+} from "../player/inventory/types";
 import {
   createEntertainmentScreen,
   type EntertainmentScreenHandle,
@@ -218,8 +228,16 @@ import {
 } from "../audio/footsteps";
 import { annotateNpcHeadLookTowardPlayer } from "../npc/player_gaze";
 import { createStationNpcPopulation } from "../npc/station_population";
-import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
-import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from "../world/planet_surface";
+import {
+  consumeInventoryAmmo,
+  resetAssignedHangarBay,
+  setAssignedHangarBay,
+} from "../net/api";
+import {
+  castTerrainPath,
+  sampleFootPlanetSurface,
+  sampleRenderablePlanetSurface,
+} from "../world/planet_surface";
 import {
   findSurfaceDestination,
   type SurfaceDestination,
@@ -242,10 +260,25 @@ import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world_client";
 import {
   occludeStationCamera,
+  castStationWorldRay,
   syncDynamicColliders,
   teleportStationPlayer,
   type StationPhysics,
 } from "../physics/station_physics";
+import {
+  advanceWeaponFire,
+  createWeaponFireState,
+  currentWeaponFireMode,
+  rejectWeaponReload,
+  resolveWeaponReload,
+  type WeaponFireState,
+} from "../player/weapon_fire";
+import {
+  buildBallisticPath,
+  resolveBallisticHit,
+  type BallisticSegment,
+  type WeaponGeometryHit,
+} from "../player/weapon_ballistics";
 
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
@@ -304,8 +337,39 @@ export interface GameLoopOptions {
   isPaused?: () => boolean;
   getInventoryLoadout?: () => LoadoutState;
   getInventory?: () => InventoryState | null;
+  onInventoryUpdate?: (inventory: InventoryState) => void;
+  onWeaponCombatEvents?: (events: readonly WeaponCombatRuntimeEvent[]) => void;
   vitalsSession?: PlayerVitalsSessionController | null;
 }
+
+export type WeaponCombatRuntimeEvent =
+  | {
+      type: "shot";
+      combat: {
+        dryFireSoundUrl: string | null;
+        fireSoundUrl: string | null;
+        hitDecalUrl: string | null;
+        reloadSoundUrl: string | null;
+      } | null;
+      direction: Vec3;
+      fireMode: WeaponFireMode;
+      hit: WeaponGeometryHit | null;
+      origin: Vec3;
+      pathEnd: Vec3;
+      weaponId: string;
+    }
+  | {
+      type: "dry-fire" | "reload-started";
+      combat: {
+        dryFireSoundUrl: string | null;
+        fireSoundUrl: string | null;
+        hitDecalUrl: string | null;
+        reloadSoundUrl: string | null;
+      } | null;
+      weaponId: string;
+    }
+  | { type: "fire-mode-changed"; fireMode: WeaponFireMode; weaponId: string }
+  | { type: "reload-completed"; roundsLoaded: number; weaponId: string };
 
 export function createGameLoop({
   planet,
@@ -333,6 +397,8 @@ export function createGameLoop({
   isPaused,
   getInventoryLoadout = () => ({}),
   getInventory = () => null,
+  onInventoryUpdate,
+  onWeaponCombatEvents,
   vitalsSession = null,
 }: GameLoopOptions) {
   const esBezelEl =
@@ -388,6 +454,8 @@ export function createGameLoop({
   });
   /** Local drawn weapon bar slot (`rifle-primary` / `rifle-secondary` / `handgun`) or holstered. */
   let activeWeaponSlotId: string | null = null;
+  const weaponFireStates = new Map<string, WeaponFireState>();
+  const ballisticSegments: BallisticSegment[] = [];
   let shipPhysics: ShipPhysics | null = null;
   let shipPhysicsWarming = false;
   let planetPhysics: PlanetPhysics | null = null;
@@ -825,6 +893,269 @@ export function createGameLoop({
   /** RMB aim with a drawn weapon → blend idle into the stance's aim-idle clip. */
   function currentWeaponAiming() {
     return activeWeaponSlotId !== null && controls.isSecondaryClickHeld();
+  }
+
+  interface ActiveFirearm {
+    ammoItemDefinitionId: string;
+    bulletGravityMps2: number;
+    definition: ItemDefinition;
+    fireModes: WeaponFireMode[];
+    magazineSize: number;
+    maxRangeMeters: number;
+    muzzleVelocityMps: number;
+    roundsPerMinute: number;
+  }
+
+  function activeFirearm(): ActiveFirearm | null {
+    if (
+      world.mode !== MODE_ON_FOOT &&
+      world.mode !== MODE_ON_SHIP_DECK &&
+      world.mode !== MODE_IN_STATION
+    ) {
+      return null;
+    }
+    if (!activeWeaponSlotId) return null;
+    const inventory = getInventory();
+    const itemId = inventory?.loadout[activeWeaponSlotId];
+    if (!inventory || !itemId) return null;
+    const definition = findItemDefinition(inventory.catalog, itemId);
+    const ammoDefinition = definition?.ammoItemDefinitionId
+      ? findItemDefinition(inventory.catalog, definition.ammoItemDefinitionId)
+      : null;
+    if (
+      !definition ||
+      definition.itemType !== "weapon" ||
+      definition.weaponSlotType === "sword" ||
+      !definition.ammoItemDefinitionId ||
+      ammoDefinition?.itemType !== "ammo" ||
+      !Array.isArray(definition.fireModes) ||
+      definition.fireModes.length === 0 ||
+      !Number.isFinite(definition.magazineSize) ||
+      !Number.isFinite(definition.roundsPerMinute) ||
+      !Number.isFinite(definition.muzzleVelocityMps) ||
+      !Number.isFinite(definition.bulletGravityMps2) ||
+      !Number.isFinite(definition.maxRangeMeters)
+    ) {
+      return null;
+    }
+    const magazineSize = Math.floor(definition.magazineSize ?? 0);
+    const roundsPerMinute = definition.roundsPerMinute ?? 0;
+    const muzzleVelocityMps = definition.muzzleVelocityMps ?? 0;
+    const bulletGravityMps2 = definition.bulletGravityMps2 ?? 0;
+    const maxRangeMeters = definition.maxRangeMeters ?? 0;
+    if (
+      magazineSize < 1 ||
+      roundsPerMinute <= 0 ||
+      muzzleVelocityMps <= 0 ||
+      bulletGravityMps2 < 0 ||
+      maxRangeMeters <= 0
+    ) {
+      return null;
+    }
+    return {
+      ammoItemDefinitionId: definition.ammoItemDefinitionId,
+      bulletGravityMps2,
+      definition,
+      fireModes: [...definition.fireModes],
+      magazineSize,
+      maxRangeMeters,
+      muzzleVelocityMps,
+      roundsPerMinute,
+    };
+  }
+
+  function fireStateFor(firearm: ActiveFirearm): WeaponFireState {
+    const existing = weaponFireStates.get(firearm.definition.id);
+    if (
+      existing &&
+      existing.magazineSize === firearm.magazineSize &&
+      existing.roundsPerMinute === firearm.roundsPerMinute &&
+      existing.fireModes.join("|") === firearm.fireModes.join("|")
+    ) {
+      return existing;
+    }
+    const created = createWeaponFireState({
+      fireModes: firearm.fireModes,
+      magazineSize: firearm.magazineSize,
+      roundsPerMinute: firearm.roundsPerMinute,
+      weaponId: firearm.definition.id,
+    });
+    weaponFireStates.set(firearm.definition.id, created);
+    return created;
+  }
+
+  function fallbackWeaponPose(): { direction: Vec3; origin: Vec3 } {
+    let basisForward = world.character.forward;
+    let yawRadians = 0;
+    if (world.mode === MODE_IN_STATION) {
+      basisForward = stationFrame.forward;
+      yawRadians = world.cameraOrbit.yawRadians;
+    } else if (world.mode === MODE_ON_SHIP_DECK) {
+      basisForward = getActiveShipBody(world).forward;
+      yawRadians = world.cameraOrbit.yawRadians;
+    }
+    const view = resolveStationWalkView(
+      basisForward,
+      world.character.up,
+      yawRadians,
+      world.cameraOrbit.pitchRadians,
+    );
+    return {
+      direction: view.forward,
+      origin: stationWalkAimOriginWorld(
+        world.character.position,
+        world.character.up,
+        view.forward,
+      ),
+    };
+  }
+
+  function resolveWeaponWorldHit(
+    origin: Vec3,
+    direction: Vec3,
+    maxDistance: number,
+  ): WeaponGeometryHit | null {
+    if (world.mode === MODE_IN_STATION && physics) {
+      const hit = castStationWorldRay(physics, stationFrame, origin, direction, maxDistance);
+      return hit ? { ...hit, surfaceKind: "station" } : null;
+    }
+    if (world.mode === MODE_ON_SHIP_DECK && shipPhysics) {
+      const hit = castShipWorldRay(
+        shipPhysics,
+        getActiveShipBody(world),
+        origin,
+        direction,
+        maxDistance,
+      );
+      return hit ? { ...hit, surfaceKind: "ship" } : null;
+    }
+    return null;
+  }
+
+  function resolveWeaponBallisticHit(
+    path: readonly BallisticSegment[],
+  ): WeaponGeometryHit | null {
+    if (world.mode === MODE_ON_FOOT) {
+      const hit = castTerrainPath(planet, seed, path);
+      return hit ? { ...hit, surfaceKind: "terrain" } : null;
+    }
+    return resolveBallisticHit(path, resolveWeaponWorldHit);
+  }
+
+  function updateWeaponCombat(
+    actions: {
+      cycleWeaponFireModePressed: boolean;
+      primaryClickHeld: boolean;
+      primaryClickPressed: boolean;
+      reloadWeaponPressed: boolean;
+    },
+    dt: number,
+  ): void {
+    const firearm = activeFirearm();
+    if (!firearm) return;
+    const inventory = getInventory();
+    if (!inventory) return;
+    const state = fireStateFor(firearm);
+    const fireEvents = advanceWeaponFire(state, {
+      cycleModePressed: actions.cycleWeaponFireModePressed,
+      deltaSeconds: dt,
+      reloadPressed: actions.reloadWeaponPressed,
+      reserveRounds: itemQuantity(inventory, firearm.ammoItemDefinitionId),
+      triggerHeld: actions.primaryClickHeld,
+      triggerPressed: actions.primaryClickPressed,
+    });
+    if (fireEvents.length === 0) return;
+
+    const presentation = renderer?.getActiveWeaponWorldPose() ?? null;
+    const fallback = fallbackWeaponPose();
+    const marker = presentation?.barrelEnd;
+    const origin = marker?.position ?? fallback.origin;
+    const direction = normalize(marker?.forward ?? fallback.direction);
+    const runtimeEvents: WeaponCombatRuntimeEvent[] = [];
+
+    for (const event of fireEvents) {
+      if (event.type === "shot") {
+        const path = buildBallisticPath(
+          {
+            bulletGravityMps2: firearm.bulletGravityMps2,
+            forward: direction,
+            maxRangeMeters: firearm.maxRangeMeters,
+            muzzleVelocityMps: firearm.muzzleVelocityMps,
+            origin,
+            worldUp: world.character.up,
+          },
+          ballisticSegments,
+        );
+        const hit = resolveWeaponBallisticHit(path);
+        renderer?.presentWeaponShot({
+          hit,
+          hitDecalUrl: presentation?.combat?.hitDecalUrl ?? null,
+          muzzleFlash: presentation?.muzzleFlash ?? null,
+        });
+        if (presentation?.combat?.fireSoundUrl) playSfx(presentation.combat.fireSoundUrl);
+        runtimeEvents.push({
+          type: "shot",
+          combat: presentation?.combat ?? null,
+          direction,
+          fireMode: event.fireMode,
+          hit,
+          origin,
+          pathEnd: { ...(hit?.point ?? path[path.length - 1]?.end ?? origin) },
+          weaponId: event.weaponId,
+        });
+        continue;
+      }
+      if (event.type === "dry-fire" || event.type === "reload-started") {
+        const soundUrl =
+          event.type === "dry-fire"
+            ? presentation?.combat?.dryFireSoundUrl
+            : presentation?.combat?.reloadSoundUrl;
+        if (soundUrl) playSfx(soundUrl);
+        runtimeEvents.push({
+          type: event.type,
+          combat: presentation?.combat ?? null,
+          weaponId: event.weaponId,
+        });
+        continue;
+      }
+      if (event.type === "fire-mode-changed") {
+        runtimeEvents.push(event);
+        continue;
+      }
+      if (event.type === "reload-request") {
+        const requestedRounds = event.quantity;
+        void consumeInventoryAmmo(firearm.ammoItemDefinitionId, requestedRounds)
+          .then((response) => {
+            onInventoryUpdate?.(response.inventory);
+            resolveWeaponReload(state, requestedRounds);
+            onWeaponCombatEvents?.([
+              {
+                type: "reload-completed",
+                roundsLoaded: requestedRounds,
+                weaponId: event.weaponId,
+              },
+            ]);
+          })
+          .catch((error: unknown) => {
+            rejectWeaponReload(state);
+            console.warn("Weapon reload could not consume ammunition.", error);
+          });
+      }
+    }
+    if (runtimeEvents.length > 0) onWeaponCombatEvents?.(runtimeEvents);
+  }
+
+  function currentCombatAmmoHud(): HudUpdateParams["combatAmmo"] {
+    const firearm = activeFirearm();
+    const inventory = getInventory();
+    if (!firearm || !inventory) return null;
+    const state = fireStateFor(firearm);
+    return {
+      fireMode: currentWeaponFireMode(state),
+      magazineSize: state.magazineSize,
+      reserveRounds: itemQuantity(inventory, firearm.ammoItemDefinitionId),
+      roundsInMagazine: state.roundsInMagazine,
+    };
   }
 
   function applyWeaponSlotPress(press: 1 | 2 | 3 | null): void {
@@ -2075,6 +2406,7 @@ export function createGameLoop({
     if (paused) {
       boostSfx.stop();
       thrustSfx.stop();
+      controls.setCombatInputActive(false);
     }
 
     let camera = controls.sampleCameraState(0);
@@ -2087,8 +2419,10 @@ export function createGameLoop({
             ? MODE_IN_BED
             : MODE_ON_FOOT,
       );
+      controls.setCombatInputActive(activeFirearm() !== null);
       const actions = controls.consumeActions();
       applyWeaponSlotPress(actions.weaponSlotPress);
+      controls.setCombatInputActive(activeFirearm() !== null);
       camera = controls.sampleCameraState(dt);
       world.cameraOrbit = {
         pitchRadians: camera.pitchRadians,
@@ -2401,6 +2735,8 @@ export function createGameLoop({
         thrustSfx.stop();
         updateTransition(world, dt, transitionContext);
       }
+
+      updateWeaponCombat(actions, dt);
 
       if (world.quantum.phase !== "traveling") {
         updateStationAnimations(dt);
@@ -2854,6 +3190,7 @@ export function createGameLoop({
         (world.mode === MODE_ON_FOOT ||
           world.mode === MODE_ON_SHIP_DECK ||
           world.mode === MODE_IN_STATION),
+      combatAmmo: paused ? null : currentCombatAmmoHud(),
       flightDual,
       cockpitGaze,
       cockpitSpeed,

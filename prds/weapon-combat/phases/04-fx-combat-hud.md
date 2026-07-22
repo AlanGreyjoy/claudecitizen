@@ -1,7 +1,7 @@
 # Phase 04 — FX and combat HUD
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Implemented — static validation complete; interactive visual/audio QA pending
 **Depends on:** Phase 03 (shot + hit events)  
 **Unlocks:** Phase 05 (polish / docs against working gunplay)
 
@@ -25,44 +25,44 @@ Present **muzzle flash**, **fire/dry/reload SFX**, **pooled world hit decals**, 
 
 ### Muzzle flash
 
-- [ ] Spawn/show flash at `muzzle-flash` world position/orientation for a short duration (or one-shot particle).
-- [ ] Pool or hard-limit concurrent flashes (e.g. 1–2 per local player).
-- [ ] If marker missing, skip flash (still allow fire from barrel-end).
-- [ ] Keep GPU cost trivial — no new full particle-system authoring requirement unless reusing existing particle helpers is easy.
+- [x] Spawn/show flash at `muzzle-flash` world position/orientation for a short duration (or one-shot particle).
+- [x] Pool or hard-limit concurrent flashes (2 per local player).
+- [x] If marker missing, skip flash (still allow fire from barrel-end).
+- [x] Keep GPU cost trivial — two crossed additive planes, not a full particle system.
 
 ### Audio
 
-- [ ] On shot: `playSfx(fireSoundUrl)` if set.
-- [ ] On dry-fire: `dryFireSoundUrl`.
-- [ ] On reload start/end: `reloadSoundUrl` (pick one moment; document).
-- [ ] Missing URL → silent (no throw).
+- [x] On shot: `playSfx(fireSoundUrl)` if set.
+- [x] On dry-fire: `dryFireSoundUrl`.
+- [x] On reload start: `reloadSoundUrl`.
+- [x] Missing URL → silent (no throw).
 
 ### Hit decals
 
-- [ ] On world hit: place a small decal quad (or projected stamp) at point with normal alignment.
-- [ ] Texture from active weapon’s `hitDecalUrl`; if null, use a single bundled default under **non-protected** public path, or skip drawing until authored.
-- [ ] **Pool cap** (e.g. 32–64); recycle oldest; `dispose` safely on session teardown.
-- [ ] Do not spawn decals for sky/misses.
+- [x] On world hit: place a small decal quad at point with normal alignment.
+- [x] Texture from active weapon’s `hitDecalUrl`; null intentionally skips drawing until authored.
+- [x] **Pool cap** of 48; recycle oldest; `dispose` safely on session teardown.
+- [x] Do not spawn decals for sky/misses.
 
 ### Combat HUD
 
-- [ ] While firearm drawn: show `roundsInMag / magazineSize` (or `roundsInMag | reserve`), and current fire mode label (`AUTO`, `BURST`, `SEMI`, `BOLT`).
-- [ ] Hide when holstered / unarmed / sword.
-- [ ] Update on fire, reload, mode cycle, inventory refresh — **event-driven**, not reallocating HUD DOM every frame.
-- [ ] Integrate visually with existing `#weapon-crosshair` / personal inventory weapon bar patterns.
+- [x] While firearm drawn: show magazine, reserve, and current fire mode label (`AUTO`, `BURST`, `SEMI`, `BOLT`).
+- [x] Hide when holstered / unarmed / sword.
+- [x] Diff updates on fire, reload, mode cycle, and inventory refresh without reallocating HUD DOM.
+- [x] Integrate visually with existing `#weapon-crosshair` HUD styling.
 
 ### Wiring
 
-- [ ] `game_loop` (or play_session) subscribes to fire module events once per frame tick without allocating closures that churn.
-- [ ] Ensure menus / weapon shop open suppress fire (already likely via pointer lock / UI gates — verify).
+- [x] `game_loop` consumes fire module events once per frame tick without allocating query closures that churn.
+- [x] Menus / weapon shop suppress fire through the existing paused/input-suppressed gates.
 
 ## Acceptance criteria
 
 - [ ] Firing shows a muzzle flash near the barrel and plays fire SFX when URLs are set.
 - [ ] Hitting a wall/floor/terrain leaves a recycled hit decal.
 - [ ] HUD shows mag + reserve + mode while drawn; updates on shoot/reload/mode change.
-- [ ] Decal pool never grows without bound during sustained auto fire.
-- [ ] `npm run typecheck` and `npm run lint` pass for touched files.
+- [x] Decal pool never grows without bound during sustained auto fire.
+- [x] `npm run typecheck` and `npm run lint` pass for touched files.
 
 ## Out of scope
 

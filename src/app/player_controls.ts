@@ -52,6 +52,8 @@ const ONE_SHOT_KEYBOARD_ACTIONS: readonly KeyboardActionId[] = [
   'weaponPrimary',
   'weaponSecondary',
   'weaponPistol',
+  'reloadWeapon',
+  'cycleWeaponFireMode',
   'hangarBuild',
   'hangarRotate',
   'hangarCancel',
@@ -97,6 +99,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   let coupledTogglePressed = false;
   const seatLook = { pitchRadians: 0, yawRadians: 0, targetPitchRadians: 0, targetYawRadians: 0 };
   let primaryClickPressed = false;
+  let primaryClickHeld = false;
   let secondaryClickHeld = false;
   const orbitLook = {
     pitchRadians: -0.35,
@@ -119,6 +122,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   let cycleFlightModePressed = false;
   let settings: GameSettings = loadGameSettings();
   let inputSuppressed = false;
+  let combatInputActive = false;
   /** CapsLock walk gait toggle (on-foot). */
   let walkToggleEnabled = false;
 
@@ -279,7 +283,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     if (inputSuppressed) return;
     if (down) {
       const wasDown = keys.has(event.code);
-      if (isKeyboardCode('reset', event.code)) onReset?.();
+      if (isKeyboardCode('reset', event.code) && !combatInputActive) onReset?.();
       if (!wasDown && isKeyboardCode('cycleCamera', event.code)) toggleShipCameraView();
       if (
         !wasDown &&
@@ -386,22 +390,30 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     canvas.requestPointerLock?.();
   }
 
-  function onPointerDown(event: PointerEvent) {
+  // Mouse events report every button transition. Pointer events only emit
+  // pointerdown/up for the first/last button in a chord, which made RMB aim
+  // swallow a later LMB fire press.
+  function onMouseDown(event: MouseEvent) {
     if (document.pointerLockElement !== canvas) return;
     if (inputSuppressed) return;
     if (event.button === 0) {
       primaryClickPressed = true;
+      primaryClickHeld = true;
     } else if (event.button === 2) {
       secondaryClickHeld = true;
     }
   }
 
-  function onPointerUp(event: PointerEvent) {
+  function onMouseUp(event: MouseEvent) {
+    if (event.button === 0) primaryClickHeld = false;
     if (event.button === 2) secondaryClickHeld = false;
   }
 
   function onPointerLockChange() {
-    if (document.pointerLockElement !== canvas) secondaryClickHeld = false;
+    if (document.pointerLockElement !== canvas) {
+      primaryClickHeld = false;
+      secondaryClickHeld = false;
+    }
   }
 
   function onContextMenu(event: MouseEvent) {
@@ -413,6 +425,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     justPressed.clear();
     deviceActionStates.clear();
     primaryClickPressed = false;
+    primaryClickHeld = false;
     secondaryClickHeld = false;
     flightAim = createFlightAimState();
     resetSeatLookState();
@@ -444,9 +457,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   window.addEventListener(GAME_SETTINGS_CHANGED_EVENT, handleSettingsChanged);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('click', onCanvasClick);
-  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('mousedown', onMouseDown);
   canvas.addEventListener('contextmenu', onContextMenu);
-  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('mouseup', onMouseUp);
   document.addEventListener('pointerlockchange', onPointerLockChange);
 
   function updateQuantumEngageHold(): boolean {
@@ -494,6 +507,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       keys.clear();
       justPressed.clear();
       deviceActionStates.clear();
+      primaryClickPressed = false;
+      primaryClickHeld = false;
       secondaryClickHeld = false;
       flightAim = createFlightAimState();
       resetSeatLookState();
@@ -515,13 +530,16 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         coupledToggled: false,
         quantumEngagePressed: false,
         primaryClickPressed: false,
+        primaryClickHeld: false,
+        reloadWeaponPressed: false,
+        cycleWeaponFireModePressed: false,
         wasKeyPressed: () => false,
       };
     }
     const cycleCameraPressed = consumeDeviceActionPress('cycleCamera');
     const resetPressed = consumeDeviceActionPress('reset');
     if (cycleCameraPressed) toggleShipCameraView();
-    if (resetPressed) onReset?.();
+    if (resetPressed && !combatInputActive) onReset?.();
 
     const weaponSlotPress =
       wasKeyboardActionPressed('weaponPrimary') || consumeDeviceActionPress('weaponPrimary')
@@ -551,6 +569,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       coupledToggled,
       quantumEngagePressed: updateQuantumEngageHold(),
       primaryClickPressed: clickPressed,
+      primaryClickHeld,
+      reloadWeaponPressed: wasKeyboardActionPressed('reloadWeapon'),
+      cycleWeaponFireModePressed: wasKeyboardActionPressed('cycleWeaponFireMode'),
       wasKeyPressed: (code: string) => justPressedSnapshot.has(code) || (code === 'KeyF' && interactPressed),
     };
     justPressed.clear();
@@ -682,9 +703,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleSettingsChanged);
     canvas.removeEventListener('wheel', onWheel);
     canvas.removeEventListener('click', onCanvasClick);
-    canvas.removeEventListener('pointerdown', onPointerDown);
+    canvas.removeEventListener('mousedown', onMouseDown);
     canvas.removeEventListener('contextmenu', onContextMenu);
-    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('mouseup', onMouseUp);
     document.removeEventListener('pointerlockchange', onPointerLockChange);
   }
 
@@ -709,6 +730,10 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     setFlightAim,
     isCoupledMode,
     setInputSuppressed,
+    setCombatInputActive(next: boolean) {
+      combatInputActive = next;
+      if (!next) primaryClickHeld = false;
+    },
     setMode(nextMode: GameMode | 'on-foot' | 'in-ship') {
       // Taking the pilot seat always starts in the cockpit view.
       if (nextMode === 'in-ship' && mode !== 'in-ship') shipCameraView = 'cockpit';

@@ -52,7 +52,7 @@ Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship
 | [Elevator](./elevator) | Floor-to-floor travel between paired markers |
 | [Hangar pad](./hangar-pad) | Ship parking spot inside a hangar |
 | [AVMS terminal](./avms-terminal) | Opens the vehicle management UI |
-| [Weapon Shop](./weapon-shop) | Gaze + F vendor screen — buy weapons for ARC |
+| [Weapon Shop](./weapon-shop) | Gaze + F vendor screen — buy weapons and ammo for ARC |
 | [Outfitters](./outfitters) | Gaze + F vendor screen — buy backpacks / gear for ARC |
 
 → Workflow details in [Station authoring](../station-authoring)
@@ -63,6 +63,9 @@ Some types allow only one per document (frames, `ship-hull`, `ship-stats`, `ship
 | --- | --- |
 | [Prop frame](./prop-frame) | Placement origin for hangar decorations |
 | [Item frame](./item-frame) | Origin for world pickup/drop visuals |
+| [Muzzle flash](./muzzle-flash) | Firearm flash origin; local +Z is bore forward |
+| [Barrel end](./barrel-end) | Firearm shot origin and bore direction |
+| [Weapon combat](./weapon-combat) | Fire/reload/dry audio and hit-decal assets |
 
 → [Props and items](../props-and-items)
 

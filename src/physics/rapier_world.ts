@@ -1,5 +1,6 @@
 import * as RAPIER from "@dimforge/rapier3d";
 import * as THREE from "three";
+import type { Vec3 } from "../types";
 import {
   loadMeshAsset,
   resolveColliderWorldMatrix,
@@ -20,6 +21,46 @@ export interface RapierWorldHandle {
   playerCollider: RAPIER.Collider;
   playerBody: RAPIER.RigidBody;
   dispose(): void;
+}
+
+export interface PhysicsRayHit {
+  distance: number;
+  normal: Vec3;
+  point: Vec3;
+}
+
+export function castRapierWorldRay(
+  world: RAPIER.World,
+  origin: Vec3,
+  direction: Vec3,
+  maxDistance: number,
+  excludeCollider?: RAPIER.Collider,
+): PhysicsRayHit | null {
+  const directionLength = Math.hypot(direction.x, direction.y, direction.z);
+  if (directionLength < 1e-9 || maxDistance <= 0) return null;
+  const dir = {
+    x: direction.x / directionLength,
+    y: direction.y / directionLength,
+    z: direction.z / directionLength,
+  };
+  const hit = world.castRayAndGetNormal(
+    new RAPIER.Ray(origin, dir),
+    maxDistance,
+    true,
+    undefined,
+    undefined,
+    excludeCollider,
+  );
+  if (!hit) return null;
+  return {
+    distance: hit.timeOfImpact,
+    point: {
+      x: origin.x + dir.x * hit.timeOfImpact,
+      y: origin.y + dir.y * hit.timeOfImpact,
+      z: origin.z + dir.z * hit.timeOfImpact,
+    },
+    normal: { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z },
+  };
 }
 
 const PLAYER_CAPSULE_RADIUS = 0.42;

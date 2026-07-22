@@ -1,6 +1,6 @@
 # Weapon Combat PRD
 
-**Status:** Ready for phased implementation  
+**Status:** Implemented — migrations applied; interactive product acceptance pending
 **Owner:** ClaudeCitizen engineering  
 **Last updated:** 2026-07-21  
 **Phases:** [01](./phases/01-ammo-weapon-catalog.md) · [02](./phases/02-weapon-prefab-authoring.md) · [03](./phases/03-hitscan-fire-runtime.md) · [04](./phases/04-fx-combat-hud.md) · [05](./phases/05-shop-seed-docs.md)  
@@ -217,8 +217,8 @@ math/ ← player/ (fire policy, mag, mode, reload intent)
 - [ ] Player can buy ammo at the weapon shop and reload a drawn rifle/handgun.
 - [ ] LMB fires with configured mode; hits world geometry with bullet drop; spawns a hit decal; no entity damage required.
 - [ ] Combat HUD shows mag, reserve, and fire mode while a firearm is drawn.
-- [ ] Domain fire/ammo policy lives under `player/` without Three.js/DOM imports.
-- [ ] `npm run lint` / `npm run typecheck` clean for touched code at end of each implementation phase (per AGENTS.md).
+- [x] Domain fire/ammo policy lives under `player/` without Three.js/DOM imports.
+- [x] `npm run lint` / `npm run typecheck` clean for touched code at end of each implementation phase (per AGENTS.md).
 
 ## 13. Open implementation notes (resolved in phase docs, not product forks)
 

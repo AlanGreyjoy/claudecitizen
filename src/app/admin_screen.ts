@@ -51,7 +51,9 @@ import { listPropPrefabOptions, type PropPrefabOption } from '../world/prefabs/l
 import { listItemPrefabOptions, type ItemPrefabOption } from '../world/prefabs/list_item_prefabs';
 import {
   ITEM_TYPES,
+  WEAPON_FIRE_MODES,
   WEARABLE_SLOT_TYPES,
+  type WeaponFireMode,
   type WearableSlotType,
 } from '../player/inventory/types';
 import { WEAPON_SLOT_TYPES, type WeaponSlotType } from '../types/equipment';
@@ -107,6 +109,14 @@ const DEFAULT_WEAPON_FORM: WeaponDefinitionInput = {
   costArc: 0,
   rarity: 'common',
   weaponSlotType: 'rifle',
+  ammoItemDefinitionId: null,
+  magazineSize: 30,
+  fireModes: ['single'],
+  roundsPerMinute: 600,
+  muzzleVelocityMps: 850,
+  bulletGravityMps2: 9.81,
+  maxRangeMeters: 1000,
+  damage: 20,
 };
 
 const DEFAULT_BACKPACK_FORM: BackpackDefinitionInput = {
@@ -293,6 +303,22 @@ function createSelect(name: string, options: Array<{ value: string; label: strin
     select.append(node);
   }
   return select;
+}
+
+function createWeaponFireModesInput(selected: readonly WeaponFireMode[]): HTMLDivElement {
+  const fireModes = document.createElement('div');
+  fireModes.className = 'sc-admin-check-grid';
+  for (const mode of WEAPON_FIRE_MODES) {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = 'fireModes';
+    input.value = mode;
+    input.checked = selected.includes(mode);
+    label.append(input, document.createTextNode(` ${mode}`));
+    fireModes.append(label);
+  }
+  return fireModes;
 }
 
 function formValue(form: HTMLFormElement, name: string): string {
@@ -1709,14 +1735,14 @@ export function showAdminScreen(): void {
     const table = document.createElement('table');
     table.className = 'sc-admin-table';
     table.innerHTML = `
-      <thead><tr><th>Name</th><th>Slot type</th><th>Sub-type</th><th>Prefab</th><th>Rarity</th></tr></thead>
+      <thead><tr><th>Name</th><th>Slot type</th><th>Ammo</th><th>Magazine</th><th>Modes</th><th>Prefab</th><th>Rarity</th></tr></thead>
     `;
     const body = document.createElement('tbody');
     if (weapons.length === 0) {
       const row = document.createElement('tr');
       row.className = 'is-static';
       const cell = document.createElement('td');
-      cell.colSpan = 5;
+      cell.colSpan = 7;
       cell.className = 'sc-admin-empty';
       cell.textContent = 'No weapon definitions match your search.';
       row.append(cell);
@@ -1724,11 +1750,17 @@ export function showAdminScreen(): void {
     }
     for (const weapon of weapons) {
       const row = document.createElement('tr');
-      for (const value of [weapon.name, weapon.weaponSlotType, weapon.subType]) {
+      for (const value of [weapon.name, weapon.weaponSlotType]) {
         const cell = document.createElement('td');
         cell.textContent = value;
         row.append(cell);
       }
+      row.append(createTruncatedCell(weapon.ammoItemDefinitionId ?? '—', 22, true));
+      const magazine = document.createElement('td');
+      magazine.textContent = String(weapon.magazineSize);
+      const modes = document.createElement('td');
+      modes.textContent = weapon.fireModes.join(', ');
+      row.append(magazine, modes);
       row.append(createTruncatedCell(weapon.prefabId ?? '—', 24, true));
       const rarity = document.createElement('td');
       rarity.textContent = weapon.rarity;
@@ -1756,9 +1788,14 @@ export function showAdminScreen(): void {
           renderWeaponsTable(
             needle
               ? weapons.filter((weapon) =>
-                  [weapon.name, weapon.weaponSlotType, weapon.subType, weapon.prefabId ?? ''].some(
-                    (value) => value.toLowerCase().includes(needle),
-                  ),
+                  [
+                    weapon.name,
+                    weapon.weaponSlotType,
+                    weapon.subType,
+                    weapon.ammoItemDefinitionId ?? '',
+                    weapon.fireModes.join(' '),
+                    weapon.prefabId ?? '',
+                  ].some((value) => value.toLowerCase().includes(needle)),
                 )
               : weapons,
           ),
@@ -1800,6 +1837,12 @@ export function showAdminScreen(): void {
   function readWeaponForm(form: HTMLFormElement): WeaponDefinitionInput {
     const iconUrl = formValue(form, 'iconUrl');
     const weaponSlotTypeRaw = formValue(form, 'weaponSlotType') as WeaponSlotType;
+    const fireModes = Array.from(
+      form.querySelectorAll<HTMLInputElement>('input[name="fireModes"]:checked'),
+    )
+      .map((input) => input.value as WeaponFireMode)
+      .filter((mode): mode is WeaponFireMode => WEAPON_FIRE_MODES.includes(mode));
+    const ammoItemDefinitionId = formValue(form, 'ammoItemDefinitionId');
     return {
       name: formValue(form, 'name'),
       description: formValue(form, 'description'),
@@ -1809,11 +1852,19 @@ export function showAdminScreen(): void {
       costArc: Math.round(formNumber(form, 'costArc')),
       rarity: formValue(form, 'rarity') || 'common',
       weaponSlotType: WEAPON_SLOT_TYPES.includes(weaponSlotTypeRaw) ? weaponSlotTypeRaw : 'rifle',
+      ammoItemDefinitionId: ammoItemDefinitionId || null,
+      magazineSize: Math.round(formNumber(form, 'magazineSize')),
+      fireModes,
+      roundsPerMinute: formNumber(form, 'roundsPerMinute'),
+      muzzleVelocityMps: formNumber(form, 'muzzleVelocityMps'),
+      bulletGravityMps2: formNumber(form, 'bulletGravityMps2'),
+      maxRangeMeters: formNumber(form, 'maxRangeMeters'),
+      damage: formNumber(form, 'damage'),
     };
   }
 
   async function showWeaponForm(existing?: WeaponDefinition): Promise<void> {
-    const prefabs = await ensureItemPrefabs();
+    const [prefabs, items] = await Promise.all([ensureItemPrefabs(), listItemDefinitions()]);
     const defaults = existing ?? DEFAULT_WEAPON_FORM;
     const form = document.createElement('form');
     form.className = 'sc-admin-form sc-admin-form-wide';
@@ -1826,6 +1877,13 @@ export function showAdminScreen(): void {
       { value: '', label: 'Select an item prefab' },
       ...prefabs.map((prefab) => ({ value: prefab.id, label: `${prefab.label} (${prefab.id})` })),
     ];
+    const ammoOptions = [
+      { value: '', label: 'No ammo (weapon cannot fire)' },
+      ...items
+        .filter((item) => item.itemType === 'ammo')
+        .map((item) => ({ value: item.id, label: `${item.name} (${item.subType})` })),
+    ];
+    const fireModes = createWeaponFireModesInput(defaults.fireModes);
     form.append(
       createField('Name', createTextInput('name', defaults.name)),
       createField('Description', createTextArea('description', defaults.description)),
@@ -1840,6 +1898,33 @@ export function showAdminScreen(): void {
       createField('Sub-type', createTextInput('subType', defaults.subType)),
       createField('Item prefab', createSelect('prefabId', prefabOptions, defaults.prefabId ?? undefined)),
       createIconUrlField(form, defaults.iconUrl ?? '', setStatus),
+      createField(
+        'Ammo item definition',
+        createSelect(
+          'ammoItemDefinitionId',
+          ammoOptions,
+          defaults.ammoItemDefinitionId ?? '',
+        ),
+      ),
+      createField('Magazine size', createNumberInput('magazineSize', defaults.magazineSize)),
+      createField('Fire modes', fireModes),
+      createField(
+        'Rounds per minute',
+        createNumberInput('roundsPerMinute', defaults.roundsPerMinute),
+      ),
+      createField(
+        'Muzzle velocity (m/s)',
+        createNumberInput('muzzleVelocityMps', defaults.muzzleVelocityMps, '0.1'),
+      ),
+      createField(
+        'Bullet gravity (m/s²)',
+        createNumberInput('bulletGravityMps2', defaults.bulletGravityMps2, '0.01'),
+      ),
+      createField(
+        'Maximum range (m)',
+        createNumberInput('maxRangeMeters', defaults.maxRangeMeters, '0.1'),
+      ),
+      createField('Damage (future)', createNumberInput('damage', defaults.damage, '0.1')),
       createField('Cost (ARC)', createNumberInput('costArc', defaults.costArc)),
       createField('Rarity', createTextInput('rarity', defaults.rarity)),
     );
@@ -1867,6 +1952,9 @@ export function showAdminScreen(): void {
       event.preventDefault();
       const payload = readWeaponForm(form);
       if (!payload.prefabId) return setStatus('Select an item prefab before saving.', true);
+      if (payload.fireModes.length === 0) {
+        return setStatus('Select at least one fire mode before saving.', true);
+      }
       setStatus('Saving weapon definition...');
       const request = existing
         ? updateWeaponDefinition(existing.id, payload)

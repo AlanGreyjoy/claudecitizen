@@ -12,6 +12,8 @@ import {
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
 import { createSidekickGameplayAvatar } from '../../characters/sidekick/gameplay_avatar';
 import { applyDefaultFrustumCulling } from '../../frustum_policy';
+import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment_attach';
+import type { InventoryState } from '../../../player/inventory/types';
 
 const UAL_AVATAR_URL = UNIVERSAL_ANIMATION_LIBRARY_URL;
 const PROTECTED_CHARACTER_URL_PREFIX = '/src/assets/protected/characters/';
@@ -61,9 +63,10 @@ export interface CharacterAvatarInstance {
   setHeadLook?: (look: CharacterUpperBodyAim | null) => void;
   /** Attach equipped backpack/weapons from personal inventory loadout; optional drawn hotbar slot. */
   setEquippedInventory?: (
-    inventory: import('../../../player/inventory/types').InventoryState | null,
+    inventory: InventoryState | null,
     activeWeaponSlotId?: string | null,
   ) => void;
+  getActiveWeaponAttachment?: () => ActiveWeaponAttachment | null;
 }
 
 let avatarAssetPromise: Promise<AvatarAsset> | null = null;
@@ -364,6 +367,7 @@ function createLegacyCharacterAvatarInstance(renderScale: number): CharacterAvat
     setEquippedInventory: () => {
       /* Legacy avatar has no equipment sockets. */
     },
+    getActiveWeaponAttachment: () => null,
   };
 }
 

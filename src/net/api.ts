@@ -294,6 +294,21 @@ export function consumeInventoryItem(
   });
 }
 
+export interface InventoryAmmoConsumeResponse {
+  inventory: InventoryState;
+}
+
+/** Consume a precise ammunition quantity after a completed local reload timer. */
+export function consumeInventoryAmmo(
+  itemDefinitionId: string,
+  quantity: number,
+): Promise<InventoryAmmoConsumeResponse> {
+  return requestJson<InventoryAmmoConsumeResponse>('/game/inventory/consume-ammo', {
+    method: 'POST',
+    body: JSON.stringify({ itemDefinitionId, quantity }),
+  });
+}
+
 /** Equip or unequip an owned item into a personal loadout slot. */
 export function equipInventoryItem(
   slotId: string,

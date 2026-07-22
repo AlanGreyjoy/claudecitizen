@@ -42,6 +42,13 @@ pub struct PurchaseItemBody {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ConsumeAmmoBody {
+    item_definition_id: String,
+    quantity: i32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EquipItemBody {
     slot_id: String,
     item_definition_id: Option<String>,
@@ -402,12 +409,12 @@ pub async fn purchase_inventory_item(
     .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
     let item_type: String = definition.try_get("itemType")?;
     let stack_max: i32 = definition.try_get("stackMax")?;
-    let is_consumable = item_type == "consumable";
+    let is_stackable = matches!(item_type.as_str(), "consumable" | "ammo");
     let is_unique_gear = matches!(
         item_type.as_str(),
         "weapon" | "backpack" | "armor" | "clothing"
     );
-    if !is_consumable && !is_unique_gear {
+    if !is_stackable && !is_unique_gear {
         return Err(ApiError::BadRequest(
             "This item cannot be purchased from a shop.".to_owned(),
         ));
@@ -430,7 +437,7 @@ pub async fn purchase_inventory_item(
             "You already own this item.".to_owned(),
         ));
     }
-    if is_consumable && owned >= stack_max {
+    if is_stackable && owned >= stack_max {
         return Err(ApiError::BadRequest(
             "Inventory stack is already full.".to_owned(),
         ));
@@ -478,13 +485,12 @@ pub async fn consume_inventory_item(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| ApiError::NotFound("Player not found.".to_owned()))?;
-    let definition = sqlx::query(
-        r#"SELECT "itemType", "metadata" FROM "ItemDefinition" WHERE "id" = $1"#,
-    )
-    .bind(&body.item_definition_id)
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
+    let definition =
+        sqlx::query(r#"SELECT "itemType", "metadata" FROM "ItemDefinition" WHERE "id" = $1"#)
+            .bind(&body.item_definition_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
     if definition.try_get::<String, _>("itemType")? != "consumable" {
         return Err(ApiError::BadRequest(
             "Only consumables can be used.".to_owned(),
@@ -550,6 +556,80 @@ pub async fn consume_inventory_item(
     Ok(Json(json!({
         "inventory": inventory_state(&state, &player_id).await?,
         "vitals": vitals_json(hunger, thirst),
+    })))
+}
+
+pub async fn consume_inventory_ammo(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Json(body): Json<ConsumeAmmoBody>,
+) -> ApiResult<Json<Value>> {
+    if body.item_definition_id.trim().is_empty() {
+        return Err(ApiError::BadRequest(
+            "itemDefinitionId is required.".to_owned(),
+        ));
+    }
+    if body.quantity < 1 {
+        return Err(ApiError::BadRequest(
+            "quantity must be a positive integer.".to_owned(),
+        ));
+    }
+
+    let player_id = require_player_id(&state, &access.user_id).await?;
+    let mut tx = state.db.begin().await?;
+    let item_type: String =
+        sqlx::query_scalar(r#"SELECT "itemType" FROM "ItemDefinition" WHERE "id" = $1"#)
+            .bind(&body.item_definition_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
+    if item_type != "ammo" {
+        return Err(ApiError::BadRequest(
+            "Only ammunition can be consumed by a reload.".to_owned(),
+        ));
+    }
+
+    let owned: i32 = sqlx::query_scalar(
+        r#"SELECT "quantity" FROM "PlayerItem"
+           WHERE "playerId" = $1 AND "itemDefinitionId" = $2
+           FOR UPDATE"#,
+    )
+    .bind(&player_id)
+    .bind(&body.item_definition_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::BadRequest("You do not own this ammunition.".to_owned()))?;
+    if owned < body.quantity {
+        return Err(ApiError::BadRequest(
+            "Insufficient ammunition for this reload.".to_owned(),
+        ));
+    }
+
+    if owned == body.quantity {
+        sqlx::query(
+            r#"DELETE FROM "PlayerItem"
+               WHERE "playerId" = $1 AND "itemDefinitionId" = $2"#,
+        )
+        .bind(&player_id)
+        .bind(&body.item_definition_id)
+        .execute(&mut *tx)
+        .await?;
+    } else {
+        sqlx::query(
+            r#"UPDATE "PlayerItem"
+               SET "quantity" = "quantity" - $3, "updatedAt" = NOW()
+               WHERE "playerId" = $1 AND "itemDefinitionId" = $2"#,
+        )
+        .bind(&player_id)
+        .bind(&body.item_definition_id)
+        .bind(body.quantity)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(Json(json!({
+        "inventory": inventory_state(&state, &player_id).await?,
     })))
 }
 
@@ -1180,7 +1260,10 @@ async fn inventory_state(state: &AppState, player_id: &str) -> ApiResult<Value> 
     let catalog = sqlx::query(
         r#"SELECT i."id", i."name", i."description", i."itemType", i."subType", i."prefabId", i."iconUrl", i."stackMax", i."costArc", i."rarity",
                   i."metadata",
-                  w."weaponSlotType", b."capacityLiters", b."emptyMassKg",
+                  w."weaponSlotType", w."ammoItemDefinitionId", w."magazineSize", w."fireModes",
+                  w."roundsPerMinute", w."muzzleVelocityMps", w."bulletGravityMps2",
+                  w."maxRangeMeters", w."damage",
+                  b."capacityLiters", b."emptyMassKg",
                   d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
            FROM "ItemDefinition" i
            LEFT JOIN "WeaponDefinition" w ON w."itemDefinitionId" = i."id"
@@ -1245,6 +1328,15 @@ fn item_row_json(row: sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
     }
     if let Some(weapon_slot_type) = row.try_get::<Option<String>, _>("weaponSlotType")? {
         value["weaponSlotType"] = json!(weapon_slot_type);
+        value["ammoItemDefinitionId"] =
+            json!(row.try_get::<Option<String>, _>("ammoItemDefinitionId")?);
+        value["magazineSize"] = json!(row.try_get::<Option<i32>, _>("magazineSize")?);
+        value["fireModes"] = json!(row.try_get::<Option<Value>, _>("fireModes")?);
+        value["roundsPerMinute"] = json!(row.try_get::<Option<f64>, _>("roundsPerMinute")?);
+        value["muzzleVelocityMps"] = json!(row.try_get::<Option<f64>, _>("muzzleVelocityMps")?);
+        value["bulletGravityMps2"] = json!(row.try_get::<Option<f64>, _>("bulletGravityMps2")?);
+        value["maxRangeMeters"] = json!(row.try_get::<Option<f64>, _>("maxRangeMeters")?);
+        value["damage"] = json!(row.try_get::<Option<f64>, _>("damage")?);
     }
     if let Some(capacity_liters) = row.try_get::<Option<f64>, _>("capacityLiters")? {
         value["capacityLiters"] = json!(capacity_liters);

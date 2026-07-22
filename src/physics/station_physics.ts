@@ -6,11 +6,13 @@ import type { Vec3 } from "../types";
 import { dot } from "../math/vec3";
 import {
   addCollider,
+  castRapierWorldRay,
   createPlayerCharacter,
   createRapierWorld,
   removeCollider,
   removeStaticColliders,
   type RapierWorldHandle,
+  type PhysicsRayHit,
 } from "./rapier_world";
 import { castCameraOcclusion } from "./camera_occlusion";
 
@@ -150,6 +152,42 @@ export function teleportStationPlayer(
     { x: local.right, y: local.up, z: local.forward },
     true,
   );
+}
+
+export function castStationWorldRay(
+  physics: StationPhysics,
+  frame: StationFrame,
+  origin: Vec3,
+  direction: Vec3,
+  maxDistance: number,
+): PhysicsRayHit | null {
+  const localOrigin = worldToStationLocal(frame, origin);
+  const localDirection = {
+    x: dot(direction, frame.right),
+    y: dot(direction, frame.up),
+    z: dot(direction, frame.forward),
+  };
+  const hit = castRapierWorldRay(
+    physics.world,
+    { x: localOrigin.right, y: localOrigin.up, z: localOrigin.forward },
+    localDirection,
+    maxDistance,
+    physics.player.playerCollider,
+  );
+  if (!hit) return null;
+  return {
+    distance: hit.distance,
+    point: stationLocalToWorld(frame, {
+      right: hit.point.x,
+      up: hit.point.y,
+      forward: hit.point.z,
+    }),
+    normal: {
+      x: frame.right.x * hit.normal.x + frame.up.x * hit.normal.y + frame.forward.x * hit.normal.z,
+      y: frame.right.y * hit.normal.x + frame.up.y * hit.normal.y + frame.forward.y * hit.normal.z,
+      z: frame.right.z * hit.normal.x + frame.up.z * hit.normal.y + frame.forward.z * hit.normal.z,
+    },
+  };
 }
 
 /**

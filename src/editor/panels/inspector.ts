@@ -39,10 +39,16 @@ import {
 
 const FLOOR_OPTIONS: StationFloorId[] = ["hab", "lobby", "hangar"];
 const AUDIO_EXTENSIONS = [".ogg", ".mp3", ".wav", ".m4a"];
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".ktx2", ".ktx"];
 
 function isAudioAssetUrl(url: string): boolean {
   const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
   return AUDIO_EXTENSIONS.some((extension) => pathname.endsWith(extension));
+}
+
+function isImageAssetUrl(url: string): boolean {
+  const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
+  return IMAGE_EXTENSIONS.some((extension) => pathname.endsWith(extension));
 }
 
 function parseDraggedEntityIds(data: string): string[] {
@@ -166,10 +172,11 @@ export function createInspectorPanel(
     });
   }
 
-  function assetUrlField(
+  function typedAssetUrlField(
     label: string,
     value: string | undefined,
     onCommit: (next: string | undefined) => void,
+    accepts: (url: string) => boolean,
   ): HTMLElement {
     const input = textInput(value ?? "", (next) => onCommit(next.trim() || undefined));
     input.addEventListener("dragover", (event) => event.preventDefault());
@@ -178,7 +185,7 @@ export function createInspectorPanel(
       const url =
         event.dataTransfer?.getData(ASSET_DND_TYPE) ||
         event.dataTransfer?.getData("text/plain");
-      if (url?.startsWith("/") && isAudioAssetUrl(url)) onCommit(url);
+      if (url?.startsWith("/") && accepts(url)) onCommit(url);
     });
     const controls = el("div", { className: "ed-field-controls" }, [
       input,
@@ -195,6 +202,22 @@ export function createInspectorPanel(
       el("span", { className: "ed-field-label", text: label }),
       controls,
     ]);
+  }
+
+  function assetUrlField(
+    label: string,
+    value: string | undefined,
+    onCommit: (next: string | undefined) => void,
+  ): HTMLElement {
+    return typedAssetUrlField(label, value, onCommit, isAudioAssetUrl);
+  }
+
+  function imageAssetUrlField(
+    label: string,
+    value: string | undefined,
+    onCommit: (next: string | undefined) => void,
+  ): HTMLElement {
+    return typedAssetUrlField(label, value, onCommit, isImageAssetUrl);
   }
 
   function colorInput(
@@ -612,7 +635,33 @@ export function createInspectorPanel(
       case "prop-frame":
       case "item-frame":
       case "drawn-grip":
+      case "muzzle-flash":
+      case "barrel-end":
         return [];
+      case "weapon-combat":
+        return [
+          assetUrlField("Fire SFX", component.fireSoundUrl ?? undefined, (fireSoundUrl) =>
+            update({ ...component, fireSoundUrl: fireSoundUrl ?? null }),
+          ),
+          assetUrlField(
+            "Dry-fire SFX",
+            component.dryFireSoundUrl ?? undefined,
+            (dryFireSoundUrl) =>
+              update({ ...component, dryFireSoundUrl: dryFireSoundUrl ?? null }),
+          ),
+          assetUrlField(
+            "Reload SFX",
+            component.reloadSoundUrl ?? undefined,
+            (reloadSoundUrl) =>
+              update({ ...component, reloadSoundUrl: reloadSoundUrl ?? null }),
+          ),
+          imageAssetUrlField(
+            "Hit decal",
+            component.hitDecalUrl ?? undefined,
+            (hitDecalUrl) =>
+              update({ ...component, hitDecalUrl: hitDecalUrl ?? null }),
+          ),
+        ];
       case "spawn-point":
         return [
           el("div", { className: "ed-field-row-wide" }, [

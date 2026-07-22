@@ -7,6 +7,7 @@ import type {
   Vec3,
 } from '../../../types';
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
+import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment_attach';
 
 interface CharacterAvatar {
   dispose: () => void;
@@ -21,6 +22,7 @@ interface CharacterAvatar {
     inventory: InventoryState | null,
     activeWeaponSlotId?: string | null,
   ) => void;
+  getActiveWeaponAttachment: () => ActiveWeaponAttachment | null;
 }
 
 export function createCharacterAvatar(
@@ -60,6 +62,7 @@ export function createCharacterAvatar(
 
   return {
     dispose,
+    getActiveWeaponAttachment: () => instance.getActiveWeaponAttachment?.() ?? null,
     update,
     setEquippedInventory: (inventory, activeWeaponSlotId = null) => {
       instance.setEquippedInventory?.(inventory, activeWeaponSlotId);

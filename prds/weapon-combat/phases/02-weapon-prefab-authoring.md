@@ -1,7 +1,7 @@
 # Phase 02 — Weapon prefab authoring
 
 **PRD:** [../PRD.md](../PRD.md)  
-**Status:** Not started  
+**Status:** Implemented — static validation complete; interactive editor drag/drop QA pending
 **Depends on:** Phase 01 recommended (ammo ids exist for docs/examples); schema work can proceed in parallel  
 **Unlocks:** Phase 03 (barrel-end world pose), Phase 04 (muzzle + audio + decal URLs)
 
@@ -29,46 +29,48 @@ Let authors place **muzzle-flash** and **barrel-end** markers on weapon item pre
 
 ### Schema + registry
 
-- [ ] Add components:
+- [x] Add components:
   - `{ type: 'muzzle-flash' }` — marker; entity TRS is flash origin/orientation.
-  - `{ type: 'barrel-end' }` — marker; entity TRS is ray origin; **document forward axis** (lock **local +Z = bore forward** unless existing weapon meshes force otherwise — record choice here).
+  - `{ type: 'barrel-end' }` — marker; entity TRS is ray origin; **local +Z = bore forward** for every weapon.
   - `{ type: 'weapon-combat', fireSoundUrl, dryFireSoundUrl, reloadSoundUrl, hitDecalUrl }` — singleton; URLs nullable strings.
-- [ ] Registry: `kinds: ['item']`; `muzzle-flash` / `barrel-end` `marker: true`; `weapon-combat` singleton (marker empty OK).
-- [ ] Validators reject unknown fields; coerce empty strings to null for URLs.
+- [x] Registry: `kinds: ['item']`; `muzzle-flash` / `barrel-end` `marker: true`; `weapon-combat` singleton (marker empty OK).
+- [x] Validators reject unknown fields; coerce empty strings to null for URLs.
 
 ### Inspector
 
-- [ ] `muzzle-flash` / `barrel-end`: TRS-only (like `drawn-grip`) — short help text pointing at viewport gizmo.
-- [ ] `weapon-combat`: reuse `assetUrlField` for audio (`.ogg/.mp3/.wav/.m4a`); image DnD for `hitDecalUrl` (mirror particle `textureUrlField` / accept common image extensions used elsewhere).
-- [ ] Clear / unset controls for each URL.
+- [x] `muzzle-flash` / `barrel-end`: TRS-only (like `drawn-grip`) — short help text pointing at viewport gizmo.
+- [x] `weapon-combat`: reuse `assetUrlField` for audio (`.ogg/.mp3/.wav/.m4a`); image DnD for `hitDecalUrl` (mirror particle `textureUrlField` / accept common image extensions used elsewhere).
+- [x] Clear / unset controls for each URL.
 
 ### Item runtime
 
-- [ ] `collectMuzzleFlash`, `collectBarrelEnd`, `collectWeaponCombat` (names flexible) returning local TRS + URLs.
-- [ ] Validate: at most one of each marker/component; warn or error in prefab validation helpers consistent with `drawn-grip`.
-- [ ] Firearms without barrel-end: runtime phase 03 may fall back to weapon root forward — authoring should still seed markers on demo guns.
+- [x] `collectMuzzleFlash`, `collectBarrelEnd`, `collectWeaponCombat` (names flexible) returning local TRS + URLs.
+- [x] Validate: at most one of each marker/component; warn or error in prefab validation helpers consistent with `drawn-grip`.
+- [x] Firearms without barrel-end: runtime phase 03 may fall back to weapon root forward — authoring should still seed markers on demo guns.
 
 ### Seed prefabs
 
-- [ ] Place empties on `assault-01` and at least one handgun prefab near the visible muzzle; approximate positions OK (authors refine in editor).
-- [ ] Include `weapon-combat` with null URLs initially (phase 04/05 can point at real clips when assets exist — do not commit protected asset paths).
+- [x] Place empties on `assault-01` and at least one handgun prefab near the visible muzzle; approximate positions OK (authors refine in editor).
+- [x] Include `weapon-combat` with null URLs initially (phase 04/05 can point at real clips when assets exist — do not commit protected asset paths).
 
 ### Docs
 
-- [ ] Component docs + index links.
-- [ ] Note: combat **balance** (modes, mag, ammo id) is Admin → Weapons, not these markers.
+- [x] Component docs + index links.
+- [x] Note: combat **balance** (modes, mag, ammo id) is Admin → Weapons, not these markers.
 
 ### Optional Base Characters
 
-- [ ] If cheap: add mount modes to select/edit muzzle/barrel while weapon is drawn (save back into weapon prefab like weapon-grip). Skip if it risks scope creep — prefab hierarchy editing is sufficient for MVP.
+- [x] Skipped for MVP as allowed: prefab hierarchy editing is sufficient and avoids expanding the Base Characters mount editor.
+
+Implementation choice: skipped for MVP. The prefab hierarchy and viewport gizmo provide the required marker workflow without expanding the already specialized Base Characters mount editor.
 
 ## Acceptance criteria
 
 - [ ] Prefab editor can add Barrel End + Muzzle Flash empties to an item prefab and persist TRS in JSON.
 - [ ] Inspector accepts drag-drop audio + hit-decal URLs on `weapon-combat`.
-- [ ] `item_runtime` collectors return data for seeded rifle/handgun prefabs.
-- [ ] Component docs exist and are linked from the components index.
-- [ ] `npm run typecheck` and `npm run lint` pass for touched files.
+- [x] `item_runtime` collectors return data for seeded rifle/handgun prefabs.
+- [x] Component docs exist and are linked from the components index.
+- [x] `npm run typecheck` and `npm run lint` pass for touched files.
 
 ## Out of scope
 

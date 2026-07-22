@@ -384,6 +384,7 @@ export async function startPlaySession(
   const interactPromptEl = requireElement<HTMLElement>('interact-prompt');
   const flightReticleEl = requireElement<HTMLElement>('flight-reticle');
   const weaponCrosshairEl = requireElement<HTMLElement>('weapon-crosshair');
+  const combatAmmoEl = requireElement<HTMLElement>('combat-ammo');
   const cockpitGazeEl = requireElement<HTMLElement>('cockpit-gaze');
   const cockpitSpeedEl = requireElement<HTMLElement>('cockpit-speed');
   const survivalVitalsEl = requireElement<HTMLElement>('survival-vitals');
@@ -494,6 +495,7 @@ export async function startPlaySession(
       interactPromptEl,
       flightReticleEl,
       weaponCrosshairEl,
+      combatAmmoEl,
       cockpitGazeEl,
       cockpitSpeedEl,
       survivalVitalsEl,
@@ -928,6 +930,10 @@ export async function startPlaySession(
       (buildTerminal?.isPaused() ?? false),
     getInventoryLoadout: () => inventoryState?.loadout ?? {},
     getInventory: () => inventoryState,
+    onInventoryUpdate: (inventory) => {
+      inventoryState = normalizeInventoryState(inventory);
+      personalInventory.refresh();
+    },
     vitalsSession,
   });
 
