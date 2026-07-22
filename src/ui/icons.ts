@@ -95,6 +95,8 @@ export function mountPlayChromeIcons(root: ParentNode = document): void {
   fill('es-close-btn', X);
   fill('weapon-shop-power-btn', Power);
   fill('weapon-shop-close-btn', X);
+  fill('food-shop-power-btn', Power);
+  fill('food-shop-close-btn', X);
   fill('outfitters-power-btn', Power);
   fill('outfitters-close-btn', X);
   fill('personal-inventory-close', X, 16);

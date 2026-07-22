@@ -20,3 +20,12 @@ export {
   loadCurrentDefaultAnimationController,
   locomotionFromGameplay,
 } from './default_controller';
+export {
+  MOVE_OCTANTS,
+  PRO_RIFLE_CATALOG_ONLY_CLIPS,
+  PRO_RIFLE_LOCOMOTION_CLIPS,
+  resolveProRifleClip,
+  type MoveOctant,
+  type ProRifleClipParams,
+  type ProRifleGait,
+} from './pro_rifle_clips';

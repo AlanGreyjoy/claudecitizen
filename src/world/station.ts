@@ -503,6 +503,33 @@ export interface StationOutfittersMarker {
   itemDefinitionIds: string[];
 }
 
+/** Which consumable subtypes a food-shop / drinks-shop / canteen marker sells. */
+export type FoodShopCatalogMode = "food" | "drinks" | "both";
+
+/**
+ * Station food / drinks / canteen vendor screen (gaze + F), baked from
+ * food-shop, drinks-shop, or canteen components.
+ */
+export interface StationFoodShopMarker {
+  id: string;
+  label: string;
+  catalogMode: FoodShopCatalogMode;
+  right: number;
+  up: number;
+  forward: number;
+  /**
+   * Screen orientation in station-group space (prefab/scene quat).
+   * Plane faces local +Z.
+   */
+  rotation: { x: number; y: number; z: number; w: number };
+  gazeRadius: number;
+  maxDistance: number;
+  screenWidth: number;
+  screenHeight: number;
+  /** Empty = sell all matching consumables for catalogMode. */
+  itemDefinitionIds: string[];
+}
+
 export interface StationLayoutOverride {
   rooms: StationRoom[];
   doorways: StationDoorway[];
@@ -514,6 +541,7 @@ export interface StationLayoutOverride {
   avmsMarkers: StationAvmsMarker[];
   weaponShops: StationWeaponShopMarker[];
   outfitters: StationOutfittersMarker[];
+  foodShops: StationFoodShopMarker[];
   npcSpawners: StationNpcSpawnerSpec[];
   npcWaypoints: StationNpcWaypointSpec[];
   npcPlacements: StationNpcPlacementSpec[];

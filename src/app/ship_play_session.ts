@@ -13,10 +13,8 @@ import {
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
 } from "../player/character_controller";
-import {
-  getCharacterSettings,
-  loadCurrentCharacterSettings,
-} from "../player/character_settings";
+import { loadCurrentCharacterSettings } from "../player/character_settings";
+import { resolveWalkInputIntent } from "../player/character_locomotion";
 import {
   bedInteractPrompt,
   createDeckCharacterState,
@@ -876,13 +874,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     const yaw = input.cameraYawRadians ?? 0;
     const orbit = resolveSandboxOrbit(yaw, 0, ORBIT_PITCH_LIMIT);
     const moveDir = add(scale(orbit.right, moveX), scale(orbit.forward, moveY));
-    const magnitude = Math.min(1, Math.hypot(moveX, moveY));
-    const settings = getCharacterSettings();
-    const moveSpeed =
-      (input.sprint
-        ? settings.sprintSpeedMetersPerSecond
-        : settings.walkSpeedMetersPerSecond) * magnitude;
-    const isMoving = magnitude > 0.08;
+    const intent = resolveWalkInputIntent(input);
+    const moveSpeed = intent.moveSpeedMetersPerSecond;
+    const isMoving = intent.isMoving;
     const desiredDirection =
       isMoving && Math.hypot(moveDir.x, moveDir.z) > 1e-4
         ? normalize({ x: moveDir.x, y: 0, z: moveDir.z })
@@ -892,10 +886,15 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       character,
       {
         wantsJump: actions.jumpPressed,
-        wantsSprint: Boolean(input.sprint),
+        wantsSprint: intent.isSprinting,
         isMoving,
         desiredDirection,
         moveSpeed,
+        cameraForward: orbit.forward,
+        cameraLockedFacing: false,
+        crouch: intent.isCrouching,
+        walk: intent.isWalking,
+        gait: intent.gait,
       },
       dt,
       WORLD_UP,

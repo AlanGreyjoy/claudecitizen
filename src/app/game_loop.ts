@@ -144,11 +144,20 @@ import {
   entertainmentSystemLabel,
   resolveEntertainmentGazeTarget,
 } from "../player/entertainment_gaze";
+import {
+  characterHeadLookTowardPoint,
+  resolveNearestScreenHotspot,
+  SCREEN_HOTSPOT_MAX_DISTANCE_METERS,
+  screenWorldNormal,
+  stationHotspotEyeWorld,
+  type ScreenHotspotAnchor,
+} from "../player/screen_hotspot";
 import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
 import type { BuildTerminalController } from "../render/effects/hud/build_terminal";
 import type { EntertainmentSystemController } from "../render/effects/hud/entertainment_system";
 import type { WeaponShopController } from "../render/effects/hud/weapon_shop";
 import type { OutfittersController } from "../render/effects/hud/outfitters";
+import type { FoodShopController } from "../render/effects/hud/food_shop";
 import type { PersonalInventoryController } from "../render/effects/hud/personal_inventory";
 import type { PlayerVitalsSessionController } from "./player_vitals_session";
 import type { InventoryState, LoadoutState } from "../player/inventory/types";
@@ -166,6 +175,10 @@ import {
   type OutfittersScreenHandle,
 } from "../render/effects/outfitters_screen";
 import {
+  createFoodShopScreen,
+  type FoodShopScreenHandle,
+} from "../render/effects/food_shop_screen";
+import {
   resolveStationWalkView,
   resolveWeaponShopGazeTarget,
   stationWalkAimOriginWorld,
@@ -177,6 +190,11 @@ import {
   outfittersLabel,
   outfittersWorldPosition,
 } from "../player/outfitters_gaze";
+import {
+  resolveFoodShopGazeTarget,
+  foodShopLabel,
+  foodShopWorldPosition,
+} from "../player/food_shop_gaze";
 import type { HangarBuildController } from "../player/hangar_build/build_controller";
 import type { BuildPropColliderRuntime } from "../player/hangar_build/prop_colliders";
 import { buildRoomForArea } from "../player/hangar_build/validation";
@@ -198,6 +216,7 @@ import {
   type FootstepActor,
   type FootstepSurface,
 } from "../audio/footsteps";
+import { annotateNpcHeadLookTowardPlayer } from "../npc/player_gaze";
 import { createStationNpcPopulation } from "../npc/station_population";
 import { resetAssignedHangarBay, setAssignedHangarBay } from "../net/api";
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from "../world/planet_surface";
@@ -210,6 +229,7 @@ import { warmRenderableHeightRing } from "../world/spawn_warm";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
 import type {
+  CharacterUpperBodyAim,
   ColorCorrectionSettings,
   GameMode,
   NetworkRenderEntity,
@@ -274,6 +294,7 @@ export interface GameLoopOptions {
   entertainmentSystem?: EntertainmentSystemController | null;
   weaponShop?: WeaponShopController | null;
   outfitters?: OutfittersController | null;
+  foodShop?: FoodShopController | null;
   personalInventory?: PersonalInventoryController | null;
   build?: BuildRuntime | null;
   physics?: StationPhysics | null;
@@ -302,6 +323,7 @@ export function createGameLoop({
   entertainmentSystem = null,
   weaponShop = null,
   outfitters = null,
+  foodShop = null,
   personalInventory = null,
   build = null,
   physics = null,
@@ -340,6 +362,15 @@ export function createGameLoop({
   const onOutfittersResize = () => outfittersScreen?.resize();
   window.addEventListener("resize", onOutfittersResize);
 
+  const foodShopBezelEl =
+    document.getElementById("food-shop-bezel") ??
+    document.querySelector<HTMLElement>(".sc-food-shop-bezel");
+  const foodShopScreen: FoodShopScreenHandle | null = foodShopBezelEl
+    ? createFoodShopScreen({ panelEl: foodShopBezelEl })
+    : null;
+  const onFoodShopResize = () => foodShopScreen?.resize();
+  window.addEventListener("resize", onFoodShopResize);
+
   const buildBtnEl = document.getElementById("hud-build-btn");
   const onBuildBtnClick = () => {
     const runtime = buildRuntimeForCurrentRoom();
@@ -348,8 +379,6 @@ export function createGameLoop({
   };
   buildBtnEl?.addEventListener("click", onBuildBtnClick);
 
-  const weaponShopCameraState = createEntertainmentCameraState();
-  const outfittersCameraState = createEntertainmentCameraState();
   let world: WorldState = createWorldState(planet, seed, {
     spawn,
     planetId,
@@ -365,6 +394,8 @@ export function createGameLoop({
   const flightCameraFeelState = createFlightCameraFeelState();
   const esCameraState = createEntertainmentCameraState();
   let entertainmentCameraFeelFrame: EntertainmentCameraFeel | null = null;
+  /** Station vendor-screen Head-bone look for the current frame. */
+  let stationScreenHeadLook: CharacterUpperBodyAim | null = null;
   let flightCameraFeelFrame: {
     fovDeltaDeg: number;
     thrust01: number;
@@ -1462,6 +1493,49 @@ export function createGameLoop({
 
     const shops = getStationLayoutOverride()?.weaponShops ?? [];
     const outfittersShops = getStationLayoutOverride()?.outfitters ?? [];
+    const foodShops = getStationLayoutOverride()?.foodShops ?? [];
+
+    // Proximity hotspots: turn the Head bone toward vendor screens.
+    const hotspotEye = stationHotspotEyeWorld(
+      world.character.position,
+      stationFrame.up,
+    );
+    const hotspotAnchors: ScreenHotspotAnchor[] = [];
+    for (const shop of shops) {
+      hotspotAnchors.push({
+        worldPosition: weaponShopWorldPosition(stationFrame, shop),
+        maxDistance: Math.min(shop.maxDistance, SCREEN_HOTSPOT_MAX_DISTANCE_METERS),
+        worldNormal: screenWorldNormal(stationFrame, shop.rotation),
+      });
+    }
+    for (const shop of outfittersShops) {
+      hotspotAnchors.push({
+        worldPosition: outfittersWorldPosition(stationFrame, shop),
+        maxDistance: Math.min(shop.maxDistance, SCREEN_HOTSPOT_MAX_DISTANCE_METERS),
+        worldNormal: screenWorldNormal(stationFrame, shop.rotation),
+      });
+    }
+    for (const shop of foodShops) {
+      hotspotAnchors.push({
+        worldPosition: foodShopWorldPosition(stationFrame, shop),
+        maxDistance: Math.min(shop.maxDistance, SCREEN_HOTSPOT_MAX_DISTANCE_METERS),
+        worldNormal: screenWorldNormal(stationFrame, shop.rotation),
+      });
+    }
+    const anyVendorOpen =
+      Boolean(weaponShop?.isOpen()) ||
+      Boolean(outfitters?.isOpen()) ||
+      Boolean(foodShop?.isOpen());
+    const hotspot = resolveNearestScreenHotspot(hotspotAnchors, hotspotEye);
+    stationScreenHeadLook = hotspot
+      ? characterHeadLookTowardPoint(
+          world.character.forward,
+          world.character.up,
+          hotspotEye,
+          hotspot.worldPosition,
+        )
+      : null;
+
     const walkView = resolveStationWalkView(
       stationFrame.forward,
       stationFrame.up,
@@ -1485,6 +1559,12 @@ export function createGameLoop({
       shopEye,
       walkView.forward,
     );
+    const foodShopHit = resolveFoodShopGazeTarget(
+      foodShops,
+      stationFrame,
+      shopEye,
+      walkView.forward,
+    );
 
     if (weaponShopScreen && renderer && shops.length > 0) {
       weaponShopScreen.attachTo(renderer.getStationRoot());
@@ -1494,16 +1574,23 @@ export function createGameLoop({
       outfittersScreen.attachTo(renderer.getStationRoot());
       outfittersScreen.setSpec(outfittersHit?.shop ?? outfittersShops[0]!);
     }
+    if (foodShopScreen && renderer && foodShops.length > 0) {
+      foodShopScreen.attachTo(renderer.getStationRoot());
+      foodShopScreen.setSpec(foodShopHit?.shop ?? foodShops[0]!);
+    }
 
     if (
       shopHit &&
       actions.interactPressed &&
       weaponShop &&
       !weaponShop.isOpen() &&
-      !outfitters?.isOpen()
+      !outfitters?.isOpen() &&
+      !foodShop?.isOpen()
     ) {
       outfittersScreen?.setInteractive(false);
       outfittersScreen?.setPowered(false);
+      foodShopScreen?.setInteractive(false);
+      foodShopScreen?.setPowered(false);
       weaponShopScreen?.setPowered(true);
       weaponShopScreen?.setInteractive(true);
       weaponShop.open({
@@ -1522,10 +1609,13 @@ export function createGameLoop({
       actions.interactPressed &&
       outfitters &&
       !outfitters.isOpen() &&
-      !weaponShop?.isOpen()
+      !weaponShop?.isOpen() &&
+      !foodShop?.isOpen()
     ) {
       weaponShopScreen?.setInteractive(false);
       weaponShopScreen?.setPowered(false);
+      foodShopScreen?.setInteractive(false);
+      foodShopScreen?.setPowered(false);
       outfittersScreen?.setPowered(true);
       outfittersScreen?.setInteractive(true);
       outfitters.open({
@@ -1539,7 +1629,32 @@ export function createGameLoop({
       return;
     }
 
-    if (weaponShop?.isOpen() || outfitters?.isOpen()) {
+    if (
+      foodShopHit &&
+      actions.interactPressed &&
+      foodShop &&
+      !foodShop.isOpen() &&
+      !weaponShop?.isOpen() &&
+      !outfitters?.isOpen()
+    ) {
+      weaponShopScreen?.setInteractive(false);
+      weaponShopScreen?.setPowered(false);
+      outfittersScreen?.setInteractive(false);
+      outfittersScreen?.setPowered(false);
+      foodShopScreen?.setPowered(true);
+      foodShopScreen?.setInteractive(true);
+      foodShop.open({
+        shop: foodShopHit.shop,
+        onClose: () => {
+          foodShopScreen?.setInteractive(false);
+          foodShopScreen?.setPowered(false);
+        },
+      });
+      world.prompt = "";
+      return;
+    }
+
+    if (anyVendorOpen) {
       world.prompt = "";
       return;
     }
@@ -1549,6 +1664,8 @@ export function createGameLoop({
       weaponShopScreen?.setPowered(false);
       outfittersScreen?.setInteractive(false);
       outfittersScreen?.setPowered(false);
+      foodShopScreen?.setInteractive(false);
+      foodShopScreen?.setPowered(false);
       world.prompt = pressInteractPrompt(weaponShopLabel(shopHit.shop));
       return;
     }
@@ -1558,7 +1675,20 @@ export function createGameLoop({
       weaponShopScreen?.setPowered(false);
       outfittersScreen?.setInteractive(false);
       outfittersScreen?.setPowered(false);
+      foodShopScreen?.setInteractive(false);
+      foodShopScreen?.setPowered(false);
       world.prompt = pressInteractPrompt(outfittersLabel(outfittersHit.shop));
+      return;
+    }
+
+    if (foodShopHit) {
+      weaponShopScreen?.setInteractive(false);
+      weaponShopScreen?.setPowered(false);
+      outfittersScreen?.setInteractive(false);
+      outfittersScreen?.setPowered(false);
+      foodShopScreen?.setInteractive(false);
+      foodShopScreen?.setPowered(false);
+      world.prompt = pressInteractPrompt(foodShopLabel(foodShopHit.shop));
       return;
     }
 
@@ -1566,6 +1696,8 @@ export function createGameLoop({
     weaponShopScreen?.setPowered(false);
     outfittersScreen?.setInteractive(false);
     outfittersScreen?.setPowered(false);
+    foodShopScreen?.setInteractive(false);
+    foodShopScreen?.setPowered(false);
 
     const interaction = resolveStationInteraction(
       world.character as StationCharacterState,
@@ -1969,6 +2101,7 @@ export function createGameLoop({
       const characterInput = controls.sampleCharacterInput();
 
       updateShipSystems(dt);
+      stationScreenHeadLook = null;
 
       if (world.mode === MODE_ON_FOOT) {
         flightCameraFeelFrame = null;
@@ -2282,7 +2415,11 @@ export function createGameLoop({
 
     stationNpcPopulation.update(STATION_SOUND_MODES.has(world.mode) ? dt : 0);
     const stationNpcRenderStates = STATION_SOUND_MODES.has(world.mode)
-      ? stationNpcPopulation.getRenderStates()
+      ? annotateNpcHeadLookTowardPlayer(
+          stationNpcPopulation.getRenderStates(),
+          world.character.position,
+          world.character.up,
+        )
       : [];
     const remoteEntities = network?.getRemoteEntities(nowMs) ?? [];
 
@@ -2336,80 +2473,8 @@ export function createGameLoop({
           viewForward: view.forward,
         });
       }
-    } else if (
-      world.mode === MODE_IN_STATION ||
-      weaponShop?.isOpen() ||
-      outfitters?.isOpen()
-    ) {
-      const shops = getStationLayoutOverride()?.weaponShops ?? [];
-      const outfittersShops = getStationLayoutOverride()?.outfitters ?? [];
-      const walkView = resolveStationWalkView(
-        stationFrame.forward,
-        stationFrame.up,
-        world.cameraOrbit.yawRadians,
-        world.cameraOrbit.pitchRadians,
-      );
-      const eye = stationWalkAimOriginWorld(
-        world.character.position,
-        stationFrame.up,
-        walkView.forward,
-      );
-      const shopHit = resolveWeaponShopGazeTarget(
-        shops,
-        stationFrame,
-        eye,
-        walkView.forward,
-      );
-      const outfittersHit = resolveOutfittersGazeTarget(
-        outfittersShops,
-        stationFrame,
-        eye,
-        walkView.forward,
-      );
-
-      if (shops.length > 0 && (shopHit || weaponShop?.isOpen())) {
-        const screenSpec = shopHit?.shop ?? shops[0]!;
-        const screen = weaponShopWorldPosition(stationFrame, screenSpec);
-        entertainmentCameraFeelFrame = updateEntertainmentCameraFeel(
-          weaponShopCameraState,
-          {
-            dt: frameDt,
-            open: weaponShop?.isOpen() ?? false,
-            gazing: Boolean(shopHit),
-            eye,
-            screen,
-            viewForward: walkView.forward,
-          },
-        );
-        if (outfittersCameraState.focus01 > 0) outfittersCameraState.focus01 = 0;
-      } else if (
-        outfittersShops.length > 0 &&
-        (outfittersHit || outfitters?.isOpen())
-      ) {
-        const screenSpec = outfittersHit?.shop ?? outfittersShops[0]!;
-        const screen = outfittersWorldPosition(stationFrame, screenSpec);
-        entertainmentCameraFeelFrame = updateEntertainmentCameraFeel(
-          outfittersCameraState,
-          {
-            dt: frameDt,
-            open: outfitters?.isOpen() ?? false,
-            gazing: Boolean(outfittersHit),
-            eye,
-            screen,
-            viewForward: walkView.forward,
-          },
-        );
-        if (weaponShopCameraState.focus01 > 0) weaponShopCameraState.focus01 = 0;
-      } else {
-        if (weaponShopCameraState.focus01 > 0) weaponShopCameraState.focus01 = 0;
-        if (outfittersCameraState.focus01 > 0) outfittersCameraState.focus01 = 0;
-      }
     } else if (esCameraState.focus01 > 0) {
       esCameraState.focus01 = 0;
-    } else if (weaponShopCameraState.focus01 > 0) {
-      weaponShopCameraState.focus01 = 0;
-    } else if (outfittersCameraState.focus01 > 0) {
-      outfittersCameraState.focus01 = 0;
     }
 
     let renderStats = null;
@@ -2439,6 +2504,7 @@ export function createGameLoop({
             (world.mode === MODE_ON_FOOT ||
               world.mode === MODE_ON_SHIP_DECK ||
               world.mode === MODE_IN_STATION),
+          characterHeadLook: stationScreenHeadLook,
           mode: world.mode,
           shipExteriorWalk: world.shipExteriorWalk,
           prompt: world.prompt,
@@ -2505,6 +2571,15 @@ export function createGameLoop({
       outfittersScreen.sync();
       outfittersScreen.render(cam);
     }
+    if (
+      foodShopScreen &&
+      renderer &&
+      (world.mode === MODE_IN_STATION || foodShop?.isOpen())
+    ) {
+      const cam = renderer.getCamera();
+      foodShopScreen.sync();
+      foodShopScreen.render(cam);
+    }
 
     let flightDual: HudUpdateParams["flightDual"];
     let cockpitGaze: HudUpdateParams["cockpitGaze"];
@@ -2552,10 +2627,12 @@ export function createGameLoop({
     if (
       world.mode === MODE_IN_STATION &&
       !weaponShop?.isOpen() &&
-      !outfitters?.isOpen()
+      !outfitters?.isOpen() &&
+      !foodShop?.isOpen()
     ) {
       const shops = getStationLayoutOverride()?.weaponShops ?? [];
       const outfittersShops = getStationLayoutOverride()?.outfitters ?? [];
+      const foodShops = getStationLayoutOverride()?.foodShops ?? [];
       const walkView = resolveStationWalkView(
         stationFrame.forward,
         stationFrame.up,
@@ -2579,6 +2656,12 @@ export function createGameLoop({
         eye,
         walkView.forward,
       );
+      const foodShopHit = resolveFoodShopGazeTarget(
+        foodShops,
+        stationFrame,
+        eye,
+        walkView.forward,
+      );
       const gazeHit = hit
         ? { worldPosition: hit.worldPosition, label: weaponShopLabel(hit.shop) }
         : outfittersHit
@@ -2586,7 +2669,12 @@ export function createGameLoop({
               worldPosition: outfittersHit.worldPosition,
               label: outfittersLabel(outfittersHit.shop),
             }
-          : null;
+          : foodShopHit
+            ? {
+                worldPosition: foodShopHit.worldPosition,
+                label: foodShopLabel(foodShopHit.shop),
+              }
+            : null;
       if (gazeHit) {
         const fovY = (60 * Math.PI) / 180;
         const viewportH = window.innerHeight;
@@ -2790,15 +2878,18 @@ export function createGameLoop({
     entertainmentSystem?.close();
     weaponShop?.close();
     outfitters?.close();
+    foodShop?.close();
     personalInventory?.close();
     buildBtnEl?.removeEventListener("click", onBuildBtnClick);
     buildBtnEl?.classList.add("is-hidden");
     window.removeEventListener("resize", onEsResize);
     window.removeEventListener("resize", onWeaponShopResize);
     window.removeEventListener("resize", onOutfittersResize);
+    window.removeEventListener("resize", onFoodShopResize);
     esScreen?.dispose();
     weaponShopScreen?.dispose();
     outfittersScreen?.dispose();
+    foodShopScreen?.dispose();
     boostSfx.stop();
     thrustSfx.stop();
     disposeShipDeckPhysics();

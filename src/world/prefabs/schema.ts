@@ -392,6 +392,54 @@ export type PrefabComponent =
        */
       itemDefinitionIds?: string[];
     }
+  /**
+   * Station food vendor screen (gaze + F while on foot). Sells consumable
+   * items with subType "food". Empty marker is the gaze / screen anchor.
+   */
+  | {
+      type: "food-shop";
+      id: string;
+      /** Prompt when gazing (default "Browse food"). */
+      label?: string;
+      gazeRadius?: number;
+      maxDistance?: number;
+      screenWidth?: number;
+      screenHeight?: number;
+      /** Optional filter of catalog food item ids. Empty = all food consumables. */
+      itemDefinitionIds?: string[];
+    }
+  /**
+   * Station drinks vendor screen (gaze + F while on foot). Sells consumable
+   * items with subType "drink". Empty marker is the gaze / screen anchor.
+   */
+  | {
+      type: "drinks-shop";
+      id: string;
+      /** Prompt when gazing (default "Browse drinks"). */
+      label?: string;
+      gazeRadius?: number;
+      maxDistance?: number;
+      screenWidth?: number;
+      screenHeight?: number;
+      /** Optional filter of catalog drink item ids. Empty = all drink consumables. */
+      itemDefinitionIds?: string[];
+    }
+  /**
+   * Station canteen vendor screen (gaze + F while on foot). Sells both food
+   * and drink consumables. Empty marker is the gaze / screen anchor.
+   */
+  | {
+      type: "canteen";
+      id: string;
+      /** Prompt when gazing (default "Browse food & drinks"). */
+      label?: string;
+      gazeRadius?: number;
+      maxDistance?: number;
+      screenWidth?: number;
+      screenHeight?: number;
+      /** Optional filter of catalog consumable ids. Empty = all food and drinks. */
+      itemDefinitionIds?: string[];
+    }
   | {
       type: "point-light";
       color?: PrefabColor;
@@ -1768,6 +1816,72 @@ function parseComponent(value: unknown, path: string): PrefabComponent | null {
       };
     }
     case "outfitters": {
+      const idsRaw = value.itemDefinitionIds;
+      let itemDefinitionIds: string[] | undefined;
+      if (idsRaw !== undefined) {
+        if (!Array.isArray(idsRaw)) {
+          fail(`${path}.itemDefinitionIds`, "expected array of strings");
+        }
+        itemDefinitionIds = idsRaw
+          .map((id, index) =>
+            parseString(id, `${path}.itemDefinitionIds[${index}]`, 64),
+          )
+          .filter((id) => id.length > 0);
+        if (itemDefinitionIds.length === 0) itemDefinitionIds = undefined;
+      }
+      return {
+        type,
+        id: parseString(value.id, `${path}.id`, 64),
+        label:
+          value.label === undefined
+            ? undefined
+            : parseString(value.label, `${path}.label`, 64),
+        gazeRadius:
+          value.gazeRadius === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.05,
+                  parseFiniteNumber(value.gazeRadius, `${path}.gazeRadius`),
+                ),
+              ),
+        maxDistance:
+          value.maxDistance === undefined
+            ? undefined
+            : Math.min(
+                10,
+                Math.max(
+                  0.5,
+                  parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+                ),
+              ),
+        screenWidth:
+          value.screenWidth === undefined
+            ? undefined
+            : Math.min(
+                2,
+                Math.max(
+                  0.2,
+                  parseFiniteNumber(value.screenWidth, `${path}.screenWidth`),
+                ),
+              ),
+        screenHeight:
+          value.screenHeight === undefined
+            ? undefined
+            : Math.min(
+                1.5,
+                Math.max(
+                  0.15,
+                  parseFiniteNumber(value.screenHeight, `${path}.screenHeight`),
+                ),
+              ),
+        itemDefinitionIds,
+      };
+    }
+    case "food-shop":
+    case "drinks-shop":
+    case "canteen": {
       const idsRaw = value.itemDefinitionIds;
       let itemDefinitionIds: string[] | undefined;
       if (idsRaw !== undefined) {

@@ -17,6 +17,11 @@ import {
   locomotionFromGameplay,
   resolveControllerClip,
 } from "./animation";
+import {
+  resolveProRifleClip,
+  type MoveOctant,
+  type ProRifleGait,
+} from "./animation/pro_rifle_clips";
 import { getCharacterSettings } from "./character_settings";
 import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 
@@ -42,32 +47,45 @@ export interface WalkInputIntent {
   moveX: number;
   moveY: number;
   isSprinting: boolean;
+  isWalking: boolean;
+  isCrouching: boolean;
   wantsJump: boolean;
   moveMagnitude: number;
   isMoving: boolean;
   moveSpeedMetersPerSecond: number;
   jumpSpeedMetersPerSecond: number;
+  gait: ProRifleGait;
 }
 
 /** Normalize raw character input into walk speeds and movement flags. */
 export function resolveWalkInputIntent(input: CharacterInput): WalkInputIntent {
   const moveX = input.moveX ?? 0;
   const moveY = input.moveY ?? 0;
-  const isSprinting = Boolean(input.sprint);
+  const isCrouching = Boolean(input.crouch);
+  // Crouch blocks sprint; walk toggle selects slow gait when not sprinting.
+  const isSprinting = Boolean(input.sprint) && !isCrouching;
+  const isWalking = Boolean(input.walk) && !isSprinting;
   const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
   const settings = getCharacterSettings();
+  const gait: ProRifleGait = isSprinting ? "sprint" : isWalking || isCrouching ? "walk" : "run";
+  const baseSpeed =
+    gait === "sprint"
+      ? settings.sprintSpeedMetersPerSecond
+      : gait === "walk"
+        ? settings.walkSpeedMetersPerSecond
+        : settings.runSpeedMetersPerSecond;
   return {
     moveX,
     moveY,
     isSprinting,
+    isWalking,
+    isCrouching,
     wantsJump: Boolean(input.jumpPressed),
     moveMagnitude,
     isMoving: moveMagnitude > WALK_MOVE_THRESHOLD,
-    moveSpeedMetersPerSecond:
-      (isSprinting
-        ? settings.sprintSpeedMetersPerSecond
-        : settings.walkSpeedMetersPerSecond) * moveMagnitude,
+    moveSpeedMetersPerSecond: baseSpeed * moveMagnitude,
     jumpSpeedMetersPerSecond: settings.jumpSpeedMetersPerSecond,
+    gait,
   };
 }
 
@@ -107,23 +125,69 @@ export interface WalkFacingParams {
   up: Vec3;
   aiming: boolean;
   isMoving: boolean;
+  /**
+   * When true, face the camera while aiming or moving (rifle 8-way strafe).
+   * Unarmed/pistol keep face-into-move unless aiming while idle.
+   */
+  cameraLockedFacing?: boolean;
 }
 
 /**
  * Resolve this frame's facing. Aiming while stationary squares the body up to
  * the camera so the aim pose tracks the player's view; otherwise the character
  * faces its movement (or holds its last facing when idle).
+ * Rifle camera-lock also faces the camera while moving so strafe clips read.
  */
 export function resolveWalkFacing(
   params: WalkFacingParams,
   dt: number,
 ): Vec3 {
-  const desired =
-    params.aiming && !params.isMoving ? params.cameraForward : params.moveDirection;
+  const lockToCamera =
+    Boolean(params.cameraLockedFacing) && (params.aiming || params.isMoving);
+  const desired = lockToCamera
+    ? params.cameraForward
+    : params.aiming && !params.isMoving
+      ? params.cameraForward
+      : params.moveDirection;
   const turned = rotateCharacterToward(params.currentForward, desired, params.up, dt);
   return length(turned) < 1e-6
     ? normalize(tangentize(params.currentForward, params.up))
     : normalize(tangentize(turned, params.up));
+}
+
+/**
+ * Quantize move direction into an 8-way octant relative to character facing.
+ * Returns `forward` when move is below threshold / zero.
+ */
+export function quantizeMoveOctant(
+  moveDirection: Vec3,
+  facing: Vec3,
+  up: Vec3,
+): MoveOctant {
+  const move = tangentize(moveDirection, up);
+  if (length(move) < 1e-6) return "forward";
+  const forward = normalize(tangentize(facing, up));
+  if (length(forward) < 1e-6) return "forward";
+  const right = normalize(cross(forward, up));
+  const moveN = normalize(move);
+  const forwardDot = clamp(dot(moveN, forward), -1, 1);
+  const rightDot = clamp(dot(moveN, right), -1, 1);
+  // atan2(right, forward): 0 = forward, +π/2 = right, ±π = backward, -π/2 = left.
+  const angle = Math.atan2(rightDot, forwardDot);
+  const sector = Math.round(angle / (Math.PI / 4));
+  const index = ((sector % 8) + 8) % 8;
+  // sector 0 forward, 1 forward_right, 2 right, 3 backward_right, ...
+  const bySector: MoveOctant[] = [
+    "forward",
+    "forward_right",
+    "right",
+    "backward_right",
+    "backward",
+    "backward_left",
+    "left",
+    "forward_left",
+  ];
+  return bySector[index] ?? "forward";
 }
 
 const UAL_FALLBACK: Record<string, string> = {
@@ -135,14 +199,58 @@ const UAL_FALLBACK: Record<string, string> = {
   idle: "Idle_Loop",
 };
 
-export function animationFromState(
-  state: Pick<CharacterState, "jumpPhase">,
-  isMoving: boolean,
-  isSprinting: boolean,
-  stanceId: WeaponAnimStanceId = "unarmed",
-  aiming = false,
-): string {
-  const locomotion = locomotionFromGameplay(state.jumpPhase, isMoving, isSprinting, aiming);
+export interface AnimationFromStateParams {
+  jumpPhase: JumpPhase;
+  isMoving: boolean;
+  isSprinting: boolean;
+  stanceId?: WeaponAnimStanceId;
+  aiming?: boolean;
+  crouch?: boolean;
+  walk?: boolean;
+  gait?: ProRifleGait;
+  /** Move direction in world/walk space (camera-relative). */
+  moveDirection?: Vec3;
+  /** Character facing after this frame's turn. */
+  facing?: Vec3;
+  up?: Vec3;
+}
+
+function resolveGait(params: AnimationFromStateParams): ProRifleGait {
+  if (params.gait) return params.gait;
+  if (params.isSprinting) return "sprint";
+  if (params.walk || params.crouch) return "walk";
+  return "run";
+}
+
+export function animationFromState(params: AnimationFromStateParams): string {
+  const stanceId = params.stanceId ?? "unarmed";
+  const aiming = Boolean(params.aiming);
+  const crouch = Boolean(params.crouch);
+  const gait = resolveGait(params);
+
+  if (stanceId === "rifle") {
+    const up = params.up ?? { x: 0, y: 1, z: 0 };
+    const facing = params.facing ?? { x: 0, y: 0, z: 1 };
+    const moveDirection = params.moveDirection ?? { x: 0, y: 0, z: 0 };
+    const octant = params.isMoving
+      ? quantizeMoveOctant(moveDirection, facing, up)
+      : "forward";
+    return resolveProRifleClip({
+      jumpPhase: params.jumpPhase,
+      isMoving: params.isMoving,
+      gait,
+      octant,
+      crouch,
+      aiming,
+    });
+  }
+
+  const locomotion = locomotionFromGameplay(
+    params.jumpPhase,
+    params.isMoving,
+    params.isSprinting,
+    aiming,
+  );
   const controller = getDefaultAnimationController();
   const clip =
     resolveControllerClip(controller, locomotion, stanceId) ??

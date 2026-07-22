@@ -34,6 +34,12 @@ export const MENU_CATALOG: readonly MenuCatalogEntry[] = [
     description: 'Station weapon vendor screen',
   },
   {
+    id: 'food-shop',
+    name: 'Food Shop / Canteen',
+    templateId: 'food-shop',
+    description: 'Station food, drinks, and canteen vendor screen',
+  },
+  {
     id: 'outfitters',
     name: 'Outfitters',
     templateId: 'outfitters',

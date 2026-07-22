@@ -10229,7 +10229,7 @@
               },
               "rotation": {
                 "x": 0,
-                "y": -0.241957,
+                "y": -0.241956,
                 "z": 0,
                 "w": 0.970287
               },
@@ -15476,6 +15476,91 @@
                 "z": 1
               }
             }
+          }
+        ]
+      },
+      {
+        "id": "e-b454567a",
+        "name": "SM_Prop_Vending_Machine_04",
+        "transform": {
+          "position": {
+            "x": -38.5,
+            "y": 55.25,
+            "z": 41.75
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "w": 1
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/SM_Prop_Vending_Machine_04.glb"
+        }
+      },
+      {
+        "id": "e-55f8a43f",
+        "name": "SM_Prop_Vending_Machine_01",
+        "transform": {
+          "position": {
+            "x": -31.25,
+            "y": 55.25,
+            "z": 49.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": -1,
+            "z": 0,
+            "w": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          }
+        },
+        "asset": {
+          "url": "/src/assets/protected/props/SM_Prop_Vending_Machine_01.glb"
+        },
+        "children": [
+          {
+            "id": "e-df4d552c",
+            "name": "Canteen",
+            "transform": {
+              "position": {
+                "x": 0,
+                "y": 1.25,
+                "z": 0.5
+              },
+              "rotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              }
+            },
+            "components": [
+              {
+                "type": "canteen",
+                "id": "canteen-1",
+                "label": "Browse food & drinks",
+                "gazeRadius": 0.4,
+                "maxDistance": 3,
+                "screenWidth": 0.45,
+                "screenHeight": 0.28
+              }
+            ]
           }
         ]
       }

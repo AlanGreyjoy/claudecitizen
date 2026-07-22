@@ -7,6 +7,10 @@ export interface CharacterInput {
   moveX?: number;
   moveY?: number;
   sprint?: boolean;
+  /** Hold crouch (C). Blocks sprint while active. */
+  crouch?: boolean;
+  /** CapsLock walk toggle — slow gait when true and not sprinting. */
+  walk?: boolean;
   jumpPressed?: boolean;
 }
 

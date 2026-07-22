@@ -19,7 +19,7 @@ import {
   loadGameSettings,
 } from '../../../settings/game_settings';
 import { getKeyboardBindingCodes } from '../../../flight/input_settings';
-import { equipInventoryItem } from '../../../net/api';
+import { consumeInventoryItem, equipInventoryItem } from '../../../net/api';
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
 import {
   ALL_PLAY_LOADOUT_SLOTS,
@@ -31,6 +31,7 @@ import {
 import {
   findItemDefinition,
   itemCompatibleWithSlot,
+  itemQuantity,
   itemsByType,
   normalizeInventoryState,
   type InventoryState,
@@ -38,6 +39,7 @@ import {
   type ItemType,
   type PlayerItemStack,
 } from '../../../player/inventory/types';
+import type { PlayerSurvivalVitals } from '../../../player/vitals';
 import {
   equippedWearableAtSlot,
   resolveEquippedWearables,
@@ -105,12 +107,23 @@ export interface PersonalInventoryCallbacks {
   playerControls: { setInputSuppressed: (value: boolean) => void };
   getInventory: () => InventoryState | null;
   onInventoryResult: (inventory: InventoryState) => void;
+  /** Called after a successful consumable Use that restored vitals. */
+  onConsumeResult?: (result: {
+    inventory: InventoryState;
+    vitals: PlayerSurvivalVitals;
+  }) => void;
   characterAppearance?: PlayerCharacterAppearanceV1 | null;
 }
 
-interface SelectedAction {
-  kind: 'equip' | 'replace' | 'unequip';
-  slotId: string;
+type SelectedAction =
+  | { kind: 'equip' | 'replace' | 'unequip'; slotId: string }
+  | { kind: 'use' };
+
+function consumableCanBeUsed(definition: ItemDefinition): boolean {
+  return (
+    definition.itemType === 'consumable' &&
+    ((definition.hungerRestore01 ?? 0) > 0 || (definition.thirstRestore01 ?? 0) > 0)
+  );
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -536,6 +549,7 @@ export function createPersonalInventory(
     if (equippedSlot) return { kind: 'unequip', slotId: equippedSlot };
     const definition = findItemDefinition(inventory.catalog, selectedItemId);
     if (!definition) return null;
+    if (consumableCanBeUsed(definition)) return { kind: 'use' };
     const slots = compatibleSlots(inventory, definition);
     const preferred = slots.find((slot) => !slotIsOccupied(inventory, slot)) ?? slots[0];
     if (!preferred) return null;
@@ -609,6 +623,12 @@ export function createPersonalInventory(
     if (definition.emptyMassKg != null) {
       appendStat('Mass', `${definition.emptyMassKg} kg`);
     }
+    if ((definition.hungerRestore01 ?? 0) > 0) {
+      appendStat('Hunger', `+${Math.round((definition.hungerRestore01 ?? 0) * 100)}%`);
+    }
+    if ((definition.thirstRestore01 ?? 0) > 0) {
+      appendStat('Thirst', `+${Math.round((definition.thirstRestore01 ?? 0) * 100)}%`);
+    }
 
     const description = document.createElement('p');
     description.className = 'sc-personal-inv-detail-description';
@@ -622,7 +642,9 @@ export function createPersonalInventory(
         ? 'Unequip'
         : action.kind === 'replace'
           ? 'Replace'
-          : 'Equip'
+          : action.kind === 'use'
+            ? 'Use'
+            : 'Equip'
       : 'No action';
   }
 
@@ -682,11 +704,49 @@ export function createPersonalInventory(
     }
   }
 
+  async function useSelected(): Promise<void> {
+    if (busy || !selectedItemId) return;
+    const inventory = inventoryOrNull();
+    if (!inventory) {
+      setStatus('Sign in to use consumables.', 'error');
+      return;
+    }
+    const definition = findItemDefinition(inventory.catalog, selectedItemId);
+    if (!definition || !consumableCanBeUsed(definition)) {
+      setStatus('That item cannot be used.', 'error');
+      return;
+    }
+
+    busy = true;
+    elements.quickEquipBtnEl.disabled = true;
+    setStatus(`Using ${definition.name}…`, 'info');
+    try {
+      const result = await consumeInventoryItem(selectedItemId);
+      const next = normalizeInventoryState(result.inventory);
+      callbacks.onInventoryResult(next);
+      callbacks.onConsumeResult?.({ inventory: next, vitals: result.vitals });
+      if (itemQuantity(next, selectedItemId) <= 0) {
+        selectedItemId = null;
+      }
+      renderAll();
+      setStatus(`Used ${definition.name}.`, 'ok');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Use failed.', 'error');
+    } finally {
+      busy = false;
+      renderDetails(inventoryOrNull() ?? inventory);
+    }
+  }
+
   async function activateSelected(): Promise<void> {
     const inventory = inventoryOrNull();
     if (!inventory) return;
     const action = selectedAction(inventory);
     if (!action) return;
+    if (action.kind === 'use') {
+      await useSelected();
+      return;
+    }
     await equipToSlot(action.slotId, action.kind === 'unequip' ? null : selectedItemId);
   }
 

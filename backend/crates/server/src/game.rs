@@ -400,9 +400,16 @@ pub async fn purchase_inventory_item(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
-    if definition.try_get::<String, _>("itemType")? != "weapon" {
+    let item_type: String = definition.try_get("itemType")?;
+    let stack_max: i32 = definition.try_get("stackMax")?;
+    let is_consumable = item_type == "consumable";
+    let is_unique_gear = matches!(
+        item_type.as_str(),
+        "weapon" | "backpack" | "armor" | "clothing"
+    );
+    if !is_consumable && !is_unique_gear {
         return Err(ApiError::BadRequest(
-            "Only weapons can be purchased from this shop.".to_owned(),
+            "This item cannot be purchased from a shop.".to_owned(),
         ));
     }
     let cost: i32 = definition.try_get("costArc")?;
@@ -418,9 +425,14 @@ pub async fn purchase_inventory_item(
     .bind(&body.item_definition_id)
     .fetch_one(&mut *tx)
     .await?;
-    if owned >= 1 {
+    if is_unique_gear && owned >= 1 {
         return Err(ApiError::BadRequest(
-            "You already own this weapon.".to_owned(),
+            "You already own this item.".to_owned(),
+        ));
+    }
+    if is_consumable && owned >= stack_max {
+        return Err(ApiError::BadRequest(
+            "Inventory stack is already full.".to_owned(),
         ));
     }
     sqlx::query(r#"UPDATE "Player" SET "arcBalance" = "arcBalance" - $2, "updatedAt" = NOW() WHERE "id" = $1"#)
@@ -444,6 +456,100 @@ pub async fn purchase_inventory_item(
     Ok(Json(json!({
         "arcBalance": balance - cost,
         "inventory": inventory_state(&state, &player_id).await?,
+    })))
+}
+
+pub async fn consume_inventory_item(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Json(body): Json<PurchaseItemBody>,
+) -> ApiResult<Json<Value>> {
+    if body.item_definition_id.trim().is_empty() {
+        return Err(ApiError::BadRequest(
+            "itemDefinitionId is required.".to_owned(),
+        ));
+    }
+    let player_id = require_player_id(&state, &access.user_id).await?;
+    let mut tx = state.db.begin().await?;
+    let player = sqlx::query(
+        r#"SELECT "hungerReserve", "thirstReserve" FROM "Player" WHERE "id" = $1 FOR UPDATE"#,
+    )
+    .bind(&player_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("Player not found.".to_owned()))?;
+    let definition = sqlx::query(
+        r#"SELECT "itemType", "metadata" FROM "ItemDefinition" WHERE "id" = $1"#,
+    )
+    .bind(&body.item_definition_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
+    if definition.try_get::<String, _>("itemType")? != "consumable" {
+        return Err(ApiError::BadRequest(
+            "Only consumables can be used.".to_owned(),
+        ));
+    }
+    let owned: i32 = sqlx::query_scalar(
+        r#"SELECT COALESCE((SELECT "quantity" FROM "PlayerItem"
+           WHERE "playerId" = $1 AND "itemDefinitionId" = $2), 0)"#,
+    )
+    .bind(&player_id)
+    .bind(&body.item_definition_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if owned < 1 {
+        return Err(ApiError::BadRequest(
+            "You do not own this consumable.".to_owned(),
+        ));
+    }
+    let metadata: Option<Value> = definition.try_get("metadata")?;
+    let (hunger_restore, thirst_restore) = consumable_restore_amounts(metadata.as_ref());
+    if hunger_restore <= 0.0 && thirst_restore <= 0.0 {
+        return Err(ApiError::BadRequest(
+            "This consumable has no restore effect.".to_owned(),
+        ));
+    }
+    let mut hunger: f64 = player.try_get("hungerReserve")?;
+    let mut thirst: f64 = player.try_get("thirstReserve")?;
+    hunger = (hunger + hunger_restore).clamp(0.0, 1.0);
+    thirst = (thirst + thirst_restore).clamp(0.0, 1.0);
+    sqlx::query(
+        r#"UPDATE "Player"
+           SET "hungerReserve" = $2,
+               "thirstReserve" = $3,
+               "updatedAt" = NOW()
+           WHERE "id" = $1"#,
+    )
+    .bind(&player_id)
+    .bind(hunger)
+    .bind(thirst)
+    .execute(&mut *tx)
+    .await?;
+    if owned <= 1 {
+        sqlx::query(
+            r#"DELETE FROM "PlayerItem"
+               WHERE "playerId" = $1 AND "itemDefinitionId" = $2"#,
+        )
+        .bind(&player_id)
+        .bind(&body.item_definition_id)
+        .execute(&mut *tx)
+        .await?;
+    } else {
+        sqlx::query(
+            r#"UPDATE "PlayerItem"
+               SET "quantity" = "quantity" - 1, "updatedAt" = NOW()
+               WHERE "playerId" = $1 AND "itemDefinitionId" = $2"#,
+        )
+        .bind(&player_id)
+        .bind(&body.item_definition_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(Json(json!({
+        "inventory": inventory_state(&state, &player_id).await?,
+        "vitals": vitals_json(hunger, thirst),
     })))
 }
 
@@ -1073,6 +1179,7 @@ async fn build_state(state: &AppState, player_id: &str, area: BuildArea) -> ApiR
 async fn inventory_state(state: &AppState, player_id: &str) -> ApiResult<Value> {
     let catalog = sqlx::query(
         r#"SELECT i."id", i."name", i."description", i."itemType", i."subType", i."prefabId", i."iconUrl", i."stackMax", i."costArc", i."rarity",
+                  i."metadata",
                   w."weaponSlotType", b."capacityLiters", b."emptyMassKg",
                   d."wearableSlotType", d."occupiedSlotTypes", d."sidekickPartPresetId"
            FROM "ItemDefinition" i
@@ -1103,6 +1210,23 @@ async fn inventory_state(state: &AppState, player_id: &str) -> ApiResult<Value> 
     Ok(json!({ "catalog": catalog, "items": items, "loadout": parse_loadout(loadout) }))
 }
 
+fn consumable_restore_amounts(metadata: Option<&Value>) -> (f64, f64) {
+    let Some(meta) = metadata else {
+        return (0.0, 0.0);
+    };
+    let hunger = meta
+        .get("hungerRestore01")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
+    let thirst = meta
+        .get("thirstRestore01")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
+    (hunger, thirst)
+}
+
 fn item_row_json(row: sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
     let mut value = json!({
         "id": row.try_get::<String, _>("id")?, "name": row.try_get::<String, _>("name")?,
@@ -1111,6 +1235,14 @@ fn item_row_json(row: sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
         "iconUrl": row.try_get::<Option<String>, _>("iconUrl")?, "stackMax": row.try_get::<i32, _>("stackMax")?,
         "costArc": row.try_get::<i32, _>("costArc")?, "rarity": row.try_get::<String, _>("rarity")?,
     });
+    let metadata: Option<Value> = row.try_get("metadata")?;
+    let (hunger_restore, thirst_restore) = consumable_restore_amounts(metadata.as_ref());
+    if hunger_restore > 0.0 {
+        value["hungerRestore01"] = json!(hunger_restore);
+    }
+    if thirst_restore > 0.0 {
+        value["thirstRestore01"] = json!(thirst_restore);
+    }
     if let Some(weapon_slot_type) = row.try_get::<Option<String>, _>("weaponSlotType")? {
         value["weaponSlotType"] = json!(weapon_slot_type);
     }

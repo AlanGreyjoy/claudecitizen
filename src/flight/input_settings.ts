@@ -4,6 +4,8 @@ export type KeyboardActionId =
   | 'strafeLeft'
   | 'strafeRight'
   | 'sprintBoost'
+  | 'crouch'
+  | 'walkToggle'
   | 'rollLeft'
   | 'rollRight'
   | 'yawLeft'
@@ -129,6 +131,16 @@ export const KEYBOARD_ACTIONS: readonly KeyboardActionDefinition[] = [
     id: 'sprintBoost',
     label: 'Sprint / Boost',
     defaultBinding: { primary: 'ShiftLeft', secondary: 'ShiftRight' },
+  },
+  {
+    id: 'crouch',
+    label: 'Crouch',
+    defaultBinding: { primary: 'KeyC' },
+  },
+  {
+    id: 'walkToggle',
+    label: 'Walk Toggle',
+    defaultBinding: { primary: 'CapsLock' },
   },
   { id: 'rollLeft', label: 'Roll Left', defaultBinding: { primary: 'KeyQ' } },
   { id: 'rollRight', label: 'Roll Right', defaultBinding: { primary: 'KeyE' } },

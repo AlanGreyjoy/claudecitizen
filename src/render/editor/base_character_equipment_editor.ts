@@ -517,6 +517,7 @@ export function createBaseCharacterEquipmentEditor(
   let previewGeneration = 0;
   let catalogMessage = 'Catalog not loaded.';
   const playTestKeys = new Set<string>();
+  let playTestWalkToggle = false;
   const playTestWeaponButtons = new Map<WeaponSelectSlotId, HTMLButtonElement>();
   const playTestCameraPositionBefore = new THREE.Vector3();
   const playTestCameraTargetBefore = new THREE.Vector3();
@@ -1215,9 +1216,13 @@ export function createBaseCharacterEquipmentEditor(
         .addScaledVector(playTestCameraRight, movement.x)
         .normalize();
       const settings = getCharacterSettings();
+      const isWalking = playTestWalkToggle;
+      const isCrouching = playTestKeys.has('KeyC');
       const speed = isSprinting
         ? settings.sprintSpeedMetersPerSecond
-        : settings.walkSpeedMetersPerSecond;
+        : isWalking || isCrouching
+          ? settings.walkSpeedMetersPerSecond
+          : settings.runSpeedMetersPerSecond;
       previewRoot.position.addScaledVector(playTestMoveDirection, speed * deltaSeconds);
       const horizontalDistance = Math.hypot(previewRoot.position.x, previewRoot.position.z);
       if (horizontalDistance > PLAY_TEST_STAGE_RADIUS_METERS) {
@@ -1290,6 +1295,7 @@ export function createBaseCharacterEquipmentEditor(
         playTestVerticalSpeed = 0;
         playTestAnimationKey = '';
         playTestKeys.clear();
+        playTestWalkToggle = false;
         previewRoot.position.set(0, 0, 0);
         previewRoot.rotation.set(0, 0, 0);
         camera.position.set(0, 1.7, 4.4);
@@ -1317,6 +1323,7 @@ export function createBaseCharacterEquipmentEditor(
     playTestActive = false;
     playTestAnimationGeneration += 1;
     playTestKeys.clear();
+    playTestWalkToggle = false;
     playTestWeaponSlotId = null;
     playTestJumpPhase = 'grounded';
     playTestJumpPhaseTime = 0;
@@ -1351,6 +1358,9 @@ export function createBaseCharacterEquipmentEditor(
       event.preventDefault();
       void setPlayTestActive(false);
       return;
+    }
+    if (event.code === 'CapsLock' && !event.repeat) {
+      playTestWalkToggle = !playTestWalkToggle;
     }
     if (event.code === 'Space') {
       event.preventDefault();
@@ -1804,7 +1814,11 @@ export function createBaseCharacterEquipmentEditor(
 
     const speedField = (
       label: string,
-      key: 'walkSpeedMetersPerSecond' | 'sprintSpeedMetersPerSecond' | 'jumpSpeedMetersPerSecond',
+      key:
+        | 'walkSpeedMetersPerSecond'
+        | 'runSpeedMetersPerSecond'
+        | 'sprintSpeedMetersPerSecond'
+        | 'jumpSpeedMetersPerSecond',
     ): HTMLLabelElement =>
       field(label, input(String(settingsState[key]), (raw) => {
         const value = Number(raw);
@@ -1836,6 +1850,7 @@ export function createBaseCharacterEquipmentEditor(
 
     panel.append(
       speedField('Walk speed (m/s)', 'walkSpeedMetersPerSecond'),
+      speedField('Run speed (m/s)', 'runSpeedMetersPerSecond'),
       speedField('Sprint speed (m/s)', 'sprintSpeedMetersPerSecond'),
       speedField('Jump speed (m/s)', 'jumpSpeedMetersPerSecond'),
       actions,

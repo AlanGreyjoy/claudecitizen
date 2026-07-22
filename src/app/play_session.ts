@@ -13,6 +13,7 @@ import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
 import { createEntertainmentSystem } from '../render/effects/hud/entertainment_system';
 import { createWeaponShop } from '../render/effects/hud/weapon_shop';
 import { createOutfitters } from '../render/effects/hud/outfitters';
+import { createFoodShop } from '../render/effects/hud/food_shop';
 import { createPersonalInventory } from '../render/effects/hud/personal_inventory';
 import { createBuildTerminal } from '../render/effects/hud/build_terminal';
 import { createHangarBuildController } from '../player/hangar_build/build_controller';
@@ -191,6 +192,7 @@ interface PlaySessionCleanup {
   entertainmentSystem: ReturnType<typeof createEntertainmentSystem>;
   weaponShop: ReturnType<typeof createWeaponShop>;
   outfitters: ReturnType<typeof createOutfitters>;
+  foodShop: ReturnType<typeof createFoodShop>;
   personalInventory: PersonalInventoryController;
   buildTerminal: BuildTerminalController | null;
   haloBand: HaloBandController | null;
@@ -215,6 +217,7 @@ export function stopPlaySession(): void {
   cleanup.entertainmentSystem.dispose();
   cleanup.weaponShop.dispose();
   cleanup.outfitters.dispose();
+  cleanup.foodShop.dispose();
   cleanup.personalInventory.dispose();
   cleanup.buildTerminal?.dispose();
   cleanup.haloBand?.dispose();
@@ -527,6 +530,9 @@ export async function startPlaySession(
   }
 
   const loopRef: { loop?: ReturnType<typeof createGameLoop> } = {};
+  const vitalsSessionRef: {
+    current: PlayerVitalsSessionController | null;
+  } = { current: null };
 
   const controls = createPlayerControls(canvas, {
     onReset: () => loopRef.loop?.resetWorld(),
@@ -632,6 +638,11 @@ export async function startPlaySession(
         personalInventory.refresh();
         loopRef.loop?.setEquippedLoadout(inventoryState.loadout);
       },
+      onConsumeResult: (result) => {
+        inventoryState = normalizeInventoryState(result.inventory);
+        personalInventory.refresh();
+        vitalsSessionRef.current?.applyAuthoritativeVitals(result.vitals);
+      },
     },
   );
 
@@ -666,6 +677,29 @@ export async function startPlaySession(
       balanceEl: requireElement<HTMLElement>('outfitters-balance'),
       closeBtnEl: requireElement<HTMLButtonElement>('outfitters-close-btn'),
       powerBtnEl: requireElement<HTMLButtonElement>('outfitters-power-btn'),
+    },
+    {
+      getArcBalance: () => arcBalance,
+      getInventory: () => inventoryState,
+      onPurchaseResult: (result) => {
+        arcBalance = result.arcBalance;
+        inventoryState = normalizeInventoryState(result.inventory);
+        personalInventory.refresh();
+      },
+    },
+  );
+
+  const foodShop = createFoodShop(
+    {
+      rootEl: requireElement<HTMLElement>('food-shop'),
+      bezelEl: requireElement<HTMLElement>('food-shop-bezel'),
+      titleEl: requireElement<HTMLElement>('food-shop-title'),
+      kickerEl: requireElement<HTMLElement>('food-shop-kicker'),
+      listEl: requireElement<HTMLElement>('food-shop-list'),
+      statusEl: requireElement<HTMLElement>('food-shop-status'),
+      balanceEl: requireElement<HTMLElement>('food-shop-balance'),
+      closeBtnEl: requireElement<HTMLButtonElement>('food-shop-close-btn'),
+      powerBtnEl: requireElement<HTMLButtonElement>('food-shop-power-btn'),
     },
     {
       getArcBalance: () => arcBalance,
@@ -822,6 +856,7 @@ export async function startPlaySession(
     entertainmentSystem.close();
     weaponShop.close();
     outfitters.close();
+    foodShop.close();
     personalInventory.close();
     buildTerminal?.close();
     haloBand?.close();
@@ -844,6 +879,7 @@ export async function startPlaySession(
       loopRef.loop?.setVitalsSyncLocked(false);
     },
   });
+  vitalsSessionRef.current = vitalsSession;
   if (bootstrap) {
     loading?.setStatus('Synchronizing citizen vitals...');
     await vitalsSession.begin();
@@ -865,6 +901,7 @@ export async function startPlaySession(
     entertainmentSystem,
     weaponShop,
     outfitters,
+    foodShop,
     personalInventory,
     stationPrefab,
     build:
@@ -886,6 +923,7 @@ export async function startPlaySession(
       entertainmentSystem.isPaused() ||
       weaponShop.isPaused() ||
       outfitters.isPaused() ||
+      foodShop.isPaused() ||
       personalInventory.isPaused() ||
       (buildTerminal?.isPaused() ?? false),
     getInventoryLoadout: () => inventoryState?.loadout ?? {},
@@ -935,6 +973,7 @@ export async function startPlaySession(
     entertainmentSystem,
     weaponShop,
     outfitters,
+    foodShop,
     personalInventory,
     buildTerminal,
     haloBand,

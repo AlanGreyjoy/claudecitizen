@@ -119,6 +119,8 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   let cycleFlightModePressed = false;
   let settings: GameSettings = loadGameSettings();
   let inputSuppressed = false;
+  /** CapsLock walk gait toggle (on-foot). */
+  let walkToggleEnabled = false;
 
   function inputSettings() {
     return settings.input;
@@ -131,6 +133,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
   function isHandledKey(code: string): boolean {
     if (code.startsWith('Key') || code === 'Space') return true;
     if (code === 'AltLeft' || code === 'AltRight') return true;
+    if (code === 'CapsLock') return true;
     return Object.values(keyboardBindings()).some(
       (binding) => binding.primary === code || binding.secondary === code,
     );
@@ -296,6 +299,14 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
         coupledMode = !coupledMode;
         coupledTogglePressed = true;
         return;
+      }
+      // CapsLock toggles walk gait on foot / deck / station (not while piloting).
+      if (
+        !wasDown &&
+        isKeyboardCode('walkToggle', event.code) &&
+        mode !== 'in-ship'
+      ) {
+        walkToggleEnabled = !walkToggleEnabled;
       }
       if (
         !wasDown &&
@@ -623,6 +634,9 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     input.moveX = mergeAxis(input.moveX, readProfileAnalog('controller', 'roll'));
     input.moveY = mergeAxis(input.moveY, readProfileAnalog('controller', 'throttle'));
     input.sprint = Boolean(input.sprint || isDeviceActionDown('boost'));
+    input.walk = walkToggleEnabled;
+    // Crouch blocks sprint (plan: crouch wins over sprint).
+    if (input.crouch) input.sprint = false;
     return input;
   }
 

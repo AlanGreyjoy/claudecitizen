@@ -87,6 +87,7 @@ export function createStationNpcRenderer(
         avatar.root.visible = true;
         avatar.setPose(npc, focusPosition, renderScale);
         avatar.setAnimation(npc.animation);
+        avatar.setHeadLook?.(npc.headLook ?? null);
         avatar.updateMixer(nowSeconds);
       }
 

@@ -1017,6 +1017,33 @@ export function createEditorViewport(
         group.add(sphere, screen);
         return group;
       }
+      case "food-shop":
+      case "drinks-shop":
+      case "canteen": {
+        const group = new THREE.Group();
+        const color =
+          component.type === "food-shop"
+            ? 0xf0c14a
+            : component.type === "drinks-shop"
+              ? 0x4ab8f0
+              : 0xc47af0;
+        const radius = component.gazeRadius ?? 0.4;
+        const sphere = makeHelperMesh(
+          new THREE.SphereGeometry(radius, 12, 10),
+          color,
+          0.28,
+          true,
+        );
+        const w = component.screenWidth ?? 0.45;
+        const h = component.screenHeight ?? 0.28;
+        const screen = makeHelperMesh(
+          new THREE.PlaneGeometry(w, h),
+          color,
+          0.75,
+        );
+        group.add(sphere, screen);
+        return group;
+      }
       case "ship-controller": {
         if (component.restHeight === undefined) return null;
         return makeRestHeightHelper(component.restHeight);

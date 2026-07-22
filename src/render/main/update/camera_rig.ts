@@ -345,111 +345,88 @@ export function updateCameraRig(
     }
     camera.up.copy(v3(shipUp));
   } else {
-    const shopFeel = world.entertainmentCameraFeel;
-    if (stationActive && shopFeel) {
-      camera.userData.smoothedWorldPos = null;
-      camera.userData.smoothedWorldTarget = null;
-      if (typeof camera.userData.baseFovDeg !== 'number') {
-        camera.userData.baseFovDeg = camera.fov;
-      }
-      camera.fov = (camera.userData.baseFovDeg as number) + shopFeel.fovDeltaDeg;
+    if (typeof camera.userData.baseFovDeg === 'number') {
+      camera.fov = camera.userData.baseFovDeg;
       camera.updateProjectionMatrix();
-      // Station camera is focus-relative (character at origin of render frame).
-      camera.position.set(
-        (shopFeel.eye.x - focusPosition.x) * renderScale,
-        (shopFeel.eye.y - focusPosition.y) * renderScale,
-        (shopFeel.eye.z - focusPosition.z) * renderScale,
-      );
-      cameraTarget.set(
-        (shopFeel.lookTarget.x - focusPosition.x) * renderScale,
-        (shopFeel.lookTarget.y - focusPosition.y) * renderScale,
-        (shopFeel.lookTarget.z - focusPosition.z) * renderScale,
-      );
-      camera.up.copy(v3(station?.frame.up ?? shipUp));
-    } else {
-      if (typeof camera.userData.baseFovDeg === 'number') {
-        camera.fov = camera.userData.baseFovDeg;
-        camera.updateProjectionMatrix();
-      }
-      const orbit =
-        stationActive && station
+    }
+    const orbit =
+      stationActive && station
+        ? resolveShipDeckOrbit(
+            station.frame.forward,
+            station.frame.up,
+            cameraOrbit.yawRadians,
+            cameraOrbit.pitchRadians,
+            ORBIT_PITCH_LIMIT,
+          )
+        : onShipDeckInterior
           ? resolveShipDeckOrbit(
-              station.frame.forward,
-              station.frame.up,
+              shipForward,
+              shipUp,
               cameraOrbit.yawRadians,
               cameraOrbit.pitchRadians,
               ORBIT_PITCH_LIMIT,
             )
-          : onShipDeckInterior
-            ? resolveShipDeckOrbit(
-                shipForward,
-                shipUp,
-                cameraOrbit.yawRadians,
-                cameraOrbit.pitchRadians,
-                ORBIT_PITCH_LIMIT,
-              )
-            : resolveOrbitCamera(
-                character.position,
-                cameraOrbit.yawRadians,
-                cameraOrbit.pitchRadians,
-                ORBIT_PITCH_LIMIT,
-              );
+          : resolveOrbitCamera(
+              character.position,
+              cameraOrbit.yawRadians,
+              cameraOrbit.pitchRadians,
+              ORBIT_PITCH_LIMIT,
+            );
 
-      const baseZoomDistance = cameraOrbit.zoomDistance ?? 7.4;
-      const zoomDistance = baseZoomDistance
-        * (1 - (1 - WEAPON_AIM_ZOOM_SCALE) * weaponAimZoom01);
-      const rig = resolveCharacterCameraRig(orbit, zoomDistance);
-      let positionOffset = rig.positionOffset;
-      if (stationActive && station) {
-        positionOffset = clampOffsetToRoom(positionOffset, character.position, station);
-      } else if (onShipDeckInterior) {
-        positionOffset = clampOffsetToShipZone(
-          positionOffset,
-          character.position,
-          world,
-          shipUp,
-          shipForward,
-        );
-      }
-
-      const desiredWorldPos = new THREE.Vector3(
-        focusPosition.x + positionOffset.x,
-        focusPosition.y + positionOffset.y,
-        focusPosition.z + positionOffset.z,
+    const baseZoomDistance = cameraOrbit.zoomDistance ?? 7.4;
+    const zoomDistance = baseZoomDistance
+      * (1 - (1 - WEAPON_AIM_ZOOM_SCALE) * weaponAimZoom01);
+    const rig = resolveCharacterCameraRig(orbit, zoomDistance);
+    let positionOffset = rig.positionOffset;
+    if (stationActive && station) {
+      positionOffset = clampOffsetToRoom(positionOffset, character.position, station);
+    } else if (onShipDeckInterior) {
+      positionOffset = clampOffsetToShipZone(
+        positionOffset,
+        character.position,
+        world,
+        shipUp,
+        shipForward,
       );
-      const desiredWorldTarget = new THREE.Vector3(
-        focusPosition.x + rig.targetOffset.x,
-        focusPosition.y + rig.targetOffset.y,
-        focusPosition.z + rig.targetOffset.z,
-      );
-
-      if (!camera.userData.smoothedWorldPos || !camera.userData.smoothedWorldTarget) {
-        camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
-        camera.userData.smoothedWorldTarget = new THREE.Vector3().copy(desiredWorldTarget);
-      }
-
-      smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
-      smoothVector(camera.userData.smoothedWorldTarget, desiredWorldTarget, dt, 0.04);
-
-      // Pull the camera in front of the first collider blocking the line
-      // from the look target. Applied to the smoothed position (and written
-      // back) so the rendered eye never clips geometry: the clamp snaps in
-      // instantly, then the smoothing above eases back out once clear.
-      const occludeCamera = world.cameraOcclusion;
-      if (occludeCamera) {
-        const smoothedPos = camera.userData.smoothedWorldPos as THREE.Vector3;
-        const smoothedTarget = camera.userData.smoothedWorldTarget as THREE.Vector3;
-        const adjusted = occludeCamera(
-          { x: smoothedTarget.x, y: smoothedTarget.y, z: smoothedTarget.z },
-          { x: smoothedPos.x, y: smoothedPos.y, z: smoothedPos.z },
-        );
-        smoothedPos.set(adjusted.x, adjusted.y, adjusted.z);
-      }
-
-      camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
-      cameraTarget.copy(camera.userData.smoothedWorldTarget).sub(focusVec).multiplyScalar(renderScale);
-      camera.up.copy(v3(orbit.up));
     }
+
+    const desiredWorldPos = new THREE.Vector3(
+      focusPosition.x + positionOffset.x,
+      focusPosition.y + positionOffset.y,
+      focusPosition.z + positionOffset.z,
+    );
+    const desiredWorldTarget = new THREE.Vector3(
+      focusPosition.x + rig.targetOffset.x,
+      focusPosition.y + rig.targetOffset.y,
+      focusPosition.z + rig.targetOffset.z,
+    );
+
+    if (!camera.userData.smoothedWorldPos || !camera.userData.smoothedWorldTarget) {
+      camera.userData.smoothedWorldPos = new THREE.Vector3().copy(desiredWorldPos);
+      camera.userData.smoothedWorldTarget = new THREE.Vector3().copy(desiredWorldTarget);
+    }
+
+    smoothVector(camera.userData.smoothedWorldPos, desiredWorldPos, dt, 0.05);
+    smoothVector(camera.userData.smoothedWorldTarget, desiredWorldTarget, dt, 0.04);
+
+    // Pull the camera in front of the first collider blocking the line
+    // from the look target. Applied to the smoothed position (and written
+    // back) so the rendered eye never clips geometry: the clamp snaps in
+    // instantly, then the smoothing above eases back out once clear.
+    const occludeCamera = world.cameraOcclusion;
+    if (occludeCamera) {
+      const smoothedPos = camera.userData.smoothedWorldPos as THREE.Vector3;
+      const smoothedTarget = camera.userData.smoothedWorldTarget as THREE.Vector3;
+      const adjusted = occludeCamera(
+        { x: smoothedTarget.x, y: smoothedTarget.y, z: smoothedTarget.z },
+        { x: smoothedPos.x, y: smoothedPos.y, z: smoothedPos.z },
+      );
+      smoothedPos.set(adjusted.x, adjusted.y, adjusted.z);
+    }
+
+    camera.position.copy(camera.userData.smoothedWorldPos).sub(focusVec).multiplyScalar(renderScale);
+    cameraTarget.copy(camera.userData.smoothedWorldTarget).sub(focusVec).multiplyScalar(renderScale);
+    camera.up.copy(v3(orbit.up));
   }
 
   camera.lookAt(cameraTarget);

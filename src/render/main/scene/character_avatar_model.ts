@@ -57,6 +57,8 @@ export interface CharacterAvatarInstance {
   updateMixer: (nowSeconds: number, timeScale?: number) => void;
   /** Procedural local-player spine aim applied after the locomotion mixer. */
   setUpperBodyAim?: (aim: CharacterUpperBodyAim | null) => void;
+  /** Procedural Head-bone look (station screen hotspots). */
+  setHeadLook?: (look: CharacterUpperBodyAim | null) => void;
   /** Attach equipped backpack/weapons from personal inventory loadout; optional drawn hotbar slot. */
   setEquippedInventory?: (
     inventory: import('../../../player/inventory/types').InventoryState | null,

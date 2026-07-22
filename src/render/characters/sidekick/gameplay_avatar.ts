@@ -30,6 +30,10 @@ import {
   type SidekickUpperBodyAimController,
 } from './upper_body_aim';
 import {
+  createSidekickHeadLookController,
+  type SidekickHeadLookController,
+} from './head_look';
+import {
   loadCurrentDefaultAnimationController,
   primaryStanceSources,
 } from '../../../player/animation';
@@ -63,6 +67,7 @@ export function createSidekickGameplayAvatar(
   let animation: SidekickAnimationRuntime | null = null;
   let fallback: CharacterAvatarInstance | null = null;
   let upperBodyAim: SidekickUpperBodyAimController | null = null;
+  let headLook: SidekickHeadLookController | null = null;
   let ready = false;
   let disposed = false;
   let desiredAnimation = 'Idle_Loop';
@@ -71,6 +76,7 @@ export function createSidekickGameplayAvatar(
   let pendingInventory: InventoryState | null = null;
   let pendingActiveWeaponSlotId: string | null = null;
   let pendingUpperBodyAim: CharacterUpperBodyAim | null = null;
+  let pendingHeadLook: CharacterUpperBodyAim | null = null;
   let sidekickCatalog: SidekickCatalog | null = null;
   let baseDefinition: SidekickCharacterDefinitionV2 | null = null;
   let appliedWearableKey = '';
@@ -182,6 +188,8 @@ export function createSidekickGameplayAvatar(
       avatar.root.scale.setScalar(renderScale);
       upperBodyAim = createSidekickUpperBodyAimController(root, avatar.root);
       upperBodyAim?.setTarget(pendingUpperBodyAim);
+      headLook = createSidekickHeadLookController(root, avatar.root);
+      headLook?.setTarget(pendingHeadLook);
       applyDefaultFrustumCulling(avatar.root);
       // Measure before parenting beneath the gameplay root. That root may already
       // be rotated into a planet/station frame while assets load; world-aligned
@@ -225,6 +233,7 @@ export function createSidekickGameplayAvatar(
       }
       equipment.dispose();
       upperBodyAim?.dispose();
+      headLook?.dispose();
       animation?.dispose();
       avatar?.dispose();
       fallback?.dispose();
@@ -263,14 +272,21 @@ export function createSidekickGameplayAvatar(
       }
       const delta = lastNowSeconds === null ? 0 : nowSeconds - lastNowSeconds;
       upperBodyAim?.restore();
+      headLook?.restore();
       animation?.update(delta * timeScale);
       upperBodyAim?.update(delta);
+      headLook?.update(delta);
       lastNowSeconds = nowSeconds;
     },
     setUpperBodyAim: (aim) => {
       pendingUpperBodyAim = aim;
       upperBodyAim?.setTarget(aim);
       fallback?.setUpperBodyAim?.(aim);
+    },
+    setHeadLook: (look) => {
+      pendingHeadLook = look;
+      headLook?.setTarget(look);
+      fallback?.setHeadLook?.(look);
     },
     setEquippedInventory: (inventory, activeWeaponSlotId = null) => {
       pendingInventory = inventory;

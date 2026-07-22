@@ -45,6 +45,7 @@ export function buildCharacterInput(
     moveX: actionAxis(keys, bindings, 'strafeRight', 'strafeLeft'),
     moveY: actionAxis(keys, bindings, 'moveForward', 'moveBackward'),
     sprint: isKeyboardActionActive(keys, 'sprintBoost', bindings),
+    crouch: isKeyboardActionActive(keys, 'crouch', bindings),
   };
 }
 

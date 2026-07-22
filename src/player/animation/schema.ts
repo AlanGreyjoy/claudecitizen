@@ -1,3 +1,9 @@
+import {
+  MOVE_OCTANTS,
+  PRO_RIFLE_CATALOG_ONLY_CLIPS,
+  PRO_RIFLE_LOCOMOTION_CLIPS,
+} from './pro_rifle_clips';
+
 export const ANIMATION_CONTROLLER_SCHEMA_VERSION = 1 as const;
 
 export const ANIMATION_LOCOMOTION_KINDS = [
@@ -172,7 +178,18 @@ export function resolveControllerState(
   return { clipName: match.clipName, sourceId: match.sourceId };
 }
 
-/** Primary locomotion sources for rifle + pistol (excludes full pack catalog). */
+function packSourceId(prefix: string, clipStem: string): string {
+  return `${prefix}-${clipStem.replaceAll('_', '-')}`;
+}
+
+const PRO_RIFLE_LOCOMOTION_SOURCE_IDS = new Set(
+  PRO_RIFLE_LOCOMOTION_CLIPS.map((clip) => packSourceId('r8', clip)),
+);
+
+/**
+ * Primary locomotion sources for rifle + pistol.
+ * Rifle includes the full directional/crouch gameplay pack (excludes turns/deaths).
+ */
 export function primaryStanceSources(
   controller: AnimationControllerV1,
 ): AnimationControllerSourceV1[] {
@@ -181,6 +198,9 @@ export function primaryStanceSources(
     if (state.stanceId !== 'rifle' && state.stanceId !== 'pistol') continue;
     if (!state.clipName || state.sourceId === UAL_ANIMATION_SOURCE_ID) continue;
     needed.add(state.sourceId);
+  }
+  for (const sourceId of PRO_RIFLE_LOCOMOTION_SOURCE_IDS) {
+    needed.add(sourceId);
   }
   return controller.sources.filter((source) => needed.has(source.id));
 }
@@ -194,18 +214,32 @@ const PRO_RIFLE_ROOT = '/src/assets/protected/animations/pro-rifle';
 const HANDGUN_LOCOMOTION_ROOT = '/src/assets/protected/animations/handgun-locomotions';
 
 /** Measured from each in-place clip's foot-travel (or aim) axis; +Z is gameplay forward. */
-const PRO_RIFLE_YAW_OFFSETS: Readonly<Partial<Record<string, number>>> = {
-  walk_forward: -30,
-  // The aim-idle pose holds the rifle ~55deg left of the root's facing;
-  // rotate the clip so the barrel squares up with the camera.
-  idle_aiming: -55,
-};
+const PRO_RIFLE_WALK_RUN_YAW_DEGREES = -30;
+const PRO_RIFLE_AIM_YAW_DEGREES = -55;
+
+function buildProRifleYawOffsets(): Readonly<Partial<Record<string, number>>> {
+  const offsets: Record<string, number> = {
+    // Aim-idle holds the rifle ~55deg left of the root's facing.
+    idle_aiming: PRO_RIFLE_AIM_YAW_DEGREES,
+    idle_crouching_aiming: PRO_RIFLE_AIM_YAW_DEGREES,
+  };
+  // Walk / run / crouch-walk share the measured walk_forward bias.
+  // Sprint stays at 0 — same as the prior primary sprint_forward binding.
+  for (const octant of MOVE_OCTANTS) {
+    offsets[`walk_${octant}`] = PRO_RIFLE_WALK_RUN_YAW_DEGREES;
+    offsets[`walk_crouching_${octant}`] = PRO_RIFLE_WALK_RUN_YAW_DEGREES;
+    offsets[`run_${octant}`] = PRO_RIFLE_WALK_RUN_YAW_DEGREES;
+  }
+  return offsets;
+}
+
+const PRO_RIFLE_YAW_OFFSETS = buildProRifleYawOffsets();
 const HANDGUN_YAW_OFFSETS: Readonly<Partial<Record<string, number>>> = {
   pistol_walk: -27,
   pistol_run: -19,
 };
 
-/** Primary rifle locomotion → Pro Rifle clip (forward / jump axis). */
+/** Coarse rifle states for editor / backward compat (forward axis). */
 const PRO_RIFLE_LOCOMOTION: Record<AnimationLocomotionKind, string> = {
   idle: 'idle',
   idle_aiming: 'idle_aiming',
@@ -227,10 +261,6 @@ const HANDGUN_LOCOMOTION: Record<AnimationLocomotionKind, string> = {
   jump_loop: 'pistol_jump_2',
   jump_land: 'pistol_jump',
 };
-
-function packSourceId(prefix: string, clipStem: string): string {
-  return `${prefix}-${clipStem.replaceAll('_', '-')}`;
-}
 
 export function buildDefaultAnimationController(): AnimationControllerV1 {
   const locomotionLabels: Record<AnimationLocomotionKind, string> = {
@@ -259,7 +289,9 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
     { id: 'pistol', label: 'Pistol' },
   ];
 
-  const rifleClips = [...new Set(Object.values(PRO_RIFLE_LOCOMOTION))];
+  const rifleClips = [
+    ...new Set([...PRO_RIFLE_LOCOMOTION_CLIPS, ...PRO_RIFLE_CATALOG_ONLY_CLIPS]),
+  ].sort();
   const handgunClips = [...new Set(Object.values(HANDGUN_LOCOMOTION))];
   const sources: AnimationControllerSourceV1[] = [
     ...rifleClips.map((clipStem) => ({

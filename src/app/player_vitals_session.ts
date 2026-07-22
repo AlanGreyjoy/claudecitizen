@@ -198,6 +198,12 @@ export function createPlayerVitalsSession(options: PlayerVitalsSessionOptions) {
   return {
     begin,
     getVitals: () => copyVitals(projected),
+    /** Apply server vitals from consume / other authoritative writes. */
+    applyAuthoritativeVitals(vitals: PlayerSurvivalVitals): void {
+      canonical = copyVitals(vitals);
+      projected = copyVitals(vitals);
+      lastProjectionAtMs = performance.now();
+    },
     isLocked: () => locked,
     stop,
     update,

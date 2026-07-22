@@ -682,6 +682,9 @@ export function createSpikeRenderer(
         focusBody.position,
         nowSeconds,
         character && world.weaponAimActive ? resolveUpperBodyAim(character) : null,
+        character && !world.weaponAimActive
+          ? (world.characterHeadLook ?? null)
+          : null,
       );
       remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
       stationNpcs.update(world.stationNpcs ?? [], focusBody.position, nowSeconds);

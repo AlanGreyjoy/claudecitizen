@@ -145,6 +145,7 @@ export function updateCharacterInStation(
   const cameraYawRadians = input.cameraYawRadians ?? 0;
   const desiredDirection = stationMovementDirection(frame, intent.moveX, intent.moveY, cameraYawRadians);
   const cameraForward = stationMovementDirection(frame, 0, 1, cameraYawRadians);
+  const cameraLockedFacing = stanceId === 'rifle';
 
   if (!physics) {
     // Physics is required for station locomotion once walk volumes are removed.
@@ -182,19 +183,26 @@ export function updateCharacterInStation(
       up: frame.up,
       aiming,
       isMoving: intent.isMoving,
+      cameraLockedFacing,
     },
     dt,
   );
 
   return {
     ...state,
-    animation: animationFromState(
-      jump,
-      intent.isMoving,
-      intent.isSprinting,
+    animation: animationFromState({
+      jumpPhase: jump.jumpPhase,
+      isMoving: intent.isMoving,
+      isSprinting: intent.isSprinting,
       stanceId,
       aiming,
-    ),
+      crouch: intent.isCrouching,
+      walk: intent.isWalking,
+      gait: intent.gait,
+      moveDirection: desiredDirection,
+      facing: forward,
+      up: frame.up,
+    }),
     forward,
     grounded: !airborne,
     jumpPhase: jump.jumpPhase,

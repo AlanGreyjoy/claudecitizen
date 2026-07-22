@@ -658,6 +658,7 @@ function updateCharacterOnDeckRapier(
     cameraYawRadians,
   );
   const cameraForward = deckMovementDirection(ship, 0, 1, cameraYawRadians);
+  const cameraLockedFacing = stanceId === 'rifle';
 
   let verticalVelocity = state.shipVerticalVelocity ?? 0;
   const groundedBefore =
@@ -694,6 +695,7 @@ function updateCharacterOnDeckRapier(
       up: ship.up,
       aiming,
       isMoving: intent.isMoving,
+      cameraLockedFacing,
     },
     dt,
   );
@@ -716,13 +718,19 @@ function updateCharacterOnDeckRapier(
     dismounted: flags.leftDeck,
     fellOffDeck: flags.leftDeck,
     state: {
-      animation: animationFromState(
-        jump,
-        intent.isMoving,
-        intent.isSprinting,
+      animation: animationFromState({
+        jumpPhase: jump.jumpPhase,
+        isMoving: intent.isMoving,
+        isSprinting: intent.isSprinting,
         stanceId,
         aiming,
-      ),
+        crouch: intent.isCrouching,
+        walk: intent.isWalking,
+        gait: intent.gait,
+        moveDirection: desiredDirection,
+        facing: forward,
+        up: ship.up,
+      }),
       deckLocal,
       deckZone: bound?.id ?? state.deckZone,
       forward,

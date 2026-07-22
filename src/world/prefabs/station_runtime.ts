@@ -9,6 +9,8 @@ import {
   type StationAvmsMarker,
   type StationWeaponShopMarker,
   type StationOutfittersMarker,
+  type StationFoodShopMarker,
+  type FoodShopCatalogMode,
   type StationLayoutOverride,
   type StationRoom,
   type StationSpawnPose,
@@ -49,6 +51,10 @@ const DEFAULT_OUTFITTERS_GAZE_RADIUS = 0.4;
 const DEFAULT_OUTFITTERS_MAX_DISTANCE = 3;
 const DEFAULT_OUTFITTERS_SCREEN_WIDTH = 0.45;
 const DEFAULT_OUTFITTERS_SCREEN_HEIGHT = 0.28;
+const DEFAULT_FOOD_SHOP_GAZE_RADIUS = 0.4;
+const DEFAULT_FOOD_SHOP_MAX_DISTANCE = 3;
+const DEFAULT_FOOD_SHOP_SCREEN_WIDTH = 0.45;
+const DEFAULT_FOOD_SHOP_SCREEN_HEIGHT = 0.28;
 
 
 interface FlattenedComponents {
@@ -115,6 +121,20 @@ interface FlattenedComponents {
   outfittersSeeds: {
     id: string;
     label: string;
+    right: number;
+    up: number;
+    forward: number;
+    rotation: Quat;
+    gazeRadius: number;
+    maxDistance: number;
+    screenWidth: number;
+    screenHeight: number;
+    itemDefinitionIds: string[];
+  }[];
+  foodShopSeeds: {
+    id: string;
+    label: string;
+    catalogMode: FoodShopCatalogMode;
     right: number;
     up: number;
     forward: number;
@@ -303,6 +323,54 @@ function collect(
           itemDefinitionIds: component.itemDefinitionIds ?? [],
         });
         break;
+      case 'food-shop':
+        out.foodShopSeeds.push({
+          id: component.id || entity.id,
+          label: component.label?.trim() || 'Browse food',
+          catalogMode: 'food',
+          right,
+          up: position.y,
+          forward,
+          rotation,
+          gazeRadius: component.gazeRadius ?? DEFAULT_FOOD_SHOP_GAZE_RADIUS,
+          maxDistance: component.maxDistance ?? DEFAULT_FOOD_SHOP_MAX_DISTANCE,
+          screenWidth: component.screenWidth ?? DEFAULT_FOOD_SHOP_SCREEN_WIDTH,
+          screenHeight: component.screenHeight ?? DEFAULT_FOOD_SHOP_SCREEN_HEIGHT,
+          itemDefinitionIds: component.itemDefinitionIds ?? [],
+        });
+        break;
+      case 'drinks-shop':
+        out.foodShopSeeds.push({
+          id: component.id || entity.id,
+          label: component.label?.trim() || 'Browse drinks',
+          catalogMode: 'drinks',
+          right,
+          up: position.y,
+          forward,
+          rotation,
+          gazeRadius: component.gazeRadius ?? DEFAULT_FOOD_SHOP_GAZE_RADIUS,
+          maxDistance: component.maxDistance ?? DEFAULT_FOOD_SHOP_MAX_DISTANCE,
+          screenWidth: component.screenWidth ?? DEFAULT_FOOD_SHOP_SCREEN_WIDTH,
+          screenHeight: component.screenHeight ?? DEFAULT_FOOD_SHOP_SCREEN_HEIGHT,
+          itemDefinitionIds: component.itemDefinitionIds ?? [],
+        });
+        break;
+      case 'canteen':
+        out.foodShopSeeds.push({
+          id: component.id || entity.id,
+          label: component.label?.trim() || 'Browse food & drinks',
+          catalogMode: 'both',
+          right,
+          up: position.y,
+          forward,
+          rotation,
+          gazeRadius: component.gazeRadius ?? DEFAULT_FOOD_SHOP_GAZE_RADIUS,
+          maxDistance: component.maxDistance ?? DEFAULT_FOOD_SHOP_MAX_DISTANCE,
+          screenWidth: component.screenWidth ?? DEFAULT_FOOD_SHOP_SCREEN_WIDTH,
+          screenHeight: component.screenHeight ?? DEFAULT_FOOD_SHOP_SCREEN_HEIGHT,
+          itemDefinitionIds: component.itemDefinitionIds ?? [],
+        });
+        break;
       case 'animation':
         out.animationSpecs.push({
           id: component.id,
@@ -388,6 +456,7 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     avmsSeeds: [],
     weaponShopSeeds: [],
     outfittersSeeds: [],
+    foodShopSeeds: [],
     animationSpecs: [],
     npcSpawners: [],
     npcWaypoints: [],
@@ -530,6 +599,30 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     });
   }
 
+  const foodShops: StationFoodShopMarker[] = [];
+  for (const seed of out.foodShopSeeds) {
+    if (foodShops.some((shop) => shop.id === seed.id)) continue;
+    foodShops.push({
+      id: seed.id,
+      label: seed.label,
+      catalogMode: seed.catalogMode,
+      right: seed.right,
+      up: seed.up,
+      forward: seed.forward,
+      rotation: {
+        x: seed.rotation.x,
+        y: seed.rotation.y,
+        z: seed.rotation.z,
+        w: seed.rotation.w,
+      },
+      gazeRadius: seed.gazeRadius,
+      maxDistance: seed.maxDistance,
+      screenWidth: seed.screenWidth,
+      screenHeight: seed.screenHeight,
+      itemDefinitionIds: seed.itemDefinitionIds,
+    });
+  }
+
   return {
     rooms: out.rooms,
     doorways: [],
@@ -541,6 +634,7 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     avmsMarkers,
     weaponShops,
     outfitters,
+    foodShops,
     npcSpawners: out.npcSpawners,
     npcWaypoints: out.npcWaypoints,
     npcPlacements: out.npcPlacements,

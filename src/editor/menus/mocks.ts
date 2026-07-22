@@ -1,6 +1,7 @@
 import type { InventoryState, ItemDefinition } from '../../player/inventory/types';
 import type { AvmsShipRecord } from '../../render/effects/hud/avms_terminal';
 import type {
+  StationFoodShopMarker,
   StationOutfittersMarker,
   StationWeaponShopMarker,
 } from '../../world/station';
@@ -19,6 +20,34 @@ export const MOCK_CATALOG: ItemDefinition[] = [
     stackMax: 10,
     costArc: 85,
     rarity: 'common',
+  },
+  {
+    id: 'mock-ration',
+    name: 'Field Ration Pack',
+    description: 'Standard-issue nutrient ration for long hauls.',
+    itemType: 'consumable',
+    subType: 'food',
+    prefabId: null,
+    iconUrl: null,
+    stackMax: 20,
+    costArc: 50,
+    rarity: 'common',
+    hungerRestore01: 0.35,
+    thirstRestore01: 0,
+  },
+  {
+    id: 'mock-water',
+    name: 'Water Flask',
+    description: 'Reusable hydration flask with a built-in purifier.',
+    itemType: 'consumable',
+    subType: 'drink',
+    prefabId: null,
+    iconUrl: null,
+    stackMax: 10,
+    costArc: 25,
+    rarity: 'common',
+    hungerRestore01: 0,
+    thirstRestore01: 0.5,
   },
   {
     id: 'mock-carbine',
@@ -222,6 +251,21 @@ export const MOCK_WEAPON_SHOP: StationWeaponShopMarker = {
 export const MOCK_OUTFITTERS: StationOutfittersMarker = {
   id: 'mock-outfitters',
   label: 'Mock Outfitters',
+  right: 0,
+  up: 0,
+  forward: 0,
+  rotation: IDENTITY_ROT,
+  gazeRadius: 0.4,
+  maxDistance: 3,
+  screenWidth: 1.2,
+  screenHeight: 0.8,
+  itemDefinitionIds: [],
+};
+
+export const MOCK_FOOD_SHOP: StationFoodShopMarker = {
+  id: 'mock-canteen',
+  label: 'Mock Canteen',
+  catalogMode: 'both',
   right: 0,
   up: 0,
   forward: 0,

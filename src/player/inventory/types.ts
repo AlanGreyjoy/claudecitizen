@@ -33,6 +33,10 @@ export interface ItemDefinition {
   stackMax: number;
   costArc: number;
   rarity: string;
+  /** Present for consumables that restore hunger (0..1). */
+  hungerRestore01?: number;
+  /** Present for consumables that restore thirst (0..1). */
+  thirstRestore01?: number;
   /** Present for weapons. */
   weaponSlotType?: WeaponSlotType;
   /** Present for backpacks. */

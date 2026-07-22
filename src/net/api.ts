@@ -269,11 +269,26 @@ export interface InventoryEquipResponse {
   inventory: InventoryState;
 }
 
-/** Buy a weapon into personal inventory (weapon shop terminals). */
+/** Buy a shop item into personal inventory (weapons, gear, consumables). */
 export function purchaseInventoryItem(
   itemDefinitionId: string,
 ): Promise<InventoryPurchaseResponse> {
   return requestJson<InventoryPurchaseResponse>('/game/inventory/purchase', {
+    method: 'POST',
+    body: JSON.stringify({ itemDefinitionId }),
+  });
+}
+
+export interface InventoryConsumeResponse {
+  inventory: InventoryState;
+  vitals: PlayerSurvivalVitals;
+}
+
+/** Use a consumable to restore hunger/thirst reserves. */
+export function consumeInventoryItem(
+  itemDefinitionId: string,
+): Promise<InventoryConsumeResponse> {
+  return requestJson<InventoryConsumeResponse>('/game/inventory/consume', {
     method: 'POST',
     body: JSON.stringify({ itemDefinitionId }),
   });

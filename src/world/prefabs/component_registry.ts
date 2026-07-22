@@ -257,6 +257,57 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       "Outfitters screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy backpacks and gear for ARC.",
   },
   {
+    type: "food-shop",
+    label: "Food Shop",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "food-shop",
+      id: "food-shop-1",
+      label: "Browse food",
+      gazeRadius: 0.4,
+      maxDistance: 3,
+      screenWidth: 0.45,
+      screenHeight: 0.28,
+    }),
+    hint:
+      "Food vendor screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy food consumables for ARC.",
+  },
+  {
+    type: "drinks-shop",
+    label: "Drinks Shop",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "drinks-shop",
+      id: "drinks-shop-1",
+      label: "Browse drinks",
+      gazeRadius: 0.4,
+      maxDistance: 3,
+      screenWidth: 0.45,
+      screenHeight: 0.28,
+    }),
+    hint:
+      "Drinks vendor screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy drink consumables for ARC.",
+  },
+  {
+    type: "canteen",
+    label: "Canteen",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "canteen",
+      id: "canteen-1",
+      label: "Browse food & drinks",
+      gazeRadius: 0.4,
+      maxDistance: 3,
+      screenWidth: 0.45,
+      screenHeight: 0.28,
+    }),
+    hint:
+      "Canteen screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy food and drinks for ARC.",
+  },
+  {
     type: "point-light",
     label: "Point Light",
     kinds: ALL_KINDS,

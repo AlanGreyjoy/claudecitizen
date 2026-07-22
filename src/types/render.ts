@@ -130,6 +130,11 @@ export interface StationNpcRenderState extends CharacterRenderState {
   id: string;
   displayName: string;
   appearance: PlayerCharacterAppearanceV1;
+  /**
+   * Optional Head-bone look (yaw/pitch relative to NPC facing). Used when
+   * glancing at the local player walking by.
+   */
+  headLook?: CharacterUpperBodyAim | null;
 }
 
 export interface NetworkRenderEntity {
@@ -161,6 +166,11 @@ export interface SpikeRenderWorld {
   character?: CharacterRenderState | null;
   /** Local-only RMB weapon aim; never sourced from replicated character state. */
   weaponAimActive?: boolean;
+  /**
+   * Local-only Head-bone look toward a nearby station vendor screen.
+   * Same yaw/pitch convention as upper-body aim (relative to character facing).
+   */
+  characterHeadLook?: CharacterUpperBodyAim | null;
   cameraOrbit?: CameraOrbit;
   /** Piloting camera view; cockpit first person is the default. */
   shipCameraView?: ShipCameraView;
@@ -177,7 +187,7 @@ export interface SpikeRenderWorld {
     eyeShake: { right: number; up: number; forward: number };
   };
   /**
-   * Bunk entertainment-screen focus (FOV zoom + dolly). Applied in bed mode.
+   * Bunk entertainment-screen focus (FOV zoom + dolly). Bed mode only.
    */
   entertainmentCameraFeel?: {
     /** Delta from the camera's base FOV (degrees; negative = zoom in). */

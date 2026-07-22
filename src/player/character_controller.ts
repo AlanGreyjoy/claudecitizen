@@ -31,6 +31,7 @@ import {
   resolveWalkFacing,
   resolveWalkInputIntent,
 } from "./character_locomotion";
+import type { ProRifleGait } from "./animation";
 import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 import { getCharacterSettings } from "./character_settings";
 
@@ -118,6 +119,12 @@ export interface LocomotionMotionInput {
   isMoving: boolean;
   desiredDirection: Vec3;
   moveSpeed: number;
+  /** Camera forward on the walk plane — used for rifle 8-way when camera-locked. */
+  cameraForward?: Vec3;
+  cameraLockedFacing?: boolean;
+  crouch?: boolean;
+  walk?: boolean;
+  gait?: ProRifleGait;
 }
 
 export interface LocomotionIntegrationResult {
@@ -215,13 +222,26 @@ export function integrateCharacterLocomotion(
     }
   }
 
-  const animation = animationFromState(
-    { jumpPhase },
-    motion.isMoving,
-    motion.wantsSprint,
+  const facingBasis =
+    motion.cameraLockedFacing && (motion.isMoving || aiming)
+      ? (motion.cameraForward ?? motion.desiredDirection)
+      : motion.isMoving
+        ? motion.desiredDirection
+        : motion.cameraForward ?? motion.desiredDirection;
+
+  const animation = animationFromState({
+    jumpPhase,
+    isMoving: motion.isMoving,
+    isSprinting: motion.wantsSprint,
     stanceId,
     aiming,
-  );
+    crouch: Boolean(motion.crouch),
+    walk: Boolean(motion.walk),
+    gait: motion.gait,
+    moveDirection: motion.desiredDirection,
+    facing: facingBasis,
+    up,
+  });
 
   return {
     animation,
@@ -342,6 +362,7 @@ export function updateCharacterState(
     cameraYawRadians,
   );
   const cameraForward = movementDirection(state.position, 0, 1, cameraYawRadians);
+  const cameraLockedFacing = stanceId === "rifle";
 
   const gravity = planet.gravityMetersPerSecond2 ?? 9.8;
   const motion = integrateCharacterLocomotion(
@@ -352,6 +373,11 @@ export function updateCharacterState(
       isMoving: intent.isMoving,
       desiredDirection,
       moveSpeed: intent.moveSpeedMetersPerSecond,
+      cameraForward,
+      cameraLockedFacing,
+      crouch: intent.isCrouching,
+      walk: intent.isWalking,
+      gait: intent.gait,
     },
     dt,
     radialUp(state.position),
@@ -414,6 +440,7 @@ export function updateCharacterState(
       up: motion.up,
       aiming,
       isMoving: intent.isMoving,
+      cameraLockedFacing,
     },
     dt,
   );

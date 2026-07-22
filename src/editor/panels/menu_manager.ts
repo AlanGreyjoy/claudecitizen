@@ -31,6 +31,7 @@ import { buildHaloBandDom } from '../../render/effects/hud/haloband_dom';
 import { createOutfitters } from '../../render/effects/hud/outfitters';
 import { createPersonalInventory } from '../../render/effects/hud/personal_inventory';
 import { createWeaponShop } from '../../render/effects/hud/weapon_shop';
+import { createFoodShop } from '../../render/effects/hud/food_shop';
 import type { PlanetSurfaceSample } from '../../types';
 import { DEFAULT_SHIP_PREFAB_ID } from '../../world/ships';
 import {
@@ -43,6 +44,7 @@ import {
   createMockInventory,
   MOCK_ARC_BALANCE,
   MOCK_AVMS_SHIPS,
+  MOCK_FOOD_SHOP,
   MOCK_OUTFITTERS,
   MOCK_WEAPON_SHOP,
 } from '../menus/mocks';
@@ -369,6 +371,35 @@ export function createMenuManagerEditor(host: HTMLElement): MenuManagerEditor {
     return { dispose: () => controller.dispose() };
   }
 
+  function mountFoodShop(): DisposablePreview {
+    const rootEl = clonePlayMenuTemplate('food-shop');
+    requireOrig(rootEl, 'food-shop-bezel').classList.add('is-flat-interactive', 'is-powered');
+    previewHost.append(rootEl);
+    const controller = createFoodShop(
+      {
+        rootEl,
+        bezelEl: requireOrig(rootEl, 'food-shop-bezel'),
+        titleEl: requireOrig(rootEl, 'food-shop-title'),
+        kickerEl: requireOrig(rootEl, 'food-shop-kicker'),
+        listEl: requireOrig(rootEl, 'food-shop-list'),
+        statusEl: requireOrig(rootEl, 'food-shop-status'),
+        balanceEl: requireOrig(rootEl, 'food-shop-balance'),
+        closeBtnEl: requireOrig(rootEl, 'food-shop-close-btn'),
+        powerBtnEl: requireOrig(rootEl, 'food-shop-power-btn'),
+      },
+      {
+        getArcBalance: () => mockBalance,
+        getInventory: () => mockInventory,
+        onPurchaseResult: (result) => {
+          mockBalance = result.arcBalance;
+          mockInventory = result.inventory;
+        },
+      },
+    );
+    controller.open({ shop: MOCK_FOOD_SHOP });
+    return { dispose: () => controller.dispose() };
+  }
+
   function mountOutfitters(): DisposablePreview {
     const rootEl = clonePlayMenuTemplate('outfitters');
     requireOrig(rootEl, 'outfitters-bezel').classList.add('is-flat-interactive', 'is-powered');
@@ -486,6 +517,9 @@ export function createMenuManagerEditor(host: HTMLElement): MenuManagerEditor {
         break;
       case 'weapon-shop':
         preview = mountWeaponShop();
+        break;
+      case 'food-shop':
+        preview = mountFoodShop();
         break;
       case 'outfitters':
         preview = mountOutfitters();

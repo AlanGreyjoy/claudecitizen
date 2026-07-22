@@ -15,6 +15,7 @@ interface CharacterAvatar {
     focusPosition: Vec3,
     nowSeconds: number,
     upperBodyAim?: CharacterUpperBodyAim | null,
+    headLook?: CharacterUpperBodyAim | null,
   ) => void;
   setEquippedInventory: (
     inventory: InventoryState | null,
@@ -36,9 +37,11 @@ export function createCharacterAvatar(
     focusPosition: Vec3,
     nowSeconds: number,
     upperBodyAim: CharacterUpperBodyAim | null = null,
+    headLook: CharacterUpperBodyAim | null = null,
   ): void {
     if (!character || instance.hasLoadError()) {
       instance.setUpperBodyAim?.(null);
+      instance.setHeadLook?.(null);
       instance.root.visible = false;
       return;
     }
@@ -46,6 +49,7 @@ export function createCharacterAvatar(
     instance.setPose(character, focusPosition, renderScale);
     instance.setAnimation(character.animation);
     instance.setUpperBodyAim?.(upperBodyAim);
+    instance.setHeadLook?.(headLook);
     instance.updateMixer(nowSeconds);
   }
 

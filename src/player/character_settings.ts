@@ -6,6 +6,8 @@ export const CHARACTER_SETTINGS_SCHEMA_VERSION = 1 as const;
 export interface CharacterSettingsV1 {
   schemaVersion: typeof CHARACTER_SETTINGS_SCHEMA_VERSION;
   walkSpeedMetersPerSecond: number;
+  /** Default on-foot move when walk toggle is off and not sprinting. */
+  runSpeedMetersPerSecond: number;
   sprintSpeedMetersPerSecond: number;
   jumpSpeedMetersPerSecond: number;
 }
@@ -13,6 +15,7 @@ export interface CharacterSettingsV1 {
 export const DEFAULT_CHARACTER_SETTINGS: CharacterSettingsV1 = {
   schemaVersion: CHARACTER_SETTINGS_SCHEMA_VERSION,
   walkSpeedMetersPerSecond: 2.0,
+  runSpeedMetersPerSecond: 3.5,
   sprintSpeedMetersPerSecond: 5.3,
   /** ~1.4 m apex at Earth gravity — snappy, not moon-bounce. */
   jumpSpeedMetersPerSecond: 5.2,
@@ -45,16 +48,28 @@ export function parseCharacterSettings(value: unknown): CharacterSettingsV1 {
       `Expected character settings schema version ${CHARACTER_SETTINGS_SCHEMA_VERSION}.`,
     );
   }
+  const walkSpeedMetersPerSecond = speedValue(
+    source.walkSpeedMetersPerSecond,
+    'walkSpeedMetersPerSecond',
+  );
+  const sprintSpeedMetersPerSecond = speedValue(
+    source.sprintSpeedMetersPerSecond,
+    'sprintSpeedMetersPerSecond',
+  );
+  // Older saves omit run — default between walk and sprint.
+  const runRaw = source.runSpeedMetersPerSecond;
+  const runSpeedMetersPerSecond =
+    typeof runRaw === 'number' && Number.isFinite(runRaw)
+      ? speedValue(runRaw, 'runSpeedMetersPerSecond')
+      : Math.min(
+          MAX_SPEED,
+          Math.max(MIN_SPEED, (walkSpeedMetersPerSecond + sprintSpeedMetersPerSecond) / 2),
+        );
   return {
     schemaVersion: CHARACTER_SETTINGS_SCHEMA_VERSION,
-    walkSpeedMetersPerSecond: speedValue(
-      source.walkSpeedMetersPerSecond,
-      'walkSpeedMetersPerSecond',
-    ),
-    sprintSpeedMetersPerSecond: speedValue(
-      source.sprintSpeedMetersPerSecond,
-      'sprintSpeedMetersPerSecond',
-    ),
+    walkSpeedMetersPerSecond,
+    runSpeedMetersPerSecond,
+    sprintSpeedMetersPerSecond,
     jumpSpeedMetersPerSecond: speedValue(
       source.jumpSpeedMetersPerSecond,
       'jumpSpeedMetersPerSecond',
