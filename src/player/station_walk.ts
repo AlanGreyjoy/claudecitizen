@@ -1,11 +1,11 @@
-import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
+import { add, cross, length, normalize, scale, tangentize, vec3 } from '../math/vec3';
+import { CHARACTER_GROUND_OFFSET_METERS } from './character_controller';
 import {
   advanceJumpAnimationPhase,
   animationFromState,
-  CHARACTER_GROUND_OFFSET_METERS,
-  rotateCharacterToward,
-} from './character_controller';
-import { getCharacterSettings } from './character_settings';
+  resolveWalkFacing,
+  resolveWalkInputIntent,
+} from './character_locomotion';
 
 import type { StationPhysics } from '../physics/station_physics';
 import {
@@ -39,10 +39,6 @@ export interface StationCharacterState extends CharacterState {
   stationRoomId: string;
   /** Vertical velocity used by the Rapier kinematic character controller. */
   stationVerticalVelocity?: number;
-}
-
-function tangentize(vector: Vec3, up: Vec3): Vec3 {
-  return sub(vector, scale(up, dot(vector, up)));
 }
 
 function stationCameraForward(frame: StationFrame, cameraYawRadians: number): Vec3 {
@@ -143,18 +139,12 @@ export function updateCharacterInStation(
   gravityMetersPerSecond2: number,
   physics: StationPhysics | null,
   stanceId: WeaponAnimStanceId = 'unarmed',
+  aiming = false,
 ): StationCharacterState {
-  const moveX = input.moveX ?? 0;
-  const moveY = input.moveY ?? 0;
-  const wantsSprint = Boolean(input.sprint);
-  const desiredDirection = stationMovementDirection(frame, moveX, moveY, input.cameraYawRadians ?? 0);
-  const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
-  const settings = getCharacterSettings();
-  const moveSpeed =
-    (wantsSprint ? settings.sprintSpeedMetersPerSecond : settings.walkSpeedMetersPerSecond)
-    * moveMagnitude;
-
-  const desiredFacing = desiredDirection;
+  const intent = resolveWalkInputIntent(input);
+  const cameraYawRadians = input.cameraYawRadians ?? 0;
+  const desiredDirection = stationMovementDirection(frame, intent.moveX, intent.moveY, cameraYawRadians);
+  const cameraForward = stationMovementDirection(frame, 0, 1, cameraYawRadians);
 
   if (!physics) {
     // Physics is required for station locomotion once walk volumes are removed.
@@ -166,14 +156,14 @@ export function updateCharacterInStation(
   if (groundedBefore && verticalVelocity <= 0) {
     verticalVelocity = 0;
   }
-  const startedJump = Boolean(input.jumpPressed && groundedBefore);
+  const startedJump = Boolean(intent.wantsJump && groundedBefore);
   if (startedJump) {
-    verticalVelocity = settings.jumpSpeedMetersPerSecond;
+    verticalVelocity = intent.jumpSpeedMetersPerSecond;
   }
   verticalVelocity -= gravityMetersPerSecond2 * dt;
 
   const velocity = add(
-    scale(desiredDirection, moveSpeed),
+    scale(desiredDirection, intent.moveSpeedMetersPerSecond),
     scale(frame.up, verticalVelocity),
   );
   moveStationPlayer(physics, frame, velocity, dt);
@@ -184,17 +174,28 @@ export function updateCharacterInStation(
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   const position = getStationPlayerPosition(physics, frame);
   const local = worldToStationLocal(frame, position);
-  const forward = rotateCharacterToward(state.forward, desiredFacing, frame.up, dt);
+  const forward = resolveWalkFacing(
+    {
+      currentForward: state.forward,
+      moveDirection: desiredDirection,
+      cameraForward,
+      up: frame.up,
+      aiming,
+      isMoving: intent.isMoving,
+    },
+    dt,
+  );
 
   return {
     ...state,
     animation: animationFromState(
       jump,
-      moveMagnitude > 0.08,
-      wantsSprint,
+      intent.isMoving,
+      intent.isSprinting,
       stanceId,
+      aiming,
     ),
-    forward: length(forward) < 1e-6 ? normalize(tangentize(state.forward, frame.up)) : normalize(tangentize(forward, frame.up)),
+    forward,
     grounded: !airborne,
     jumpPhase: jump.jumpPhase,
     jumpPhaseTime: jump.jumpPhaseTime,

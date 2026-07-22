@@ -2,6 +2,7 @@ export const ANIMATION_CONTROLLER_SCHEMA_VERSION = 1 as const;
 
 export const ANIMATION_LOCOMOTION_KINDS = [
   'idle',
+  'idle_aiming',
   'walk',
   'sprint',
   'jump_start',
@@ -192,9 +193,12 @@ export function locomotionStateSlug(locomotion: AnimationLocomotionKind): string
 const PRO_RIFLE_ROOT = '/src/assets/protected/animations/pro-rifle';
 const HANDGUN_LOCOMOTION_ROOT = '/src/assets/protected/animations/handgun-locomotions';
 
-/** Measured from each in-place clip's foot-travel axis; +Z is gameplay forward. */
+/** Measured from each in-place clip's foot-travel (or aim) axis; +Z is gameplay forward. */
 const PRO_RIFLE_YAW_OFFSETS: Readonly<Partial<Record<string, number>>> = {
   walk_forward: -30,
+  // The aim-idle pose holds the rifle ~55deg left of the root's facing;
+  // rotate the clip so the barrel squares up with the camera.
+  idle_aiming: -55,
 };
 const HANDGUN_YAW_OFFSETS: Readonly<Partial<Record<string, number>>> = {
   pistol_walk: -27,
@@ -204,6 +208,7 @@ const HANDGUN_YAW_OFFSETS: Readonly<Partial<Record<string, number>>> = {
 /** Primary rifle locomotion → Pro Rifle clip (forward / jump axis). */
 const PRO_RIFLE_LOCOMOTION: Record<AnimationLocomotionKind, string> = {
   idle: 'idle',
+  idle_aiming: 'idle_aiming',
   walk: 'walk_forward',
   sprint: 'sprint_forward',
   jump_start: 'jump_up',
@@ -214,6 +219,8 @@ const PRO_RIFLE_LOCOMOTION: Record<AnimationLocomotionKind, string> = {
 /** Primary pistol locomotion → handgun-locomotions clip. */
 const HANDGUN_LOCOMOTION: Record<AnimationLocomotionKind, string> = {
   idle: 'pistol_idle',
+  // No handgun aim-idle clip in the pack yet; plain idle composes with spine aim.
+  idle_aiming: 'pistol_idle',
   walk: 'pistol_walk',
   sprint: 'pistol_run',
   jump_start: 'pistol_jump',
@@ -228,6 +235,7 @@ function packSourceId(prefix: string, clipStem: string): string {
 export function buildDefaultAnimationController(): AnimationControllerV1 {
   const locomotionLabels: Record<AnimationLocomotionKind, string> = {
     idle: 'Idle',
+    idle_aiming: 'Idle Aiming',
     walk: 'Walk',
     sprint: 'Sprint',
     jump_start: 'Jump Start',
@@ -236,6 +244,8 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
   };
   const ualClips: Record<AnimationLocomotionKind, string> = {
     idle: 'Idle_Loop',
+    // Unarmed has no aim-idle clip; plain idle composes with spine aim.
+    idle_aiming: 'Idle_Loop',
     walk: 'Walk_Loop',
     sprint: 'Sprint_Loop',
     jump_start: 'Jump_Start',

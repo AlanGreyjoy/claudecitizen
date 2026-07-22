@@ -1,4 +1,4 @@
-import { cross, dot, normalize, scale, sub } from '../math/vec3';
+import { cross, dot, normalize, scale, sub, tangentize } from '../math/vec3';
 import { createFlightBody } from '../flight/flight_body';
 import {
   CHARACTER_GROUND_OFFSET_METERS,
@@ -17,10 +17,6 @@ import type { CharacterState, FlightBody, Planet, Vec3 } from '../types';
 import { getShipRestHeightMeters } from './ship_layout';
 
 const CHARACTER_SPAWN_SIDE_METERS = 12;
-
-function tangentize(vector: Vec3, up: Vec3): Vec3 {
-  return sub(vector, scale(up, dot(vector, up)));
-}
 
 function yawFromForward(position: Vec3, forward: Vec3): number {
   const up = radialUp(position);

@@ -25,7 +25,7 @@
       "id": "r8-idle-aiming",
       "url": "/src/assets/protected/animations/pro-rifle/idle_aiming.glb",
       "label": "idle_aiming",
-      "yawOffsetDegrees": 0
+      "yawOffsetDegrees": -55
     },
     {
       "id": "r8-idle-crouching",
@@ -406,6 +406,14 @@
       "sourceId": "ual"
     },
     {
+      "id": "unarmed-idle-aiming",
+      "label": "Unarmed Idle Aiming",
+      "locomotion": "idle_aiming",
+      "stanceId": "unarmed",
+      "clipName": "Idle_Loop",
+      "sourceId": "ual"
+    },
+    {
       "id": "unarmed-walk",
       "label": "Unarmed Walk",
       "locomotion": "walk",
@@ -454,6 +462,14 @@
       "sourceId": "r8-idle"
     },
     {
+      "id": "rifle-idle-aiming",
+      "label": "Rifle Idle Aiming",
+      "locomotion": "idle_aiming",
+      "stanceId": "rifle",
+      "clipName": "idle_aiming",
+      "sourceId": "r8-idle-aiming"
+    },
+    {
       "id": "rifle-walk",
       "label": "Rifle Walk",
       "locomotion": "walk",
@@ -500,6 +516,14 @@
       "stanceId": "pistol",
       "clipName": "Pistol_Idle_Loop",
       "sourceId": "hg-pistol-walk"
+    },
+    {
+      "id": "pistol-idle-aiming",
+      "label": "Pistol Idle Aiming",
+      "locomotion": "idle_aiming",
+      "stanceId": "pistol",
+      "clipName": "pistol_idle",
+      "sourceId": "hg-pistol-idle"
     },
     {
       "id": "pistol-walk",

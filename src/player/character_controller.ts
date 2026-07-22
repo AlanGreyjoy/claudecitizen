@@ -8,6 +8,7 @@ import {
   rotateAroundAxis,
   scale,
   sub,
+  tangentize,
   vec3,
 } from "../math/vec3";
 import {
@@ -24,10 +25,12 @@ import type {
   Vec3,
 } from "../types";
 import {
-  getDefaultAnimationController,
-  locomotionFromGameplay,
-  resolveControllerClip,
-} from "./animation";
+  animationFromState,
+  JUMP_LAND_SECONDS,
+  JUMP_START_SECONDS,
+  resolveWalkFacing,
+  resolveWalkInputIntent,
+} from "./character_locomotion";
 import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 import { getCharacterSettings } from "./character_settings";
 
@@ -35,9 +38,6 @@ export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
 const AIR_CONTROL = 0.18;
 /** Extra pull on the way down so hang time doesn't feel floaty. */
 const FALL_GRAVITY_MULTIPLIER = 1.7;
-const JUMP_START_SECONDS = 0.18;
-const JUMP_LAND_SECONDS = 0.18;
-const TURN_SPEED_RADIANS_PER_SECOND = 10;
 export const ORBIT_PITCH_LIMIT = 1.15;
 export const FIRST_PERSON_PITCH_LIMIT = 1.5;
 export const CHARACTER_EYE_HEIGHT_METERS = 1.62;
@@ -73,10 +73,6 @@ function tangentBasis(position: Vec3): TangentBasis {
   return { east, north, up };
 }
 
-function tangentize(vector: Vec3, up: Vec3): Vec3 {
-  return sub(vector, scale(up, dot(vector, up)));
-}
-
 function forwardFromYaw(position: Vec3, yawRadians: number): Vec3 {
   const { east, north } = tangentBasis(position);
   return normalize(
@@ -99,53 +95,6 @@ function movementDirection(
   return normalize(tangentDesired);
 }
 
-const UAL_FALLBACK: Record<string, string> = {
-  jump_start: "Jump_Start",
-  jump_loop: "Jump_Loop",
-  jump_land: "Jump_Land",
-  sprint: "Sprint_Loop",
-  walk: "Walk_Loop",
-  idle: "Idle_Loop",
-};
-
-export function animationFromState(
-  state: Pick<CharacterState, "jumpPhase">,
-  isMoving: boolean,
-  isSprinting: boolean,
-  stanceId: WeaponAnimStanceId = "unarmed",
-): string {
-  const locomotion = locomotionFromGameplay(state.jumpPhase, isMoving, isSprinting);
-  const clip = resolveControllerClip(getDefaultAnimationController(), locomotion, stanceId);
-  return clip ?? UAL_FALLBACK[locomotion] ?? "Idle_Loop";
-}
-
-/** Turn a character across the tangent plane without stalling at a 180-degree reversal. */
-export function rotateCharacterToward(
-  currentForward: Vec3,
-  desiredForward: Vec3,
-  up: Vec3,
-  dt: number,
-): Vec3 {
-  const tangentDesired = tangentize(desiredForward, up);
-  if (length(tangentDesired) < 1e-6) {
-    return normalize(tangentize(currentForward, up));
-  }
-
-  const desired = normalize(tangentDesired);
-  const tangentCurrent = tangentize(currentForward, up);
-  if (length(tangentCurrent) < 1e-6) return desired;
-
-  const current = normalize(tangentCurrent);
-  const turnAxis = normalize(up);
-  const signedAngle = Math.atan2(
-    dot(turnAxis, cross(current, desired)),
-    clamp(dot(current, desired), -1, 1),
-  );
-  const maxTurn = Math.max(0, dt) * TURN_SPEED_RADIANS_PER_SECOND;
-  const turn = clamp(signedAngle, -maxTurn, maxTurn);
-  return normalize(rotateAroundAxis(current, turnAxis, turn));
-}
-
 function clampToGround(position: Vec3, surfaceRadiusMeters: number): Vec3 {
   return surfacePointFromPosition(
     position,
@@ -161,42 +110,6 @@ function updateGroundJumpState(
   return state.jumpPhaseTime + dt >= JUMP_LAND_SECONDS
     ? "grounded"
     : "jump-land";
-}
-
-export interface JumpAnimationPhaseState {
-  jumpPhase: JumpPhase;
-  jumpPhaseTime: number;
-}
-
-/** Advance animation-only jump phases for Rapier-controlled walkers. */
-export function advanceJumpAnimationPhase(
-  state: Pick<CharacterState, "jumpPhase" | "jumpPhaseTime">,
-  dt: number,
-  airborne: boolean,
-  startedJump: boolean,
-): JumpAnimationPhaseState {
-  if (startedJump) return { jumpPhase: "jump-start", jumpPhaseTime: 0 };
-
-  const elapsed = state.jumpPhase === "grounded"
-    ? 0
-    : state.jumpPhaseTime + Math.max(0, dt);
-  if (airborne) {
-    if (state.jumpPhase === "jump-start" && elapsed < JUMP_START_SECONDS) {
-      return { jumpPhase: "jump-start", jumpPhaseTime: elapsed };
-    }
-    return {
-      jumpPhase: "jump-loop",
-      jumpPhaseTime: state.jumpPhase === "jump-loop" ? elapsed : 0,
-    };
-  }
-
-  if (state.jumpPhase === "jump-start" || state.jumpPhase === "jump-loop") {
-    return { jumpPhase: "jump-land", jumpPhaseTime: 0 };
-  }
-  if (state.jumpPhase === "jump-land" && elapsed < JUMP_LAND_SECONDS) {
-    return { jumpPhase: "jump-land", jumpPhaseTime: elapsed };
-  }
-  return { jumpPhase: "grounded", jumpPhaseTime: 0 };
 }
 
 export interface LocomotionMotionInput {
@@ -236,6 +149,7 @@ export function integrateCharacterLocomotion(
   gravityMetersPerSecond2: number,
   callbacks: LocomotionCallbacks,
   stanceId: WeaponAnimStanceId = "unarmed",
+  aiming = false,
 ): LocomotionIntegrationResult {
   let position = state.position;
   let velocity = state.velocity;
@@ -306,6 +220,7 @@ export function integrateCharacterLocomotion(
     motion.isMoving,
     motion.wantsSprint,
     stanceId,
+    aiming,
   );
 
   return {
@@ -416,35 +331,34 @@ export function updateCharacterState(
   seed: number,
   propCollision?: PlanetPropCollision | null,
   stanceId: WeaponAnimStanceId = "unarmed",
+  aiming = false,
 ): CharacterState {
-  const moveX = input.moveX ?? 0;
-  const moveY = input.moveY ?? 0;
-  const wantsSprint = Boolean(input.sprint);
-  const wantsJump = Boolean(input.jumpPressed);
+  const intent = resolveWalkInputIntent(input);
+  const cameraYawRadians = input.cameraYawRadians ?? 0;
   const desiredDirection = movementDirection(
     state.position,
-    moveX,
-    moveY,
-    input.cameraYawRadians ?? 0,
+    intent.moveX,
+    intent.moveY,
+    cameraYawRadians,
   );
-  const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
-  const settings = getCharacterSettings();
-  const moveSpeed =
-    (wantsSprint
-      ? settings.sprintSpeedMetersPerSecond
-      : settings.walkSpeedMetersPerSecond) * moveMagnitude;
+  const cameraForward = movementDirection(state.position, 0, 1, cameraYawRadians);
 
-  const isMoving = moveMagnitude > 0.08;
   const gravity = planet.gravityMetersPerSecond2 ?? 9.8;
   const motion = integrateCharacterLocomotion(
     state,
-    { wantsJump, wantsSprint, isMoving, desiredDirection, moveSpeed },
+    {
+      wantsJump: intent.wantsJump,
+      wantsSprint: intent.isSprinting,
+      isMoving: intent.isMoving,
+      desiredDirection,
+      moveSpeed: intent.moveSpeedMetersPerSecond,
+    },
     dt,
     radialUp(state.position),
     gravity,
     {
       onGroundedStep: () => {
-        const step = scale(desiredDirection, moveSpeed * dt);
+        const step = scale(desiredDirection, intent.moveSpeedMetersPerSecond * dt);
         const up0 = radialUp(state.position);
         const nextPosition = propCollision
           ? propCollision.filterMovement(state.position, step, up0)
@@ -489,16 +403,20 @@ export function updateCharacterState(
       sampleAirborneUp: radialUp,
     },
     stanceId,
+    aiming,
   );
 
-  const desiredFacing = desiredDirection;
-  let forward = rotateCharacterToward(state.forward, desiredFacing, motion.up, dt);
-
-  if (length(forward) < 1e-6) {
-    forward = normalize(tangentize(state.forward, motion.up));
-  } else {
-    forward = normalize(tangentize(forward, motion.up));
-  }
+  const forward = resolveWalkFacing(
+    {
+      currentForward: state.forward,
+      moveDirection: desiredDirection,
+      cameraForward,
+      up: motion.up,
+      aiming,
+      isMoving: intent.isMoving,
+    },
+    dt,
+  );
 
   return {
     animation: motion.animation,

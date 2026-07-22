@@ -36,7 +36,7 @@ import {
 } from '../../player/animation/default_controller';
 import {
   advanceJumpAnimationPhase,
-} from '../../player/character_controller';
+} from '../../player/character_locomotion';
 import {
   cloneCharacterSettings,
   DEFAULT_CHARACTER_SETTINGS,
@@ -202,6 +202,7 @@ export interface BaseCharacterEquipmentEditor {
 
 const LOCOMOTION_LABELS: Record<AnimationLocomotionKind, string> = {
   idle: 'Idle',
+  idle_aiming: 'Idle Aiming',
   walk: 'Walk',
   sprint: 'Sprint',
   jump_start: 'Jump Start',

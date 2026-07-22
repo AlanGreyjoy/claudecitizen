@@ -1,4 +1,4 @@
-import { add, cross, dot, length, normalize, scale, sub, vec3 } from '../math/vec3';
+import { add, cross, dot, length, normalize, scale, sub, tangentize, vec3 } from '../math/vec3';
 import { getShipLayout, getShipRestHeightMeters } from './ship_layout';
 import type {
   CharacterState,
@@ -20,10 +20,6 @@ export const PARKED_MAX_SPEED_METERS_PER_SECOND = 1.0;
 
 interface ShipAnchor extends Pose {
   right: Vec3;
-}
-
-function tangentize(vector: Vec3, up: Vec3): Vec3 {
-  return sub(vector, scale(up, dot(vector, up)));
 }
 
 export function getShipRight(ship: FlightBody): Vec3 {

@@ -6,16 +6,19 @@ import {
   normalize,
   scale,
   sub,
+  tangentize,
   vec3,
 } from "../math/vec3";
 import {
-  advanceJumpAnimationPhase,
-  animationFromState,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-  rotateCharacterToward,
 } from "./character_controller";
-import { getCharacterSettings } from "./character_settings";
+import {
+  advanceJumpAnimationPhase,
+  animationFromState,
+  resolveWalkFacing,
+  resolveWalkInputIntent,
+} from "./character_locomotion";
 import {
   sampleColliderGroundHeight,
   type ShipColliderRigState,
@@ -125,10 +128,6 @@ function deckSpawnCandidates(): DeckLocal[] {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function tangentize(vector: Vec3, up: Vec3): Vec3 {
-  return sub(vector, scale(up, dot(vector, up)));
 }
 
 function colliderProbeUp(localUp?: number): number {
@@ -648,23 +647,17 @@ function updateCharacterOnDeckRapier(
   physics: ShipPhysics,
   options?: DeckLocomotionOptions,
   stanceId: WeaponAnimStanceId = 'unarmed',
+  aiming = false,
 ): DeckUpdateResult {
-  const moveX = input.moveX ?? 0;
-  const moveY = input.moveY ?? 0;
-  const wantsSprint = Boolean(input.sprint);
+  const intent = resolveWalkInputIntent(input);
+  const cameraYawRadians = input.cameraYawRadians ?? 0;
   const desiredDirection = deckMovementDirection(
     ship,
-    moveX,
-    moveY,
-    input.cameraYawRadians ?? 0,
+    intent.moveX,
+    intent.moveY,
+    cameraYawRadians,
   );
-  const moveMagnitude = Math.min(1, Math.hypot(moveX, moveY));
-  const settings = getCharacterSettings();
-  const moveSpeed =
-    (wantsSprint
-      ? settings.sprintSpeedMetersPerSecond
-      : settings.walkSpeedMetersPerSecond) * moveMagnitude;
-  const desiredFacing = desiredDirection;
+  const cameraForward = deckMovementDirection(ship, 0, 1, cameraYawRadians);
 
   let verticalVelocity = state.shipVerticalVelocity ?? 0;
   const groundedBefore =
@@ -672,14 +665,14 @@ function updateCharacterOnDeckRapier(
   if (groundedBefore && verticalVelocity <= 0) {
     verticalVelocity = 0;
   }
-  const startedJump = Boolean(input.jumpPressed && groundedBefore);
+  const startedJump = Boolean(intent.wantsJump && groundedBefore);
   if (startedJump) {
-    verticalVelocity = settings.jumpSpeedMetersPerSecond;
+    verticalVelocity = intent.jumpSpeedMetersPerSecond;
   }
   verticalVelocity -= gravityMetersPerSecond2 * dt;
 
   const velocity = add(
-    scale(desiredDirection, moveSpeed),
+    scale(desiredDirection, intent.moveSpeedMetersPerSecond),
     scale(ship.up, verticalVelocity),
   );
   moveShipPlayer(physics, ship, velocity, dt);
@@ -693,7 +686,17 @@ function updateCharacterOnDeckRapier(
   const position = getShipPlayerWorldPosition(physics, ship);
   const deckLocal = { right: localPose.right, forward: localPose.forward };
   const bound = findCameraBoundAt(deckLocal);
-  const forward = rotateCharacterToward(state.forward, desiredFacing, ship.up, dt);
+  const forward = resolveWalkFacing(
+    {
+      currentForward: state.forward,
+      moveDirection: desiredDirection,
+      cameraForward,
+      up: ship.up,
+      aiming,
+      isMoving: intent.isMoving,
+    },
+    dt,
+  );
   const flags = options?.suppressDeckExit
     ? {
         leftDeck: false,
@@ -715,16 +718,14 @@ function updateCharacterOnDeckRapier(
     state: {
       animation: animationFromState(
         jump,
-        moveMagnitude > 0.08,
-        wantsSprint,
+        intent.isMoving,
+        intent.isSprinting,
         stanceId,
+        aiming,
       ),
       deckLocal,
       deckZone: bound?.id ?? state.deckZone,
-      forward:
-        length(forward) < 1e-6
-          ? normalize(tangentize(state.forward, ship.up))
-          : normalize(tangentize(forward, ship.up)),
+      forward,
       grounded: !airborne,
       jumpPhase: jump.jumpPhase,
       jumpPhaseTime: jump.jumpPhaseTime,
@@ -748,6 +749,7 @@ export function updateCharacterOnDeck(
   physics?: ShipPhysics | null,
   options?: DeckLocomotionOptions,
   stanceId: WeaponAnimStanceId = 'unarmed',
+  aiming = false,
 ): DeckUpdateResult {
   if (!physics) {
     return {
@@ -765,5 +767,6 @@ export function updateCharacterOnDeck(
     physics,
     options,
     stanceId,
+    aiming,
   );
 }

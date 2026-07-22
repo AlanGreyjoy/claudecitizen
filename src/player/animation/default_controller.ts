@@ -40,11 +40,12 @@ export function locomotionFromGameplay(
   jumpPhase: JumpPhase,
   isMoving: boolean,
   isSprinting: boolean,
+  aiming = false,
 ): AnimationLocomotionKind {
   if (jumpPhase === 'jump-start') return 'jump_start';
   if (jumpPhase === 'jump-loop') return 'jump_loop';
   if (jumpPhase === 'jump-land') return 'jump_land';
   if (isMoving && isSprinting) return 'sprint';
   if (isMoving) return 'walk';
-  return 'idle';
+  return aiming ? 'idle_aiming' : 'idle';
 }

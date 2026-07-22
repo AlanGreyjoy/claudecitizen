@@ -791,6 +791,11 @@ export function createGameLoop({
     return stanceIdForWeaponSlot(activeWeaponSlotId);
   }
 
+  /** RMB aim with a drawn weapon → blend idle into the stance's aim-idle clip. */
+  function currentWeaponAiming() {
+    return activeWeaponSlotId !== null && controls.isSecondaryClickHeld();
+  }
+
   function applyWeaponSlotPress(press: 1 | 2 | 3 | null): void {
     if (!press) return;
     const loadout =
@@ -1413,6 +1418,7 @@ export function createGameLoop({
         planet.gravityMetersPerSecond2 ?? 9.8,
         physics,
         currentAnimStance(),
+        currentWeaponAiming(),
       );
       updateBuildTool(activeRuntime);
       const tool = activeRuntime.controller.getContext().toolMode;
@@ -1443,6 +1449,7 @@ export function createGameLoop({
       planet.gravityMetersPerSecond2 ?? 9.8,
       physics,
       currentAnimStance(),
+      currentWeaponAiming(),
     );
 
     if (tryEnterShipPadInterest()) return;
@@ -1793,6 +1800,7 @@ export function createGameLoop({
         suppressDeckExit: likelyExterior,
       },
       currentAnimStance(),
+      currentWeaponAiming(),
     );
     world.character = result.state;
 
@@ -1993,6 +2001,7 @@ export function createGameLoop({
           seed,
           planetPhysics,
           currentAnimStance(),
+          currentWeaponAiming(),
         );
         if (!tryEnterShipPadInterest()) {
           world.prompt = handleRampOutside(actions.interactPressed) ?? "";

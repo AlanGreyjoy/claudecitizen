@@ -63,3 +63,8 @@ export function rotateAroundAxis(v: Vec3, axis: Vec3, radians: number): Vec3 {
   const term3 = scale(unitAxis, dot(unitAxis, v) * (1 - cos));
   return add(add(term1, term2), term3);
 }
+
+/** Project a vector onto the plane perpendicular to `up`. */
+export function tangentize(vector: Vec3, up: Vec3): Vec3 {
+  return sub(vector, scale(up, dot(vector, up)));
+}
