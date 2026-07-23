@@ -431,10 +431,12 @@ export function createSpikeRenderer(
       renderMode,
       up,
       dayNightInfluence,
-      lighting.sun,
-      lighting.sunMesh,
-      lighting.moonMesh,
-      lighting.moonLight,
+      {
+        sun: lighting.sun,
+        sunMesh: lighting.sunMesh,
+        moonMesh: lighting.moonMesh,
+        moonLight: lighting.moonLight,
+      },
     );
     updateSunIntensity(lighting.sun, sunState.rawDaylight, spaceFactor);
 
@@ -449,8 +451,10 @@ export function createSpikeRenderer(
       altitudeFactor,
       shipUp,
       shipForward,
-      { frame: stationFrame, roomId: world.stationRoomId ?? null },
-      dt,
+      {
+        station: { frame: stationFrame, roomId: world.stationRoomId ?? null },
+        dt,
+      },
     );
     // Approach prefetch uses ship velocity (character render state has no
     // velocity). On foot, selection alone covers the local ring.

@@ -748,7 +748,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       { ...input, jumpPressed: actions.jumpPressed },
       dt,
       SANDBOX_GRAVITY,
-      colliderRig,
       shipPhysics,
     );
     character = result.state;

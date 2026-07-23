@@ -73,15 +73,27 @@ function collectLayerInstances(
   planet: Planet,
   seed: number,
   patch: PlanetPreviewPatch,
-  sampleCount: number,
-  salt: number,
-  assetCount: number,
-  gapMeters: number,
-  visualScale: number,
-  baseOffsets: readonly number[],
-  accept: (surface: ReturnType<typeof samplePlanetSurface>, i: number) => boolean,
-  makeScale: (surface: ReturnType<typeof samplePlanetSurface>, i: number) => number,
+  layer: {
+    sampleCount: number;
+    salt: number;
+    assetCount: number;
+    gapMeters: number;
+    visualScale: number;
+    baseOffsets: readonly number[];
+    accept: (surface: ReturnType<typeof samplePlanetSurface>, i: number) => boolean;
+    makeScale: (surface: ReturnType<typeof samplePlanetSurface>, i: number) => number;
+  },
 ): StoredVegetationInstance[] {
+  const {
+    sampleCount,
+    salt,
+    assetCount,
+    gapMeters,
+    visualScale,
+    baseOffsets,
+    accept,
+    makeScale,
+  } = layer;
   if (sampleCount <= 0 || assetCount <= 0) return [];
   const instances: StoredVegetationInstance[] = [];
   const grid = createPlacementGrid(gapMeters);
@@ -159,55 +171,49 @@ export function collectPreviewVegetation(
     treeSettings.density,
   );
 
-  const grass = collectLayerInstances(
-    planet,
-    seed,
-    patch,
-    grassSampleCount,
-    8201,
-    catalog.grass.length,
-    grassSettings.gapMeters,
-    PREVIEW_GRASS_VISUAL_SCALE,
-    catalog.grass.map((asset) => asset.baseOffsetY),
-    (surface, i) => {
+  const grass = collectLayerInstances(planet, seed, patch, {
+    sampleCount: grassSampleCount,
+    salt: 8201,
+    assetCount: catalog.grass.length,
+    gapMeters: grassSettings.gapMeters,
+    visualScale: PREVIEW_GRASS_VISUAL_SCALE,
+    baseOffsets: catalog.grass.map((asset) => asset.baseOffsetY),
+    accept: (surface, i) => {
       if (!(surface.biome === 'plains' || surface.biome === 'forest')) {
         return false;
       }
       if (surface.grassDensity <= 0) return false;
       return unitHash(seed, 8205, i) <= Math.min(1, surface.grassDensity * 1.4);
     },
-    (surface, i) =>
+    makeScale: (surface, i) =>
       lerp(
         grassSettings.minScale,
         grassSettings.maxScale,
         clamp01(surface.grassDensity * 0.35 + unitHash(seed, 8203, i) * 0.8),
       ),
-  );
+  });
 
-  const trees = collectLayerInstances(
-    planet,
-    seed,
-    patch,
-    treeSampleCount,
-    8301,
-    catalog.trees.length,
-    treeSettings.gapMeters,
-    PREVIEW_TREE_VISUAL_SCALE,
-    catalog.trees.map((asset) => asset.baseOffsetY),
-    (surface, i) => {
+  const trees = collectLayerInstances(planet, seed, patch, {
+    sampleCount: treeSampleCount,
+    salt: 8301,
+    assetCount: catalog.trees.length,
+    gapMeters: treeSettings.gapMeters,
+    visualScale: PREVIEW_TREE_VISUAL_SCALE,
+    baseOffsets: catalog.trees.map((asset) => asset.baseOffsetY),
+    accept: (surface, i) => {
       if (!(surface.biome === 'plains' || surface.biome === 'forest')) {
         return false;
       }
       if (surface.treeDensity <= 0) return false;
       return unitHash(seed, 8305, i) <= Math.min(1, surface.treeDensity * 1.8);
     },
-    (surface, i) =>
+    makeScale: (surface, i) =>
       lerp(
         treeSettings.minScale,
         treeSettings.maxScale,
         clamp01(surface.treeDensity * 0.45 + unitHash(seed, 8303, i) * 0.7),
       ),
-  );
+  });
 
   return { grass, trees };
 }

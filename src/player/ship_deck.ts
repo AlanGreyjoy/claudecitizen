@@ -638,6 +638,8 @@ export interface DeckLocomotionOptions {
   exteriorPlanetGrounded?: boolean;
   /** Skip freefall eject (parked exterior absorbs it via planet snap). */
   suppressDeckExit?: boolean;
+  stanceId?: WeaponAnimStanceId;
+  aiming?: boolean;
 }
 
 function updateCharacterOnDeckRapier(
@@ -648,9 +650,9 @@ function updateCharacterOnDeckRapier(
   gravityMetersPerSecond2: number,
   physics: ShipPhysics,
   options?: DeckLocomotionOptions,
-  stanceId: WeaponAnimStanceId = 'unarmed',
-  aiming = false,
 ): DeckUpdateResult {
+  const stanceId = options?.stanceId ?? 'unarmed';
+  const aiming = options?.aiming ?? false;
   const intent = resolveWalkInputIntent(input);
   const poseAiming = resolveWalkAiming(aiming, intent);
   const cameraYawRadians = input.cameraYawRadians ?? 0;
@@ -750,11 +752,8 @@ export function updateCharacterOnDeck(
   input: CharacterInput,
   dt: number,
   gravityMetersPerSecond2: number,
-  _colliderRig?: ShipColliderRigState,
   physics?: ShipPhysics | null,
   options?: DeckLocomotionOptions,
-  stanceId: WeaponAnimStanceId = 'unarmed',
-  aiming = false,
 ): DeckUpdateResult {
   if (!physics) {
     return {
@@ -771,7 +770,5 @@ export function updateCharacterOnDeck(
     gravityMetersPerSecond2,
     physics,
     options,
-    stanceId,
-    aiming,
   );
 }

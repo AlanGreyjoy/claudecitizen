@@ -103,14 +103,13 @@ export function updateDeckMode(
     { ...characterInput, jumpPressed: actions.jumpPressed },
     dt,
     ctx.planet.gravityMetersPerSecond2 ?? 9.8,
-    colliderRig,
     usesColliderDeck() ? ctx.shipPhysics : null,
     {
       exteriorPlanetGrounded,
       suppressDeckExit: likelyExterior,
+      stanceId: deps.combat.currentAnimStance(),
+      aiming: deps.combat.currentWeaponPoseAiming(characterInput),
     },
-    deps.combat.currentAnimStance(),
-    deps.combat.currentWeaponPoseAiming(characterInput),
   );
   ctx.world.character = result.state;
 

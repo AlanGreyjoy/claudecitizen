@@ -174,9 +174,13 @@ export function updateCameraRig(
   altitudeFactor: number,
   shipUp: Vec3,
   shipForward: Vec3,
-  station: StationCameraContext | null = null,
-  dt = 0.016,
+  options: {
+    station?: StationCameraContext | null;
+    dt?: number;
+  } = {},
 ): void {
+  const station = options.station ?? null;
+  const dt = options.dt ?? 0.016;
   const {
     cameraOrbit = { pitchRadians: -0.35, yawRadians: 0, zoomDistance: 7.4 },
     character = null,

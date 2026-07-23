@@ -144,13 +144,21 @@ function buildInstanceEntries(
   planet: Planet,
   seed: number,
   sampleCount: number,
-  allowPlacement: AllowPlacementFn,
-  makeScale: MakeScaleFn,
-  getNormalOffset: GetNormalOffsetFn | null = null,
-  makeBasisNormal: MakeBasisNormalFn | null = null,
-  makeVariantIndex: MakeVariantIndexFn | null = null,
-  minimumGapMeters = 0,
+  placement: {
+    allowPlacement: AllowPlacementFn;
+    makeScale: MakeScaleFn;
+    getNormalOffset?: GetNormalOffsetFn | null;
+    makeBasisNormal?: MakeBasisNormalFn | null;
+    makeVariantIndex?: MakeVariantIndexFn | null;
+    minimumGapMeters?: number;
+  },
 ): StoredVegetationInstance[] {
+  const allowPlacement = placement.allowPlacement;
+  const makeScale = placement.makeScale;
+  const getNormalOffset = placement.getNormalOffset ?? null;
+  const makeBasisNormal = placement.makeBasisNormal ?? null;
+  const makeVariantIndex = placement.makeVariantIndex ?? null;
+  const minimumGapMeters = placement.minimumGapMeters ?? 0;
   const entries: StoredVegetationInstance[] = [];
   const faceIndex = FACE_INDEX[tileInfo.face] ?? 0;
   const placementGrid = createPlacementGrid(minimumGapMeters);
@@ -272,28 +280,29 @@ export function collectTileVegetationData(
       planet,
       seed,
       grassSampleCount,
-      (surface, i) =>
-        (surface.biome === 'plains' || surface.biome === 'forest') &&
-        hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, i, 71) <
-          Math.min(1, surface.grassDensity * 1.35),
-      (surface, i) =>
-        lerp(
-          grassSettings.minScale,
-          grassSettings.maxScale,
-          clamp01(
-            surface.grassDensity * 0.35 +
-              hash01(seed, tileInfo.x, tileInfo.y, i, 83) * 0.8,
+      {
+        allowPlacement: (surface, i) =>
+          (surface.biome === 'plains' || surface.biome === 'forest') &&
+          hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, i, 71) <
+            Math.min(1, surface.grassDensity * 1.35),
+        makeScale: (surface, i) =>
+          lerp(
+            grassSettings.minScale,
+            grassSettings.maxScale,
+            clamp01(
+              surface.grassDensity * 0.35 +
+                hash01(seed, tileInfo.x, tileInfo.y, i, 83) * 0.8,
+            ),
           ),
-        ),
-      (_surface, _i, variantIndex) =>
-        assets.grass[variantIndex]?.baseOffsetY ?? 0,
-      null,
-      (_surface, _i) =>
-        Math.floor(
-          hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, _i, 313) *
-            assets.grass.length,
-        ),
-      grassSettings.gapMeters,
+        getNormalOffset: (_surface, _i, variantIndex) =>
+          assets.grass[variantIndex]?.baseOffsetY ?? 0,
+        makeVariantIndex: (_surface, _i) =>
+          Math.floor(
+            hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, _i, 313) *
+              assets.grass.length,
+          ),
+        minimumGapMeters: grassSettings.gapMeters,
+      },
     );
   }
 
@@ -305,28 +314,31 @@ export function collectTileVegetationData(
       planet,
       seed,
       treeSampleCount,
-      (surface, i) =>
-        (surface.biome === 'plains' || surface.biome === 'forest') &&
-        surface.treeDensity > 0 &&
-        hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, i, 101) <
-          Math.min(1, surface.treeDensity * 1.18),
-      (surface, i) =>
-        lerp(
-          treeSettings.minScale,
-          treeSettings.maxScale,
-          clamp01(
-            surface.treeDensity * 0.55 +
-              hash01(seed, tileInfo.x, tileInfo.y, i, 131) * 0.75,
+      {
+        allowPlacement: (surface, i) =>
+          (surface.biome === 'plains' || surface.biome === 'forest') &&
+          surface.treeDensity > 0 &&
+          hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, i, 101) <
+            Math.min(1, surface.treeDensity * 1.18),
+        makeScale: (surface, i) =>
+          lerp(
+            treeSettings.minScale,
+            treeSettings.maxScale,
+            clamp01(
+              surface.treeDensity * 0.55 +
+                hash01(seed, tileInfo.x, tileInfo.y, i, 131) * 0.75,
+            ),
           ),
-        ),
-      (_surface, _i, variantIndex) => assets.trees[variantIndex]?.baseOffsetY ?? 0,
-      (_surface, direction) => direction,
-      (_surface, _i) =>
-        Math.floor(
-          hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, _i, 199) *
-            assets.trees.length,
-        ),
-      treeSettings.gapMeters,
+        getNormalOffset: (_surface, _i, variantIndex) =>
+          assets.trees[variantIndex]?.baseOffsetY ?? 0,
+        makeBasisNormal: (_surface, direction) => direction,
+        makeVariantIndex: (_surface, _i) =>
+          Math.floor(
+            hash01(seed, tileInfo.level, tileInfo.x, tileInfo.y, _i, 199) *
+              assets.trees.length,
+          ),
+        minimumGapMeters: treeSettings.gapMeters,
+      },
     );
   }
 

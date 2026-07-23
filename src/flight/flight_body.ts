@@ -247,8 +247,6 @@ function integrateLinear(
   dt: number,
   frame: { forward: Vec3; right: Vec3; up: Vec3 },
   stats: ReturnType<typeof resolveThrustStats>,
-  _gravityUp: Vec3,
-  _gravityMps2: number,
   atmosphereFactor: number,
   dragSeaLevel: number,
   grounded: boolean,
@@ -369,7 +367,6 @@ export function integrateFlightInEnvironment(
   const stats = resolveThrustStats(options);
 
   let gravityUp: Vec3;
-  let gravityMps2: number;
   let atmosphereFactor: number;
   let dragSeaLevel: number;
   let grounded: boolean;
@@ -377,7 +374,6 @@ export function integrateFlightInEnvironment(
   if (environment.kind === 'planet') {
     const { planet, seed } = environment;
     gravityUp = radialUp(body.position);
-    gravityMps2 = planet.gravityMetersPerSecond2 ?? 9.8;
     const currentSurface = sampleRenderablePlanetSurface(planet, seed, body.position);
     // Match flat sandbox: gear-rest altitude counts as grounded, not belly-on-dirt.
     const gearRestAltitude =
@@ -392,7 +388,6 @@ export function integrateFlightInEnvironment(
     dragSeaLevel = planet.dragSeaLevel ?? 0.015;
   } else {
     gravityUp = vec3(0, 1, 0);
-    gravityMps2 = environment.gravityMps2;
     const altitude = body.position.y - environment.groundY;
     grounded =
       body.grounded ??
@@ -417,8 +412,6 @@ export function integrateFlightInEnvironment(
     dt,
     oriented,
     stats,
-    gravityUp,
-    gravityMps2,
     atmosphereFactor,
     dragSeaLevel,
     grounded,

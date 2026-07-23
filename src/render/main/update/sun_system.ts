@@ -62,11 +62,14 @@ export function updateSunSystem(
   renderMode: RenderMode,
   up: Vec3,
   dayNightInfluence: number,
-  sun: THREE.DirectionalLight,
-  sunMesh: THREE.Mesh,
-  moonMesh?: THREE.Mesh,
-  moonLight?: THREE.DirectionalLight,
+  lighting: {
+    sun: THREE.DirectionalLight;
+    sunMesh: THREE.Mesh;
+    moonMesh?: THREE.Mesh;
+    moonLight?: THREE.DirectionalLight;
+  },
 ): SunSystemState {
+  const { sun, sunMesh, moonMesh, moonLight } = lighting;
   const theta = (nowSeconds / DAY_LENGTH_SECONDS) * Math.PI * 2;
   const surfaceInfluence = clamp01(dayNightInfluence);
   const spaceInfluence = 1 - surfaceInfluence;

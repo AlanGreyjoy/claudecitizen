@@ -11,9 +11,9 @@ import * as RAPIER from "@dimforge/rapier3d";
  */
 
 /** Camera collision sphere radius. Keeps the near plane out of walls. */
-const CAMERA_OCCLUSION_RADIUS_METERS = 0.22;
+const CAMERA_OCCLUSION_RADIUS_METERS = 0.11;
 /** Extra pull-in past the first hit so the sphere never touches geometry. */
-const CAMERA_OCCLUSION_MARGIN_METERS = 0.05;
+const CAMERA_OCCLUSION_MARGIN_METERS = 0.02;
 /** Closest the occlusion clamp may bring the camera to the look pivot. */
 const CAMERA_OCCLUSION_MIN_DISTANCE_METERS = 0.35;
 /**
