@@ -35,25 +35,32 @@ export function entityTargetsGlbNode(entity: EditorEntity, nodeName: string): bo
   return (entity.components ?? []).some((component) => componentTargetsGlbNode(component, nodeName));
 }
 
+function componentReferencesAnyGlbNode(
+  component: PrefabComponent,
+  glbNodeNames: Set<string>,
+): boolean {
+  if (component.type === 'ship-door' && Array.isArray(component.nodes)) {
+    return component.nodes.some((n) => n.name && glbNodeNames.has(n.name));
+  }
+  if (component.type === 'animation' && Array.isArray(component.nodes)) {
+    return component.nodes.some((n) => n.name && glbNodeNames.has(n.name));
+  }
+  if (component.type === 'object-animation' && Array.isArray(component.nodes)) {
+    return component.nodes.some((n) => n.name && glbNodeNames.has(n.name));
+  }
+  if (component.type === 'collider' && component.node && glbNodeNames.has(component.node)) {
+    return true;
+  }
+  return false;
+}
+
 export function entityBoundToAnyGlbNode(
   entity: EditorEntity,
   glbNodeNames: Set<string>,
 ): boolean {
   const anchor = getEntityGlbAnchor(entity);
   if (anchor && glbNodeNames.has(anchor)) return true;
-  for (const component of entity.components ?? []) {
-    if (component.type === 'ship-door' && Array.isArray(component.nodes)) {
-      if (component.nodes.some((n) => n.name && glbNodeNames.has(n.name))) return true;
-    }
-    if (component.type === 'animation' && Array.isArray(component.nodes)) {
-      if (component.nodes.some((n) => n.name && glbNodeNames.has(n.name))) return true;
-    }
-    if (component.type === 'object-animation' && Array.isArray(component.nodes)) {
-      if (component.nodes.some((n) => n.name && glbNodeNames.has(n.name))) return true;
-    }
-    if (component.type === 'collider' && component.node && glbNodeNames.has(component.node)) {
-      return true;
-    }
-  }
-  return false;
+  return (entity.components ?? []).some((component) =>
+    componentReferencesAnyGlbNode(component, glbNodeNames),
+  );
 }

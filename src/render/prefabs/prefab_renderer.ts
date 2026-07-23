@@ -105,19 +105,11 @@ function setupUpdateAnimations(group: THREE.Group): void {
   };
 }
 
-function bindAnimationComponent(
-  rootGroup: THREE.Group | undefined,
+function collectBoundAnimationNodes(
+  rootGroup: THREE.Group,
   targetObject: THREE.Object3D,
   component: AnimationPrefabComponent,
-): void {
-  if (!rootGroup) return;
-
-  // Prevent duplicate bindings if already bound
-  const bound = rootGroup.userData.boundAnimations as BoundAnimation[] | undefined;
-  if (bound && bound.some((b) => b.id === component.id)) {
-    return;
-  }
-
+): { boundNodes: BoundAnimationNode[]; allFound: boolean } {
   const boundNodes: BoundAnimationNode[] = [];
   let allFound = true;
   for (const nodeSpec of component.nodes) {
@@ -137,52 +129,74 @@ function bindAnimationComponent(
       allFound = false;
     }
   }
+  return { boundNodes, allFound };
+}
 
-  if (allFound && boundNodes.length > 0) {
-    if (bound) {
-      bound.push({
-        id: component.id,
-        motion: component.motion,
-        axis: component.axis,
-        nodes: boundNodes,
-      });
-    }
-    // Successfully bound! Remove from pending queue if present
-    const pending = rootGroup.userData.pendingAnimations as AnimationPrefabComponent[] | undefined;
-    if (pending) {
-      const idx = pending.indexOf(component);
-      if (idx !== -1) {
-        pending.splice(idx, 1);
-      }
-    }
-  } else {
-    // If not all nodes are found, queue in pendingAnimations to retry as models load
-    const pending = rootGroup.userData.pendingAnimations as AnimationPrefabComponent[] | undefined;
-    if (pending) {
-      const attempts = (animationBindAttempts.get(component) ?? 0) + 1;
-      animationBindAttempts.set(component, attempts);
-
-      if (!pending.includes(component)) {
-        pending.push(component);
-      }
-
-      // Log warning only if it remains unbound after a reasonable delay (e.g. 300 frames)
-      if (attempts === 300) {
-        console.warn(`Animation node not found after 300 attempts: ${component.nodes.map(n => n.name).join(', ')} under ${targetObject.name} or rootGroup`);
-        const allNames: string[] = [];
-        rootGroup.traverse((child) => {
-          if (child.name) allNames.push(child.name);
-        });
-        console.warn(`Available node names under rootGroup (${rootGroup.name}):`, allNames);
-        
-        // Remove from pending to stop retrying indefinitely
-        const idx = pending.indexOf(component);
-        if (idx !== -1) {
-          pending.splice(idx, 1);
-        }
-      }
-    }
+function completeAnimationBinding(
+  rootGroup: THREE.Group,
+  component: AnimationPrefabComponent,
+  boundNodes: BoundAnimationNode[],
+): void {
+  const bound = rootGroup.userData.boundAnimations as BoundAnimation[] | undefined;
+  if (bound) {
+    bound.push({
+      id: component.id,
+      motion: component.motion,
+      axis: component.axis,
+      nodes: boundNodes,
+    });
   }
+  const pending = rootGroup.userData.pendingAnimations as AnimationPrefabComponent[] | undefined;
+  if (!pending) return;
+  const idx = pending.indexOf(component);
+  if (idx !== -1) pending.splice(idx, 1);
+}
+
+function queuePendingAnimationBinding(
+  rootGroup: THREE.Group,
+  targetObject: THREE.Object3D,
+  component: AnimationPrefabComponent,
+): void {
+  const pending = rootGroup.userData.pendingAnimations as AnimationPrefabComponent[] | undefined;
+  if (!pending) return;
+  const attempts = (animationBindAttempts.get(component) ?? 0) + 1;
+  animationBindAttempts.set(component, attempts);
+  if (!pending.includes(component)) pending.push(component);
+  if (attempts !== 300) return;
+  console.warn(
+    `Animation node not found after 300 attempts: ${component.nodes.map((n) => n.name).join(', ')} under ${targetObject.name} or rootGroup`,
+  );
+  const allNames: string[] = [];
+  rootGroup.traverse((child) => {
+    if (child.name) allNames.push(child.name);
+  });
+  console.warn(`Available node names under rootGroup (${rootGroup.name}):`, allNames);
+  const idx = pending.indexOf(component);
+  if (idx !== -1) pending.splice(idx, 1);
+}
+
+function bindAnimationComponent(
+  rootGroup: THREE.Group | undefined,
+  targetObject: THREE.Object3D,
+  component: AnimationPrefabComponent,
+): void {
+  if (!rootGroup) return;
+
+  const bound = rootGroup.userData.boundAnimations as BoundAnimation[] | undefined;
+  if (bound && bound.some((b) => b.id === component.id)) {
+    return;
+  }
+
+  const { boundNodes, allFound } = collectBoundAnimationNodes(
+    rootGroup,
+    targetObject,
+    component,
+  );
+  if (allFound && boundNodes.length > 0) {
+    completeAnimationBinding(rootGroup, component, boundNodes);
+    return;
+  }
+  queuePendingAnimationBinding(rootGroup, targetObject, component);
 }
 
 export interface PrefabLightRenderOptions {
@@ -569,6 +583,49 @@ function attachLoadedAsset(
   bindAllDescendantAnimations(entity);
 }
 
+function attachEntityComponents(
+  group: THREE.Group,
+  entity: PrefabEntity,
+  options: BuildEntityOptions,
+): void {
+  for (const component of entity.components ?? []) {
+    if (
+      component.type === 'point-light' ||
+      component.type === 'area-light' ||
+      component.type === 'spot-light'
+    ) {
+      group.add(createPrefabLightObject(component, {
+        lightScale: options.lightScale,
+        localLightShadowMapSize: options.localLightShadowMapSize,
+        localLightShadowsEnabled: options.localLightShadowsEnabled,
+      }));
+    }
+    if (component.type === 'particle-system') {
+      attachParticleSystemToEntity(options.rootGroup, group, component);
+    }
+    if (component.type === 'object-animation' && entity.asset) {
+      if ((component.nodes?.length ?? 0) === 0) {
+        bindObjectAnimationComponent(options.rootGroup, group, component);
+      }
+    }
+  }
+}
+
+function bindStaticEntityAnimations(
+  group: THREE.Group,
+  entity: PrefabEntity,
+  options: BuildEntityOptions,
+): void {
+  for (const component of entity.components ?? []) {
+    if (component.type === 'animation') {
+      bindAnimationComponent(options.rootGroup, group, component);
+    }
+    if (component.type === 'object-animation') {
+      bindObjectAnimationComponent(options.rootGroup, group, component);
+    }
+  }
+}
+
 function buildEntity(
   entity: PrefabEntity,
   options: BuildEntityOptions,
@@ -594,39 +651,10 @@ function buildEntity(
         }),
     );
   } else {
-    for (const component of entity.components ?? []) {
-      if (component.type === 'animation') {
-        bindAnimationComponent(options.rootGroup, group, component);
-      }
-      if (component.type === 'object-animation') {
-        bindObjectAnimationComponent(options.rootGroup, group, component);
-      }
-    }
+    bindStaticEntityAnimations(group, entity, options);
   }
 
-  for (const component of entity.components ?? []) {
-    if (
-      component.type === 'point-light' ||
-      component.type === 'area-light' ||
-      component.type === 'spot-light'
-    ) {
-      group.add(createPrefabLightObject(component, {
-        lightScale: options.lightScale,
-        localLightShadowMapSize: options.localLightShadowMapSize,
-        localLightShadowsEnabled: options.localLightShadowsEnabled,
-      }));
-    }
-    if (component.type === 'particle-system') {
-      attachParticleSystemToEntity(options.rootGroup, group, component);
-    }
-    if (component.type === 'object-animation' && entity.asset) {
-      // Asset entities bind after the GLB loads (see above). Empty-node hover
-      // can also start immediately on the entity group.
-      if ((component.nodes?.length ?? 0) === 0) {
-        bindObjectAnimationComponent(options.rootGroup, group, component);
-      }
-    }
-  }
+  attachEntityComponents(group, entity, options);
 
   for (const child of entity.children ?? []) {
     const built = buildEntity(child, options);

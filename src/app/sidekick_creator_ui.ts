@@ -490,13 +490,12 @@ export function createSidekickCreatorUi(
     }
   };
 
-  const renderDiagnosticsTab = (state: SidekickCreatorState): void => {
+  const buildDiagnosticsMetricRows = (
+    state: SidekickCreatorState,
+    diagnostics: SidekickAvatarDiagnostics | null,
+  ): Array<[string, string]> => {
     const installed = getInstalledParts(catalog);
-    const diagnostics = hooks.getAvatarDiagnostics();
-    const section = element('section', 'sidekick-section sidekick-diagnostics');
-    section.append(element('h2', undefined, 'Runtime diagnostics'));
-    const grid = element('dl', 'sidekick-diagnostic-grid');
-    const values: Array<[string, string]> = [
+    return [
       ['Manifest', `v${catalog.schemaVersion ?? 1} · ${catalog.dbVersion?.semanticVersion ?? 'unknown'}`],
       ['Installed parts', String(installed.length)],
       ['Unavailable DB parts', String((catalog.stats?.databaseParts ?? catalog.parts.length) - installed.length)],
@@ -510,8 +509,16 @@ export function createSidekickCreatorUi(
       ['Avatar root', diagnostics?.rootId ?? 'loading'],
       ['Last action', state.lastAction],
     ];
-    for (const [key, value] of values)
+  };
+
+  const appendDiagnosticsSection = (state: SidekickCreatorState): void => {
+    const diagnostics = hooks.getAvatarDiagnostics();
+    const section = element('section', 'sidekick-section sidekick-diagnostics');
+    section.append(element('h2', undefined, 'Runtime diagnostics'));
+    const grid = element('dl', 'sidekick-diagnostic-grid');
+    for (const [key, value] of buildDiagnosticsMetricRows(state, diagnostics)) {
       grid.append(element('dt', undefined, key), element('dd', undefined, value));
+    }
     section.append(grid);
     if (diagnostics?.morphTargets.length) {
       const details = element('details');
@@ -520,7 +527,9 @@ export function createSidekickCreatorUi(
       section.append(details);
     }
     content.append(section);
+  };
 
+  const appendDefinitionEditorSection = (state: SidekickCreatorState): void => {
     const definitionSection = element('section', 'sidekick-section');
     definitionSection.append(element('h2', undefined, 'Character definition'));
     const textarea = element('textarea', 'sidekick-definition-json');
@@ -544,6 +553,11 @@ export function createSidekickCreatorUi(
     );
     definitionSection.append(textarea, actions);
     content.append(definitionSection);
+  };
+
+  const renderDiagnosticsTab = (state: SidekickCreatorState): void => {
+    appendDiagnosticsSection(state);
+    appendDefinitionEditorSection(state);
   };
 
   const render = (state = currentState): void => {

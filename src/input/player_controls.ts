@@ -277,54 +277,51 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
     shipCameraView = shipCameraView === 'cockpit' ? 'external' : 'cockpit';
   }
 
-  function onKeyChange(event: KeyboardEvent, down: boolean) {
-    if (!isHandledKey(event.code)) return;
-    event.preventDefault();
-    if (inputSuppressed) return;
-    if (down) {
-      const wasDown = keys.has(event.code);
-      if (isKeyboardCode('reset', event.code) && !combatInputActive) onReset?.();
-      if (!wasDown && isKeyboardCode('cycleCamera', event.code)) toggleShipCameraView();
-      if (
-        !wasDown &&
-        isKeyboardCode('cycleFlightMode', event.code) &&
-        mode === 'in-ship'
-      ) {
-        uHeldSinceMs = performance.now();
-        quantumEngageTriggered = false;
-      }
-      // Star Citizen-style coupled/decoupled toggle (Alt+C).
-      if (
-        !wasDown &&
-        event.code === 'KeyC' &&
-        event.altKey &&
-        mode === 'in-ship'
-      ) {
-        coupledMode = !coupledMode;
-        coupledTogglePressed = true;
-        return;
-      }
-      // CapsLock toggles walk gait on foot / deck / station (not while piloting).
-      if (
-        !wasDown &&
-        isKeyboardCode('walkToggle', event.code) &&
-        mode !== 'in-ship'
-      ) {
-        walkToggleEnabled = !walkToggleEnabled;
-      }
-      if (
-        !wasDown &&
-        ONE_SHOT_KEYBOARD_ACTIONS.some((action) => isKeyboardCode(action, event.code))
-      ) {
-        // The default F binding is hold-only while seated; tap-F interact stays for deck/doors/ramp.
-        // In bed, head look is always on — allow tap-F for Entertainment System gaze interact.
-        if (!(isKeyboardCode('seatLook', event.code) && mode === 'in-ship')) {
-          justPressed.add(event.code);
-        }
-      }
-      keys.add(event.code);
+  function handleControlsKeyDown(event: KeyboardEvent): void {
+    const wasDown = keys.has(event.code);
+    if (isKeyboardCode('reset', event.code) && !combatInputActive) onReset?.();
+    if (!wasDown && isKeyboardCode('cycleCamera', event.code)) toggleShipCameraView();
+    if (
+      !wasDown &&
+      isKeyboardCode('cycleFlightMode', event.code) &&
+      mode === 'in-ship'
+    ) {
+      uHeldSinceMs = performance.now();
+      quantumEngageTriggered = false;
+    }
+    // Star Citizen-style coupled/decoupled toggle (Alt+C).
+    if (
+      !wasDown &&
+      event.code === 'KeyC' &&
+      event.altKey &&
+      mode === 'in-ship'
+    ) {
+      coupledMode = !coupledMode;
+      coupledTogglePressed = true;
       return;
     }
+    // CapsLock toggles walk gait on foot / deck / station (not while piloting).
+    if (
+      !wasDown &&
+      isKeyboardCode('walkToggle', event.code) &&
+      mode !== 'in-ship'
+    ) {
+      walkToggleEnabled = !walkToggleEnabled;
+    }
+    if (
+      !wasDown &&
+      ONE_SHOT_KEYBOARD_ACTIONS.some((action) => isKeyboardCode(action, event.code))
+    ) {
+      // The default F binding is hold-only while seated; tap-F interact stays for deck/doors/ramp.
+      // In bed, head look is always on — allow tap-F for Entertainment System gaze interact.
+      if (!(isKeyboardCode('seatLook', event.code) && mode === 'in-ship')) {
+        justPressed.add(event.code);
+      }
+    }
+    keys.add(event.code);
+  }
+
+  function handleControlsKeyUp(event: KeyboardEvent): void {
     if (
       isKeyboardCode('cycleFlightMode', event.code) &&
       uHeldSinceMs !== null &&
@@ -340,6 +337,17 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       uHeldSinceMs = null;
       quantumEngageTriggered = false;
     }
+  }
+
+  function onKeyChange(event: KeyboardEvent, down: boolean) {
+    if (!isHandledKey(event.code)) return;
+    event.preventDefault();
+    if (inputSuppressed) return;
+    if (down) {
+      handleControlsKeyDown(event);
+      return;
+    }
+    handleControlsKeyUp(event);
   }
 
   function onMouseMove(event: MouseEvent) {

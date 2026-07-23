@@ -147,74 +147,80 @@ function findHullEntityWithController(
   return null;
 }
 
-function bakeFromShipController(
+type ShipControllerComponent = Extract<PrefabComponent, { type: "ship-controller" }>;
+
+const CONTROLLER_NUMERIC_STAT_FIELDS = [
+  "maxSpeedMps",
+  "maxHp",
+  "maxShields",
+  "shieldRegenPerSec",
+  "massKg",
+  "maxAngularRateRadps",
+  "forwardThrustN",
+  "backwardThrustN",
+  "verticalThrustN",
+  "lateralThrustN",
+  "pitchTorqueNm",
+  "yawTorqueNm",
+  "rollTorqueNm",
+  "thrustFovForwardDeg",
+  "thrustFovBackwardDeg",
+  "thrustFovBlendPerSec",
+  "boostShakeAmplitudeM",
+  "boostShakeHz",
+  "boostBlendPerSec",
+  "boostSoundVolume",
+  "thrustSoundVolume",
+] as const satisfies readonly (keyof NonNullable<ShipControllerComponent["stats"]>)[];
+
+function copyControllerNumericStats(
+  stats: NonNullable<ShipControllerComponent["stats"]>,
+  spec: Partial<ShipSpec>,
+): void {
+  for (const field of CONTROLLER_NUMERIC_STAT_FIELDS) {
+    const value = stats[field];
+    if (value !== undefined) {
+      spec[field] = value;
+    }
+  }
+}
+
+function copyControllerSoundStats(
+  stats: NonNullable<ShipControllerComponent["stats"]>,
+  spec: Partial<ShipSpec>,
+): void {
+  if (stats.boostSoundUrl) spec.boostSoundUrl = stats.boostSoundUrl;
+  if (stats.thrustSoundUrl) spec.thrustSoundUrl = stats.thrustSoundUrl;
+}
+
+function bakeControllerHull(
   hull: PrefabEntity,
-  controller: Extract<PrefabComponent, { type: "ship-controller" }>,
-  transforms: Map<string, EntityWorldTransform>,
+  controller: ShipControllerComponent,
   out: CollectedShip,
 ): void {
   out.hasController = true;
   out.hullUrl = hull.asset?.url ?? null;
   out.hullNodeOverrides = hull.nodeOverrides ? [...hull.nodeOverrides] : null;
   if (controller.restHeight !== undefined) out.restHeight = controller.restHeight;
-  if (controller.stats?.maxSpeedMps !== undefined)
-    out.spec.maxSpeedMps = controller.stats.maxSpeedMps;
-  if (controller.stats?.maxHp !== undefined) out.spec.maxHp = controller.stats.maxHp;
-  if (controller.stats?.maxShields !== undefined)
-    out.spec.maxShields = controller.stats.maxShields;
-  if (controller.stats?.shieldRegenPerSec !== undefined)
-    out.spec.shieldRegenPerSec = controller.stats.shieldRegenPerSec;
-  if (controller.stats?.massKg !== undefined) out.spec.massKg = controller.stats.massKg;
-  if (controller.stats?.maxAngularRateRadps !== undefined)
-    out.spec.maxAngularRateRadps = controller.stats.maxAngularRateRadps;
-  if (controller.stats?.forwardThrustN !== undefined)
-    out.spec.forwardThrustN = controller.stats.forwardThrustN;
-  if (controller.stats?.backwardThrustN !== undefined)
-    out.spec.backwardThrustN = controller.stats.backwardThrustN;
-  if (controller.stats?.verticalThrustN !== undefined)
-    out.spec.verticalThrustN = controller.stats.verticalThrustN;
-  if (controller.stats?.lateralThrustN !== undefined)
-    out.spec.lateralThrustN = controller.stats.lateralThrustN;
-  if (controller.stats?.pitchTorqueNm !== undefined)
-    out.spec.pitchTorqueNm = controller.stats.pitchTorqueNm;
-  if (controller.stats?.yawTorqueNm !== undefined)
-    out.spec.yawTorqueNm = controller.stats.yawTorqueNm;
-  if (controller.stats?.rollTorqueNm !== undefined)
-    out.spec.rollTorqueNm = controller.stats.rollTorqueNm;
-  if (controller.stats?.thrustFovForwardDeg !== undefined)
-    out.spec.thrustFovForwardDeg = controller.stats.thrustFovForwardDeg;
-  if (controller.stats?.thrustFovBackwardDeg !== undefined)
-    out.spec.thrustFovBackwardDeg = controller.stats.thrustFovBackwardDeg;
-  if (controller.stats?.thrustFovBlendPerSec !== undefined)
-    out.spec.thrustFovBlendPerSec = controller.stats.thrustFovBlendPerSec;
-  if (controller.stats?.boostShakeAmplitudeM !== undefined)
-    out.spec.boostShakeAmplitudeM = controller.stats.boostShakeAmplitudeM;
-  if (controller.stats?.boostShakeHz !== undefined)
-    out.spec.boostShakeHz = controller.stats.boostShakeHz;
-  if (controller.stats?.boostBlendPerSec !== undefined)
-    out.spec.boostBlendPerSec = controller.stats.boostBlendPerSec;
-  if (controller.stats?.boostSoundUrl) {
-    out.spec.boostSoundUrl = controller.stats.boostSoundUrl;
-  }
-  if (controller.stats?.boostSoundVolume !== undefined) {
-    out.spec.boostSoundVolume = controller.stats.boostSoundVolume;
-  }
-  if (controller.stats?.thrustSoundUrl) {
-    out.spec.thrustSoundUrl = controller.stats.thrustSoundUrl;
-  }
-  if (controller.stats?.thrustSoundVolume !== undefined) {
-    out.spec.thrustSoundVolume = controller.stats.thrustSoundVolume;
-  }
+  if (!controller.stats) return;
+  copyControllerNumericStats(controller.stats, out.spec);
+  copyControllerSoundStats(controller.stats, out.spec);
+}
 
+function mapGearHingeNode(
+  node: NonNullable<NonNullable<ShipControllerComponent["gear"]>["nodes"]>[number],
+): ShipGearHingeSpec {
+  return {
+    name: node.name,
+    ...(node.under ? { under: node.under } : {}),
+    deployRadians: node.deployRadians,
+    ...(node.axis ? { axis: node.axis } : {}),
+  };
+}
+
+function bakeControllerGear(controller: ShipControllerComponent, out: CollectedShip): void {
   if (controller.gear?.nodes?.length) {
-    out.spec.gearHinges = controller.gear.nodes.map(
-      (node): ShipGearHingeSpec => ({
-        name: node.name,
-        ...(node.under ? { under: node.under } : {}),
-        deployRadians: node.deployRadians,
-        ...(node.axis ? { axis: node.axis } : {}),
-      }),
-    );
+    out.spec.gearHinges = controller.gear.nodes.map(mapGearHingeNode);
   }
   if (controller.gear?.deploySoundUrl) {
     out.spec.gearDeploySoundUrl = controller.gear.deploySoundUrl;
@@ -222,120 +228,132 @@ function bakeFromShipController(
   if (controller.gear?.retractSoundUrl) {
     out.spec.gearRetractSoundUrl = controller.gear.retractSoundUrl;
   }
-  if (controller.ramp?.hinge) {
-    out.spec.rampHinge = {
-      name: controller.ramp.hinge.node,
-      lowerRadians: controller.ramp.hinge.lowerRadians,
-      ...(controller.ramp.hinge.axis ? { axis: controller.ramp.hinge.axis } : {}),
-    };
-    if (controller.ramp.openSoundUrl) {
-      out.spec.rampOpenSoundUrl = controller.ramp.openSoundUrl;
-    }
-    if (controller.ramp.closeSoundUrl) {
-      out.spec.rampCloseSoundUrl = controller.ramp.closeSoundUrl;
-    }
-    if (controller.ramp.outsideInteractId) {
-      const point = resolveEntityShipPoint(
-        controller.ramp.outsideInteractId,
-        transforms,
-      );
-      if (point) {
-        out.rampInteracts.push({
-          placement: "outside",
-          right: point.right,
-          forward: point.forward,
-          radius: controller.ramp.outsideRadius ?? DEFAULT_RAMP_OUTSIDE_RADIUS,
-        });
-      } else {
-        console.warn(
-          `Ship controller ramp.outsideInteractId "${controller.ramp.outsideInteractId}" not found.`,
-        );
-      }
-    }
-    if (controller.ramp.deckInteractId) {
-      const point = resolveEntityShipPoint(
-        controller.ramp.deckInteractId,
-        transforms,
-      );
-      if (point) {
-        out.rampInteracts.push({
-          placement: "deck",
-          right: point.right,
-          forward: point.forward,
-          radius: controller.ramp.deckRadius ?? DEFAULT_RAMP_DECK_RADIUS,
-        });
-      } else {
-        console.warn(
-          `Ship controller ramp.deckInteractId "${controller.ramp.deckInteractId}" not found.`,
-        );
-      }
-    }
-  }
+}
 
-  for (const door of controller.doors ?? []) {
-    const interact = resolveEntityShipPoint(door.interactEntityId, transforms);
-    if (!interact) {
-      console.warn(
-        `Ship controller door "${door.id}" interactEntityId "${door.interactEntityId}" not found.`,
-      );
-      continue;
-    }
-    upsertShipDoor(out, {
-      id: door.id,
-      label: door.label,
-      motion: door.motion,
-      axis: door.axis,
-      nodes: door.nodes.map((node) => ({ ...node })),
-      interact: {
-        right: interact.right,
-        up: interact.up,
-        forward: interact.forward,
-      },
-      trigger: door.trigger ?? "radial",
-      radius: door.radius ?? DEFAULT_DOOR_RADIUS,
-      aimRadius: door.aimRadius ?? DEFAULT_DOOR_AIM_RADIUS,
-      defaultOpen: door.defaultOpen ?? false,
-      ...(door.openSoundUrl ? { openSoundUrl: door.openSoundUrl } : {}),
-      ...(door.closeSoundUrl ? { closeSoundUrl: door.closeSoundUrl } : {}),
-    });
+function pushControllerRampInteract(
+  interactId: string,
+  placement: ShipRampInteract["placement"],
+  radius: number,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+  missingLabel: string,
+): void {
+  const point = resolveEntityShipPoint(interactId, transforms);
+  if (!point) {
+    console.warn(missingLabel);
+    return;
   }
+  out.rampInteracts.push({
+    placement,
+    right: point.right,
+    forward: point.forward,
+    radius,
+  });
+}
 
-  for (const seat of controller.seats ?? []) {
-    const point = resolveEntityShipPoint(seat.entityId, transforms);
-    if (!point) {
-      console.warn(
-        `Ship controller seat entityId "${seat.entityId}" not found.`,
-      );
-      continue;
-    }
-    const eye = seat.eye ?? { x: 0, y: 0.87, z: 0.25 };
-    const stand = seat.stand ?? { x: 0, z: -1.55 };
-    const transform = transforms.get(seat.entityId);
-    const position = transform?.position ?? vec3(0, 0, 0);
-    out.seats.push({
-      id: seat.entityId,
-      role: seat.role ?? "passenger",
-      seat: { right: point.right, up: point.up, forward: point.forward },
-      eye: {
-        right: -(position.x + eye.x),
-        up: position.y + eye.y,
-        forward: position.z + eye.z,
-      },
-      stand: {
-        right: -(position.x + stand.x),
-        forward: position.z + stand.z,
-      },
-      interactRadius: seat.interactRadius ?? DEFAULT_CHAIR_RADIUS,
-    });
+function bakeControllerRamp(
+  controller: ShipControllerComponent,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  const ramp = controller.ramp;
+  if (!ramp?.hinge) return;
+  out.spec.rampHinge = {
+    name: ramp.hinge.node,
+    lowerRadians: ramp.hinge.lowerRadians,
+    ...(ramp.hinge.axis ? { axis: ramp.hinge.axis } : {}),
+  };
+  if (ramp.openSoundUrl) out.spec.rampOpenSoundUrl = ramp.openSoundUrl;
+  if (ramp.closeSoundUrl) out.spec.rampCloseSoundUrl = ramp.closeSoundUrl;
+  if (ramp.outsideInteractId) {
+    pushControllerRampInteract(
+      ramp.outsideInteractId,
+      "outside",
+      ramp.outsideRadius ?? DEFAULT_RAMP_OUTSIDE_RADIUS,
+      transforms,
+      out,
+      `Ship controller ramp.outsideInteractId "${ramp.outsideInteractId}" not found.`,
+    );
   }
-
-  if (controller.deckSpawnEntityId) {
-    const point = resolveEntityShipPoint(controller.deckSpawnEntityId, transforms);
-    if (point) {
-      out.deckSpawn = { right: point.right, forward: point.forward };
-    }
+  if (ramp.deckInteractId) {
+    pushControllerRampInteract(
+      ramp.deckInteractId,
+      "deck",
+      ramp.deckRadius ?? DEFAULT_RAMP_DECK_RADIUS,
+      transforms,
+      out,
+      `Ship controller ramp.deckInteractId "${ramp.deckInteractId}" not found.`,
+    );
   }
+}
 
+function bakeControllerDoor(
+  door: NonNullable<ShipControllerComponent["doors"]>[number],
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  const interact = resolveEntityShipPoint(door.interactEntityId, transforms);
+  if (!interact) {
+    console.warn(
+      `Ship controller door "${door.id}" interactEntityId "${door.interactEntityId}" not found.`,
+    );
+    return;
+  }
+  upsertShipDoor(out, {
+    id: door.id,
+    label: door.label,
+    motion: door.motion,
+    axis: door.axis,
+    nodes: door.nodes.map((node) => ({ ...node })),
+    interact: {
+      right: interact.right,
+      up: interact.up,
+      forward: interact.forward,
+    },
+    trigger: door.trigger ?? "radial",
+    radius: door.radius ?? DEFAULT_DOOR_RADIUS,
+    aimRadius: door.aimRadius ?? DEFAULT_DOOR_AIM_RADIUS,
+    defaultOpen: door.defaultOpen ?? false,
+    ...(door.openSoundUrl ? { openSoundUrl: door.openSoundUrl } : {}),
+    ...(door.closeSoundUrl ? { closeSoundUrl: door.closeSoundUrl } : {}),
+  });
+}
+
+function bakeControllerSeat(
+  seat: NonNullable<ShipControllerComponent["seats"]>[number],
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  const point = resolveEntityShipPoint(seat.entityId, transforms);
+  if (!point) {
+    console.warn(`Ship controller seat entityId "${seat.entityId}" not found.`);
+    return;
+  }
+  const eye = seat.eye ?? { x: 0, y: 0.87, z: 0.25 };
+  const stand = seat.stand ?? { x: 0, z: -1.55 };
+  const transform = transforms.get(seat.entityId);
+  const position = transform?.position ?? vec3(0, 0, 0);
+  out.seats.push({
+    id: seat.entityId,
+    role: seat.role ?? "passenger",
+    seat: { right: point.right, up: point.up, forward: point.forward },
+    eye: {
+      right: -(position.x + eye.x),
+      up: position.y + eye.y,
+      forward: position.z + eye.z,
+    },
+    stand: {
+      right: -(position.x + stand.x),
+      forward: position.z + stand.z,
+    },
+    interactRadius: seat.interactRadius ?? DEFAULT_CHAIR_RADIUS,
+  });
+}
+
+function bakeControllerCameraBounds(
+  controller: ShipControllerComponent,
+  out: CollectedShip,
+): void {
   for (const bound of controller.cameraBounds ?? []) {
     out.cameraBounds.push({
       id: bound.id ?? "camera",
@@ -351,7 +369,35 @@ function bakeFromShipController(
   }
 }
 
-function mergeShipSpec(partial: Partial<ShipSpec>): ShipSpec {
+function bakeFromShipController(
+  hull: PrefabEntity,
+  controller: ShipControllerComponent,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  bakeControllerHull(hull, controller, out);
+  bakeControllerGear(controller, out);
+  bakeControllerRamp(controller, transforms, out);
+  for (const door of controller.doors ?? []) {
+    bakeControllerDoor(door, transforms, out);
+  }
+  for (const seat of controller.seats ?? []) {
+    bakeControllerSeat(seat, transforms, out);
+  }
+  if (controller.deckSpawnEntityId) {
+    const point = resolveEntityShipPoint(controller.deckSpawnEntityId, transforms);
+    if (point) {
+      out.deckSpawn = { right: point.right, forward: point.forward };
+    }
+  }
+  bakeControllerCameraBounds(controller, out);
+}
+
+function resolveShipThrustDefaults(partial: Partial<ShipSpec>): {
+  massKg: number;
+  forwardThrustN: number;
+  throttleAccelMps2: number;
+} {
   const massKg = partial.massKg ?? DEFAULT_SHIP_SPEC.massKg;
   const forwardThrustN =
     partial.forwardThrustN ??
@@ -360,43 +406,59 @@ function mergeShipSpec(partial: Partial<ShipSpec>): ShipSpec {
       : DEFAULT_SHIP_SPEC.forwardThrustN);
   const throttleAccelMps2 =
     partial.throttleAccelMps2 ?? forwardThrustN / Math.max(massKg, 1);
-  return {
-    maxSpeedMps: partial.maxSpeedMps ?? DEFAULT_SHIP_SPEC.maxSpeedMps,
-    throttleAccelMps2,
-    massKg,
-    maxAngularRateRadps:
-      partial.maxAngularRateRadps ?? DEFAULT_SHIP_SPEC.maxAngularRateRadps,
-    forwardThrustN,
-    backwardThrustN: partial.backwardThrustN ?? DEFAULT_SHIP_SPEC.backwardThrustN,
-    verticalThrustN: partial.verticalThrustN ?? DEFAULT_SHIP_SPEC.verticalThrustN,
-    lateralThrustN: partial.lateralThrustN ?? DEFAULT_SHIP_SPEC.lateralThrustN,
-    pitchTorqueNm: partial.pitchTorqueNm ?? DEFAULT_SHIP_SPEC.pitchTorqueNm,
-    yawTorqueNm: partial.yawTorqueNm ?? DEFAULT_SHIP_SPEC.yawTorqueNm,
-    rollTorqueNm: partial.rollTorqueNm ?? DEFAULT_SHIP_SPEC.rollTorqueNm,
-    thrustFovForwardDeg:
-      partial.thrustFovForwardDeg ?? DEFAULT_SHIP_SPEC.thrustFovForwardDeg,
-    thrustFovBackwardDeg:
-      partial.thrustFovBackwardDeg ?? DEFAULT_SHIP_SPEC.thrustFovBackwardDeg,
-    thrustFovBlendPerSec:
-      partial.thrustFovBlendPerSec ?? DEFAULT_SHIP_SPEC.thrustFovBlendPerSec,
-    boostShakeAmplitudeM:
-      partial.boostShakeAmplitudeM ?? DEFAULT_SHIP_SPEC.boostShakeAmplitudeM,
-    boostShakeHz: partial.boostShakeHz ?? DEFAULT_SHIP_SPEC.boostShakeHz,
-    boostBlendPerSec:
-      partial.boostBlendPerSec ?? DEFAULT_SHIP_SPEC.boostBlendPerSec,
-    boostSoundVolume:
-      partial.boostSoundVolume ?? DEFAULT_SHIP_SPEC.boostSoundVolume,
-    thrustSoundVolume:
-      partial.thrustSoundVolume ?? DEFAULT_SHIP_SPEC.thrustSoundVolume,
-    maxHp: partial.maxHp ?? DEFAULT_SHIP_SPEC.maxHp,
-    maxShields: partial.maxShields ?? DEFAULT_SHIP_SPEC.maxShields,
-    shieldRegenPerSec:
-      partial.shieldRegenPerSec ?? DEFAULT_SHIP_SPEC.shieldRegenPerSec,
+  return { massKg, forwardThrustN, throttleAccelMps2 };
+}
+
+const CORE_SPEC_OVERRIDE_KEYS = [
+  "maxSpeedMps",
+  "maxAngularRateRadps",
+  "backwardThrustN",
+  "verticalThrustN",
+  "lateralThrustN",
+  "pitchTorqueNm",
+  "yawTorqueNm",
+  "rollTorqueNm",
+  "thrustFovForwardDeg",
+  "thrustFovBackwardDeg",
+  "thrustFovBlendPerSec",
+  "boostShakeAmplitudeM",
+  "boostShakeHz",
+  "boostBlendPerSec",
+  "boostSoundVolume",
+  "thrustSoundVolume",
+  "maxHp",
+  "maxShields",
+  "shieldRegenPerSec",
+] as const satisfies readonly (keyof ShipSpec)[];
+
+function buildCoreShipSpec(
+  partial: Partial<ShipSpec>,
+  thrust: ReturnType<typeof resolveShipThrustDefaults>,
+): ShipSpec {
+  const spec: ShipSpec = {
+    ...DEFAULT_SHIP_SPEC,
+    ...thrust,
     gearHinges:
       partial.gearHinges && partial.gearHinges.length > 0
         ? partial.gearHinges
         : DEFAULT_STARHOPPER_GEAR_HINGES,
     rampHinge: partial.rampHinge ?? DEFAULT_STARHOPPER_RAMP_HINGE,
+  };
+  for (const key of CORE_SPEC_OVERRIDE_KEYS) {
+    const value = partial[key];
+    if (value !== undefined) {
+      spec[key] = value;
+    }
+  }
+  return spec;
+}
+
+function appendOptionalShipSounds(
+  partial: Partial<ShipSpec>,
+  spec: ShipSpec,
+): ShipSpec {
+  return {
+    ...spec,
     ...(partial.gearDeploySoundUrl
       ? { gearDeploySoundUrl: partial.gearDeploySoundUrl }
       : {}),
@@ -412,6 +474,204 @@ function mergeShipSpec(partial: Partial<ShipSpec>): ShipSpec {
     ...(partial.boostSoundUrl ? { boostSoundUrl: partial.boostSoundUrl } : {}),
     ...(partial.thrustSoundUrl ? { thrustSoundUrl: partial.thrustSoundUrl } : {}),
   };
+}
+
+function mergeShipSpec(partial: Partial<ShipSpec>): ShipSpec {
+  const thrust = resolveShipThrustDefaults(partial);
+  return appendOptionalShipSounds(partial, buildCoreShipSpec(partial, thrust));
+}
+
+interface CollectEntityContext {
+  entity: PrefabEntity;
+  position: Vec3;
+  right: number;
+  forward: number;
+}
+
+function collectShipStatsComponent(
+  component: Extract<PrefabComponent, { type: "ship-stats" }>,
+  out: CollectedShip,
+): void {
+  if (component.maxSpeedMps !== undefined) out.spec.maxSpeedMps ??= component.maxSpeedMps;
+  if (component.maxHp !== undefined) out.spec.maxHp ??= component.maxHp;
+  if (component.maxShields !== undefined) out.spec.maxShields ??= component.maxShields;
+  if (component.shieldRegenPerSec !== undefined) {
+    out.spec.shieldRegenPerSec ??= component.shieldRegenPerSec;
+  }
+}
+
+function collectShipGearComponent(
+  component: Extract<PrefabComponent, { type: "ship-gear" }>,
+  out: CollectedShip,
+): void {
+  out.spec.gearHinges = component.nodes.map(
+    (node): ShipGearHingeSpec => ({
+      name: node.name,
+      ...(node.under ? { under: node.under } : {}),
+      deployRadians: node.deployRadians,
+      ...(node.axis ? { axis: node.axis } : {}),
+    }),
+  );
+}
+
+function collectShipRampComponent(
+  component: Extract<PrefabComponent, { type: "ship-ramp" }>,
+  out: CollectedShip,
+): void {
+  out.spec.rampHinge = {
+    name: component.node,
+    lowerRadians: component.lowerRadians,
+    ...(component.axis ? { axis: component.axis } : {}),
+  };
+}
+
+function collectShipHullComponent(
+  component: Extract<PrefabComponent, { type: "ship-hull" }>,
+  entity: PrefabEntity,
+  out: CollectedShip,
+): void {
+  if (entity.asset) out.hullUrl ??= entity.asset.url;
+  if (component.restHeight !== undefined) out.restHeight ??= component.restHeight;
+}
+
+function collectShipDoorComponent(
+  component: Extract<PrefabComponent, { type: "ship-door" }>,
+  ctx: CollectEntityContext,
+  out: CollectedShip,
+): void {
+  upsertShipDoor(out, {
+    id: component.id,
+    label: component.label,
+    motion: component.motion,
+    axis: component.axis,
+    nodes: component.nodes.map((node) => ({ ...node })),
+    interact: { right: ctx.right, up: ctx.position.y, forward: ctx.forward },
+    trigger: component.trigger ?? "radial",
+    radius: component.radius ?? DEFAULT_DOOR_RADIUS,
+    aimRadius: component.aimRadius ?? DEFAULT_DOOR_AIM_RADIUS,
+    defaultOpen: component.defaultOpen ?? false,
+    ...(component.openSoundUrl ? { openSoundUrl: component.openSoundUrl } : {}),
+    ...(component.closeSoundUrl ? { closeSoundUrl: component.closeSoundUrl } : {}),
+  });
+}
+
+function collectPilotSeatComponent(
+  component: Extract<PrefabComponent, { type: "pilot-seat" }>,
+  ctx: CollectEntityContext,
+  out: CollectedShip,
+): void {
+  const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
+  const stand = component.stand ?? { x: 0, z: -1.55 };
+  const { position, right, forward, entity } = ctx;
+  out.seats.push({
+    id: entity.id,
+    role: component.role ?? "passenger",
+    seat: { right, up: position.y, forward },
+    eye: {
+      right: -(position.x + eye.x),
+      up: position.y + eye.y,
+      forward: position.z + eye.z,
+    },
+    stand: {
+      right: -(position.x + stand.x),
+      forward: position.z + stand.z,
+    },
+    interactRadius: component.interactRadius ?? DEFAULT_CHAIR_RADIUS,
+  });
+}
+
+function collectRampInteractComponent(
+  component: Extract<PrefabComponent, { type: "ramp-interact" }>,
+  ctx: CollectEntityContext,
+  out: CollectedShip,
+): void {
+  out.rampInteracts.push({
+    placement: component.placement,
+    right: ctx.right,
+    forward: ctx.forward,
+    radius:
+      component.radius ??
+      (component.placement === "outside"
+        ? DEFAULT_RAMP_OUTSIDE_RADIUS
+        : DEFAULT_RAMP_DECK_RADIUS),
+  });
+}
+
+function collectCockpitControlComponent(
+  component: Extract<PrefabComponent, { type: "cockpit-control" }>,
+  ctx: CollectEntityContext,
+  out: CollectedShip,
+): void {
+  const point = sceneToShipPoint(ctx.position);
+  out.cockpitControls.push({
+    id: component.id || ctx.entity.id,
+    action: component.action,
+    ...(component.label ? { label: component.label } : {}),
+    position: {
+      right: point.right,
+      up: point.up,
+      forward: point.forward,
+    },
+    gazeRadius: component.gazeRadius ?? DEFAULT_COCKPIT_GAZE_RADIUS,
+    maxDistance: component.maxDistance ?? DEFAULT_COCKPIT_MAX_DISTANCE,
+  });
+}
+
+function collectCockpitStatComponent(
+  component: Extract<PrefabComponent, { type: "cockpit-stat" }>,
+  ctx: CollectEntityContext,
+  out: CollectedShip,
+): void {
+  const point = sceneToShipPoint(ctx.position);
+  out.cockpitStats.push({
+    id: component.id || ctx.entity.id,
+    kind: component.kind,
+    ...(component.label ? { label: component.label } : {}),
+    position: {
+      right: point.right,
+      up: point.up,
+      forward: point.forward,
+    },
+    maxDistance: component.maxDistance ?? DEFAULT_COCKPIT_STAT_MAX_DISTANCE,
+  });
+}
+
+function collectLegacyShipComponent(
+  component: PrefabComponent,
+  ctx: CollectEntityContext,
+  out: CollectedShip,
+): void {
+  switch (component.type) {
+    case "ship-stats":
+      collectShipStatsComponent(component, out);
+      break;
+    case "ship-gear":
+      collectShipGearComponent(component, out);
+      break;
+    case "ship-ramp":
+      collectShipRampComponent(component, out);
+      break;
+    case "ship-hull":
+      collectShipHullComponent(component, ctx.entity, out);
+      break;
+    case "ship-door":
+      collectShipDoorComponent(component, ctx, out);
+      break;
+    case "pilot-seat":
+      collectPilotSeatComponent(component, ctx, out);
+      break;
+    case "ramp-interact":
+      collectRampInteractComponent(component, ctx, out);
+      break;
+    case "cockpit-control":
+      collectCockpitControlComponent(component, ctx, out);
+      break;
+    case "cockpit-stat":
+      collectCockpitStatComponent(component, ctx, out);
+      break;
+    default:
+      break;
+  }
 }
 
 function sceneToShipPoint(point: Vec3): {
@@ -447,130 +707,15 @@ function collect(
     parentScale.z * entity.transform.scale.z,
   );
 
-  const right = -position.x;
-  const forward = position.z;
+  const ctx: CollectEntityContext = {
+    entity,
+    position,
+    right: -position.x,
+    forward: position.z,
+  };
 
   for (const component of entity.components ?? []) {
-    switch (component.type) {
-      case "ship-stats":
-        if (component.maxSpeedMps !== undefined)
-          out.spec.maxSpeedMps ??= component.maxSpeedMps;
-        if (component.maxHp !== undefined) out.spec.maxHp ??= component.maxHp;
-        if (component.maxShields !== undefined)
-          out.spec.maxShields ??= component.maxShields;
-        if (component.shieldRegenPerSec !== undefined)
-          out.spec.shieldRegenPerSec ??= component.shieldRegenPerSec;
-        break;
-      case "ship-gear":
-        out.spec.gearHinges = component.nodes.map(
-          (node): ShipGearHingeSpec => ({
-            name: node.name,
-            ...(node.under ? { under: node.under } : {}),
-            deployRadians: node.deployRadians,
-            ...(node.axis ? { axis: node.axis } : {}),
-          }),
-        );
-        break;
-      case "ship-ramp":
-        out.spec.rampHinge = {
-          name: component.node,
-          lowerRadians: component.lowerRadians,
-          ...(component.axis ? { axis: component.axis } : {}),
-        };
-        break;
-      case "ship-hull":
-        if (entity.asset) out.hullUrl ??= entity.asset.url;
-        if (component.restHeight !== undefined)
-          out.restHeight ??= component.restHeight;
-        break;
-      case "ship-door":
-        upsertShipDoor(out, {
-          id: component.id,
-          label: component.label,
-          motion: component.motion,
-          axis: component.axis,
-          nodes: component.nodes.map((node) => ({ ...node })),
-          interact: { right, up: position.y, forward },
-          trigger: component.trigger ?? "radial",
-          radius: component.radius ?? DEFAULT_DOOR_RADIUS,
-          aimRadius: component.aimRadius ?? DEFAULT_DOOR_AIM_RADIUS,
-          defaultOpen: component.defaultOpen ?? false,
-          ...(component.openSoundUrl
-            ? { openSoundUrl: component.openSoundUrl }
-            : {}),
-          ...(component.closeSoundUrl
-            ? { closeSoundUrl: component.closeSoundUrl }
-            : {}),
-        });
-        break;
-      case "pilot-seat": {
-        const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
-        const stand = component.stand ?? { x: 0, z: -1.55 };
-        out.seats.push({
-          id: entity.id,
-          role: component.role ?? "passenger",
-          seat: { right, up: position.y, forward },
-          eye: {
-            right: -(position.x + eye.x),
-            up: position.y + eye.y,
-            forward: position.z + eye.z,
-          },
-          stand: {
-            right: -(position.x + stand.x),
-            forward: position.z + stand.z,
-          },
-          interactRadius: component.interactRadius ?? DEFAULT_CHAIR_RADIUS,
-        });
-        break;
-      }
-      case "ramp-interact":
-        out.rampInteracts.push({
-          placement: component.placement,
-          right,
-          forward,
-          radius:
-            component.radius ??
-            (component.placement === "outside"
-              ? DEFAULT_RAMP_OUTSIDE_RADIUS
-              : DEFAULT_RAMP_DECK_RADIUS),
-        });
-        break;
-      case "cockpit-control": {
-        // Also collected via collectCockpitControls for ship-controller path.
-        const point = sceneToShipPoint(position);
-        out.cockpitControls.push({
-          id: component.id || entity.id,
-          action: component.action,
-          ...(component.label ? { label: component.label } : {}),
-          position: {
-            right: point.right,
-            up: point.up,
-            forward: point.forward,
-          },
-          gazeRadius: component.gazeRadius ?? DEFAULT_COCKPIT_GAZE_RADIUS,
-          maxDistance: component.maxDistance ?? DEFAULT_COCKPIT_MAX_DISTANCE,
-        });
-        break;
-      }
-      case "cockpit-stat": {
-        // Also collected via collectCockpitStats for ship-controller path.
-        const point = sceneToShipPoint(position);
-        out.cockpitStats.push({
-          id: component.id || entity.id,
-          kind: component.kind,
-          ...(component.label ? { label: component.label } : {}),
-          position: {
-            right: point.right,
-            up: point.up,
-            forward: point.forward,
-          },
-          maxDistance: component.maxDistance ?? DEFAULT_COCKPIT_STAT_MAX_DISTANCE,
-        });
-        break;
-      }
-      default:
-        break;
-    }
+    collectLegacyShipComponent(component, ctx, out);
   }
 
   for (const child of entity.children ?? []) {
@@ -871,26 +1016,8 @@ function bindColliderAnimations(
   return result;
 }
 
-/**
- * Builds the ship layout for a ship prefab. Returns null only when the
- * prefab has no ship components at all. An in-progress prefab (e.g. hull
- * only, no deck colliders yet) still yields a layout so previews show the
- * authored ship; deck walking simply stays unavailable until colliders exist.
- * Missing primary pilot seat falls back to the built-in Starhopper anchors.
- */
-export async function buildShipLayoutFromPrefab(
-  doc: PrefabDocument,
-): Promise<ShipLayout | null> {
-  const transforms = new Map<string, EntityWorldTransform>();
-  buildEntityTransformMap(
-    doc.root,
-    vec3(0, 0, 0),
-    quatIdentity(),
-    vec3(1, 1, 1),
-    transforms,
-  );
-
-  const out: CollectedShip = {
+function createEmptyCollectedShip(): CollectedShip {
+  return {
     hullUrl: null,
     hullNodeOverrides: null,
     restHeight: null,
@@ -907,7 +1034,13 @@ export async function buildShipLayoutFromPrefab(
     testSpawn: null,
     hasController: false,
   };
+}
 
+function populateCollectedShipFromPrefab(
+  doc: PrefabDocument,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
   const hullWithController = findHullEntityWithController(doc.root);
   if (hullWithController) {
     bakeFromShipController(
@@ -924,44 +1057,47 @@ export async function buildShipLayoutFromPrefab(
   collectEntertainmentSystems(doc.root, transforms, out);
   collectShipDoors(doc.root, transforms, out);
   collectBeds(doc.root, transforms, out);
+}
 
+function resolveTestSpawn(
+  doc: PrefabDocument,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
   const testSpawnEntity = findEntityByName(doc.root, "Test Spawn");
-  if (testSpawnEntity) {
-    const point = resolveEntityShipPoint(testSpawnEntity.id, transforms);
-    if (point) {
-      out.testSpawn = {
-        right: point.right,
-        up: point.up,
-        forward: point.forward,
-      };
-    } else {
-      console.warn(
-        `Ship prefab "${doc.id}" has a "Test Spawn" empty but its transform could not be resolved.`,
-      );
-    }
+  if (!testSpawnEntity) return;
+  const point = resolveEntityShipPoint(testSpawnEntity.id, transforms);
+  if (point) {
+    out.testSpawn = {
+      right: point.right,
+      up: point.up,
+      forward: point.forward,
+    };
+    return;
   }
+  console.warn(
+    `Ship prefab "${doc.id}" has a "Test Spawn" empty but its transform could not be resolved.`,
+  );
+}
 
-  const hasShipContent =
+function shipPrefabHasContent(out: CollectedShip): boolean {
+  return (
     out.hasController ||
     out.hullUrl !== null ||
     out.doors.length > 0 ||
     out.seats.length > 0 ||
     out.beds.length > 0 ||
     out.rampInteracts.length > 0 ||
-    Object.keys(out.spec).length > 0;
-  if (!hasShipContent) {
-    console.warn(
-      `Ship prefab "${doc.id}" has no ship components; using the built-in ship.`,
-    );
-    return null;
-  }
+    Object.keys(out.spec).length > 0
+  );
+}
+
+function warnShipLayoutIssues(doc: PrefabDocument, out: CollectedShip): void {
   if (!out.hullUrl) {
     console.warn(
       `Ship prefab "${doc.id}" has no hull GLB on the ship-controller / ship-hull entity; using the built-in hull.`,
     );
   }
-
-  const fallback = DEFAULT_SHIP_LAYOUT;
   const pilot = primaryPilotSeat(out.seats);
   if (out.seats.length > 0 && !pilot) {
     console.warn(
@@ -978,11 +1114,27 @@ export async function buildShipLayoutFromPrefab(
       `Ship prefab "${doc.id}" has ${pilotCount} pilot seats; the first pilot marker wins for flight.`,
     );
   }
+}
 
-  const pilotSeat = pilot?.seat ?? fallback.pilotSeat;
-  const pilotEye = pilot?.eye ?? fallback.pilotEye;
-  const seatStand = pilot?.stand ?? fallback.seatStand;
+function resolvePilotAnchors(out: CollectedShip): {
+  pilotSeat: ShipLayout["pilotSeat"];
+  pilotEye: ShipLayout["pilotEye"];
+  seatStand: ShipLayout["seatStand"];
+} {
+  const fallback = DEFAULT_SHIP_LAYOUT;
+  const pilot = primaryPilotSeat(out.seats);
+  return {
+    pilotSeat: pilot?.seat ?? fallback.pilotSeat,
+    pilotEye: pilot?.eye ?? fallback.pilotEye,
+    seatStand: pilot?.stand ?? fallback.seatStand,
+  };
+}
 
+async function finalizeShipLayout(
+  doc: PrefabDocument,
+  out: CollectedShip,
+): Promise<ShipLayout> {
+  const { pilotSeat, pilotEye, seatStand } = resolvePilotAnchors(out);
   const spec = mergeShipSpec(out.spec);
   const colliders = bindColliderAnimations(
     await buildPrefabColliders(doc),
@@ -997,7 +1149,6 @@ export async function buildShipLayoutFromPrefab(
       `Ship prefab "${doc.id}" uses ship-controller but has no deck colliders; the interior is not walkable yet.`,
     );
   }
-
   return {
     spec,
     hullUrl: out.hullUrl,
@@ -1019,4 +1170,38 @@ export async function buildShipLayoutFromPrefab(
     testSpawn: out.testSpawn ?? undefined,
     sounds: buildPrefabSounds(doc),
   };
+}
+
+/**
+ * Builds the ship layout for a ship prefab. Returns null only when the
+ * prefab has no ship components at all. An in-progress prefab (e.g. hull
+ * only, no deck colliders yet) still yields a layout so previews show the
+ * authored ship; deck walking simply stays unavailable until colliders exist.
+ * Missing primary pilot seat falls back to the built-in Starhopper anchors.
+ */
+export async function buildShipLayoutFromPrefab(
+  doc: PrefabDocument,
+): Promise<ShipLayout | null> {
+  const transforms = new Map<string, EntityWorldTransform>();
+  buildEntityTransformMap(
+    doc.root,
+    vec3(0, 0, 0),
+    quatIdentity(),
+    vec3(1, 1, 1),
+    transforms,
+  );
+
+  const out = createEmptyCollectedShip();
+  populateCollectedShipFromPrefab(doc, transforms, out);
+  resolveTestSpawn(doc, transforms, out);
+
+  if (!shipPrefabHasContent(out)) {
+    console.warn(
+      `Ship prefab "${doc.id}" has no ship components; using the built-in ship.`,
+    );
+    return null;
+  }
+
+  warnShipLayoutIssues(doc, out);
+  return finalizeShipLayout(doc, out);
 }

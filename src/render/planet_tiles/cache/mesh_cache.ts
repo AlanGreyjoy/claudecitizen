@@ -569,73 +569,58 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     return ready;
   }
 
-  function requestBestAvailableTile(info: TileInfo, buildBudget: BuildBudget): ResolvedTile {
+  function buildTileSearchChain(info: TileInfo): TileInfo[] {
     const searchChain: TileInfo[] = [];
     let current: TileInfo | null = info;
     while (current) {
       searchChain.push(current);
       current = parentTileInfo(current, planet);
     }
+    return searchChain;
+  }
 
-    const target = searchChain[0];
-    const targetKey = tileKey(target.face, target.level, target.x, target.y);
-    let targetEntry = meshCache.get(targetKey);
+  function resolvedTile(info: TileInfo, key: string, mesh: THREE.Mesh | null): ResolvedTile {
+    return { info, key, mesh };
+  }
 
-    // Start the requested leaf before any fallback parent. Queue priority is
-    // distance-first with a fine-LOD tie-break, so cold-cache refinement grows
-    // outward from the viewer instead of consuming the budget on coarse rings.
-    if (!targetEntry) {
-      targetEntry = beginBudgetedSelectedTileLoad(target, buildBudget);
+  function tryResolveTargetTile(
+    target: TileInfo,
+    targetKey: string,
+    targetEntry: TileMeshEntry | undefined,
+    buildBudget: BuildBudget,
+  ): ResolvedTile | null {
+    if (!targetEntry || targetEntry.status === 'loading-disk' || targetEntry.mesh) {
+      return targetEntry?.mesh ? resolvedTile(target, targetKey, targetEntry.mesh) : null;
     }
-    if (!targetEntry?.mesh) {
-      const immediateParent = searchChain[1];
-      if (immediateParent) {
-        beginBudgetedSelectedTileLoad(immediateParent, buildBudget);
-      }
-    }
-    if (targetEntry) targetEntry.lastUsedFrame = frameNumber;
-
-    if (targetEntry && targetEntry.status !== 'loading-disk' && !targetEntry.mesh) {
-      if (maySyncBuild(target)) {
-        const builtEntry = tryBuildTileMeshSync(target, buildBudget);
-        if (builtEntry) {
-          return {
-            info: target,
-            key: targetKey,
-            mesh: builtEntry.mesh!,
-          };
-        }
-      } else if (hasWorkers() && target.level > 0 && !targetEntry.buildId) {
-        // Disk miss left a sync-pending stub; promote to worker queue.
+    if (!maySyncBuild(target)) {
+      if (hasWorkers() && target.level > 0 && !targetEntry.buildId) {
         meshCache.delete(targetKey);
         if (buildBudget.remaining > 0) {
           buildBudget.remaining -= 1;
           queueTileBuild(target);
         }
       }
-    } else if (targetEntry) {
-      if (targetEntry.mesh) {
-        return {
-          info: target,
-          key: targetKey,
-          mesh: targetEntry.mesh,
-        };
-      }
+      return null;
     }
+    const builtEntry = tryBuildTileMeshSync(target, buildBudget);
+    return builtEntry?.mesh ? resolvedTile(target, targetKey, builtEntry.mesh) : null;
+  }
 
-    for (const candidate of searchChain.slice(1)) {
+  function findAncestorMesh(candidates: TileInfo[]): ResolvedTile | null {
+    for (const candidate of candidates) {
       const key = tileKey(candidate.face, candidate.level, candidate.x, candidate.y);
       const entry = meshCache.get(key);
-      if (!entry) continue;
+      if (!entry?.mesh) continue;
       entry.lastUsedFrame = frameNumber;
-      if (!entry.mesh) continue;
-      return {
-        info: candidate,
-        key,
-        mesh: entry.mesh,
-      };
+      return resolvedTile(candidate, key, entry.mesh);
     }
+    return null;
+  }
 
+  function resolveFallbackTile(
+    searchChain: TileInfo[],
+    buildBudget: BuildBudget,
+  ): ResolvedTile {
     const fallbackInfo = searchChain.find((candidate) => candidate.level <= MIN_LEVEL)
       ?? searchChain[searchChain.length - 1];
     const fallbackKey = tileKey(
@@ -647,11 +632,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     const fallbackEntry = meshCache.get(fallbackKey);
     if (fallbackEntry?.mesh) {
       fallbackEntry.lastUsedFrame = frameNumber;
-      return {
-        info: fallbackInfo,
-        key: fallbackKey,
-        mesh: fallbackEntry.mesh,
-      };
+      return resolvedTile(fallbackInfo, fallbackKey, fallbackEntry.mesh);
     }
 
     const fallbackQueuedInWorker =
@@ -662,22 +643,36 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       fallbackQueuedInWorker || !maySyncBuild(fallbackInfo)
         ? null
         : tryBuildTileMeshSync(fallbackInfo, buildBudget);
-    if (builtFallbackEntry) {
-      return {
-        info: fallbackInfo,
-        key: fallbackKey,
-        mesh: builtFallbackEntry.mesh,
-      };
+    if (builtFallbackEntry?.mesh) {
+      return resolvedTile(fallbackInfo, fallbackKey, builtFallbackEntry.mesh);
     }
 
-    // The six pinned L0 roots should make this path unreachable. Keep the
-    // defensive request in case cache initialization ever changes.
     startTerrainDiskLoad(fallbackInfo);
-    return {
-      info: fallbackInfo,
-      key: fallbackKey,
-      mesh: null,
-    };
+    return resolvedTile(fallbackInfo, fallbackKey, null);
+  }
+
+  function requestBestAvailableTile(info: TileInfo, buildBudget: BuildBudget): ResolvedTile {
+    const searchChain = buildTileSearchChain(info);
+    const target = searchChain[0];
+    const targetKey = tileKey(target.face, target.level, target.x, target.y);
+    let targetEntry = meshCache.get(targetKey);
+
+    if (!targetEntry) {
+      targetEntry = beginBudgetedSelectedTileLoad(target, buildBudget);
+    }
+    const immediateParent = searchChain[1];
+    if (!targetEntry?.mesh && immediateParent) {
+      beginBudgetedSelectedTileLoad(immediateParent, buildBudget);
+    }
+    if (targetEntry) targetEntry.lastUsedFrame = frameNumber;
+
+    const targetResolved = tryResolveTargetTile(target, targetKey, targetEntry, buildBudget);
+    if (targetResolved) return targetResolved;
+
+    const ancestorResolved = findAncestorMesh(searchChain.slice(1));
+    if (ancestorResolved) return ancestorResolved;
+
+    return resolveFallbackTile(searchChain, buildBudget);
   }
 
   function evictTileMeshes(selectedKeys: Set<string>): void {

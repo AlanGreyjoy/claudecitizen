@@ -14,7 +14,6 @@ import {
   surfaceDestinationDisplayName,
   type SurfaceDestination,
 } from '../../world/biome_teleport';
-import { oceanWaterLevelMeters } from '../../world/coastal_profile';
 import { cartesianFromLatLonAlt } from '../../world/coordinates';
 import { sampleSurfaceHeight } from '../../world/elevation';
 import { activatePlanetDocument } from '../../world/planets/runtime';
@@ -26,7 +25,6 @@ import {
   createDefaultSpawnEntry,
   parsePlanetDocument,
   planetPhysicsFromDocument,
-  type PlanetSurfacePalette,
   type PlanetBiomeRecipe,
   type PlanetDocument,
   type SurfacePaletteKey,
@@ -49,6 +47,10 @@ import {
   buildPreviewSpawns,
   type PreviewSpawnHandle,
 } from './planet_preview_spawns';
+import {
+  buildPlanetPreviewMeshes,
+  disposePreviewMesh,
+} from './planet_preview_mesh';
 
 const PREVIEW_SEGMENTS = 96;
 const DIAGNOSTIC_FEATURES: readonly SurfaceDestination[] = [
@@ -1440,11 +1442,6 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     return children;
   }
 
-  function hexToRgb(hex: string): [number, number, number] {
-    const value = Number.parseInt(hex.slice(1), 16);
-    return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
-  }
-
   function clearPreviewVegetation(): void {
     previewVegetationLoad?.cancel();
     previewVegetationLoad = null;
@@ -1465,243 +1462,32 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
   }
 
   function rebuildPreviewMesh(): void {
-    // Terrain edits invalidate planted props until Preview rebuilds them.
     clearPreviewDecorations();
     activatePlanetDocument(documentState);
     const planet = planetPhysicsFromDocument(documentState);
     const seed = documentState.seed;
     const hint = activePreviewLocation;
     const patch = previewPatch(hint);
-    const segments = PREVIEW_SEGMENTS;
-    const { halfLatExtentRadians, halfLonExtentRadians, heightScale, patchExtentMeters } = patch;
-    const gridWidth = segments + 1;
-    const positions: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-    const heights = new Float64Array(gridWidth * gridWidth);
-    const waterLevels = new Float64Array(gridWidth * gridWidth);
-    const waterKinds = new Uint8Array(gridWidth * gridWidth); // 0 none, 1 lake, 2 ocean, 3 river
-    let minHeight = Infinity;
-    let maxHeight = -Infinity;
-    let moistureTotal = 0;
-    let temperatureTotal = 0;
-    let targetMatches = 0;
-    let centerSurface: ReturnType<typeof samplePlanetSurface> | null = null;
-    const oceanLevel = oceanWaterLevelMeters();
-
-    for (let y = 0; y <= segments; y += 1) {
-      for (let x = 0; x <= segments; x += 1) {
-        const u = x / segments;
-        const v = y / segments;
-        const lat = hint.latRadians + (v - 0.5) * 2 * halfLatExtentRadians;
-        const lon = hint.lonRadians + (u - 0.5) * 2 * halfLonExtentRadians;
-        const probe = cartesianFromLatLonAlt(lat, lon, 0, planet.radiusMeters);
-        const surface = samplePlanetSurface(planet, seed, probe);
-        const height = surface.heightMeters;
-        const localX = (u - 0.5) * patchExtentMeters;
-        const localZ = (v - 0.5) * patchExtentMeters;
-        const vertex = y * gridWidth + x;
-        heights[vertex] = height;
-        minHeight = Math.min(minHeight, height);
-        maxHeight = Math.max(maxHeight, height);
-        moistureTotal += surface.moisture;
-        temperatureTotal += surface.temperature;
-        if (x === segments / 2 && y === segments / 2) centerSurface = surface;
-        const isCoast =
-          surface.waterBody == null &&
-          surface.lakeWaterLevelMeters == null &&
-          surface.riverWaterLevelMeters == null &&
-          surface.heightMeters >= oceanLevel + 1.5 &&
-          surface.heightMeters <= documentState.biomes.coastMaxHeightMeters;
-        const matchesTarget =
-          activePreviewDestination === 'coast'
-            ? isCoast
-            : activePreviewDestination === 'lake' || activePreviewDestination === 'river'
-              ? surface.waterBody === activePreviewDestination
-              : activePreviewDestination != null
-                ? surface.waterBody == null && surface.biome === activePreviewDestination
-                : false;
-        if (matchesTarget) targetMatches += 1;
-        positions.push(localX, height * heightScale, localZ);
-        const [r, g, b] = hexToRgb(
-          isCoast
-            ? documentState.palette.coast
-            : (documentState.palette as PlanetSurfacePalette)[surface.biome] ?? '#719447',
-        );
-        colors.push(r, g, b);
-
-        if (surface.waterBody != null && surface.waterLevelMeters != null) {
-          waterLevels[vertex] = surface.waterLevelMeters;
-          waterKinds[vertex] =
-            surface.waterBody === 'ocean' ? 2 : surface.waterBody === 'river' ? 3 : 1;
-        } else {
-          waterLevels[vertex] = Number.NaN;
-          waterKinds[vertex] = 0;
-        }
-      }
-    }
-
-    const cellSpanMeters = patchExtentMeters / segments;
-    let maxSlopeRadians = 0;
-    for (let y = 1; y < segments; y += 1) {
-      for (let x = 1; x < segments; x += 1) {
-        const center = y * gridWidth + x;
-        const riseX = (heights[center + 1]! - heights[center - 1]!) / 2;
-        const riseZ =
-          (heights[center + gridWidth]! - heights[center - gridWidth]!) / 2;
-        maxSlopeRadians = Math.max(
-          maxSlopeRadians,
-          Math.atan(Math.hypot(riseX, riseZ) / cellSpanMeters),
-        );
-      }
-    }
-    const sampleCount = gridWidth * gridWidth;
-    const resolvedCenter = centerSurface ?? samplePlanetSurface(
+    const built = buildPlanetPreviewMeshes({
       planet,
       seed,
-      cartesianFromLatLonAlt(hint.latRadians, hint.lonRadians, 0, planet.radiusMeters),
-    );
-    previewDiagnostics = {
-      centerBiome: resolvedCenter.biome,
-      centerWater: resolvedCenter.waterBody ?? 'dry',
-      coverage: targetMatches / sampleCount,
-      maxHeight,
-      maxSlopeDegrees: (maxSlopeRadians * 180) / Math.PI,
-      meanMoisture: moistureTotal / sampleCount,
-      meanTemperature: temperatureTotal / sampleCount,
-      minHeight,
-    };
-
-    for (let y = 0; y < segments; y += 1) {
-      for (let x = 0; x < segments; x += 1) {
-        const a = y * gridWidth + x;
-        const b = a + 1;
-        const c = a + gridWidth;
-        const d = c + 1;
-        indices.push(a, c, b, b, c, d);
-      }
-    }
-
-    if (previewMesh) {
-      scene.remove(previewMesh);
-      previewMesh.geometry.dispose();
-      (previewMesh.material as THREE.Material).dispose();
-      previewMesh = null;
-    }
-    if (previewWaterMesh) {
-      scene.remove(previewWaterMesh);
-      previewWaterMesh.geometry.dispose();
-      (previewWaterMesh.material as THREE.Material).dispose();
-      previewWaterMesh = null;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    previewMesh = new THREE.Mesh(
-      geometry,
-      new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        roughness: 0.92,
-        metalness: 0.02,
-        flatShading: true,
-      }),
-    );
+      patch,
+      segments: PREVIEW_SEGMENTS,
+      palette: documentState.palette,
+      coastMaxHeightMeters: documentState.biomes.coastMaxHeightMeters,
+      activePreviewDestination,
+    });
+    disposePreviewMesh(previewMesh, scene);
+    disposePreviewMesh(previewWaterMesh, scene);
+    previewMesh = built.terrainMesh;
+    previewWaterMesh = built.waterMesh;
     scene.add(previewMesh);
-
-    const waterPositions: number[] = [];
-    const waterColors: number[] = [];
-    const waterIndices: number[] = [];
-    const oceanRgb = hexToRgb(documentState.palette.ocean);
-    const lakeRgb = hexToRgb(documentState.palette.lake);
-    const riverRgb = hexToRgb(documentState.palette.river);
-    const shallowRgb = hexToRgb('#3f7898');
-
-    for (let y = 0; y < segments; y += 1) {
-      for (let x = 0; x < segments; x += 1) {
-        const corners = [
-          y * gridWidth + x,
-          y * gridWidth + x + 1,
-          (y + 1) * gridWidth + x,
-          (y + 1) * gridWidth + x + 1,
-        ];
-        const wetCorners = corners.filter((index) => waterKinds[index] !== 0);
-        if (wetCorners.length === 0) continue;
-
-        const base = waterPositions.length / 3;
-        let oceanCount = 0;
-        let riverCount = 0;
-        for (const index of corners) {
-          const u = (index % gridWidth) / segments;
-          const v = Math.floor(index / gridWidth) / segments;
-          const localX = (u - 0.5) * patchExtentMeters;
-          const localZ = (v - 0.5) * patchExtentMeters;
-          const level = waterKinds[index] !== 0 ? waterLevels[index] : wetCorners.reduce(
-            (sum, wetIndex) => sum + waterLevels[wetIndex],
-            0,
-          ) / wetCorners.length;
-          waterPositions.push(localX, level * heightScale, localZ);
-          if (waterKinds[index] === 2) oceanCount += 1;
-          if (waterKinds[index] === 3) riverCount += 1;
-        }
-
-        const useOcean = oceanCount >= 2;
-        const tint = useOcean
-          ? [
-              oceanRgb[0] * 0.55 + shallowRgb[0] * 0.45,
-              oceanRgb[1] * 0.55 + shallowRgb[1] * 0.45,
-              oceanRgb[2] * 0.55 + shallowRgb[2] * 0.45,
-            ]
-          : riverCount >= 2
-            ? riverRgb
-            : lakeRgb;
-        for (let i = 0; i < 4; i += 1) {
-          waterColors.push(tint[0], tint[1], tint[2]);
-        }
-        waterIndices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-      }
-    }
-
-    if (waterPositions.length > 0) {
-      const waterGeometry = new THREE.BufferGeometry();
-      waterGeometry.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(waterPositions, 3),
-      );
-      waterGeometry.setAttribute('color', new THREE.Float32BufferAttribute(waterColors, 3));
-      waterGeometry.setIndex(waterIndices);
-      waterGeometry.computeVertexNormals();
-      previewWaterMesh = new THREE.Mesh(
-        waterGeometry,
-        new THREE.MeshStandardMaterial({
-          vertexColors: true,
-          transparent: true,
-          opacity: 0.62,
-          depthWrite: false,
-          roughness: 0.28,
-          metalness: 0.08,
-          side: THREE.DoubleSide,
-          polygonOffset: true,
-          polygonOffsetFactor: -1,
-          polygonOffsetUnits: -1,
-        }),
-      );
-      previewWaterMesh.renderOrder = 2;
-      scene.add(previewWaterMesh);
-    }
-
-    const midHeight =
-      sampleSurfaceHeight(
-        planet,
-        seed,
-        cartesianFromLatLonAlt(hint.latRadians, hint.lonRadians, 0, planet.radiusMeters),
-      ) * heightScale;
+    if (previewWaterMesh) scene.add(previewWaterMesh);
+    previewDiagnostics = built.diagnostics;
     if (resetCameraOnRebuild) {
       endFly();
-      camera.position.set(0, midHeight + 230, 440);
-      orbit.target.set(0, midHeight, 0);
+      camera.position.set(0, built.midHeight + 230, 440);
+      orbit.target.set(0, built.midHeight, 0);
       camera.lookAt(orbit.target);
       orbit.update();
       resetCameraOnRebuild = false;

@@ -1,33 +1,23 @@
 import * as THREE from 'three';
 import type {
   Planet,
-  PlanetSurfaceSample,
   RenderStats,
   SpikeRenderWorld,
   SsaoSettings,
   Vec3,
 } from '../../types';
-import { distance, normalize } from '../../math/vec3';
+import { distance } from '../../math/vec3';
 import { createCharacterAvatar } from './scene/character_avatar';
 import { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
 import { createPlanetTileManager } from '../planet_tiles';
-import { planApproachPrefetch } from '../planet_tiles/domain/approach_prefetch';
 import { createPlanetVegetationManager, normalizeVegetationSettings } from '../vegetation';
 import { createSurfaceSpawnManager } from '../surface_spawns';
-import { radialUp } from '../../world/coordinates';
-import {
-  getRenderableSurfaceCacheStats,
-  sampleRenderablePlanetSurface,
-} from '../../world/planet_surface';
-import { clamp01 } from './domain/math';
 import { applyRenderQualitySettings } from './domain/apply_render_quality';
 import { DAY_LENGTH_SECONDS, SURFACE_MAX_PIXEL_RATIO } from './domain/constants';
-import type { RenderMode, SpikeRenderer, TimeOverride } from './domain/types';
+import type { SpikeRenderer, TimeOverride } from './domain/types';
 import { getStationFrame, type StationFrame } from '../../world/station';
-import { getShipLayout } from '../../player/ship_layout';
 import {
   createPrefabStationGroup,
-  updateLocalLightShadowCull,
 } from '../prefabs/prefab_renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
@@ -43,16 +33,8 @@ import {
   resolveColorCorrectionSettings,
   saveColorCorrectionSettings,
 } from './domain/color_correction';
-import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
-import { setFogSettings as applyFogSettings, updateEnvironment } from './update/environment';
-import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun_system';
+import { setFogSettings as applyFogSettings } from './update/environment';
 import { createQuantumBubble } from '../effects/quantum_bubble';
-import {
-  evaluateQuantumEligibility,
-  createQuantumTravelState,
-  listNavDestinationMarkers,
-  resolveNavDestinationId,
-} from '../../flight/quantum_travel';
 import type { PlayerCharacterAppearanceV1 } from '../../player/character_creator/player_character_appearance';
 import {
   GAME_SETTINGS_CHANGED_EVENT,
@@ -63,84 +45,18 @@ import {
 import { createMuzzleFlashRenderer } from '../effects/muzzle_flash';
 import { createHitDecalRenderer } from '../effects/hit_decals';
 import { createTracerRenderer } from '../effects/tracers';
+import {
+  executeSpikeRenderFrame,
+  type SpikeRenderFrameDeps,
+  type SpikeRenderFrameState,
+  QUANTUM_RENDER_LAYER,
+  enableRenderLayer,
+} from './render_spike_frame';
 
-const DAY_NIGHT_FADE_START_METERS = 18_000;
-const QUANTUM_RENDER_LAYER = 1;
-const QUANTUM_BACKGROUND = new THREE.Color(0x01030a);
 // A full protected station can carry multiple gigabytes of decoded atlas data.
 // Distant stations already have System Map/nav markers, so load their detailed
 // prefab only once the player is close enough for the mesh to matter.
 const SECONDARY_STATION_LOAD_DISTANCE_METERS = 75_000;
-
-function enableRenderLayer(root: THREE.Object3D, layer: number): void {
-  root.traverse((object) => object.layers.enable(layer));
-}
-
-function renderQuantumIsolation(
-  renderer: THREE.WebGLRenderer,
-  scene: THREE.Scene,
-  camera: THREE.PerspectiveCamera,
-  quantumRoot: THREE.Object3D,
-  visibleBranchRoot: THREE.Object3D,
-  preservedSceneRoots: readonly THREE.Object3D[],
-): void {
-  const previousLayerMask = camera.layers.mask;
-  const previousBackground = scene.background;
-  const previousFog = scene.fog;
-  const previousMatrixWorldAutoUpdate = scene.matrixWorldAutoUpdate;
-  const hiddenSiblings: THREE.Object3D[] = [];
-  const preservedRoots = new Set(preservedSceneRoots);
-
-  // Layers prevent draw submission, but Three.js still traverses every child
-  // on a mismatched layer. Temporarily hiding siblings along the bubble's
-  // ancestry makes the renderer visit the capsule branch and nothing else.
-  let branch: THREE.Object3D | null = quantumRoot;
-  while (branch?.parent) {
-    // Keep the active ship/cockpit beside the capsule, then prune everything
-    // else once the traversal reaches the main scene.
-    if (branch.parent !== visibleBranchRoot) {
-      for (const sibling of branch.parent.children) {
-        if (
-          sibling !== branch &&
-          !preservedRoots.has(sibling) &&
-          sibling.visible
-        ) {
-          sibling.visible = false;
-          hiddenSiblings.push(sibling);
-        }
-      }
-    }
-    branch = branch.parent;
-  }
-
-  camera.layers.set(QUANTUM_RENDER_LAYER);
-  scene.background = QUANTUM_BACKGROUND;
-  scene.fog = null;
-  visibleBranchRoot.updateWorldMatrix(true, true);
-  for (const preservedRoot of preservedSceneRoots) {
-    preservedRoot.updateWorldMatrix(true, true);
-  }
-  scene.matrixWorldAutoUpdate = false;
-  try {
-    renderer.render(scene, camera);
-  } finally {
-    scene.matrixWorldAutoUpdate = previousMatrixWorldAutoUpdate;
-    camera.layers.mask = previousLayerMask;
-    scene.background = previousBackground;
-    scene.fog = previousFog;
-    for (const sibling of hiddenSiblings) sibling.visible = true;
-  }
-}
-
-function smoothstep01(value: number, edge0: number, edge1: number): number {
-  const t = clamp01((value - edge0) / Math.max(edge1 - edge0, 0.000001));
-  return t * t * (3 - 2 * t);
-}
-
-function resolveDayNightInfluence(altitudeMeters: number, atmosphereHeightMeters: number): number {
-  const fadeStart = Math.min(DAY_NIGHT_FADE_START_METERS, atmosphereHeightMeters * 0.35);
-  return 1 - smoothstep01(altitudeMeters, fadeStart, atmosphereHeightMeters);
-}
 
 export interface SpikeRendererOptions {
   /** Dev preview: render this prefab as the orbital station instead of the procedural model. */
@@ -282,29 +198,19 @@ export function createSpikeRenderer(
   const quantumBubble = createQuantumBubble(scene, tileManager.renderScale);
   quantumBubble.enableRenderLayer(QUANTUM_RENDER_LAYER);
 
-  let lastTime = 0;
-  const lastFocusPosition: Vec3 = { x: 0, y: 0, z: 0 };
-  let timeOverride: TimeOverride = 'auto';
-  let quantumPreloadKey: string | null = null;
-  let quantumPreloadPosition: Vec3 | null = null;
-  let quantumPreloadSurface: PlanetSurfaceSample | null = null;
-  let quantumPreloadTileState: ReturnType<typeof tileManager.update> | null = null;
-  let lastVegetationApproachPrefetchSeconds = -Infinity;
-  let lastQuantumPreloadUpdateSeconds = -Infinity;
-  let wasQuantumTraveling = false;
-
-  const IDLE_VEGETATION_STATS = {
-    activeTiles: 0,
-    builtThisFrame: 0,
-    cacheLimit: 0,
-    cachedTiles: 0,
-    diskHits: 0,
-    diskMisses: 0,
-    evictedThisFrame: 0,
-    peakCachedTiles: 0,
-    totalBuilds: 0,
-    totalEvictions: 0,
+  const renderFrameState: SpikeRenderFrameState = {
+    lastTime: 0,
+    quantumPreloadKey: null,
+    quantumPreloadPosition: null,
+    quantumPreloadSurface: null,
+    quantumPreloadTileState: null,
+    lastVegetationApproachPrefetchSeconds: -Infinity,
+    lastQuantumPreloadUpdateSeconds: -Infinity,
+    wasQuantumTraveling: false,
+    lastFocusPosition: { x: 0, y: 0, z: 0 },
   };
+
+  let timeOverride: TimeOverride = 'auto';
 
   // Sun direction is a function of time: dir(theta) ~ (cos(theta), sin(theta) * 0.364,
   // sin(theta) * 0.939). To force day/night we solve for the theta that points the
@@ -358,391 +264,42 @@ export function createSpikeRenderer(
     );
   }
 
+  const renderFrameDeps: SpikeRenderFrameDeps = {
+    planet,
+    seed,
+    getCloudMode: () => cloudMode,
+    tileManager,
+    vegetationManager,
+    surfaceSpawnManager,
+    cloudShell,
+    surfaceWaterManager,
+    composerStack,
+    shipRenderPool,
+    avatar,
+    remotePresence,
+    stationNpcs,
+    quantumBubble,
+    muzzleFlashRenderer,
+    hitDecalRenderer,
+    tracerRenderer,
+    lighting,
+    renderer,
+    scene,
+    camera,
+    cameraTarget,
+    stationFrame,
+    stationMesh,
+    additionalStationMeshes,
+    atmosphereMesh,
+    defaultFog,
+    quantumLightingRoots,
+    resolveSunTimeSeconds,
+    syncSurfacePixelRatio,
+    ensureAdditionalStationMesh,
+  };
+
   function render(world: SpikeRenderWorld): RenderStats {
-    const {
-      character = null,
-      mode = 'in-ship',
-      ship,
-      timeSeconds: nowSeconds = 0,
-    } = world;
-
-    const renderMode = mode as RenderMode;
-    const dt = Math.max(0.0001, Math.min(nowSeconds - lastTime, 0.1));
-    lastTime = nowSeconds;
-
-    const focusBody = mode === 'in-ship' || mode === 'in-bed' || !character ? ship : character;
-    lastFocusPosition.x = focusBody.position.x;
-    lastFocusPosition.y = focusBody.position.y;
-    lastFocusPosition.z = focusBody.position.z;
-    const volumetricEnabled = cloudMode === 'volumetric';
-    const quantumState = world.quantum ?? createQuantumTravelState();
-    const quantumTraveling = quantumState.phase === 'traveling';
-    const quantumBusy =
-      quantumState.phase === 'spooling' ||
-      quantumTraveling ||
-      quantumState.phase === 'dropOut';
-    muzzleFlashRenderer.update(dt, focusBody.position, !quantumTraveling);
-    hitDecalRenderer.update(focusBody.position, !quantumTraveling);
-    tracerRenderer.update(dt, focusBody.position, !quantumTraveling);
-
-    // Resolve this once at travel entry. During the tunnel, all world systems
-    // can work against the destination instead of sampling every point along
-    // a route the isolated camera cannot see.
-    if (quantumTraveling && quantumState.route) {
-      const preloadKey = quantumState.destinationId ?? 'quantum-destination';
-      if (preloadKey !== quantumPreloadKey) {
-        const radius = planet.radiusMeters + quantumState.route.endAlt;
-        quantumPreloadKey = preloadKey;
-        quantumPreloadPosition = {
-          x: quantumState.route.endDir.x * radius,
-          y: quantumState.route.endDir.y * radius,
-          z: quantumState.route.endDir.z * radius,
-        };
-        quantumPreloadSurface = sampleRenderablePlanetSurface(
-          planet,
-          seed,
-          quantumPreloadPosition,
-        );
-      }
-    }
-
-    const surface =
-      quantumTraveling && quantumPreloadSurface
-        ? quantumPreloadSurface
-        : sampleRenderablePlanetSurface(planet, seed, focusBody.position);
-    syncSurfacePixelRatio(surface.altitudeMeters);
-    const up = radialUp(focusBody.position);
-    const shipUp = normalize(ship.up ?? radialUp(ship.position));
-    const shipForward = normalize(ship.forward);
-    const altitudeFactor = clamp01(surface.altitudeMeters / planet.atmosphereHeightMeters);
-    const spaceFactor = clamp01(
-      (surface.altitudeMeters - 18_000) / (planet.atmosphereHeightMeters * 1.6),
-    );
-    const dayNightInfluence = resolveDayNightInfluence(
-      surface.altitudeMeters,
-      planet.atmosphereHeightMeters,
-    );
-    const renderScale = tileManager.renderScale;
-
-    const sunState = updateSunSystem(
-      resolveSunTimeSeconds(nowSeconds, up),
-      focusBody.position,
-      renderScale,
-      renderMode,
-      up,
-      dayNightInfluence,
-      {
-        sun: lighting.sun,
-        sunMesh: lighting.sunMesh,
-        moonMesh: lighting.moonMesh,
-        moonLight: lighting.moonLight,
-      },
-    );
-    updateSunIntensity(lighting.sun, sunState.rawDaylight, spaceFactor);
-
-    // Camera still updates before terrain so Three.js can frustum-cull draws,
-    // but terrain residency itself is deliberately view-independent. Mouse
-    // look must never hide/reselect the planet underneath a stationary body.
-    updateCameraRig(
-      camera,
-      cameraTarget,
-      world,
-      renderScale,
-      altitudeFactor,
-      shipUp,
-      shipForward,
-      {
-        station: { frame: stationFrame, roomId: world.stationRoomId ?? null },
-        dt,
-      },
-    );
-    // Approach prefetch uses ship velocity (character render state has no
-    // velocity). On foot, selection alone covers the local ring.
-    const focusVelocity = ship.velocity;
-
-    let tileState: ReturnType<typeof tileManager.update>;
-    if (quantumTraveling && quantumPreloadPosition && quantumPreloadSurface) {
-      if (!wasQuantumTraveling) {
-        quantumPreloadTileState = null;
-        lastQuantumPreloadUpdateSeconds = -Infinity;
-      }
-      // Poll terrain streaming at 12 Hz while the capsule itself renders at
-      // the display rate. Workers still get a steady destination queue, but
-      // selection/cache bookkeeping cannot dominate every tunnel frame.
-      // No frustum cull at the destination — the tunnel camera is elsewhere.
-      if (
-        !quantumPreloadTileState ||
-        nowSeconds - lastQuantumPreloadUpdateSeconds >= 1 / 12
-      ) {
-        quantumPreloadTileState = tileManager.update(
-          quantumPreloadPosition,
-          quantumPreloadSurface,
-          { view: null, velocity: null },
-        );
-        lastQuantumPreloadUpdateSeconds = nowSeconds;
-      }
-      tileState = quantumPreloadTileState;
-    } else {
-      tileState = tileManager.update(focusBody.position, surface, {
-        view: null,
-        velocity: focusVelocity,
-      });
-    }
-    tileManager.setVisible(!quantumTraveling);
-    surfaceWaterManager.setVisible(!quantumTraveling);
-    cloudShell.setVisible(!quantumTraveling && cloudMode === 'shell');
-
-    // Skipping the vegetation update alone leaves the previously active
-    // instanced grass/trees beside the camera. Hide the parent so those meshes
-    // do not keep rendering throughout warp.
-    vegetationManager.setVisible(!quantumTraveling);
-    surfaceSpawnManager.setVisible(!quantumTraveling);
-    const vegetationStats = quantumTraveling
-      ? IDLE_VEGETATION_STATS
-      : vegetationManager.update(
-          focusBody.position,
-          tileState.selectedTiles,
-          surface.altitudeMeters,
-          nowSeconds,
-        );
-    if (!quantumTraveling) {
-      surfaceSpawnManager.update(
-        focusBody.position,
-        tileState.selectedTiles,
-        surface.altitudeMeters,
-      );
-    }
-    if (
-      !quantumTraveling &&
-      surface.altitudeMeters < 8_000 &&
-      surface.altitudeMeters >= 1_500 &&
-      nowSeconds - lastVegetationApproachPrefetchSeconds >= 0.35
-    ) {
-      const vegPlan = planApproachPrefetch(
-        planet,
-        focusBody.position,
-        focusVelocity,
-        surface.altitudeMeters,
-      );
-      if (vegPlan && vegPlan.maxLevel >= 14) {
-        lastVegetationApproachPrefetchSeconds = nowSeconds;
-        for (const focus of vegPlan.focuses) {
-          vegetationManager.prefetchAround(focus, Math.min(vegPlan.radiusMeters, 800), {
-            // Vegetation builds on the main thread. Keep the total across the
-            // usual three approach foci near twelve speculative tiles/pass.
-            maxStarts: 4,
-            minLevel: Math.max(14, vegPlan.minLevel),
-            maxLevel: Math.min(16, vegPlan.maxLevel),
-          });
-        }
-      }
-    }
-    if (!quantumTraveling && cloudMode === 'shell') {
-      cloudShell.update(
-        focusBody.position,
-        nowSeconds,
-        spaceFactor,
-        surface.altitudeMeters,
-        {
-          x: camera.position.x,
-          y: camera.position.y,
-          z: camera.position.z,
-        },
-      );
-    }
-
-    const renderInstances =
-      world.ships ??
-      [
-        {
-          id: 'legacy',
-          prefabId: getShipLayout().hullUrl ? 'active' : 'phobos-starhopper',
-          body: ship,
-          rig: world.shipRig ?? { gear01: 1, ramp01: 0, doors: {} },
-        },
-      ];
-    shipRenderPool.sync(
-      renderInstances,
-      world.activeShipId,
-      focusBody.position,
-      renderScale,
-    );
-    const activeShipGroup = shipRenderPool.getActiveGroup();
-    quantumBubble.attachToShip(activeShipGroup);
-    if (quantumTraveling) {
-      enableRenderLayer(activeShipGroup, QUANTUM_RENDER_LAYER);
-    }
-    const flightMode = world.flightMode ?? 'traverse';
-    let highlightedId: string | null = null;
-    if (flightMode === 'nav' && quantumState.phase === 'idle') {
-      const eligibility = evaluateQuantumEligibility({
-        body: ship,
-        flightMode,
-        quantum: quantumState,
-        planet,
-        seed,
-      });
-      highlightedId = eligibility.ok
-        ? eligibility.destinationId
-        : resolveNavDestinationId(ship, planet, seed);
-    } else if (quantumState.destinationId) {
-      highlightedId = quantumState.destinationId;
-    }
-    const markers =
-      quantumTraveling
-        ? []
-        : listNavDestinationMarkers(planet, seed).map((marker) => ({
-            ...marker,
-            highlighted: marker.id === highlightedId,
-          }));
-    quantumBubble.update({
-      quantum: quantumState,
-      flightMode,
-      focusPosition: focusBody.position,
-      markers,
-      timeSeconds: nowSeconds,
-    });
-    if (!quantumTraveling) {
-      updateShipPlacement(
-        stationMesh,
-        { position: stationFrame.origin, up: stationFrame.up, forward: stationFrame.forward },
-        focusBody.position,
-        renderScale,
-      );
-      for (const extra of additionalStationMeshes) {
-        const mesh = ensureAdditionalStationMesh(extra, focusBody.position);
-        if (!mesh) continue;
-        updateShipPlacement(
-          mesh,
-          {
-            position: extra.frame.origin,
-            up: extra.frame.up,
-            forward: extra.frame.forward,
-          },
-          focusBody.position,
-          renderScale,
-        );
-      }
-    }
-    // Hide stations during quantum; frustum culling handles off-screen draws
-    // during normal play.
-    stationMesh.visible = !quantumTraveling;
-    for (const extra of additionalStationMeshes) {
-      if (extra.mesh) extra.mesh.visible = !quantumTraveling;
-    }
-
-    let backgroundColor = QUANTUM_BACKGROUND;
-    if (!quantumTraveling) {
-      ({ backgroundColor } = updateEnvironment({
-        scene,
-        defaultFog,
-        atmosphereMesh,
-        lighting,
-        composerStack,
-        planet,
-        camera,
-        sunState,
-        altitudeMeters: surface.altitudeMeters,
-        altitudeFactor,
-        spaceFactor,
-        dt,
-        nowSeconds,
-        renderScale,
-        focusPosition: focusBody.position,
-        volumetricEnabled: volumetricEnabled && !quantumBusy,
-        stationInteriorActive:
-          renderMode === 'in-station' || renderMode === 'riding-elevator',
-      }));
-
-      avatar.update(
-        character,
-        focusBody.position,
-        nowSeconds,
-        {
-          headLook: character && !world.weaponAimActive
-            ? (world.characterHeadLook ?? null)
-            : null,
-        },
-      );
-      remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
-      stationNpcs.update(world.stationNpcs ?? [], focusBody.position, nowSeconds);
-    }
-
-    if (!quantumTraveling) {
-      surfaceWaterManager.update(
-        focusBody.position,
-        tileState.selectedTiles,
-        sunState.sunDir,
-        dt,
-        backgroundColor,
-      );
-    }
-
-    if (!quantumTraveling) {
-      updateSpeedBlur(composerStack.speedBlurEffect, world);
-    }
-
-    if (quantumBusy) {
-      // Warp already has its own bubble/fade treatment. Skip the expensive
-      // scene re-render and full-screen sampling passes that add little while
-      // the camera traverses thousands of kilometres per frame.
-      composerStack.normalPass.setEnabled(false);
-      composerStack.n8aoPass?.setEnabled(false);
-      composerStack.volumetricFogPass.setEnabled(false);
-      composerStack.speedBlurPass.setEnabled(false);
-      composerStack.motionBlurPass.setEnabled(false);
-      lighting.sun.castShadow = false;
-      lighting.moonLight.castShadow = false;
-      if (quantumTraveling && !wasQuantumTraveling) {
-        composerStack.motionBlurEffect.reset();
-      }
-    } else {
-      composerStack.n8aoPass?.setEnabled(composerStack.ambientOcclusionEnabled);
-      composerStack.speedBlurPass.setEnabled(true);
-      composerStack.motionBlurPass.setEnabled(composerStack.motionBlurEnabledByQuality);
-      if (wasQuantumTraveling) {
-        composerStack.motionBlurEffect.reset();
-      }
-      composerStack.motionBlurEffect.updateCamera(
-        camera,
-        new THREE.Vector3(focusBody.position.x, focusBody.position.y, focusBody.position.z),
-        renderScale,
-      );
-    }
-    wasQuantumTraveling = quantumTraveling;
-    if (!quantumTraveling) {
-      updateLocalLightShadowCull(
-        stationMesh,
-        camera.position,
-        80 * renderScale,
-        2,
-      );
-    }
-
-    if (quantumTraveling) {
-      renderQuantumIsolation(
-        renderer,
-        scene,
-        camera,
-        quantumBubble.getRenderRoot(),
-        activeShipGroup,
-        quantumLightingRoots,
-      );
-    } else if (quantumState.phase === 'dropOut') {
-      // Reveal the destination without restarting the post stack yet. The
-      // black fade and retracting shell cover this one-pass loading window.
-      renderer.render(scene, camera);
-    } else {
-      composerStack.composer.render(dt);
-    }
-
-    const renderStats: RenderStats = {
-      surfaceCache: getRenderableSurfaceCacheStats(),
-      terrain: tileState.stats,
-      vegetation: vegetationStats,
-    };
-    window.__claudecitizenRenderStats = renderStats;
-    return renderStats;
+    return executeSpikeRenderFrame(renderFrameDeps, renderFrameState, world);
   }
 
   function applySsaoSettings(settings: Partial<SsaoSettings>): void {
@@ -860,9 +417,9 @@ export function createSpikeRenderer(
         weaponMarkerForward.set(0, 0, 1).applyQuaternion(weaponMarkerQuaternion).normalize();
         return {
           position: {
-            x: weaponMarkerPosition.x / tileManager.renderScale + lastFocusPosition.x,
-            y: weaponMarkerPosition.y / tileManager.renderScale + lastFocusPosition.y,
-            z: weaponMarkerPosition.z / tileManager.renderScale + lastFocusPosition.z,
+            x: weaponMarkerPosition.x / tileManager.renderScale + renderFrameState.lastFocusPosition.x,
+            y: weaponMarkerPosition.y / tileManager.renderScale + renderFrameState.lastFocusPosition.y,
+            z: weaponMarkerPosition.z / tileManager.renderScale + renderFrameState.lastFocusPosition.z,
           },
           forward: {
             x: weaponMarkerForward.x,

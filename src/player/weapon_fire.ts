@@ -113,76 +113,67 @@ function startReload(
   return true;
 }
 
-export function advanceWeaponFire(
+function tickWeaponReload(
+  state: WeaponFireState,
+  reserveRounds: number,
+  deltaSeconds: number,
+  events: WeaponFireEvent[],
+): void {
+  state.cooldownSeconds = 0;
+  state.reloadSecondsRemaining = Math.max(0, state.reloadSecondsRemaining - deltaSeconds);
+  if (state.reloadSecondsRemaining > 0 || state.reloadRequestPending) return;
+
+  const quantity = Math.min(
+    Math.max(0, Math.floor(reserveRounds)),
+    state.magazineSize - state.roundsInMagazine,
+  );
+  if (quantity > 0) {
+    state.reloadRequestPending = true;
+    events.push({ type: 'reload-request', quantity, weaponId: state.weaponId });
+    return;
+  }
+  state.reloading = false;
+}
+
+function cycleWeaponFireMode(state: WeaponFireState, events: WeaponFireEvent[]): void {
+  state.fireModeIndex = (state.fireModeIndex + 1) % state.fireModes.length;
+  state.burstRoundsRemaining = 0;
+  events.push({
+    type: 'fire-mode-changed',
+    fireMode: currentWeaponFireMode(state),
+    weaponId: state.weaponId,
+  });
+}
+
+function primeBurstFire(
   state: WeaponFireState,
   input: WeaponFireInput,
-): WeaponFireEvent[] {
-  const events: WeaponFireEvent[] = [];
-  const deltaSeconds = Math.max(0, input.deltaSeconds);
-  state.cooldownSeconds -= deltaSeconds;
-
-  if (!input.triggerHeld && !input.triggerPressed) state.dryFireLatched = false;
-
-  if (input.cycleModePressed && state.fireModes.length > 1) {
-    state.fireModeIndex = (state.fireModeIndex + 1) % state.fireModes.length;
-    state.burstRoundsRemaining = 0;
-    events.push({
-      type: 'fire-mode-changed',
-      fireMode: currentWeaponFireMode(state),
-      weaponId: state.weaponId,
-    });
-  }
-
-  if (state.reloading) {
-    state.cooldownSeconds = 0;
-    state.reloadSecondsRemaining = Math.max(0, state.reloadSecondsRemaining - deltaSeconds);
-    if (state.reloadSecondsRemaining <= 0 && !state.reloadRequestPending) {
-      const quantity = Math.min(
-        Math.max(0, Math.floor(input.reserveRounds)),
-        state.magazineSize - state.roundsInMagazine,
-      );
-      if (quantity > 0) {
-        state.reloadRequestPending = true;
-        events.push({ type: 'reload-request', quantity, weaponId: state.weaponId });
-      } else {
-        state.reloading = false;
-      }
-    }
-    return events;
-  }
-
-  if (input.reloadPressed && startReload(state, input.reserveRounds, events)) return events;
-  if (state.reloadRequestPending) {
-    state.cooldownSeconds = 0;
-    return events;
-  }
-
-  const mode = currentWeaponFireMode(state);
-  if (mode === 'burst3' && input.triggerPressed && state.burstRoundsRemaining <= 0) {
-    if (state.roundsInMagazine <= 0) {
-      emitDryFire(state, events);
-    } else {
-      state.burstRoundsRemaining = Math.min(3, state.roundsInMagazine);
-    }
-  }
-
-  const wantsShot =
-    (mode === 'auto' && input.triggerHeld) ||
-    ((mode === 'single' || mode === 'bolt') && input.triggerPressed) ||
-    (mode === 'burst3' && state.burstRoundsRemaining > 0);
-
-  if (!wantsShot) {
-    state.cooldownSeconds = Math.max(0, state.cooldownSeconds);
-    return events;
-  }
+  events: WeaponFireEvent[],
+): void {
+  if (state.burstRoundsRemaining > 0 || !input.triggerPressed) return;
   if (state.roundsInMagazine <= 0) {
-    if (input.triggerPressed || mode === 'auto') emitDryFire(state, events);
-    state.burstRoundsRemaining = 0;
-    state.cooldownSeconds = Math.max(0, state.cooldownSeconds);
-    return events;
+    emitDryFire(state, events);
+    return;
   }
-  if (state.cooldownSeconds > 0) return events;
+  state.burstRoundsRemaining = Math.min(3, state.roundsInMagazine);
+}
 
+function weaponWantsShot(
+  mode: WeaponFireMode,
+  input: WeaponFireInput,
+  burstRoundsRemaining: number,
+): boolean {
+  if (mode === 'auto') return input.triggerHeld;
+  if (mode === 'burst3') return burstRoundsRemaining > 0;
+  return input.triggerPressed;
+}
+
+function emitWeaponShots(
+  state: WeaponFireState,
+  mode: WeaponFireMode,
+  input: WeaponFireInput,
+  events: WeaponFireEvent[],
+): void {
   const shotLimit = mode === 'auto' || mode === 'burst3' ? MAX_WEAPON_SHOTS_PER_TICK : 1;
   let shotsEmitted = 0;
   while (
@@ -203,6 +194,49 @@ export function advanceWeaponFire(
   if (state.roundsInMagazine <= 0) state.burstRoundsRemaining = 0;
   // A suspended tab or debugger pause must not create an unbounded shot backlog.
   if (shotsEmitted >= shotLimit) state.cooldownSeconds = Math.max(0, state.cooldownSeconds);
+}
+
+export function advanceWeaponFire(
+  state: WeaponFireState,
+  input: WeaponFireInput,
+): WeaponFireEvent[] {
+  const events: WeaponFireEvent[] = [];
+  const deltaSeconds = Math.max(0, input.deltaSeconds);
+  state.cooldownSeconds -= deltaSeconds;
+
+  if (!input.triggerHeld && !input.triggerPressed) state.dryFireLatched = false;
+
+  if (input.cycleModePressed && state.fireModes.length > 1) {
+    cycleWeaponFireMode(state, events);
+  }
+
+  if (state.reloading) {
+    tickWeaponReload(state, input.reserveRounds, deltaSeconds, events);
+    return events;
+  }
+
+  if (input.reloadPressed && startReload(state, input.reserveRounds, events)) return events;
+  if (state.reloadRequestPending) {
+    state.cooldownSeconds = 0;
+    return events;
+  }
+
+  const mode = currentWeaponFireMode(state);
+  if (mode === 'burst3') primeBurstFire(state, input, events);
+
+  if (!weaponWantsShot(mode, input, state.burstRoundsRemaining)) {
+    state.cooldownSeconds = Math.max(0, state.cooldownSeconds);
+    return events;
+  }
+  if (state.roundsInMagazine <= 0) {
+    if (input.triggerPressed || mode === 'auto') emitDryFire(state, events);
+    state.burstRoundsRemaining = 0;
+    state.cooldownSeconds = Math.max(0, state.cooldownSeconds);
+    return events;
+  }
+  if (state.cooldownSeconds > 0) return events;
+
+  emitWeaponShots(state, mode, input, events);
   return events;
 }
 

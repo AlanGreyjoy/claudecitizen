@@ -192,6 +192,36 @@ export function createSidekickGameplayAvatar(
     playDesiredAnimation(0);
   }
 
+  async function applyWearableDefinition(epoch: number, wearableKey: string): Promise<void> {
+    const definition = applyWearableLoadoutToDefinition(
+      baseDefinition!,
+      sidekickCatalog!,
+      pendingInventory,
+    );
+    try {
+      await avatar!.applyDefinition(definition);
+      if (disposed || epoch !== wearableSyncEpoch) return;
+    } catch (error) {
+      if (disposed || epoch !== wearableSyncEpoch) return;
+      if (import.meta.env.DEV && !wearableAssetWarnings.has(wearableKey)) {
+        wearableAssetWarnings.add(wearableKey);
+        console.warn(
+          'Wearable Sidekick assets could not be loaded; using the base appearance.',
+          error,
+        );
+      }
+      try {
+        await avatar!.applyDefinition(baseDefinition!);
+      } catch (restoreError) {
+        if (import.meta.env.DEV) {
+          console.warn('Failed to restore the base Sidekick appearance.', restoreError);
+        }
+      }
+      if (disposed || epoch !== wearableSyncEpoch) return;
+    }
+    appliedWearableKey = wearableKey;
+  }
+
   async function syncSidekickEquipment(epoch: number): Promise<void> {
     if (fallback) {
       fallback.setEquippedInventory?.(pendingInventory, pendingActiveWeaponSlotId);
@@ -200,33 +230,7 @@ export function createSidekickGameplayAvatar(
     if (!avatar || !ready || !sidekickCatalog || !baseDefinition) return;
     const wearableKey = wearableLoadoutVisualKey(pendingInventory);
     if (wearableKey !== appliedWearableKey) {
-      const definition = applyWearableLoadoutToDefinition(
-        baseDefinition,
-        sidekickCatalog,
-        pendingInventory,
-      );
-      try {
-        await avatar.applyDefinition(definition);
-        if (disposed || epoch !== wearableSyncEpoch) return;
-      } catch (error) {
-        if (disposed || epoch !== wearableSyncEpoch) return;
-        if (import.meta.env.DEV && !wearableAssetWarnings.has(wearableKey)) {
-          wearableAssetWarnings.add(wearableKey);
-          console.warn(
-            'Wearable Sidekick assets could not be loaded; using the base appearance.',
-            error,
-          );
-        }
-        try {
-          await avatar.applyDefinition(baseDefinition);
-        } catch (restoreError) {
-          if (import.meta.env.DEV) {
-            console.warn('Failed to restore the base Sidekick appearance.', restoreError);
-          }
-        }
-        if (disposed || epoch !== wearableSyncEpoch) return;
-      }
-      appliedWearableKey = wearableKey;
+      await applyWearableDefinition(epoch, wearableKey);
     }
     equipment.sync(avatar.root, characterType, pendingInventory, pendingActiveWeaponSlotId);
   }

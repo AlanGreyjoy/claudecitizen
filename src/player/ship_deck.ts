@@ -642,6 +642,42 @@ export interface DeckLocomotionOptions {
   aiming?: boolean;
 }
 
+function resolveDeckVerticalMotion(
+  state: DeckCharacterState,
+  intent: ReturnType<typeof resolveWalkInputIntent>,
+  groundedBefore: boolean,
+  gravityMetersPerSecond2: number,
+  dt: number,
+): { startedJump: boolean; verticalVelocity: number } {
+  let verticalVelocity = state.shipVerticalVelocity ?? 0;
+  if (groundedBefore && verticalVelocity <= 0) verticalVelocity = 0;
+  const startedJump = Boolean(intent.wantsJump && groundedBefore);
+  if (startedJump) verticalVelocity = intent.jumpSpeedMetersPerSecond;
+  verticalVelocity -= gravityMetersPerSecond2 * dt;
+  return { startedJump, verticalVelocity };
+}
+
+function resolveDeckExitState(
+  state: DeckCharacterState,
+  physics: ShipPhysics,
+  grounded: boolean,
+  options?: DeckLocomotionOptions,
+): ReturnType<typeof rapierDeckExitFlags> {
+  if (options?.suppressDeckExit) {
+    return {
+      leftDeck: false,
+      airborneOffDeckFrames: 0,
+      deckExitGraceFrames: Math.max(0, (state.deckExitGraceFrames ?? 0) - 1),
+    };
+  }
+  return rapierDeckExitFlags(
+    physics,
+    grounded,
+    state.airborneOffDeckFrames ?? 0,
+    state.deckExitGraceFrames ?? 0,
+  );
+}
+
 function updateCharacterOnDeckRapier(
   state: DeckCharacterState,
   ship: FlightBody,
@@ -664,17 +700,15 @@ function updateCharacterOnDeckRapier(
   );
   const cameraForward = deckMovementDirection(ship, 0, 1, cameraYawRadians);
 
-  let verticalVelocity = state.shipVerticalVelocity ?? 0;
   const groundedBefore =
     isShipPlayerGrounded(physics) || Boolean(options?.exteriorPlanetGrounded);
-  if (groundedBefore && verticalVelocity <= 0) {
-    verticalVelocity = 0;
-  }
-  const startedJump = Boolean(intent.wantsJump && groundedBefore);
-  if (startedJump) {
-    verticalVelocity = intent.jumpSpeedMetersPerSecond;
-  }
-  verticalVelocity -= gravityMetersPerSecond2 * dt;
+  const { startedJump, verticalVelocity } = resolveDeckVerticalMotion(
+    state,
+    intent,
+    groundedBefore,
+    gravityMetersPerSecond2,
+    dt,
+  );
 
   const velocity = add(
     scale(desiredDirection, intent.moveSpeedMetersPerSecond),
@@ -702,18 +736,7 @@ function updateCharacterOnDeckRapier(
     },
     dt,
   );
-  const flags = options?.suppressDeckExit
-    ? {
-        leftDeck: false,
-        airborneOffDeckFrames: 0,
-        deckExitGraceFrames: Math.max(0, (state.deckExitGraceFrames ?? 0) - 1),
-      }
-    : rapierDeckExitFlags(
-        physics,
-        grounded,
-        state.airborneOffDeckFrames ?? 0,
-        state.deckExitGraceFrames ?? 0,
-      );
+  const flags = resolveDeckExitState(state, physics, grounded, options);
 
   const airborne = startedJump || !grounded || verticalVelocity > 0.15;
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);

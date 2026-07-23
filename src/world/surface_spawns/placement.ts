@@ -119,6 +119,123 @@ function pickWeightedEntry(
  * probe set. Entries compete by accept rules + weighted lottery — no per-entry
  * full sample loops. Pure domain — no Three.js.
  */
+function gatherAcceptedEntries(
+  entries: PlanetSpawnEntry[],
+  surface: ReturnType<typeof samplePlanetSurface>,
+  perEntryCounts: Map<string, number>,
+): void {
+  acceptScratch.length = 0;
+  weightScratch.length = 0;
+  for (const entry of entries) {
+    if (!acceptsSurface(entry, surface.biome, surface.normalizedHeight)) continue;
+    const count = perEntryCounts.get(entry.id) ?? 0;
+    if (count >= MAX_INSTANCES_PER_ENTRY_PER_TILE) continue;
+    const w = entryLotteryWeight(entry);
+    if (w <= 0) continue;
+    acceptScratch.push(entry);
+    weightScratch.push(w);
+  }
+}
+
+function passesSpawnLottery(
+  seed: number,
+  faceIndex: number,
+  tileInfo: TileInfo,
+  sampleIndex: number,
+  catalogDensity: number,
+  chosen: PlanetSpawnEntry,
+): boolean {
+  const catalogAccept =
+    hash01(seed, faceIndex, tileInfo.level, tileInfo.x, tileInfo.y, sampleIndex, 71) <
+    Math.min(1, 0.85 * Math.sqrt(Math.max(0.01, catalogDensity)));
+  if (!catalogAccept) return false;
+  return (
+    hash01(
+      seed + chosen.seedOffset,
+      faceIndex,
+      tileInfo.level,
+      tileInfo.x,
+      tileInfo.y,
+      sampleIndex,
+      73,
+    ) < Math.min(1, 0.85 * Math.sqrt(Math.max(0.01, chosen.density)))
+  );
+}
+
+interface SpawnPlacementContext {
+  chosen: PlanetSpawnEntry;
+  direction: Vec3;
+  surface: ReturnType<typeof samplePlanetSurface>;
+  planet: Planet;
+  planetSeed: number;
+  probe: Vec3;
+  seed: number;
+  faceIndex: number;
+  tileInfo: TileInfo;
+  sampleIndex: number;
+  grids: Map<string, PlacementGrid | null>;
+}
+
+function tryPlaceSpawnInstance(context: SpawnPlacementContext): SurfaceSpawnInstance | null {
+  const {
+    chosen,
+    direction,
+    surface,
+    planet,
+    planetSeed,
+    probe,
+    seed,
+    faceIndex,
+    tileInfo,
+    sampleIndex,
+    grids,
+  } = context;
+  const worldPosition: Vec3 = {
+    x: direction.x * surface.surfaceRadiusMeters,
+    y: direction.y * surface.surfaceRadiusMeters,
+    z: direction.z * surface.surfaceRadiusMeters,
+  };
+
+  let grid: PlacementGrid | null | undefined = grids.get(chosen.id);
+  if (grid === undefined) {
+    grid = createPlacementGrid(chosen.gapMeters);
+    grids.set(chosen.id, grid);
+  }
+  if (!canPlaceWithGap(grid, worldPosition)) return null;
+  registerPlacement(grid, worldPosition);
+
+  let normal: Vec3 = direction;
+  if (chosen.alignToNormal) {
+    normal = normalize(sampleVisibleSurfaceFrame(planet, planetSeed, probe).normal);
+  }
+
+  const yaw =
+    hash01(
+      seed + chosen.seedOffset,
+      faceIndex,
+      tileInfo.level,
+      tileInfo.x,
+      tileInfo.y,
+      sampleIndex,
+      47,
+    ) *
+    Math.PI *
+    2;
+  const scaleValue = lerp(
+    chosen.minScale,
+    chosen.maxScale,
+    clamp01(hash01(seed + chosen.seedOffset, tileInfo.x, tileInfo.y, sampleIndex, 83)),
+  );
+  applyTerrainInset(worldPosition, normal, chosen.terrainInsetMeters ?? 0, scaleValue);
+  return {
+    layerId: chosen.id,
+    position: worldPosition,
+    normal,
+    yawRadians: yaw,
+    scale: scaleValue,
+  };
+}
+
 export function collectTileSurfaceSpawns(
   tileInfo: TileInfo,
   planet: Planet,
@@ -161,26 +278,8 @@ export function collectTileSurfaceSpawns(
     const surface = samplePlanetSurface(planet, planetSeed, probe);
     if (surface.waterBody != null) continue;
 
-    acceptScratch.length = 0;
-    weightScratch.length = 0;
-    for (const entry of entries) {
-      if (!acceptsSurface(entry, surface.biome, surface.normalizedHeight)) {
-        continue;
-      }
-      const count = perEntryCounts.get(entry.id) ?? 0;
-      if (count >= MAX_INSTANCES_PER_ENTRY_PER_TILE) continue;
-      const w = entryLotteryWeight(entry);
-      if (w <= 0) continue;
-      acceptScratch.push(entry);
-      weightScratch.push(w);
-    }
+    gatherAcceptedEntries(entries, surface, perEntryCounts);
     if (acceptScratch.length === 0) continue;
-
-    // Catalog-level stochastic sparsity (same curve family as legacy layer density).
-    const catalogAccept =
-      hash01(seed, faceIndex, tileInfo.level, tileInfo.x, tileInfo.y, i, 71) <
-      Math.min(1, 0.85 * Math.sqrt(Math.max(0.01, catalogDensity)));
-    if (!catalogAccept) continue;
 
     const chosen = pickWeightedEntry(
       seed,
@@ -191,76 +290,24 @@ export function collectTileSurfaceSpawns(
       weightScratch,
     );
     if (!chosen) continue;
+    if (!passesSpawnLottery(seed, faceIndex, tileInfo, i, catalogDensity, chosen)) continue;
 
-    // Per-entry sparsity from legacy density (single-entry catalogs keep old feel).
-    const entryAccept =
-      hash01(
-        seed + chosen.seedOffset,
-        faceIndex,
-        tileInfo.level,
-        tileInfo.x,
-        tileInfo.y,
-        i,
-        73,
-      ) < Math.min(1, 0.85 * Math.sqrt(Math.max(0.01, chosen.density)));
-    if (!entryAccept) continue;
-
-    const worldPosition: Vec3 = {
-      x: direction.x * surface.surfaceRadiusMeters,
-      y: direction.y * surface.surfaceRadiusMeters,
-      z: direction.z * surface.surfaceRadiusMeters,
-    };
-
-    let grid: PlacementGrid | null | undefined = grids.get(chosen.id);
-    if (grid === undefined) {
-      grid = createPlacementGrid(chosen.gapMeters);
-      grids.set(chosen.id, grid);
-    }
-    if (!canPlaceWithGap(grid, worldPosition)) continue;
-    registerPlacement(grid, worldPosition);
-
-    let normal: Vec3 = direction;
-    if (chosen.alignToNormal) {
-      normal = normalize(
-        sampleVisibleSurfaceFrame(planet, planetSeed, probe).normal,
-      );
-    }
-
-    const yaw =
-      hash01(
-        seed + chosen.seedOffset,
-        faceIndex,
-        tileInfo.level,
-        tileInfo.x,
-        tileInfo.y,
-        i,
-        47,
-      ) *
-      Math.PI *
-      2;
-    const scaleValue = lerp(
-      chosen.minScale,
-      chosen.maxScale,
-      clamp01(
-        hash01(seed + chosen.seedOffset, tileInfo.x, tileInfo.y, i, 83),
-      ),
-    );
-
-    // Bury after gap registration so spacing stays surface-based.
-    applyTerrainInset(
-      worldPosition,
-      normal,
-      chosen.terrainInsetMeters ?? 0,
-      scaleValue,
-    );
-
-    instances.push({
-      layerId: chosen.id,
-      position: worldPosition,
-      normal,
-      yawRadians: yaw,
-      scale: scaleValue,
+    const instance = tryPlaceSpawnInstance({
+      chosen,
+      direction,
+      surface,
+      planet,
+      planetSeed,
+      probe,
+      seed,
+      faceIndex,
+      tileInfo,
+      sampleIndex: i,
+      grids,
     });
+    if (!instance) continue;
+
+    instances.push(instance);
     perEntryCounts.set(chosen.id, (perEntryCounts.get(chosen.id) ?? 0) + 1);
   }
 

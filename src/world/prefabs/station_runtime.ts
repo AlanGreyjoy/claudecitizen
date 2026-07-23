@@ -15,7 +15,7 @@ import {
   type StationRoom,
   type StationSpawnPose,
 } from '../station';
-import type { PrefabDocument, PrefabEntity } from './schema';
+import type { PrefabComponent, PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
 import { buildPrefabColliders } from '../../physics/prefab_colliders';
 import {
@@ -165,6 +165,351 @@ function sceneToStationDir2(worldRotation: Quat): StationDir2 {
   return { right: right / len, forward: fwd / len };
 }
 
+interface CollectStationContext {
+  entity: PrefabEntity;
+  right: number;
+  up: number;
+  forward: number;
+  rotation: Quat;
+}
+
+function collectSpawnPoint(
+  component: Extract<PrefabComponent, { type: "spawn-point" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.spawnCandidates.push({
+    floorId: component.floorId,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    face: sceneToStationDir2(ctx.rotation),
+  });
+}
+
+function collectNpcSpawner(
+  component: Extract<PrefabComponent, { type: "npc-spawner" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.npcSpawners.push({
+    id: component.id,
+    populationId: component.populationId,
+    floorId: component.floorId,
+    minAlive: component.minAlive,
+    maxAlive: component.maxAlive,
+    routeGroup: component.routeGroup,
+    radius: component.radius,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    face: sceneToStationDir2(ctx.rotation),
+  });
+}
+
+function collectNpcWaypoint(
+  component: Extract<PrefabComponent, { type: "npc-waypoint" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.npcWaypoints.push({
+    id: component.id,
+    floorId: component.floorId,
+    routeGroup: component.routeGroup,
+    links: component.links,
+    waitMinSeconds: component.waitMinSeconds,
+    waitMaxSeconds: component.waitMaxSeconds,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+  });
+}
+
+function collectNpcPlacement(
+  component: Extract<PrefabComponent, { type: "npc-placement" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.npcPlacements.push({
+    id: component.id,
+    npcDefinitionId: component.npcDefinitionId,
+    displayName: component.displayName,
+    floorId: component.floorId,
+    behavior: component.behavior,
+    routeGroup: component.routeGroup,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    face: sceneToStationDir2(ctx.rotation),
+  });
+}
+
+function collectElevator(
+  component: Extract<PrefabComponent, { type: "elevator" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.elevatorSeeds.push({
+    pairId: component.id,
+    targetFloor: component.targetFloor,
+    floorId: component.floorId,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    face: sceneToStationDir2(ctx.rotation),
+  });
+}
+
+function collectHangarPad(
+  component: Extract<PrefabComponent, { type: "hangar-pad" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.hangarSeeds.push({
+    hangarId: component.hangarId,
+    padIndex: component.padIndex,
+    floorId: component.floorId ?? 'hangar',
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+  });
+}
+
+function collectInteraction(
+  component: Extract<PrefabComponent, { type: "interaction" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.infoSeeds.push({
+    id: component.id,
+    prompt: component.prompt,
+    radius: component.radius,
+    floorId: component.floorId,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    interactionType: component.interactionType,
+    targetAnimationId: component.targetAnimationId,
+    keyLabel: component.keyLabel,
+    proximitySoundUrl: component.proximitySoundUrl,
+    interactSoundUrl: component.interactSoundUrl,
+  });
+}
+
+function collectAvmsTerminal(
+  component: Extract<PrefabComponent, { type: "avms-terminal" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.avmsSeeds.push({
+    id: component.id,
+    radius: component.radius,
+    floorId: component.floorId,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+  });
+}
+
+function collectWeaponShop(
+  component: Extract<PrefabComponent, { type: "weapon-shop" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.weaponShopSeeds.push({
+    id: component.id || ctx.entity.id,
+    label: component.label?.trim() || 'Browse weapons',
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    rotation: ctx.rotation,
+    gazeRadius: component.gazeRadius ?? DEFAULT_WEAPON_SHOP_GAZE_RADIUS,
+    maxDistance: component.maxDistance ?? DEFAULT_WEAPON_SHOP_MAX_DISTANCE,
+    screenWidth: component.screenWidth ?? DEFAULT_WEAPON_SHOP_SCREEN_WIDTH,
+    screenHeight: component.screenHeight ?? DEFAULT_WEAPON_SHOP_SCREEN_HEIGHT,
+    itemDefinitionIds: component.itemDefinitionIds ?? [],
+  });
+}
+
+function collectOutfitters(
+  component: Extract<PrefabComponent, { type: "outfitters" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.outfittersSeeds.push({
+    id: component.id || ctx.entity.id,
+    label: component.label?.trim() || 'Browse outfitters',
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    rotation: ctx.rotation,
+    gazeRadius: component.gazeRadius ?? DEFAULT_OUTFITTERS_GAZE_RADIUS,
+    maxDistance: component.maxDistance ?? DEFAULT_OUTFITTERS_MAX_DISTANCE,
+    screenWidth: component.screenWidth ?? DEFAULT_OUTFITTERS_SCREEN_WIDTH,
+    screenHeight: component.screenHeight ?? DEFAULT_OUTFITTERS_SCREEN_HEIGHT,
+    itemDefinitionIds: component.itemDefinitionIds ?? [],
+  });
+}
+
+function collectFoodShopSeed(
+  options: {
+    id: string;
+    label: string;
+    catalogMode: FoodShopCatalogMode;
+    itemDefinitionIds?: string[];
+    gazeRadius?: number;
+    maxDistance?: number;
+    screenWidth?: number;
+    screenHeight?: number;
+  },
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.foodShopSeeds.push({
+    id: options.id,
+    label: options.label,
+    catalogMode: options.catalogMode,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    rotation: ctx.rotation,
+    gazeRadius: options.gazeRadius ?? DEFAULT_FOOD_SHOP_GAZE_RADIUS,
+    maxDistance: options.maxDistance ?? DEFAULT_FOOD_SHOP_MAX_DISTANCE,
+    screenWidth: options.screenWidth ?? DEFAULT_FOOD_SHOP_SCREEN_WIDTH,
+    screenHeight: options.screenHeight ?? DEFAULT_FOOD_SHOP_SCREEN_HEIGHT,
+    itemDefinitionIds: options.itemDefinitionIds ?? [],
+  });
+}
+
+function collectFoodShop(
+  component: Extract<PrefabComponent, { type: "food-shop" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  collectFoodShopSeed(
+    {
+      id: component.id || ctx.entity.id,
+      label: component.label?.trim() || 'Browse food',
+      catalogMode: 'food',
+      itemDefinitionIds: component.itemDefinitionIds,
+      gazeRadius: component.gazeRadius,
+      maxDistance: component.maxDistance,
+      screenWidth: component.screenWidth,
+      screenHeight: component.screenHeight,
+    },
+    ctx,
+    out,
+  );
+}
+
+function collectDrinksShop(
+  component: Extract<PrefabComponent, { type: "drinks-shop" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  collectFoodShopSeed(
+    {
+      id: component.id || ctx.entity.id,
+      label: component.label?.trim() || 'Browse drinks',
+      catalogMode: 'drinks',
+      itemDefinitionIds: component.itemDefinitionIds,
+      gazeRadius: component.gazeRadius,
+      maxDistance: component.maxDistance,
+      screenWidth: component.screenWidth,
+      screenHeight: component.screenHeight,
+    },
+    ctx,
+    out,
+  );
+}
+
+function collectCanteen(
+  component: Extract<PrefabComponent, { type: "canteen" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  collectFoodShopSeed(
+    {
+      id: component.id || ctx.entity.id,
+      label: component.label?.trim() || 'Browse food & drinks',
+      catalogMode: 'both',
+      itemDefinitionIds: component.itemDefinitionIds,
+      gazeRadius: component.gazeRadius,
+      maxDistance: component.maxDistance,
+      screenWidth: component.screenWidth,
+      screenHeight: component.screenHeight,
+    },
+    ctx,
+    out,
+  );
+}
+
+function collectAnimation(
+  component: Extract<PrefabComponent, { type: "animation" }>,
+  out: FlattenedComponents,
+): void {
+  out.animationSpecs.push({
+    id: component.id,
+    motion: component.motion,
+    axis: component.axis,
+    nodes: component.nodes,
+  });
+}
+
+function collectStationComponent(
+  component: PrefabComponent,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  switch (component.type) {
+    case 'spawn-point':
+      collectSpawnPoint(component, ctx, out);
+      break;
+    case 'npc-spawner':
+      collectNpcSpawner(component, ctx, out);
+      break;
+    case 'npc-waypoint':
+      collectNpcWaypoint(component, ctx, out);
+      break;
+    case 'npc-placement':
+      collectNpcPlacement(component, ctx, out);
+      break;
+    case 'elevator':
+      collectElevator(component, ctx, out);
+      break;
+    case 'hangar-pad':
+      collectHangarPad(component, ctx, out);
+      break;
+    case 'interaction':
+      collectInteraction(component, ctx, out);
+      break;
+    case 'avms-terminal':
+      collectAvmsTerminal(component, ctx, out);
+      break;
+    case 'weapon-shop':
+      collectWeaponShop(component, ctx, out);
+      break;
+    case 'outfitters':
+      collectOutfitters(component, ctx, out);
+      break;
+    case 'food-shop':
+      collectFoodShop(component, ctx, out);
+      break;
+    case 'drinks-shop':
+      collectDrinksShop(component, ctx, out);
+      break;
+    case 'canteen':
+      collectCanteen(component, ctx, out);
+      break;
+    case 'animation':
+      collectAnimation(component, out);
+      break;
+    case 'station-frame':
+    case 'collider':
+      break;
+  }
+}
+
 function collect(
   entity: PrefabEntity,
   parentPosition: Vec3,
@@ -190,199 +535,16 @@ function collect(
     parentScale.z * entity.transform.scale.z,
   );
 
-  const right = -position.x;
-  const forward = position.z;
+  const ctx: CollectStationContext = {
+    entity,
+    right: -position.x,
+    up: position.y,
+    forward: position.z,
+    rotation,
+  };
 
   for (const component of entity.components ?? []) {
-    switch (component.type) {
-      case 'spawn-point':
-        out.spawnCandidates.push({
-          floorId: component.floorId,
-          right,
-          up: position.y,
-          forward,
-          face: sceneToStationDir2(rotation),
-        });
-        break;
-      case 'npc-spawner':
-        out.npcSpawners.push({
-          id: component.id,
-          populationId: component.populationId,
-          floorId: component.floorId,
-          minAlive: component.minAlive,
-          maxAlive: component.maxAlive,
-          routeGroup: component.routeGroup,
-          radius: component.radius,
-          right,
-          up: position.y,
-          forward,
-          face: sceneToStationDir2(rotation),
-        });
-        break;
-      case 'npc-waypoint':
-        out.npcWaypoints.push({
-          id: component.id,
-          floorId: component.floorId,
-          routeGroup: component.routeGroup,
-          links: component.links,
-          waitMinSeconds: component.waitMinSeconds,
-          waitMaxSeconds: component.waitMaxSeconds,
-          right,
-          up: position.y,
-          forward,
-        });
-        break;
-      case 'npc-placement':
-        out.npcPlacements.push({
-          id: component.id,
-          npcDefinitionId: component.npcDefinitionId,
-          displayName: component.displayName,
-          floorId: component.floorId,
-          behavior: component.behavior,
-          routeGroup: component.routeGroup,
-          right,
-          up: position.y,
-          forward,
-          face: sceneToStationDir2(rotation),
-        });
-        break;
-      case 'elevator':
-        out.elevatorSeeds.push({
-          pairId: component.id,
-          targetFloor: component.targetFloor,
-          floorId: component.floorId,
-          right,
-          up: position.y,
-          forward,
-          face: sceneToStationDir2(rotation),
-        });
-        break;
-      case 'hangar-pad':
-        out.hangarSeeds.push({
-          hangarId: component.hangarId,
-          padIndex: component.padIndex,
-          floorId: component.floorId ?? 'hangar',
-          right,
-          up: position.y,
-          forward,
-        });
-        break;
-      case 'interaction':
-        out.infoSeeds.push({
-          id: component.id,
-          prompt: component.prompt,
-          radius: component.radius,
-          floorId: component.floorId,
-          right,
-          up: position.y,
-          forward,
-          interactionType: component.interactionType,
-          targetAnimationId: component.targetAnimationId,
-          keyLabel: component.keyLabel,
-          proximitySoundUrl: component.proximitySoundUrl,
-          interactSoundUrl: component.interactSoundUrl,
-        });
-        break;
-      case 'avms-terminal':
-        out.avmsSeeds.push({
-          id: component.id,
-          radius: component.radius,
-          floorId: component.floorId,
-          right,
-          up: position.y,
-          forward,
-        });
-        break;
-      case 'weapon-shop':
-        out.weaponShopSeeds.push({
-          id: component.id || entity.id,
-          label: component.label?.trim() || 'Browse weapons',
-          right,
-          up: position.y,
-          forward,
-          rotation,
-          gazeRadius: component.gazeRadius ?? DEFAULT_WEAPON_SHOP_GAZE_RADIUS,
-          maxDistance: component.maxDistance ?? DEFAULT_WEAPON_SHOP_MAX_DISTANCE,
-          screenWidth: component.screenWidth ?? DEFAULT_WEAPON_SHOP_SCREEN_WIDTH,
-          screenHeight: component.screenHeight ?? DEFAULT_WEAPON_SHOP_SCREEN_HEIGHT,
-          itemDefinitionIds: component.itemDefinitionIds ?? [],
-        });
-        break;
-      case 'outfitters':
-        out.outfittersSeeds.push({
-          id: component.id || entity.id,
-          label: component.label?.trim() || 'Browse outfitters',
-          right,
-          up: position.y,
-          forward,
-          rotation,
-          gazeRadius: component.gazeRadius ?? DEFAULT_OUTFITTERS_GAZE_RADIUS,
-          maxDistance: component.maxDistance ?? DEFAULT_OUTFITTERS_MAX_DISTANCE,
-          screenWidth: component.screenWidth ?? DEFAULT_OUTFITTERS_SCREEN_WIDTH,
-          screenHeight: component.screenHeight ?? DEFAULT_OUTFITTERS_SCREEN_HEIGHT,
-          itemDefinitionIds: component.itemDefinitionIds ?? [],
-        });
-        break;
-      case 'food-shop':
-        out.foodShopSeeds.push({
-          id: component.id || entity.id,
-          label: component.label?.trim() || 'Browse food',
-          catalogMode: 'food',
-          right,
-          up: position.y,
-          forward,
-          rotation,
-          gazeRadius: component.gazeRadius ?? DEFAULT_FOOD_SHOP_GAZE_RADIUS,
-          maxDistance: component.maxDistance ?? DEFAULT_FOOD_SHOP_MAX_DISTANCE,
-          screenWidth: component.screenWidth ?? DEFAULT_FOOD_SHOP_SCREEN_WIDTH,
-          screenHeight: component.screenHeight ?? DEFAULT_FOOD_SHOP_SCREEN_HEIGHT,
-          itemDefinitionIds: component.itemDefinitionIds ?? [],
-        });
-        break;
-      case 'drinks-shop':
-        out.foodShopSeeds.push({
-          id: component.id || entity.id,
-          label: component.label?.trim() || 'Browse drinks',
-          catalogMode: 'drinks',
-          right,
-          up: position.y,
-          forward,
-          rotation,
-          gazeRadius: component.gazeRadius ?? DEFAULT_FOOD_SHOP_GAZE_RADIUS,
-          maxDistance: component.maxDistance ?? DEFAULT_FOOD_SHOP_MAX_DISTANCE,
-          screenWidth: component.screenWidth ?? DEFAULT_FOOD_SHOP_SCREEN_WIDTH,
-          screenHeight: component.screenHeight ?? DEFAULT_FOOD_SHOP_SCREEN_HEIGHT,
-          itemDefinitionIds: component.itemDefinitionIds ?? [],
-        });
-        break;
-      case 'canteen':
-        out.foodShopSeeds.push({
-          id: component.id || entity.id,
-          label: component.label?.trim() || 'Browse food & drinks',
-          catalogMode: 'both',
-          right,
-          up: position.y,
-          forward,
-          rotation,
-          gazeRadius: component.gazeRadius ?? DEFAULT_FOOD_SHOP_GAZE_RADIUS,
-          maxDistance: component.maxDistance ?? DEFAULT_FOOD_SHOP_MAX_DISTANCE,
-          screenWidth: component.screenWidth ?? DEFAULT_FOOD_SHOP_SCREEN_WIDTH,
-          screenHeight: component.screenHeight ?? DEFAULT_FOOD_SHOP_SCREEN_HEIGHT,
-          itemDefinitionIds: component.itemDefinitionIds ?? [],
-        });
-        break;
-      case 'animation':
-        out.animationSpecs.push({
-          id: component.id,
-          motion: component.motion,
-          axis: component.axis,
-          nodes: component.nodes,
-        });
-        break;
-      case 'station-frame':
-      case 'collider':
-        break;
-    }
+    collectStationComponent(component, ctx, out);
   }
 
   for (const child of entity.children ?? []) {

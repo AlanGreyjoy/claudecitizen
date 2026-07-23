@@ -206,6 +206,43 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
     sendReliable(encodeLeave());
   }
 
+  function ensurePredictionKind(nextPredictionKind: 'character' | 'ship'): void {
+    if (predictionKind === nextPredictionKind) return;
+    predictionKind = nextPredictionKind;
+    predictionFrame = null;
+    pendingPredictions = [];
+  }
+
+  function buildPresenceShipPayload(
+    world: WorldState,
+    activeShipBody: NonNullable<ReturnType<typeof getActiveShipBody>>,
+    predicted: PredictionFrame,
+  ) {
+    const activeShip = getActiveShip(world);
+    return {
+      ...activeShipBody,
+      position: predicted.position,
+      velocity: predicted.velocity,
+      shipId: world.activeShipId,
+      prefabId: activeShip.prefabId,
+      hp: activeShip.vitals.hp,
+      shields: activeShip.vitals.shields,
+      maxHp: activeShip.spec.maxHp,
+      maxShields: activeShip.spec.maxShields,
+    };
+  }
+
+  function buildPresenceShipRig(world: WorldState) {
+    const rig = getActiveShipRig(world);
+    return {
+      gear01: rig.gear01,
+      ramp01: rig.ramp01,
+      doors: Object.fromEntries(
+        Object.entries(rig.doors).map(([id, door]) => [id, door.open01]),
+      ),
+    };
+  }
+
   function handlePayload(payload: Uint8Array): void {
     const message = decodeServerWorldMessage(payload);
     switch (message.kind) {
@@ -374,11 +411,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
       const shipInstance = getShipInstance(world.activeShipId);
       const activeShipBody = shipInstance ? getActiveShipBody(world) : null;
       const nextPredictionKind = activeShipBody ? 'ship' : 'character';
-      if (predictionKind !== nextPredictionKind) {
-        predictionKind = nextPredictionKind;
-        predictionFrame = null;
-        pendingPredictions = [];
-      }
+      ensurePredictionKind(nextPredictionKind);
       const rawPosition = activeShipBody?.position ?? world.character.position;
       const desiredVelocity = activeShipBody?.velocity ?? characterVelocity(
         previousCharacterPosition,
@@ -411,17 +444,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
               up: world.character.up,
             };
       const ship = shipInstance && activeShipBody
-        ? {
-            ...activeShipBody,
-            position: predicted.position,
-            velocity: predicted.velocity,
-            shipId: world.activeShipId,
-            prefabId: getActiveShip(world).prefabId,
-            hp: getActiveShip(world).vitals.hp,
-            shields: getActiveShip(world).vitals.shields,
-            maxHp: getActiveShip(world).spec.maxHp,
-            maxShields: getActiveShip(world).spec.maxShields,
-          }
+        ? buildPresenceShipPayload(world, activeShipBody, predicted)
         : null;
       sendDatagram(
         encodePresenceIntent({
@@ -429,18 +452,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
           mode: world.mode,
           character,
           ship,
-          shipRig: shipInstance
-            ? {
-                gear01: getActiveShipRig(world).gear01,
-                ramp01: getActiveShipRig(world).ramp01,
-                doors: Object.fromEntries(
-                  Object.entries(getActiveShipRig(world).doors).map(([id, door]) => [
-                    id,
-                    door.open01,
-                  ]),
-                ),
-              }
-            : null,
+          shipRig: shipInstance ? buildPresenceShipRig(world) : null,
           stationRoomId: world.character.stationRoomId ?? null,
           shipZoneId: world.character.deckZone ?? null,
           clientTimeMs: now,

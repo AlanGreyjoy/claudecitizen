@@ -233,6 +233,43 @@ export function createRemotePresenceRenderer(
     return created;
   }
 
+  function syncRemoteEntity(
+    entity: NetworkRenderEntity,
+    remote: RemoteObject,
+    focusPosition: Vec3,
+    nowSeconds: number,
+  ): void {
+    const isMarker = entity.lod === 'marker';
+    const avatar = isMarker
+      ? remote.avatar
+      : ensureRemoteAvatar(remote, entity.characterAppearance, renderScale);
+    const body = entity.mode === 'in-ship' ? entity.ship : entity.character;
+    const shipVisible = !isMarker && entity.mode === 'in-ship' && entity.ship !== null;
+    const avatarVisible = !isMarker && !shipVisible && entity.character !== null;
+
+    avatar.root.visible = avatarVisible;
+    if (remote.shipHandle) remote.shipHandle.group.visible = shipVisible;
+    remote.marker.visible = isMarker;
+    remote.label.visible = !isMarker;
+
+    if (avatarVisible && entity.character) {
+      avatar.setAnimation(entity.character.animation);
+      avatar.updateMixer(nowSeconds);
+    }
+
+    if (shipVisible && entity.ship) {
+      const handle = ensureRemoteShip(remote, resolveRemoteShipPrefabId(entity), renderScale);
+      handle.setArticulation(entity.shipRig ?? DEFAULT_REMOTE_SHIP_RIG);
+    }
+
+    if (isMarker || !body) {
+      setMarkerPose(remote.root, entity.markerPosition, focusPosition, renderScale);
+    } else {
+      setRootPose(remote.root, body, focusPosition, renderScale);
+    }
+    remote.root.visible = true;
+  }
+
   function update(
     entities: NetworkRenderEntity[],
     focusPosition: Vec3,
@@ -241,38 +278,7 @@ export function createRemotePresenceRenderer(
     const live = new Set<string>();
     for (const entity of entities) {
       live.add(entity.id);
-      const remote = getRemote(entity);
-      const isMarker = entity.lod === 'marker';
-      const avatar = isMarker
-        ? remote.avatar
-        : ensureRemoteAvatar(remote, entity.characterAppearance, renderScale);
-      const body = entity.mode === 'in-ship' ? entity.ship : entity.character;
-      const shipVisible = !isMarker && entity.mode === 'in-ship' && entity.ship !== null;
-      const avatarVisible = !isMarker && !shipVisible && entity.character !== null;
-
-      avatar.root.visible = avatarVisible;
-      if (remote.shipHandle) {
-        remote.shipHandle.group.visible = shipVisible;
-      }
-      remote.marker.visible = isMarker;
-      remote.label.visible = !isMarker;
-
-      if (avatarVisible && entity.character) {
-        avatar.setAnimation(entity.character.animation);
-        avatar.updateMixer(nowSeconds);
-      }
-
-      if (shipVisible && entity.ship) {
-        const handle = ensureRemoteShip(remote, resolveRemoteShipPrefabId(entity), renderScale);
-        handle.setArticulation(entity.shipRig ?? DEFAULT_REMOTE_SHIP_RIG);
-      }
-
-      if (isMarker || !body) {
-        setMarkerPose(remote.root, entity.markerPosition, focusPosition, renderScale);
-      } else {
-        setRootPose(remote.root, body, focusPosition, renderScale);
-      }
-      remote.root.visible = true;
+      syncRemoteEntity(entity, getRemote(entity), focusPosition, nowSeconds);
     }
 
     for (const [id, remote] of remotes) {

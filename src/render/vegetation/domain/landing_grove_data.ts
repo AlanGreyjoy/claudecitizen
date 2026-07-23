@@ -43,6 +43,145 @@ function radialWorldPoint(
   return scale(normalizeVec3(combined.x, combined.y, combined.z), planetRadiusMeters);
 }
 
+function isForestBiome(biome: string): boolean {
+  return biome === 'plains' || biome === 'forest';
+}
+
+function collectLandingGrass(
+  planet: Planet,
+  seed: number,
+  assets: VegetationAssetCatalog,
+  grassSettings: VegetationSettings['grass'],
+  grassSampleCount: number,
+  anchor: ReturnType<typeof createAnchorFromDirection>,
+): StoredVegetationInstance[] {
+  const grass: StoredVegetationInstance[] = [];
+  if (assets.grass.length === 0 || grassSampleCount <= 0) return grass;
+
+  const grassPlacementGrid = createPlacementGrid(grassSettings.gapMeters);
+  for (let i = 0; i < grassSampleCount; i += 1) {
+    const angle = hash01(seed, 7001, i) * Math.PI * 2;
+    const radiusMeters = 25 + hash01(seed, 7002, i) * 330;
+    const worldPoint = radialWorldPoint(
+      anchor.normal,
+      anchor.tangent,
+      anchor.bitangent,
+      planet.radiusMeters,
+      Math.cos(angle) * radiusMeters,
+      Math.sin(angle) * radiusMeters,
+    );
+    const surface = sampleRenderablePlanetSurface(planet, seed, worldPoint);
+    if (!isForestBiome(surface.biome)) continue;
+    if (hash01(seed, 7005, i) > Math.min(1, surface.grassDensity * 1.4)) continue;
+
+    const normal = normalizeVec3(
+      surface.normal?.x ?? worldPoint.x,
+      surface.normal?.y ?? worldPoint.y,
+      surface.normal?.z ?? worldPoint.z,
+    );
+    const grassPoint = renderableSurfacePointFromDirection(
+      { x: worldPoint.x, y: worldPoint.y, z: worldPoint.z },
+      planet,
+      seed,
+      0,
+    );
+    let localPosition = sub(
+      { x: grassPoint.x, y: grassPoint.y, z: grassPoint.z },
+      anchor.position,
+    );
+    if (!canPlaceWithGap(grassPlacementGrid, localPosition)) continue;
+    registerPlacement(grassPlacementGrid, localPosition);
+    const assetIndex = Math.floor(hash01(seed, 7006, i) * assets.grass.length);
+    const scaleValue = lerp(
+      grassSettings.minScale,
+      grassSettings.maxScale,
+      clamp01(surface.grassDensity * 0.35 + hash01(seed, 7003, i) * 0.8),
+    );
+    const offset = (assets.grass[assetIndex]?.baseOffsetY ?? 0) * scaleValue;
+    localPosition = {
+      x: localPosition.x + normal.x * offset,
+      y: localPosition.y + normal.y * offset,
+      z: localPosition.z + normal.z * offset,
+    };
+    grass.push({
+      matrix: composeInstanceMatrix(
+        localPosition,
+        normal,
+        hash01(seed, 7004, i) * Math.PI * 2,
+        scaleValue,
+      ),
+      variantIndex: assetIndex,
+    });
+  }
+  return grass;
+}
+
+function collectLandingTrees(
+  planet: Planet,
+  seed: number,
+  assets: VegetationAssetCatalog,
+  treeSettings: VegetationSettings['tree'],
+  treeSampleCount: number,
+  anchor: ReturnType<typeof createAnchorFromDirection>,
+): StoredVegetationInstance[] {
+  const trees: StoredVegetationInstance[] = [];
+  if (assets.trees.length === 0 || treeSampleCount <= 0) return trees;
+
+  const treePlacementGrid = createPlacementGrid(treeSettings.gapMeters);
+  for (let i = 0; i < treeSampleCount; i += 1) {
+    const angle = hash01(seed, 7101, i) * Math.PI * 2;
+    const radiusMeters = 24 + hash01(seed, 7102, i) * 235;
+    const worldPoint = radialWorldPoint(
+      anchor.normal,
+      anchor.tangent,
+      anchor.bitangent,
+      planet.radiusMeters,
+      Math.cos(angle) * radiusMeters,
+      Math.sin(angle) * radiusMeters,
+    );
+    const surface = sampleRenderablePlanetSurface(planet, seed, worldPoint);
+    if (!isForestBiome(surface.biome)) continue;
+    if (surface.treeDensity <= 0) continue;
+    if (hash01(seed, 7105, i) > Math.min(1, surface.treeDensity * 1.1)) continue;
+
+    const normal = normalizeVec3(worldPoint.x, worldPoint.y, worldPoint.z);
+    const treePoint = renderableSurfacePointFromDirection(
+      { x: worldPoint.x, y: worldPoint.y, z: worldPoint.z },
+      planet,
+      seed,
+      0,
+    );
+    let localPosition = sub(
+      { x: treePoint.x, y: treePoint.y, z: treePoint.z },
+      anchor.position,
+    );
+    if (!canPlaceWithGap(treePlacementGrid, localPosition)) continue;
+    registerPlacement(treePlacementGrid, localPosition);
+    const scaleValue = lerp(
+      treeSettings.minScale,
+      treeSettings.maxScale,
+      clamp01(surface.treeDensity * 0.55 + hash01(seed, 7103, i) * 0.75),
+    );
+    const pineIndex = Math.floor(hash01(seed, 7201, i) * assets.trees.length);
+    const baseOffsetY = assets.trees[pineIndex]?.baseOffsetY ?? 0;
+    localPosition = {
+      x: localPosition.x + normal.x * baseOffsetY * scaleValue,
+      y: localPosition.y + normal.y * baseOffsetY * scaleValue,
+      z: localPosition.z + normal.z * baseOffsetY * scaleValue,
+    };
+    trees.push({
+      matrix: composeInstanceMatrix(
+        localPosition,
+        normal,
+        hash01(seed, 7104, i) * Math.PI * 2,
+        scaleValue,
+      ),
+      variantIndex: pineIndex,
+    });
+  }
+  return trees;
+}
+
 export function collectLandingGroveData(
   planet: Planet,
   seed: number,
@@ -63,7 +202,7 @@ export function collectLandingGroveData(
   );
   const anchor = createAnchorFromDirection(anchorDirection, planet, seed);
 
-  if (!(anchor.surface.biome === 'plains' || anchor.surface.biome === 'forest')) {
+  if (!isForestBiome(anchor.surface.biome)) {
     return {
       anchor: {
         x: anchor.position.x,
@@ -94,146 +233,27 @@ export function collectLandingGroveData(
     treeSettings.density,
   );
 
-  const grass: StoredVegetationInstance[] = [];
-  if (assets.grass.length > 0 && grassSampleCount > 0) {
-    const grassPlacementGrid = createPlacementGrid(grassSettings.gapMeters);
-    for (let i = 0; i < grassSampleCount; i += 1) {
-      const angle = hash01(seed, 7001, i) * Math.PI * 2;
-      const radiusMeters = 25 + hash01(seed, 7002, i) * 330;
-      const offsetX = Math.cos(angle) * radiusMeters;
-      const offsetZ = Math.sin(angle) * radiusMeters;
-      const worldPoint = radialWorldPoint(
-        anchor.normal,
-        anchor.tangent,
-        anchor.bitangent,
-        planet.radiusMeters,
-        offsetX,
-        offsetZ,
-      );
-      const surface = sampleRenderablePlanetSurface(planet, seed, worldPoint);
-      if (!(surface.biome === 'plains' || surface.biome === 'forest')) continue;
-      // Authored density scales sample count; accept is biome/surface only.
-      if (hash01(seed, 7005, i) > Math.min(1, surface.grassDensity * 1.4)) {
-        continue;
-      }
-
-      const placementDirection: Vec3 = {
-        x: worldPoint.x,
-        y: worldPoint.y,
-        z: worldPoint.z,
-      };
-      const normal = normalizeVec3(
-        surface.normal?.x ?? worldPoint.x,
-        surface.normal?.y ?? worldPoint.y,
-        surface.normal?.z ?? worldPoint.z,
-      );
-      const grassPoint = renderableSurfacePointFromDirection(
-        placementDirection,
-        planet,
-        seed,
-        0,
-      );
-      let localPosition = sub(
-        { x: grassPoint.x, y: grassPoint.y, z: grassPoint.z },
-        anchor.position,
-      );
-      if (!canPlaceWithGap(grassPlacementGrid, localPosition)) continue;
-      registerPlacement(grassPlacementGrid, localPosition);
-      const assetIndex = Math.floor(hash01(seed, 7006, i) * assets.grass.length);
-      const scaleValue = lerp(
-        grassSettings.minScale,
-        grassSettings.maxScale,
-        clamp01(surface.grassDensity * 0.35 + hash01(seed, 7003, i) * 0.8),
-      );
-      const offset = (assets.grass[assetIndex]?.baseOffsetY ?? 0) * scaleValue;
-      localPosition = {
-        x: localPosition.x + normal.x * offset,
-        y: localPosition.y + normal.y * offset,
-        z: localPosition.z + normal.z * offset,
-      };
-      grass.push({
-        matrix: composeInstanceMatrix(
-          localPosition,
-          normal,
-          hash01(seed, 7004, i) * Math.PI * 2,
-          scaleValue,
-        ),
-        variantIndex: assetIndex,
-      });
-    }
-  }
-
-  const trees: StoredVegetationInstance[] = [];
-  if (assets.trees.length > 0 && treeSampleCount > 0) {
-    const treePlacementGrid = createPlacementGrid(treeSettings.gapMeters);
-    for (let i = 0; i < treeSampleCount; i += 1) {
-      const angle = hash01(seed, 7101, i) * Math.PI * 2;
-      const radiusMeters = 24 + hash01(seed, 7102, i) * 235;
-      const offsetX = Math.cos(angle) * radiusMeters;
-      const offsetZ = Math.sin(angle) * radiusMeters;
-      const worldPoint = radialWorldPoint(
-        anchor.normal,
-        anchor.tangent,
-        anchor.bitangent,
-        planet.radiusMeters,
-        offsetX,
-        offsetZ,
-      );
-      const surface = sampleRenderablePlanetSurface(planet, seed, worldPoint);
-      if (!(surface.biome === 'plains' || surface.biome === 'forest')) continue;
-      if (surface.treeDensity <= 0) continue;
-      if (hash01(seed, 7105, i) > Math.min(1, surface.treeDensity * 1.1))
-        continue;
-
-      const placementDirection: Vec3 = {
-        x: worldPoint.x,
-        y: worldPoint.y,
-        z: worldPoint.z,
-      };
-      const normal = normalizeVec3(worldPoint.x, worldPoint.y, worldPoint.z);
-      const treePoint = renderableSurfacePointFromDirection(
-        placementDirection,
-        planet,
-        seed,
-        0,
-      );
-      let localPosition = sub(
-        { x: treePoint.x, y: treePoint.y, z: treePoint.z },
-        anchor.position,
-      );
-      if (!canPlaceWithGap(treePlacementGrid, localPosition)) continue;
-      registerPlacement(treePlacementGrid, localPosition);
-      const scaleValue = lerp(
-        treeSettings.minScale,
-        treeSettings.maxScale,
-        clamp01(surface.treeDensity * 0.55 + hash01(seed, 7103, i) * 0.75),
-      );
-      const pineIndex = Math.floor(hash01(seed, 7201, i) * assets.trees.length);
-      const baseOffsetY = assets.trees[pineIndex]?.baseOffsetY ?? 0;
-      localPosition = {
-        x: localPosition.x + normal.x * baseOffsetY * scaleValue,
-        y: localPosition.y + normal.y * baseOffsetY * scaleValue,
-        z: localPosition.z + normal.z * baseOffsetY * scaleValue,
-      };
-      trees.push({
-        matrix: composeInstanceMatrix(
-          localPosition,
-          normal,
-          hash01(seed, 7104, i) * Math.PI * 2,
-          scaleValue,
-        ),
-        variantIndex: pineIndex,
-      });
-    }
-  }
-
   return {
     anchor: {
       x: anchor.position.x,
       y: anchor.position.y,
       z: anchor.position.z,
     },
-    grass,
-    trees,
+    grass: collectLandingGrass(
+      planet,
+      seed,
+      assets,
+      grassSettings,
+      grassSampleCount,
+      anchor,
+    ),
+    trees: collectLandingTrees(
+      planet,
+      seed,
+      assets,
+      treeSettings,
+      treeSampleCount,
+      anchor,
+    ),
   };
 }

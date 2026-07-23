@@ -900,6 +900,40 @@ export function sampleColliderGroundHeightForAnimation(
   return best;
 }
 
+function resolveCollisionIteration(
+  params: ResolveCollisionParams,
+  right: number,
+  forward: number,
+): { right: number; forward: number; done: boolean } {
+  const totalPush = new THREE.Vector3();
+  for (const height of CAPSULE_SAMPLE_HEIGHTS) {
+    const sample = new THREE.Vector3(right, params.floorUp + height, forward);
+    for (const collider of params.colliders) {
+      const push = colliderPush(collider, sample, params.rig);
+      if (!push) continue;
+      push.y = 0;
+      if (horizontalLength(push) < 1e-5) continue;
+      totalPush.add(push);
+    }
+  }
+
+  totalPush.y = 0;
+  const pushLen = horizontalLength(totalPush);
+  if (pushLen < 1e-5) return { right, forward, done: true };
+  if (pushLen > CHARACTER_COLLIDER_RADIUS_METERS) {
+    totalPush.multiplyScalar(CHARACTER_COLLIDER_RADIUS_METERS / pushLen);
+  }
+
+  const candidate = {
+    right: right + totalPush.x,
+    forward: forward + totalPush.z,
+  };
+  if (params.isAllowed && !params.isAllowed(candidate)) {
+    return { right, forward, done: true };
+  }
+  return { right: candidate.right, forward: candidate.forward, done: false };
+}
+
 export function resolveCharacterAgainstColliders(
   params: ResolveCollisionParams,
 ): { right: number; forward: number } {
@@ -911,34 +945,10 @@ export function resolveCharacterAgainstColliders(
   let forward = params.forward;
 
   for (let iteration = 0; iteration < 3; iteration += 1) {
-    const totalPush = new THREE.Vector3();
-    for (const height of CAPSULE_SAMPLE_HEIGHTS) {
-      const sample = new THREE.Vector3(right, params.floorUp + height, forward);
-      for (const collider of params.colliders) {
-        const push = colliderPush(collider, sample, params.rig);
-        if (!push) continue;
-        push.y = 0;
-        if (horizontalLength(push) < 1e-5) continue;
-        totalPush.add(push);
-      }
-    }
-
-    totalPush.y = 0;
-    const pushLen = horizontalLength(totalPush);
-    if (pushLen < 1e-5) break;
-    if (pushLen > CHARACTER_COLLIDER_RADIUS_METERS) {
-      totalPush.multiplyScalar(CHARACTER_COLLIDER_RADIUS_METERS / pushLen);
-    }
-
-    const candidate = {
-      right: right + totalPush.x,
-      forward: forward + totalPush.z,
-    };
-    if (params.isAllowed && !params.isAllowed(candidate)) {
-      break;
-    }
-    right = candidate.right;
-    forward = candidate.forward;
+    const result = resolveCollisionIteration(params, right, forward);
+    right = result.right;
+    forward = result.forward;
+    if (result.done) break;
   }
 
   return { right, forward };

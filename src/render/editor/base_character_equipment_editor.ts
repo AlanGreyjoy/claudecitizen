@@ -10,7 +10,6 @@ import {
   type WeaponDefinition,
 } from '../../net/admin_api';
 import {
-  DEFAULT_DRAWN_WEAPON_BONE,
   cloneBaseCharacterEquipment,
   identityCharacterMount,
   parseBaseCharacterEquipment,
@@ -79,13 +78,10 @@ import {
   createSidekickUpperBodyAimController,
   type SidekickUpperBodyAimController,
 } from '../characters/sidekick/upper_body_aim';
-import { createPropInstanceGroup } from '../prefabs/prefab_renderer';
 import { loadPrefabDocument } from '../../world/prefabs/loader';
 import {
   collectDrawnGrip,
-  collectEquipmentSockets,
   identityDrawnGripTransform,
-  validateBackpackPrefab,
 } from '../../world/prefabs/item_runtime';
 import {
   parsePrefabDocument,
@@ -93,24 +89,26 @@ import {
   type PrefabEntity,
   type PrefabTransform,
 } from '../../world/prefabs/schema';
-import type { WeaponSlotType } from '../../types/equipment';
+import {
+  attachWeaponEquipmentPreviews,
+  createEquipmentPreviewState,
+  loadBackpackEquipmentPreview,
+  reportDrawnAuthoringStatus,
+  setupEquipmentDrawnPivots,
+  setupEquipmentMountPivots,
+} from "./base_character_equipment_preview";
+import { applyPlayTestAnimationLayers, buildPlayTestAnimationStateKey } from "./base_character_equipment_play_test";
+import {
+  resolveEquipmentTransformTarget,
+  type MountEditMode,
+} from "./base_character_equipment_transform";
+import { renderEquipmentInspector } from "./base_character_equipment_inspector";
 import {
   WEAPON_SELECT_SLOT_IDS,
   stanceIdForWeaponSlot,
   type WeaponSelectSlotId,
 } from '../../player/inventory/weapon_select';
 
-const ATTACHMENT_BONES = [
-  'backAttach',
-  'hipAttach_l',
-  'hipAttach_r',
-  'hipAttachFront',
-  'hipAttachBack',
-  'hand_l',
-  'hand_r',
-  'prop_l',
-  'prop_r',
-];
 const EQUIPMENT_DND_TYPE = 'application/x-claudecitizen-equipment-definition';
 
 type CatalogDefinition = WeaponDefinition | BackpackDefinition;
@@ -118,7 +116,6 @@ type CharacterPreviewPose = 'reference' | 'animated';
 type EquipmentGizmoMode = 'translate' | 'rotate' | 'scale';
 type BaseCharacterLeftTab = 'equipment' | 'animation' | 'controllers' | 'settings';
 /** holster = resting; drawn = character hand bone; weapon-grip = per-weapon prefab pose */
-type MountEditMode = 'holster' | 'drawn' | 'weapon-grip';
 
 interface PlayTestDefaultAssignment {
   slotId: 'backpack' | WeaponSelectSlotId;
@@ -909,68 +906,25 @@ export function createBaseCharacterEquipmentEditor(
   const currentDrawnMount = (): CharacterBoneMountV1 | null =>
     currentVariant()?.drawnMounts?.[selectedSlotId] ?? null;
 
-  const currentTransformTarget = (): {
-    object: THREE.Object3D;
-    transform: PrefabTransform;
-    source: 'character' | 'backpack-socket' | 'weapon-grip';
-    prefabId?: string;
-    label: string;
-  } | null => {
+  const currentTransformTarget = (): ReturnType<typeof resolveEquipmentTransformTarget> => {
     const slot = currentSlot();
     if (!slot) return null;
-    if (slot.requiresSlotId && !assignments.has(slot.requiresSlotId)) return null;
-
-    if (mountEditMode === 'weapon-grip' && slot.kind === 'weapon') {
-      const weaponRoot = weaponPreviewRoots.get(selectedSlotId);
-      const gripEntity = weaponGripEntities.get(selectedSlotId);
-      const assignment = assignments.get(selectedSlotId);
-      if (!weaponRoot || !gripEntity || !assignment?.prefabId) return null;
-      return {
-        object: weaponRoot,
-        transform: gripEntity.transform,
-        source: 'weapon-grip',
-        prefabId: assignment.prefabId,
-        label: `Weapon grip · ${assignment.name}`,
-      };
-    }
-
-    if (mountEditMode === 'drawn' && slot.kind === 'weapon') {
-      const drawn = currentDrawnMount();
-      const pivot = drawnPivots.get(selectedSlotId);
-      if (!drawn || !pivot) return null;
-      return {
-        object: pivot,
-        transform: drawn,
-        source: 'character',
-        label: `Type ${selectedType} hand bone mount`,
-      };
-    }
-
-    if (slot.providerSocket && activeBackpackPrefabId) {
-      const object = backpackSocketObjects.get(slot.providerSocket.socketId);
-      const entity = backpackSocketEntities.get(slot.providerSocket.socketId);
-      if (object && entity) {
-        return {
-          object,
-          transform: entity.transform,
-          source: 'backpack-socket',
-          prefabId: activeBackpackPrefabId,
-          label: `Backpack socket · ${slot.providerSocket.socketId}`,
-        };
-      }
-      if (slot.requiresSlotId) return null;
-    }
-    const mount = currentMount();
-    const pivot = mountPivots.get(selectedSlotId);
-    if (!mount || !pivot) return null;
-    return {
-      object: pivot,
-      transform: mount,
-      source: 'character',
-      label: slot.providerSocket
-        ? `Type ${selectedType} holster fallback`
-        : `Type ${selectedType} holster mount`,
-    };
+    return resolveEquipmentTransformTarget({
+      slot,
+      mountEditMode,
+      selectedType,
+      selectedSlotId,
+      assignments,
+      activeBackpackPrefabId,
+      weaponPreviewRoots,
+      weaponGripEntities,
+      drawnPivots,
+      mountPivots,
+      backpackSocketObjects,
+      backpackSocketEntities,
+      currentDrawnMount,
+      currentMount,
+    });
   };
 
   const syncGizmo = (): void => {
@@ -1030,105 +984,53 @@ export function createBaseCharacterEquipmentEditor(
     for (const child of [...previewRoot.children]) {
       if (child !== avatar.root) previewRoot.remove(child);
     }
-    mountPivots = new Map();
-    drawnPivots = new Map();
-    weaponPreviewRoots = new Map();
-    weaponGripEntities = new Map();
-    activeBackpackPrefabId = null;
-    backpackSocketObjects = new Map();
-    backpackSocketEntities = new Map();
-    const variant = documentState.variants[String(selectedType) as '1' | '2'];
-    for (const slot of documentState.slots) {
-      const mount = variant.mounts[slot.id];
-      const bone = avatar.root.getObjectByName(mount.bone);
-      const pivot = new THREE.Group();
-      pivot.name = `equipment-mount:${slot.id}`;
-      applyTransform(pivot, mount);
-      (bone ?? previewRoot).add(pivot);
-      mountPivots.set(slot.id, pivot);
-      if (!bone) setStageStatus(`Missing character bone "${mount.bone}" for ${slot.label}.`, true);
-    }
-    for (const [slotId, mount] of Object.entries(variant.drawnMounts ?? {})) {
-      const bone = avatar.root.getObjectByName(mount.bone);
-      const pivot = new THREE.Group();
-      pivot.name = `equipment-drawn:${slotId}`;
-      applyTransform(pivot, mount);
-      (bone ?? previewRoot).add(pivot);
-      drawnPivots.set(slotId, pivot);
-      if (!bone) {
-        setStageStatus(`Missing drawn-mount bone "${mount.bone}" for ${slotId}.`, true);
-      }
-    }
+    const previewState = createEquipmentPreviewState();
+    mountPivots = previewState.mountPivots;
+    drawnPivots = previewState.drawnPivots;
+    weaponPreviewRoots = previewState.weaponPreviewRoots;
+    weaponGripEntities = previewState.weaponGripEntities;
+    activeBackpackPrefabId = previewState.activeBackpackPrefabId;
+    backpackSocketObjects = previewState.backpackSocketObjects;
+    backpackSocketEntities = previewState.backpackSocketEntities;
 
-    let backpackRoot: THREE.Group | null = null;
-    const backpackSockets = new Map<string, THREE.Object3D>();
-    const backpackAssignment = assignments.get('backpack');
-    if (backpackAssignment?.itemType === 'backpack') {
-      const prefab = backpackAssignment.prefabId
-        ? await loadBackpackPrefabDraft(backpackAssignment.prefabId)
-        : null;
-      if (generation !== previewGeneration) return;
-      const errors = prefab ? validateBackpackPrefab(prefab) : ['Backpack prefab is missing.'];
-      if (prefab && errors.length === 0) {
-        activeBackpackPrefabId = prefab.id;
-        backpackRoot = createPropInstanceGroup(prefab);
-        mountPivots.get('backpack')?.add(backpackRoot);
-        for (const socket of collectEquipmentSockets(prefab)) {
-          const object = findEntityObject(backpackRoot, socket.entityId);
-          const entity = findPrefabEntity(prefab.root, socket.entityId);
-          if (object) {
-            backpackSockets.set(socket.id, object);
-            backpackSocketObjects.set(socket.id, object);
-          }
-          if (entity) backpackSocketEntities.set(socket.id, entity);
-        }
-        setStageStatus('Backpack sockets valid. Both rifle slots are available.');
-      } else {
-        mountPivots.get('backpack')?.add(placeholder(0xffa832));
-        assignments.delete('rifle-secondary');
-        setStageStatus(`Backpack warning: ${errors.join(' ')}`, true);
-      }
-    } else {
-      assignments.delete('rifle-secondary');
-      setStageStatus('No backpack equipped. One rifle uses the character backAttach fallback.');
-    }
-
-    for (const slot of documentState.slots) {
-      if (slot.kind !== 'weapon') continue;
-      const definition = assignments.get(slot.id);
-      if (!definition || definition.itemType !== 'weapon') continue;
-      if (slot.requiresSlotId && !assignments.has(slot.requiresSlotId)) continue;
-      if (!definition.prefabId) continue;
-      const draft = await loadWeaponPrefabDraft(definition.prefabId);
-      if (generation !== previewGeneration) return;
-      if (!draft) continue;
-      const gripEntity = ensureDrawnGripEntity(draft);
-      const item = createPropInstanceGroup(draft);
-      weaponPreviewRoots.set(slot.id, item);
-      weaponGripEntities.set(slot.id, gripEntity);
-      const drawnSlotId = playTestActive ? playTestWeaponSlotId : simulateDrawnSlotId;
-      const drawnParent = drawnSlotId === slot.id ? drawnPivots.get(slot.id) ?? null : null;
-      if (drawnParent) {
-        applyTransform(item, gripEntity.transform);
-        drawnParent.add(item);
-        continue;
-      }
-      applyTransform(item, identityDrawnGripTransform());
-      const socket = slot.providerSocket ? backpackSockets.get(slot.providerSocket.socketId) : null;
-      if (socket && backpackRoot) socket.add(item);
-      else if (!slot.requiresSlotId) mountPivots.get(slot.id)?.add(item);
-    }
-    if (
-      !playTestActive
-      && simulateDrawnSlotId
-      && (mountEditMode === 'drawn' || mountEditMode === 'weapon-grip')
-    ) {
-      setStageStatus(
-        mountEditMode === 'weapon-grip'
-          ? 'Editing this weapon’s drawn-grip. Save writes the weapon prefab.'
-          : 'Editing character hand bone. Switch to Weapon grip for per-gun rotation.',
-      );
-    }
+    const previewCtx = {
+      documentState,
+      selectedType,
+      avatar,
+      previewRoot,
+      assignments,
+      playTestActive,
+      playTestWeaponSlotId,
+      simulateDrawnSlotId,
+      mountEditMode,
+      loadBackpackPrefabDraft,
+      loadWeaponPrefabDraft,
+      ensureDrawnGripEntity,
+      applyTransform,
+      setStageStatus,
+      findEntityObject,
+      findPrefabEntity,
+      placeholder,
+    };
+    setupEquipmentMountPivots(previewCtx, previewState);
+    setupEquipmentDrawnPivots(previewCtx, previewState);
+    const { backpackRoot, backpackSockets } = await loadBackpackEquipmentPreview(
+      previewCtx,
+      previewState,
+      generation,
+      previewGeneration,
+    );
+    if (generation !== previewGeneration) return;
+    const stale = await attachWeaponEquipmentPreviews(
+      previewCtx,
+      previewState,
+      backpackRoot,
+      backpackSockets,
+      generation,
+      previewGeneration,
+    );
+    if (stale || generation !== previewGeneration) return;
+    reportDrawnAuthoringStatus(previewCtx);
     if (playTestActive) gizmo.detach();
     else syncGizmo();
     renderPlayTestHud();
@@ -1455,55 +1357,32 @@ export function createBaseCharacterEquipmentEditor(
     locomotion?: { isMoving?: boolean; gait?: WalkGait; jumpPhase?: JumpPhase },
   ): Promise<void> => {
     if (!playTestActive || !animation || !controllerState) return;
-    const stanceId = stanceIdForWeaponSlot(playTestWeaponSlotId);
-    const layers = animationLayersFromState({
-      stanceId,
-      aiming: playTestHardAim,
-      isMoving: locomotion?.isMoving,
-      gait: locomotion?.gait,
-      jumpPhase: locomotion?.jumpPhase,
-    });
-    const stateKey = `${stanceId}:${layers.baseClip}:${layers.upperClip ?? ''}`;
+    const { stanceId, stateKey, previewLocomotion: nextPreviewLocomotion } =
+      buildPlayTestAnimationStateKey({
+        playTestWeaponSlotId,
+        playTestHardAim,
+        locomotion,
+      });
     if (!force && stateKey === playTestAnimationKey) return;
     playTestAnimationKey = stateKey;
-    previewLocomotion = locomotion?.jumpPhase && locomotion.jumpPhase !== 'grounded'
-      ? locomotion.jumpPhase.replace('-', '_') as AnimationLocomotionKind
-      : stanceId === 'rifle' && playTestHardAim && !locomotion?.isMoving
-      ? 'idle_aiming'
-      : locomotion?.isMoving
-        ? (locomotion.gait === 'sprint' ? 'sprint' : locomotion.gait === 'walk' ? 'walk' : 'run')
-        : 'idle';
+    previewLocomotion = nextPreviewLocomotion;
     selectedStanceId = stanceId;
     const generation = ++playTestAnimationGeneration;
     renderPlayTestHud();
     try {
-      const loadedClip = await ensureControllerClipLoaded(layers.baseClip);
-      if (!playTestActive || generation !== playTestAnimationGeneration) return;
-      if (!loadedClip) {
-        setStageStatus(
-          `Play test has no loadable ${stanceId} clip "${layers.baseClip}".`,
-          true,
-        );
-        return;
-      }
-      let loadedUpper: string | null = null;
-      if (layers.upperClip) {
-        loadedUpper = await ensureControllerClipLoaded(layers.upperClip);
-        if (!playTestActive || generation !== playTestAnimationGeneration) return;
-        if (!loadedUpper) {
-          setStageStatus(
-            `Play test has no loadable upper clip "${layers.upperClip}".`,
-            true,
-          );
-          return;
-        }
-      }
-      await ensureAnimatedPose();
-      if (!playTestActive || generation !== playTestAnimationGeneration) return;
-      // Set the upper layer first so the base action is created with the lower-body mask.
-      animation.setUpperBodyAnimation(loadedUpper, 0.16);
-      animation.setAnimation(loadedClip, 0.16);
-      animation.setPlaying(true);
+      const applied = await applyPlayTestAnimationLayers({
+        animation,
+        stanceId,
+        playTestHardAim,
+        locomotion,
+        generation,
+        playTestAnimationGeneration,
+        isPlayTestActive: () => playTestActive,
+        ensureControllerClipLoaded,
+        ensureAnimatedPose,
+        setStageStatus,
+      });
+      if (!applied) return;
       renderPlayTestHud();
       renderInspector();
     } catch (error) {
@@ -2405,366 +2284,58 @@ export function createBaseCharacterEquipmentEditor(
   }
 
   function renderInspector(): void {
-    right.replaceChildren();
-    if (playTestActive) {
-      const heading = document.createElement('div');
-      heading.className = 'ed-base-panel-title';
-      heading.textContent = 'Play Test';
-      const section = document.createElement('section');
-      section.className = 'ed-base-section';
-      const state = document.createElement('p');
-      state.className = 'ed-base-note';
-      const weaponName = playTestWeaponSlotId
-        ? assignments.get(playTestWeaponSlotId)?.name ?? playTestWeaponSlotId
-        : 'Unarmed';
-      state.textContent = `${weaponName} · ${LOCOMOTION_LABELS[previewLocomotion]} · ${animation?.activeClipName || 'loading'}`;
-      const controlsNote = document.createElement('p');
-      controlsNote.className = 'ed-base-note';
-      controlsNote.textContent =
-        'WASD move · Shift sprint · Space jump · 1 Assault 01 · 2 Brown 50 · 3 Twin Horned Pistol';
-      section.append(state, controlsNote);
-      right.append(heading, section);
-      return;
-    }
-    const slot = currentSlot();
-    const mount = currentMount();
-    const heading = document.createElement('div');
-    heading.className = 'ed-base-panel-title';
-    heading.textContent = slot ? slot.label : 'Equipment slot';
-    right.append(heading);
-    if (!slot || !mount || !documentState) return;
-    const update = (): void => {
-      markDirty();
-      void rebuildEquipmentPreview();
-    };
-    const slotSection = document.createElement('section');
-    slotSection.className = 'ed-base-section';
-    slotSection.append(
-      field('Slot ID', Object.assign(document.createElement('code'), { textContent: slot.id })),
-      field('Label', input(slot.label, (value) => { slot.label = value || slot.id; update(); })),
-      field(
-        'Kind',
-        select(slot.kind, [{ value: 'weapon', label: 'Weapon' }, { value: 'backpack', label: 'Backpack' }], (value) => {
-          slot.kind = value === 'backpack' ? 'backpack' : 'weapon';
-          if (slot.kind === 'weapon') slot.weaponSlotType ??= 'rifle';
-          else delete slot.weaponSlotType;
-          assignments.delete(slot.id);
-          update();
-        }),
-      ),
-    );
-    if (slot.kind === 'weapon') {
-      slotSection.append(field(
-        'Accepts',
-        select(slot.weaponSlotType ?? 'rifle', ['sword', 'handgun', 'rifle'].map((value) => ({ value, label: value })), (value) => {
-          slot.weaponSlotType = value as WeaponSlotType;
-          assignments.delete(slot.id);
-          update();
-        }),
-      ));
-    }
-    const slotOptions = [{ value: '', label: 'Always available' }, ...documentState.slots
-      .filter((candidate) => candidate.id !== slot.id)
-      .map((candidate) => ({ value: candidate.id, label: candidate.label }))];
-    slotSection.append(
-      field('Requires slot', select(slot.requiresSlotId ?? '', slotOptions, (value) => {
-        slot.requiresSlotId = value || undefined;
-        if (!value) assignments.delete(slot.id);
-        update();
-      })),
-      field('Provider slot', select(slot.providerSocket?.slotId ?? '', [{ value: '', label: 'Character mount' }, ...slotOptions.slice(1)], (value) => {
-        slot.providerSocket = value ? { slotId: value, socketId: slot.providerSocket?.socketId || slot.id } : undefined;
-        update();
-      })),
-    );
-    if (slot.providerSocket) {
-      slotSection.append(field('Provider socket', input(slot.providerSocket.socketId, (value) => {
-        if (slot.providerSocket) slot.providerSocket.socketId = value;
-        update();
-      })));
-    }
-    const remove = button('Delete slot', () => {
-      if (!documentState || documentState.slots.length <= 1) return;
-      if (!window.confirm(`Delete slot "${slot.label}" from both character types?`)) return;
-      documentState.slots = documentState.slots.filter((candidate) => candidate.id !== slot.id);
-      delete documentState.variants['1'].mounts[slot.id];
-      delete documentState.variants['2'].mounts[slot.id];
-      delete documentState.variants['1'].drawnMounts?.[slot.id];
-      delete documentState.variants['2'].drawnMounts?.[slot.id];
-      for (const candidate of documentState.slots) {
-        if (candidate.requiresSlotId === slot.id) delete candidate.requiresSlotId;
-        if (candidate.providerSocket?.slotId === slot.id) delete candidate.providerSocket;
-      }
-      assignments.delete(slot.id);
-      if (simulateDrawnSlotId === slot.id) simulateDrawnSlotId = null;
-      mountEditMode = 'holster';
-      selectedSlotId = documentState.slots[0]?.id ?? '';
-      update();
-      renderLeft();
+    renderEquipmentInspector({
+      right,
+      playTestActive,
+      playTestWeaponSlotId,
+      previewLocomotion,
+      animation,
+      assignments,
+      locomotionLabels: LOCOMOTION_LABELS,
+      currentSlot,
+      currentMount,
+      currentDrawnMount,
+      currentTransformTarget,
+      documentState,
+      markDirty,
+      rebuildEquipmentPreview,
+      renderLeft,
+      renderInspector,
+      mountEditMode,
+      setMountEditMode: (mode) => { mountEditMode = mode; },
+      selectedStanceId,
+      setSelectedStanceId: (stanceId) => { selectedStanceId = stanceId; },
+      simulateDrawnSlotId,
+      setSimulateDrawnSlotId: (slotId) => { simulateDrawnSlotId = slotId; },
+      selectedType,
+      selectedSlotId,
+      setSelectedSlotId: (slotId) => { selectedSlotId = slotId; },
+      assignmentsMap: assignments,
+      loadWeaponPrefabDraft,
+      ensureDrawnGripEntity,
+      markWeaponPrefabDirty,
+      previewControllerState,
+      gizmoMode,
+      setGizmoMode,
+      gizmoSpace,
+      setGizmoSpace: (space) => { gizmoSpace = space; },
+      gizmo,
+      markBackpackPrefabDirty,
+      catalogMessage,
+      refreshCatalog,
+      backpacks,
+      weapons,
+      assignDefinition,
+      equipmentDndType: EQUIPMENT_DND_TYPE,
+      button,
+      input,
+      field,
+      select,
+      displayNumber,
+      applyTransform,
+      transformEulerDegrees,
+      setTransformEulerDegrees,
     });
-    slotSection.append(remove);
-
-    let mountModeSection: HTMLElement | null = null;
-    if (slot.kind === 'weapon') {
-      mountModeSection = document.createElement('section');
-      mountModeSection.className = 'ed-base-section';
-      const mountModeTitle = document.createElement('h3');
-      mountModeTitle.textContent = 'Mount target';
-      mountModeSection.append(mountModeTitle);
-      const modeRow = document.createElement('div');
-      modeRow.className = 'ed-base-actions';
-      const enterDrawnAuthoring = (mode: 'drawn' | 'weapon-grip'): void => {
-        mountEditMode = mode;
-        selectedStanceId = stanceIdForWeaponSlot(slot.id);
-        simulateDrawnSlotId = slot.id;
-        if (!currentDrawnMount() && documentState) {
-          const variant = documentState.variants[String(selectedType) as '1' | '2'];
-          variant.drawnMounts ??= {};
-          variant.drawnMounts[slot.id] = identityCharacterMount(DEFAULT_DRAWN_WEAPON_BONE);
-          markDirty();
-        }
-        const assignment = assignments.get(slot.id);
-        if (mode === 'weapon-grip' && assignment?.prefabId) {
-          void loadWeaponPrefabDraft(assignment.prefabId).then((draft) => {
-            if (draft) {
-              const hadGrip = Boolean(collectDrawnGrip(draft));
-              ensureDrawnGripEntity(draft);
-              if (!hadGrip) markWeaponPrefabDirty(draft.id);
-            }
-            void rebuildEquipmentPreview().then(() => {
-              void previewControllerState();
-            });
-          });
-          return;
-        }
-        void rebuildEquipmentPreview().then(() => {
-          void previewControllerState();
-        });
-      };
-      for (const [label, mode] of [
-        ['Holster', 'holster'],
-        ['Hand bone', 'drawn'],
-        ['Weapon grip', 'weapon-grip'],
-      ] as const) {
-        const modeButton = button(label, () => {
-          if (mode === 'holster') {
-            mountEditMode = 'holster';
-            if (simulateDrawnSlotId === slot.id) simulateDrawnSlotId = null;
-            void rebuildEquipmentPreview();
-            return;
-          }
-          enterDrawnAuthoring(mode);
-        });
-        modeButton.classList.toggle('is-active', mountEditMode === mode);
-        if (mode === 'weapon-grip' && !assignments.has(slot.id)) {
-          modeButton.disabled = true;
-          modeButton.title = 'Assign a weapon from the catalog first';
-        }
-        modeRow.append(modeButton);
-      }
-      mountModeSection.append(modeRow);
-      const drawn = currentDrawnMount();
-      if (mountEditMode === 'drawn' || mountEditMode === 'weapon-grip') {
-        const hint = document.createElement('p');
-        hint.className = 'ed-base-note';
-        hint.textContent = mountEditMode === 'weapon-grip'
-          ? 'Per-gun rotation/offset saved on this weapon prefab’s drawn-grip marker.'
-          : 'Shared hand bone for this loadout slot (usually prop_r). Prefer Weapon grip for mesh-specific aim.';
-        mountModeSection.append(hint);
-        const simulateLabel = document.createElement('label');
-        simulateLabel.className = 'ed-base-note';
-        simulateLabel.style.display = 'flex';
-        simulateLabel.style.gap = '0.4rem';
-        simulateLabel.style.alignItems = 'center';
-        const simulate = document.createElement('input');
-        simulate.type = 'checkbox';
-        simulate.checked = simulateDrawnSlotId === slot.id;
-        simulate.addEventListener('change', () => {
-          simulateDrawnSlotId = simulate.checked ? slot.id : null;
-          void rebuildEquipmentPreview();
-        });
-        simulateLabel.append(simulate, document.createTextNode('Simulate drawn (mesh in hand)'));
-        mountModeSection.append(simulateLabel);
-        if (mountEditMode === 'drawn') {
-          if (drawn) {
-            const removeDrawn = button('Remove hand bone mount', () => {
-              if (!documentState) return;
-              const variant = documentState.variants[String(selectedType) as '1' | '2'];
-              if (variant.drawnMounts) {
-                delete variant.drawnMounts[slot.id];
-                if (Object.keys(variant.drawnMounts).length === 0) delete variant.drawnMounts;
-              }
-              if (simulateDrawnSlotId === slot.id) simulateDrawnSlotId = null;
-              mountEditMode = 'holster';
-              update();
-            });
-            mountModeSection.append(removeDrawn);
-          } else {
-            const addDrawn = button('Add hand bone mount', () => {
-              if (!documentState) return;
-              const variant = documentState.variants[String(selectedType) as '1' | '2'];
-              variant.drawnMounts ??= {};
-              variant.drawnMounts[slot.id] = identityCharacterMount(DEFAULT_DRAWN_WEAPON_BONE);
-              update();
-            });
-            mountModeSection.append(addDrawn);
-          }
-        }
-      }
-    }
-
-    const transformSection = document.createElement('section');
-    transformSection.className = 'ed-base-section';
-    const transformTitle = document.createElement('h3');
-    const transformTarget = currentTransformTarget();
-    const editingMount = mountEditMode === 'drawn' && slot.kind === 'weapon'
-      ? currentDrawnMount()
-      : mountEditMode === 'weapon-grip'
-        ? null
-        : mount;
-    transformTitle.textContent = transformTarget?.label ?? 'Transform unavailable';
-    transformSection.append(transformTitle);
-    if (!transformTarget) {
-      const unavailable = document.createElement('p');
-      unavailable.className = 'ed-base-warning';
-      unavailable.textContent = mountEditMode === 'weapon-grip' && slot.kind === 'weapon'
-        ? 'Assign a weapon and enable Simulate drawn to edit that gun’s grip.'
-        : mountEditMode === 'drawn' && slot.kind === 'weapon'
-          ? 'Add a hand bone mount to edit the shared character attach bone.'
-          : slot.requiresSlotId
-            ? `Equip a valid ${slot.requiresSlotId} to edit this provider socket.`
-            : 'The selected transform target is unavailable.';
-      transformSection.append(unavailable);
-    }
-    const modes = document.createElement('div');
-    modes.className = 'ed-base-actions';
-    for (const [label, mode] of [['Move', 'translate'], ['Rotate', 'rotate'], ['Scale', 'scale']] as const) {
-      const modeButton = button(label, () => setGizmoMode(mode));
-      modeButton.classList.toggle('is-active', gizmoMode === mode);
-      modes.append(modeButton);
-    }
-    const spaceButton = button(gizmoSpace === 'local' ? 'Local' : 'World', () => {
-      gizmoSpace = gizmoSpace === 'local' ? 'world' : 'local';
-      gizmo.setSpace(gizmoSpace);
-      renderInspector();
-    });
-    spaceButton.title = 'Toggle local/world gizmo orientation';
-    modes.append(spaceButton);
-    if (transformTarget) transformSection.append(modes);
-    const markTransformDirty = (): void => {
-      if (transformTarget?.source === 'backpack-socket' && transformTarget.prefabId) {
-        markBackpackPrefabDirty(transformTarget.prefabId);
-      } else if (transformTarget?.source === 'weapon-grip' && transformTarget.prefabId) {
-        markWeaponPrefabDirty(transformTarget.prefabId);
-      } else {
-        markDirty();
-      }
-    };
-    const updateNumber = (target: { x: number; y: number; z: number }, key: 'x' | 'y' | 'z', value: string): void => {
-      const number = Number(value);
-      if (!Number.isFinite(number) || !transformTarget) return;
-      target[key] = number;
-      applyTransform(transformTarget.object, transformTarget.transform);
-      markTransformDirty();
-    };
-    if (transformTarget?.source === 'character' && editingMount) {
-      transformSection.append(field('Bone', select(editingMount.bone, ATTACHMENT_BONES.map((bone) => ({ value: bone, label: bone })), (value) => {
-        editingMount.bone = value;
-        update();
-      })));
-    } else if (transformTarget?.source === 'backpack-socket') {
-      const note = document.createElement('p');
-      note.className = 'ed-base-note';
-      note.textContent = 'Editing the backpack item prefab. Saving will persist this resting weapon position for every character using this backpack.';
-      transformSection.append(note);
-    } else if (transformTarget?.source === 'weapon-grip') {
-      const note = document.createElement('p');
-      note.className = 'ed-base-note';
-      note.textContent = 'Editing this weapon prefab’s drawn-grip. Each gun keeps its own rotation/offset when drawn.';
-      transformSection.append(note);
-    }
-    const appendVectorRow = (
-      label: string,
-      target: { x: number; y: number; z: number },
-      step: number,
-      onValue: (key: 'x' | 'y' | 'z', value: string) => void,
-    ): void => {
-      const row = document.createElement('div');
-      row.className = 'ed-base-vector';
-      const rowLabel = document.createElement('span');
-      rowLabel.textContent = label;
-      row.append(rowLabel);
-      for (const key of ['x', 'y', 'z'] as const) {
-        const valueInput = input(displayNumber(target[key]), (value) => onValue(key, value), 'number', step);
-        valueInput.title = key.toUpperCase();
-        row.append(valueInput);
-      }
-      transformSection.append(row);
-    };
-    if (transformTarget) {
-      const transform = transformTarget.transform;
-      appendVectorRow('Position', transform.position, 0.01, (key, value) => updateNumber(transform.position, key, value));
-      const rotationDegrees = transformEulerDegrees(transform);
-      appendVectorRow('Rotation°', rotationDegrees, 5, (key, value) => {
-        const number = Number(value);
-        if (!Number.isFinite(number)) return;
-        const nextDegrees = transformEulerDegrees(transform);
-        nextDegrees[key] = number;
-        setTransformEulerDegrees(transform, nextDegrees);
-        applyTransform(transformTarget.object, transform);
-        markTransformDirty();
-        renderInspector();
-      });
-      appendVectorRow('Scale', transform.scale, 0.05, (key, value) => updateNumber(transform.scale, key, value));
-    }
-
-    const catalogSection = document.createElement('section');
-    catalogSection.className = 'ed-base-section ed-base-catalog';
-    const catalogTitle = document.createElement('h3');
-    catalogTitle.textContent = 'Synchronized catalog';
-    const refresh = button('Refresh', () => void refreshCatalog());
-    const adminLink = document.createElement('a');
-    adminLink.className = 'ed-btn';
-    adminLink.href = '/?boot=admin';
-    adminLink.target = '_blank';
-    adminLink.textContent = 'Open Admin';
-    const message = document.createElement('p');
-    message.className = 'ed-base-note';
-    message.textContent = catalogMessage;
-    catalogSection.append(catalogTitle, refresh, adminLink, message);
-    const available = slot.kind === 'backpack'
-      ? backpacks
-      : weapons.filter((weapon) => weapon.weaponSlotType === slot.weaponSlotType);
-    const slotUnavailable = Boolean(slot.requiresSlotId && !assignments.has(slot.requiresSlotId));
-    if (slotUnavailable) {
-      const warning = document.createElement('p');
-      warning.className = 'ed-base-warning';
-      warning.textContent = `Equip ${slot.requiresSlotId} to unlock this slot.`;
-      catalogSection.append(warning);
-    } else {
-      for (const definition of available) {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'ed-base-catalog-item';
-        card.draggable = true;
-        card.textContent = `${definition.name} · ${definition.prefabId ?? 'missing prefab'}`;
-        card.addEventListener('dragstart', (event) => event.dataTransfer?.setData(EQUIPMENT_DND_TYPE, definition.id));
-        card.addEventListener('click', () => assignDefinition(slot, definition));
-        catalogSection.append(card);
-      }
-    }
-    const clear = button('Clear preview assignment', () => {
-      assignments.delete(slot.id);
-      if (slot.id === 'backpack') assignments.delete('rifle-secondary');
-      void rebuildEquipmentPreview();
-    });
-    catalogSection.append(clear);
-    right.append(
-      slotSection,
-      ...(mountModeSection ? [mountModeSection] : []),
-      transformSection,
-      catalogSection,
-    );
   }
 
   async function loadDocument(): Promise<void> {

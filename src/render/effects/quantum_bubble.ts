@@ -208,6 +208,31 @@ function markerWorldSizeMeters(distanceMeters: number): number {
   );
 }
 
+function isQuantumBubbleActive(phase: QuantumTravelState['phase']): boolean {
+  return phase === 'spooling' || phase === 'traveling' || phase === 'dropOut';
+}
+
+function quantumBubbleIntensity(quantum: QuantumTravelState): number {
+  const spoolT = Math.min(
+    1,
+    quantum.spoolElapsed / Math.max(quantum.spoolDuration, 0.001),
+  );
+  const dropT = Math.min(1, quantum.dropOutElapsed / QUANTUM_DROP_OUT_SECONDS);
+  if (quantum.phase === 'spooling') return Math.max(0, (spoolT - 0.55) / 0.45);
+  if (quantum.phase === 'dropOut') return 1 - dropT * dropT * (3 - 2 * dropT);
+  return 1;
+}
+
+function boostedMarkerPosition(marker: Vec3): Vec3 {
+  const markerLen = length3(marker.x, marker.y, marker.z);
+  const boost = markerLen > 1e-3 ? MARKER_ALTITUDE_BOOST_METERS / markerLen : 0;
+  return {
+    x: marker.x * (1 + boost),
+    y: marker.y * (1 + boost),
+    z: marker.z * (1 + boost),
+  };
+}
+
 export function createQuantumBubble(
   scene: THREE.Scene,
   renderScale: number,
@@ -317,6 +342,78 @@ export function createQuantumBubble(
 
   let shipAttached = false;
 
+  function updateBubbleVisuals(
+    quantum: QuantumTravelState,
+    timeSeconds: number,
+  ): void {
+    const intensity = quantumBubbleIntensity(quantum);
+    const pulse = 1 + Math.sin(timeSeconds * 7) * 0.012 * intensity;
+    root.scale.setScalar(pulse);
+    shellSpin.rotation.z = timeSeconds * 0.16;
+    const dropT = Math.min(1, quantum.dropOutElapsed / QUANTUM_DROP_OUT_SECONDS);
+    shellSpin.position.z =
+      quantum.phase === 'dropOut'
+        ? -dropT * HYPERSPACE_LENGTH_METERS * 0.62 * renderScale
+        : 0;
+    hyperspaceUniforms.uTime.value = timeSeconds;
+    hyperspaceUniforms.uIntensity.value = intensity;
+  }
+
+  function updateMarkerSlot(
+    slot: MarkerSlot,
+    marker: QuantumBubbleUpdateParams['markers'][number],
+    focusPosition: Vec3,
+    timeSeconds: number,
+  ): void {
+    const boosted = boostedMarkerPosition(marker.position);
+    const distanceMeters = length3(
+      marker.position.x - focusPosition.x,
+      marker.position.y - focusPosition.y,
+      marker.position.z - focusPosition.z,
+    );
+    const visible = markerVisibleFromFocus(
+      focusPosition.x,
+      focusPosition.y,
+      focusPosition.z,
+      boosted.x,
+      boosted.y,
+      boosted.z,
+    );
+    if (!visible) {
+      slot.root.visible = false;
+      return;
+    }
+
+    slot.root.visible = true;
+    slot.root.position.set(
+      (boosted.x - focusPosition.x) * renderScale,
+      (boosted.y - focusPosition.y) * renderScale,
+      (boosted.z - focusPosition.z) * renderScale,
+    );
+
+    const sizeMeters = markerWorldSizeMeters(distanceMeters);
+    const sizeRender = sizeMeters * renderScale;
+    slot.diamond.scale.setScalar(sizeRender * 0.5);
+    slot.diamond.rotation.y = timeSeconds * 0.8;
+    slot.diamond.rotation.x = 0.6;
+
+    if (slot.labelName !== marker.name) {
+      disposeLabel(slot.label);
+      const label = makeLabelSprite(marker.name);
+      slot.root.add(label);
+      slot.label = label;
+      slot.labelName = marker.name;
+    }
+    if (slot.label) {
+      slot.label.scale.set(sizeRender * 4, sizeRender, 1);
+      slot.label.position.y = sizeRender * 1.1;
+    }
+
+    const markerMat = slot.diamond.material as THREE.MeshBasicMaterial;
+    markerMat.color.setHex(marker.highlighted ? 0x9ff7ff : 0x3a9ec0);
+    markerMat.opacity = marker.highlighted ? 0.95 : 0.55;
+  }
+
   return {
     attachToShip(shipGroup: THREE.Group) {
       if (shipAttached) return;
@@ -336,37 +433,9 @@ export function createQuantumBubble(
       markers,
       timeSeconds,
     }: QuantumBubbleUpdateParams) {
-      const active =
-        quantum.phase === 'spooling' ||
-        quantum.phase === 'traveling' ||
-        quantum.phase === 'dropOut';
+      const active = isQuantumBubbleActive(quantum.phase);
       root.visible = active;
-
-      if (active) {
-        const spoolT = Math.min(
-          1,
-          quantum.spoolElapsed / Math.max(quantum.spoolDuration, 0.001),
-        );
-        const dropT = Math.min(
-          1,
-          quantum.dropOutElapsed / QUANTUM_DROP_OUT_SECONDS,
-        );
-        const intensity =
-          quantum.phase === 'spooling'
-            ? Math.max(0, (spoolT - 0.55) / 0.45)
-            : quantum.phase === 'dropOut'
-              ? 1 - dropT * dropT * (3 - 2 * dropT)
-              : 1;
-        const pulse = 1 + Math.sin(timeSeconds * 7) * 0.012 * intensity;
-        root.scale.setScalar(pulse);
-        shellSpin.rotation.z = timeSeconds * 0.16;
-        shellSpin.position.z =
-          quantum.phase === 'dropOut'
-            ? -dropT * HYPERSPACE_LENGTH_METERS * 0.62 * renderScale
-            : 0;
-        hyperspaceUniforms.uTime.value = timeSeconds;
-        hyperspaceUniforms.uIntensity.value = intensity;
-      }
+      if (active) updateBubbleVisuals(quantum, timeSeconds);
 
       const showMarkers = flightMode === 'nav';
       for (let i = 0; i < markerSlots.length; i += 1) {
@@ -376,63 +445,7 @@ export function createQuantumBubble(
           slot.root.visible = false;
           continue;
         }
-
-        const dx = marker.position.x - focusPosition.x;
-        const dy = marker.position.y - focusPosition.y;
-        const dz = marker.position.z - focusPosition.z;
-        const distanceMeters = length3(dx, dy, dz);
-
-        // Radial boost so the icon sits above the terrain pad.
-        const markerLen = length3(marker.position.x, marker.position.y, marker.position.z);
-        const boost =
-          markerLen > 1e-3 ? MARKER_ALTITUDE_BOOST_METERS / markerLen : 0;
-        const boostedX = marker.position.x * (1 + boost);
-        const boostedY = marker.position.y * (1 + boost);
-        const boostedZ = marker.position.z * (1 + boost);
-
-        const visible = markerVisibleFromFocus(
-          focusPosition.x,
-          focusPosition.y,
-          focusPosition.z,
-          boostedX,
-          boostedY,
-          boostedZ,
-        );
-        if (!visible) {
-          slot.root.visible = false;
-          continue;
-        }
-
-        slot.root.visible = true;
-        slot.root.position.set(
-          (boostedX - focusPosition.x) * renderScale,
-          (boostedY - focusPosition.y) * renderScale,
-          (boostedZ - focusPosition.z) * renderScale,
-        );
-
-        const sizeMeters = markerWorldSizeMeters(distanceMeters);
-        const sizeRender = sizeMeters * renderScale;
-        // Octahedron radius 1 → scale to half of desired world size for a readable diamond.
-        slot.diamond.scale.setScalar(sizeRender * 0.5);
-        slot.diamond.rotation.y = timeSeconds * 0.8;
-        slot.diamond.rotation.x = 0.6;
-
-        if (slot.labelName !== marker.name) {
-          disposeLabel(slot.label);
-          const label = makeLabelSprite(marker.name);
-          slot.root.add(label);
-          slot.label = label;
-          slot.labelName = marker.name;
-        }
-        if (slot.label) {
-          // Label width ~4× diamond, height ~1×; offset above diamond.
-          slot.label.scale.set(sizeRender * 4, sizeRender, 1);
-          slot.label.position.y = sizeRender * 1.1;
-        }
-
-        const markerMat = slot.diamond.material as THREE.MeshBasicMaterial;
-        markerMat.color.setHex(marker.highlighted ? 0x9ff7ff : 0x3a9ec0);
-        markerMat.opacity = marker.highlighted ? 0.95 : 0.55;
+        updateMarkerSlot(slot, marker, focusPosition, timeSeconds);
       }
     },
     dispose() {

@@ -130,14 +130,14 @@ export default tseslint.config(
       'sonarjs/no-duplicate-string': ['warn', { threshold: 5 }],
 
       // --- SRP / complexity ---
-      complexity: ['warn', { max: 15 }],
+      complexity: ['error', { max: 20 }],
       'max-depth': ['warn', { max: 4 }],
       'max-params': ['error', { max: 8 }],
       'max-lines-per-function': [
         'warn',
         { max: 120, skipBlankLines: true, skipComments: true },
       ],
-      'sonarjs/cognitive-complexity': ['warn', 15],
+      'sonarjs/cognitive-complexity': ['error', 20],
 
       // --- SOLID (what ESLint can reasonably enforce) ---
       '@typescript-eslint/no-extraneous-class': 'warn',

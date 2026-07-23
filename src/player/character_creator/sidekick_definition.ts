@@ -193,6 +193,104 @@ export function getDefinitionPartName(
   return definition.parts.find((part) => part.partType === partType)?.name ?? null;
 }
 
+function parseLegacyParts(
+  definition: SidekickCharacterDefinitionV2,
+  parts: unknown,
+): void {
+  if (!Array.isArray(parts)) return;
+  for (const value of parts) {
+    if (!value || typeof value !== 'object') continue;
+    const part = value as Record<string, unknown>;
+    if (typeof part.name !== 'string' || typeof part.partType !== 'number') continue;
+    definition.parts.push({
+      name: part.name,
+      partType: part.partType as CharacterPartType,
+      partVersion: typeof part.partVersion === 'string' ? part.partVersion : '',
+    });
+  }
+}
+
+function parseLegacyColorSet(
+  definition: SidekickCharacterDefinitionV2,
+  colorSet: unknown,
+  speciesId: number,
+): void {
+  if (!colorSet || typeof colorSet !== 'object') return;
+  const value = colorSet as Record<string, unknown>;
+  definition.colorSet = {
+    id: typeof value.id === 'number' ? value.id : undefined,
+    species: finiteNumber(value.species, speciesId),
+    name: typeof value.name === 'string' ? value.name : 'Custom',
+    sourceColorPath: typeof value.sourceColorPath === 'string' ? value.sourceColorPath : '',
+    sourceMetallicPath: typeof value.sourceMetallicPath === 'string' ? value.sourceMetallicPath : '',
+    sourceSmoothnessPath: typeof value.sourceSmoothnessPath === 'string' ? value.sourceSmoothnessPath : '',
+    sourceReflectionPath: typeof value.sourceReflectionPath === 'string' ? value.sourceReflectionPath : '',
+    sourceEmissionPath: typeof value.sourceEmissionPath === 'string' ? value.sourceEmissionPath : '',
+    sourceOpacityPath: typeof value.sourceOpacityPath === 'string' ? value.sourceOpacityPath : '',
+  };
+}
+
+function parseColorRowChannel(row: Record<string, unknown>, name: string, fallback: string): string {
+  return typeof row[name] === 'string' ? row[name] as string : fallback;
+}
+
+function parseLegacyColorRows(definition: SidekickCharacterDefinitionV2, colorRows: unknown): void {
+  if (!Array.isArray(colorRows)) return;
+  for (const value of colorRows) {
+    if (!value || typeof value !== 'object') continue;
+    const row = value as Record<string, unknown>;
+    if (typeof row.colorPropertyId !== 'number') continue;
+    definition.colorRows.push({
+      colorPropertyId: row.colorPropertyId,
+      color: parseColorRowChannel(row, 'color', 'FFFFFF'),
+      metallic: parseColorRowChannel(row, 'metallic', '000000'),
+      smoothness: parseColorRowChannel(row, 'smoothness', '808080'),
+      reflection: parseColorRowChannel(row, 'reflection', '000000'),
+      emission: parseColorRowChannel(row, 'emission', '000000'),
+      opacity: parseColorRowChannel(row, 'opacity', 'FFFFFF'),
+    });
+  }
+}
+
+function parseLegacyBlendShapes(
+  definition: SidekickCharacterDefinitionV2,
+  blendShapes: unknown,
+): void {
+  if (!blendShapes || typeof blendShapes !== 'object') return;
+  const body = blendShapes as Record<string, unknown>;
+  definition.blendShapes = {
+    bodyTypeValue: clampBodyValue(finiteNumber(body.bodyTypeValue, 0)),
+    bodySizeValue: clampBodyValue(finiteNumber(body.bodySizeValue, 0)),
+    muscleValue: clampBodyValue(finiteNumber(body.muscleValue, 0)),
+  };
+}
+
+function parseLegacyMaterialEffects(
+  definition: SidekickCharacterDefinitionV2,
+  materialEffects: unknown,
+): void {
+  if (!materialEffects || typeof materialEffects !== 'object') return;
+  const effects = materialEffects as Record<string, unknown>;
+  definition.materialEffects = setDefinitionMaterialEffects(definition, {
+    darkAmount: finiteNumber(effects.darkAmount, DEFAULT_SIDEKICK_MATERIAL_EFFECTS.darkAmount),
+    dirtAmount: finiteNumber(effects.dirtAmount, DEFAULT_SIDEKICK_MATERIAL_EFFECTS.dirtAmount),
+    dirtColor: typeof effects.dirtColor === 'string'
+      ? effects.dirtColor
+      : DEFAULT_SIDEKICK_MATERIAL_EFFECTS.dirtColor,
+    skinColorAmount: finiteNumber(
+      effects.skinColorAmount,
+      DEFAULT_SIDEKICK_MATERIAL_EFFECTS.skinColorAmount,
+    ),
+    skinColor: typeof effects.skinColor === 'string'
+      ? effects.skinColor
+      : DEFAULT_SIDEKICK_MATERIAL_EFFECTS.skinColor,
+    eyelinerAmount: finiteNumber(
+      effects.eyelinerAmount,
+      DEFAULT_SIDEKICK_MATERIAL_EFFECTS.eyelinerAmount,
+    ),
+  }).materialEffects;
+}
+
 export function parseSidekickDefinition(raw: unknown): SidekickCharacterDefinitionV2 {
   if (!raw || typeof raw !== 'object')
     throw new Error('Sidekick character definition must be a JSON object.');
@@ -204,83 +302,11 @@ export function parseSidekickDefinition(raw: unknown): SidekickCharacterDefiniti
     typeof legacy.name === 'string' ? legacy.name : 'Imported Character',
   );
 
-  if (Array.isArray(legacy.parts)) {
-    for (const value of legacy.parts) {
-      if (!value || typeof value !== 'object') continue;
-      const part = value as Record<string, unknown>;
-      if (typeof part.name !== 'string' || typeof part.partType !== 'number') continue;
-      definition.parts.push({
-        name: part.name,
-        partType: part.partType as CharacterPartType,
-        partVersion: typeof part.partVersion === 'string' ? part.partVersion : '',
-      });
-    }
-  }
-
-  if (legacy.colorSet && typeof legacy.colorSet === 'object') {
-    const value = legacy.colorSet as Record<string, unknown>;
-    definition.colorSet = {
-      id: typeof value.id === 'number' ? value.id : undefined,
-      species: finiteNumber(value.species, speciesId),
-      name: typeof value.name === 'string' ? value.name : 'Custom',
-      sourceColorPath: typeof value.sourceColorPath === 'string' ? value.sourceColorPath : '',
-      sourceMetallicPath: typeof value.sourceMetallicPath === 'string' ? value.sourceMetallicPath : '',
-      sourceSmoothnessPath: typeof value.sourceSmoothnessPath === 'string' ? value.sourceSmoothnessPath : '',
-      sourceReflectionPath: typeof value.sourceReflectionPath === 'string' ? value.sourceReflectionPath : '',
-      sourceEmissionPath: typeof value.sourceEmissionPath === 'string' ? value.sourceEmissionPath : '',
-      sourceOpacityPath: typeof value.sourceOpacityPath === 'string' ? value.sourceOpacityPath : '',
-    };
-  }
-
-  if (Array.isArray(legacy.colorRows)) {
-    for (const value of legacy.colorRows) {
-      if (!value || typeof value !== 'object') continue;
-      const row = value as Record<string, unknown>;
-      if (typeof row.colorPropertyId !== 'number') continue;
-      const channel = (name: string, fallback: string): string =>
-        typeof row[name] === 'string' ? row[name] as string : fallback;
-      definition.colorRows.push({
-        colorPropertyId: row.colorPropertyId,
-        color: channel('color', 'FFFFFF'),
-        metallic: channel('metallic', '000000'),
-        smoothness: channel('smoothness', '808080'),
-        reflection: channel('reflection', '000000'),
-        emission: channel('emission', '000000'),
-        opacity: channel('opacity', 'FFFFFF'),
-      });
-    }
-  }
-
-  if (legacy.blendShapes && typeof legacy.blendShapes === 'object') {
-    const body = legacy.blendShapes as Record<string, unknown>;
-    definition.blendShapes = {
-      bodyTypeValue: clampBodyValue(finiteNumber(body.bodyTypeValue, 0)),
-      bodySizeValue: clampBodyValue(finiteNumber(body.bodySizeValue, 0)),
-      muscleValue: clampBodyValue(finiteNumber(body.muscleValue, 0)),
-    };
-  }
-
-  if (legacy.materialEffects && typeof legacy.materialEffects === 'object') {
-    const effects = legacy.materialEffects as Record<string, unknown>;
-    definition.materialEffects = setDefinitionMaterialEffects(definition, {
-      darkAmount: finiteNumber(effects.darkAmount, DEFAULT_SIDEKICK_MATERIAL_EFFECTS.darkAmount),
-      dirtAmount: finiteNumber(effects.dirtAmount, DEFAULT_SIDEKICK_MATERIAL_EFFECTS.dirtAmount),
-      dirtColor: typeof effects.dirtColor === 'string'
-        ? effects.dirtColor
-        : DEFAULT_SIDEKICK_MATERIAL_EFFECTS.dirtColor,
-      skinColorAmount: finiteNumber(
-        effects.skinColorAmount,
-        DEFAULT_SIDEKICK_MATERIAL_EFFECTS.skinColorAmount,
-      ),
-      skinColor: typeof effects.skinColor === 'string'
-        ? effects.skinColor
-        : DEFAULT_SIDEKICK_MATERIAL_EFFECTS.skinColor,
-      eyelinerAmount: finiteNumber(
-        effects.eyelinerAmount,
-        DEFAULT_SIDEKICK_MATERIAL_EFFECTS.eyelinerAmount,
-      ),
-    }).materialEffects;
-  }
+  parseLegacyParts(definition, legacy.parts);
+  parseLegacyColorSet(definition, legacy.colorSet, speciesId);
+  parseLegacyColorRows(definition, legacy.colorRows);
+  parseLegacyBlendShapes(definition, legacy.blendShapes);
+  parseLegacyMaterialEffects(definition, legacy.materialEffects);
 
   definition.parts.sort((left, right) => left.partType - right.partType);
   definition.colorRows.sort((left, right) => left.colorPropertyId - right.colorPropertyId);

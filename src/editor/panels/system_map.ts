@@ -296,14 +296,7 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
     }
   }
 
-  function draw(): void {
-    resizeCanvas();
-    const width = canvas.width;
-    const height = canvas.height;
-    mapCtx.fillStyle = '#050b14';
-    mapCtx.fillRect(0, 0, width, height);
-
-    // Grid
+  function drawMapGrid(width: number, height: number): void {
     const gridStep = niceGridStep(metersPerPixel * 80);
     const topLeft = screenToWorld(0, 0);
     const bottomRight = screenToWorld(width, height);
@@ -327,8 +320,9 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
       mapCtx.lineTo(b.x, b.y);
     }
     mapCtx.stroke();
+  }
 
-    // Parent lines for stations
+  function drawStationParentLines(): void {
     for (const station of documentState.stations) {
       const parentPos =
         station.parentBodyId === SYSTEM_STAR_PARENT_ID
@@ -346,20 +340,20 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
       mapCtx.stroke();
       mapCtx.setLineDash([]);
     }
+  }
 
-    // Star
-    {
-      const star = worldToScreen(0, 0);
-      mapCtx.fillStyle = '#ffd27a';
-      mapCtx.beginPath();
-      mapCtx.arc(star.x, star.y, 10, 0, Math.PI * 2);
-      mapCtx.fill();
-      mapCtx.fillStyle = '#ffe9b8';
-      mapCtx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
-      mapCtx.fillText(documentState.star.name, star.x + 14, star.y + 4);
-    }
+  function drawStar(): void {
+    const star = worldToScreen(0, 0);
+    mapCtx.fillStyle = '#ffd27a';
+    mapCtx.beginPath();
+    mapCtx.arc(star.x, star.y, 10, 0, Math.PI * 2);
+    mapCtx.fill();
+    mapCtx.fillStyle = '#ffe9b8';
+    mapCtx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+    mapCtx.fillText(documentState.star.name, star.x + 14, star.y + 4);
+  }
 
-    // Planets
+  function drawPlanets(): void {
     for (const planet of documentState.planets) {
       const pos = planetWorldPos(planet);
       const screen = worldToScreen(pos.x, pos.z);
@@ -374,8 +368,9 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
       mapCtx.fillStyle = '#cfe9ff';
       mapCtx.fillText(planet.name ?? planet.planetId, screen.x + 18, screen.y + 4);
     }
+  }
 
-    // Stations (diamond)
+  function drawStations(): void {
     for (const station of documentState.stations) {
       const pos = stationWorldPos(documentState, station);
       const screen = worldToScreen(pos.x, pos.z);
@@ -395,7 +390,19 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
       mapCtx.fillStyle = '#ffe6c4';
       mapCtx.fillText(station.name, screen.x + 12, screen.y + 4);
     }
+  }
 
+  function draw(): void {
+    resizeCanvas();
+    const width = canvas.width;
+    const height = canvas.height;
+    mapCtx.fillStyle = '#050b14';
+    mapCtx.fillRect(0, 0, width, height);
+    drawMapGrid(width, height);
+    drawStationParentLines();
+    drawStar();
+    drawPlanets();
+    drawStations();
     needsRedraw = false;
   }
 

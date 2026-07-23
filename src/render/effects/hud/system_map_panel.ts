@@ -242,15 +242,7 @@ export function createSystemMapPanel(host: HTMLElement): SystemMapPanel {
     setRouteBtn.disabled = true;
   }
 
-  function draw(doc: SystemDocument): void {
-    resize();
-    const width = canvas.width;
-    const height = canvas.height;
-    mapCtx.fillStyle = 'rgba(4, 10, 18, 0.92)';
-    mapCtx.fillRect(0, 0, width, height);
-
-    const activeParent = activePlanetEntryId(doc);
-
+  function drawStationLinks(doc: SystemDocument): void {
     for (const station of doc.stations) {
       const parentPos =
         station.parentBodyId === SYSTEM_STAR_PARENT_ID
@@ -270,18 +262,20 @@ export function createSystemMapPanel(host: HTMLElement): SystemMapPanel {
       mapCtx.stroke();
       mapCtx.setLineDash([]);
     }
+  }
 
-    {
-      const star = worldToScreen(0, 0);
-      mapCtx.fillStyle = '#ffd27a';
-      mapCtx.beginPath();
-      mapCtx.arc(star.x, star.y, 8, 0, Math.PI * 2);
-      mapCtx.fill();
-      mapCtx.fillStyle = '#ffe9b8';
-      mapCtx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
-      mapCtx.fillText(doc.star.name, star.x + 12, star.y + 4);
-    }
+  function drawStar(doc: SystemDocument): void {
+    const star = worldToScreen(0, 0);
+    mapCtx.fillStyle = '#ffd27a';
+    mapCtx.beginPath();
+    mapCtx.arc(star.x, star.y, 8, 0, Math.PI * 2);
+    mapCtx.fill();
+    mapCtx.fillStyle = '#ffe9b8';
+    mapCtx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+    mapCtx.fillText(doc.star.name, star.x + 12, star.y + 4);
+  }
 
+  function drawPlanets(doc: SystemDocument, activeParent: string | null): void {
     for (const planet of doc.planets) {
       const pos = planetPos(planet);
       const screen = worldToScreen(pos.x, pos.z);
@@ -300,7 +294,9 @@ export function createSystemMapPanel(host: HTMLElement): SystemMapPanel {
       mapCtx.fillStyle = '#cfe9ff';
       mapCtx.fillText(planet.name ?? planet.planetId, screen.x + radius + 6, screen.y + 4);
     }
+  }
 
+  function drawStations(doc: SystemDocument): void {
     for (const station of doc.stations) {
       const pos = stationPos(doc, station);
       const screen = worldToScreen(pos.x, pos.z);
@@ -317,6 +313,20 @@ export function createSystemMapPanel(host: HTMLElement): SystemMapPanel {
       mapCtx.fillStyle = '#ffe6c4';
       mapCtx.fillText(station.name, screen.x + 10, screen.y + 4);
     }
+  }
+
+  function draw(doc: SystemDocument): void {
+    resize();
+    const width = canvas.width;
+    const height = canvas.height;
+    mapCtx.fillStyle = 'rgba(4, 10, 18, 0.92)';
+    mapCtx.fillRect(0, 0, width, height);
+
+    const activeParent = activePlanetEntryId(doc);
+    drawStationLinks(doc);
+    drawStar(doc);
+    drawPlanets(doc, activeParent);
+    drawStations(doc);
   }
 
   function refresh(): void {

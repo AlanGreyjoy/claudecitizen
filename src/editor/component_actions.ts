@@ -174,6 +174,70 @@ export function addColliderToGlbNodes(
   );
 }
 
+function addColliderToGlbNodeFromPalette(
+  store: EditorStore,
+  targetEntityId: string,
+  subNodeName: string,
+  entity: EditorEntity,
+  def: ComponentDef,
+  getNodeBounds?: () => NodeBounds | null,
+): void {
+  const existing = store.getNodeOverrideComponents(targetEntityId, subNodeName);
+  const component = createComponentForEntity(def, entity, subNodeName);
+  if (component.type === 'collider' && component.shape === 'box') {
+    const bounds = getNodeBounds?.();
+    if (bounds) {
+      const { size, offset } = fitBoxColliderToBounds(bounds);
+      component.size = size;
+      component.offset = offset;
+    }
+  }
+  store.setNodeOverrideComponents(targetEntityId, subNodeName, [...existing, component]);
+  showToast(`Added "${def.label}" to node ${subNodeName}.`);
+}
+
+function addMarkerChildFromPalette(
+  store: EditorStore,
+  targetEntityId: string,
+  entity: EditorEntity,
+  def: ComponentDef,
+  subNodeName: string | null,
+  options?: AddComponentOptions,
+): void {
+  const markerLabel = subNodeName ? `${def.label} (${subNodeName})` : def.label;
+  const marker = createEmptyEntity(markerLabel);
+  if (subNodeName) marker.glbAnchor = subNodeName;
+  marker.components = [createComponentForEntity(def, entity, subNodeName)];
+  if (options?.spawnPosition) {
+    marker.position = { ...options.spawnPosition };
+  }
+  store.addEntity(marker, targetEntityId);
+  showToast(
+    options?.spawnPosition
+      ? `Added "${def.label}" at mesh position — fine-tune with the gizmo.`
+      : `Added "${def.label}" as a child marker — position it with the gizmo.`,
+  );
+}
+
+function finalizeEntityComponentAdd(
+  store: EditorStore,
+  targetEntityId: string,
+  entity: EditorEntity,
+  def: ComponentDef,
+  subNodeName: string | null,
+): void {
+  const components = structuredClone(entity.components);
+  components.push(createComponentForEntity(def, entity, subNodeName));
+  store.setComponents(targetEntityId, components);
+
+  if (subNodeName && def.type === 'object-animation') {
+    store.setEntitySelection(targetEntityId);
+    showToast(
+      `Added "${def.label}" targeting ${subNodeName} — tune speed/axis in the inspector.`,
+    );
+  }
+}
+
 export function addComponentFromPalette(
   store: EditorStore,
   targetEntityId: string,
@@ -191,61 +255,30 @@ export function addComponentFromPalette(
       ? store.getGlbNodeName(targetEntityId, sub.nodeUuid)
       : null;
 
-  // When a GLB node is sub-selected and the component is a collider, attach
-  // it to the node override rather than the entity or a child marker.
   if (
     subNodeName &&
     !def.marker &&
     def.type === 'collider' &&
     entity.asset
   ) {
-    const existing = store.getNodeOverrideComponents(targetEntityId, subNodeName);
-    const component = createComponentForEntity(def, entity, subNodeName);
-    // Auto-size the box collider to the node's mesh bounds
-    if (component.type === 'collider' && component.shape === 'box') {
-      const bounds = options?.getNodeBounds?.();
-      if (bounds) {
-        const { size, offset } = fitBoxColliderToBounds(bounds);
-        component.size = size;
-        component.offset = offset;
-      }
-    }
-    store.setNodeOverrideComponents(targetEntityId, subNodeName, [...existing, component]);
-    showToast(`Added "${def.label}" to node ${subNodeName}.`);
+    addColliderToGlbNodeFromPalette(
+      store,
+      targetEntityId,
+      subNodeName,
+      entity,
+      def,
+      options?.getNodeBounds,
+    );
     return;
   }
 
   const hasVisual = Boolean(entity.asset || entity.primitive);
   if (def.marker && hasVisual) {
-    const markerLabel = subNodeName ? `${def.label} (${subNodeName})` : def.label;
-    const marker = createEmptyEntity(markerLabel);
-    if (subNodeName) marker.glbAnchor = subNodeName;
-    marker.components = [createComponentForEntity(def, entity, subNodeName)];
-    if (options?.spawnPosition) {
-      marker.position = { ...options.spawnPosition };
-    }
-    store.addEntity(marker, targetEntityId);
-    showToast(
-      options?.spawnPosition
-        ? `Added "${def.label}" at mesh position — fine-tune with the gizmo.`
-        : `Added "${def.label}" as a child marker — position it with the gizmo.`,
-    );
+    addMarkerChildFromPalette(store, targetEntityId, entity, def, subNodeName, options);
     return;
   }
 
-  const components = structuredClone(entity.components);
-  components.push(createComponentForEntity(def, entity, subNodeName));
-  store.setComponents(targetEntityId, components);
-
-  // Object Animation (and similar entity-level components) attach to the entity,
-  // not the node override list. Clear GLB sub-selection so the inspector shows
-  // their settings instead of an empty node Components section.
-  if (subNodeName && def.type === 'object-animation') {
-    store.setEntitySelection(targetEntityId);
-    showToast(
-      `Added "${def.label}" targeting ${subNodeName} — tune speed/axis in the inspector.`,
-    );
-  }
+  finalizeEntityComponentAdd(store, targetEntityId, entity, def, subNodeName);
 }
 
 function createComponentForEntity(

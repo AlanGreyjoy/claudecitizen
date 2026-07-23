@@ -44,6 +44,61 @@ export function applyMaterialOverride(
   material.needsUpdate = true;
 }
 
+type ShipMeshMaterial = THREE.MeshStandardMaterial & {
+  emissive?: THREE.Color;
+  map?: THREE.Texture | null;
+  emissiveMap?: THREE.Texture | null;
+  normalMap?: THREE.Texture | null;
+};
+
+function configureGlassMaterial(meshMaterial: ShipMeshMaterial): void {
+  meshMaterial.color?.setHex(0x9bc9f5);
+  meshMaterial.metalness = 0;
+  meshMaterial.roughness = 0.08;
+  meshMaterial.opacity = Math.min(meshMaterial.opacity ?? 1, 0.2);
+  meshMaterial.transparent = true;
+}
+
+function configureNamedShipMaterial(
+  meshMaterial: ShipMeshMaterial,
+  materialName: string,
+): boolean {
+  switch (materialName) {
+    case 'VA_Glass2':
+    case 'VA_Glass4':
+      configureGlassMaterial(meshMaterial);
+      return true;
+    case 'VA_Mirror':
+      meshMaterial.color?.setHex(0xc5d1dc);
+      meshMaterial.metalness = 0.86;
+      meshMaterial.roughness = 0.06;
+      return true;
+    case 'Light_White_Bright':
+      meshMaterial.color?.setHex(0xffffff);
+      meshMaterial.emissive?.setHex(0xd9e5ff);
+      meshMaterial.emissiveIntensity = 1.2;
+      return true;
+    case 'Light_Yellow_Med':
+      meshMaterial.color?.setHex(0xffd5a0);
+      meshMaterial.emissive?.setHex(0xffc27d);
+      meshMaterial.emissiveIntensity = 1.1;
+      return true;
+    case 'Light_Blue_Med':
+      meshMaterial.color?.setHex(0x7bb6ff);
+      meshMaterial.emissive?.setHex(0x67b6ff);
+      meshMaterial.emissiveIntensity = 1.1;
+      return true;
+    case 'VA_ScreenOff':
+      meshMaterial.color?.setHex(0x09101a);
+      meshMaterial.emissive?.setHex(0x000000);
+      meshMaterial.metalness = 0.02;
+      meshMaterial.roughness = 0.92;
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function configureShipMaterial(
   material: THREE.Material | THREE.Material[] | null | undefined,
 ): void {
@@ -53,54 +108,12 @@ export function configureShipMaterial(
   }
   if (!material) return;
 
-  const meshMaterial = material as THREE.MeshStandardMaterial & {
-    emissive?: THREE.Color;
-    map?: THREE.Texture | null;
-    normalMap?: THREE.Texture | null;
-  };
+  const meshMaterial = material as ShipMeshMaterial;
   if (meshMaterial.map) meshMaterial.map.colorSpace = THREE.SRGBColorSpace;
   if (meshMaterial.emissiveMap) meshMaterial.emissiveMap.colorSpace = THREE.SRGBColorSpace;
 
   const materialName = normalizeMaterialName(material.name);
-
-  switch (materialName) {
-    case 'VA_Glass2':
-    case 'VA_Glass4':
-      meshMaterial.color?.setHex(0x9bc9f5);
-      meshMaterial.metalness = 0;
-      meshMaterial.roughness = 0.08;
-      meshMaterial.opacity = Math.min(meshMaterial.opacity ?? 1, 0.2);
-      meshMaterial.transparent = true;
-      return;
-    case 'VA_Mirror':
-      meshMaterial.color?.setHex(0xc5d1dc);
-      meshMaterial.metalness = 0.86;
-      meshMaterial.roughness = 0.06;
-      return;
-    case 'Light_White_Bright':
-      meshMaterial.color?.setHex(0xffffff);
-      meshMaterial.emissive?.setHex(0xd9e5ff);
-      meshMaterial.emissiveIntensity = 1.2;
-      return;
-    case 'Light_Yellow_Med':
-      meshMaterial.color?.setHex(0xffd5a0);
-      meshMaterial.emissive?.setHex(0xffc27d);
-      meshMaterial.emissiveIntensity = 1.1;
-      return;
-    case 'Light_Blue_Med':
-      meshMaterial.color?.setHex(0x7bb6ff);
-      meshMaterial.emissive?.setHex(0x67b6ff);
-      meshMaterial.emissiveIntensity = 1.1;
-      return;
-    case 'VA_ScreenOff':
-      meshMaterial.color?.setHex(0x09101a);
-      meshMaterial.emissive?.setHex(0x000000);
-      meshMaterial.metalness = 0.02;
-      meshMaterial.roughness = 0.92;
-      return;
-    default:
-      break;
-  }
+  if (configureNamedShipMaterial(meshMaterial, materialName)) return;
 
   // All ordinary ship/model surfaces share the same satin-matte response.
   // Texture maps still provide color and material variation.

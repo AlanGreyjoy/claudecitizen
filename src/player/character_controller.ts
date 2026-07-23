@@ -138,90 +138,147 @@ export interface LocomotionCallbacks {
   sampleAirborneUp?: (position: Vec3) => Vec3;
 }
 
+type LocomotionState = Pick<
+  CharacterState,
+  "position" | "velocity" | "grounded" | "jumpPhase" | "jumpPhaseTime"
+>;
+
+function integrateGroundedLocomotion(
+  state: LocomotionState,
+  motion: LocomotionMotionInput,
+  dt: number,
+  callbacks: LocomotionCallbacks,
+): Pick<LocomotionIntegrationResult, "grounded" | "jumpPhase" | "jumpPhaseTime" | "position" | "up" | "velocity"> {
+  const stepped = callbacks.onGroundedStep();
+  const position = stepped.position;
+  const nextUp = stepped.up;
+  const velocity =
+    dt > 0 ? scale(sub(position, state.position), 1 / dt) : vec3(0, 0, 0);
+
+  if (motion.wantsJump) {
+    return {
+      grounded: false,
+      jumpPhase: "jump-start",
+      jumpPhaseTime: 0,
+      position,
+      up: nextUp,
+      velocity: add(velocity, scale(nextUp, getCharacterSettings().jumpSpeedMetersPerSecond)),
+    };
+  }
+
+  const jumpPhase = updateGroundJumpState(state, dt);
+  return {
+    grounded: true,
+    jumpPhase,
+    jumpPhaseTime: jumpPhase === "grounded" ? 0 : state.jumpPhaseTime + dt,
+    position,
+    up: nextUp,
+    velocity,
+  };
+}
+
+interface AirborneLocomotionInput {
+  callbacks: LocomotionCallbacks;
+  dt: number;
+  gravityMetersPerSecond2: number;
+  jumpPhase: JumpPhase;
+  jumpPhaseTime: number;
+  motion: LocomotionMotionInput;
+  position: Vec3;
+  up: Vec3;
+  velocity: Vec3;
+}
+
+function integrateAirborneLocomotion(
+  input: AirborneLocomotionInput,
+): Pick<LocomotionIntegrationResult, "grounded" | "jumpPhase" | "jumpPhaseTime" | "position" | "up" | "velocity"> {
+  const {
+    motion,
+    dt,
+    position,
+    up,
+    velocity,
+    jumpPhase,
+    jumpPhaseTime,
+    gravityMetersPerSecond2,
+    callbacks,
+  } = input;
+  const tangentVelocity = tangentize(velocity, up);
+  const desiredVelocity = scale(motion.desiredDirection, motion.moveSpeed);
+  const blendedTangent = lerp(
+    tangentVelocity,
+    desiredVelocity,
+    clamp(dt * AIR_CONTROL * 8, 0, 1),
+  );
+  const verticalSpeed = dot(velocity, up);
+  const gravityScale = verticalSpeed < 0 ? FALL_GRAVITY_MULTIPLIER : 1;
+  const verticalVelocity =
+    verticalSpeed - gravityMetersPerSecond2 * gravityScale * dt;
+  const nextVelocity = add(blendedTangent, scale(up, verticalVelocity));
+  const nextPosition = add(position, scale(nextVelocity, dt));
+
+  const landed = callbacks.tryLand(nextPosition);
+  if (landed) {
+    return {
+      grounded: true,
+      jumpPhase: "jump-land",
+      jumpPhaseTime: 0,
+      position: landed.position,
+      up: landed.up,
+      velocity: tangentize(nextVelocity, landed.up),
+    };
+  }
+
+  let nextUp = up;
+  if (callbacks.sampleAirborneUp) nextUp = callbacks.sampleAirborneUp(nextPosition);
+
+  let nextJumpPhase = jumpPhase;
+  let nextJumpPhaseTime = jumpPhaseTime;
+  if (jumpPhase === "jump-start" && jumpPhaseTime >= JUMP_START_SECONDS) {
+    nextJumpPhase = "jump-loop";
+    nextJumpPhaseTime = 0;
+  } else if (jumpPhase === "grounded") {
+    nextJumpPhase = "jump-loop";
+    nextJumpPhaseTime = 0;
+  }
+
+  return {
+    grounded: false,
+    jumpPhase: nextJumpPhase,
+    jumpPhaseTime: nextJumpPhaseTime,
+    position: nextPosition,
+    up: nextUp,
+    velocity: nextVelocity,
+  };
+}
+
 /** Shared grounded/airborne jump integration for planet, deck, and station walkers. */
 export function integrateCharacterLocomotion(
-  state: Pick<
-    CharacterState,
-    "position" | "velocity" | "grounded" | "jumpPhase" | "jumpPhaseTime"
-  >,
+  state: LocomotionState,
   motion: LocomotionMotionInput,
   dt: number,
   initialUp: Vec3,
   gravityMetersPerSecond2: number,
   callbacks: LocomotionCallbacks,
 ): LocomotionIntegrationResult {
-  let position = state.position;
-  let velocity = state.velocity;
-  let grounded = state.grounded;
-  let jumpPhase = state.jumpPhase;
-  let jumpPhaseTime =
+  const jumpPhaseTime =
     state.jumpPhase === "grounded" ? 0 : state.jumpPhaseTime + dt;
-  let up = initialUp;
 
-  if (grounded) {
-    const stepped = callbacks.onGroundedStep();
-    position = stepped.position;
-    up = stepped.up;
-    velocity =
-      dt > 0 ? scale(sub(position, state.position), 1 / dt) : vec3(0, 0, 0);
-
-    if (motion.wantsJump) {
-      grounded = false;
-      jumpPhase = "jump-start";
-      jumpPhaseTime = 0;
-      velocity = add(
-        velocity,
-        scale(up, getCharacterSettings().jumpSpeedMetersPerSecond),
-      );
-    } else {
-      jumpPhase = updateGroundJumpState(state, dt);
-      if (jumpPhase === "grounded") jumpPhaseTime = 0;
-    }
+  if (state.grounded) {
+    return integrateGroundedLocomotion(state, motion, dt, callbacks);
   }
 
-  if (!grounded) {
-    const tangentVelocity = tangentize(velocity, up);
-    const desiredVelocity = scale(motion.desiredDirection, motion.moveSpeed);
-    const blendedTangent = lerp(
-      tangentVelocity,
-      desiredVelocity,
-      clamp(dt * AIR_CONTROL * 8, 0, 1),
-    );
-    const verticalSpeed = dot(velocity, up);
-    const gravityScale = verticalSpeed < 0 ? FALL_GRAVITY_MULTIPLIER : 1;
-    const verticalVelocity =
-      verticalSpeed - gravityMetersPerSecond2 * gravityScale * dt;
-    velocity = add(blendedTangent, scale(up, verticalVelocity));
-    position = add(position, scale(velocity, dt));
-
-    const landed = callbacks.tryLand(position);
-    if (landed) {
-      position = landed.position;
-      up = landed.up;
-      velocity = tangentize(velocity, up);
-      grounded = true;
-      jumpPhase = "jump-land";
-      jumpPhaseTime = 0;
-    } else {
-      if (callbacks.sampleAirborneUp) up = callbacks.sampleAirborneUp(position);
-      if (jumpPhase === "jump-start" && jumpPhaseTime >= JUMP_START_SECONDS) {
-        jumpPhase = "jump-loop";
-        jumpPhaseTime = 0;
-      } else if (jumpPhase === "grounded") {
-        jumpPhase = "jump-loop";
-        jumpPhaseTime = 0;
-      }
-    }
-  }
-
-  return {
-    grounded,
-    jumpPhase,
+  return integrateAirborneLocomotion({
+    motion,
+    dt,
+    position: state.position,
+    up: initialUp,
+    velocity: state.velocity,
+    jumpPhase: state.jumpPhase,
     jumpPhaseTime,
-    position,
-    up,
-    velocity,
-  };
+    gravityMetersPerSecond2,
+    callbacks,
+  });
 }
 
 export function resolveOrbitCamera(

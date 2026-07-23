@@ -293,34 +293,55 @@ function normalizeKeyboardBindings(
   return bindings;
 }
 
-function normalizeDeviceBinding(raw: unknown): DeviceInputBinding | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const record = raw as Partial<DeviceInputBinding>;
-  const deviceId = typeof record.deviceId === 'string' && record.deviceId ? record.deviceId : undefined;
+function parseDeviceBindingMeta(record: Partial<DeviceInputBinding>): {
+  deviceId?: string;
+  deviceIndex?: number;
+} {
+  const deviceId =
+    typeof record.deviceId === 'string' && record.deviceId ? record.deviceId : undefined;
   const deviceIndex =
     typeof record.deviceIndex === 'number' && Number.isInteger(record.deviceIndex)
       ? Math.max(0, record.deviceIndex)
       : undefined;
-  if (record.kind === 'button' && typeof record.button === 'number' && Number.isInteger(record.button)) {
-    return {
-      kind: 'button',
-      button: Math.max(0, record.button),
-      ...(deviceId ? { deviceId } : {}),
-      ...(deviceIndex !== undefined ? { deviceIndex } : {}),
-    };
+  return {
+    ...(deviceId ? { deviceId } : {}),
+    ...(deviceIndex !== undefined ? { deviceIndex } : {}),
+  };
+}
+
+function normalizeButtonDeviceBinding(
+  record: Partial<DeviceInputBinding>,
+): DeviceInputBinding | null {
+  if (record.kind !== 'button' || typeof record.button !== 'number' || !Number.isInteger(record.button)) {
+    return null;
   }
-  if (record.kind === 'axis' && typeof record.axis === 'number' && Number.isInteger(record.axis)) {
-    const direction = record.direction === -1 || record.direction === 1 ? record.direction : undefined;
-    return {
-      kind: 'axis',
-      axis: Math.max(0, record.axis),
-      ...(direction !== undefined ? { direction } : {}),
-      ...(deviceId ? { deviceId } : {}),
-      ...(deviceIndex !== undefined ? { deviceIndex } : {}),
-      ...(typeof record.invert === 'boolean' ? { invert: record.invert } : {}),
-    };
+  return {
+    kind: 'button',
+    button: Math.max(0, record.button),
+    ...parseDeviceBindingMeta(record),
+  };
+}
+
+function normalizeAxisDeviceBinding(
+  record: Partial<DeviceInputBinding>,
+): DeviceInputBinding | null {
+  if (record.kind !== 'axis' || typeof record.axis !== 'number' || !Number.isInteger(record.axis)) {
+    return null;
   }
-  return null;
+  const direction = record.direction === -1 || record.direction === 1 ? record.direction : undefined;
+  return {
+    kind: 'axis',
+    axis: Math.max(0, record.axis),
+    ...(direction !== undefined ? { direction } : {}),
+    ...parseDeviceBindingMeta(record),
+    ...(typeof record.invert === 'boolean' ? { invert: record.invert } : {}),
+  };
+}
+
+function normalizeDeviceBinding(raw: unknown): DeviceInputBinding | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Partial<DeviceInputBinding>;
+  return normalizeButtonDeviceBinding(record) ?? normalizeAxisDeviceBinding(record);
 }
 
 function normalizeAnalogBindings(

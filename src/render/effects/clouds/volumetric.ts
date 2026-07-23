@@ -406,17 +406,25 @@ export function createVolumetricCloudManager(
     }
   }
 
-  function dispose(): void {
-    cloudsEffect.events.removeEventListener('change', syncAtmosphereComposition);
+  function disposePrecomputedTextures(): void {
     cachedTextures?.irradianceTexture?.dispose?.();
     cachedTextures?.scatteringTexture?.dispose?.();
     cachedTextures?.transmittanceTexture?.dispose?.();
     cachedTextures?.singleMieScatteringTexture?.dispose?.();
     cachedTextures?.higherOrderScatteringTexture?.dispose?.();
+  }
+
+  function disposeCloudTextures(): void {
     cloudsEffect.localWeatherTexture?.dispose?.();
     cloudsEffect.shapeTexture?.dispose?.();
     cloudsEffect.shapeDetailTexture?.dispose?.();
     cloudsEffect.turbulenceTexture?.dispose?.();
+  }
+
+  function dispose(): void {
+    cloudsEffect.events.removeEventListener('change', syncAtmosphereComposition);
+    disposePrecomputedTextures();
+    disposeCloudTextures();
   }
 
   return {

@@ -119,6 +119,53 @@ function attachmentFingerprint(
   });
 }
 
+function rebuildWasCancelled(
+  gen: number,
+  expectedGen: number,
+  loadoutKeyValue: string,
+  expectedLoadoutKey: string,
+  mountFingerprint: string,
+  expectedMountFingerprint: string,
+): boolean {
+  return (
+    gen !== expectedGen
+    || loadoutKeyValue !== expectedLoadoutKey
+    || mountFingerprint !== expectedMountFingerprint
+  );
+}
+
+function registerWeaponAttachments(
+  slotId: string,
+  item: THREE.Object3D,
+  prefab: Awaited<ReturnType<typeof loadPrefabDocument>>,
+  holster: THREE.Object3D,
+  maps: {
+    holsterParents: Map<string, THREE.Object3D>;
+    weaponRoots: Map<string, THREE.Object3D>;
+    barrelEnds: Map<string, THREE.Object3D>;
+    muzzleFlashes: Map<string, THREE.Object3D>;
+    weaponCombat: Map<string, WeaponCombatLayout>;
+  },
+): void {
+  if (!prefab) return;
+  maps.holsterParents.set(slotId, holster);
+  maps.weaponRoots.set(slotId, item);
+  const barrelEnd = collectBarrelEnd(prefab);
+  const muzzleFlash = collectMuzzleFlash(prefab);
+  const combat = collectWeaponCombat(prefab);
+  if (barrelEnd) {
+    const object = findEntityObject(item, barrelEnd.entityId);
+    if (object) maps.barrelEnds.set(slotId, object);
+  }
+  if (muzzleFlash) {
+    const object = findEntityObject(item, muzzleFlash.entityId);
+    if (object) maps.muzzleFlashes.set(slotId, object);
+  }
+  if (combat) maps.weaponCombat.set(slotId, structuredClone(combat));
+  applyTransform(item, IDENTITY_GRIP);
+  holster.add(item);
+}
+
 export interface EquipmentAttachmentController {
   /** Rebuild attachments when avatar root / loadout / catalog / drawn slot / mounts change. */
   sync: (
@@ -211,29 +258,10 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
     appliedDrawnSlotId = activeWeaponSlotId;
   }
 
-  async function rebuild(
+  function setupMountPivots(
     avatarRoot: THREE.Object3D,
-    characterType: BaseCharacterType,
-    inventory: InventoryState,
-    loadoutKeyValue: string,
-    mountFingerprint: string,
-    equipmentDoc: BaseCharacterEquipmentV1,
-    grips: Map<string, PrefabTransform>,
-  ): Promise<void> {
-    const gen = ++generation;
-    if (
-      gen !== generation
-      || loadoutKeyValue !== lastLoadoutKey
-      || mountFingerprint !== lastMountFingerprint
-    ) {
-      return;
-    }
-    clearMounts();
-    for (const [slotId, transform] of grips) {
-      weaponGrips.set(slotId, structuredClone(transform));
-    }
-
-    const variant = equipmentDoc.variants[String(characterType) as '1' | '2'];
+    variant: BaseCharacterEquipmentV1['variants']['1'],
+  ): void {
     for (const slot of PLAY_LOADOUT_SLOTS) {
       const mount = variant.mounts[slot.id];
       if (!mount) continue;
@@ -243,7 +271,13 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
         console.warn(`Missing character bone "${mount.bone}" for equipment slot "${slot.id}".`);
       }
     }
+  }
 
+  function setupDrawnMountPivots(
+    avatarRoot: THREE.Object3D,
+    characterType: BaseCharacterType,
+    variant: BaseCharacterEquipmentV1['variants']['1'],
+  ): void {
     for (const [slotId, mount] of Object.entries(variant.drawnMounts ?? {})) {
       const pivot = createPivot(avatarRoot, `equipment-drawn:${slotId}`, mount);
       if (pivot) {
@@ -255,33 +289,52 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
         );
       }
     }
+  }
 
+  async function loadBackpackSockets(
+    inventory: InventoryState,
+    gen: number,
+    loadoutKeyValue: string,
+    mountFingerprint: string,
+  ): Promise<Map<string, THREE.Object3D>> {
     const loadout = inventory.loadout;
-    let backpackSockets = new Map<string, THREE.Object3D>();
     const backpackId = loadout.backpack;
-    if (backpackId) {
-      const backpackDef = findItemDefinition(inventory.catalog, backpackId);
-      if (backpackDef?.prefabId) {
-        const prefab = await loadPrefabDocument(backpackDef.prefabId);
-        if (
-          gen !== generation
-          || loadoutKeyValue !== lastLoadoutKey
-          || mountFingerprint !== lastMountFingerprint
-        ) {
-          return;
-        }
-        if (prefab && validateBackpackPrefab(prefab).length === 0) {
-          const backpackRoot = createPropInstanceGroup(prefab);
-          mountPivots.get('backpack')?.add(backpackRoot);
-          backpackSockets = new Map();
-          for (const socket of collectEquipmentSockets(prefab)) {
-            const object = findEntityObject(backpackRoot, socket.entityId);
-            if (object) backpackSockets.set(socket.id, object);
-          }
-        }
-      }
-    }
+    if (!backpackId) return new Map();
 
+    const backpackDef = findItemDefinition(inventory.catalog, backpackId);
+    if (!backpackDef?.prefabId) return new Map();
+
+    const prefab = await loadPrefabDocument(backpackDef.prefabId);
+    if (rebuildWasCancelled(gen, generation, loadoutKeyValue, lastLoadoutKey, mountFingerprint, lastMountFingerprint)) {
+      return new Map();
+    }
+    if (!prefab || validateBackpackPrefab(prefab).length > 0) return new Map();
+
+    const backpackRoot = createPropInstanceGroup(prefab);
+    mountPivots.get('backpack')?.add(backpackRoot);
+    const sockets = new Map<string, THREE.Object3D>();
+    for (const socket of collectEquipmentSockets(prefab)) {
+      const object = findEntityObject(backpackRoot, socket.entityId);
+      if (object) sockets.set(socket.id, object);
+    }
+    return sockets;
+  }
+
+  async function attachWeaponSlots(
+    inventory: InventoryState,
+    backpackSockets: Map<string, THREE.Object3D>,
+    gen: number,
+    loadoutKeyValue: string,
+    mountFingerprint: string,
+  ): Promise<void> {
+    const loadout = inventory.loadout;
+    const attachmentMaps = {
+      holsterParents,
+      weaponRoots,
+      barrelEnds,
+      muzzleFlashes,
+      weaponCombat,
+    };
     for (const slot of PLAY_LOADOUT_SLOTS) {
       if (slot.kind !== 'weapon') continue;
       const itemId = loadout[slot.id];
@@ -290,11 +343,7 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
       const definition = findItemDefinition(inventory.catalog, itemId);
       if (!definition?.prefabId) continue;
       const prefab = await loadPrefabDocument(definition.prefabId);
-      if (
-        gen !== generation
-        || loadoutKeyValue !== lastLoadoutKey
-        || mountFingerprint !== lastMountFingerprint
-      ) {
+      if (rebuildWasCancelled(gen, generation, loadoutKeyValue, lastLoadoutKey, mountFingerprint, lastMountFingerprint)) {
         return;
       }
       if (!prefab) continue;
@@ -304,24 +353,43 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
         : null;
       const holster = socket ?? (!slot.requiresSlotId ? mountPivots.get(slot.id) ?? null : null);
       if (!holster) continue;
-      holsterParents.set(slot.id, holster);
-      weaponRoots.set(slot.id, item);
-      const barrelEnd = collectBarrelEnd(prefab);
-      const muzzleFlash = collectMuzzleFlash(prefab);
-      const combat = collectWeaponCombat(prefab);
-      if (barrelEnd) {
-        const object = findEntityObject(item, barrelEnd.entityId);
-        if (object) barrelEnds.set(slot.id, object);
-      }
-      if (muzzleFlash) {
-        const object = findEntityObject(item, muzzleFlash.entityId);
-        if (object) muzzleFlashes.set(slot.id, object);
-      }
-      if (combat) weaponCombat.set(slot.id, structuredClone(combat));
-      applyTransform(item, IDENTITY_GRIP);
-      holster.add(item);
+      registerWeaponAttachments(slot.id, item, prefab, holster, attachmentMaps);
+    }
+  }
+
+  async function rebuild(
+    avatarRoot: THREE.Object3D,
+    characterType: BaseCharacterType,
+    inventory: InventoryState,
+    loadoutKeyValue: string,
+    mountFingerprint: string,
+    equipmentDoc: BaseCharacterEquipmentV1,
+    grips: Map<string, PrefabTransform>,
+  ): Promise<void> {
+    const gen = ++generation;
+    if (rebuildWasCancelled(gen, generation, loadoutKeyValue, lastLoadoutKey, mountFingerprint, lastMountFingerprint)) {
+      return;
+    }
+    clearMounts();
+    for (const [slotId, transform] of grips) {
+      weaponGrips.set(slotId, structuredClone(transform));
     }
 
+    const variant = equipmentDoc.variants[String(characterType) as '1' | '2'];
+    setupMountPivots(avatarRoot, variant);
+    setupDrawnMountPivots(avatarRoot, characterType, variant);
+
+    const backpackSockets = await loadBackpackSockets(
+      inventory,
+      gen,
+      loadoutKeyValue,
+      mountFingerprint,
+    );
+    if (rebuildWasCancelled(gen, generation, loadoutKeyValue, lastLoadoutKey, mountFingerprint, lastMountFingerprint)) {
+      return;
+    }
+
+    await attachWeaponSlots(inventory, backpackSockets, gen, loadoutKeyValue, mountFingerprint);
     applyDrawnParents();
   }
 

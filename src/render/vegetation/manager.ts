@@ -741,6 +741,83 @@ export function createPlanetVegetationManager(
     }
   }
 
+  function selectVisibleVegetationTiles(
+    bodyPosition: Vec3,
+    altitudeMeters: number,
+    selectedTiles: TileInfo[],
+    selectedKeys: Set<string>,
+    keepKeys: Set<string>,
+  ): void {
+    const decoratedTiles = selectVegetationTiles(
+      planet,
+      selectedTiles,
+      bodyPosition,
+      altitudeMeters,
+      VEGETATION_SELECTION_BUDGET,
+    );
+    const resolvedCandidates = new Map<string, ResolvedVegetationTile>();
+    for (const tileInfo of decoratedTiles) {
+      const targetKey = tileKey(tileInfo.face, tileInfo.level, tileInfo.x, tileInfo.y);
+      keepKeys.add(targetKey);
+      const resolved = resolveBestAvailableVegetation(tileInfo);
+      resolvedCandidates.set(resolved.key, resolved);
+      keepKeys.add(resolved.key);
+    }
+
+    const orderedCandidates = [...resolvedCandidates.values()].sort(
+      (a, b) => a.tileInfo.level - b.tileInfo.level,
+    );
+    for (const { key, renderGroup, tileInfo } of orderedCandidates) {
+      if (hasSelectedTileAncestor(tileInfo, selectedKeys)) continue;
+      renderGroup.group.visible = true;
+      renderGroup.setTreesVisible(treesLayerVisible);
+      const showGrass =
+        grassLayerVisible &&
+        (shouldShowGrassOnTile(tileInfo, bodyPosition) ||
+          distance(renderGroup.anchor, bodyPosition) <
+            getGrassDistanceMeters() + tileInfo.spanMeters);
+      renderGroup.setGrassVisible(showGrass);
+      selectedKeys.add(key);
+    }
+  }
+
+  function hideInactiveVegetationTiles(selectedKeys: Set<string>): void {
+    for (const key of activeKeys) {
+      if (selectedKeys.has(key)) continue;
+      const entry = tileCache.get(key);
+      if (entry) entry.group.visible = false;
+    }
+  }
+
+  function collectNewlyVisibleKeys(selectedKeys: Set<string>, vegetationVisible: boolean): Set<string> {
+    const newlyVisibleKeys = new Set<string>();
+    for (const key of selectedKeys) {
+      if (!activeKeys.has(key)) newlyVisibleKeys.add(key);
+    }
+    if (vegetationVisible && !activeKeys.has('landing-grove')) {
+      newlyVisibleKeys.add('landing-grove');
+    }
+    return newlyVisibleKeys;
+  }
+
+  function refreshLandingGroveLayers(
+    bodyPosition: Vec3,
+    selectedKeys: Set<string>,
+    newlyVisibleKeys: Set<string>,
+  ): void {
+    landingGrove.setTreesVisible(treesLayerVisible);
+    const showGroveGrass =
+      grassLayerVisible &&
+      distance(landingGrove.anchor, bodyPosition) < getGrassDistanceMeters() + 80;
+    landingGrove.setGrassVisible(showGroveGrass);
+    if (grassLayerVisible) {
+      updateGrassRadiusForVisible(bodyPosition, selectedKeys, newlyVisibleKeys);
+    }
+    if (treesLayerVisible) {
+      updateTreeLodForVisible(bodyPosition, selectedKeys, newlyVisibleKeys);
+    }
+  }
+
   function update(
     bodyPosition: Vec3,
     selectedTiles: TileInfo[],
@@ -761,68 +838,18 @@ export function createPlanetVegetationManager(
     const vegetationVisible = vegetationInRange && assetsReady;
 
     if (vegetationVisible) {
-      const decoratedTiles = selectVegetationTiles(
-        planet,
-        selectedTiles,
+      selectVisibleVegetationTiles(
         bodyPosition,
         altitudeMeters,
-        VEGETATION_SELECTION_BUDGET,
+        selectedTiles,
+        selectedKeys,
+        keepKeys,
       );
-
-      const resolvedCandidates = new Map<string, ResolvedVegetationTile>();
-      for (const tileInfo of decoratedTiles) {
-        const targetKey = tileKey(
-          tileInfo.face,
-          tileInfo.level,
-          tileInfo.x,
-          tileInfo.y,
-        );
-        keepKeys.add(targetKey);
-        const resolved = resolveBestAvailableVegetation(tileInfo);
-        resolvedCandidates.set(resolved.key, resolved);
-        keepKeys.add(resolved.key);
-      }
-
-      // As with terrain, never show a parent vegetation tile underneath some
-      // of its ready children. Hold the parent until all overlapping fallbacks
-      // disappear, then make one clean swap to the finer coverage.
-      const orderedCandidates = [...resolvedCandidates.values()].sort(
-        (a, b) => a.tileInfo.level - b.tileInfo.level,
-      );
-      for (const { key, renderGroup, tileInfo } of orderedCandidates) {
-        if (hasSelectedTileAncestor(tileInfo, selectedKeys)) continue;
-        renderGroup.group.visible = true;
-        renderGroup.setTreesVisible(treesLayerVisible);
-        // Trees use the long veg radius; grass is near-field only.
-        // Grass instance packing is deferred to updateGrassRadiusForVisible so
-        // we do not repack every selected tile every frame.
-        const showGrass =
-          grassLayerVisible &&
-          (shouldShowGrassOnTile(tileInfo, bodyPosition) ||
-            distance(renderGroup.anchor, bodyPosition) <
-              getGrassDistanceMeters() + tileInfo.spanMeters);
-        renderGroup.setGrassVisible(showGrass);
-        selectedKeys.add(key);
-      }
     }
 
-    // Drain after enqueue so newly visible tiles can build the same frame.
     drainBuildQueue(bodyPosition);
-
-    for (const key of activeKeys) {
-      if (selectedKeys.has(key)) continue;
-      const entry = tileCache.get(key);
-      if (entry) entry.group.visible = false;
-    }
-
-    const newlyVisibleKeys = new Set<string>();
-    for (const key of selectedKeys) {
-      if (!activeKeys.has(key)) newlyVisibleKeys.add(key);
-    }
-    const landingGroveWasHidden = !activeKeys.has('landing-grove');
-    if (vegetationVisible && landingGroveWasHidden) {
-      newlyVisibleKeys.add('landing-grove');
-    }
+    hideInactiveVegetationTiles(selectedKeys);
+    const newlyVisibleKeys = collectNewlyVisibleKeys(selectedKeys, vegetationVisible);
 
     activeKeys.clear();
     for (const key of selectedKeys) activeKeys.add(key);
@@ -836,17 +863,7 @@ export function createPlanetVegetationManager(
     );
 
     if (vegetationVisible) {
-      landingGrove.setTreesVisible(treesLayerVisible);
-      const showGroveGrass =
-        grassLayerVisible &&
-        distance(landingGrove.anchor, bodyPosition) < getGrassDistanceMeters() + 80;
-      landingGrove.setGrassVisible(showGroveGrass);
-      if (grassLayerVisible) {
-        updateGrassRadiusForVisible(bodyPosition, selectedKeys, newlyVisibleKeys);
-      }
-      if (treesLayerVisible) {
-        updateTreeLodForVisible(bodyPosition, selectedKeys, newlyVisibleKeys);
-      }
+      refreshLandingGroveLayers(bodyPosition, selectedKeys, newlyVisibleKeys);
     }
 
     return {

@@ -76,6 +76,113 @@ function pickWeightedEntry(
   return candidates[candidates.length - 1]!;
 }
 
+function collectAcceptedSpawnCandidates(
+  entries: readonly PlanetSpawnEntry[],
+  surface: ReturnType<typeof samplePlanetSurface>,
+  acceptScratch: PlanetSpawnEntry[],
+  weightScratch: number[],
+): void {
+  acceptScratch.length = 0;
+  weightScratch.length = 0;
+  for (const entry of entries) {
+    if (!acceptsSurface(entry, surface.biome, surface.normalizedHeight)) continue;
+    const w = entryLotteryWeight(entry);
+    if (w <= 0) continue;
+    acceptScratch.push(entry);
+    weightScratch.push(w);
+  }
+}
+
+interface PreviewSpawnPlacementContext {
+  planet: Planet;
+  seed: number;
+  seedU: number;
+  patch: PlanetPreviewPatch;
+  entries: readonly PlanetSpawnEntry[];
+  catalogDensity: number;
+  acceptScratch: PlanetSpawnEntry[];
+  weightScratch: number[];
+  grids: Map<string, PlacementGrid | null>;
+}
+
+function tryPlacePreviewSpawn(
+  i: number,
+  ctx: PreviewSpawnPlacementContext,
+): PreviewSpawnInstance | null {
+  const {
+    planet,
+    seed,
+    seedU,
+    patch,
+    entries,
+    catalogDensity,
+    acceptScratch,
+    weightScratch,
+    grids,
+  } = ctx;
+  const u =
+    0.5 +
+    (unitHash(seedU, 9201, i, 1) - 0.5) * PREVIEW_PLANT_RADIUS_FRACTION;
+  const v =
+    0.5 +
+    (unitHash(seedU, 9201, i, 2) - 0.5) * PREVIEW_PLANT_RADIUS_FRACTION;
+  const lat =
+    patch.hint.latRadians + (v - 0.5) * 2 * patch.halfLatExtentRadians;
+  const lon =
+    patch.hint.lonRadians + (u - 0.5) * 2 * patch.halfLonExtentRadians;
+  const localX = (u - 0.5) * patch.patchExtentMeters;
+  const localZ = (v - 0.5) * patch.patchExtentMeters;
+
+  const probe = cartesianFromLatLonAlt(lat, lon, 0, planet.radiusMeters);
+  const surface = samplePlanetSurface(planet, seed, probe);
+  if (surface.waterBody != null) return null;
+
+  collectAcceptedSpawnCandidates(entries, surface, acceptScratch, weightScratch);
+  if (acceptScratch.length === 0) return null;
+
+  const catalogAccept =
+    unitHash(seedU, 9205, i) <
+    Math.min(1, 0.9 * Math.sqrt(Math.max(0.01, catalogDensity)));
+  if (!catalogAccept) return null;
+
+  const chosen = pickWeightedEntry(seedU, i, acceptScratch, weightScratch);
+  if (!chosen) return null;
+
+  const entryAccept =
+    unitHash(seedU + chosen.seedOffset, 9207, i) <
+    Math.min(1, 0.9 * Math.sqrt(Math.max(0.01, chosen.density)));
+  if (!entryAccept) return null;
+
+  const scaleValue =
+    lerp(
+      chosen.minScale,
+      chosen.maxScale,
+      clamp01(unitHash(seedU + chosen.seedOffset, 9209, i)),
+    ) * PREVIEW_SPAWN_VISUAL_SCALE;
+
+  const position: Vec3 = {
+    x: localX,
+    y: surface.heightMeters * patch.heightScale,
+    z: localZ,
+  };
+
+  let grid: PlacementGrid | null | undefined = grids.get(chosen.id);
+  if (grid === undefined) {
+    grid = createPlacementGrid(chosen.gapMeters);
+    grids.set(chosen.id, grid);
+  }
+  if (!canPlaceWithGap(grid, position)) return null;
+  registerPlacement(grid, position);
+
+  applyTerrainInset(position, UP, chosen.terrainInsetMeters ?? 0, scaleValue);
+
+  const yaw = unitHash(seedU + chosen.seedOffset, 9211, i) * Math.PI * 2;
+  return {
+    assetUrl: chosen.assetUrl,
+    matrix: composeSurfaceSpawnMatrix(position, UP, yaw, scaleValue),
+  };
+}
+
 export function collectPreviewSpawns(
   planet: Planet,
   seed: number,
@@ -105,82 +212,22 @@ export function collectPreviewSpawns(
   const instances: PreviewSpawnInstance[] = [];
   const seedU = seed >>> 0;
 
+  const placementCtx: PreviewSpawnPlacementContext = {
+    planet,
+    seed,
+    seedU,
+    patch,
+    entries,
+    catalogDensity,
+    acceptScratch,
+    weightScratch,
+    grids,
+  };
+
   for (let i = 0; i < sampleCount; i += 1) {
     if (instances.length >= PREVIEW_MAX_SPAWNS) break;
-
-    const u =
-      0.5 +
-      (unitHash(seedU, 9201, i, 1) - 0.5) * PREVIEW_PLANT_RADIUS_FRACTION;
-    const v =
-      0.5 +
-      (unitHash(seedU, 9201, i, 2) - 0.5) * PREVIEW_PLANT_RADIUS_FRACTION;
-    const lat =
-      patch.hint.latRadians + (v - 0.5) * 2 * patch.halfLatExtentRadians;
-    const lon =
-      patch.hint.lonRadians + (u - 0.5) * 2 * patch.halfLonExtentRadians;
-    const localX = (u - 0.5) * patch.patchExtentMeters;
-    const localZ = (v - 0.5) * patch.patchExtentMeters;
-
-    const probe = cartesianFromLatLonAlt(lat, lon, 0, planet.radiusMeters);
-    const surface = samplePlanetSurface(planet, seed, probe);
-    if (surface.waterBody != null) continue;
-
-    acceptScratch.length = 0;
-    weightScratch.length = 0;
-    for (const entry of entries) {
-      if (!acceptsSurface(entry, surface.biome, surface.normalizedHeight)) {
-        continue;
-      }
-      const w = entryLotteryWeight(entry);
-      if (w <= 0) continue;
-      acceptScratch.push(entry);
-      weightScratch.push(w);
-    }
-    if (acceptScratch.length === 0) continue;
-
-    const catalogAccept =
-      unitHash(seedU, 9205, i) <
-      Math.min(1, 0.9 * Math.sqrt(Math.max(0.01, catalogDensity)));
-    if (!catalogAccept) continue;
-
-    const chosen = pickWeightedEntry(seedU, i, acceptScratch, weightScratch);
-    if (!chosen) continue;
-
-    const entryAccept =
-      unitHash(seedU + chosen.seedOffset, 9207, i) <
-      Math.min(1, 0.9 * Math.sqrt(Math.max(0.01, chosen.density)));
-    if (!entryAccept) continue;
-
-    const scaleValue =
-      lerp(
-        chosen.minScale,
-        chosen.maxScale,
-        clamp01(unitHash(seedU + chosen.seedOffset, 9209, i)),
-      ) * PREVIEW_SPAWN_VISUAL_SCALE;
-
-    const position: Vec3 = {
-      x: localX,
-      y: surface.heightMeters * patch.heightScale,
-      z: localZ,
-    };
-
-    let grid: PlacementGrid | null | undefined = grids.get(chosen.id);
-    if (grid === undefined) {
-      // Gap is authored in play meters; preview horizontal axes match that scale.
-      grid = createPlacementGrid(chosen.gapMeters);
-      grids.set(chosen.id, grid);
-    }
-    if (!canPlaceWithGap(grid, position)) continue;
-    registerPlacement(grid, position);
-
-    // Preview uses world up; bury after gap so spacing stays surface-based.
-    applyTerrainInset(position, UP, chosen.terrainInsetMeters ?? 0, scaleValue);
-
-    const yaw = unitHash(seedU + chosen.seedOffset, 9211, i) * Math.PI * 2;
-    instances.push({
-      assetUrl: chosen.assetUrl,
-      matrix: composeSurfaceSpawnMatrix(position, UP, yaw, scaleValue),
-    });
+    const instance = tryPlacePreviewSpawn(i, placementCtx);
+    if (instance) instances.push(instance);
   }
 
   return instances;

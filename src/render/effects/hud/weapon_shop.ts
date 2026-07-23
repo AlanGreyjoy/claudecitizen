@@ -54,6 +54,71 @@ function filterShopOfferings(
   return offerings.filter((entry) => allow.has(entry.id));
 }
 
+function formatShopItemDetail(
+  definition: ItemDefinition,
+  quantity: number,
+  uniqueOwned: boolean,
+  stackFull: boolean,
+): string {
+  if (uniqueOwned) return "Owned — already in inventory";
+  if (definition.itemType !== "ammo") {
+    return definition.description || definition.subType || "Weapon";
+  }
+  if (stackFull) {
+    return `Owned ${quantity} / ${definition.stackMax} — stack full`;
+  }
+  return `Owned ${quantity} / ${definition.stackMax} · ${definition.description || definition.subType}`;
+}
+
+function createShopRow(
+  definition: ItemDefinition,
+  quantity: number,
+  balance: number,
+  buyingId: string | null,
+  onBuy: (itemId: string) => void,
+): HTMLElement {
+  const uniqueOwned = definition.itemType === "weapon" && quantity >= 1;
+  const stackFull = definition.itemType === "ammo" && quantity >= definition.stackMax;
+  const canAfford = balance >= definition.costArc;
+  const disabled = uniqueOwned || stackFull || !canAfford || buyingId !== null;
+
+  const row = document.createElement("div");
+  row.className = "sc-weapon-shop-row";
+  if (uniqueOwned || stackFull) row.classList.add("is-owned");
+  if (!canAfford && !uniqueOwned && !stackFull) row.classList.add("is-unaffordable");
+
+  const icon = document.createElement("div");
+  icon.className = "sc-weapon-shop-icon";
+  paintItemIcon(icon, definition);
+
+  const meta = document.createElement("div");
+  meta.className = "sc-weapon-shop-meta";
+  const name = document.createElement("div");
+  name.className = "sc-weapon-shop-name";
+  name.textContent = definition.name;
+  const detail = document.createElement("div");
+  detail.className = "sc-weapon-shop-detail";
+  detail.textContent = formatShopItemDetail(definition, quantity, uniqueOwned, stackFull);
+  meta.append(name, detail);
+
+  const price = document.createElement("div");
+  price.className = "sc-weapon-shop-price";
+  price.textContent = formatArc(definition.costArc);
+
+  const buy = document.createElement("button");
+  buy.type = "button";
+  buy.className = "sc-weapon-shop-buy";
+  buy.textContent = uniqueOwned ? "Owned" : stackFull ? "Full" : "Buy";
+  buy.disabled = disabled;
+  buy.dataset.itemId = definition.id;
+  buy.addEventListener("click", () => {
+    void onBuy(definition.id);
+  });
+
+  row.append(icon, meta, price, buy);
+  return row;
+}
+
 export function createWeaponShop(
   elements: WeaponShopElements,
   callbacks: WeaponShopCallbacks,
@@ -93,52 +158,9 @@ export function createWeaponShop(
 
     for (const definition of offerings) {
       const quantity = itemQuantity(inventory, definition.id);
-      const uniqueOwned = definition.itemType === "weapon" && quantity >= 1;
-      const stackFull = definition.itemType === "ammo" && quantity >= definition.stackMax;
-      const canAfford = balance >= definition.costArc;
-      const disabled = uniqueOwned || stackFull || !canAfford || buyingId !== null;
-
-      const row = document.createElement("div");
-      row.className = "sc-weapon-shop-row";
-      if (uniqueOwned || stackFull) row.classList.add("is-owned");
-      if (!canAfford && !uniqueOwned && !stackFull) row.classList.add("is-unaffordable");
-
-      const icon = document.createElement("div");
-      icon.className = "sc-weapon-shop-icon";
-      paintItemIcon(icon, definition);
-
-      const meta = document.createElement("div");
-      meta.className = "sc-weapon-shop-meta";
-      const name = document.createElement("div");
-      name.className = "sc-weapon-shop-name";
-      name.textContent = definition.name;
-      const detail = document.createElement("div");
-      detail.className = "sc-weapon-shop-detail";
-      detail.textContent = uniqueOwned
-        ? "Owned — already in inventory"
-        : definition.itemType === "ammo"
-          ? stackFull
-            ? `Owned ${quantity} / ${definition.stackMax} — stack full`
-            : `Owned ${quantity} / ${definition.stackMax} · ${definition.description || definition.subType}`
-          : definition.description || definition.subType || "Weapon";
-      meta.append(name, detail);
-
-      const price = document.createElement("div");
-      price.className = "sc-weapon-shop-price";
-      price.textContent = formatArc(definition.costArc);
-
-      const buy = document.createElement("button");
-      buy.type = "button";
-      buy.className = "sc-weapon-shop-buy";
-      buy.textContent = uniqueOwned ? "Owned" : stackFull ? "Full" : "Buy";
-      buy.disabled = disabled;
-      buy.dataset.itemId = definition.id;
-      buy.addEventListener("click", () => {
-        void buyItem(definition.id);
-      });
-
-      row.append(icon, meta, price, buy);
-      elements.listEl.append(row);
+      elements.listEl.append(
+        createShopRow(definition, quantity, balance, buyingId, buyItem),
+      );
     }
   }
 

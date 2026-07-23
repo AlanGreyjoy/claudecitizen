@@ -141,11 +141,33 @@ export interface PlanetFlightEnvironment {
 
 export type FlightEnvironment = FlatFlightEnvironment | PlanetFlightEnvironment;
 
-function resolveThrustStats(options?: FlightStatsOptions) {
-  const massKg = Math.max(1, options?.massKg ?? 12_000);
-  const forwardThrustN =
+function resolveMassKg(options?: FlightStatsOptions): number {
+  return Math.max(1, options?.massKg ?? 12_000);
+}
+
+function resolveForwardThrustN(options: FlightStatsOptions | undefined, massKg: number): number {
+  return (
     options?.forwardThrustN ??
-    (options?.throttleAccelMps2 ?? FLIGHT_CONFIG.THROTTLE_ACCEL) * massKg;
+    (options?.throttleAccelMps2 ?? FLIGHT_CONFIG.THROTTLE_ACCEL) * massKg
+  );
+}
+
+function resolveTorqueNm(
+  _options: FlightStatsOptions | undefined,
+  massKg: number,
+  rate: number,
+  inertiaScale: number,
+  override?: number,
+): number {
+  return (
+    override ??
+    rate * inertiaScale * massKg * FLIGHT_CONFIG.INERTIA_FACTOR
+  );
+}
+
+function resolveThrustStats(options?: FlightStatsOptions) {
+  const massKg = resolveMassKg(options);
+  const forwardThrustN = resolveForwardThrustN(options, massKg);
   return {
     massKg,
     maxSpeedMps:
@@ -157,15 +179,27 @@ function resolveThrustStats(options?: FlightStatsOptions) {
       options?.verticalThrustN ?? FLIGHT_CONFIG.LIFT_ACCEL * massKg,
     lateralThrustN:
       options?.lateralThrustN ?? FLIGHT_CONFIG.STRAFE_ACCEL * massKg,
-    pitchTorqueNm:
-      options?.pitchTorqueNm ??
-      FLIGHT_CONFIG.PITCH_RATE * 2 * massKg * FLIGHT_CONFIG.INERTIA_FACTOR,
-    yawTorqueNm:
-      options?.yawTorqueNm ??
-      FLIGHT_CONFIG.YAW_RATE * 2 * massKg * FLIGHT_CONFIG.INERTIA_FACTOR,
-    rollTorqueNm:
-      options?.rollTorqueNm ??
-      FLIGHT_CONFIG.ROLL_RATE * 2.2 * massKg * FLIGHT_CONFIG.INERTIA_FACTOR,
+    pitchTorqueNm: resolveTorqueNm(
+      options,
+      massKg,
+      FLIGHT_CONFIG.PITCH_RATE,
+      2,
+      options?.pitchTorqueNm,
+    ),
+    yawTorqueNm: resolveTorqueNm(
+      options,
+      massKg,
+      FLIGHT_CONFIG.YAW_RATE,
+      2,
+      options?.yawTorqueNm,
+    ),
+    rollTorqueNm: resolveTorqueNm(
+      options,
+      massKg,
+      FLIGHT_CONFIG.ROLL_RATE,
+      2.2,
+      options?.rollTorqueNm,
+    ),
     coupled: options?.coupled !== false,
     aimForward: options?.aimForward,
   };
@@ -241,18 +275,13 @@ function integrateOrientation(
   };
 }
 
-function integrateLinear(
-  body: FlightBody,
+function computeThrustAcceleration(
   input: FlightInput,
-  dt: number,
   frame: { forward: Vec3; right: Vec3; up: Vec3 },
   stats: ReturnType<typeof resolveThrustStats>,
-  atmosphereFactor: number,
-  dragSeaLevel: number,
   grounded: boolean,
-): { velocity: Vec3; grounded: boolean } {
+): { accel: Vec3; nextGrounded: boolean } {
   const { forward, right, up } = frame;
-  const inAtmosphere = atmosphereFactor > FLIGHT_CONFIG.SPACE_ATMOSPHERE_THRESHOLD;
   const boostFactor = 1 + (input.boost01 ?? 0) * FLIGHT_CONFIG.BOOST_FACTOR;
   const throttle = input.throttle01 ?? 0;
   const forwardForce =
@@ -275,36 +304,67 @@ function integrateLinear(
   if (grounded && (input.lift01 ?? 0) > FLIGHT_CONFIG.TAKEOFF_LIFT_THRESHOLD) {
     nextGrounded = false;
   }
+  return { accel, nextGrounded };
+}
 
-  // Star Wars–style: no gravity while flying. Altitude is thruster-only (Space / C).
-  // Landing still works via hangar pad / open-planet gear-rest clamps.
-
+function computeLinearDragAcceleration(
+  body: FlightBody,
+  input: FlightInput,
+  stats: ReturnType<typeof resolveThrustStats>,
+  atmosphereFactor: number,
+  dragSeaLevel: number,
+  inAtmosphere: boolean,
+  nextGrounded: boolean,
+): Vec3 {
   const speed = length(body.velocity);
+  if (speed <= 1e-6) return vec3(0, 0, 0);
+
   const dragCoefficient = dragSeaLevel * atmosphereFactor;
-  let dragAccel = vec3(0, 0, 0);
-  if (speed > 1e-6) {
-    dragAccel = inAtmosphere
-      ? scale(
-          normalize(body.velocity),
-          -dragCoefficient *
-            FLIGHT_CONFIG.ATMOSPHERE_DRAG_MULTIPLIER *
-            speed *
-            speed,
-        )
-      : scale(body.velocity, -dragCoefficient * FLIGHT_CONFIG.SPACE_DRAG_MULTIPLIER);
-  }
-  if (!nextGrounded && inAtmosphere && !hasActiveThrust(input) && speed > 1e-6) {
+  let dragAccel = inAtmosphere
+    ? scale(
+        normalize(body.velocity),
+        -dragCoefficient *
+          FLIGHT_CONFIG.ATMOSPHERE_DRAG_MULTIPLIER *
+          speed *
+          speed,
+      )
+    : scale(body.velocity, -dragCoefficient * FLIGHT_CONFIG.SPACE_DRAG_MULTIPLIER);
+
+  if (!nextGrounded && inAtmosphere && !hasActiveThrust(input)) {
     dragAccel = add(
       dragAccel,
       scale(body.velocity, -FLIGHT_CONFIG.ATMOSPHERE_HOVER_DAMPING * atmosphereFactor),
     );
   }
-
-  // Coupled IFCS: bleed velocity when no thrust (SC coupled).
-  if (stats.coupled && !nextGrounded && !hasActiveThrust(input) && speed > 1e-6) {
+  if (stats.coupled && !nextGrounded && !hasActiveThrust(input)) {
     dragAccel = add(dragAccel, scale(body.velocity, -FLIGHT_CONFIG.COUPLED_DAMPING));
   }
+  return dragAccel;
+}
 
+function integrateLinear(
+  body: FlightBody,
+  input: FlightInput,
+  dt: number,
+  frame: { forward: Vec3; right: Vec3; up: Vec3 },
+  stats: ReturnType<typeof resolveThrustStats>,
+  atmosphereFactor: number,
+  dragSeaLevel: number,
+  grounded: boolean,
+): { velocity: Vec3; grounded: boolean } {
+  const inAtmosphere = atmosphereFactor > FLIGHT_CONFIG.SPACE_ATMOSPHERE_THRESHOLD;
+  const { accel, nextGrounded } = computeThrustAcceleration(input, frame, stats, grounded);
+  const dragAccel = computeLinearDragAcceleration(
+    body,
+    input,
+    stats,
+    atmosphereFactor,
+    dragSeaLevel,
+    inAtmosphere,
+    nextGrounded,
+  );
+
+  const speed = length(body.velocity);
   const brakeAccel =
     speed > 1e-6
       ? scale(normalize(body.velocity), -(input.brake01 ?? 0) * FLIGHT_CONFIG.BRAKE_ACCEL)
@@ -357,6 +417,170 @@ export function integrateSandboxFlightBody(
   );
 }
 
+interface ResolvedFlightEnvironment {
+  atmosphereFactor: number;
+  dragSeaLevel: number;
+  gravityUp: Vec3;
+  grounded: boolean;
+}
+
+function resolvePlanetFlightEnvironment(
+  body: FlightBody,
+  planet: Planet,
+  seed: number,
+): ResolvedFlightEnvironment {
+  const gravityUp = radialUp(body.position);
+  const currentSurface = sampleRenderablePlanetSurface(planet, seed, body.position);
+  const gearRestAltitude =
+    getShipRestHeightMeters() + FLIGHT_CONFIG.GROUNDED_ALTITUDE_METERS;
+  const grounded =
+    body.grounded ?? currentSurface.altitudeMeters <= gearRestAltitude;
+  const altitudeMeters = altitudeForPosition(body.position, planet.radiusMeters);
+  const atmosphereFactor = Math.max(
+    0,
+    1 - Math.max(0, altitudeMeters) / planet.atmosphereHeightMeters,
+  );
+  return {
+    gravityUp,
+    grounded,
+    atmosphereFactor,
+    dragSeaLevel: planet.dragSeaLevel ?? 0.015,
+  };
+}
+
+function resolveFlatFlightEnvironment(
+  body: FlightBody,
+  environment: Omit<FlatFlightEnvironment, 'kind'>,
+): ResolvedFlightEnvironment {
+  const gravityUp = vec3(0, 1, 0);
+  const altitude = body.position.y - environment.groundY;
+  const grounded =
+    body.grounded ??
+    altitude <= environment.restHeightMeters + FLIGHT_CONFIG.GROUNDED_ALTITUDE_METERS;
+  const atmosphereFactor = Math.max(
+    0,
+    1 - Math.max(0, altitude) / Math.max(1, environment.atmosphereHeightMeters),
+  );
+  return {
+    gravityUp,
+    grounded,
+    atmosphereFactor,
+    dragSeaLevel: environment.dragSeaLevel ?? 0.015,
+  };
+}
+
+function resolveFlightEnvironment(
+  body: FlightBody,
+  environment: FlightEnvironment,
+  seed: number,
+): ResolvedFlightEnvironment {
+  if (environment.kind === 'planet') {
+    return resolvePlanetFlightEnvironment(body, environment.planet, seed);
+  }
+  return resolveFlatFlightEnvironment(body, environment);
+}
+
+interface PlanetLandingClampInput {
+  forward: Vec3;
+  nextGrounded: boolean;
+  oriented: ReturnType<typeof integrateOrientation>;
+  planet: Planet;
+  position: Vec3;
+  seed: number;
+  up: Vec3;
+  velocity: Vec3;
+}
+
+function applyPlanetLandingClamp(
+  input: PlanetLandingClampInput,
+): {
+  forward: Vec3;
+  grounded: boolean;
+  oriented: ReturnType<typeof integrateOrientation>;
+  position: Vec3;
+  up: Vec3;
+  velocity: Vec3;
+} {
+  const { position, velocity, forward, up, oriented, planet, seed, nextGrounded } = input;
+  const nextSurface = sampleRenderablePlanetSurface(planet, seed, position);
+  const restHeight = getShipRestHeightMeters();
+  const stationFrame = getStationFrame(planet);
+  const hangarRest = sampleHangarRest(stationFrame, position, restHeight);
+  if (hangarRest) {
+    const localUp = worldToStationLocal(stationFrame, position).up;
+    if (localUp <= hangarRest.restUp) {
+      const clampedPosition = add(position, scale(stationFrame.up, hangarRest.restUp - localUp));
+      const inwardSpeed = dot(velocity, stationFrame.up);
+      const clampedVelocity =
+        inwardSpeed < 0 ? sub(velocity, scale(stationFrame.up, inwardSpeed)) : velocity;
+      const frame = orthonormalFrame(forward, stationFrame.up, stationFrame.up);
+      return {
+        position: clampedPosition,
+        velocity: clampedVelocity,
+        up: frame.up,
+        forward: frame.forward,
+        grounded: true,
+        oriented,
+      };
+    }
+  }
+  if (nextSurface.altitudeMeters >= restHeight) {
+    return { position, velocity, up, forward, grounded: nextGrounded, oriented };
+  }
+
+  const clampedPosition = surfacePointFromPosition(
+    position,
+    nextSurface.surfaceRadiusMeters + restHeight,
+  );
+  const normal = nextSurface.normal ?? radialUp(clampedPosition);
+  const inwardSpeed = dot(velocity, normal);
+  const clampedVelocity =
+    inwardSpeed < 0 ? sub(velocity, scale(normal, inwardSpeed)) : velocity;
+  const frame = orthonormalFrame(forward, normal, normal);
+  return {
+    position: clampedPosition,
+    velocity: scale(clampedVelocity, 0.2),
+    up: frame.up,
+    forward: frame.forward,
+    grounded: true,
+    oriented: { ...oriented, angularVelocity: vec3(0, 0, 0) },
+  };
+}
+
+function applyFlatLandingClamp(
+  position: Vec3,
+  velocity: Vec3,
+  forward: Vec3,
+  up: Vec3,
+  oriented: ReturnType<typeof integrateOrientation>,
+  environment: Omit<FlatFlightEnvironment, 'kind'>,
+  gravityUp: Vec3,
+  nextGrounded: boolean,
+): {
+  forward: Vec3;
+  grounded: boolean;
+  oriented: ReturnType<typeof integrateOrientation>;
+  position: Vec3;
+  up: Vec3;
+  velocity: Vec3;
+} {
+  const restY = environment.groundY + environment.restHeightMeters;
+  if (position.y >= restY) {
+    return { position, velocity, up, forward, grounded: nextGrounded, oriented };
+  }
+  const clampedPosition = { ...position, y: restY };
+  const clampedVelocity = velocity.y < 0 ? { ...velocity, y: 0 } : velocity;
+  const frame = orthonormalFrame(forward, gravityUp, gravityUp);
+  return {
+    position: clampedPosition,
+    velocity: clampedVelocity,
+    up: frame.up,
+    forward: frame.forward,
+    grounded: true,
+    oriented: { ...oriented, angularVelocity: vec3(0, 0, 0) },
+  };
+}
+
 export function integrateFlightInEnvironment(
   body: FlightBody,
   input: FlightInput,
@@ -365,39 +589,12 @@ export function integrateFlightInEnvironment(
   options?: FlightStatsOptions,
 ): FlightBody {
   const stats = resolveThrustStats(options);
-
-  let gravityUp: Vec3;
-  let atmosphereFactor: number;
-  let dragSeaLevel: number;
-  let grounded: boolean;
-
-  if (environment.kind === 'planet') {
-    const { planet, seed } = environment;
-    gravityUp = radialUp(body.position);
-    const currentSurface = sampleRenderablePlanetSurface(planet, seed, body.position);
-    // Match flat sandbox: gear-rest altitude counts as grounded, not belly-on-dirt.
-    const gearRestAltitude =
-      getShipRestHeightMeters() + FLIGHT_CONFIG.GROUNDED_ALTITUDE_METERS;
-    grounded =
-      body.grounded ?? currentSurface.altitudeMeters <= gearRestAltitude;
-    const altitudeMeters = altitudeForPosition(body.position, planet.radiusMeters);
-    atmosphereFactor = Math.max(
-      0,
-      1 - Math.max(0, altitudeMeters) / planet.atmosphereHeightMeters,
-    );
-    dragSeaLevel = planet.dragSeaLevel ?? 0.015;
-  } else {
-    gravityUp = vec3(0, 1, 0);
-    const altitude = body.position.y - environment.groundY;
-    grounded =
-      body.grounded ??
-      altitude <= environment.restHeightMeters + FLIGHT_CONFIG.GROUNDED_ALTITUDE_METERS;
-    atmosphereFactor = Math.max(
-      0,
-      1 - Math.max(0, altitude) / Math.max(1, environment.atmosphereHeightMeters),
-    );
-    dragSeaLevel = environment.dragSeaLevel ?? 0.015;
-  }
+  const seed = environment.kind === 'planet' ? environment.seed : 0;
+  const { gravityUp, atmosphereFactor, dragSeaLevel, grounded } = resolveFlightEnvironment(
+    body,
+    environment,
+    seed,
+  );
 
   const oriented = integrateOrientation(
     body,
@@ -422,55 +619,39 @@ export function integrateFlightInEnvironment(
   let position = add(body.position, scale(velocity, dt));
 
   if (environment.kind === 'planet') {
-    const { planet, seed } = environment;
-    const nextSurface = sampleRenderablePlanetSurface(planet, seed, position);
-    const restHeight = getShipRestHeightMeters();
-    const stationFrame = getStationFrame(planet);
-    const hangarRest = sampleHangarRest(stationFrame, position, restHeight);
-    if (hangarRest) {
-      const localUp = worldToStationLocal(stationFrame, position).up;
-      if (localUp <= hangarRest.restUp) {
-        position = add(position, scale(stationFrame.up, hangarRest.restUp - localUp));
-        const inwardSpeed = dot(velocity, stationFrame.up);
-        if (inwardSpeed < 0) velocity = sub(velocity, scale(stationFrame.up, inwardSpeed));
-        up = stationFrame.up;
-        const frame = orthonormalFrame(forward, up, stationFrame.up);
-        forward = frame.forward;
-        up = frame.up;
-        nextGrounded = true;
-      }
-    } else if (nextSurface.altitudeMeters < restHeight) {
-      // Open atmosphere: settle onto deployed-gear rest height (same as spawn /
-      // flat sandbox). Belly-on-surface used to break ramp outside interacts
-      // (feet at local.up≈0 instead of -restHeight) and left sticky
-      // grounded=false after soft landings.
-      position = surfacePointFromPosition(
-        position,
-        nextSurface.surfaceRadiusMeters + restHeight,
-      );
-      const normal = nextSurface.normal ?? radialUp(position);
-      const inwardSpeed = dot(velocity, normal);
-      if (inwardSpeed < 0) velocity = sub(velocity, scale(normal, inwardSpeed));
-      up = normal;
-      const frame = orthonormalFrame(forward, up, normal);
-      forward = frame.forward;
-      up = frame.up;
-      nextGrounded = true;
-      velocity = scale(velocity, 0.2);
-      oriented.angularVelocity = vec3(0, 0, 0);
-    }
+    const landed = applyPlanetLandingClamp({
+      position,
+      velocity,
+      forward,
+      up,
+      oriented,
+      planet: environment.planet,
+      seed: environment.seed,
+      nextGrounded,
+    });
+    position = landed.position;
+    velocity = landed.velocity;
+    up = landed.up;
+    forward = landed.forward;
+    nextGrounded = landed.grounded;
+    oriented.angularVelocity = landed.oriented.angularVelocity;
   } else {
-    const restY = environment.groundY + environment.restHeightMeters;
-    if (position.y < restY) {
-      position = { ...position, y: restY };
-      if (velocity.y < 0) velocity = { ...velocity, y: 0 };
-      up = gravityUp;
-      const frame = orthonormalFrame(forward, up, gravityUp);
-      forward = frame.forward;
-      up = frame.up;
-      nextGrounded = true;
-      oriented.angularVelocity = vec3(0, 0, 0);
-    }
+    const landed = applyFlatLandingClamp(
+      position,
+      velocity,
+      forward,
+      up,
+      oriented,
+      environment,
+      gravityUp,
+      nextGrounded,
+    );
+    position = landed.position;
+    velocity = landed.velocity;
+    up = landed.up;
+    forward = landed.forward;
+    nextGrounded = landed.grounded;
+    oriented.angularVelocity = landed.oriented.angularVelocity;
   }
 
   return {

@@ -37,6 +37,42 @@ function advanceOnSphere(direction: Vec3, tangent: Vec3, distanceRadians: number
  * every level from MIN→MAX inside a large radius floods the terrain mesh
  * cache, thrashing pending worker jobs before they finish.
  */
+function prefetchMaxLevel(altitudeMeters: number): number {
+  if (altitudeMeters > 80_000) return 9;
+  if (altitudeMeters > 30_000) return 11;
+  if (altitudeMeters > 12_000) return 13;
+  if (altitudeMeters > 4_000) return 15;
+  return 16;
+}
+
+function appendAheadFocuses(
+  focuses: Vec3[],
+  up: Vec3,
+  horizontal: Vec3,
+  groundSpeed: number,
+  aheadMeters: number,
+  planetRadiusMeters: number,
+): void {
+  if (aheadMeters <= 200 || groundSpeed <= 5) return;
+  const tangent = normalize(horizontal);
+  const steps = aheadMeters > 12_000 ? 3 : aheadMeters > 4_000 ? 2 : 1;
+  for (let i = 1; i <= steps; i += 1) {
+    const stepMeters = (aheadMeters * i) / steps;
+    const dir = advanceOnSphere(up, tangent, stepMeters / planetRadiusMeters);
+    focuses.push(scale(dir, planetRadiusMeters));
+  }
+}
+
+function dedupePrefetchFocuses(focuses: Vec3[], radiusMeters: number): Vec3[] {
+  const unique: Vec3[] = [];
+  for (const focus of focuses) {
+    if (unique.every((existing) => distance(existing, focus) > radiusMeters * 0.35)) {
+      unique.push(focus);
+    }
+  }
+  return unique;
+}
+
 export function planApproachPrefetch(
   planet: Planet,
   position: Vec3,
@@ -59,25 +95,9 @@ export function planApproachPrefetch(
   const aheadMeters = clamp(groundSpeed * lookAheadSeconds, 0, 80_000);
 
   const focuses: Vec3[] = [surfaceFocus];
-  if (aheadMeters > 200 && groundSpeed > 5) {
-    const tangent = normalize(horizontal);
-    const steps = aheadMeters > 12_000 ? 3 : aheadMeters > 4_000 ? 2 : 1;
-    for (let i = 1; i <= steps; i += 1) {
-      const stepMeters = (aheadMeters * i) / steps;
-      const dir = advanceOnSphere(up, tangent, stepMeters / planet.radiusMeters);
-      focuses.push(scale(dir, planet.radiusMeters));
-    }
-  }
+  appendAheadFocuses(focuses, up, horizontal, groundSpeed, aheadMeters, planet.radiusMeters);
 
-  // Cap fine LOD from high altitude — L17 from orbit is wasted work.
-  // Prefetch only the top few levels; parents come from normal selection.
-  let maxLevel: number;
-  if (altitudeMeters > 80_000) maxLevel = 9;
-  else if (altitudeMeters > 30_000) maxLevel = 11;
-  else if (altitudeMeters > 12_000) maxLevel = 13;
-  else if (altitudeMeters > 4_000) maxLevel = 15;
-  else maxLevel = 16;
-
+  const maxLevel = prefetchMaxLevel(altitudeMeters);
   const minLevel = Math.max(MIN_LEVEL, maxLevel - 2);
   const radiusMeters = clamp(
     300 + altitudeMeters * 0.05 + aheadMeters * 0.08,
@@ -85,16 +105,8 @@ export function planApproachPrefetch(
     8_000,
   );
 
-  // Drop duplicate foci that land in the same coarse cell.
-  const unique: Vec3[] = [];
-  for (const focus of focuses) {
-    if (unique.every((existing) => distance(existing, focus) > radiusMeters * 0.35)) {
-      unique.push(focus);
-    }
-  }
-
   return {
-    focuses: unique,
+    focuses: dedupePrefetchFocuses(focuses, radiusMeters),
     maxLevel,
     minLevel,
     radiusMeters,

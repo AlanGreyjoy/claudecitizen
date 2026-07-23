@@ -330,49 +330,97 @@ export function createParticleSystem(
     };
   }
 
-  function stepSimulation(dt: number): void {
-    if (playing) {
-      if (delayRemaining > 0) {
-        delayRemaining -= dt;
-      } else {
-        const duration = Math.max(0.01, spec.duration);
-        const prevTime = time;
-        time += dt;
-        if (!spec.looping && prevTime >= duration) {
-          playing = false;
-        } else if (playing) {
-          const cycleTime = spec.looping ? time % duration : Math.min(time, duration);
-          const prevCycle = spec.looping ? prevTime % duration : prevTime;
-          emitCarry += spec.emission.rateOverTime * dt;
-          const rateCount = Math.floor(emitCarry);
-          emitCarry -= rateCount;
-          if (rateCount > 0) emit(rateCount, time * 100);
+  function stepContinuousEmission(dt: number): void {
+    emitCarry += spec.emission.rateOverTime * dt;
+    const rateCount = Math.floor(emitCarry);
+    emitCarry -= rateCount;
+    if (rateCount > 0) emit(rateCount, time * 100);
+  }
 
-          for (let bi = 0; bi < spec.emission.bursts.length; bi += 1) {
-            const burst = spec.emission.bursts[bi];
-            const cycles = Math.max(1, burst.cycles ?? 1);
-            const interval = Math.max(0.01, burst.interval ?? duration);
-            for (let c = 0; c < cycles; c += 1) {
-              const t = burst.time + c * interval;
-              if (t > duration && !spec.looping) break;
-              const fireKey = bi * 1000 + c;
-              const crossed =
-                (prevCycle <= t && cycleTime >= t) ||
-                (spec.looping && prevCycle > cycleTime && (t >= prevCycle || t <= cycleTime));
-              if (crossed && lastBurstFire[bi] !== fireKey + Math.floor(time / duration)) {
-                lastBurstFire[bi] = fireKey + Math.floor(time / duration);
-                emit(sampleBurstCount(burst.count, time * 90 + c), time * 90 + c);
-              }
-            }
-          }
+  function stepBurstEmission(
+    duration: number,
+    cycleTime: number,
+    prevCycle: number,
+  ): void {
+    for (let bi = 0; bi < spec.emission.bursts.length; bi += 1) {
+      const burst = spec.emission.bursts[bi];
+      const cycles = Math.max(1, burst.cycles ?? 1);
+      const interval = Math.max(0.01, burst.interval ?? duration);
+      for (let c = 0; c < cycles; c += 1) {
+        const t = burst.time + c * interval;
+        if (t > duration && !spec.looping) break;
+        const fireKey = bi * 1000 + c;
+        const crossed =
+          (prevCycle <= t && cycleTime >= t) ||
+          (spec.looping && prevCycle > cycleTime && (t >= prevCycle || t <= cycleTime));
+        if (crossed && lastBurstFire[bi] !== fireKey + Math.floor(time / duration)) {
+          lastBurstFire[bi] = fireKey + Math.floor(time / duration);
+          emit(sampleBurstCount(burst.count, time * 90 + c), time * 90 + c);
         }
       }
     }
+  }
+
+  function stepPlayingEmission(dt: number): void {
+    if (delayRemaining > 0) {
+      delayRemaining -= dt;
+      return;
+    }
+    const duration = Math.max(0.01, spec.duration);
+    const prevTime = time;
+    time += dt;
+    if (!spec.looping && prevTime >= duration) {
+      playing = false;
+      return;
+    }
+    if (!playing) return;
+    const cycleTime = spec.looping ? time % duration : Math.min(time, duration);
+    const prevCycle = spec.looping ? prevTime % duration : prevTime;
+    stepContinuousEmission(dt);
+    stepBurstEmission(duration, cycleTime, prevCycle);
+  }
+
+  function applyVelocityOverLifetime(slot: ParticleSlot, dt: number): void {
+    const vol = spec.velocityOverLifetime;
+    if (!vol?.enabled) return;
+    slot.vx += vol.linear.x * dt;
+    slot.vy += vol.linear.y * dt;
+    slot.vz += vol.linear.z * dt;
+    const ox = slot.x;
+    const oz = slot.z;
+    const ang = vol.orbital.y * dt;
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+    slot.x = ox * cos - oz * sin;
+    slot.z = ox * sin + oz * cos;
+    const radial = vol.radial * dt;
+    const len = Math.hypot(slot.x, slot.y, slot.z) || 1;
+    slot.vx += (slot.x / len) * radial;
+    slot.vy += (slot.y / len) * radial;
+    slot.vz += (slot.z / len) * radial;
+  }
+
+  function integrateParticleSlot(slot: ParticleSlot, dt: number, gravity: number): void {
+    applyVelocityOverLifetime(slot, dt);
+    const force = spec.forceOverLifetime;
+    if (force?.enabled) {
+      slot.vx += force.force.x * dt;
+      slot.vy += force.force.y * dt;
+      slot.vz += force.force.z * dt;
+    }
+    slot.vy += gravity * dt;
+    slot.x += slot.vx * dt;
+    slot.y += slot.vy * dt;
+    slot.z += slot.vz * dt;
+    if (spec.collision?.enabled) {
+      resolveParticlePlaneCollisions(slot, spec.collision, 0);
+    }
+  }
+
+  function stepSimulation(dt: number): void {
+    if (playing) stepPlayingEmission(dt);
 
     const gravity = -9.81 * spec.gravityModifier;
-    const vol = spec.velocityOverLifetime;
-    const force = spec.forceOverLifetime;
-
     for (let i = 0; i < slots.length; i += 1) {
       const slot = slots[i];
       if (!slot.alive) continue;
@@ -381,37 +429,7 @@ export function createParticleSystem(
         slot.alive = false;
         continue;
       }
-
-      if (vol?.enabled) {
-        slot.vx += vol.linear.x * dt;
-        slot.vy += vol.linear.y * dt;
-        slot.vz += vol.linear.z * dt;
-        const ox = slot.x;
-        const oz = slot.z;
-        const ang = vol.orbital.y * dt;
-        const cos = Math.cos(ang);
-        const sin = Math.sin(ang);
-        slot.x = ox * cos - oz * sin;
-        slot.z = ox * sin + oz * cos;
-        const radial = vol.radial * dt;
-        const len = Math.hypot(slot.x, slot.y, slot.z) || 1;
-        slot.vx += (slot.x / len) * radial;
-        slot.vy += (slot.y / len) * radial;
-        slot.vz += (slot.z / len) * radial;
-      }
-      if (force?.enabled) {
-        slot.vx += force.force.x * dt;
-        slot.vy += force.force.y * dt;
-        slot.vz += force.force.z * dt;
-      }
-      slot.vy += gravity * dt;
-      slot.x += slot.vx * dt;
-      slot.y += slot.vy * dt;
-      slot.z += slot.vz * dt;
-
-      if (spec.collision?.enabled) {
-        resolveParticlePlaneCollisions(slot, spec.collision, 0);
-      }
+      integrateParticleSlot(slot, dt, gravity);
     }
   }
 

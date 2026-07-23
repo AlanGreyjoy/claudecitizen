@@ -104,6 +104,85 @@ function bakeCollider(
   };
 }
 
+async function collectEntityColliders(
+  entity: PrefabEntity,
+  hullColliderSceneMatrix: THREE.Matrix4,
+  out: GameplayCollider[],
+): Promise<void> {
+  let colliderIndex = 0;
+  const isShipHull =
+    entity.components?.some((component) => component.type === "ship-controller") ??
+    false;
+  for (const component of entity.components ?? []) {
+    if (component.type !== "collider") continue;
+    const collider = bakeCollider(
+      component,
+      entity,
+      hullColliderSceneMatrix,
+      `${entity.id}:collider-${colliderIndex}`,
+      undefined,
+      isShipHull,
+    );
+    colliderIndex += 1;
+    if (collider) out.push(collider);
+  }
+}
+
+async function collectNodeOverrideColliders(
+  entity: PrefabEntity,
+  hullColliderSceneMatrix: THREE.Matrix4,
+  out: GameplayCollider[],
+): Promise<void> {
+  if (!entity.asset?.url || !entity.nodeOverrides) return;
+  const nodesWithColliders = entity.nodeOverrides.filter(
+    (o) => o.components?.some((c) => c.type === "collider"),
+  );
+  if (nodesWithColliders.length === 0) return;
+
+  const isShipHull =
+    entity.components?.some((component) => component.type === "ship-controller") ??
+    false;
+  const nodeNames = nodesWithColliders.map((o) => o.node);
+  const requestedNodeNames = entity.asset.node
+    ? [...nodeNames, entity.asset.node]
+    : nodeNames;
+  const matrices = await loadNodeWorldMatrices(
+    entity.asset.url,
+    requestedNodeNames,
+    entity.nodeOverrides,
+    isShipHull,
+  );
+  const assetRootInverse = entity.asset.node
+    ? matrices.get(entity.asset.node)?.clone().invert()
+    : undefined;
+  for (const override of nodesWithColliders) {
+    const nodeWorldMatrix = matrices.get(override.node);
+    if (!nodeWorldMatrix) {
+      console.warn(
+        `Collider on GLB node "${override.node}" skipped — node not found in ${entity.asset.url}.`,
+      );
+      continue;
+    }
+    const nodeSceneMatrix = hullColliderSceneMatrix.clone();
+    if (assetRootInverse) nodeSceneMatrix.multiply(assetRootInverse);
+    nodeSceneMatrix.multiply(nodeWorldMatrix);
+    let nodeColliderIndex = 0;
+    for (const component of override.components!) {
+      if (component.type !== "collider") continue;
+      const collider = bakeCollider(
+        component,
+        entity,
+        nodeSceneMatrix,
+        `${entity.id}:${override.node}:collider-${nodeColliderIndex}`,
+        override.node,
+        isShipHull,
+      );
+      nodeColliderIndex += 1;
+      if (collider) out.push(collider);
+    }
+  }
+}
+
 async function collect(
   entity: PrefabEntity,
   parentSceneMatrix: THREE.Matrix4,
@@ -119,67 +198,8 @@ async function collect(
   const hullColliderSceneMatrix = isShipHull
     ? shipHullColliderMatrix(parentSceneMatrix, entity.transform)
     : entitySceneMatrix;
-  let colliderIndex = 0;
-  for (const component of entity.components ?? []) {
-    if (component.type !== "collider") continue;
-    const collider = bakeCollider(
-      component,
-      entity,
-      hullColliderSceneMatrix,
-      `${entity.id}:collider-${colliderIndex}`,
-      undefined,
-      isShipHull,
-    );
-    colliderIndex += 1;
-    if (collider) out.push(collider);
-  }
-
-  if (entity.asset?.url && entity.nodeOverrides) {
-    const nodesWithColliders = entity.nodeOverrides.filter(
-      (o) => o.components?.some((c) => c.type === "collider"),
-    );
-    if (nodesWithColliders.length > 0) {
-      const nodeNames = nodesWithColliders.map((o) => o.node);
-      const requestedNodeNames = entity.asset.node
-        ? [...nodeNames, entity.asset.node]
-        : nodeNames;
-      const matrices = await loadNodeWorldMatrices(
-        entity.asset.url,
-        requestedNodeNames,
-        entity.nodeOverrides,
-        isShipHull,
-      );
-      const assetRootInverse = entity.asset.node
-        ? matrices.get(entity.asset.node)?.clone().invert()
-        : undefined;
-      for (const override of nodesWithColliders) {
-        const nodeWorldMatrix = matrices.get(override.node);
-        if (!nodeWorldMatrix) {
-          console.warn(
-            `Collider on GLB node "${override.node}" skipped — node not found in ${entity.asset.url}.`,
-          );
-          continue;
-        }
-        const nodeSceneMatrix = hullColliderSceneMatrix.clone();
-        if (assetRootInverse) nodeSceneMatrix.multiply(assetRootInverse);
-        nodeSceneMatrix.multiply(nodeWorldMatrix);
-        let nodeColliderIndex = 0;
-        for (const component of override.components!) {
-          if (component.type !== "collider") continue;
-          const collider = bakeCollider(
-            component,
-            entity,
-            nodeSceneMatrix,
-            `${entity.id}:${override.node}:collider-${nodeColliderIndex}`,
-            override.node,
-            isShipHull,
-          );
-          nodeColliderIndex += 1;
-          if (collider) out.push(collider);
-        }
-      }
-    }
-  }
+  await collectEntityColliders(entity, hullColliderSceneMatrix, out);
+  await collectNodeOverrideColliders(entity, hullColliderSceneMatrix, out);
 
   for (const child of entity.children ?? []) {
     await collect(child, entitySceneMatrix, out);

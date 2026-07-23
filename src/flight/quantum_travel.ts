@@ -367,6 +367,161 @@ export interface QuantumAdvanceResult {
   screenFade: number;
 }
 
+interface QuantumTravelContext {
+  destination: QuantumDestination | null;
+  endPosition: Vec3 | null;
+  planet: Planet;
+  route: NonNullable<QuantumTravelState['route']>;
+}
+
+function resolveQuantumTravelContext(
+  quantum: QuantumTravelState,
+  planet: Planet,
+  seed: number,
+): QuantumTravelContext | null {
+  if (!quantum.route) return null;
+  const destination = quantum.destinationId
+    ? getQuantumDestination(planet, seed, quantum.destinationId)
+    : null;
+  const endPosition = destination
+    ? destinationWorldPosition(planet, seed, destination)
+    : null;
+  return { route: quantum.route, destination, endPosition, planet };
+}
+
+function advanceQuantumSpooling(
+  body: FlightBody,
+  quantum: QuantumTravelState,
+  ctx: QuantumTravelContext,
+  dt: number,
+): QuantumAdvanceResult {
+  const spoolElapsed = quantum.spoolElapsed + dt;
+  const spoolT = Math.min(1, spoolElapsed / Math.max(quantum.spoolDuration, 0.001));
+  let nextBody = body;
+  if (ctx.endPosition) {
+    const targetBearing = bearingToDestination(body, ctx.endPosition);
+    nextBody = orientToward(body, targetBearing, Math.min(1, dt * 2.5));
+  }
+  nextBody = {
+    ...nextBody,
+    velocity: scale(nextBody.velocity, Math.max(0, 1 - dt * 6)),
+  };
+  const screenFade = Math.min(0.35, spoolT * 0.35);
+  if (spoolElapsed >= quantum.spoolDuration) {
+    return {
+      body: nextBody,
+      quantum: {
+        ...quantum,
+        phase: 'traveling',
+        spoolElapsed,
+        entryFlash: 1,
+      },
+      screenFade: 0.55,
+    };
+  }
+  return {
+    body: nextBody,
+    quantum: { ...quantum, spoolElapsed },
+    screenFade,
+  };
+}
+
+function advanceQuantumTraveling(
+  body: FlightBody,
+  quantum: QuantumTravelState,
+  ctx: QuantumTravelContext,
+  dt: number,
+): QuantumAdvanceResult {
+  const { route, planet, endPosition } = ctx;
+  const progress = Math.min(1, route.progress + dt / Math.max(route.travelDuration, 0.001));
+  const position = positionAlongRoute(route, planet, progress);
+  const tangent = routeTangent(route, planet, progress);
+  const nominalSpeed =
+    distance(body.position, endPosition ?? position) / route.travelDuration;
+  const up = radialUp(position);
+  const right = normalize(cross(tangent, up));
+  const shipUp = normalize(cross(right, tangent));
+
+  const nextBody: FlightBody = {
+    ...body,
+    position,
+    forward: tangent,
+    up: shipUp,
+    velocity: scale(tangent, nominalSpeed),
+    grounded: false,
+  };
+
+  const entryFlash = Math.max(0, quantum.entryFlash - dt * 2.5);
+  const screenFade = entryFlash > 0 ? entryFlash * 0.7 : 0.15;
+  if (progress >= 1) {
+    return {
+      body: nextBody,
+      quantum: {
+        ...quantum,
+        phase: 'dropOut',
+        route: { ...route, progress: 1 },
+        dropOutElapsed: 0,
+        entryFlash: 0,
+        exitFlash: 1,
+      },
+      // Cover the first destination frame so terrain/water can repopulate
+      // behind the hyperspace shell before the drop-out reveal begins.
+      screenFade: 0.85,
+    };
+  }
+  return {
+    body: nextBody,
+    quantum: {
+      ...quantum,
+      route: { ...route, progress },
+      entryFlash,
+    },
+    screenFade,
+  };
+}
+
+function advanceQuantumDropOut(
+  body: FlightBody,
+  quantum: QuantumTravelState,
+  ctx: QuantumTravelContext,
+  dt: number,
+): QuantumAdvanceResult {
+  const dropOutElapsed = quantum.dropOutElapsed + dt;
+  const dropT = Math.min(1, dropOutElapsed / QUANTUM_DROP_OUT_SECONDS);
+  let nextBody = body;
+  if (ctx.endPosition) {
+    nextBody = {
+      ...nextBody,
+      position: ctx.endPosition,
+      velocity: scale(nextBody.velocity, Math.max(0, 1 - dropT)),
+      grounded: dropT > 0.85,
+    };
+    nextBody = orientToward(nextBody, bearingToDestination(nextBody, ctx.endPosition), dropT);
+  }
+  const exitFlash = Math.max(0, 1 - dropT);
+  const screenFade = exitFlash * 0.85;
+  if (dropOutElapsed >= QUANTUM_DROP_OUT_SECONDS) {
+    const handoffPlanetId =
+      ctx.destination?.handoff && ctx.destination.planetDocumentId
+        ? ctx.destination.planetDocumentId
+        : null;
+    if (!handoffPlanetId) clearNavRoute();
+    return {
+      body: nextBody,
+      quantum: {
+        ...createQuantumTravelState(),
+        pendingHandoffPlanetId: handoffPlanetId,
+      },
+      screenFade,
+    };
+  }
+  return {
+    body: nextBody,
+    quantum: { ...quantum, dropOutElapsed, exitFlash },
+    screenFade,
+  };
+}
+
 export function advanceQuantumTravel(
   body: FlightBody,
   quantum: QuantumTravelState,
@@ -374,126 +529,16 @@ export function advanceQuantumTravel(
   planet: Planet,
   seed: number,
 ): QuantumAdvanceResult {
-  let nextQuantum = quantum;
-  let nextBody = body;
-  let screenFade = 0;
-
   if (quantum.phase === 'idle' || !quantum.route) {
     return { body, quantum, screenFade: 0 };
   }
 
-  const route = quantum.route;
-  const destination = quantum.destinationId
-    ? getQuantumDestination(planet, seed, quantum.destinationId)
-    : null;
-  const endPosition = destination
-    ? destinationWorldPosition(planet, seed, destination)
-    : null;
+  const ctx = resolveQuantumTravelContext(quantum, planet, seed);
+  if (!ctx) return { body, quantum, screenFade: 0 };
 
-  if (quantum.phase === 'spooling') {
-    const spoolElapsed = quantum.spoolElapsed + dt;
-    const spoolT = Math.min(1, spoolElapsed / Math.max(quantum.spoolDuration, 0.001));
-    if (endPosition) {
-      const targetBearing = bearingToDestination(body, endPosition);
-      nextBody = orientToward(body, targetBearing, Math.min(1, dt * 2.5));
-    }
-    nextBody = {
-      ...nextBody,
-      velocity: scale(nextBody.velocity, Math.max(0, 1 - dt * 6)),
-    };
-    screenFade = Math.min(0.35, spoolT * 0.35);
-
-    if (spoolElapsed >= quantum.spoolDuration) {
-      nextQuantum = {
-        ...quantum,
-        phase: 'traveling',
-        spoolElapsed,
-        entryFlash: 1,
-      };
-      screenFade = 0.55;
-    } else {
-      nextQuantum = { ...quantum, spoolElapsed };
-    }
-    return { body: nextBody, quantum: nextQuantum, screenFade };
-  }
-
-  if (quantum.phase === 'traveling') {
-    const progress = Math.min(1, route.progress + dt / Math.max(route.travelDuration, 0.001));
-    const position = positionAlongRoute(route, planet, progress);
-    const tangent = routeTangent(route, planet, progress);
-    const nominalSpeed =
-      distance(body.position, endPosition ?? position) / route.travelDuration;
-    const up = radialUp(position);
-    const right = normalize(cross(tangent, up));
-    const shipUp = normalize(cross(right, tangent));
-
-    nextBody = {
-      ...nextBody,
-      position,
-      forward: tangent,
-      up: shipUp,
-      velocity: scale(tangent, nominalSpeed),
-      grounded: false,
-    };
-
-    const entryFlash = Math.max(0, quantum.entryFlash - dt * 2.5);
-    screenFade = entryFlash > 0 ? entryFlash * 0.7 : 0.15;
-
-    if (progress >= 1) {
-      nextQuantum = {
-        ...quantum,
-        phase: 'dropOut',
-        route: { ...route, progress: 1 },
-        dropOutElapsed: 0,
-        entryFlash: 0,
-        exitFlash: 1,
-      };
-      // Cover the first destination frame so terrain/water can repopulate
-      // behind the hyperspace shell before the drop-out reveal begins.
-      screenFade = 0.85;
-    } else {
-      nextQuantum = {
-        ...quantum,
-        route: { ...route, progress },
-        entryFlash,
-      };
-    }
-    return { body: nextBody, quantum: nextQuantum, screenFade };
-  }
-
-  if (quantum.phase === 'dropOut') {
-    const dropOutElapsed = quantum.dropOutElapsed + dt;
-    const dropT = Math.min(1, dropOutElapsed / QUANTUM_DROP_OUT_SECONDS);
-    if (endPosition) {
-      nextBody = {
-        ...nextBody,
-        position: endPosition,
-        velocity: scale(nextBody.velocity, Math.max(0, 1 - dropT)),
-        grounded: dropT > 0.85,
-      };
-      nextBody = orientToward(nextBody, bearingToDestination(nextBody, endPosition), dropT);
-    }
-    const exitFlash = Math.max(0, 1 - dropT);
-    screenFade = exitFlash * 0.85;
-
-    if (dropOutElapsed >= QUANTUM_DROP_OUT_SECONDS) {
-      const handoffPlanetId =
-        destination?.handoff && destination.planetDocumentId
-          ? destination.planetDocumentId
-          : null;
-      if (!handoffPlanetId) {
-        clearNavRoute();
-      }
-      nextQuantum = {
-        ...createQuantumTravelState(),
-        pendingHandoffPlanetId: handoffPlanetId,
-      };
-    } else {
-      nextQuantum = { ...quantum, dropOutElapsed, exitFlash };
-    }
-    return { body: nextBody, quantum: nextQuantum, screenFade };
-  }
-
+  if (quantum.phase === 'spooling') return advanceQuantumSpooling(body, quantum, ctx, dt);
+  if (quantum.phase === 'traveling') return advanceQuantumTraveling(body, quantum, ctx, dt);
+  if (quantum.phase === 'dropOut') return advanceQuantumDropOut(body, quantum, ctx, dt);
   return { body, quantum, screenFade: 0 };
 }
 

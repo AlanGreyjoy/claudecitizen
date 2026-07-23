@@ -35,6 +35,77 @@ function applyThickness(radius: number, thickness: number, seed: number): number
   return inner + (radius - inner) * u;
 }
 
+function sampleBoxShape(shape: PrefabParticleShape, seed: number): SpawnSample {
+  const sx = shape.box.x * 0.5;
+  const sy = shape.box.y * 0.5;
+  const sz = shape.box.z * 0.5;
+  let x = (hash01(seed + 0.1) * 2 - 1) * sx;
+  let y = (hash01(seed + 0.2) * 2 - 1) * sy;
+  let z = (hash01(seed + 0.3) * 2 - 1) * sz;
+  if (shape.emitFrom === "shell" || shape.emitFrom === "edge") {
+    const face = Math.floor(hash01(seed + 0.4) * 6);
+    if (face === 0) x = -sx;
+    else if (face === 1) x = sx;
+    else if (face === 2) y = -sy;
+    else if (face === 3) y = sy;
+    else if (face === 4) z = -sz;
+    else z = sz;
+  }
+  const dir = normalize(x, y + 0.001, z);
+  return { x, y, z, dirX: dir.x, dirY: dir.y, dirZ: dir.z };
+}
+
+function sampleCircleShape(shape: PrefabParticleShape, seed: number, angle: number): SpawnSample {
+  const r =
+    shape.shape === "edge" || shape.emitFrom === "edge" || shape.emitFrom === "shell"
+      ? shape.radius
+      : applyThickness(shape.radius, shape.radiusThickness, seed + 0.5);
+  const x = Math.cos(angle) * r;
+  const z = Math.sin(angle) * r;
+  return { x, y: 0, z, dirX: 0, dirY: 1, dirZ: 0 };
+}
+
+function sampleConeShape(shape: PrefabParticleShape, seed: number, angle: number): SpawnSample {
+  const half = (shape.angle * Math.PI) / 180;
+  const rBase = applyThickness(shape.radius, shape.radiusThickness, seed + 0.6);
+  const along = hash01(seed + 0.7);
+  const radiusAt = rBase * along;
+  const x = Math.cos(angle) * radiusAt;
+  const z = Math.sin(angle) * radiusAt;
+  const y = along;
+  const dirAngle = half * (radiusAt / Math.max(1e-5, shape.radius || 1));
+  const dir = normalize(
+    Math.cos(angle) * Math.sin(dirAngle),
+    Math.cos(dirAngle),
+    Math.sin(angle) * Math.sin(dirAngle),
+  );
+  return { x, y: y * Math.max(shape.radius, 0.01), z, dirX: dir.x, dirY: dir.y, dirZ: dir.z };
+}
+
+function sampleRadialShape(
+  shape: PrefabParticleShape,
+  _seed: number,
+  dirSeed: number,
+  thicknessSeed: number,
+): SpawnSample {
+  let dir = randomOnSphere(dirSeed);
+  if (shape.shape === "hemisphere" && dir.y < 0) {
+    dir = { x: dir.x, y: -dir.y, z: dir.z };
+  }
+  const r =
+    shape.emitFrom === "shell" || shape.emitFrom === "edge"
+      ? shape.radius
+      : applyThickness(shape.radius, shape.radiusThickness, thicknessSeed);
+  return {
+    x: dir.x * r,
+    y: dir.y * r,
+    z: dir.z * r,
+    dirX: dir.x,
+    dirY: dir.y,
+    dirZ: dir.z,
+  };
+}
+
 export function sampleEmitterShape(
   shape: PrefabParticleShape,
   seed: number,
@@ -47,83 +118,18 @@ export function sampleEmitterShape(
   const angle = hash01(seed) * arcRad;
 
   switch (shape.shape) {
-    case "box": {
-      const sx = shape.box.x * 0.5;
-      const sy = shape.box.y * 0.5;
-      const sz = shape.box.z * 0.5;
-      let x = (hash01(seed + 0.1) * 2 - 1) * sx;
-      let y = (hash01(seed + 0.2) * 2 - 1) * sy;
-      let z = (hash01(seed + 0.3) * 2 - 1) * sz;
-      if (shape.emitFrom === "shell" || shape.emitFrom === "edge") {
-        const face = Math.floor(hash01(seed + 0.4) * 6);
-        if (face === 0) x = -sx;
-        else if (face === 1) x = sx;
-        else if (face === 2) y = -sy;
-        else if (face === 3) y = sy;
-        else if (face === 4) z = -sz;
-        else z = sz;
-      }
-      const dir = normalize(x, y + 0.001, z);
-      return { x, y, z, dirX: dir.x, dirY: dir.y, dirZ: dir.z };
-    }
+    case "box":
+      return sampleBoxShape(shape, seed);
     case "circle":
-    case "edge": {
-      const r =
-        shape.shape === "edge" || shape.emitFrom === "edge" || shape.emitFrom === "shell"
-          ? shape.radius
-          : applyThickness(shape.radius, shape.radiusThickness, seed + 0.5);
-      const x = Math.cos(angle) * r;
-      const z = Math.sin(angle) * r;
-      return { x, y: 0, z, dirX: 0, dirY: 1, dirZ: 0 };
-    }
-    case "cone": {
-      const half = (shape.angle * Math.PI) / 180;
-      const rBase = applyThickness(shape.radius, shape.radiusThickness, seed + 0.6);
-      const along = hash01(seed + 0.7);
-      const radiusAt = rBase * along;
-      const x = Math.cos(angle) * radiusAt;
-      const z = Math.sin(angle) * radiusAt;
-      const y = along; // unit height cone; direction from apex
-      const dirAngle = half * (radiusAt / Math.max(1e-5, shape.radius || 1));
-      const dir = normalize(
-        Math.cos(angle) * Math.sin(dirAngle),
-        Math.cos(dirAngle),
-        Math.sin(angle) * Math.sin(dirAngle),
-      );
-      return { x, y: y * Math.max(shape.radius, 0.01), z, dirX: dir.x, dirY: dir.y, dirZ: dir.z };
-    }
-    case "hemisphere": {
-      let dir = randomOnSphere(seed + 1.1);
-      if (dir.y < 0) dir = { x: dir.x, y: -dir.y, z: dir.z };
-      const r =
-        shape.emitFrom === "shell" || shape.emitFrom === "edge"
-          ? shape.radius
-          : applyThickness(shape.radius, shape.radiusThickness, seed + 0.8);
-      return {
-        x: dir.x * r,
-        y: dir.y * r,
-        z: dir.z * r,
-        dirX: dir.x,
-        dirY: dir.y,
-        dirZ: dir.z,
-      };
-    }
+    case "edge":
+      return sampleCircleShape(shape, seed, angle);
+    case "cone":
+      return sampleConeShape(shape, seed, angle);
+    case "hemisphere":
+      return sampleRadialShape(shape, seed, seed + 1.1, seed + 0.8);
     case "sphere":
-    default: {
-      const dir = randomOnSphere(seed + 2.2);
-      const r =
-        shape.emitFrom === "shell" || shape.emitFrom === "edge"
-          ? shape.radius
-          : applyThickness(shape.radius, shape.radiusThickness, seed + 0.9);
-      return {
-        x: dir.x * r,
-        y: dir.y * r,
-        z: dir.z * r,
-        dirX: dir.x,
-        dirY: dir.y,
-        dirZ: dir.z,
-      };
-    }
+    default:
+      return sampleRadialShape(shape, seed, seed + 2.2, seed + 0.9);
   }
 }
 

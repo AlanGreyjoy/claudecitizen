@@ -298,6 +298,80 @@ function GlbSubtree({
   );
 }
 
+function entityRowClassName(
+  selected: boolean,
+  inSelection: boolean,
+  parentSelected: boolean,
+  isDropTarget: boolean,
+): string {
+  return `ed-tree-row${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}${parentSelected ? ' is-parent-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}`;
+}
+
+function EntityRowName({
+  ctx,
+  entity,
+}: {
+  ctx: TreeCtx;
+  entity: EditorEntity;
+}): ReactNode {
+  if (ctx.renaming === entity.id) {
+    return (
+      <input
+        className="ed-input ed-tree-rename"
+        type="text"
+        defaultValue={entity.name}
+        autoFocus
+        onFocus={(event) => event.currentTarget.select()}
+        onBlur={(event) => {
+          ctx.setRenaming(null);
+          ctx.store.renameEntity(
+            entity.id,
+            event.currentTarget.value.trim() || entity.name,
+          );
+        }}
+        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+          if (event.key === 'Escape') ctx.setRenaming(null);
+          event.stopPropagation();
+        }}
+      />
+    );
+  }
+  return (
+    <span className={`ed-tree-name${entity.visible ? '' : ' is-hidden-entity'}`}>
+      {entity.name}
+    </span>
+  );
+}
+
+function shouldShowEntityGlbSubtree(
+  entity: EditorEntity,
+  glbTree: GlbNodeRef | null,
+  ctx: TreeCtx,
+  store: EditorStore,
+): boolean {
+  if (!entity.asset || !glbTree) return false;
+  const filtering = hasActiveFilters(ctx.searchQuery, ctx.componentFilter);
+  if (!filtering) return true;
+  return glbSubtreeHasMatch(store, entity.id, glbTree, ctx.searchQuery, ctx.componentFilter);
+}
+
+function filterEntityRowChildren(
+  children: EditorEntity[],
+  glbNodeNames: Set<string>,
+  ctx: TreeCtx,
+  store: EditorStore,
+): EditorEntity[] {
+  const filtering = hasActiveFilters(ctx.searchQuery, ctx.componentFilter);
+  return children.filter((child) => {
+    if (isEntityBoundToGlb(child, glbNodeNames)) return false;
+    if (filtering && !entitySubtreeHasMatch(store, child, ctx.searchQuery, ctx.componentFilter)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function EntityRow({
   ctx,
   entity,
@@ -321,44 +395,12 @@ function EntityRow({
   const parentSelected =
     selection === entity.id && Boolean(sub) && sub?.entityId === entity.id;
   const badge = componentBadge(entity);
-  const filtering = hasActiveFilters(ctx.searchQuery, ctx.componentFilter);
   const isDropTarget = ctx.dropTargetId === entity.id;
-
-  let nameEl: ReactNode;
-  if (ctx.renaming === entity.id) {
-    nameEl = (
-      <input
-        className="ed-input ed-tree-rename"
-        type="text"
-        defaultValue={entity.name}
-        autoFocus
-        onFocus={(event) => event.currentTarget.select()}
-        onBlur={(event) => {
-          ctx.setRenaming(null);
-          store.renameEntity(
-            entity.id,
-            event.currentTarget.value.trim() || entity.name,
-          );
-        }}
-        onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-          if (event.key === 'Enter') event.currentTarget.blur();
-          if (event.key === 'Escape') ctx.setRenaming(null);
-          event.stopPropagation();
-        }}
-      />
-    );
-  } else {
-    nameEl = (
-      <span className={`ed-tree-name${entity.visible ? '' : ' is-hidden-entity'}`}>
-        {entity.name}
-      </span>
-    );
-  }
 
   return (
     <>
       <div
-        className={`ed-tree-row${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}${parentSelected ? ' is-parent-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}`}
+        className={entityRowClassName(selected, inSelection, parentSelected, isDropTarget)}
         draggable
         data-entity-id={entity.id}
         style={{ paddingLeft: `${10 + depth * 14}px` }}
@@ -420,34 +462,17 @@ function EntityRow({
         ) : (
           <span className="ed-tree-chevron-spacer" />
         )}
-        {nameEl}
+        <EntityRowName ctx={ctx} entity={entity} />
         {badge ? <span className="ed-tree-badge">{badge}</span> : null}
       </div>
       {expanded ? (
         <>
-          {entity.asset && glbTree && (
-            !filtering ||
-            glbSubtreeHasMatch(
-              store,
-              entity.id,
-              glbTree,
-              ctx.searchQuery,
-              ctx.componentFilter,
-            )
-          ) ? (
+          {shouldShowEntityGlbSubtree(entity, glbTree, ctx, store) ? (
             <GlbSubtree ctx={ctx} entity={entity} depth={depth + 1} />
           ) : null}
-          {entity.children
-            .filter((child) => {
-              if (isEntityBoundToGlb(child, glbNodeNames)) return false;
-              if (filtering && !entitySubtreeHasMatch(store, child, ctx.searchQuery, ctx.componentFilter)) {
-                return false;
-              }
-              return true;
-            })
-            .map((child) => (
-              <EntityRow key={child.id} ctx={ctx} entity={child} depth={depth + 1} />
-            ))}
+          {filterEntityRowChildren(entity.children, glbNodeNames, ctx, store).map((child) => (
+            <EntityRow key={child.id} ctx={ctx} entity={child} depth={depth + 1} />
+          ))}
         </>
       ) : null}
     </>

@@ -386,11 +386,11 @@ function waterSurfaceCellFromLevel(
   };
 }
 
-export function buildSurfaceWaterGeometry(
+function buildWaterSampleGrid(
   info: TileInfo,
   planetRef: Planet,
   seed: number,
-): SurfaceWaterBuffers | null {
+): { grid: GridCell[]; gridWidth: number; renderPartialShoreCells: boolean } | null {
   const { u0, u1, v0, v1 } = info.bounds;
   const gridWidth = TILE_SEGMENTS + 1;
   const cellSpanMeters = info.spanMeters / TILE_SEGMENTS;
@@ -414,120 +414,163 @@ export function buildSurfaceWaterGeometry(
 
   if (paddedVertices < 3) return null;
   if (renderPartialShoreCells) markGridShoreline(grid, gridWidth);
+  return { grid, gridWidth, renderPartialShoreCells };
+}
 
-  const positions: number[] = [];
-  const depths: number[] = [];
-  const shoreFactors: number[] = [];
-  const surfFactors: number[] = [];
-  const indices: number[] = [];
-  const indexLookup = new Int32Array(grid.length);
-  indexLookup.fill(-1);
-  const extraIndexLookup = new Map<string, number>();
+interface WaterTriangulationState {
+  info: TileInfo;
+  planetRef: Planet;
+  seed: number;
+  grid: GridCell[];
+  gridWidth: number;
+  renderPartialShoreCells: boolean;
+  positions: number[];
+  depths: number[];
+  shoreFactors: number[];
+  surfFactors: number[];
+  indices: number[];
+  indexLookup: Int32Array;
+  extraIndexLookup: Map<string, number>;
+}
 
-  function emitVertex(cell: GridCell | WaterSurfaceCell): number {
-    depths.push(cell.depthMeters);
-    positions.push(
+function triangulateWaterCell(state: WaterTriangulationState, x: number, y: number): void {
+  const { info, planetRef, seed, grid, gridWidth, renderPartialShoreCells } = state;
+  const { u0, u1, v0, v1 } = info.bounds;
+  const cornerCoords: [number, number][] = [
+    [x, y],
+    [x + 1, y],
+    [x + 1, y + 1],
+    [x, y + 1],
+  ];
+  const cornerIndex = (cx: number, cy: number) => cy * gridWidth + cx;
+  const corners = cornerCoords.map(([cx, cy]) => grid[cornerIndex(cx, cy)]);
+
+  if (!corners.some((corner) => corner.padded)) return;
+  const allCornersPadded = corners.every((corner) => corner.padded);
+  if (!allCornersPadded && !renderPartialShoreCells) return;
+
+  const emitVertex = (cell: GridCell | WaterSurfaceCell): number => {
+    state.depths.push(cell.depthMeters);
+    state.positions.push(
       cell.direction.x * cell.radius! - info.centerPosition.x,
       cell.direction.y * cell.radius! - info.centerPosition.y,
       cell.direction.z * cell.radius! - info.centerPosition.z,
     );
-    shoreFactors.push(cell.shore);
-    surfFactors.push(cell.waterBody === 'ocean' ? cell.shore : 0);
-    return positions.length / 3 - 1;
-  }
-
-  function vertexIndexForCell(x: number, y: number): number {
-    const gridIdx = y * gridWidth + x;
+    state.shoreFactors.push(cell.shore);
+    state.surfFactors.push(cell.waterBody === 'ocean' ? cell.shore : 0);
+    return state.positions.length / 3 - 1;
+  };
+  const vertexIndexForCell = (cx: number, cy: number): number => {
+    const gridIdx = cornerIndex(cx, cy);
     const cell = grid[gridIdx];
     if (!cell.padded) return -1;
-    if (indexLookup[gridIdx] === -1) {
-      indexLookup[gridIdx] = emitVertex(cell);
+    if (state.indexLookup[gridIdx] === -1) {
+      state.indexLookup[gridIdx] = emitVertex(cell);
     }
-    return indexLookup[gridIdx];
-  }
-
-  function vertexIndexForExtra(key: string, cell: WaterSurfaceCell): number {
-    if (!extraIndexLookup.has(key)) {
-      extraIndexLookup.set(key, emitVertex(cell));
+    return state.indexLookup[gridIdx];
+  };
+  const vertexIndexForExtra = (key: string, cell: WaterSurfaceCell): number => {
+    if (!state.extraIndexLookup.has(key)) {
+      state.extraIndexLookup.set(key, emitVertex(cell));
     }
-    return extraIndexLookup.get(key)!;
-  }
-
-  function cornerIndex(x: number, y: number): number {
-    return y * gridWidth + x;
-  }
-
-  function addTriangle(a: number, b: number, c: number): void {
+    return state.extraIndexLookup.get(key)!;
+  };
+  const addTriangle = (a: number, b: number, c: number): void => {
     if (a < 0 || b < 0 || c < 0) return;
-    indices.push(a, b, c);
+    state.indices.push(a, b, c);
+  };
+
+  const cornerIndices = cornerCoords.map(([cx, cy]) => vertexIndexForCell(cx, cy));
+  if (allCornersPadded) {
+    const globalCellX = info.x * TILE_SEGMENTS + x;
+    const globalCellY = info.y * TILE_SEGMENTS + y;
+    if (terrainCellUsesNorthwestSoutheastDiagonal(globalCellX, globalCellY)) {
+      addTriangle(cornerIndices[0], cornerIndices[1], cornerIndices[2]);
+      addTriangle(cornerIndices[0], cornerIndices[2], cornerIndices[3]);
+    } else {
+      addTriangle(cornerIndices[0], cornerIndices[1], cornerIndices[3]);
+      addTriangle(cornerIndices[1], cornerIndices[2], cornerIndices[3]);
+    }
+    return;
   }
+
+  const centerU = u0 + ((u1 - u0) * (x + 0.5)) / TILE_SEGMENTS;
+  const centerV = v0 + ((v1 - v0) * (y + 0.5)) / TILE_SEGMENTS;
+  const centerSample = sampleGridCell(info, planetRef, seed, {
+    sampleSpacingMeters: renderableCellSampleSpacingMeters(planetRef, info.level),
+    u: centerU,
+    v: centerV,
+  });
+  const fallbackWater = corners.find(
+    (corner): corner is GridCell & { waterBody: WaterBody; waterLevelMeters: number } =>
+      corner.waterBody != null && corner.waterLevelMeters != null,
+  );
+  const waterLevelMeters = centerSample.waterLevelMeters ?? fallbackWater?.waterLevelMeters;
+  const waterBody = centerSample.waterBody ?? fallbackWater?.waterBody;
+  if (waterLevelMeters == null || waterBody == null) return;
+
+  const centerCell = waterSurfaceCellFromLevel(centerSample, waterLevelMeters, waterBody, planetRef);
+  const centerIndex = vertexIndexForExtra(`center:${x}:${y}`, centerCell);
+  for (let i = 0; i < 4; i += 1) {
+    const a = cornerIndices[i];
+    const b = cornerIndices[(i + 1) % 4];
+    if (a >= 0 && b >= 0) addTriangle(a, b, centerIndex);
+  }
+}
+
+function triangulateWaterSampleGrid(
+  info: TileInfo,
+  planetRef: Planet,
+  seed: number,
+  grid: GridCell[],
+  gridWidth: number,
+  renderPartialShoreCells: boolean,
+): SurfaceWaterBuffers | null {
+  const state: WaterTriangulationState = {
+    info,
+    planetRef,
+    seed,
+    grid,
+    gridWidth,
+    renderPartialShoreCells,
+    positions: [],
+    depths: [],
+    shoreFactors: [],
+    surfFactors: [],
+    indices: [],
+    indexLookup: new Int32Array(grid.length).fill(-1),
+    extraIndexLookup: new Map<string, number>(),
+  };
 
   for (let y = 0; y < TILE_SEGMENTS; y += 1) {
     for (let x = 0; x < TILE_SEGMENTS; x += 1) {
-      const cornerCoords: [number, number][] = [
-        [x, y],
-        [x + 1, y],
-        [x + 1, y + 1],
-        [x, y + 1],
-      ];
-      const corners = cornerCoords.map(([cx, cy]) => grid[cornerIndex(cx, cy)]);
-
-      if (!corners.some((corner) => corner.padded)) continue;
-      const allCornersPadded = corners.every((corner) => corner.padded);
-      if (!allCornersPadded && !renderPartialShoreCells) continue;
-
-      const cornerIndices = cornerCoords.map(([cx, cy]) => vertexIndexForCell(cx, cy));
-      const centerU = u0 + ((u1 - u0) * (x + 0.5)) / TILE_SEGMENTS;
-      const centerV = v0 + ((v1 - v0) * (y + 0.5)) / TILE_SEGMENTS;
-      const centerSample = sampleGridCell(info, planetRef, seed, {
-        sampleSpacingMeters: renderableCellSampleSpacingMeters(planetRef, info.level),
-        u: centerU,
-        v: centerV,
-      });
-      const fallbackWater = corners.find(
-        (corner): corner is GridCell & { waterBody: WaterBody; waterLevelMeters: number } =>
-          corner.waterBody != null && corner.waterLevelMeters != null,
-      );
-      const waterLevelMeters = centerSample.waterLevelMeters ?? fallbackWater?.waterLevelMeters;
-      const waterBody = centerSample.waterBody ?? fallbackWater?.waterBody;
-
-      if (waterLevelMeters == null || waterBody == null) continue;
-
-      if (allCornersPadded) {
-        const globalCellX = info.x * TILE_SEGMENTS + x;
-        const globalCellY = info.y * TILE_SEGMENTS + y;
-        if (terrainCellUsesNorthwestSoutheastDiagonal(globalCellX, globalCellY)) {
-          addTriangle(cornerIndices[0], cornerIndices[1], cornerIndices[2]);
-          addTriangle(cornerIndices[0], cornerIndices[2], cornerIndices[3]);
-        } else {
-          addTriangle(cornerIndices[0], cornerIndices[1], cornerIndices[3]);
-          addTriangle(cornerIndices[1], cornerIndices[2], cornerIndices[3]);
-        }
-        continue;
-      }
-
-      const centerCell = waterSurfaceCellFromLevel(
-        centerSample,
-        waterLevelMeters,
-        waterBody,
-        planetRef,
-      );
-      const centerIndex = vertexIndexForExtra(`center:${x}:${y}`, centerCell);
-
-      for (let i = 0; i < 4; i += 1) {
-        const a = cornerIndices[i];
-        const b = cornerIndices[(i + 1) % 4];
-        if (a >= 0 && b >= 0) addTriangle(a, b, centerIndex);
-      }
+      triangulateWaterCell(state, x, y);
     }
   }
 
-  if (indices.length === 0) return null;
+  if (state.indices.length === 0) return null;
   return packFacetedWaterBuffers(info, seed, {
-    depths,
-    indices,
-    positions,
-    shoreFactors,
-    surfFactors,
+    depths: state.depths,
+    indices: state.indices,
+    positions: state.positions,
+    shoreFactors: state.shoreFactors,
+    surfFactors: state.surfFactors,
   });
+}
+
+export function buildSurfaceWaterGeometry(
+  info: TileInfo,
+  planetRef: Planet,
+  seed: number,
+): SurfaceWaterBuffers | null {
+  const sampleGrid = buildWaterSampleGrid(info, planetRef, seed);
+  if (!sampleGrid) return null;
+  return triangulateWaterSampleGrid(
+    info,
+    planetRef,
+    seed,
+    sampleGrid.grid,
+    sampleGrid.gridWidth,
+    sampleGrid.renderPartialShoreCells,
+  );
 }
