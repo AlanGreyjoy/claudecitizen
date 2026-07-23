@@ -13386,15 +13386,15 @@
             "name": "NPC Placement (Hab Steward)",
             "transform": {
               "position": {
-                "x": -33.25,
+                "x": -33,
                 "y": 0,
-                "z": 69.5
+                "z": 67.5
               },
               "rotation": {
                 "x": 0,
-                "y": 0.707107,
+                "y": -0.92388,
                 "z": 0,
-                "w": 0.707107
+                "w": 0.382683
               },
               "scale": {
                 "x": 1,

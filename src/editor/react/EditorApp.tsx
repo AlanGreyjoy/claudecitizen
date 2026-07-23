@@ -236,11 +236,30 @@ export function EditorApp(): ReactElement {
     });
   }, []);
 
+  // Cached so a fetch that finishes before Toolbar mounts is not dropped.
+  // Toolbar only mounts after ViewportHost provides viewportToolbarHost.
+  const prefabListCacheRef = useRef<Awaited<ReturnType<typeof fetchPrefabList>> | null>(null);
+  const planetListCacheRef = useRef<Awaited<ReturnType<typeof fetchPlanetList>> | null>(null);
+
   const refreshPrefabList = useCallback(async () => {
     try {
-      toolbarRef.current?.setPrefabOptions(await fetchPrefabList());
+      const prefabs = await fetchPrefabList();
+      prefabListCacheRef.current = prefabs;
+      toolbarRef.current?.setPrefabOptions(prefabs);
     } catch {
       // Dev API unavailable.
+    }
+  }, []);
+
+  const refreshPlanetList = useCallback(async () => {
+    try {
+      const planets = await fetchPlanetList();
+      planetListCacheRef.current = planets;
+      toolbarRef.current?.setPlanetOptions(planets);
+    } catch {
+      const fallback = [{ id: 'asteron', name: 'Asteron' }];
+      planetListCacheRef.current = fallback;
+      toolbarRef.current?.setPlanetOptions(fallback);
     }
   }, []);
 
@@ -404,13 +423,28 @@ export function EditorApp(): ReactElement {
     ],
   );
 
-  // Prefab/planet lists + boot query params
+  // Prefab/planet lists — fetch early, and re-apply when Toolbar mounts.
   useEffect(() => {
     void refreshPrefabList();
-    void fetchPlanetList()
-      .then((planets) => toolbarRef.current?.setPlanetOptions(planets))
-      .catch(() => toolbarRef.current?.setPlanetOptions([{ id: 'asteron', name: 'Asteron' }]));
+    void refreshPlanetList();
+  }, [refreshPrefabList, refreshPlanetList]);
 
+  useEffect(() => {
+    if (!viewportToolbarHost) return;
+    if (prefabListCacheRef.current) {
+      toolbarRef.current?.setPrefabOptions(prefabListCacheRef.current);
+    } else {
+      void refreshPrefabList();
+    }
+    if (planetListCacheRef.current) {
+      toolbarRef.current?.setPlanetOptions(planetListCacheRef.current);
+    } else {
+      void refreshPlanetList();
+    }
+  }, [viewportToolbarHost, refreshPrefabList, refreshPlanetList]);
+
+  // Boot query params
+  useEffect(() => {
     const bootParams = new URLSearchParams(window.location.search);
     const prefabParam = bootParams.get('prefab');
     if (prefabParam) void loadById(prefabParam);
@@ -423,7 +457,7 @@ export function EditorApp(): ReactElement {
         queueMicrotask(() => tabHandlesRef.current.menuManagerEditor?.openMenu(menuId));
       }
     }
-  }, [refreshPrefabList, loadById, setTab]);
+  }, [loadById, setTab]);
 
   // Keyboard shortcuts
   useEffect(() => {
