@@ -28,7 +28,7 @@
 - **Schema** (`src/world/prefabs/schema.ts`) defines every component type and its validator. Read this first when a component's fields are unclear.
 - **Ship runtime** (`src/world/prefabs/ship_runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
 - **Station runtime** (`src/world/prefabs/station_runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
-- **Game loop** (`src/app/game_loop.ts`) owns `stationAnimationStates` (per-animation blend values) and the F-key interaction dispatch.
+- **Game loop** (`src/game/create_game_loop.ts`) is a thin orchestrator that composes colocated feature modules under `src/game/`. Station animation blend values (`stationAnimationStates`) live in `src/game/station/animations.ts`; the F-key interaction dispatch lives in `src/game/modes/in_station.ts`.
 
 ### Rifle ADS locomotion blending
 
@@ -55,15 +55,15 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 
 #### Station prefab doors (animation component)
 
-1. **Visual**: `game_loop.ts` `updateStationAnimations` lerps `stationAnimationStates[id].value` toward `target`, then calls `renderer.getStationRoot().userData.updateAnimations(blends)`. The renderer (`src/render/prefabs/prefab_renderer.ts` `setupUpdateAnimations`) looks up GLB nodes by name and translates/rotates them.
-2. **Collider**: station colliders are baked as **static Rapier bodies** in `play_session.ts` `createStationPhysics` → `syncStaticColliders`. They do NOT move with the animation unless bound via `collider.animation` (set in `station_runtime.ts` `bindStationColliderAnimations`). When bound, `game_loop.ts` toggles their `setEnabled` state in `updateStationAnimations` based on the open blend.
-3. **F-key toggle**: an `interaction` component with `interactionType: "animation"` + `targetAnimationId` produces a `prefab-info` interaction (`station_interaction.ts`). `game_loop.ts` handles it at the `interaction.kind === 'prefab-info'` branch using `actions.wasKeyPressed(keyCode)` — NOT `actions.interactPressed`. See gotcha below.
+1. **Visual**: `src/game/station/animations.ts` `updateStationAnimations` lerps `stationAnimationStates[id].value` toward `target`, then calls `renderer.getStationRoot().userData.updateAnimations(blends)`. The renderer (`src/render/prefabs/prefab_renderer.ts` `setupUpdateAnimations`) looks up GLB nodes by name and translates/rotates them.
+2. **Collider**: station colliders are baked as **static Rapier bodies** in `play_session.ts` `createStationPhysics` → `syncStaticColliders`. They do NOT move with the animation unless bound via `collider.animation` (set in `station_runtime.ts` `bindStationColliderAnimations`). When bound, `src/game/station/animations.ts` toggles their `setEnabled` state in `updateStationAnimations` based on the open blend.
+3. **F-key toggle**: an `interaction` component with `interactionType: "animation"` + `targetAnimationId` produces a `prefab-info` interaction (`station_interaction.ts`). `src/game/modes/in_station.ts` handles it at the `interaction.kind === 'prefab-info'` branch using `actions.wasKeyPressed(keyCode)` — NOT `actions.interactPressed`. See gotcha below.
 
 #### Ship prefab doors (ship-door component)
 
 1. **Visual**: ship model articulation follows door blends from `ship_rig.ts`.
 2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip child nodes that have their own colliders so the closed door is not embedded as a ghost barrier. Near a parked ship, a ship-local pad plane shares that Rapier world so exterior hull collision and ramp walk are continuous (`shipHasFloorBelow`); freefall off the pad hands back to planet/station.
-3. **F-key toggle**: `ship_play_session.ts` / `game_loop.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
+3. **F-key toggle**: `ship_play_session.ts` / `src/game/modes/on_ship_deck.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
 4. **Collider pass-through**: door trimeshes disable when `open01 >= 0.85` (same threshold as stations).
 
 #### Ship bunks (bed component)
@@ -81,7 +81,7 @@ Flight is **not** Rapier. Deck walking may use Rapier; flying uses the custom in
 - **Global feel** (mouse aim gain, IFCS damping, coupled bleed, drag) lives in `src/flight/flight_config.ts` — only change when *all* ships feel wrong.
 - **Gravity (Star Wars–style):** once airborne, gravity does **not** pull the ship down. Altitude is thruster-only (Space/C). Landing uses ground/hangar clamp. **No auto-level** — roll/pitch attitude sticks until the pilot corrects (preview levels on pad exit).
 - **Mouse dual-reticle**: persistent aim pip + nose pip; IFCS PD-tracks aim (`flight_aim.ts`). Hold **F** = cockpit free-look (camera only); while free-looking, gaze + **LMB** activates `cockpit-control` markers (gear/ramp). **Alt+C** = coupled ↔ decoupled.
-- **Main play**: `game_loop.ts` `MODE_IN_SHIP` → `integrateFlightBody` + dual reticle HUD.
+- **Main play**: `src/game/modes/in_ship.ts` (`MODE_IN_SHIP`) → `integrateFlightBody` + dual reticle HUD (`src/game/hud/frame_hud.ts`).
 - **Preview Ship** (`?shipPrefab=` / `ship_play_session.ts`): sit pilot → takeoff/flight over the flat pad (same flight model). Hold **Y** exits the seat anytime (settles onto the pad when nearby).
 - **Tuning workflow**: read `.cursor/skills/ship-flight/SKILL.md` (and `.cursor/rules/ship-flight.mdc`). Symptom → fix tables live there.
 
@@ -262,7 +262,9 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/flight/flight_aim.ts` | Aim state, mouse → aim, PD IFCS torque demand |
 | `src/flight/flight_body.ts` | Mass/thrust/torque integrate (planet + sandbox flat) |
 | `src/input/player_controls.ts` | Keyboard/gamepad input; aim persistence; Alt+C coupled; `wasKeyPressed` |
-| `src/app/game_loop.ts` | Main frame loop; flight + `stationAnimationStates` + F-key dispatch |
+| `src/game/create_game_loop.ts` | Thin play-loop orchestrator; wires feature modules + owns `frame()`/start/stop |
+| `src/game/modes/` | Per-mode frame logic (on-foot, in-ship, in-bed, ship-deck, station, elevator, transitions) |
+| `src/game/station/animations.ts` | `stationAnimationStates` blend + door-collider enable toggle |
 | `src/app/ship_play_session.ts` | Ship sandbox: deck walk + pilot flight preview |
 | `src/render/effects/hud/flight_reticle.ts` | Dual-reticle aim + nose pips |
 | `src/player/flight_camera_feel.ts` | Thrust FOV + boost shake (ship-controller stats) |

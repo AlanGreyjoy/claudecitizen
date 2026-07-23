@@ -37,9 +37,9 @@ const DOMAIN_IMPORT_RESTRICTIONS = [
     ],
     patterns: [
       {
-        group: ['**/render/**', '**/editor/**'],
+        group: ['**/render/**', '**/editor/**', '**/game/**'],
         message:
-          'Domain code must not import render/ or editor/. Presentation and dev tools stay at the edge.',
+          'Domain code must not import render/, editor/, or game/. Presentation, dev tools, and play-loop orchestration stay at the edge.',
       },
     ],
   },
@@ -49,15 +49,15 @@ const DOMAIN_GLOBAL_RESTRICTIONS = [
   'error',
   {
     name: 'document',
-    message: 'Domain code must not touch the DOM. Use render/ or app/ for browser APIs.',
+    message: 'Domain code must not touch the DOM. Use render/, app/, or game/ for browser APIs.',
   },
   {
     name: 'window',
-    message: 'Domain code must not touch the DOM. Use render/ or app/ for browser APIs.',
+    message: 'Domain code must not touch the DOM. Use render/, app/, or game/ for browser APIs.',
   },
   {
     name: 'HTMLElement',
-    message: 'Domain code must not reference DOM types. Use render/ or app/ for UI.',
+    message: 'Domain code must not reference DOM types. Use render/, app/, or game/ for UI.',
   },
 ];
 
@@ -174,7 +174,8 @@ export default tseslint.config(
     },
   },
 
-  // DDD: render reads domain state but should not depend on app orchestration.
+  // DDD: render reads domain state but should not depend on app orchestration
+  // or the play-loop composition layer.
   {
     files: ['src/render/**/*.ts'],
     rules: {
@@ -185,7 +186,12 @@ export default tseslint.config(
             {
               group: ['**/app/**'],
               message:
-                'render/ must not import app/. Dependency flows app → render → domain.',
+                'render/ must not import app/. Dependency flows app → game → render → domain.',
+            },
+            {
+              group: ['**/game/**'],
+              message:
+                'render/ must not import game/. Dependency flows app → game → render → domain.',
             },
           ],
         },
@@ -196,6 +202,18 @@ export default tseslint.config(
   // DDD + SRP: app/bootstrap wires modules; keep domain logic out of giant orchestrators.
   {
     files: ['src/app/**/*.ts'],
+    rules: {
+      'max-lines': [
+        'warn',
+        { max: 900, skipBlankLines: true, skipComments: true },
+      ],
+      'sonarjs/cognitive-complexity': ['warn', 20],
+    },
+  },
+
+  // SRP: game/ hosts the play-loop composition split into feature modules.
+  {
+    files: ['src/game/**/*.ts'],
     rules: {
       'max-lines': [
         'warn',

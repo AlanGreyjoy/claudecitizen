@@ -32,7 +32,8 @@ flowchart TB
   end
 
   subgraph composition ["Composition"]
-    App["app/<br/>bootstrap, game loop, sessions"]
+    App["app/<br/>bootstrap, sessions, HUD wiring"]
+    Game["game/<br/>play-loop runtime: modes, combat, hud"]
   end
 
   Math["math/<br/>vectors, frames, helpers"]
@@ -42,9 +43,13 @@ flowchart TB
   World --> Player
   Flight --> App
   Player --> App
+  Flight --> Game
+  Player --> Game
+  App --> Game
   World --> Render
   Player --> Render
   Flight --> Render
+  Game --> Render
   App --> Render
 ```
 
@@ -54,7 +59,8 @@ flowchart TB
 | **Flight** | `src/flight/` | Ship rigid-body dynamics, input mapping, radial gravity |
 | **Player** | `src/player/` | Character controller, boarding, deck collision, pilot-seat FSM |
 | **Render** | `src/render/` | Meshes, materials, LOD tiles, atmosphere, post-FX — **read-only** toward domain |
-| **App** | `src/app/` | Wires contexts together; `game_loop.ts` orchestrates, does not own rules |
+| **App** | `src/app/` | Session shell: bootstraps the play session, HUD, network, and vitals, then hands the frame loop to `game/` |
+| **Game** | `src/game/` | Play-loop runtime: `create_game_loop.ts` composes colocated feature modules (modes, combat, station, ship, hud, …); orchestrates, does not own rules |
 
 Supporting modules sit outside the core simulation boundary:
 
@@ -126,7 +132,7 @@ sequenceDiagram
   participant JSON as *.prefab.json
   participant Schema as world/prefabs/schema.ts
   participant Runtime as ship_runtime / station_runtime
-  participant Game as game_loop + player/
+  participant Game as game/ loop + player/
 
   Editor->>JSON: serialize components
   JSON->>Schema: validate on load

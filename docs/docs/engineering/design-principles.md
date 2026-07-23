@@ -70,7 +70,7 @@ flowchart LR
 
 Before adding code, ask: *"If this requirement changes, is there exactly one folder I'd expect to edit?"* If the answer is "it depends," extract a function or move the logic.
 
-**Example:** Station door colliders toggle in `game_loop.ts` because animation state lives there — but the **rules** for binding colliders to animations live in `station_runtime.ts`. State orchestration ≠ layout rules.
+**Example:** Station door colliders toggle in `src/game/station/animations.ts` because animation state lives there — but the **rules** for binding colliders to animations live in `station_runtime.ts`. State orchestration ≠ layout rules.
 
 ---
 
@@ -129,7 +129,7 @@ Covered above. Same letter, same goal.
 
 > Open for extension, closed for modification.
 
-**Prefabs are the main extension point.** New station elevators, ship doors, or hangar pads ship as new component types in JSON — not forks of `game_loop.ts`.
+**Prefabs are the main extension point.** New station elevators, ship doors, or hangar pads ship as new component types in JSON — not forks of the play loop (`src/game/`).
 
 ```mermaid
 flowchart LR
@@ -192,7 +192,7 @@ High-level flow depends on **domain concepts**, not Three.js meshes:
 
 | High level | Depends on | Not on |
 | --- | --- | --- |
-| `game_loop.ts` | `ShipLayout`, blend values, mode FSM | `THREE.Mesh` |
+| `src/game/` (play loop) | `ShipLayout`, blend values, mode FSM | `THREE.Mesh` |
 | `player/` movement | `sampleFootPlanetSurface()`, collider rigs | GPU buffers |
 | Authoritative cell | Protobuf intents, tick state | client render details |
 

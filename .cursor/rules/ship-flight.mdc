@@ -1,6 +1,6 @@
 ---
 description: Ship flight IFCS — mass/thrust/torque, dual-reticle aim, coupled mode, preview flight. Use when tuning or changing ship flight.
-globs: src/flight/**,src/app/ship_play_session.ts,src/input/player_controls.ts,src/app/game_loop.ts,src/player/ship_layout.ts,src/render/effects/hud/flight_reticle.ts,src/world/prefabs/ship_runtime.ts,src/world/prefabs/data/*.prefab.json
+globs: src/flight/**,src/app/ship_play_session.ts,src/input/player_controls.ts,src/game/modes/in_ship.ts,src/game/create_game_loop.ts,src/player/ship_layout.ts,src/render/effects/hud/flight_reticle.ts,src/world/prefabs/ship_runtime.ts,src/world/prefabs/data/*.prefab.json
 alwaysApply: false
 ---
 
@@ -21,7 +21,7 @@ SC-style IFCS: mouse aim + nose lag, mass-scaled thrust/torque. **Flight is not 
 | Global IFCS / damping | `src/flight/flight_config.ts` (all ships) |
 | Integrate | `flight_body.ts` (+ sandbox flat env) |
 | Aim / PD IFCS | `flight_aim.ts` + `player_controls.ts` |
-| Main play | `game_loop.ts` `MODE_IN_SHIP` |
+| Main play | `src/game/modes/in_ship.ts` (`MODE_IN_SHIP`) |
 | Preview | `ship_play_session.ts` pilot mode |
 | HUD | `flight_reticle.ts` (aim + nose pips); `cockpit_gaze_hud.ts` (Hold F look-at labels); `cockpit_speed_hud.ts` (cockpit-stat speed) |
 | Cockpit controls | `cockpit-control` markers → `ShipLayout.cockpitControls` → `cockpit_gaze.ts` |

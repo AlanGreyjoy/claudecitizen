@@ -1,5 +1,6 @@
 import { createPlayerControls } from '../input/player_controls';
-import { createGameLoop, type BuildAreaRuntime } from './game_loop';
+import { createGameLoop } from '../game/create_game_loop';
+import type { BuildAreaRuntime } from '../game/types';
 import type { LoadingScreenHandle } from './loading_screen';
 import {
   createPlayerVitalsSession,

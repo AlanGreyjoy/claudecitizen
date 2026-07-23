@@ -49,7 +49,7 @@ See `AGENTS.md` **Animation → collider → interaction wiring**.
 
 ### Station doors (`animation` + `interaction`)
 
-1. **Visual**: `game_loop.ts` → `updateStationAnimations` → `prefab_renderer.ts` `updateAnimations`.
+1. **Visual**: `src/game/station/animations.ts` → `updateStationAnimations` → `prefab_renderer.ts` `updateAnimations`.
 2. **Collider**: static Rapier bodies; must have `collider.animation` bound in `station_runtime.ts`. Open blend toggles `setEnabled`.
 3. **F-key**: `interaction` with `interactionType: "animation"` + `targetAnimationId` → `prefab-info` branch uses `actions.wasKeyPressed`, **not** `interactPressed`.
 

@@ -147,7 +147,7 @@ Dumps scene hierarchy, mesh bindings, and animation clip targets. Use this **bef
 | Context menus | `component_actions.ts`, `hierarchy.ts`, `viewport.ts` |
 | Node override persistence | `document.ts`, `serialize.ts` |
 | Runtime GLB binding | `prefab_renderer.ts` |
-| Ship/station door wiring | `ship_runtime.ts`, `station_runtime.ts`, `game_loop.ts` |
+| Ship/station door wiring | `ship_runtime.ts`, `station_runtime.ts`, `src/game/station/animations.ts`, `src/game/modes/` |
 
 Read AGENTS.md sections **Editor**, **Prefab & Animation Architecture**, **Ship flight**, and **Debugging GLB nodes & Colliders** before cross-cutting prefab changes.
 

@@ -127,7 +127,7 @@ Touch these when *all* ships feel wrong — not when balancing one hull.
 | `src/flight/flight_body.ts` | Mass/thrust/torque integrate; planet + sandbox flat |
 | `src/input/player_controls.ts` | Aim persistence, Alt+C coupled |
 | `src/app/ship_play_session.ts` | Preview flight |
-| `src/app/game_loop.ts` | Main-play flight + dual reticle |
+| `src/game/modes/in_ship.ts` | Main-play flight branch (`MODE_IN_SHIP`); dual reticle HUD in `src/game/hud/frame_hud.ts` |
 | `src/render/effects/hud/flight_reticle.ts` | Aim + nose pips |
 | `docs/docs/cc-editor/components/ship-controller.md` | Author-facing docs |
 
