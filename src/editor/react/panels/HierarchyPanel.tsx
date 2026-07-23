@@ -18,6 +18,11 @@ import {
   addColliderToGlbNodes,
   buildEntityComponentsSubmenu,
   buildGlbAuthoringMenu,
+  collectComponentTypesOnEntities,
+  collectComponentTypesOnGlbNodes,
+  removeComponentTypeFromEntities,
+  removeComponentTypeFromGlbNodes,
+  removeComponentTypeMenuEntries,
   type GlbNodeColliderTarget,
 } from '../../component_actions';
 import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../../document';
@@ -778,6 +783,7 @@ export function HierarchyPanel({
         const allVisible = selectedIds.every(
           (id) => store.locate(id)?.entity.visible ?? true,
         );
+        const removableTypes = collectComponentTypesOnEntities(store, selectedIds);
         return [
           { label: 'Group in Empty', action: () => store.groupSelectedInEmpty() },
           {
@@ -798,6 +804,12 @@ export function HierarchyPanel({
             label: 'Add Collider',
             children: addColliderShapeMenuEntries((shape) =>
               addColliderToEntities(store, selectedIds, shape),
+            ),
+          },
+          {
+            label: 'Remove Component',
+            children: removeComponentTypeMenuEntries(removableTypes, (type) =>
+              removeComponentTypeFromEntities(store, selectedIds, type),
             ),
           },
           { label: 'Filter', action: () => filterByItemName(entity.name) },
@@ -863,6 +875,10 @@ export function HierarchyPanel({
     ): ContextMenuEntry[] => {
       const getPosition = getGlbNodePrefabPosition ?? (() => null);
       const getBounds = getGlbNodeBounds ?? (() => null);
+      const removableTypes =
+        targets.length > 1
+          ? collectComponentTypesOnGlbNodes(store, targets)
+          : [];
       const batchEntries: ContextMenuEntry[] =
         targets.length > 1
           ? [
@@ -870,6 +886,12 @@ export function HierarchyPanel({
                 label: `Add Collider to ${targets.length} Nodes`,
                 children: addColliderShapeMenuEntries((shape) =>
                   addColliderToGlbNodes(store, targets, getGlbNodeBounds, shape),
+                ),
+              },
+              {
+                label: 'Remove Component',
+                children: removeComponentTypeMenuEntries(removableTypes, (type) =>
+                  removeComponentTypeFromGlbNodes(store, targets, type),
                 ),
               },
               'sep',

@@ -117,6 +117,7 @@ export function updateShipSandboxGroundFallback(
     ...session.character,
     animation: animationFromState({
       isMoving,
+      isCrouching: intent.isCrouching,
       gait: intent.gait,
       jumpPhase: motion.jumpPhase,
     }),

@@ -15,8 +15,8 @@ The CC Editor uses a Unity-inspired layout with resizable panels. Panel sizes pe
 │  Toolbar (gizmo, snap, New/Load/Save, prefab name + kind)   │
 ├──────────┬──────────────────────────────┬─────────────────────┤
 │          │  Scene tabs: Scene |         │                     │
-│ Hierarchy│  Character Preview |         │    Inspector        │
-│          │  Material Manager            │                     │
+│ Hierarchy│  Material Manager |          │    Inspector        │
+│          │  Base Characters             │                     │
 │          │  ┌────────────────────────┐  │                     │
 │          │  │  Viewport / tab panel  │  │                     │
 │          │  └────────────────────────┘  │                     │
@@ -95,7 +95,7 @@ Merged asset browser over:
 - `editor/assets/` — local library (free + `protected/` gitignored packs)
 - `src/assets/` — tracked game assets
 
-Folder tree on the left, thumbnail grid on the right. Model cards support drag-and-drop into the scene. GLB cards also expose **Character** and **Anims** buttons for the character preview tab.
+Folder tree on the left, thumbnail grid on the right. Model cards support drag-and-drop into the scene. GLB cards also expose an **Anims** button that loads clips into the **Base Characters** tab.
 
 ## Toolbar
 
@@ -129,14 +129,13 @@ The center column switches between authoring surfaces:
 | Tab | Purpose |
 | --- | --- |
 | **Scene** | Main prefab viewport |
-| **Character Preview** | Skinned character + animation retargeting preview |
 | **Material Manager** | Batch material overrides across the scene |
-| **Base Characters** | Default character equipment |
+| **Base Characters** | Sidekick equipment, animation controllers, and play-test stage |
 | **Planet Authoring** | Planet terrain / biome documents |
 | **System Map** | Star / planet / station ecliptic layout |
 | **Menu Manager** | Live HaloBand + play menu previews (File → Open Menus) |
 
-See [Character preview](./character-preview), [Material manager](./material-manager), [Planet authoring](./planet-authoring), [System Map](./system-map), and [Menu Manager](./menu-manager).
+See [Material manager](./material-manager), [Planet authoring](./planet-authoring), [System Map](./system-map), and [Menu Manager](./menu-manager).
 
 ## Keyboard shortcuts
 

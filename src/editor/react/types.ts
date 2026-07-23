@@ -1,6 +1,5 @@
 export type SceneEditorTab =
   | 'scene'
-  | 'character-preview'
   | 'material-manager'
   | 'base-characters'
   | 'planet-authoring'
@@ -9,7 +8,6 @@ export type SceneEditorTab =
 
 export const SCENE_EDITOR_TABS: ReadonlyArray<{ id: SceneEditorTab; label: string }> = [
   { id: 'scene', label: 'Scene' },
-  { id: 'character-preview', label: 'Character Preview' },
   { id: 'material-manager', label: 'Material Manager' },
   { id: 'base-characters', label: 'Base Characters' },
   { id: 'planet-authoring', label: 'Planet Authoring' },

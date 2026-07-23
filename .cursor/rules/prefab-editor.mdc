@@ -21,7 +21,7 @@ glb_binding.ts              render/editor/viewport.ts (Three.js, imperative)
 
 - **React UI** lives in `src/editor/react/` (shell, Project, Hierarchy, Toolbar, Inspector chrome, Material Manager).
 - **EditorStore** and serialize stay framework-agnostic in `src/editor/`.
-- **Imperative hosts**: prefab viewport, character preview, base-characters stage, planet/system/menu tab editors, and dense inspector component field builders (`inspector_component_fields_dom.ts` / `particle_fields.ts`).
+- **Imperative hosts**: prefab viewport, base-characters stage, planet/system/menu tab editors, and dense inspector component field builders (`inspector_component_fields_dom.ts` / `particle_fields.ts`).
 - HMR: Fast Refresh for React panels; soft remount + sessionStorage snapshot for store/tab/selection; CSS hot-swaps via `styles.ts`. Prefab/planet/system JSON stays on Vite `watch.ignored`.
 
 Editor logic stays in `src/editor/`. Three.js viewport in `src/render/editor/`. Prefab JSON contract in `world/prefabs/`.

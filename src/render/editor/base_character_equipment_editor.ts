@@ -274,14 +274,19 @@ export interface BaseCharacterEquipmentEditor {
   save: () => Promise<void>;
   /** Load a Project / protected animation GLB into the Sidekick preview runtime. */
   loadAnimationFromAsset: (url: string) => Promise<void>;
-  /** Host under the stage where the shared Project panel docks (full-height inspector). */
-  getProjectHost: () => HTMLElement;
+  /** Left equipment chrome — dock into Scene hierarchy panel (full height). */
+  getLeftPanel: () => HTMLElement;
+  /** Right inspector chrome — dock into Scene inspector panel (full height). */
+  getRightPanel: () => HTMLElement;
   dispose: () => void;
 }
 
 const LOCOMOTION_LABELS: Record<AnimationLocomotionKind, string> = {
   idle: 'Idle',
   idle_aiming: 'Idle Aiming',
+  idle_crouching: 'Idle Crouching',
+  idle_crouching_aiming: 'Idle Crouching Aiming',
+  walk_crouching: 'Walk Crouching',
   walk: 'Walk',
   run: 'Run',
   sprint: 'Sprint',
@@ -465,11 +470,12 @@ function compatible(slot: CharacterEquipmentSlotV1, definition: CatalogDefinitio
 export function createBaseCharacterEquipmentEditor(
   container: HTMLElement,
 ): BaseCharacterEquipmentEditor {
-  container.classList.add('ed-base-character-editor');
+  // Stage fills the Scene center body. Left/right chrome docks into the outer
+  // hierarchy/inspector panels so scene tabs sit between them (same as Scene).
+  // Clear any prior mount (HMR / Strict Mode) so panels don't stack twice.
+  container.replaceChildren();
   const left = document.createElement('aside');
   left.className = 'ed-base-sidebar';
-  const center = document.createElement('div');
-  center.className = 'ed-base-center';
   const stage = document.createElement('div');
   stage.className = 'ed-base-stage';
   const canvas = document.createElement('canvas');
@@ -498,12 +504,9 @@ export function createBaseCharacterEquipmentEditor(
   const stageStatus = document.createElement('div');
   stageStatus.className = 'ed-base-stage-status';
   stage.append(canvas, playTestHud, stageStatus);
-  const projectHost = document.createElement('div');
-  projectHost.className = 'ed-base-project-host';
-  center.append(stage, projectHost);
   const right = document.createElement('aside');
   right.className = 'ed-base-sidebar ed-base-inspector';
-  container.append(left, center, right);
+  container.append(stage);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -532,7 +535,7 @@ export function createBaseCharacterEquipmentEditor(
   grid.position.y = 0.003;
   scene.add(grid);
   // Near starts small so equipment-mount close-ups don't clip; renderFrame
-  // retunes near/far from camera↔target distance (same idea as character_previewer).
+  // retunes near/far from camera↔target distance for the orbit stage.
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
   camera.position.set(0, 1.05, 4.2);
   const controls = new OrbitControls(camera, canvas);
@@ -717,7 +720,7 @@ export function createBaseCharacterEquipmentEditor(
   let dirty = false;
   let active = false;
   let disposed = false;
-  let initialized = false;
+  let readyPromise: Promise<void> | null = null;
   let avatar: SidekickAvatarInstance | null = null;
   let animation: SidekickAnimationRuntime | null = null;
   let controllerUpperBodyAim: SidekickUpperBodyAimController | null = null;
@@ -1149,7 +1152,16 @@ export function createBaseCharacterEquipmentEditor(
     return id;
   };
 
+  const ensureReady = (): Promise<void> => {
+    active = true;
+    clock.start();
+    resize();
+    readyPromise ??= Promise.all([loadDocument(), refreshCatalog()]).then(() => undefined);
+    return readyPromise;
+  };
+
   const loadAnimationFromAsset = async (url: string): Promise<void> => {
+    await ensureReady();
     await ensureAvatar();
     if (!animation) throw new Error('Animation runtime unavailable.');
     leftTab = 'controllers';
@@ -1354,7 +1366,12 @@ export function createBaseCharacterEquipmentEditor(
 
   const syncPlayTestAnimation = async (
     force = false,
-    locomotion?: { isMoving?: boolean; gait?: WalkGait; jumpPhase?: JumpPhase },
+    locomotion?: {
+      isMoving?: boolean;
+      isCrouching?: boolean;
+      gait?: WalkGait;
+      jumpPhase?: JumpPhase;
+    },
   ): Promise<void> => {
     if (!playTestActive || !animation || !controllerState) return;
     const { stanceId, stateKey, previewLocomotion: nextPreviewLocomotion } =
@@ -1537,6 +1554,7 @@ export function createBaseCharacterEquipmentEditor(
       stanceId,
       aiming: poseAiming,
       isMoving: intent.isMoving,
+      isCrouching: intent.isCrouching,
       gait: intent.gait,
       jumpPhase: motion.jumpPhase,
     });
@@ -1608,6 +1626,7 @@ export function createBaseCharacterEquipmentEditor(
     controllerUpperBodyAim?.setTarget(resolvePlayTestUpperBodyAim());
     void syncPlayTestAnimation(false, {
       isMoving: intent.isMoving,
+      isCrouching: intent.isCrouching,
       gait: intent.gait,
       jumpPhase: motion.jumpPhase,
     });
@@ -2431,13 +2450,7 @@ export function createBaseCharacterEquipmentEditor(
 
   return {
     activate: () => {
-      active = true;
-      clock.start();
-      resize();
-      if (!initialized) {
-        initialized = true;
-        void Promise.all([loadDocument(), refreshCatalog()]);
-      }
+      void ensureReady();
     },
     deactivate: () => {
       active = false;
@@ -2450,7 +2463,8 @@ export function createBaseCharacterEquipmentEditor(
     setGizmoMode,
     save,
     loadAnimationFromAsset,
-    getProjectHost: () => projectHost,
+    getLeftPanel: () => left,
+    getRightPanel: () => right,
     dispose: () => {
       disposed = true;
       endFly();
@@ -2470,6 +2484,9 @@ export function createBaseCharacterEquipmentEditor(
       avatar?.dispose();
       environmentTarget.dispose();
       renderer.dispose();
+      left.remove();
+      stage.remove();
+      right.remove();
     },
   };
 }

@@ -11,6 +11,9 @@ const UNARMED_JUMP_LAND_CLIP = 'Jump_Land';
 
 const RIFLE_IDLE_CLIP = 'idle';
 const RIFLE_AIM_IDLE_CLIP = 'idle_aiming';
+const RIFLE_CROUCH_IDLE_CLIP = 'idle_crouching';
+const RIFLE_CROUCH_AIM_IDLE_CLIP = 'idle_crouching_aiming';
+const RIFLE_CROUCH_WALK_CLIP = 'walk_crouching_forward';
 const RIFLE_WALK_CLIP = 'walk_forward';
 const RIFLE_RUN_CLIP = 'run_forward';
 const RIFLE_SPRINT_CLIP = 'sprint_forward';
@@ -30,6 +33,7 @@ export interface ResolveLocomotionClipParams {
   /** Hard aim (RMB). Sprint locomotion takes precedence and suppresses ADS. */
   aiming?: boolean;
   isMoving?: boolean;
+  isCrouching?: boolean;
   gait?: LocomotionGait;
   jumpPhase?: JumpPhase;
 }
@@ -64,6 +68,7 @@ function normalizeParams(
       stanceId: params,
       aiming: false,
       isMoving: false,
+      isCrouching: false,
       gait: 'run',
       jumpPhase: 'grounded',
     };
@@ -78,6 +83,7 @@ function normalizeParams(
       gait,
     }),
     isMoving,
+    isCrouching: Boolean(params.isCrouching),
     gait,
     jumpPhase: params.jumpPhase ?? 'grounded',
   };
@@ -98,28 +104,51 @@ function jumpClip(stanceId: WeaponAnimStanceId, jumpPhase: JumpPhase): string | 
   return UNARMED_JUMP_LAND_CLIP;
 }
 
+function resolveRifleLayers(
+  aiming: boolean,
+  isMoving: boolean,
+  isCrouching: boolean,
+  gait: LocomotionGait,
+): LocomotionLayers {
+  if (isCrouching) {
+    if (aiming && !isMoving) {
+      return { baseClip: RIFLE_CROUCH_AIM_IDLE_CLIP, upperClip: null };
+    }
+    if (aiming && isMoving) {
+      return {
+        baseClip: RIFLE_CROUCH_WALK_CLIP,
+        upperClip: RIFLE_CROUCH_AIM_IDLE_CLIP,
+      };
+    }
+    if (!isMoving) return { baseClip: RIFLE_CROUCH_IDLE_CLIP, upperClip: null };
+    return { baseClip: RIFLE_CROUCH_WALK_CLIP, upperClip: null };
+  }
+  if (aiming && !isMoving) {
+    return { baseClip: RIFLE_AIM_IDLE_CLIP, upperClip: null };
+  }
+  if (aiming && isMoving) {
+    return { baseClip: rifleGaitClip(gait), upperClip: RIFLE_AIM_IDLE_CLIP };
+  }
+  if (!isMoving) return { baseClip: RIFLE_IDLE_CLIP, upperClip: null };
+  return { baseClip: rifleGaitClip(gait), upperClip: null };
+}
+
 /**
  * Stance + gait + optional upper ADS layer.
  * Rifle ADS while walking/running: loco base + masked idle_aiming upper.
  * Rifle ADS idle: full-body idle_aiming (no upper layer).
+ * Rifle crouch uses the authored crouch idle/walk clips and matching ADS upper.
  * Rifle sprint: full-body sprint with ADS suppressed.
  */
 export function resolveLocomotionLayers(
   params: ResolveLocomotionClipParams | WeaponAnimStanceId,
 ): LocomotionLayers {
-  const { stanceId, aiming, isMoving, gait, jumpPhase } = normalizeParams(params);
+  const { stanceId, aiming, isMoving, isCrouching, gait, jumpPhase } = normalizeParams(params);
   const airborneClip = jumpClip(stanceId, jumpPhase);
   if (airborneClip) return { baseClip: airborneClip, upperClip: null };
 
   if (stanceId === 'rifle') {
-    if (aiming && !isMoving) {
-      return { baseClip: RIFLE_AIM_IDLE_CLIP, upperClip: null };
-    }
-    if (aiming && isMoving) {
-      return { baseClip: rifleGaitClip(gait), upperClip: RIFLE_AIM_IDLE_CLIP };
-    }
-    if (!isMoving) return { baseClip: RIFLE_IDLE_CLIP, upperClip: null };
-    return { baseClip: rifleGaitClip(gait), upperClip: null };
+    return resolveRifleLayers(aiming, isMoving, isCrouching, gait);
   }
 
   if (stanceId === 'pistol') {

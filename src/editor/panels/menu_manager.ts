@@ -57,6 +57,8 @@ export interface MenuManagerEditor {
   save: () => Promise<boolean>;
   openMenu: (id: string) => boolean;
   getActiveMenuId: () => MenuPreviewId;
+  /** Menu list chrome — dock into Scene hierarchy panel (full height). */
+  getLeftPanel: () => HTMLElement;
 }
 
 const MOCK_SHIP_SURFACE: PlanetSurfaceSample = {
@@ -139,7 +141,7 @@ export function createMenuManagerEditor(host: HTMLElement): MenuManagerEditor {
   let mockInventory = createMockInventory();
   let mockBalance = MOCK_ARC_BALANCE;
 
-  const root = el('div', { className: 'ed-menu-manager' });
+  // Preview fills the Scene center body; sidebar docks into hierarchy chrome.
   const sidebar = el('div', { className: 'ed-menu-manager-sidebar' });
   const previewHost = el('div', { className: 'ed-menu-manager-preview' });
 
@@ -216,8 +218,7 @@ export function createMenuManagerEditor(host: HTMLElement): MenuManagerEditor {
   halobandExtras.append(shipModeLabel);
 
   sidebar.append(statusEl, descEl, balanceNote, menuSection, halobandExtras);
-  root.append(sidebar, previewHost);
-  host.append(root);
+  host.replaceChildren(previewHost);
 
   function syncMenuButtons(): void {
     for (const [id, button] of menuButtons) {
@@ -573,5 +574,6 @@ export function createMenuManagerEditor(host: HTMLElement): MenuManagerEditor {
     getActiveMenuId() {
       return activeMenuId;
     },
+    getLeftPanel: () => sidebar,
   };
 }

@@ -57,7 +57,7 @@ flowchart LR
 | Path | Role |
 | --- | --- |
 | `src/editor/` | Document store, panels, commands, serialization, dev API client |
-| `src/render/editor/` | Three.js viewport, character previewer, thumbnails |
+| `src/render/editor/` | Three.js viewport, base-characters stage, thumbnails |
 | `src/world/prefabs/schema.ts` | Canonical prefab JSON contract and validators |
 | `src/world/prefabs/component_registry.ts` | Component palette metadata per prefab kind |
 | Vite `/__editor/*` routes | Dev-only save/load and asset listing |
@@ -87,7 +87,6 @@ http://localhost:4173/?boot=editor&prefab=<prefab-id>
 - [Station authoring](./station-authoring)
 - [Ship authoring](./ship-authoring)
 - [Props and items](./props-and-items)
-- [Character preview](./character-preview)
 - [Material manager](./material-manager)
 - [Planet authoring](./planet-authoring)
 - [System Map](./system-map)

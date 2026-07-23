@@ -38,6 +38,8 @@ export interface SystemMapEditor {
   save: () => Promise<boolean>;
   loadSystem: (id: string) => Promise<boolean>;
   getDocument: () => SystemDocument | null;
+  /** Form chrome — dock into Scene hierarchy panel (full height). */
+  getLeftPanel: () => HTMLElement;
 }
 
 type Selection =
@@ -181,7 +183,7 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
   let panLastY = 0;
   let dragging: Selection = { kind: 'none' };
 
-  const root = el('div', { className: 'ed-system-map' });
+  // Map fills the Scene center body; sidebar docks into hierarchy chrome.
   const sidebar = el('div', { className: 'ed-system-sidebar' });
   const formHost = el('div', { className: 'ed-system-form' });
   const mapHost = el('div', { className: 'ed-system-map-view' });
@@ -199,8 +201,7 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
   const mapCtx: CanvasRenderingContext2D = mapCtxOrNull;
   mapHost.append(canvas, hint);
 
-  host.append(root);
-  root.append(sidebar, mapHost);
+  host.replaceChildren(mapHost);
   sidebar.append(
     el('h2', { className: 'ed-base-panel-title', text: 'System Map' }),
     statusEl,
@@ -910,5 +911,6 @@ export function createSystemMapEditor(host: HTMLElement): SystemMapEditor {
     save,
     loadSystem,
     getDocument: () => documentState,
+    getLeftPanel: () => sidebar,
   };
 }

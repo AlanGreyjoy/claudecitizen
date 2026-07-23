@@ -6,6 +6,9 @@ export const ANIMATION_CONTROLLER_SCHEMA_VERSION = 1 as const;
 export const ANIMATION_LOCOMOTION_KINDS = [
   'idle',
   'idle_aiming',
+  'idle_crouching',
+  'idle_crouching_aiming',
+  'walk_crouching',
   'walk',
   'run',
   'sprint',
@@ -213,6 +216,9 @@ const PRO_RIFLE_ROOT = '/src/assets/protected/animations/pro-rifle';
 const HANDGUN_LOCOMOTION_ROOT = '/src/assets/protected/animations/handgun-locomotions';
 const RIFLE_IDLE_CLIP = 'idle';
 const RIFLE_AIM_IDLE_CLIP = 'idle_aiming';
+const RIFLE_CROUCH_IDLE_CLIP = 'idle_crouching';
+const RIFLE_CROUCH_AIM_IDLE_CLIP = 'idle_crouching_aiming';
+const RIFLE_CROUCH_WALK_CLIP = 'walk_crouching_forward';
 const RIFLE_WALK_CLIP = 'walk_forward';
 const RIFLE_RUN_CLIP = 'run_forward';
 const RIFLE_SPRINT_CLIP = 'sprint_forward';
@@ -245,6 +251,9 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
   const rifleClips = [
     RIFLE_IDLE_CLIP,
     RIFLE_AIM_IDLE_CLIP,
+    RIFLE_CROUCH_IDLE_CLIP,
+    RIFLE_CROUCH_AIM_IDLE_CLIP,
+    RIFLE_CROUCH_WALK_CLIP,
     RIFLE_WALK_CLIP,
     RIFLE_RUN_CLIP,
     RIFLE_SPRINT_CLIP,
@@ -346,6 +355,30 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
       stanceId: 'rifle',
       clipName: RIFLE_AIM_IDLE_CLIP,
       sourceId: packSourceId('r8', RIFLE_AIM_IDLE_CLIP),
+    },
+    {
+      id: 'rifle-idle-crouching',
+      label: 'Rifle Idle Crouching',
+      locomotion: 'idle_crouching',
+      stanceId: 'rifle',
+      clipName: RIFLE_CROUCH_IDLE_CLIP,
+      sourceId: packSourceId('r8', RIFLE_CROUCH_IDLE_CLIP),
+    },
+    {
+      id: 'rifle-idle-crouching-aiming',
+      label: 'Rifle Idle Crouching Aiming',
+      locomotion: 'idle_crouching_aiming',
+      stanceId: 'rifle',
+      clipName: RIFLE_CROUCH_AIM_IDLE_CLIP,
+      sourceId: packSourceId('r8', RIFLE_CROUCH_AIM_IDLE_CLIP),
+    },
+    {
+      id: 'rifle-walk-crouching',
+      label: 'Rifle Walk Crouching',
+      locomotion: 'walk_crouching',
+      stanceId: 'rifle',
+      clipName: RIFLE_CROUCH_WALK_CLIP,
+      sourceId: packSourceId('r8', RIFLE_CROUCH_WALK_CLIP),
     },
     {
       id: 'rifle-walk',

@@ -43,7 +43,6 @@ export interface ProjectPanelOptions {
   /** Render a thumbnail data-url for a model asset (provided by render/editor). */
   getModelThumbnail: (url: string) => Promise<string>;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
-  onPreviewCharacter: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
   audioPreview: EditorAudioPreviewController;
 }
@@ -171,14 +170,12 @@ function ModelAssetActions({
   url,
   isEmptyFile,
   canCreateItem,
-  onPreviewCharacter,
   onPreviewAnimationSource,
   onCreateItemPrefab,
 }: {
   url: string;
   isEmptyFile: boolean;
   canCreateItem: boolean;
-  onPreviewCharacter: (url: string) => void | Promise<void>;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
 }): ReactElement {
@@ -188,16 +185,7 @@ function ModelAssetActions({
         <button
           type="button"
           className="ed-asset-action"
-          title={isEmptyFile ? 'File is empty' : 'Load in character preview'}
-          disabled={isEmptyFile}
-          onClick={runAssetAction('Character preview', isEmptyFile, onPreviewCharacter, url)}
-        >
-          Character
-        </button>
-        <button
-          type="button"
-          className="ed-asset-action"
-          title={isEmptyFile ? 'File is empty' : 'Load animation clips in character preview'}
+          title={isEmptyFile ? 'File is empty' : 'Load animation clips in Base Characters'}
           disabled={isEmptyFile}
           onClick={runAssetAction('Animation preview', isEmptyFile, onPreviewAnimationSource, url)}
         >
@@ -262,7 +250,6 @@ function AssetCard({
   audioPreview,
   audioTick,
   onAudioToggle,
-  onPreviewCharacter,
   onPreviewAnimationSource,
   onCreateItemPrefab,
 }: {
@@ -271,7 +258,6 @@ function AssetCard({
   audioPreview: EditorAudioPreviewController;
   audioTick: number;
   onAudioToggle: () => void;
-  onPreviewCharacter: (url: string) => void | Promise<void>;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
 }): ReactElement {
@@ -310,7 +296,6 @@ function AssetCard({
           url={url}
           isEmptyFile={isEmptyFile}
           canCreateItem={canCreateItemPrefabFromPath(entry.path)}
-          onPreviewCharacter={onPreviewCharacter}
           onPreviewAnimationSource={onPreviewAnimationSource}
           onCreateItemPrefab={onCreateItemPrefab}
         />
@@ -424,7 +409,6 @@ function ProjectAssetGrid({
   audioPreview,
   audioTick,
   onAudioToggle,
-  onPreviewCharacter,
   onPreviewAnimationSource,
   onCreateItemPrefab,
 }: {
@@ -435,7 +419,6 @@ function ProjectAssetGrid({
   audioPreview: EditorAudioPreviewController;
   audioTick: number;
   onAudioToggle: () => void;
-  onPreviewCharacter: (url: string) => void | Promise<void>;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
 }): ReactElement {
@@ -454,7 +437,6 @@ function ProjectAssetGrid({
               audioPreview={audioPreview}
               audioTick={audioTick}
               onAudioToggle={onAudioToggle}
-              onPreviewCharacter={onPreviewCharacter}
               onPreviewAnimationSource={onPreviewAnimationSource}
               onCreateItemPrefab={onCreateItemPrefab}
             />
@@ -474,7 +456,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
     const {
       getModelThumbnail,
       onPreviewAnimationSource,
-      onPreviewCharacter,
       onCreateItemPrefab,
       audioPreview,
     } = options;
@@ -595,7 +576,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
           audioPreview={audioPreview}
           audioTick={audioTick}
           onAudioToggle={bumpAudio}
-          onPreviewCharacter={onPreviewCharacter}
           onPreviewAnimationSource={onPreviewAnimationSource}
           onCreateItemPrefab={onCreateItemPrefab}
         />

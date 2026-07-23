@@ -9,7 +9,9 @@ import {
 import {
   addColliderToEntities,
   addComponentFromPalette,
+  collectComponentTypesOnEntities,
   collectExistingComponentTypes,
+  removeComponentTypeFromEntities,
   shouldHideShipHullCollider,
 } from '../../component_actions';
 import type { EditorEntity, EditorStore, EntityTransform } from '../../document';
@@ -657,6 +659,7 @@ function InspectorBody({
   }, [previewTarget, options.audioPreview]);
 
   if (selectedIds.length > 1) {
+    const removableTypes = collectComponentTypesOnEntities(store, selectedIds);
     return (
       <div className="ed-section">
         <EmptyNote>{selectedIds.length} entities selected</EmptyNote>
@@ -675,6 +678,21 @@ function InspectorBody({
           >
             Add Mesh Collider to All
           </button>
+          {removableTypes.map((type) => {
+            const label = getComponentDef(type)?.label ?? type;
+            return (
+              <button
+                key={type}
+                type="button"
+                className="ed-btn"
+                onClick={() =>
+                  removeComponentTypeFromEntities(store, selectedIds, type)
+                }
+              >
+                Remove {label} from All
+              </button>
+            );
+          })}
           <button
             type="button"
             className="ed-btn"

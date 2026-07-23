@@ -888,18 +888,57 @@ export function createEditorViewport(
     selectionBoxes = [];
   }
 
+  function syncLightRangeHelpers(selectedIds: ReadonlySet<string>): void {
+    for (const [entityId, object] of objectsById) {
+      const showRange = selectedIds.has(entityId);
+      object.traverse((child) => {
+        if (child.userData.editorLightRangeHelper) {
+          child.visible = showRange;
+        }
+      });
+    }
+  }
+
+  /** Hide light volume gizmos so bounds/selection boxes use the bulb only. */
+  function withLightRangesHidden<T>(
+    object: THREE.Object3D,
+    fn: () => T,
+  ): T {
+    const hidden: THREE.Object3D[] = [];
+    object.traverse((child) => {
+      if (child.userData.editorLightRangeHelper && child.visible) {
+        child.visible = false;
+        hidden.push(child);
+      }
+    });
+    try {
+      return fn();
+    } finally {
+      for (const child of hidden) child.visible = true;
+    }
+  }
+
   function syncSelectionHighlight(): void {
     const entityId = store.getSelection();
     gizmo.detach();
     clearSelectionBoxes();
     const selectedIds = store.getSelectedIds();
+    syncLightRangeHelpers(new Set(selectedIds));
     if (selectedIds.length === 0) return;
 
     for (const selectedId of selectedIds) {
       const object = objectsById.get(selectedId);
       if (!object) continue;
       const color = selectedId === entityId ? PRIMARY_BOX_COLOR : SECONDARY_BOX_COLOR;
-      const box = new THREE.BoxHelper(object, color);
+      const box = withLightRangesHidden(
+        object,
+        () => new THREE.BoxHelper(object, color),
+      );
+      // BoxHelper.update() runs every frame; keep light volumes out of the outline.
+      const updateBox = box.update.bind(box);
+      box.update = () => {
+        withLightRangesHidden(object, updateBox);
+      };
       scene.add(box);
       selectionBoxes.push(box);
     }
@@ -948,6 +987,7 @@ export function createEditorViewport(
     for (const hit of hits) {
       if (!isEffectivelyVisible(hit.object)) continue;
       if (hit.object.userData.editorMeshColliderHelper) continue;
+      if (hit.object.userData.editorLightRangeHelper) continue;
       const entityId = entityIdFromObject(hit.object);
       if (!entityId) continue;
       const root = objectsById.get(entityId);
@@ -1364,14 +1404,18 @@ export function createEditorViewport(
     if (sub && selectedIds.length <= 1) {
       const target = getGizmoTarget();
       if (target) {
-        box.setFromObject(target);
+        withLightRangesHidden(target, () => {
+          box.setFromObject(target);
+        });
       }
     } else if (selectedIds.length > 0) {
       let hasContent = false;
       for (const selectedId of selectedIds) {
         const object = objectsById.get(selectedId);
         if (!object) continue;
-        box.expandByObject(object);
+        withLightRangesHidden(object, () => {
+          box.expandByObject(object);
+        });
         hasContent = true;
       }
       if (!hasContent && entityRoot.children.length > 0) {

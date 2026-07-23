@@ -15,7 +15,24 @@
       "label": "idle_aiming",
       "yawOffsetDegrees": 0
     },
-
+    {
+      "id": "r8-idle-crouching",
+      "url": "/src/assets/protected/animations/pro-rifle/idle_crouching.glb",
+      "label": "idle_crouching",
+      "yawOffsetDegrees": 0
+    },
+    {
+      "id": "r8-idle-crouching-aiming",
+      "url": "/src/assets/protected/animations/pro-rifle/idle_crouching_aiming.glb",
+      "label": "idle_crouching_aiming",
+      "yawOffsetDegrees": 0
+    },
+    {
+      "id": "r8-walk-crouching-forward",
+      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_forward.glb",
+      "label": "walk_crouching_forward",
+      "yawOffsetDegrees": 0
+    },
     {
       "id": "r8-walk-forward",
       "url": "/src/assets/protected/animations/pro-rifle/walk_forward.glb",
@@ -161,6 +178,30 @@
       "stanceId": "rifle",
       "clipName": "idle_aiming",
       "sourceId": "r8-idle-aiming"
+    },
+    {
+      "id": "rifle-idle-crouching",
+      "label": "Rifle Idle Crouching",
+      "locomotion": "idle_crouching",
+      "stanceId": "rifle",
+      "clipName": "idle_crouching",
+      "sourceId": "r8-idle-crouching"
+    },
+    {
+      "id": "rifle-idle-crouching-aiming",
+      "label": "Rifle Idle Crouching Aiming",
+      "locomotion": "idle_crouching_aiming",
+      "stanceId": "rifle",
+      "clipName": "idle_crouching_aiming",
+      "sourceId": "r8-idle-crouching-aiming"
+    },
+    {
+      "id": "rifle-walk-crouching",
+      "label": "Rifle Walk Crouching",
+      "locomotion": "walk_crouching",
+      "stanceId": "rifle",
+      "clipName": "walk_crouching_forward",
+      "sourceId": "r8-walk-crouching-forward"
     },
     {
       "id": "rifle-walk",

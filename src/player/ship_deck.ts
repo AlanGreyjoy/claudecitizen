@@ -744,6 +744,7 @@ function updateCharacterOnDeckRapier(
     stanceId,
     aiming: poseAiming,
     isMoving: intent.isMoving,
+    isCrouching: intent.isCrouching,
     gait: intent.gait,
     jumpPhase: jump.jumpPhase,
   });

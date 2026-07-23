@@ -123,6 +123,8 @@ export interface PlanetAuthoringEditor {
   loadPlanet: (id: string) => Promise<boolean>;
   getDocument: () => PlanetDocument | null;
   previewPlanet: () => Promise<boolean>;
+  /** Form chrome — dock into Scene hierarchy panel (full height). */
+  getLeftPanel: () => HTMLElement;
 }
 
 function paletteDisplayName(key: SurfacePaletteKey): string {
@@ -637,7 +639,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     return sectionEl;
   }
 
-  const root = el('div', { className: 'ed-planet-authoring' });
+  // Preview fills the Scene center body; sidebar docks into hierarchy chrome.
   const sidebar = el('div', { className: 'ed-planet-sidebar' });
   const formHost = el('div', { className: 'ed-planet-form' });
   const previewHost = el('div', { className: 'ed-planet-preview' });
@@ -862,8 +864,7 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     { passive: false },
   );
 
-  host.append(root);
-  root.append(sidebar, previewHost);
+  host.replaceChildren(previewHost);
   sidebar.append(
     el('h2', { className: 'ed-base-panel-title', text: 'Planet Authoring' }),
     statusEl,
@@ -1764,5 +1765,6 @@ export function createPlanetAuthoringEditor(host: HTMLElement): PlanetAuthoringE
     loadPlanet,
     getDocument: () => documentState,
     previewPlanet,
+    getLeftPanel: () => sidebar,
   };
 }

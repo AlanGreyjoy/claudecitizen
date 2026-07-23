@@ -523,7 +523,6 @@ body.ed-resize-row * {
 }
 
 .ed-scene-body > .ed-viewport,
-.ed-scene-body > .ed-character-preview,
 .ed-scene-body > .ed-material-manager,
 .ed-scene-body > .ed-base-characters,
 .ed-scene-body > .ed-planet-authoring-host,
@@ -533,13 +532,7 @@ body.ed-resize-row * {
   inset: 0;
 }
 
-/* Hide Project in the scene center until it docks under the Base Characters stage. */
-#editor-root.is-base-characters .ed-center-column > .ed-project,
-#editor-root.is-base-characters .ed-center-column > .ed-project-splitter {
-  display: none;
-}
-
-/* System Map / Menu Manager hide Project. */
+/* System Map / Menu Manager hide Project; Planet Authoring keeps it under center. */
 #editor-root.is-system-map .ed-center-column > .ed-project,
 #editor-root.is-system-map .ed-center-column > .ed-project-splitter,
 #editor-root.is-menu-manager .ed-center-column > .ed-project,
@@ -547,50 +540,39 @@ body.ed-resize-row * {
   display: none;
 }
 
-#editor-root.is-base-characters .ed-main,
+/* Left-only tab editors: keep hierarchy chrome, drop empty inspector column. */
 #editor-root.is-planet-authoring .ed-main,
 #editor-root.is-system-map .ed-main,
 #editor-root.is-menu-manager .ed-main {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns:
+    var(--ed-hierarchy-width, 264px)
+    4px
+    minmax(0, 1fr);
 }
 
-#editor-root.is-base-characters .ed-center-column,
-#editor-root.is-planet-authoring .ed-center-column,
-#editor-root.is-system-map .ed-center-column,
-#editor-root.is-menu-manager .ed-center-column {
-  grid-column: 1;
-}
-
-#editor-root.is-base-characters .ed-hierarchy-panel,
-#editor-root.is-base-characters .ed-inspector-panel,
-#editor-root.is-base-characters .ed-hierarchy-splitter,
-#editor-root.is-base-characters .ed-inspector-splitter,
-#editor-root.is-planet-authoring .ed-hierarchy-panel,
 #editor-root.is-planet-authoring .ed-inspector-panel,
-#editor-root.is-planet-authoring .ed-hierarchy-splitter,
 #editor-root.is-planet-authoring .ed-inspector-splitter,
-#editor-root.is-system-map .ed-hierarchy-panel,
 #editor-root.is-system-map .ed-inspector-panel,
-#editor-root.is-system-map .ed-hierarchy-splitter,
 #editor-root.is-system-map .ed-inspector-splitter,
-#editor-root.is-system-map .ed-project,
-#editor-root.is-system-map .ed-project-splitter,
-#editor-root.is-menu-manager .ed-hierarchy-panel,
 #editor-root.is-menu-manager .ed-inspector-panel,
-#editor-root.is-menu-manager .ed-hierarchy-splitter,
-#editor-root.is-menu-manager .ed-inspector-splitter,
-#editor-root.is-menu-manager .ed-project,
-#editor-root.is-menu-manager .ed-project-splitter {
+#editor-root.is-menu-manager .ed-inspector-splitter {
   display: none;
 }
 
-.ed-planet-authoring {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+.ed-planet-authoring-host,
+.ed-system-map-host,
+.ed-menu-manager-host {
+  background: #08101d;
+}
+
+.ed-hierarchy-panel > .ed-planet-sidebar,
+.ed-hierarchy-panel > .ed-system-sidebar,
+.ed-hierarchy-panel > .ed-menu-manager-sidebar {
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  background: #08101d;
+  overflow: auto;
+  border-right: none;
 }
 
 .ed-planet-sidebar {
@@ -598,7 +580,6 @@ body.ed-resize-row * {
   min-height: 0;
   overflow: auto;
   padding: 10px;
-  border-right: 1px solid rgba(90, 190, 255, 0.16);
   background: rgba(5, 11, 24, 0.94);
 }
 
@@ -755,9 +736,10 @@ body.ed-resize-row * {
 }
 
 .ed-planet-preview {
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
-  position: relative;
   background: #050b14;
 }
 
@@ -879,21 +861,11 @@ body.ed-resize-row * {
   margin-left: auto;
 }
 
-.ed-system-map {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  background: #08101d;
-}
-
 .ed-system-sidebar {
   min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: 10px;
-  border-right: 1px solid rgba(90, 190, 255, 0.16);
   background: rgba(5, 11, 24, 0.94);
 }
 
@@ -950,9 +922,10 @@ body.ed-resize-row * {
 }
 
 .ed-system-map-view {
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
-  position: relative;
   background: #050b14;
 }
 
@@ -978,21 +951,11 @@ body.ed-resize-row * {
   pointer-events: none;
 }
 
-.ed-menu-manager {
-  display: grid;
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  background: #08101d;
-}
-
 .ed-menu-manager-sidebar {
   min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: 12px;
-  border-right: 1px solid rgba(90, 190, 255, 0.16);
   background: rgba(5, 11, 24, 0.94);
   display: flex;
   flex-direction: column;
@@ -1058,54 +1021,40 @@ body.ed-resize-row * {
 }
 
 .ed-menu-manager-preview {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: #02060e;
 }
 
+/* Stage-only host in Scene body; left/right dock into hierarchy/inspector. */
 .ed-base-character-editor {
-  display: grid;
-  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr) minmax(280px, 340px);
+  height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: #08101d;
 }
 
-/* Stage + Project stack; left/right sidebars stay full height (Rogue-style). */
-.ed-base-center {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-.ed-base-center > .ed-base-stage {
+.ed-hierarchy-panel > .ed-base-sidebar,
+.ed-inspector-panel > .ed-base-sidebar {
   flex: 1 1 auto;
-  min-height: 0;
-}
-
-.ed-base-project-host {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  background: rgba(5, 11, 24, 0.94);
 }
 
-.ed-base-project-host:empty {
-  display: none;
-}
-
-.ed-base-project-host > .ed-project-splitter {
-  flex: 0 0 4px;
-}
-
-.ed-base-project-host > .ed-project {
-  flex: 0 0 var(--ed-project-height, 280px);
-  height: var(--ed-project-height, 280px);
-  max-height: var(--ed-project-height, 280px);
+.ed-hierarchy-panel > .ed-panel-swap,
+.ed-inspector-panel > .ed-panel-swap {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .ed-base-sidebar {
@@ -1113,7 +1062,6 @@ body.ed-resize-row * {
   min-height: 0;
   overflow: auto;
   padding: 10px;
-  border-right: 1px solid rgba(90, 190, 255, 0.16);
   background: rgba(5, 11, 24, 0.94);
 }
 
@@ -1155,11 +1103,6 @@ body.ed-resize-row * {
 
 .ed-base-tab-body {
   min-width: 0;
-}
-
-.ed-base-inspector {
-  border-right: 0;
-  border-left: 1px solid rgba(90, 190, 255, 0.16);
 }
 
 .ed-base-panel-title {
@@ -1277,7 +1220,8 @@ body.ed-resize-row * {
 }
 
 .ed-base-stage {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
 }
@@ -2182,70 +2126,6 @@ body.ed-resize-row * {
   color: var(--muted);
   cursor: default;
   opacity: 0.45;
-}
-
-.ed-character-preview {
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(140px, 1fr) auto;
-}
-
-.ed-character-preview-toolbar {
-  display: grid;
-  grid-template-columns: auto minmax(120px, 220px) auto auto minmax(80px, 140px) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid rgba(90, 190, 255, 0.16);
-  background: rgba(0, 0, 0, 0.18);
-}
-
-.ed-character-preview-select {
-  width: 100%;
-}
-
-.ed-character-preview-speed {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.ed-character-preview-canvas {
-  min-height: 0;
-  position: relative;
-  background: #090f1c;
-}
-
-.ed-character-preview-canvas canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.ed-character-preview-meta {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(180px, 1.2fr);
-  gap: 8px;
-  padding: 7px 10px;
-  border-top: 1px solid rgba(90, 190, 255, 0.16);
-  background: rgba(0, 0, 0, 0.22);
-}
-
-.ed-character-preview-source,
-.ed-character-preview-status {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font: 600 10px/1.2 var(--sc-mono);
-}
-
-.ed-character-preview-status {
-  color: var(--accent);
-}
-
-.ed-character-preview-status.is-error {
-  color: #ffb0b0;
 }
 
 .ed-material-manager {

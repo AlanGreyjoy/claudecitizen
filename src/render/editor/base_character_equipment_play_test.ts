@@ -13,11 +13,20 @@ import type { SidekickAnimationRuntime } from "../characters/sidekick/animation_
 export function resolvePlayTestPreviewLocomotion(args: {
   stanceId: ReturnType<typeof stanceIdForWeaponSlot>;
   playTestHardAim: boolean;
-  locomotion?: { isMoving?: boolean; gait?: WalkGait; jumpPhase?: JumpPhase };
+  locomotion?: {
+    isMoving?: boolean;
+    isCrouching?: boolean;
+    gait?: WalkGait;
+    jumpPhase?: JumpPhase;
+  };
 }): AnimationLocomotionKind {
   const { stanceId, playTestHardAim, locomotion } = args;
   if (locomotion?.jumpPhase && locomotion.jumpPhase !== "grounded") {
     return locomotion.jumpPhase.replace("-", "_") as AnimationLocomotionKind;
+  }
+  if (stanceId === "rifle" && locomotion?.isCrouching) {
+    if (locomotion.isMoving) return "walk_crouching";
+    return playTestHardAim ? "idle_crouching_aiming" : "idle_crouching";
   }
   if (stanceId === "rifle" && playTestHardAim && !locomotion?.isMoving) {
     return "idle_aiming";
@@ -33,7 +42,12 @@ export function resolvePlayTestPreviewLocomotion(args: {
 export function buildPlayTestAnimationStateKey(args: {
   playTestWeaponSlotId: WeaponSelectSlotId | null;
   playTestHardAim: boolean;
-  locomotion?: { isMoving?: boolean; gait?: WalkGait; jumpPhase?: JumpPhase };
+  locomotion?: {
+    isMoving?: boolean;
+    isCrouching?: boolean;
+    gait?: WalkGait;
+    jumpPhase?: JumpPhase;
+  };
 }): {
   stanceId: ReturnType<typeof stanceIdForWeaponSlot>;
   stateKey: string;
@@ -44,6 +58,7 @@ export function buildPlayTestAnimationStateKey(args: {
     stanceId,
     aiming: args.playTestHardAim,
     isMoving: args.locomotion?.isMoving,
+    isCrouching: args.locomotion?.isCrouching,
     gait: args.locomotion?.gait,
     jumpPhase: args.locomotion?.jumpPhase,
   });
@@ -62,7 +77,12 @@ export async function applyPlayTestAnimationLayers(args: {
   animation: SidekickAnimationRuntime;
   stanceId: ReturnType<typeof stanceIdForWeaponSlot>;
   playTestHardAim: boolean;
-  locomotion?: { isMoving?: boolean; gait?: WalkGait; jumpPhase?: JumpPhase };
+  locomotion?: {
+    isMoving?: boolean;
+    isCrouching?: boolean;
+    gait?: WalkGait;
+    jumpPhase?: JumpPhase;
+  };
   generation: number;
   playTestAnimationGeneration: number;
   isPlayTestActive: () => boolean;
@@ -74,6 +94,7 @@ export async function applyPlayTestAnimationLayers(args: {
     stanceId: args.stanceId,
     aiming: args.playTestHardAim,
     isMoving: args.locomotion?.isMoving,
+    isCrouching: args.locomotion?.isCrouching,
     gait: args.locomotion?.gait,
     jumpPhase: args.locomotion?.jumpPhase,
   });

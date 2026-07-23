@@ -468,6 +468,7 @@ export function updateCharacterState(
     stanceId,
     aiming: poseAiming,
     isMoving: intent.isMoving,
+    isCrouching: intent.isCrouching,
     gait: intent.gait,
     jumpPhase: motion.jumpPhase,
   });

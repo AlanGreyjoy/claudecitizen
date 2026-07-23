@@ -169,6 +169,7 @@ export interface AnimationFromStateParams {
   stanceId?: WeaponAnimStanceId;
   aiming?: boolean;
   isMoving?: boolean;
+  isCrouching?: boolean;
   gait?: WalkGait;
   jumpPhase?: JumpPhase;
 }
@@ -183,6 +184,7 @@ export function animationFromState(params: AnimationFromStateParams): string {
     stanceId: params.stanceId ?? "unarmed",
     aiming: params.aiming,
     isMoving: params.isMoving,
+    isCrouching: params.isCrouching,
     gait: params.gait,
     jumpPhase: params.jumpPhase,
   });
@@ -196,6 +198,7 @@ export function animationLayersFromState(
     stanceId: params.stanceId ?? "unarmed",
     aiming: params.aiming,
     isMoving: params.isMoving,
+    isCrouching: params.isCrouching,
     gait: params.gait,
     jumpPhase: params.jumpPhase,
   });

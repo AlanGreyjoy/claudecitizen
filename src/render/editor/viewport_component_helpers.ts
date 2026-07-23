@@ -181,25 +181,55 @@ export function createViewportComponentHelpers(
     return group;
   }
 
+  /** Compact bulb marker — always visible so unselected lights stay pickable. */
+  function makeLightBulbIcon(color: number): THREE.Group {
+    const icon = new THREE.Group();
+    icon.userData.editorLightBulbIcon = true;
+    const glass = makeHelperMesh(
+      new THREE.SphereGeometry(0.15, 14, 12),
+      color,
+      0.92,
+    );
+    glass.position.y = 0.08;
+    const neck = makeHelperMesh(
+      new THREE.CylinderGeometry(0.05, 0.07, 0.08, 10),
+      color,
+      0.88,
+    );
+    neck.position.y = -0.08;
+    const base = makeHelperMesh(
+      new THREE.CylinderGeometry(0.085, 0.095, 0.11, 10),
+      color,
+      0.8,
+    );
+    base.position.y = -0.17;
+    icon.add(glass, neck, base);
+    return icon;
+  }
+
+  /** Volume/range gizmo — only shown while the light entity is selected. */
+  function tagLightRangeHelper(object: THREE.Object3D): THREE.Object3D {
+    object.userData.editorLightRangeHelper = true;
+    object.visible = false;
+    // Never steal picks from scene content; the bulb icon is the hit target.
+    object.traverse((child) => {
+      child.raycast = () => {};
+    });
+    return object;
+  }
+
   function buildPointLightHelper(
     component: Extract<PrefabComponent, { type: "point-light" }>,
   ): THREE.Object3D | null {
     const color = new THREE.Color(component.color ?? "#dfeaff").getHex();
     const group = new THREE.Group();
     group.add(createPrefabLightObject(component));
-    const bulb = makeHelperMesh(
-    new THREE.SphereGeometry(0.18, 16, 10),
-    color,
-    0.82,
-    );
+    group.add(makeLightBulbIcon(color));
     const radius = component.distance > 0 ? component.distance : 2;
-    const reach = makeHelperMesh(
-    new THREE.SphereGeometry(radius, 24, 12),
-    color,
-    0.12,
-    true,
+    const reach = tagLightRangeHelper(
+      makeHelperMesh(new THREE.SphereGeometry(radius, 24, 12), color, 0.12, true),
     );
-    group.add(bulb, reach);
+    group.add(reach);
     return group;
   }
   function buildAreaLightHelper(
@@ -208,34 +238,38 @@ export function createViewportComponentHelpers(
     const color = new THREE.Color(component.color ?? "#cfe8ff").getHex();
     const group = new THREE.Group();
     group.add(createPrefabLightObject(component));
+    // Area lights already have a compact panel; keep a bulb for consistency.
+    group.add(makeLightBulbIcon(color));
     const panel = makeHelperMesh(
-    new THREE.BoxGeometry(component.width, component.height, 0.035),
-    color,
-    0.32,
+      new THREE.BoxGeometry(component.width, component.height, 0.035),
+      color,
+      0.32,
     );
     const outline = makeHelperMesh(
-    new THREE.BoxGeometry(component.width, component.height, 0.04),
-    color,
-    0.7,
-    true,
+      new THREE.BoxGeometry(component.width, component.height, 0.04),
+      color,
+      0.7,
+      true,
     );
     const directionGeometry = track(new THREE.BufferGeometry());
     directionGeometry.setFromPoints([
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0, 0, -Math.max(0.75, component.height * 1.5)),
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, -Math.max(0.75, component.height * 1.5)),
     ]);
     const directionMaterial = track(
-    new THREE.LineBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.85,
-    }),
+      new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.85,
+      }),
     );
-    group.add(
-    panel,
-    outline,
-    new THREE.Line(directionGeometry, directionMaterial),
+    const shape = tagLightRangeHelper(new THREE.Group());
+    shape.add(
+      panel,
+      outline,
+      new THREE.Line(directionGeometry, directionMaterial),
     );
+    group.add(shape);
     return group;
   }
   function buildSpotLightHelper(
@@ -244,24 +278,18 @@ export function createViewportComponentHelpers(
     const color = new THREE.Color(component.color ?? "#dfeaff").getHex();
     const group = new THREE.Group();
     group.add(createPrefabLightObject(component));
-    const bulb = makeHelperMesh(
-    new THREE.SphereGeometry(0.18, 16, 10),
-    color,
-    0.82,
-    );
+    group.add(makeLightBulbIcon(color));
     const angle = THREE.MathUtils.degToRad(component.angle ?? 45);
     const range = component.distance > 0 ? component.distance : 24;
-    const coneGeometry = track(new THREE.ConeGeometry(
-    Math.tan(angle) * range,
-    range,
-    24,
-    1,
-    true,
-    ));
+    const coneGeometry = track(
+      new THREE.ConeGeometry(Math.tan(angle) * range, range, 24, 1, true),
+    );
     coneGeometry.translate(0, -range / 2, 0);
     coneGeometry.rotateX(-Math.PI / 2);
-    const cone = makeHelperMesh(coneGeometry, color, 0.14, true);
-    group.add(bulb, cone);
+    const cone = tagLightRangeHelper(
+      makeHelperMesh(coneGeometry, color, 0.14, true),
+    );
+    group.add(cone);
     return group;
   }
   function buildSoundHelper(

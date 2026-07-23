@@ -2,6 +2,7 @@ import { createEmptyEntity, type EditorEntity, type EditorStore } from './docume
 import { showToast, type ContextMenuEntry } from './dom';
 import type { ComponentDef } from '../world/prefabs/component_registry';
 import {
+  getComponentDef,
   getComponentsForKind,
   searchComponents,
 } from '../world/prefabs/component_registry';
@@ -102,6 +103,146 @@ export function addColliderToEntities(
   }
   showToast(
     `Added ${shape} collider to ${added} ${added === 1 ? 'entity' : 'entities'}.`,
+  );
+}
+
+function componentTypeLabel(type: PrefabComponentType): string {
+  return getComponentDef(type)?.label ?? type;
+}
+
+export function collectComponentTypesOnEntities(
+  store: EditorStore,
+  entityIds: string[],
+): PrefabComponentType[] {
+  const types = new Set<PrefabComponentType>();
+  for (const entityId of entityIds) {
+    const entity = store.locate(entityId)?.entity;
+    if (!entity) continue;
+    for (const component of entity.components) types.add(component.type);
+  }
+  return [...types].sort((a, b) => a.localeCompare(b));
+}
+
+export function removeComponentTypeFromEntities(
+  store: EditorStore,
+  entityIds: string[],
+  type: PrefabComponentType,
+): void {
+  let removed = 0;
+  let skipped = 0;
+  const label = componentTypeLabel(type);
+
+  for (const entityId of entityIds) {
+    const entity = store.locate(entityId)?.entity;
+    if (!entity) continue;
+    const next = entity.components.filter((component) => component.type !== type);
+    if (next.length === entity.components.length) {
+      skipped += 1;
+      continue;
+    }
+    store.setComponents(entityId, next);
+    removed += 1;
+  }
+
+  if (removed === 0) {
+    showToast(
+      skipped > 0
+        ? `None of the selected entities have ${label}.`
+        : 'No selected entities to update.',
+      true,
+    );
+    return;
+  }
+  if (skipped > 0) {
+    showToast(
+      `Removed ${label} from ${removed} entities (${skipped} did not have it).`,
+    );
+    return;
+  }
+  showToast(
+    `Removed ${label} from ${removed} ${removed === 1 ? 'entity' : 'entities'}.`,
+  );
+}
+
+export function removeComponentTypeMenuEntries(
+  types: PrefabComponentType[],
+  onPick: (type: PrefabComponentType) => void,
+): ContextMenuEntry[] {
+  if (types.length === 0) {
+    return [{ label: 'No components', disabled: true }];
+  }
+  return types.map((type) => ({
+    label: componentTypeLabel(type),
+    action: () => onPick(type),
+  }));
+}
+
+export function collectComponentTypesOnGlbNodes(
+  store: EditorStore,
+  targets: GlbNodeColliderTarget[],
+): PrefabComponentType[] {
+  const types = new Set<PrefabComponentType>();
+  const seen = new Set<string>();
+  for (const target of targets) {
+    const key = `${target.entityId}::${target.nodeName}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    for (const component of store.getNodeOverrideComponents(
+      target.entityId,
+      target.nodeName,
+    )) {
+      types.add(component.type);
+    }
+  }
+  return [...types].sort((a, b) => a.localeCompare(b));
+}
+
+export function removeComponentTypeFromGlbNodes(
+  store: EditorStore,
+  targets: GlbNodeColliderTarget[],
+  type: PrefabComponentType,
+): void {
+  const uniqueTargets = new Map<string, GlbNodeColliderTarget>();
+  for (const target of targets) {
+    uniqueTargets.set(`${target.entityId}::${target.nodeName}`, target);
+  }
+
+  const edits: Parameters<EditorStore['setNodeOverrideComponentsBatch']>[0] = [];
+  let skipped = 0;
+  const label = componentTypeLabel(type);
+
+  for (const target of uniqueTargets.values()) {
+    const existing = store.getNodeOverrideComponents(target.entityId, target.nodeName);
+    const next = existing.filter((component) => component.type !== type);
+    if (next.length === existing.length) {
+      skipped += 1;
+      continue;
+    }
+    edits.push({
+      entityId: target.entityId,
+      nodeName: target.nodeName,
+      components: next,
+    });
+  }
+
+  if (edits.length === 0) {
+    showToast(
+      skipped > 0
+        ? `None of the selected nodes have ${label}.`
+        : 'No selected GLB nodes to update.',
+      true,
+    );
+    return;
+  }
+
+  store.setNodeOverrideComponentsBatch(
+    edits,
+    `Remove ${label} from ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}`,
+  );
+  showToast(
+    skipped > 0
+      ? `Removed ${label} from ${edits.length} nodes (${skipped} did not have it).`
+      : `Removed ${label} from ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}.`,
   );
 }
 

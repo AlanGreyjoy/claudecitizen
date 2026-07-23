@@ -3,7 +3,6 @@ import {
   createBaseCharacterEquipmentEditor,
   type BaseCharacterEquipmentEditor,
 } from '../../render/editor/base_character_equipment_editor';
-import { createCharacterAnimationPreviewer } from '../../render/editor/character_previewer';
 import {
   createMenuManagerEditor,
   type MenuManagerEditor,
@@ -19,7 +18,6 @@ import {
 import type { SceneEditorTab } from './types';
 
 export type TabEditorHandles = {
-  characterPreviewer: ReturnType<typeof createCharacterAnimationPreviewer> | null;
   baseCharacterEditor: BaseCharacterEquipmentEditor | null;
   planetAuthoringEditor: PlanetAuthoringEditor | null;
   systemMapEditor: SystemMapEditor | null;
@@ -36,29 +34,28 @@ type TabEditorHostsProps = {
  * activate lifecycle; factories stay in their modules.
  */
 export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactElement {
-  const characterRef = useRef<HTMLDivElement | null>(null);
   const baseRef = useRef<HTMLDivElement | null>(null);
   const planetRef = useRef<HTMLDivElement | null>(null);
   const systemRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const handlesRef = useRef<TabEditorHandles>({
-    characterPreviewer: null,
     baseCharacterEditor: null,
     planetAuthoringEditor: null,
     systemMapEditor: null,
     menuManagerEditor: null,
   });
 
+  // Eager mount so Project → Anims can load clips without waiting for the first tab visit.
   useEffect(() => {
-    const characterHost = characterRef.current;
-    if (!characterHost) return;
-    const previewer = createCharacterAnimationPreviewer(characterHost);
-    handlesRef.current.characterPreviewer = previewer;
+    const host = baseRef.current;
+    if (!host) return;
+    const editor = createBaseCharacterEquipmentEditor(host);
+    handlesRef.current.baseCharacterEditor = editor;
     onHandles({ ...handlesRef.current });
     return () => {
-      previewer.dispose();
-      handlesRef.current.characterPreviewer = null;
+      editor.dispose();
+      handlesRef.current.baseCharacterEditor = null;
       onHandles({ ...handlesRef.current });
     };
   }, [onHandles]);
@@ -66,11 +63,7 @@ export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactEl
   useEffect(() => {
     const h = handlesRef.current;
     if (tab === 'base-characters') {
-      const host = baseRef.current;
-      if (host) {
-        h.baseCharacterEditor ??= createBaseCharacterEquipmentEditor(host);
-        h.baseCharacterEditor.activate();
-      }
+      h.baseCharacterEditor?.activate();
     } else {
       h.baseCharacterEditor?.deactivate();
     }
@@ -121,14 +114,8 @@ export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactEl
   return (
     <>
       <div
-        ref={characterRef}
-        className={`ed-scene-panel ed-character-preview${
-          tab !== 'character-preview' ? ' is-hidden' : ''
-        }`}
-      />
-      <div
         ref={baseRef}
-        className={`ed-scene-panel ed-base-characters${
+        className={`ed-scene-panel ed-base-characters ed-base-character-editor${
           tab !== 'base-characters' ? ' is-hidden' : ''
         }`}
       />

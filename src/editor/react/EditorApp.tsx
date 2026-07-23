@@ -55,7 +55,8 @@ function restoreSnapshot(
   if (snapshot.subSelection) {
     store.setSubSelection(snapshot.subSelection.entityId, snapshot.subSelection.nodeUuid);
   }
-  return snapshot.tab;
+  const known = SCENE_EDITOR_TABS.some((entry) => entry.id === snapshot.tab);
+  return known ? snapshot.tab : 'scene';
 }
 
 export function EditorApp(): ReactElement {
@@ -68,7 +69,6 @@ export function EditorApp(): ReactElement {
   const [viewport, setViewport] = useState<EditorViewport | null>(null);
   const [viewportToolbarHost, setViewportToolbarHost] = useState<HTMLElement | null>(null);
   const [tabHandles, setTabHandles] = useState<TabEditorHandles>({
-    characterPreviewer: null,
     baseCharacterEditor: null,
     planetAuthoringEditor: null,
     systemMapEditor: null,
@@ -89,6 +89,8 @@ export function EditorApp(): ReactElement {
   const mainRef = useRef<HTMLDivElement | null>(null);
   const centerColumnRef = useRef<HTMLDivElement | null>(null);
   const projectHostRef = useRef<HTMLDivElement | null>(null);
+  const hierarchyPanelRef = useRef<HTMLDivElement | null>(null);
+  const inspectorPanelRef = useRef<HTMLDivElement | null>(null);
   const hierarchySplitterRef = useRef<HTMLDivElement | null>(null);
   const inspectorSplitterRef = useRef<HTMLDivElement | null>(null);
   const projectSplitterRef = useRef<HTMLDivElement | null>(null);
@@ -115,31 +117,45 @@ export function EditorApp(): ReactElement {
     root.classList.toggle('is-menu-manager', tab === 'menu-manager');
   }, [tab]);
 
-  // Rogue-style dock: Project sits under the center column. On Base Characters,
-  // relocate it under the stage so the equipment inspector stays full height.
+  // Dock tab-editor sidebars into Scene hierarchy/inspector so scene tabs sit
+  // between them (same chrome as Scene).
   useEffect(() => {
-    const splitter = projectSplitterRef.current;
-    const project = projectHostRef.current;
-    const center = centerColumnRef.current;
-    if (!splitter || !project || !center) return;
+    const hierarchy = hierarchyPanelRef.current;
+    const inspector = inspectorPanelRef.current;
+    if (!hierarchy) return;
 
-    if (tab === 'base-characters') {
-      const host = tabHandles.baseCharacterEditor?.getProjectHost();
-      if (!host) return;
-      if (project.parentElement !== host) {
-        host.append(splitter, project);
-      }
-    } else if (splitter.parentElement !== center || project.parentElement !== center) {
-      center.append(splitter, project);
+    const docked: HTMLElement[] = [];
+    const dockLeft = (panel: HTMLElement): void => {
+      if (panel.parentElement !== hierarchy) hierarchy.append(panel);
+      docked.push(panel);
+    };
+    const dockRight = (panel: HTMLElement): void => {
+      if (!inspector) return;
+      if (panel.parentElement !== inspector) inspector.append(panel);
+      docked.push(panel);
+    };
+
+    if (tab === 'base-characters' && tabHandles.baseCharacterEditor) {
+      dockLeft(tabHandles.baseCharacterEditor.getLeftPanel());
+      dockRight(tabHandles.baseCharacterEditor.getRightPanel());
+    } else if (tab === 'planet-authoring' && tabHandles.planetAuthoringEditor) {
+      dockLeft(tabHandles.planetAuthoringEditor.getLeftPanel());
+    } else if (tab === 'system-map' && tabHandles.systemMapEditor) {
+      dockLeft(tabHandles.systemMapEditor.getLeftPanel());
+    } else if (tab === 'menu-manager' && tabHandles.menuManagerEditor) {
+      dockLeft(tabHandles.menuManagerEditor.getLeftPanel());
     }
 
     return () => {
-      // Return nodes to the React parent before unmount / host teardown.
-      if (splitter.parentElement !== center || project.parentElement !== center) {
-        center.append(splitter, project);
-      }
+      for (const panel of docked) panel.remove();
     };
-  }, [tab, tabHandles.baseCharacterEditor]);
+  }, [
+    tab,
+    tabHandles.baseCharacterEditor,
+    tabHandles.planetAuthoringEditor,
+    tabHandles.systemMapEditor,
+    tabHandles.menuManagerEditor,
+  ]);
 
   const setTab = useCallback((next: SceneEditorTab) => {
     const handles = tabHandlesRef.current;
@@ -572,18 +588,29 @@ export function EditorApp(): ReactElement {
       </div>
 
       <div ref={mainRef} className="ed-main">
-        <div className="ed-panel ed-hierarchy-panel">
-          <HierarchyPanel
-            store={store}
-            getGlbNodePrefabPosition={(entityId, nodeUuid) =>
-              viewportRef.current?.getGlbNodePrefabPosition(entityId, nodeUuid) ?? null
-            }
-            getGlbNodeBounds={(entityId, nodeUuid) =>
-              viewportRef.current?.getGlbNodeBounds(entityId, nodeUuid) ?? null
-            }
-            onDuplicateGlbNode={duplicateGlbNode}
-            onExtractGlbNode={extractGlbNode}
-          />
+        <div ref={hierarchyPanelRef} className="ed-panel ed-hierarchy-panel">
+          <div
+            className={`ed-panel-swap${
+              tab === 'base-characters' ||
+              tab === 'planet-authoring' ||
+              tab === 'system-map' ||
+              tab === 'menu-manager'
+                ? ' is-hidden'
+                : ''
+            }`}
+          >
+            <HierarchyPanel
+              store={store}
+              getGlbNodePrefabPosition={(entityId, nodeUuid) =>
+                viewportRef.current?.getGlbNodePrefabPosition(entityId, nodeUuid) ?? null
+              }
+              getGlbNodeBounds={(entityId, nodeUuid) =>
+                viewportRef.current?.getGlbNodeBounds(entityId, nodeUuid) ?? null
+              }
+              onDuplicateGlbNode={duplicateGlbNode}
+              onExtractGlbNode={extractGlbNode}
+            />
+          </div>
         </div>
         <div
           ref={hierarchySplitterRef}
@@ -635,19 +662,8 @@ export function EditorApp(): ReactElement {
               audioPreview={audioPreview}
               getModelThumbnail={getModelThumbnail}
               onPreviewAnimationSource={async (url) => {
-                if (tabRef.current === 'base-characters') {
-                  const editor = tabHandlesRef.current.baseCharacterEditor;
-                  if (editor) {
-                    await editor.loadAnimationFromAsset(url);
-                    return;
-                  }
-                }
-                setTab('character-preview');
-                await tabHandlesRef.current.characterPreviewer?.loadAnimationSource(url);
-              }}
-              onPreviewCharacter={async (url) => {
-                setTab('character-preview');
-                await tabHandlesRef.current.characterPreviewer?.loadCharacter(url);
+                setTab('base-characters');
+                await tabHandlesRef.current.baseCharacterEditor?.loadAnimationFromAsset(url);
               }}
               onCreateItemPrefab={createItemPrefab}
             />
@@ -658,26 +674,30 @@ export function EditorApp(): ReactElement {
           ref={inspectorSplitterRef}
           className="ed-splitter ed-splitter-col ed-inspector-splitter"
         />
-        <div className="ed-panel ed-inspector-panel">
-          {viewport ? (
-            <InspectorPanel
-              store={store}
-              audioPreview={audioPreview}
-              particlePreview={viewport.particlePreview}
-              getGlbNodeLocalTransform={(entityId, nodeUuid) =>
-                viewport.getGlbNodeLocalTransform(entityId, nodeUuid)
-              }
-              setGlbNodeLocalTransform={(entityId, nodeUuid, transform) =>
-                viewport.setGlbNodeLocalTransform(entityId, nodeUuid, transform)
-              }
-              getGlbNodeBounds={(entityId, nodeUuid) =>
-                viewport.getGlbNodeBounds(entityId, nodeUuid)
-              }
-              onToggleShipDoorPreview={(doorId) =>
-                toolbarRef.current?.toggleDoorPreview(doorId)
-              }
-            />
-          ) : null}
+        <div ref={inspectorPanelRef} className="ed-panel ed-inspector-panel">
+          <div
+            className={`ed-panel-swap${tab === 'base-characters' ? ' is-hidden' : ''}`}
+          >
+            {viewport ? (
+              <InspectorPanel
+                store={store}
+                audioPreview={audioPreview}
+                particlePreview={viewport.particlePreview}
+                getGlbNodeLocalTransform={(entityId, nodeUuid) =>
+                  viewport.getGlbNodeLocalTransform(entityId, nodeUuid)
+                }
+                setGlbNodeLocalTransform={(entityId, nodeUuid, transform) =>
+                  viewport.setGlbNodeLocalTransform(entityId, nodeUuid, transform)
+                }
+                getGlbNodeBounds={(entityId, nodeUuid) =>
+                  viewport.getGlbNodeBounds(entityId, nodeUuid)
+                }
+                onToggleShipDoorPreview={(doorId) =>
+                  toolbarRef.current?.toggleDoorPreview(doorId)
+                }
+              />
+            ) : null}
+          </div>
         </div>
       </div>
     </>
