@@ -32,10 +32,20 @@ import {
   type AnimationLocomotionKind,
 } from '../../player/animation/schema';
 import {
-  locomotionFromGameplay,
+  setDefaultAnimationController,
 } from '../../player/animation/default_controller';
 import {
-  advanceJumpAnimationPhase,
+  integrateCharacterLocomotion,
+  ORBIT_PITCH_LIMIT,
+  resolveCharacterCameraRig,
+} from '../../player/character_controller';
+import {
+  animationLayersFromState,
+  resolveWalkAiming,
+  resolveWalkFacing,
+  resolveWalkInputIntent,
+  shouldLockFacingToCamera,
+  type WalkGait,
 } from '../../player/character_locomotion';
 import {
   cloneCharacterSettings,
@@ -45,6 +55,10 @@ import {
   setCharacterSettings,
   type CharacterSettingsV1,
 } from '../../player/character_settings';
+import { createPlayerControls } from '../../input/player_controls';
+import { resolveDeckCameraOrbit } from '../../flight/flight_aim';
+import { add, normalize, scale, vec3 } from '../../math/vec3';
+import type { CharacterState, JumpPhase, Vec3 } from '../../types';
 import { buildDefaultDefinition, findPreviewSpecies, loadSidekickCatalog } from '../../player/character_creator/sidekick_catalog';
 import type { SidekickCharacterDefinitionV2 } from '../../player/character_creator/sidekick_definition';
 import {
@@ -61,6 +75,10 @@ import {
 } from '../../editor/api';
 import { assembleSidekickCharacter, type SidekickAvatarInstance } from '../characters/sidekick/assemble_avatar';
 import { createSidekickAnimationRuntime, type SidekickAnimationRuntime } from '../characters/sidekick/animation_runtime';
+import {
+  createSidekickUpperBodyAimController,
+  type SidekickUpperBodyAimController,
+} from '../characters/sidekick/upper_body_aim';
 import { createPropInstanceGroup } from '../prefabs/prefab_renderer';
 import { loadPrefabDocument } from '../../world/prefabs/loader';
 import {
@@ -76,7 +94,6 @@ import {
   type PrefabTransform,
 } from '../../world/prefabs/schema';
 import type { WeaponSlotType } from '../../types/equipment';
-import type { JumpPhase } from '../../types/character';
 import {
   WEAPON_SELECT_SLOT_IDS,
   stanceIdForWeaponSlot,
@@ -208,9 +225,48 @@ const PLAY_TEST_DEFAULT_ASSIGNMENTS: readonly PlayTestDefaultAssignment[] = [
   },
 ] as const;
 
-const PLAY_TEST_GRAVITY_METERS_PER_SECOND_SQUARED = 9.81;
-const PLAY_TEST_FALL_GRAVITY_MULTIPLIER = 1.7;
+const PLAY_TEST_GRAVITY_METERS_PER_SECOND_SQUARED = 9.8;
 const PLAY_TEST_STAGE_RADIUS_METERS = 9;
+const PLAY_TEST_WORLD_UP: Vec3 = { x: 0, y: 1, z: 0 };
+const PLAY_TEST_STAGE_FORWARD: Vec3 = { x: 0, y: 0, z: 1 };
+const PLAY_TEST_WEAPON_AIM_ZOOM_SCALE = 0.86;
+const PLAY_TEST_WEAPON_AIM_ZOOM_HALF_LIFE_SECONDS = 0.07;
+const PLAY_TEST_MAX_UPPER_BODY_AIM_YAW = THREE.MathUtils.degToRad(80);
+const PLAY_TEST_MAX_UPPER_BODY_AIM_PITCH = THREE.MathUtils.degToRad(55);
+
+function createPlayTestCharacterState(): CharacterState {
+  return {
+    animation: 'Idle_Loop',
+    forward: { ...PLAY_TEST_STAGE_FORWARD },
+    grounded: true,
+    jumpPhase: 'grounded',
+    jumpPhaseTime: 0,
+    position: vec3(0, 0, 0),
+    up: { ...PLAY_TEST_WORLD_UP },
+    velocity: vec3(0, 0, 0),
+  };
+}
+
+function clampPlayTestToStage(position: Vec3): Vec3 {
+  const radial = Math.hypot(position.x, position.z);
+  if (radial <= PLAY_TEST_STAGE_RADIUS_METERS) return position;
+  const pull = PLAY_TEST_STAGE_RADIUS_METERS / radial;
+  return { x: position.x * pull, y: position.y, z: position.z * pull };
+}
+
+function smoothPlayTestVector(
+  current: THREE.Vector3,
+  target: THREE.Vector3,
+  dt: number,
+  halfLife: number,
+): void {
+  if (halfLife <= 1e-6) {
+    current.copy(target);
+    return;
+  }
+  const blend = 1 - Math.exp((-Math.LN2 * dt) / halfLife);
+  current.lerp(target, blend);
+}
 
 export interface BaseCharacterEquipmentEditor {
   activate: () => void;
@@ -221,6 +277,8 @@ export interface BaseCharacterEquipmentEditor {
   save: () => Promise<void>;
   /** Load a Project / protected animation GLB into the Sidekick preview runtime. */
   loadAnimationFromAsset: (url: string) => Promise<void>;
+  /** Host under the stage where the shared Project panel docks (full-height inspector). */
+  getProjectHost: () => HTMLElement;
   dispose: () => void;
 }
 
@@ -228,6 +286,7 @@ const LOCOMOTION_LABELS: Record<AnimationLocomotionKind, string> = {
   idle: 'Idle',
   idle_aiming: 'Idle Aiming',
   walk: 'Walk',
+  run: 'Run',
   sprint: 'Sprint',
   jump_start: 'Jump Start',
   jump_loop: 'Jump Loop',
@@ -412,6 +471,8 @@ export function createBaseCharacterEquipmentEditor(
   container.classList.add('ed-base-character-editor');
   const left = document.createElement('aside');
   left.className = 'ed-base-sidebar';
+  const center = document.createElement('div');
+  center.className = 'ed-base-center';
   const stage = document.createElement('div');
   stage.className = 'ed-base-stage';
   const canvas = document.createElement('canvas');
@@ -429,7 +490,8 @@ export function createBaseCharacterEquipmentEditor(
   playTestHudLoadout.className = 'ed-base-playtest-loadout';
   const playTestHudHelp = document.createElement('div');
   playTestHudHelp.className = 'ed-base-playtest-help';
-  playTestHudHelp.textContent = 'WASD move · Shift sprint · Space jump · drag to orbit · Esc stop';
+  playTestHudHelp.textContent =
+    'Click stage to look · WASD move · Shift sprint · CapsLock walk · C crouch · Space jump · RMB aim · LMB fire anim · wheel zoom · 1-3 weapons · Esc stop';
   playTestHud.append(
     playTestHudTitle,
     playTestHudState,
@@ -439,9 +501,12 @@ export function createBaseCharacterEquipmentEditor(
   const stageStatus = document.createElement('div');
   stageStatus.className = 'ed-base-stage-status';
   stage.append(canvas, playTestHud, stageStatus);
+  const projectHost = document.createElement('div');
+  projectHost.className = 'ed-base-project-host';
+  center.append(stage, projectHost);
   const right = document.createElement('aside');
   right.className = 'ed-base-sidebar ed-base-inspector';
-  container.append(left, stage, right);
+  container.append(left, center, right);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -469,12 +534,21 @@ export function createBaseCharacterEquipmentEditor(
   const grid = new THREE.GridHelper(20, 20, 0x43749a, 0x233b58);
   grid.position.y = 0.003;
   scene.add(grid);
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
+  // Near starts small so equipment-mount close-ups don't clip; renderFrame
+  // retunes near/far from camera↔target distance (same idea as character_previewer).
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
   camera.position.set(0, 1.05, 4.2);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
+  controls.dampingFactor = 0.12;
   controls.target.set(0, 1, 0);
-  controls.enablePan = false;
+  controls.minDistance = 0.08;
+  // Match Scene viewport: RMB is Unity-style flythrough; pan lives on middle mouse.
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: null as unknown as THREE.MOUSE,
+  };
   const gizmo = new TransformControls(camera, canvas);
   gizmo.setSpace('local');
   gizmo.setTranslationSnap(0.01);
@@ -482,8 +556,135 @@ export function createBaseCharacterEquipmentEditor(
   gizmo.setScaleSnap(0.05);
   scene.add(gizmo.getHelper());
   gizmo.addEventListener('dragging-changed', (event) => {
-    controls.enabled = !event.value;
+    if (!playTestActive && !flying) controls.enabled = !event.value;
   });
+
+  // ---- flythrough camera (hold RMB, same as Scene viewport) ----------------
+  const FLY_KEY_CODES = new Set([
+    'KeyW',
+    'KeyA',
+    'KeyS',
+    'KeyD',
+    'KeyQ',
+    'KeyE',
+    'ShiftLeft',
+    'ShiftRight',
+  ]);
+  const FLY_LOOK_RADIANS_PER_PIXEL = 0.0022;
+  const FLY_PITCH_LIMIT = Math.PI / 2 - 0.01;
+
+  const flyKeys = new Set<string>();
+  const flyEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+  const flyForward = new THREE.Vector3();
+  const flyRight = new THREE.Vector3();
+  const flyMove = new THREE.Vector3();
+  let flying = false;
+  let flySpeed = 12;
+  let flyTargetDistance = 10;
+
+  /** Blocks RMB fly while play-test owns the canvas / camera. */
+  let authoringCameraSuspended = false;
+
+  function beginFly(): void {
+    if (flying || playTestActive || authoringCameraSuspended || disposed || !active) return;
+    flying = true;
+    flyTargetDistance = Math.max(4, camera.position.distanceTo(controls.target));
+    flyEuler.setFromQuaternion(camera.quaternion, 'YXZ');
+    flyEuler.z = 0;
+    controls.enabled = false;
+    canvas.requestPointerLock?.();
+  }
+
+  function endFly(): void {
+    if (!flying) return;
+    flying = false;
+    flyKeys.clear();
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    camera.getWorldDirection(flyForward);
+    controls.target
+      .copy(camera.position)
+      .addScaledVector(flyForward, flyTargetDistance);
+    if (!playTestActive) controls.enabled = true;
+    controls.update();
+  }
+
+  function onFlyLook(event: PointerEvent): void {
+    if (!flying) return;
+    flyEuler.y -= event.movementX * FLY_LOOK_RADIANS_PER_PIXEL;
+    flyEuler.x -= event.movementY * FLY_LOOK_RADIANS_PER_PIXEL;
+    flyEuler.x = Math.max(-FLY_PITCH_LIMIT, Math.min(FLY_PITCH_LIMIT, flyEuler.x));
+    camera.quaternion.setFromEuler(flyEuler);
+  }
+
+  function updateFly(dt: number): void {
+    camera.getWorldDirection(flyForward);
+    flyRight.crossVectors(flyForward, camera.up).normalize();
+    flyMove.set(0, 0, 0);
+    if (flyKeys.has('KeyW')) flyMove.add(flyForward);
+    if (flyKeys.has('KeyS')) flyMove.sub(flyForward);
+    if (flyKeys.has('KeyD')) flyMove.add(flyRight);
+    if (flyKeys.has('KeyA')) flyMove.sub(flyRight);
+    if (flyKeys.has('KeyE')) flyMove.y += 1;
+    if (flyKeys.has('KeyQ')) flyMove.y -= 1;
+    if (flyMove.lengthSq() === 0) return;
+    const boost = flyKeys.has('ShiftLeft') || flyKeys.has('ShiftRight') ? 4 : 1;
+    flyMove.normalize().multiplyScalar(flySpeed * boost * dt);
+    camera.position.add(flyMove);
+  }
+
+  function onFlyKey(event: KeyboardEvent): void {
+    if (!flying || !FLY_KEY_CODES.has(event.code)) return;
+    if (
+      event.target instanceof HTMLElement &&
+      (event.target.tagName === 'INPUT' ||
+        event.target.tagName === 'TEXTAREA' ||
+        event.target.tagName === 'SELECT' ||
+        event.target.isContentEditable)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    if (event.type === 'keydown') flyKeys.add(event.code);
+    else flyKeys.delete(event.code);
+  }
+
+  function onPointerLockChange(): void {
+    // Play-test also pointer-locks this canvas; don't treat its unlock as fly end.
+    if (authoringCameraSuspended || playTestActive) return;
+    if (flying && document.pointerLockElement !== canvas) endFly();
+  }
+
+  window.addEventListener('keydown', onFlyKey);
+  window.addEventListener('keyup', onFlyKey);
+  document.addEventListener('pointerlockchange', onPointerLockChange);
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+  canvas.addEventListener('pointermove', onFlyLook);
+  canvas.addEventListener('pointerdown', (event) => {
+    if (event.button !== 2 || playTestActive || authoringCameraSuspended) return;
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // Stale pointer id — flythrough still works.
+    }
+    beginFly();
+  });
+  canvas.addEventListener('pointerup', (event) => {
+    if (event.button === 2) endFly();
+  });
+  canvas.addEventListener('pointercancel', () => endFly());
+  canvas.addEventListener(
+    'wheel',
+    (event) => {
+      if (!flying) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      flySpeed = Math.min(
+        200,
+        Math.max(0.5, flySpeed * Math.pow(1.1, -event.deltaY / 100)),
+      );
+    },
+    { passive: false, capture: true },
+  );
 
   let documentState: BaseCharacterEquipmentV1 | null = null;
   let controllerState: AnimationControllerV1 | null = null;
@@ -506,9 +707,10 @@ export function createBaseCharacterEquipmentEditor(
   let simulateDrawnSlotId: string | null = null;
   let playTestActive = false;
   let playTestWeaponSlotId: WeaponSelectSlotId | null = null;
-  let playTestJumpPhase: JumpPhase = 'grounded';
-  let playTestJumpPhaseTime = 0;
-  let playTestVerticalSpeed = 0;
+  let playTestCharacter = createPlayTestCharacterState();
+  let playTestControls: ReturnType<typeof createPlayerControls> | null = null;
+  let playTestHardAim = false;
+  let playTestAimZoom01 = 0;
   let playTestAnimationKey = '';
   let playTestAnimationGeneration = 0;
   let playTestPoseBefore: CharacterPreviewPose = 'reference';
@@ -521,6 +723,7 @@ export function createBaseCharacterEquipmentEditor(
   let initialized = false;
   let avatar: SidekickAvatarInstance | null = null;
   let animation: SidekickAnimationRuntime | null = null;
+  let controllerUpperBodyAim: SidekickUpperBodyAimController | null = null;
   let animationObjectUrl: string | null = null;
   let defaultDefinition: SidekickCharacterDefinitionV2 | null = null;
   let mountPivots = new Map<string, THREE.Group>();
@@ -540,24 +743,55 @@ export function createBaseCharacterEquipmentEditor(
   let backpacks: BackpackDefinition[] = [];
   let previewGeneration = 0;
   let catalogMessage = 'Catalog not loaded.';
-  const playTestKeys = new Set<string>();
-  let playTestWalkToggle = false;
   const playTestWeaponButtons = new Map<WeaponSelectSlotId, HTMLButtonElement>();
   const playTestCameraPositionBefore = new THREE.Vector3();
   const playTestCameraTargetBefore = new THREE.Vector3();
-  const playTestPreviousPosition = new THREE.Vector3();
-  const playTestCameraForward = new THREE.Vector3();
-  const playTestCameraRight = new THREE.Vector3();
-  const playTestMoveDirection = new THREE.Vector3();
-  const playTestCameraDelta = new THREE.Vector3();
+  const playTestDesiredCameraPos = new THREE.Vector3();
+  const playTestDesiredCameraTarget = new THREE.Vector3();
+  const playTestSmoothedCameraPos = new THREE.Vector3();
+  const playTestSmoothedCameraTarget = new THREE.Vector3();
+  const playTestUpperAimView = new THREE.Vector3();
+  const playTestUpperAimUp = new THREE.Vector3();
+  const playTestUpperAimForward = new THREE.Vector3();
+  const playTestUpperAimPlanarView = new THREE.Vector3();
+  const playTestUpperAimCross = new THREE.Vector3();
   const controllerSourceLoads = new Map<string, Promise<void>>();
   scene.add(previewRoot);
+
+  const restoreAuthoringCamera = (): void => {
+    endFly();
+    camera.up.set(0, 1, 0);
+    camera.position.copy(playTestCameraPositionBefore);
+    controls.target.copy(playTestCameraTargetBefore);
+    controls.enabled = true;
+    controls.update();
+  };
+
+  const resetPlayTestStageTransform = (): void => {
+    previewRoot.position.set(0, 0, 0);
+    previewRoot.rotation.set(0, 0, 0);
+    previewRoot.scale.set(1, 1, 1);
+    if (!avatar) return;
+    avatar.root.position.set(0, 0, 0);
+    avatar.root.rotation.set(0, 0, 0);
+    avatar.root.scale.set(1, 1, 1);
+  };
 
   const resize = (): void => {
     const width = Math.max(1, canvas.clientWidth);
     const height = Math.max(1, canvas.clientHeight);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  };
+  /** Keep near/far proportional to framing distance so close zooms don't eat the mesh. */
+  const updateAuthoringClipPlanes = (): void => {
+    const distance = Math.max(0.05, camera.position.distanceTo(controls.target));
+    const nextNear = THREE.MathUtils.clamp(distance * 0.01, 0.001, 0.05);
+    const nextFar = Math.max(200, distance * 40);
+    if (camera.near === nextNear && camera.far === nextFar) return;
+    camera.near = nextNear;
+    camera.far = nextFar;
     camera.updateProjectionMatrix();
   };
   const resizeObserver = new ResizeObserver(resize);
@@ -570,8 +804,14 @@ export function createBaseCharacterEquipmentEditor(
     resize();
     const deltaSeconds = Math.min(clock.getDelta(), 0.05);
     if (playTestActive) updatePlayTest(deltaSeconds);
-    controls.update();
-    if (previewPose === 'animated') animation?.update(deltaSeconds);
+    else if (flying) updateFly(deltaSeconds);
+    else controls.update();
+    if (!playTestActive) updateAuthoringClipPlanes();
+    if (previewPose === 'animated') {
+      controllerUpperBodyAim?.restore();
+      animation?.update(deltaSeconds);
+      controllerUpperBodyAim?.update(deltaSeconds);
+    }
     renderer.render(scene, camera);
   };
   requestAnimationFrame(renderFrame);
@@ -588,6 +828,10 @@ export function createBaseCharacterEquipmentEditor(
 
   const markControllerDirty = (): void => {
     controllerDirty = true;
+    // Live authoring: Play Test and getDefaultAnimationController() share this draft.
+    if (controllerState?.id === 'default') {
+      setDefaultAnimationController(controllerState);
+    }
     renderLeft();
   };
 
@@ -916,6 +1160,7 @@ export function createBaseCharacterEquipmentEditor(
     renderLeft();
     if (!avatar) return;
     if (previewPose === 'reference') {
+      controllerUpperBodyAim?.restore();
       animation?.setPlaying(false);
       setStageStatus('Reference pose active. Character mounts now use a stable bind-pose basis.');
       await applyCharacterType();
@@ -952,6 +1197,7 @@ export function createBaseCharacterEquipmentEditor(
       console.warn('Base character idle animation unavailable.', error);
       return null;
     });
+    controllerUpperBodyAim = createSidekickUpperBodyAimController(previewRoot, avatar.root);
     animation?.setAnimation('Idle_Loop', 0);
     controls.target.set(0, 0.95, 0);
     camera.position.set(0, 1.05, 4.2);
@@ -1041,12 +1287,17 @@ export function createBaseCharacterEquipmentEditor(
       }
       selectedStanceId = controllerState.stances[0]?.id ?? 'unarmed';
       controllerDirty = false;
+      // Keep gameplay's shared default cache on the same document Play Test uses.
+      if (controllerState.id === 'default') {
+        setDefaultAnimationController(controllerState);
+      }
       renderLeft();
     } catch (error) {
       controllerState = cloneAnimationController(buildDefaultAnimationController());
       selectedControllerId = controllerState.id;
       selectedStanceId = controllerState.stances[0]?.id ?? 'unarmed';
       controllerDirty = false;
+      setDefaultAnimationController(controllerState);
       setStageStatus(
         error instanceof Error
           ? `Controller load failed (${error.message}); using in-memory default.`
@@ -1057,38 +1308,53 @@ export function createBaseCharacterEquipmentEditor(
     }
   };
 
+  const ensureControllerClipLoaded = async (
+    clipName: string,
+  ): Promise<string | null> => {
+    if (!controllerState || !animation || !clipName) return null;
+    if (animation.clipNames.includes(clipName)) return clipName;
+    const state = controllerState.states.find((entry) => entry.clipName === clipName);
+    const source = (
+      state
+        ? controllerState.sources.find((entry) => entry.id === state.sourceId)
+        : null
+    ) ?? controllerState.sources.find(
+      (entry) => entry.label === clipName
+        || entry.id.endsWith(`-${clipName.replaceAll('_', '-')}`),
+    );
+    if (!source) {
+      // UAL clips are registered by the default library load — no source entry.
+      return animation.clipNames.includes(clipName) ? clipName : null;
+    }
+    let pending = controllerSourceLoads.get(source.id);
+    if (!pending) {
+      pending = animation.loadAnimationSource(
+        source.url,
+        clipName,
+        source.yawOffsetDegrees,
+        { activate: false },
+      );
+      controllerSourceLoads.set(source.id, pending);
+    }
+    try {
+      await pending;
+      lastLoadedSourceId = source.id;
+    } finally {
+      if (controllerSourceLoads.get(source.id) === pending) {
+        controllerSourceLoads.delete(source.id);
+      }
+    }
+    return animation.clipNames.includes(clipName) ? clipName : null;
+  };
+
   const loadControllerStateClip = async (
     locomotion: AnimationLocomotionKind,
     stanceId: string,
   ): Promise<string | null> => {
-    if (!controllerState || !animation) return null;
+    if (!controllerState) return null;
     const state = resolveControllerState(controllerState, locomotion, stanceId);
     if (!state) return null;
-    if (
-      state.sourceId !== UAL_ANIMATION_SOURCE_ID
-      && !animation.clipNames.includes(state.clipName)
-    ) {
-      const source = controllerState.sources.find((entry) => entry.id === state.sourceId);
-      if (!source) return null;
-      let pending = controllerSourceLoads.get(source.id);
-      if (!pending) {
-        pending = animation.loadAnimationSource(
-          source.url,
-          source.label,
-          source.yawOffsetDegrees,
-        );
-        controllerSourceLoads.set(source.id, pending);
-      }
-      try {
-        await pending;
-        lastLoadedSourceId = source.id;
-      } finally {
-        if (controllerSourceLoads.get(source.id) === pending) {
-          controllerSourceLoads.delete(source.id);
-        }
-      }
-    }
-    return animation.clipNames.includes(state.clipName) ? state.clipName : null;
+    return ensureControllerClipLoaded(state.clipName);
   };
 
   const previewControllerState = async (): Promise<void> => {
@@ -1120,47 +1386,123 @@ export function createBaseCharacterEquipmentEditor(
     await ensureAnimatedPose();
     animation.setAnimation(clipName, 0.12);
     animation.setPlaying(true);
-    setStageStatus(`Controller preview · ${selectedStanceId} / ${previewLocomotion} → ${clipName}`);
+    setStageStatus(
+      `Controller preview · ${selectedStanceId} ${previewLocomotion} → ${clipName}`,
+    );
     renderLeft();
   };
 
-  const playTestMovementAxes = (): { x: number; y: number; moving: boolean } => {
-    const x = Number(playTestKeys.has('KeyD')) - Number(playTestKeys.has('KeyA'));
-    const y = Number(playTestKeys.has('KeyW')) - Number(playTestKeys.has('KeyS'));
-    return { x, y, moving: x !== 0 || y !== 0 };
+  const resolvePlayTestUpperBodyAim = (): {
+    pitchRadians: number;
+    yawRadians: number;
+  } | null => {
+    if (!playTestHardAim) return null;
+    camera.getWorldDirection(playTestUpperAimView).normalize();
+    playTestUpperAimUp
+      .set(playTestCharacter.up.x, playTestCharacter.up.y, playTestCharacter.up.z)
+      .normalize();
+    playTestUpperAimForward
+      .set(
+        playTestCharacter.forward.x,
+        playTestCharacter.forward.y,
+        playTestCharacter.forward.z,
+      )
+      .addScaledVector(playTestUpperAimUp, -playTestUpperAimForward.dot(playTestUpperAimUp))
+      .normalize();
+    playTestUpperAimPlanarView
+      .copy(playTestUpperAimView)
+      .addScaledVector(playTestUpperAimUp, -playTestUpperAimView.dot(playTestUpperAimUp));
+
+    let yawRadians = 0;
+    if (
+      playTestUpperAimPlanarView.lengthSq() > 1e-8
+      && playTestUpperAimForward.lengthSq() > 1e-8
+    ) {
+      playTestUpperAimPlanarView.normalize();
+      yawRadians = Math.atan2(
+        playTestUpperAimUp.dot(
+          playTestUpperAimCross.crossVectors(
+            playTestUpperAimForward,
+            playTestUpperAimPlanarView,
+          ),
+        ),
+        THREE.MathUtils.clamp(
+          playTestUpperAimForward.dot(playTestUpperAimPlanarView),
+          -1,
+          1,
+        ),
+      );
+    }
+
+    return {
+      pitchRadians: THREE.MathUtils.clamp(
+        Math.asin(
+          THREE.MathUtils.clamp(playTestUpperAimView.dot(playTestUpperAimUp), -1, 1),
+        ),
+        -PLAY_TEST_MAX_UPPER_BODY_AIM_PITCH,
+        PLAY_TEST_MAX_UPPER_BODY_AIM_PITCH,
+      ),
+      yawRadians: THREE.MathUtils.clamp(
+        yawRadians,
+        -PLAY_TEST_MAX_UPPER_BODY_AIM_YAW,
+        PLAY_TEST_MAX_UPPER_BODY_AIM_YAW,
+      ),
+    };
   };
 
-  const syncPlayTestAnimation = async (force = false): Promise<void> => {
+  const syncPlayTestAnimation = async (
+    force = false,
+    locomotion?: { isMoving?: boolean; gait?: WalkGait; jumpPhase?: JumpPhase },
+  ): Promise<void> => {
     if (!playTestActive || !animation || !controllerState) return;
-    const movement = playTestMovementAxes();
-    const isSprinting = movement.moving
-      && (playTestKeys.has('ShiftLeft') || playTestKeys.has('ShiftRight'));
-    const locomotion = locomotionFromGameplay(
-      playTestJumpPhase,
-      movement.moving,
-      isSprinting,
-    );
     const stanceId = stanceIdForWeaponSlot(playTestWeaponSlotId);
-    const stateKey = `${stanceId}:${locomotion}`;
+    const layers = animationLayersFromState({
+      stanceId,
+      aiming: playTestHardAim,
+      isMoving: locomotion?.isMoving,
+      gait: locomotion?.gait,
+      jumpPhase: locomotion?.jumpPhase,
+    });
+    const stateKey = `${stanceId}:${layers.baseClip}:${layers.upperClip ?? ''}`;
     if (!force && stateKey === playTestAnimationKey) return;
     playTestAnimationKey = stateKey;
-    previewLocomotion = locomotion;
+    previewLocomotion = locomotion?.jumpPhase && locomotion.jumpPhase !== 'grounded'
+      ? locomotion.jumpPhase.replace('-', '_') as AnimationLocomotionKind
+      : stanceId === 'rifle' && playTestHardAim && !locomotion?.isMoving
+      ? 'idle_aiming'
+      : locomotion?.isMoving
+        ? (locomotion.gait === 'sprint' ? 'sprint' : locomotion.gait === 'walk' ? 'walk' : 'run')
+        : 'idle';
     selectedStanceId = stanceId;
     const generation = ++playTestAnimationGeneration;
     renderPlayTestHud();
     try {
-      const clipName = await loadControllerStateClip(locomotion, stanceId);
+      const loadedClip = await ensureControllerClipLoaded(layers.baseClip);
       if (!playTestActive || generation !== playTestAnimationGeneration) return;
-      if (!clipName) {
+      if (!loadedClip) {
         setStageStatus(
-          `Play test has no loadable ${stanceId} / ${LOCOMOTION_LABELS[locomotion]} clip.`,
+          `Play test has no loadable ${stanceId} clip "${layers.baseClip}".`,
           true,
         );
         return;
       }
+      let loadedUpper: string | null = null;
+      if (layers.upperClip) {
+        loadedUpper = await ensureControllerClipLoaded(layers.upperClip);
+        if (!playTestActive || generation !== playTestAnimationGeneration) return;
+        if (!loadedUpper) {
+          setStageStatus(
+            `Play test has no loadable upper clip "${layers.upperClip}".`,
+            true,
+          );
+          return;
+        }
+      }
       await ensureAnimatedPose();
       if (!playTestActive || generation !== playTestAnimationGeneration) return;
-      animation.setAnimation(clipName, 0.12);
+      // Set the upper layer first so the base action is created with the lower-body mask.
+      animation.setUpperBodyAnimation(loadedUpper, 0.16);
+      animation.setAnimation(loadedClip, 0.16);
       animation.setPlaying(true);
       renderPlayTestHud();
       renderInspector();
@@ -1181,6 +1523,7 @@ export function createBaseCharacterEquipmentEditor(
     equipDefaultPlayTestLoadout();
     playTestWeaponSlotId = toggle && slotId === playTestWeaponSlotId ? null : slotId;
     playTestAnimationKey = '';
+    playTestControls?.setCombatInputActive(playTestWeaponSlotId !== null);
     renderPlayTestHud();
     await rebuildEquipmentPreview();
     if (!playTestActive) return;
@@ -1217,92 +1560,196 @@ export function createBaseCharacterEquipmentEditor(
       : 'Unarmed';
     playTestHudState.textContent = [
       weaponName,
-      LOCOMOTION_LABELS[previewLocomotion],
+      stanceIdForWeaponSlot(playTestWeaponSlotId),
+      playTestHardAim ? 'aiming' : null,
       animation?.activeClipName || 'loading animation',
-    ].join(' · ');
+    ].filter(Boolean).join(' · ');
   }
 
   function updatePlayTest(deltaSeconds: number): void {
-    const movement = playTestMovementAxes();
-    const isSprinting = movement.moving
-      && (playTestKeys.has('ShiftLeft') || playTestKeys.has('ShiftRight'));
-    playTestPreviousPosition.copy(previewRoot.position);
-
-    if (movement.moving) {
-      camera.getWorldDirection(playTestCameraForward);
-      playTestCameraForward.y = 0;
-      if (playTestCameraForward.lengthSq() < 1e-6) playTestCameraForward.set(0, 0, -1);
-      else playTestCameraForward.normalize();
-      playTestCameraRight.crossVectors(playTestCameraForward, THREE.Object3D.DEFAULT_UP).normalize();
-      playTestMoveDirection
-        .copy(playTestCameraForward)
-        .multiplyScalar(movement.y)
-        .addScaledVector(playTestCameraRight, movement.x)
-        .normalize();
-      const settings = getCharacterSettings();
-      const isWalking = playTestWalkToggle;
-      const isCrouching = playTestKeys.has('KeyC');
-      const speed = isSprinting
-        ? settings.sprintSpeedMetersPerSecond
-        : isWalking || isCrouching
-          ? settings.walkSpeedMetersPerSecond
-          : settings.runSpeedMetersPerSecond;
-      previewRoot.position.addScaledVector(playTestMoveDirection, speed * deltaSeconds);
-      const horizontalDistance = Math.hypot(previewRoot.position.x, previewRoot.position.z);
-      if (horizontalDistance > PLAY_TEST_STAGE_RADIUS_METERS) {
-        const scale = PLAY_TEST_STAGE_RADIUS_METERS / horizontalDistance;
-        previewRoot.position.x *= scale;
-        previewRoot.position.z *= scale;
-      }
-      const targetYaw = Math.atan2(playTestMoveDirection.x, playTestMoveDirection.z);
-      const yawDelta = Math.atan2(
-        Math.sin(targetYaw - previewRoot.rotation.y),
-        Math.cos(targetYaw - previewRoot.rotation.y),
-      );
-      previewRoot.rotation.y += yawDelta * Math.min(1, deltaSeconds * 10);
+    if (!playTestControls || !controllerState) return;
+    playTestControls.setMode('on-foot');
+    const actions = playTestControls.consumeActions();
+    if (actions.weaponSlotPress) {
+      const slotId = WEAPON_SELECT_SLOT_IDS[actions.weaponSlotPress - 1] ?? null;
+      if (slotId) void selectPlayTestWeapon(slotId);
     }
+    const cameraState = playTestControls.sampleCameraState(deltaSeconds);
+    const input = playTestControls.sampleCharacterInput();
+    const stanceId = stanceIdForWeaponSlot(playTestWeaponSlotId);
 
-    const airborne = playTestJumpPhase === 'jump-start' || playTestJumpPhase === 'jump-loop';
-    if (airborne) {
-      const gravityScale = playTestVerticalSpeed < 0 ? PLAY_TEST_FALL_GRAVITY_MULTIPLIER : 1;
-      playTestVerticalSpeed -= PLAY_TEST_GRAVITY_METERS_PER_SECOND_SQUARED
-        * gravityScale
-        * deltaSeconds;
-      previewRoot.position.y += playTestVerticalSpeed * deltaSeconds;
-      if (previewRoot.position.y <= 0) {
-        previewRoot.position.y = 0;
-        playTestVerticalSpeed = 0;
-      }
-    }
-    const phase = advanceJumpAnimationPhase(
-      { jumpPhase: playTestJumpPhase, jumpPhaseTime: playTestJumpPhaseTime },
-      deltaSeconds,
-      previewRoot.position.y > 0.001,
-      false,
+    const intent = resolveWalkInputIntent({
+      ...input,
+      jumpPressed: actions.jumpPressed,
+    });
+    playTestHardAim = resolveWalkAiming(
+      playTestWeaponSlotId !== null && playTestControls.isSecondaryClickHeld(),
+      intent,
     );
-    playTestJumpPhase = phase.jumpPhase;
-    playTestJumpPhaseTime = phase.jumpPhaseTime;
+    const poseAiming = playTestHardAim;
+    const flatOrbit = resolveDeckCameraOrbit(
+      PLAY_TEST_STAGE_FORWARD,
+      PLAY_TEST_WORLD_UP,
+      cameraState.yawRadians,
+      0,
+      ORBIT_PITCH_LIMIT,
+    );
+    const moveDir = add(
+      scale(flatOrbit.right, intent.moveX),
+      scale(flatOrbit.forward, intent.moveY),
+    );
+    const desiredDirection = intent.isMoving && Math.hypot(moveDir.x, moveDir.z) > 1e-4
+      ? normalize({ x: moveDir.x, y: 0, z: moveDir.z })
+      : vec3(0, 0, 0);
+    const cameraForward = normalize({
+      x: flatOrbit.forward.x,
+      y: 0,
+      z: flatOrbit.forward.z,
+    });
 
-    playTestCameraDelta.copy(previewRoot.position).sub(playTestPreviousPosition);
-    camera.position.add(playTestCameraDelta);
-    controls.target.add(playTestCameraDelta);
-    void syncPlayTestAnimation();
+    const motion = integrateCharacterLocomotion(
+      playTestCharacter,
+      {
+        wantsJump: intent.wantsJump,
+        wantsSprint: intent.isSprinting,
+        isMoving: intent.isMoving,
+        desiredDirection,
+        moveSpeed: intent.moveSpeedMetersPerSecond,
+      },
+      deltaSeconds,
+      PLAY_TEST_WORLD_UP,
+      PLAY_TEST_GRAVITY_METERS_PER_SECOND_SQUARED,
+      {
+        onGroundedStep: () => {
+          let position = playTestCharacter.position;
+          if (intent.isMoving) {
+            position = clampPlayTestToStage(
+              add(position, scale(desiredDirection, intent.moveSpeedMetersPerSecond * deltaSeconds)),
+            );
+          }
+          return {
+            position: { x: position.x, y: 0, z: position.z },
+            up: PLAY_TEST_WORLD_UP,
+          };
+        },
+        tryLand: (candidate) => {
+          if (candidate.y > 0) return null;
+          const clamped = clampPlayTestToStage(candidate);
+          return {
+            position: { x: clamped.x, y: 0, z: clamped.z },
+            up: PLAY_TEST_WORLD_UP,
+          };
+        },
+      },
+    );
+
+    const forward = resolveWalkFacing(
+      {
+        currentForward: playTestCharacter.forward,
+        moveDirection: desiredDirection,
+        cameraForward,
+        up: PLAY_TEST_WORLD_UP,
+        aiming: poseAiming,
+        lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
+      },
+      deltaSeconds,
+    );
+    const layers = animationLayersFromState({
+      stanceId,
+      aiming: poseAiming,
+      isMoving: intent.isMoving,
+      gait: intent.gait,
+      jumpPhase: motion.jumpPhase,
+    });
+    playTestCharacter = {
+      ...playTestCharacter,
+      animation: layers.baseClip,
+      upperBodyAnimation: layers.upperClip,
+      forward,
+      grounded: motion.grounded,
+      jumpPhase: motion.jumpPhase,
+      jumpPhaseTime: motion.jumpPhaseTime,
+      position: motion.position,
+      up: motion.up,
+      velocity: motion.velocity,
+    };
+
+    previewRoot.position.set(
+      playTestCharacter.position.x,
+      playTestCharacter.position.y,
+      playTestCharacter.position.z,
+    );
+    previewRoot.rotation.y = Math.atan2(
+      playTestCharacter.forward.x,
+      playTestCharacter.forward.z,
+    );
+
+    const aimZoomTarget = playTestHardAim ? 1 : 0;
+    playTestAimZoom01 += (aimZoomTarget - playTestAimZoom01)
+      * (1 - Math.exp(
+        (-Math.LN2 * deltaSeconds) / PLAY_TEST_WEAPON_AIM_ZOOM_HALF_LIFE_SECONDS,
+      ));
+    const orbit = resolveDeckCameraOrbit(
+      PLAY_TEST_STAGE_FORWARD,
+      PLAY_TEST_WORLD_UP,
+      cameraState.yawRadians,
+      cameraState.pitchRadians,
+      ORBIT_PITCH_LIMIT,
+    );
+    const zoomDistance = cameraState.zoomDistance
+      * (1 - (1 - PLAY_TEST_WEAPON_AIM_ZOOM_SCALE) * playTestAimZoom01);
+    const rig = resolveCharacterCameraRig(orbit, zoomDistance);
+    playTestDesiredCameraPos.set(
+      playTestCharacter.position.x + rig.positionOffset.x,
+      playTestCharacter.position.y + rig.positionOffset.y,
+      playTestCharacter.position.z + rig.positionOffset.z,
+    );
+    playTestDesiredCameraTarget.set(
+      playTestCharacter.position.x + rig.targetOffset.x,
+      playTestCharacter.position.y + rig.targetOffset.y,
+      playTestCharacter.position.z + rig.targetOffset.z,
+    );
+    smoothPlayTestVector(playTestSmoothedCameraPos, playTestDesiredCameraPos, deltaSeconds, 0.05);
+    smoothPlayTestVector(
+      playTestSmoothedCameraTarget,
+      playTestDesiredCameraTarget,
+      deltaSeconds,
+      0.04,
+    );
+    camera.position.copy(playTestSmoothedCameraPos);
+    camera.up.set(
+      PLAY_TEST_WORLD_UP.x,
+      PLAY_TEST_WORLD_UP.y,
+      PLAY_TEST_WORLD_UP.z,
+    );
+    // Keep OrbitControls.target on the pre-play-test pivot so authoring framing
+    // is intact when play test stops (do not follow the stage character).
+    camera.lookAt(playTestSmoothedCameraTarget);
+
+    controllerUpperBodyAim?.setTarget(resolvePlayTestUpperBodyAim());
+    void syncPlayTestAnimation(false, {
+      isMoving: intent.isMoving,
+      gait: intent.gait,
+      jumpPhase: motion.jumpPhase,
+    });
   }
 
-  const startPlayTestJump = (): void => {
-    if (!playTestActive || previewRoot.position.y > 0.001) return;
-    if (playTestJumpPhase === 'jump-start' || playTestJumpPhase === 'jump-loop') return;
-    playTestVerticalSpeed = getCharacterSettings().jumpSpeedMetersPerSecond;
-    playTestJumpPhase = 'jump-start';
-    playTestJumpPhaseTime = 0;
-    playTestAnimationKey = '';
-    void syncPlayTestAnimation(true);
+  const stopPlayTestControls = (): void => {
+    playTestControls?.setCombatInputActive(false);
+    playTestControls?.setInputSuppressed(true);
+    playTestControls?.dispose();
+    playTestControls = null;
+    if (document.pointerLockElement === canvas) {
+      document.exitPointerLock();
+    }
   };
 
   const setPlayTestActive = async (nextActive: boolean): Promise<void> => {
     if (nextActive === playTestActive) return;
     if (nextActive) {
       try {
+        authoringCameraSuspended = true;
+        endFly();
         await ensureAvatar();
         if (!avatar || !documentState) throw new Error('Base Character is still loading.');
         playTestPoseBefore = previewPose;
@@ -1311,30 +1758,46 @@ export function createBaseCharacterEquipmentEditor(
         playTestClipBefore = animation?.activeClipName || 'Idle_Loop';
         playTestCameraPositionBefore.copy(camera.position);
         playTestCameraTargetBefore.copy(controls.target);
+        controls.saveState();
         equipDefaultPlayTestLoadout();
+        // Play Test must resolve clips from the same controller document as authoring.
+        if (controllerState?.id === 'default') {
+          setDefaultAnimationController(controllerState);
+        }
         playTestActive = true;
         playTestWeaponSlotId = null;
-        playTestJumpPhase = 'grounded';
-        playTestJumpPhaseTime = 0;
-        playTestVerticalSpeed = 0;
+        playTestCharacter = createPlayTestCharacterState();
+        playTestHardAim = false;
+        playTestAimZoom01 = 0;
         playTestAnimationKey = '';
-        playTestKeys.clear();
-        playTestWalkToggle = false;
         previewRoot.position.set(0, 0, 0);
         previewRoot.rotation.set(0, 0, 0);
-        camera.position.set(0, 1.7, 4.4);
-        controls.target.set(0, 0.95, 0);
-        controls.update();
+        gizmo.detach();
+        controls.enabled = false;
+        stopPlayTestControls();
+        playTestControls = createPlayerControls(canvas);
+        playTestControls.setMode('on-foot');
+        playTestControls.setOrbitFacing(0, -0.35);
+        playTestControls.setCombatInputActive(false);
+        playTestSmoothedCameraPos.set(0, 1.7, 4.4);
+        playTestSmoothedCameraTarget.set(0, 0.95, 0);
+        camera.position.copy(playTestSmoothedCameraPos);
+        camera.lookAt(playTestSmoothedCameraTarget);
         renderPlayTestHud();
         await setPreviewPose('animated');
         await rebuildEquipmentPreview();
-        setStageStatus('Play test active. The stage has focus; press Esc to return to authoring.');
+        setStageStatus(
+          'Play test active — same on-foot camera/controls as the game. Click the stage to look; Esc returns to authoring.',
+        );
         await syncPlayTestAnimation(true);
         canvas.focus();
         renderLeft();
         renderInspector();
       } catch (error) {
+        stopPlayTestControls();
         playTestActive = false;
+        authoringCameraSuspended = false;
+        restoreAuthoringCamera();
         renderPlayTestHud();
         setStageStatus(
           error instanceof Error ? error.message : 'Could not start Base Character play test.',
@@ -1344,20 +1807,22 @@ export function createBaseCharacterEquipmentEditor(
       return;
     }
 
+    authoringCameraSuspended = true;
     playTestActive = false;
     playTestAnimationGeneration += 1;
-    playTestKeys.clear();
-    playTestWalkToggle = false;
+    stopPlayTestControls();
     playTestWeaponSlotId = null;
-    playTestJumpPhase = 'grounded';
-    playTestJumpPhaseTime = 0;
-    playTestVerticalSpeed = 0;
+    playTestCharacter = createPlayTestCharacterState();
+    playTestHardAim = false;
+    playTestAimZoom01 = 0;
     playTestAnimationKey = '';
-    previewRoot.position.set(0, 0, 0);
-    previewRoot.rotation.set(0, 0, 0);
-    camera.position.copy(playTestCameraPositionBefore);
-    controls.target.copy(playTestCameraTargetBefore);
-    controls.update();
+    resetPlayTestStageTransform();
+    controllerUpperBodyAim?.setTarget(null);
+    controllerUpperBodyAim?.restore();
+    animation?.setUpperBodyAnimation(null, 0);
+    animation?.setPlaying(false);
+    if (avatar) restoreReferencePose(avatar.root);
+    restoreAuthoringCamera();
     selectedStanceId = playTestStanceBefore;
     previewLocomotion = playTestLocomotionBefore;
     renderPlayTestHud();
@@ -1366,54 +1831,35 @@ export function createBaseCharacterEquipmentEditor(
       await setPreviewPose('reference');
     } else {
       animation?.setPlaying(true);
+      animation?.setUpperBodyAnimation(null, 0);
       animation?.setAnimation(playTestClipBefore, 0.12);
     }
+    // Async pose/prefab work can run while the render loop orbits; pin stage + camera again.
+    resetPlayTestStageTransform();
+    restoreAuthoringCamera();
+    controls.saveState();
+    authoringCameraSuspended = false;
     setStageStatus('Play test stopped. Authoring controls restored.');
     renderLeft();
     renderInspector();
     syncGizmo();
   };
 
+  // Escape only — Digit 1–3 are consumed by playTestControls → updatePlayTest.
+  // Handling them here too double-toggled draw/holster on a single press.
   const onPlayTestKeyDown = (event: KeyboardEvent): void => {
     if (!playTestActive) return;
     if (event.ctrlKey || event.metaKey) return;
-    event.stopPropagation();
     if (event.code === 'Escape') {
       event.preventDefault();
       void setPlayTestActive(false);
-      return;
     }
-    if (event.code === 'CapsLock' && !event.repeat) {
-      playTestWalkToggle = !playTestWalkToggle;
-    }
-    if (event.code === 'Space') {
-      event.preventDefault();
-      if (!event.repeat) startPlayTestJump();
-    }
-    const digitIndex = ['Digit1', 'Digit2', 'Digit3'].indexOf(event.code);
-    if (digitIndex >= 0 && !event.repeat) {
-      event.preventDefault();
-      void selectPlayTestWeapon(WEAPON_SELECT_SLOT_IDS[digitIndex]!);
-    }
-    playTestKeys.add(event.code);
   };
 
-  const onPlayTestKeyUp = (event: KeyboardEvent): void => {
-    if (!playTestActive) return;
-    if (!event.ctrlKey && !event.metaKey) event.stopPropagation();
-    playTestKeys.delete(event.code);
-  };
-
-  const onPlayTestBlur = (): void => {
-    playTestKeys.clear();
-  };
-
+  window.addEventListener('keydown', onPlayTestKeyDown);
   canvas.addEventListener('pointerdown', () => {
     if (playTestActive) canvas.focus();
   });
-  canvas.addEventListener('keydown', onPlayTestKeyDown);
-  canvas.addEventListener('keyup', onPlayTestKeyUp);
-  canvas.addEventListener('blur', onPlayTestBlur);
 
   const assignClipToState = (stateId: string, clipName: string): void => {
     if (!controllerState) return;
@@ -1526,7 +1972,7 @@ export function createBaseCharacterEquipmentEditor(
     );
     const previewBtn = button('Preview', () => void previewControllerState());
     previewBtn.disabled = !animation;
-    previewRow.append(field('Preview loco', locoSelect), previewBtn);
+    previewRow.append(field('Idle clip', locoSelect), previewBtn);
 
     const table = document.createElement('div');
     table.className = 'ed-base-controller-states';
@@ -1583,7 +2029,7 @@ export function createBaseCharacterEquipmentEditor(
     const note = document.createElement('div');
     note.className = 'ed-base-note';
     note.textContent =
-      'Use Project → Anims (or drop a GLB on a row) to load clips, then assign. Gameplay still uses hard-coded UAL names until stance wiring.';
+      'Idle-only controller: each stance maps to one idle clip (unarmed Idle_Loop, rifle idle, pistol pistol_idle).';
 
     panel.append(
       field('Controller', controllerSelect),
@@ -1939,7 +2385,7 @@ export function createBaseCharacterEquipmentEditor(
       const note = document.createElement('p');
       note.className = 'ed-base-note';
       note.textContent =
-        'Click the stage, then use WASD, Shift, Space, and 1–3. Movement drives the active controller states in real time.';
+        'Click the stage, then use WASD, Shift, Space, and 1–3. Weapon slots switch stance idle clips (unarmed / rifle / pistol).';
       const reset = button('Reset default loadout', () => {
         equipDefaultPlayTestLoadout(true);
         void rebuildEquipmentPreview().then(() => canvas.focus());
@@ -2380,6 +2826,10 @@ export function createBaseCharacterEquipmentEditor(
         controllerState = cloneAnimationController(parsed);
         controllerDirty = false;
         controllerList = await fetchAnimationControllerList();
+        // Disk is source of truth for Play Mode; keep the shared runtime cache aligned.
+        if (controllerState.id === 'default') {
+          setDefaultAnimationController(controllerState);
+        }
         savedPaths.push(path);
       }
       await persistSettings(savedPaths);
@@ -2429,18 +2879,22 @@ export function createBaseCharacterEquipmentEditor(
     setGizmoMode,
     save,
     loadAnimationFromAsset,
+    getProjectHost: () => projectHost,
     dispose: () => {
       disposed = true;
+      endFly();
       resizeObserver.disconnect();
-      canvas.removeEventListener('keydown', onPlayTestKeyDown);
-      canvas.removeEventListener('keyup', onPlayTestKeyUp);
-      canvas.removeEventListener('blur', onPlayTestBlur);
-      playTestKeys.clear();
+      window.removeEventListener('keydown', onPlayTestKeyDown);
+      window.removeEventListener('keydown', onFlyKey);
+      window.removeEventListener('keyup', onFlyKey);
+      document.removeEventListener('pointerlockchange', onPointerLockChange);
+      stopPlayTestControls();
       controllerSourceLoads.clear();
       gizmo.detach();
       controls.dispose();
       gizmo.dispose();
       animation?.dispose();
+      controllerUpperBodyAim?.dispose();
       revokeAnimationObjectUrl();
       avatar?.dispose();
       environmentTarget.dispose();

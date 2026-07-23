@@ -3,7 +3,7 @@
 const EDITOR_CSS = `
 #editor-root {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 4px var(--ed-project-height, 240px);
+  grid-template-rows: auto minmax(0, 1fr);
   background: #060a14;
   color: var(--text);
   font: 13px/1.35 var(--sc-font);
@@ -365,6 +365,29 @@ const EDITOR_CSS = `
   min-height: 0;
 }
 
+/* Center column stacks scene + Project so left/right inspectors stay full height. */
+.ed-center-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ed-center-column > .ed-scene-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ed-center-column > .ed-project-splitter {
+  flex: 0 0 4px;
+}
+
+.ed-center-column > .ed-project {
+  flex: 0 0 var(--ed-project-height, 240px);
+  height: var(--ed-project-height, 240px);
+  max-height: var(--ed-project-height, 240px);
+}
+
 .ed-splitter {
   position: relative;
   z-index: 2;
@@ -510,20 +533,18 @@ body.ed-resize-row * {
   inset: 0;
 }
 
-/* Planet Authoring keeps the Project asset browser for spawn-layer DnD. */
-#editor-root.is-planet-authoring {
-  grid-template-rows: auto minmax(0, 1fr) 4px var(--ed-project-height, 240px);
+/* Hide Project in the scene center until it docks under the Base Characters stage. */
+#editor-root.is-base-characters .ed-center-column > .ed-project,
+#editor-root.is-base-characters .ed-center-column > .ed-project-splitter {
+  display: none;
 }
 
-/* Base Characters keeps Project for protected/animations assignment. */
-#editor-root.is-base-characters {
-  grid-template-rows: auto minmax(0, 1fr) 4px var(--ed-project-height, 280px);
-}
-
-/* System Map / Menu Manager hide Project — collapse its rows. */
-#editor-root.is-system-map,
-#editor-root.is-menu-manager {
-  grid-template-rows: auto minmax(0, 1fr) 0 0;
+/* System Map / Menu Manager hide Project. */
+#editor-root.is-system-map .ed-center-column > .ed-project,
+#editor-root.is-system-map .ed-center-column > .ed-project-splitter,
+#editor-root.is-menu-manager .ed-center-column > .ed-project,
+#editor-root.is-menu-manager .ed-center-column > .ed-project-splitter {
+  display: none;
 }
 
 #editor-root.is-base-characters .ed-main,
@@ -533,10 +554,10 @@ body.ed-resize-row * {
   grid-template-columns: minmax(0, 1fr);
 }
 
-#editor-root.is-base-characters .ed-scene-shell,
-#editor-root.is-planet-authoring .ed-scene-shell,
-#editor-root.is-system-map .ed-scene-shell,
-#editor-root.is-menu-manager .ed-scene-shell {
+#editor-root.is-base-characters .ed-center-column,
+#editor-root.is-planet-authoring .ed-center-column,
+#editor-root.is-system-map .ed-center-column,
+#editor-root.is-menu-manager .ed-center-column {
   grid-column: 1;
 }
 
@@ -1050,6 +1071,41 @@ body.ed-resize-row * {
   min-width: 0;
   min-height: 0;
   background: #08101d;
+}
+
+/* Stage + Project stack; left/right sidebars stay full height (Rogue-style). */
+.ed-base-center {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ed-base-center > .ed-base-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ed-base-project-host {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ed-base-project-host:empty {
+  display: none;
+}
+
+.ed-base-project-host > .ed-project-splitter {
+  flex: 0 0 4px;
+}
+
+.ed-base-project-host > .ed-project {
+  flex: 0 0 var(--ed-project-height, 280px);
+  height: var(--ed-project-height, 280px);
+  max-height: var(--ed-project-height, 280px);
 }
 
 .ed-base-sidebar {
@@ -2416,13 +2472,19 @@ body.ed-resize-row * {
 }
 `;
 
-let injected = false;
-
+/** Inject or hot-swap editor CSS (HMR-safe). */
 export function injectEditorStyles(): void {
-  if (injected) return;
-  injected = true;
-  const style = document.createElement('style');
-  style.dataset.editorStyles = 'true';
+  let style = document.querySelector<HTMLStyleElement>('style[data-editor-styles]');
+  if (!style) {
+    style = document.createElement('style');
+    style.dataset.editorStyles = 'true';
+    document.head.appendChild(style);
+  }
   style.textContent = EDITOR_CSS;
-  document.head.appendChild(style);
+}
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    injectEditorStyles();
+  });
 }

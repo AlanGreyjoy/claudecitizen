@@ -36,7 +36,7 @@ import {
 } from "../flight/quantum_travel";
 import { regenerateShipShields } from "../flight/ship_instance";
 import { getShipInstance, listShipInstances, removeShipInstance } from "../flight/ship_world";
-import { type createPlayerControls } from "./player_controls";
+import { type createPlayerControls } from "../input/player_controls";
 import type { KeyboardActionId } from "../flight/input_settings";
 import {
   MODE_ENTERING_BED,
@@ -223,9 +223,16 @@ import { createSoundSceneController, type SoundListenerPose } from "../audio/sou
 import {
   createFootstepController,
   footstepGaitFromAnimation,
+  footstepGaitFromIntent,
   type FootstepActor,
   type FootstepSurface,
 } from "../audio/footsteps";
+import {
+  resolveWalkAiming,
+  resolveWalkInputIntent,
+  WALK_MOVE_THRESHOLD,
+} from "../player/character_locomotion";
+import { getCharacterSettings } from "../player/character_settings";
 import { annotateNpcHeadLookTowardPlayer } from "../npc/player_gaze";
 import { createStationNpcPopulation } from "../npc/station_population";
 import {
@@ -279,7 +286,6 @@ import {
   type BallisticSegment,
   type WeaponGeometryHit,
 } from "../player/weapon_ballistics";
-
 type PlayerControls = ReturnType<typeof createPlayerControls>;
 
 const STATION_SOUND_MODES = new Set<GameMode>([
@@ -665,11 +671,16 @@ export function createGameLoop({
     position: Vec3,
     surface: FootstepSurface,
   ): FootstepActor {
+    const speed = length(world.character.velocity);
+    const sprintSpeed = getCharacterSettings().sprintSpeedMetersPerSecond;
     return {
       id: "local-player",
       position,
       grounded: world.character.grounded,
-      gait: footstepGaitFromAnimation(world.character.animation),
+      gait: footstepGaitFromIntent({
+        isMoving: speed > WALK_MOVE_THRESHOLD,
+        isSprinting: speed >= sprintSpeed * 0.85,
+      }),
       surface,
       spatial: false,
     };
@@ -890,9 +901,18 @@ export function createGameLoop({
     return stanceIdForWeaponSlot(activeWeaponSlotId);
   }
 
-  /** RMB aim with a drawn weapon → blend idle into the stance's aim-idle clip. */
+  /** Hard aim is held by RMB. */
   function currentWeaponAiming() {
     return activeWeaponSlotId !== null && controls.isSecondaryClickHeld();
+  }
+
+  function currentWeaponPoseAiming(
+    input: ReturnType<PlayerControls["sampleCharacterInput"]>,
+  ) {
+    return resolveWalkAiming(
+      currentWeaponAiming(),
+      resolveWalkInputIntent(input),
+    );
   }
 
   interface ActiveFirearm {
@@ -1087,10 +1107,12 @@ export function createGameLoop({
           ballisticSegments,
         );
         const hit = resolveWeaponBallisticHit(path);
+        const pathEnd = { ...(hit?.point ?? path[path.length - 1]?.end ?? origin) };
         renderer?.presentWeaponShot({
           hit,
           hitDecalUrl: presentation?.combat?.hitDecalUrl ?? null,
           muzzleFlash: presentation?.muzzleFlash ?? null,
+          tracer: { end: pathEnd, start: origin },
         });
         if (presentation?.combat?.fireSoundUrl) playSfx(presentation.combat.fireSoundUrl);
         runtimeEvents.push({
@@ -1100,7 +1122,7 @@ export function createGameLoop({
           fireMode: event.fireMode,
           hit,
           origin,
-          pathEnd: { ...(hit?.point ?? path[path.length - 1]?.end ?? origin) },
+          pathEnd,
           weaponId: event.weaponId,
         });
         continue;
@@ -1780,7 +1802,7 @@ export function createGameLoop({
         planet.gravityMetersPerSecond2 ?? 9.8,
         physics,
         currentAnimStance(),
-        currentWeaponAiming(),
+        currentWeaponPoseAiming(characterInput),
       );
       updateBuildTool(activeRuntime);
       const tool = activeRuntime.controller.getContext().toolMode;
@@ -1811,7 +1833,7 @@ export function createGameLoop({
       planet.gravityMetersPerSecond2 ?? 9.8,
       physics,
       currentAnimStance(),
-      currentWeaponAiming(),
+      currentWeaponPoseAiming(characterInput),
     );
 
     if (tryEnterShipPadInterest()) return;
@@ -2263,7 +2285,7 @@ export function createGameLoop({
         suppressDeckExit: likelyExterior,
       },
       currentAnimStance(),
-      currentWeaponAiming(),
+      currentWeaponPoseAiming(characterInput),
     );
     world.character = result.state;
 
@@ -2401,6 +2423,7 @@ export function createGameLoop({
     const paused = isPaused?.() ?? false;
     const frameDt = Math.min((nowMs - lastMs) / 1000, 1 / 30);
     const dt = paused ? 0 : frameDt;
+    let weaponPoseAiming = false;
     lastMs = nowMs;
 
     if (paused) {
@@ -2433,6 +2456,7 @@ export function createGameLoop({
       world.shipCameraZoom = camera.shipZoomDistance;
 
       const characterInput = controls.sampleCharacterInput();
+      weaponPoseAiming = currentWeaponPoseAiming(characterInput);
 
       updateShipSystems(dt);
       stationScreenHeadLook = null;
@@ -2468,7 +2492,7 @@ export function createGameLoop({
           seed,
           planetPhysics,
           currentAnimStance(),
-          currentWeaponAiming(),
+          weaponPoseAiming,
         );
         if (!tryEnterShipPadInterest()) {
           world.prompt = handleRampOutside(actions.interactPressed) ?? "";
@@ -2829,14 +2853,13 @@ export function createGameLoop({
               ? null
               : {
                   animation: world.character.animation,
+                  upperBodyAnimation: world.character.upperBodyAnimation ?? null,
                   forward: world.character.forward,
                   position: world.character.position,
                   up: world.character.up,
                 },
           weaponAimActive:
-            !paused &&
-            activeWeaponSlotId !== null &&
-            controls.isSecondaryClickHeld() &&
+            weaponPoseAiming &&
             (world.mode === MODE_ON_FOOT ||
               world.mode === MODE_ON_SHIP_DECK ||
               world.mode === MODE_IN_STATION),

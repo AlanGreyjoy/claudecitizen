@@ -17,7 +17,7 @@ Wire **LMB fire** for drawn rifles/handguns: fire-mode cadence, session-local ma
 | `src/player/weapon_ballistics.ts` (optional split) | **Add** — pure path sampling for gravity-bent hitscan segments (no Three.js) |
 | `src/net/api.ts` | **Extend** — reload / consume-ammo API helper |
 | `backend/crates/server/src/game.rs` + `main.rs` | **Extend** — decrement ammo stack endpoint (or generalize consume) |
-| `src/app/player_controls.ts` | **Extend** — fire / reload / fire-mode cycle actions without breaking cockpit click |
+| `src/input/player_controls.ts` | **Extend** — fire / reload / fire-mode cycle actions without breaking cockpit click |
 | `src/app/game_loop.ts` | **Wire** — when firearm drawn, drive fire tick; resolve hits via world adapters |
 | Physics / render hit adapters | **Extend** — station/ship Rapier rays and terrain hit as needed |
 | `src/player/inventory/types.ts` / play session inventory hooks | **Wire** — reserve counts for reload eligibility |

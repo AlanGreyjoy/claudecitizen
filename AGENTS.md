@@ -30,6 +30,17 @@
 - **Station runtime** (`src/world/prefabs/station_runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
 - **Game loop** (`src/app/game_loop.ts`) owns `stationAnimationStates` (per-animation blend values) and the F-key interaction dispatch.
 
+### Rifle ADS locomotion blending
+
+- `src/player/character_locomotion.ts` owns effective on-foot aim and facing for planet, station, and ship-deck walkers. While effective ADS is active, the whole character turns toward the camera-forward aim direction; otherwise it faces movement. Do not make equipped rifle/pistol stances camera-locked when RMB is not held.
+- `src/player/animation/resolve_locomotion.ts` owns the base/upper clip decision. Rifle ADS while idle uses full-body `idle_aiming`; rifle ADS while walking/running uses the current rifle gait as the lower-body base plus `idle_aiming` as the upper-body override.
+- Sprint takes precedence over ADS. Moving with the sprint gait suppresses the aim pose, camera-facing lock, and aim camera zoom until the character stops sprinting. Sprint always uses its normal full-body locomotion clip; the drawn-weapon crosshair remains available for hip fire.
+- `src/render/characters/sidekick/animation_runtime.ts` splits the clips at `spine_01`. Do not play full-body gait and ADS actions over the same spine/arm tracks, and do not turn ADS into a generic additive delta; both approaches double-drive the upper skeleton and distort the weapon pose.
+- The rifle gait GLBs contain materially different root/pelvis rotations. A masked upper clip still inherits those parents, which previously made moving ADS point away from the authored aim direction. `applyUpperParentCompensation` keeps the live gait parents for the legs but cancels their orientation at `spine_01` against the authored ADS parent space.
+- Parent compensation is fade-weighted and must be restored before every `AnimationMixer.update()`. Three.js may skip writing an unchanged track, so applying correction repeatedly without restore accumulates rotation drift.
+- Switching between full and lower-body variants of the same gait must preserve `AnimationAction.time`; otherwise pressing or releasing RMB visibly restarts the foot cycle.
+- Diagnose aim-only orientation bugs in this order: confirm `upperBodyAnimation`, inspect the root/pelvis tracks in both clips, then inspect the spine compensation. Do not patch walk/sprint `yawOffsetDegrees` unless the corresponding full-body clip is also facing incorrectly.
+
 ### Friendly station NPCs
 
 - Ambient populations use `npc-spawner` markers connected to an undirected graph of `npc-waypoint` markers. Named/service characters use `npc-placement`.
@@ -80,15 +91,18 @@ The in-browser prefab editor is only available under `npm run dev`. It assembles
 
 | Path | Role |
 |------|------|
-| `src/editor/` | Editor business logic: document store, panels, commands, serialization |
+| `src/editor/` | Editor business logic: document store, commands, serialization |
+| `src/editor/react/` | React shell + panels (Fast Refresh); entry `react/main.tsx` |
 | `src/editor/document.ts` | `EditorEntity` model, `EditorStore`, selection, GLB overrides |
-| `src/editor/panels/hierarchy.ts` | Scene tree / outliner |
-| `src/editor/panels/inspector.ts` | Entity properties & component editor |
-| `src/editor/panels/project.ts` | Asset browser |
+| `src/editor/react/panels/HierarchyPanel.tsx` | Scene tree / outliner |
+| `src/editor/react/panels/InspectorPanel.tsx` | Entity properties & component editor chrome |
+| `src/editor/react/panels/ProjectPanel.tsx` | Asset browser |
 | `src/editor/serialize.ts` | Convert editor state to/from `PrefabDocument` |
-| `src/render/editor/viewport.ts` | Three.js editor viewport |
+| `src/render/editor/viewport.ts` | Three.js editor viewport (imperative host) |
 | `src/world/prefabs/schema.ts` | Canonical prefab JSON schema |
 | `src/render/prefabs/prefab_renderer.ts` | Runtime prefab rendering |
+
+React owns editor chrome; `EditorStore` stays framework-agnostic. WebGL/canvas tab editors (viewport, planet, system map, base characters, menu manager) mount via imperative hosts. Dense per-component inspector fields and particle forms still use DOM builders under `panels/`.
 
 ### GLB node overrides and deletions
 
@@ -211,7 +225,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 
 ## Common gotchas
 
-- **F-key does nothing for station animation doors**: `consumeActions()` (`src/app/player_controls.ts`) returns `wasKeyPressed` as a closure. It must snapshot `justPressed` before `justPressed.clear()` runs, otherwise the closure always reads an empty set. `interactPressed` is a captured boolean and is safe; only `wasKeyPressed` had this bug.
+- **F-key does nothing for station animation doors**: `consumeActions()` (`src/input/player_controls.ts`) returns `wasKeyPressed` as a closure. It must snapshot `justPressed` before `justPressed.clear()` runs, otherwise the closure always reads an empty set. `interactPressed` is a captured boolean and is safe; only `wasKeyPressed` had this bug.
 - **"Open on spawn" works but F doesn't**: the animation init path (`stationAnimationStates` seeded from `defaultOpen`) runs without any key input, so it masks a broken key-press path. If `defaultOpen` works but F doesn't, suspect the `wasKeyPressed` closure or the `prefab-info` interaction branch.
 - **Door animates visually but player can't walk through**: the collider isn't bound to the animation (check `collider.animation` is set) or the Rapier collider isn't being toggled (check `setDoorColliderEnabled` is called in `updateStationAnimations`).
 - **Door animation with no bound collider**: `ship_runtime.ts` `bindColliderAnimations` and `station_runtime.ts` `bindStationColliderAnimations` log a warning **per door/animation** that has zero colliders bound to its node(s) — the door will animate but its collider stays enabled (player can't walk through). A collider with no matching node is a normal static floor/hull collider and is intentionally **not** warned about (that was a prior false-positive flood). Check the console for "has no collider bound".
@@ -239,13 +253,15 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) |
 | `src/player/ship_deck.ts` | Ship deck walking + collider step resolution |
 | `src/player/character_settings.ts` | Editor-tunable walk/sprint/jump speeds; persisted in `src/player/data/character-settings.json` via the dev-only `/__editor/character-settings` endpoint (Base Characters → Char Settings) |
-| `src/player/character_locomotion.ts` | Shared on-foot locomotion policy for all walkers (planet/station/deck): walk input intent, facing resolution (aim-idle faces camera), clip selection (`animationFromState`), jump animation phases |
+| `src/player/character_locomotion.ts` | Shared on-foot locomotion policy for all walkers (planet/station/deck): walk input intent, effective ADS (sprint suppresses aim), facing resolution (active aim faces camera), clip selection, jump animation phases |
+| `src/player/animation/resolve_locomotion.ts` | Selects full-body locomotion and optional rifle ADS upper-body layers |
+| `src/render/characters/sidekick/animation_runtime.ts` | Retargeted clip playback, lower/upper masks, crossfades, and ADS parent-space compensation |
 | `src/player/station_walk.ts` | Station walking (Rapier character controller) |
 | `src/player/station_interaction.ts` | Resolves nearby station interactions from markers |
 | `src/flight/flight_config.ts` | Global IFCS / drag / damping / mouse aim knobs |
 | `src/flight/flight_aim.ts` | Aim state, mouse → aim, PD IFCS torque demand |
 | `src/flight/flight_body.ts` | Mass/thrust/torque integrate (planet + sandbox flat) |
-| `src/app/player_controls.ts` | Keyboard/gamepad input; aim persistence; Alt+C coupled; `wasKeyPressed` |
+| `src/input/player_controls.ts` | Keyboard/gamepad input; aim persistence; Alt+C coupled; `wasKeyPressed` |
 | `src/app/game_loop.ts` | Main frame loop; flight + `stationAnimationStates` + F-key dispatch |
 | `src/app/ship_play_session.ts` | Ship sandbox: deck walk + pilot flight preview |
 | `src/render/effects/hud/flight_reticle.ts` | Dual-reticle aim + nose pips |

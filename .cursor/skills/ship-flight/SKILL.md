@@ -125,7 +125,7 @@ Touch these when *all* ships feel wrong — not when balancing one hull.
 | `src/flight/flight_config.ts` | Global IFCS / drag / damping |
 | `src/flight/flight_aim.ts` | Aim state, mouse → aim, PD IFCS demand |
 | `src/flight/flight_body.ts` | Mass/thrust/torque integrate; planet + sandbox flat |
-| `src/app/player_controls.ts` | Aim persistence, Alt+C coupled |
+| `src/input/player_controls.ts` | Aim persistence, Alt+C coupled |
 | `src/app/ship_play_session.ts` | Preview flight |
 | `src/app/game_loop.ts` | Main-play flight + dual reticle |
 | `src/render/effects/hud/flight_reticle.ts` | Aim + nose pips |

@@ -4,54 +4,6 @@
   "label": "Default Character",
   "sources": [
     {
-      "id": "r8-crouching-turn-90-left",
-      "url": "/src/assets/protected/animations/pro-rifle/crouching_turn_90_left.glb",
-      "label": "crouching_turn_90_left",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-crouching-turn-90-right",
-      "url": "/src/assets/protected/animations/pro-rifle/crouching_turn_90_right.glb",
-      "label": "crouching_turn_90_right",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-death-crouching-headshot-front",
-      "url": "/src/assets/protected/animations/pro-rifle/death_crouching_headshot_front.glb",
-      "label": "death_crouching_headshot_front",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-death-from-back-headshot",
-      "url": "/src/assets/protected/animations/pro-rifle/death_from_back_headshot.glb",
-      "label": "death_from_back_headshot",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-death-from-front-headshot",
-      "url": "/src/assets/protected/animations/pro-rifle/death_from_front_headshot.glb",
-      "label": "death_from_front_headshot",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-death-from-right",
-      "url": "/src/assets/protected/animations/pro-rifle/death_from_right.glb",
-      "label": "death_from_right",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-death-from-the-back",
-      "url": "/src/assets/protected/animations/pro-rifle/death_from_the_back.glb",
-      "label": "death_from_the_back",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-death-from-the-front",
-      "url": "/src/assets/protected/animations/pro-rifle/death_from_the_front.glb",
-      "label": "death_from_the_front",
-      "yawOffsetDegrees": 0
-    },
-    {
       "id": "r8-idle",
       "url": "/src/assets/protected/animations/pro-rifle/idle.glb",
       "label": "idle",
@@ -61,102 +13,19 @@
       "id": "r8-idle-aiming",
       "url": "/src/assets/protected/animations/pro-rifle/idle_aiming.glb",
       "label": "idle_aiming",
-      "yawOffsetDegrees": -55
-    },
-    {
-      "id": "r8-idle-crouching",
-      "url": "/src/assets/protected/animations/pro-rifle/idle_crouching.glb",
-      "label": "idle_crouching",
       "yawOffsetDegrees": 0
     },
+
     {
-      "id": "r8-idle-crouching-aiming",
-      "url": "/src/assets/protected/animations/pro-rifle/idle_crouching_aiming.glb",
-      "label": "idle_crouching_aiming",
-      "yawOffsetDegrees": -55
-    },
-    {
-      "id": "r8-jump-down",
-      "url": "/src/assets/protected/animations/pro-rifle/jump_down.glb",
-      "label": "jump_down",
+      "id": "r8-walk-forward",
+      "url": "/src/assets/protected/animations/pro-rifle/walk_forward.glb",
+      "label": "walk_forward",
       "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-jump-loop",
-      "url": "/src/assets/protected/animations/pro-rifle/jump_loop.glb",
-      "label": "jump_loop",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-jump-up",
-      "url": "/src/assets/protected/animations/pro-rifle/jump_up.glb",
-      "label": "jump_up",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-run-backward",
-      "url": "/src/assets/protected/animations/pro-rifle/run_backward.glb",
-      "label": "run_backward",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-run-backward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/run_backward_left.glb",
-      "label": "run_backward_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-run-backward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/run_backward_right.glb",
-      "label": "run_backward_right",
-      "yawOffsetDegrees": -30
     },
     {
       "id": "r8-run-forward",
       "url": "/src/assets/protected/animations/pro-rifle/run_forward.glb",
       "label": "run_forward",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-run-forward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/run_forward_left.glb",
-      "label": "run_forward_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-run-forward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/run_forward_right.glb",
-      "label": "run_forward_right",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-run-left",
-      "url": "/src/assets/protected/animations/pro-rifle/run_left.glb",
-      "label": "run_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-run-right",
-      "url": "/src/assets/protected/animations/pro-rifle/run_right.glb",
-      "label": "run_right",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-sprint-backward",
-      "url": "/src/assets/protected/animations/pro-rifle/sprint_backward.glb",
-      "label": "sprint_backward",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-sprint-backward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/sprint_backward_left.glb",
-      "label": "sprint_backward_left",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-sprint-backward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/sprint_backward_right.glb",
-      "label": "sprint_backward_right",
       "yawOffsetDegrees": 0
     },
     {
@@ -166,137 +35,24 @@
       "yawOffsetDegrees": 0
     },
     {
-      "id": "r8-sprint-forward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/sprint_forward_left.glb",
-      "label": "sprint_forward_left",
+      "id": "r8-jump-up",
+      "url": "/src/assets/protected/animations/pro-rifle/jump_up.glb",
+      "label": "jump_up",
       "yawOffsetDegrees": 0
     },
     {
-      "id": "r8-sprint-forward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/sprint_forward_right.glb",
-      "label": "sprint_forward_right",
+      "id": "r8-jump-loop",
+      "url": "/src/assets/protected/animations/pro-rifle/jump_loop.glb",
+      "label": "jump_loop",
       "yawOffsetDegrees": 0
     },
     {
-      "id": "r8-sprint-left",
-      "url": "/src/assets/protected/animations/pro-rifle/sprint_left.glb",
-      "label": "sprint_left",
+      "id": "r8-jump-down",
+      "url": "/src/assets/protected/animations/pro-rifle/jump_down.glb",
+      "label": "jump_down",
       "yawOffsetDegrees": 0
     },
-    {
-      "id": "r8-sprint-right",
-      "url": "/src/assets/protected/animations/pro-rifle/sprint_right.glb",
-      "label": "sprint_right",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-turn-90-left",
-      "url": "/src/assets/protected/animations/pro-rifle/turn_90_left.glb",
-      "label": "turn_90_left",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-turn-90-right",
-      "url": "/src/assets/protected/animations/pro-rifle/turn_90_right.glb",
-      "label": "turn_90_right",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-walk-backward",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_backward.glb",
-      "label": "walk_backward",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-backward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_backward_left.glb",
-      "label": "walk_backward_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-backward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_backward_right.glb",
-      "label": "walk_backward_right",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-backward",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_backward.glb",
-      "label": "walk_crouching_backward",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-backward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_backward_left.glb",
-      "label": "walk_crouching_backward_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-backward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_backward_right.glb",
-      "label": "walk_crouching_backward_right",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-forward",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_forward.glb",
-      "label": "walk_crouching_forward",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-forward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_forward_left.glb",
-      "label": "walk_crouching_forward_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-forward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_forward_right.glb",
-      "label": "walk_crouching_forward_right",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-left",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_left.glb",
-      "label": "walk_crouching_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-crouching-right",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_crouching_right.glb",
-      "label": "walk_crouching_right",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-forward",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_forward.glb",
-      "label": "walk_forward",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-forward-left",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_forward_left.glb",
-      "label": "walk_forward_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-forward-right",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_forward_right.glb",
-      "label": "walk_forward_right",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-left",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_left.glb",
-      "label": "walk_left",
-      "yawOffsetDegrees": -30
-    },
-    {
-      "id": "r8-walk-right",
-      "url": "/src/assets/protected/animations/pro-rifle/walk_right.glb",
-      "label": "walk_right",
-      "yawOffsetDegrees": -30
-    },
+
     {
       "id": "hg-pistol-idle",
       "url": "/src/assets/protected/animations/handgun-locomotions/pistol_idle.glb",
@@ -307,13 +63,13 @@
       "id": "hg-pistol-walk",
       "url": "/src/assets/protected/animations/handgun-locomotions/pistol_walk.glb",
       "label": "pistol_walk",
-      "yawOffsetDegrees": -27
+      "yawOffsetDegrees": 0
     },
     {
       "id": "hg-pistol-run",
       "url": "/src/assets/protected/animations/handgun-locomotions/pistol_run.glb",
       "label": "pistol_run",
-      "yawOffsetDegrees": -19
+      "yawOffsetDegrees": 0
     },
     {
       "id": "hg-pistol-jump",
@@ -326,111 +82,12 @@
       "url": "/src/assets/protected/animations/handgun-locomotions/pistol_jump_2.glb",
       "label": "pistol_jump_2",
       "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-kneel-to-stand",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_kneel_to_stand.glb",
-      "label": "pistol_kneel_to_stand",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-kneeling-idle",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_kneeling_idle.glb",
-      "label": "pistol_kneeling_idle",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-run-arc",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_run_arc.glb",
-      "label": "pistol_run_arc",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-run-arc-2",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_run_arc_2.glb",
-      "label": "pistol_run_arc_2",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-run-backward",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_run_backward.glb",
-      "label": "pistol_run_backward",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-run-backward-arc",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_run_backward_arc.glb",
-      "label": "pistol_run_backward_arc",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-run-backward-arc-2",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_run_backward_arc_2.glb",
-      "label": "pistol_run_backward_arc_2",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-stand-to-kneel",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_stand_to_kneel.glb",
-      "label": "pistol_stand_to_kneel",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-strafe",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_strafe.glb",
-      "label": "pistol_strafe",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-strafe-2",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_strafe_2.glb",
-      "label": "pistol_strafe_2",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-walk-arc",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_walk_arc.glb",
-      "label": "pistol_walk_arc",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-walk-arc-2",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_walk_arc_2.glb",
-      "label": "pistol_walk_arc_2",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-walk-backward",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_walk_backward.glb",
-      "label": "pistol_walk_backward",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-walk-backward-arc",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_walk_backward_arc.glb",
-      "label": "pistol_walk_backward_arc",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-walk-backward-arc-2",
-      "url": "/src/assets/protected/animations/handgun-locomotions/pistol_walk_backward_arc_2.glb",
-      "label": "pistol_walk_backward_arc_2",
-      "yawOffsetDegrees": 0
     }
   ],
   "stances": [
-    {
-      "id": "unarmed",
-      "label": "Unarmed"
-    },
-    {
-      "id": "rifle",
-      "label": "Rifle"
-    },
-    {
-      "id": "pistol",
-      "label": "Pistol"
-    }
+    { "id": "unarmed", "label": "Unarmed" },
+    { "id": "rifle", "label": "Rifle" },
+    { "id": "pistol", "label": "Pistol" }
   ],
   "states": [
     {
@@ -442,17 +99,17 @@
       "sourceId": "ual"
     },
     {
-      "id": "unarmed-idle-aiming",
-      "label": "Unarmed Idle Aiming",
-      "locomotion": "idle_aiming",
-      "stanceId": "unarmed",
-      "clipName": "Idle_Loop",
-      "sourceId": "ual"
-    },
-    {
       "id": "unarmed-walk",
       "label": "Unarmed Walk",
       "locomotion": "walk",
+      "stanceId": "unarmed",
+      "clipName": "Walk_Loop",
+      "sourceId": "ual"
+    },
+    {
+      "id": "unarmed-run",
+      "label": "Unarmed Run",
+      "locomotion": "run",
       "stanceId": "unarmed",
       "clipName": "Walk_Loop",
       "sourceId": "ual"
@@ -514,6 +171,14 @@
       "sourceId": "r8-walk-forward"
     },
     {
+      "id": "rifle-run",
+      "label": "Rifle Run",
+      "locomotion": "run",
+      "stanceId": "rifle",
+      "clipName": "run_forward",
+      "sourceId": "r8-run-forward"
+    },
+    {
       "id": "rifle-sprint",
       "label": "Rifle Sprint",
       "locomotion": "sprint",
@@ -554,20 +219,20 @@
       "sourceId": "hg-pistol-idle"
     },
     {
-      "id": "pistol-idle-aiming",
-      "label": "Pistol Idle Aiming",
-      "locomotion": "idle_aiming",
-      "stanceId": "pistol",
-      "clipName": "pistol_idle",
-      "sourceId": "hg-pistol-idle"
-    },
-    {
       "id": "pistol-walk",
       "label": "Pistol Walk",
       "locomotion": "walk",
       "stanceId": "pistol",
       "clipName": "pistol_walk",
       "sourceId": "hg-pistol-walk"
+    },
+    {
+      "id": "pistol-run",
+      "label": "Pistol Run",
+      "locomotion": "run",
+      "stanceId": "pistol",
+      "clipName": "pistol_run",
+      "sourceId": "hg-pistol-run"
     },
     {
       "id": "pistol-sprint",

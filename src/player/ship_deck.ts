@@ -15,9 +15,11 @@ import {
 } from "./character_controller";
 import {
   advanceJumpAnimationPhase,
-  animationFromState,
+  animationLayersFromState,
+  resolveWalkAiming,
   resolveWalkFacing,
   resolveWalkInputIntent,
+  shouldLockFacingToCamera,
 } from "./character_locomotion";
 import {
   sampleColliderGroundHeight,
@@ -650,6 +652,7 @@ function updateCharacterOnDeckRapier(
   aiming = false,
 ): DeckUpdateResult {
   const intent = resolveWalkInputIntent(input);
+  const poseAiming = resolveWalkAiming(aiming, intent);
   const cameraYawRadians = input.cameraYawRadians ?? 0;
   const desiredDirection = deckMovementDirection(
     ship,
@@ -658,7 +661,6 @@ function updateCharacterOnDeckRapier(
     cameraYawRadians,
   );
   const cameraForward = deckMovementDirection(ship, 0, 1, cameraYawRadians);
-  const cameraLockedFacing = stanceId === 'rifle';
 
   let verticalVelocity = state.shipVerticalVelocity ?? 0;
   const groundedBefore =
@@ -693,9 +695,8 @@ function updateCharacterOnDeckRapier(
       moveDirection: desiredDirection,
       cameraForward,
       up: ship.up,
-      aiming,
-      isMoving: intent.isMoving,
-      cameraLockedFacing,
+      aiming: poseAiming,
+      lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
     },
     dt,
   );
@@ -714,23 +715,19 @@ function updateCharacterOnDeckRapier(
 
   const airborne = startedJump || !grounded || verticalVelocity > 0.15;
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
+  const layers = animationLayersFromState({
+    stanceId,
+    aiming: poseAiming,
+    isMoving: intent.isMoving,
+    gait: intent.gait,
+    jumpPhase: jump.jumpPhase,
+  });
   return {
     dismounted: flags.leftDeck,
     fellOffDeck: flags.leftDeck,
     state: {
-      animation: animationFromState({
-        jumpPhase: jump.jumpPhase,
-        isMoving: intent.isMoving,
-        isSprinting: intent.isSprinting,
-        stanceId,
-        aiming,
-        crouch: intent.isCrouching,
-        walk: intent.isWalking,
-        gait: intent.gait,
-        moveDirection: desiredDirection,
-        facing: forward,
-        up: ship.up,
-      }),
+      animation: layers.baseClip,
+      upperBodyAnimation: layers.upperClip,
       deckLocal,
       deckZone: bound?.id ?? state.deckZone,
       forward,

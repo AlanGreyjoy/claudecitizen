@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import type {
-  CharacterRenderState,
-  CharacterUpperBodyAim,
   Planet,
   PlanetSurfaceSample,
   RenderStats,
@@ -64,6 +62,7 @@ import {
 } from '../../settings/game_settings';
 import { createMuzzleFlashRenderer } from '../effects/muzzle_flash';
 import { createHitDecalRenderer } from '../effects/hit_decals';
+import { createTracerRenderer } from '../effects/tracers';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 const QUANTUM_RENDER_LAYER = 1;
@@ -72,8 +71,6 @@ const QUANTUM_BACKGROUND = new THREE.Color(0x01030a);
 // Distant stations already have System Map/nav markers, so load their detailed
 // prefab only once the player is close enough for the mesh to matter.
 const SECONDARY_STATION_LOAD_DISTANCE_METERS = 75_000;
-const MAX_UPPER_BODY_AIM_YAW = THREE.MathUtils.degToRad(80);
-const MAX_UPPER_BODY_AIM_PITCH = THREE.MathUtils.degToRad(55);
 
 function enableRenderLayer(root: THREE.Object3D, layer: number): void {
   root.traverse((object) => object.layers.enable(layer));
@@ -177,45 +174,6 @@ export function createSpikeRenderer(
   const weaponMarkerPosition = new THREE.Vector3();
   const weaponMarkerForward = new THREE.Vector3();
   const weaponMarkerQuaternion = new THREE.Quaternion();
-  const upperAimView = new THREE.Vector3();
-  const upperAimUp = new THREE.Vector3();
-  const upperAimForward = new THREE.Vector3();
-  const upperAimPlanarView = new THREE.Vector3();
-  const upperAimCross = new THREE.Vector3();
-
-  function resolveUpperBodyAim(character: CharacterRenderState): CharacterUpperBodyAim {
-    camera.getWorldDirection(upperAimView).normalize();
-    upperAimUp.set(character.up.x, character.up.y, character.up.z).normalize();
-    upperAimForward
-      .set(character.forward.x, character.forward.y, character.forward.z)
-      .addScaledVector(upperAimUp, -upperAimForward.dot(upperAimUp))
-      .normalize();
-    upperAimPlanarView
-      .copy(upperAimView)
-      .addScaledVector(upperAimUp, -upperAimView.dot(upperAimUp));
-
-    let yawRadians = 0;
-    if (upperAimPlanarView.lengthSq() > 1e-8 && upperAimForward.lengthSq() > 1e-8) {
-      upperAimPlanarView.normalize();
-      yawRadians = Math.atan2(
-        upperAimUp.dot(upperAimCross.crossVectors(upperAimForward, upperAimPlanarView)),
-        THREE.MathUtils.clamp(upperAimForward.dot(upperAimPlanarView), -1, 1),
-      );
-    }
-
-    return {
-      pitchRadians: THREE.MathUtils.clamp(
-        Math.asin(THREE.MathUtils.clamp(upperAimView.dot(upperAimUp), -1, 1)),
-        -MAX_UPPER_BODY_AIM_PITCH,
-        MAX_UPPER_BODY_AIM_PITCH,
-      ),
-      yawRadians: THREE.MathUtils.clamp(
-        yawRadians,
-        -MAX_UPPER_BODY_AIM_YAW,
-        MAX_UPPER_BODY_AIM_YAW,
-      ),
-    };
-  }
   const lighting = createSceneLighting(scene);
   const quantumLightingRoots = [
     lighting.ambient,
@@ -231,6 +189,7 @@ export function createSpikeRenderer(
   const tileManager = createPlanetTileManager(scene, planet, seed);
   const muzzleFlashRenderer = createMuzzleFlashRenderer(scene, tileManager.renderScale);
   const hitDecalRenderer = createHitDecalRenderer(scene, tileManager.renderScale);
+  const tracerRenderer = createTracerRenderer(scene, tileManager.renderScale);
   const surfaceWaterManager = createPlanetSurfaceWaterManager(
     scene,
     planet,
@@ -424,6 +383,7 @@ export function createSpikeRenderer(
       quantumState.phase === 'dropOut';
     muzzleFlashRenderer.update(dt, focusBody.position, !quantumTraveling);
     hitDecalRenderer.update(focusBody.position, !quantumTraveling);
+    tracerRenderer.update(dt, focusBody.position, !quantumTraveling);
 
     // Resolve this once at travel entry. During the tunnel, all world systems
     // can work against the destination instead of sampling every point along
@@ -694,10 +654,11 @@ export function createSpikeRenderer(
         character,
         focusBody.position,
         nowSeconds,
-        character && world.weaponAimActive ? resolveUpperBodyAim(character) : null,
-        character && !world.weaponAimActive
-          ? (world.characterHeadLook ?? null)
-          : null,
+        {
+          headLook: character && !world.weaponAimActive
+            ? (world.characterHeadLook ?? null)
+            : null,
+        },
       );
       remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
       stationNpcs.update(world.stationNpcs ?? [], focusBody.position, nowSeconds);
@@ -914,6 +875,7 @@ export function createSpikeRenderer(
     },
     presentWeaponShot(shot) {
       if (shot.muzzleFlash) muzzleFlashRenderer.spawn(shot.muzzleFlash);
+      if (shot.tracer) tracerRenderer.spawn(shot.tracer);
       if (shot.hit) {
         hitDecalRenderer.spawn({
           normal: shot.hit.normal,
@@ -934,6 +896,7 @@ export function createSpikeRenderer(
       avatar.dispose();
       muzzleFlashRenderer.dispose();
       hitDecalRenderer.dispose();
+      tracerRenderer.dispose();
       shipRenderPool.dispose();
       tileManager.dispose();
       composerStack.dispose();

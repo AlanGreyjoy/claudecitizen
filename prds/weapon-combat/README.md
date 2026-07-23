@@ -37,8 +37,8 @@ Paste the prompt block at the top of [CHECKLIST.md](./CHECKLIST.md). Work phases
 | Weapon prefabs | `src/world/prefabs/data/assault-01.prefab.json`, `twin-horned-pistol.prefab.json`, `brown-50.prefab.json` |
 | Equipment attach | `src/render/characters/sidekick/equipment_attach.ts` |
 | Base Characters editor | `src/render/editor/base_character_equipment_editor.ts` |
-| Aim / draw / crosshair | `src/app/game_loop.ts`, `src/app/player_controls.ts` |
-| Rifle / pistol anims | `src/player/animation/pro_rifle_clips.ts`, `src/player/character_locomotion.ts` |
+| Aim / draw / crosshair | `src/app/game_loop.ts`, `src/input/player_controls.ts` |
+| Rifle / pistol anims | `src/player/animation/resolve_locomotion.ts`, `src/player/character_locomotion.ts`, `src/render/characters/sidekick/animation_runtime.ts` |
 | Weapon shop | `src/player/weapon_shop_gaze.ts`, `src/render/effects/hud/weapon_shop.ts` |
 | Purchase / consume API | `src/net/api.ts`, `backend/crates/server/src/game.rs` |
 | Weapon admin catalog | `backend/migrations/0008_equipment_catalog.sql`, `src/net/admin_api.ts` |

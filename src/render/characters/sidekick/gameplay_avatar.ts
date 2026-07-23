@@ -26,16 +26,13 @@ import {
 import { createEquipmentAttachmentController } from './equipment_attach';
 import { applyDefaultFrustumCulling } from '../../frustum_policy';
 import {
-  createSidekickUpperBodyAimController,
-  type SidekickUpperBodyAimController,
-} from './upper_body_aim';
-import {
   createSidekickHeadLookController,
   type SidekickHeadLookController,
 } from './head_look';
 import {
   loadCurrentDefaultAnimationController,
   primaryStanceSources,
+  type AnimationControllerV1,
 } from '../../../player/animation';
 
 const GAMEPLAY_ANIMATION_TIME_SCALE = 1;
@@ -65,26 +62,135 @@ export function createSidekickGameplayAvatar(
 
   let avatar: Awaited<ReturnType<typeof assembleSidekickCharacter>> | null = null;
   let animation: SidekickAnimationRuntime | null = null;
+  let animationController: AnimationControllerV1 | null = null;
   let fallback: CharacterAvatarInstance | null = null;
-  let upperBodyAim: SidekickUpperBodyAimController | null = null;
   let headLook: SidekickHeadLookController | null = null;
   let ready = false;
   let disposed = false;
   let desiredAnimation = 'Idle_Loop';
+  let desiredUpperAnimation: string | null = null;
   let lastNowSeconds: number | null = null;
   let headBone: THREE.Object3D | null = null;
   let pendingInventory: InventoryState | null = null;
   let pendingActiveWeaponSlotId: string | null = null;
-  let pendingUpperBodyAim: CharacterUpperBodyAim | null = null;
   let pendingHeadLook: CharacterUpperBodyAim | null = null;
   let sidekickCatalog: SidekickCatalog | null = null;
   let baseDefinition: SidekickCharacterDefinitionV2 | null = null;
   let appliedWearableKey = '';
   let wearableSyncEpoch = 0;
+  let appliedControllerSourceKey = '';
+  let controllerSyncEpoch = 0;
+  const clipLoadInFlight = new Map<string, Promise<boolean>>();
   const wearableAssetWarnings = new Set<string>();
   const equipment = createEquipmentAttachmentController();
   const modelOffsetPosition = new THREE.Vector3();
   const characterType = appearance.type === 2 ? 2 : 1;
+
+  function controllerSourceKey(controller: AnimationControllerV1): string {
+    return primaryStanceSources(controller)
+      .map((source) => `${source.id}:${source.yawOffsetDegrees}:${source.url}`)
+      .join('|');
+  }
+
+  function sourceForClipName(clipName: string) {
+    if (!animationController) return null;
+    const state = animationController.states.find((entry) => entry.clipName === clipName);
+    if (state) {
+      return animationController.sources.find((source) => source.id === state.sourceId) ?? null;
+    }
+    return animationController.sources.find((source) => source.label === clipName) ?? null;
+  }
+
+  async function ensureClipLoaded(clipName: string): Promise<boolean> {
+    if (!animation || !clipName) return false;
+    if (animation.clipNames.includes(clipName)) return true;
+    const existing = clipLoadInFlight.get(clipName);
+    if (existing) return existing;
+    const source = sourceForClipName(clipName);
+    if (!source) return false;
+    const loading = (async () => {
+      try {
+        await animation!.loadAnimationSource(
+          source.url,
+          clipName,
+          source.yawOffsetDegrees,
+          { activate: false },
+        );
+        return !disposed && Boolean(animation?.clipNames.includes(clipName));
+      } catch (error) {
+        console.warn(`Failed to load animation clip "${clipName}".`, error);
+        return false;
+      } finally {
+        clipLoadInFlight.delete(clipName);
+      }
+    })();
+    clipLoadInFlight.set(clipName, loading);
+    return loading;
+  }
+
+  function playDesiredUpper(fadeSeconds = 0.16): void {
+    if (!animation) return;
+    if (!desiredUpperAnimation) {
+      animation.setUpperBodyAnimation(null, fadeSeconds);
+      return;
+    }
+    const applyUpper = (): void => {
+      if (!animation || !desiredUpperAnimation) return;
+      if (!animation.clipNames.includes(desiredUpperAnimation)) return;
+      animation.setUpperBodyAnimation(desiredUpperAnimation, fadeSeconds);
+    };
+    if (animation.clipNames.includes(desiredUpperAnimation)) {
+      applyUpper();
+      return;
+    }
+    void (async () => {
+      const loaded = await ensureClipLoaded(desiredUpperAnimation!);
+      if (!loaded || disposed) return;
+      applyUpper();
+    })();
+  }
+
+  function playDesiredAnimation(fadeSeconds = 0.16): void {
+    if (!animation) return;
+    // Upper first so base activation sees the correct layer mask.
+    playDesiredUpper(fadeSeconds);
+    if (animation.clipNames.includes(desiredAnimation)) {
+      animation.setAnimation(desiredAnimation, fadeSeconds);
+      return;
+    }
+    void ensureClipLoaded(desiredAnimation).then((loaded) => {
+      if (!loaded || disposed || !animation) return;
+      if (desiredAnimation && animation.clipNames.includes(desiredAnimation)) {
+        playDesiredUpper(fadeSeconds);
+        animation.setAnimation(desiredAnimation, fadeSeconds);
+      }
+    });
+  }
+
+  async function preloadControllerSources(
+    controller: AnimationControllerV1,
+    epoch: number,
+  ): Promise<void> {
+    if (!animation) return;
+    animationController = controller;
+    const sources = primaryStanceSources(controller);
+    for (const source of sources) {
+      if (disposed || epoch !== controllerSyncEpoch || !animation) break;
+      try {
+        await animation.loadAnimationSource(
+          source.url,
+          source.label,
+          source.yawOffsetDegrees,
+          { activate: false },
+        );
+      } catch (error) {
+        console.warn(`Failed to preload stance animation "${source.label}".`, error);
+      }
+    }
+    if (disposed || epoch !== controllerSyncEpoch || !animation) return;
+    appliedControllerSourceKey = controllerSourceKey(controller);
+    playDesiredAnimation(0);
+  }
 
   async function syncSidekickEquipment(epoch: number): Promise<void> {
     if (fallback) {
@@ -130,9 +236,29 @@ export function createSidekickGameplayAvatar(
     void syncSidekickEquipment(epoch);
   }
 
-  /** DEV: re-fetch Base Character mounts when returning from the editor tab. */
+  async function refreshAnimationControllerFromEditor(): Promise<void> {
+    if (!animation || !ready || fallback) return;
+    const epoch = ++controllerSyncEpoch;
+    try {
+      const controller = await loadCurrentDefaultAnimationController();
+      if (disposed || epoch !== controllerSyncEpoch) return;
+      animationController = controller;
+      const nextKey = controllerSourceKey(controller);
+      if (nextKey === appliedControllerSourceKey) {
+        playDesiredAnimation(0);
+        return;
+      }
+      await preloadControllerSources(controller, epoch);
+    } catch (error) {
+      console.warn('Could not refresh the gameplay animation controller.', error);
+    }
+  }
+
+  /** DEV: re-fetch mounts + animation controller when returning from the editor tab. */
   const onVisibilityRefresh = (): void => {
-    if (document.visibilityState === 'visible') syncEquipment();
+    if (document.visibilityState !== 'visible') return;
+    syncEquipment();
+    void refreshAnimationControllerFromEditor();
   };
   if (import.meta.env.DEV) {
     document.addEventListener('visibilitychange', onVisibilityRefresh);
@@ -163,21 +289,10 @@ export function createSidekickGameplayAvatar(
         avatar = null;
         return;
       }
-      // Preload rifle + pistol primary locomotion packs (bounded; not full catalog).
+      // Preload rifle + pistol idle sources authored on the animation controller.
       const controller = await loadCurrentDefaultAnimationController();
-      const stanceSources = primaryStanceSources(controller);
-      for (const source of stanceSources) {
-        if (disposed || !animation) break;
-        try {
-          await animation.loadAnimationSource(
-            source.url,
-            source.label,
-            source.yawOffsetDegrees,
-          );
-        } catch (error) {
-          console.warn(`Failed to preload stance animation "${source.label}".`, error);
-        }
-      }
+      const epoch = ++controllerSyncEpoch;
+      await preloadControllerSources(controller, epoch);
       if (disposed) {
         animation?.dispose();
         animation = null;
@@ -186,8 +301,6 @@ export function createSidekickGameplayAvatar(
         return;
       }
       avatar.root.scale.setScalar(renderScale);
-      upperBodyAim = createSidekickUpperBodyAimController(root, avatar.root);
-      upperBodyAim?.setTarget(pendingUpperBodyAim);
       headLook = createSidekickHeadLookController(root, avatar.root);
       headLook?.setTarget(pendingHeadLook);
       applyDefaultFrustumCulling(avatar.root);
@@ -203,7 +316,7 @@ export function createSidekickGameplayAvatar(
       );
       modelOffset.add(avatar.root);
       headBone = avatar.root.getObjectByName('Head') ?? avatar.root.getObjectByName('head') ?? null;
-      animation.setAnimation(desiredAnimation, 0);
+      playDesiredAnimation(0);
       ready = true;
       syncEquipment();
     } catch (error) {
@@ -212,6 +325,7 @@ export function createSidekickGameplayAvatar(
       avatar = null;
       animation?.dispose();
       animation = null;
+      animationController = null;
       modelOffset.clear();
       if (disposed) return;
       fallback = createFallback();
@@ -228,15 +342,17 @@ export function createSidekickGameplayAvatar(
     dispose: () => {
       disposed = true;
       wearableSyncEpoch += 1;
+      controllerSyncEpoch += 1;
+      clipLoadInFlight.clear();
       if (import.meta.env.DEV) {
         document.removeEventListener('visibilitychange', onVisibilityRefresh);
       }
       equipment.dispose();
-      upperBodyAim?.dispose();
       headLook?.dispose();
       animation?.dispose();
       avatar?.dispose();
       fallback?.dispose();
+      animationController = null;
       root.clear();
     },
     getHeadBone: () => fallback?.getHeadBone() ?? headBone,
@@ -246,8 +362,13 @@ export function createSidekickGameplayAvatar(
     isReady: () => fallback?.isReady() ?? ready,
     setAnimation: (name) => {
       desiredAnimation = name;
-      animation?.setAnimation(name);
+      playDesiredAnimation();
       fallback?.setAnimation(name);
+    },
+    setUpperBodyAnimation: (name) => {
+      desiredUpperAnimation = name;
+      playDesiredUpper();
+      fallback?.setUpperBodyAnimation?.(name);
     },
     setPose: (character: CharacterRenderState, focusPosition: Vec3, scale: number) => {
       if (fallback) {
@@ -273,17 +394,10 @@ export function createSidekickGameplayAvatar(
         return;
       }
       const delta = lastNowSeconds === null ? 0 : nowSeconds - lastNowSeconds;
-      upperBodyAim?.restore();
       headLook?.restore();
       animation?.update(delta * timeScale);
-      upperBodyAim?.update(delta);
       headLook?.update(delta);
       lastNowSeconds = nowSeconds;
-    },
-    setUpperBodyAim: (aim) => {
-      pendingUpperBodyAim = aim;
-      upperBodyAim?.setTarget(aim);
-      fallback?.setUpperBodyAim?.(aim);
     },
     setHeadLook: (look) => {
       pendingHeadLook = look;

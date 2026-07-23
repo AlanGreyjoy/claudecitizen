@@ -91,11 +91,29 @@ const SURFACE_PROFILES: Record<FootstepSurface, SurfaceProfile> = {
 
 const noiseBuffers = new WeakMap<BaseAudioContext, readonly AudioBuffer[]>();
 
-/** Maps authored animation clip names to the cadence used by footstep audio. */
+/**
+ * Maps movement intent to footstep cadence. Animation clips are stance-idle
+ * only, so gait must come from locomotion physics — not clip names.
+ */
+export function footstepGaitFromIntent(params: {
+  isMoving: boolean;
+  isSprinting: boolean;
+}): FootstepGait | null {
+  if (!params.isMoving) return null;
+  return params.isSprinting ? 'sprint' : 'walk';
+}
+
+/** @deprecated Prefer footstepGaitFromIntent — clip names no longer encode gait. */
 export function footstepGaitFromAnimation(animation: string): FootstepGait | null {
   const normalized = animation.toLowerCase();
-  if (normalized.includes('sprint') || normalized.includes('run')) return 'sprint';
-  if (normalized.includes('walk')) return 'walk';
+  if (normalized.includes('sprint')) return 'sprint';
+  if (
+    normalized.includes('run')
+    || normalized.includes('walk')
+    || normalized.includes('strafe')
+  ) {
+    return 'walk';
+  }
   return null;
 }
 

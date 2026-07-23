@@ -18,14 +18,17 @@ export {
 export {
   getDefaultAnimationController,
   loadCurrentDefaultAnimationController,
-  locomotionFromGameplay,
+  setDefaultAnimationController,
 } from './default_controller';
 export {
-  MOVE_OCTANTS,
-  PRO_RIFLE_CATALOG_ONLY_CLIPS,
-  PRO_RIFLE_LOCOMOTION_CLIPS,
-  resolveProRifleClip,
-  type MoveOctant,
-  type ProRifleClipParams,
-  type ProRifleGait,
-} from './pro_rifle_clips';
+  PISTOL_IDLE_CLIP,
+  PISTOL_IDLE_CLIPS,
+} from './pistol_clips';
+export {
+  resolveLocomotionClip,
+  resolveLocomotionAiming,
+  resolveLocomotionLayers,
+  type LocomotionGait,
+  type LocomotionLayers,
+  type ResolveLocomotionClipParams,
+} from './resolve_locomotion';

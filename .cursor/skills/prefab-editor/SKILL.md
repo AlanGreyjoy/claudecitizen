@@ -11,13 +11,14 @@ Dev-only in-browser editor for station/ship/site/prop prefabs. Requires `npm run
 
 | Panel | Path | Role |
 |-------|------|------|
-| Hierarchy | `src/editor/panels/hierarchy.ts` | Entity tree + expandable GLB node tree under asset entities |
-| Viewport | `src/render/editor/viewport.ts` | 3D scene, picking, gizmo, flythrough |
-| Inspector | `src/editor/panels/inspector.ts` | Transform, visual, materials, components |
-| Project | `src/editor/panels/project.ts` | Prefab list, asset browser |
-| Toolbar | `src/editor/panels/toolbar.ts` | New/Save/Load/Preview, gizmo modes |
+| Shell | `src/editor/react/EditorApp.tsx` | React chrome, tabs, HMR soft-remount |
+| Hierarchy | `src/editor/react/panels/HierarchyPanel.tsx` | Entity tree + expandable GLB node tree under asset entities |
+| Viewport | `src/render/editor/viewport.ts` | 3D scene, picking, gizmo, flythrough (imperative) |
+| Inspector | `src/editor/react/panels/InspectorPanel.tsx` | Transform, visual, materials, components |
+| Project | `src/editor/react/panels/ProjectPanel.tsx` | Asset browser |
+| Toolbar | `src/editor/react/panels/Toolbar.tsx` | New/Save/Load/Preview, gizmo modes |
 
-Canonical data flow: `document.ts` (store) → `serialize.ts` (prefab JSON) → `src/world/prefabs/schema.ts` (validators).
+Canonical data flow: `document.ts` (store) → `serialize.ts` (prefab JSON) → `src/world/prefabs/schema.ts` (validators). React UI sits on top of `EditorStore`; dense component field editors still use `panels/inspector_component_fields_dom.ts`.
 
 ## Selection
 
@@ -42,7 +43,7 @@ Three entry points (all call `addComponentFromPalette` in `component_actions.ts`
 | **Hierarchy** | RMB entity → **Components** submenu |
 | **GLB node** | RMB GLB row in hierarchy **or** RMB viewport when a GLB node is sub-selected → **Add Component to Node** |
 
-Palette is filtered by prefab **kind** (`station` / `ship` / `site` / `prop`) and **singleton** types already in the document are disabled. Registry + defaults: `src/world/prefabs/component_registry.ts`. Field editors: `inspector.ts` `componentFields()`.
+Palette is filtered by prefab **kind** (`station` / `ship` / `site` / `prop`) and **singleton** types already in the document are disabled. Registry + defaults: `src/world/prefabs/component_registry.ts`. Field editors: `inspector_component_fields_dom.ts` (mounted from React inspector).
 
 ### Where components land
 

@@ -11,11 +11,18 @@ Dev server port **4173** (`npm run dev`). Open via title-screen **Editor** or `?
 ## Architecture
 
 ```
+react/main.tsx → EditorApp (React shell, Fast Refresh)
 document.ts (EditorStore) → serialize.ts → world/prefabs/schema.ts
-panels/ (DOM UI)            render/editor/viewport.ts (Three.js)
+react/panels/* (React UI)   panels/*_logic.ts + ImperativeHost leftovers
 component_actions.ts        world/prefabs/component_registry.ts
-glb_binding.ts              render/prefabs/prefab_renderer.ts (runtime)
+glb_binding.ts              render/editor/viewport.ts (Three.js, imperative)
+                            render/prefabs/prefab_renderer.ts (runtime)
 ```
+
+- **React UI** lives in `src/editor/react/` (shell, Project, Hierarchy, Toolbar, Inspector chrome, Material Manager).
+- **EditorStore** and serialize stay framework-agnostic in `src/editor/`.
+- **Imperative hosts**: prefab viewport, character preview, base-characters stage, planet/system/menu tab editors, and dense inspector component field builders (`inspector_component_fields_dom.ts` / `particle_fields.ts`).
+- HMR: Fast Refresh for React panels; soft remount + sessionStorage snapshot for store/tab/selection; CSS hot-swaps via `styles.ts`. Prefab/planet/system JSON stays on Vite `watch.ignored`.
 
 Editor logic stays in `src/editor/`. Three.js viewport in `src/render/editor/`. Prefab JSON contract in `world/prefabs/`.
 
@@ -29,9 +36,9 @@ Editor logic stays in `src/editor/`. Three.js viewport in `src/render/editor/`. 
 
 | Entry point | Path |
 |-------------|------|
-| Inspector combobox | `inspector.ts` |
-| RMB entity → Components | `hierarchy.ts` |
-| RMB GLB node → Add Component to Node | `hierarchy.ts` / `viewport.ts` |
+| Inspector combobox | `react/panels/InspectorPanel.tsx` |
+| RMB entity → Components | `react/panels/HierarchyPanel.tsx` |
+| RMB GLB node → Add Component to Node | `HierarchyPanel.tsx` / `viewport.ts` |
 
 **Where data lands:**
 - `marker: true` on a visual entity → **child empty** at node position; set `glbAnchor`.
@@ -54,10 +61,11 @@ Hierarchy uses `entityTargetsGlbNode` / `entityBoundToAnyGlbNode` from `glb_bind
 
 | Task | Files |
 |------|-------|
-| New component type | `schema.ts`, `component_registry.ts`, `inspector.ts` |
-| Ship flight stats on ship-controller | `schema.ts`, `inspector.ts`, `ship_runtime.ts` — tune via `.cursor/skills/ship-flight/SKILL.md` |
-| Add-component / context menus | `component_actions.ts`, `hierarchy.ts`, `viewport.ts` |
+| New component type | `schema.ts`, `component_registry.ts`, `InspectorPanel.tsx` / `inspector_component_fields_dom.ts` |
+| Ship flight stats on ship-controller | `schema.ts`, inspector fields, `ship_runtime.ts` — tune via `.cursor/skills/ship-flight/SKILL.md` |
+| Add-component / context menus | `component_actions.ts`, `HierarchyPanel.tsx`, `viewport.ts` |
 | Node overrides | `document.ts`, `serialize.ts`, `viewport.ts`, `prefab_renderer.ts` |
 | GLB binding bugs | `glb_binding.ts`, console + `node scripts/inspect_glb.mjs` |
+| Editor shell / HMR | `src/editor/react/main.tsx`, `EditorApp.tsx` |
 
 Deeper workflows: `.cursor/skills/prefab-editor/SKILL.md`. Ship flight feel: `.cursor/skills/ship-flight/SKILL.md`. Runtime door/animation wiring: `AGENTS.md`.

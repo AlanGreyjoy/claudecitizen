@@ -18,6 +18,11 @@ export type JumpPhase = 'grounded' | 'jump-start' | 'jump-loop' | 'jump-land';
 
 export interface CharacterState {
   animation: string;
+  /**
+   * Optional upper-body overlay clip (rifle ADS while moving → idle_aiming).
+   * Null/undefined = full-body base only.
+   */
+  upperBodyAnimation?: string | null;
   forward: Vec3;
   grounded: boolean;
   jumpPhase: JumpPhase;
@@ -68,6 +73,8 @@ export type GameMode =
 
 export interface CharacterRenderState {
   animation: string;
+  /** Optional upper-body overlay; remotes may omit. */
+  upperBodyAnimation?: string | null;
   forward: Vec3;
   position: Vec3;
   up: Vec3;

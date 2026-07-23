@@ -11,6 +11,7 @@
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
     "types": ["vite/client", "node"],
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -30,5 +31,5 @@
       ]
     }
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts"]
 }

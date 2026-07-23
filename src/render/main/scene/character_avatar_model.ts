@@ -3,7 +3,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkinnedScene } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CHARACTER_GROUND_OFFSET_METERS } from '../../../player/character_controller';
-import type { CharacterRenderState, CharacterUpperBodyAim, Vec3 } from '../../../types';
+import type {
+  CharacterRenderState,
+  CharacterUpperBodyAim,
+  Vec3,
+} from '../../../types';
 import {
   findFirstSkinnedMesh,
   retargetUnityHumanoidAnimations,
@@ -55,10 +59,10 @@ export interface CharacterAvatarInstance {
   hasLoadError: () => boolean;
   isReady: () => boolean;
   setAnimation: (name: string) => void;
+  /** Upper-body ADS overlay (rifle aim-while-moving); null clears. */
+  setUpperBodyAnimation?: (name: string | null) => void;
   setPose: (character: CharacterRenderState, focusPosition: Vec3, renderScale: number) => void;
   updateMixer: (nowSeconds: number, timeScale?: number) => void;
-  /** Procedural local-player spine aim applied after the locomotion mixer. */
-  setUpperBodyAim?: (aim: CharacterUpperBodyAim | null) => void;
   /** Procedural Head-bone look (station screen hotspots). */
   setHeadLook?: (look: CharacterUpperBodyAim | null) => void;
   /** Attach equipped backpack/weapons from personal inventory loadout; optional drawn hotbar slot. */

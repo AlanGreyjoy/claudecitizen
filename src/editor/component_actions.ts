@@ -53,7 +53,22 @@ export interface GlbNodeColliderTarget {
   nodeName: string;
 }
 
-export function addColliderToEntities(store: EditorStore, entityIds: string[]): void {
+export type ColliderShapeChoice = 'box' | 'mesh';
+
+export function addColliderShapeMenuEntries(
+  onPick: (shape: ColliderShapeChoice) => void,
+): ContextMenuEntry[] {
+  return [
+    { label: 'Box', action: () => onPick('box') },
+    { label: 'Mesh', action: () => onPick('mesh') },
+  ];
+}
+
+export function addColliderToEntities(
+  store: EditorStore,
+  entityIds: string[],
+  shape: ColliderShapeChoice,
+): void {
   const colliderDef = allComponentsForKind(store).find((def) => def.type === 'collider');
   if (!colliderDef) {
     showToast('Collider component is unavailable for this prefab kind.', true);
@@ -70,7 +85,7 @@ export function addColliderToEntities(store: EditorStore, entityIds: string[]): 
       skipped += 1;
       continue;
     }
-    const component = createComponentForEntity(colliderDef, entity, null);
+    const component = createComponentForEntity(colliderDef, entity, null, shape);
     store.setComponents(entityId, [...entity.components, component]);
     added += 1;
   }
@@ -80,16 +95,21 @@ export function addColliderToEntities(store: EditorStore, entityIds: string[]): 
     return;
   }
   if (skipped > 0) {
-    showToast(`Added collider to ${added} entities (${skipped} already had one).`);
+    showToast(
+      `Added ${shape} collider to ${added} entities (${skipped} already had one).`,
+    );
     return;
   }
-  showToast(`Added collider to ${added} ${added === 1 ? 'entity' : 'entities'}.`);
+  showToast(
+    `Added ${shape} collider to ${added} ${added === 1 ? 'entity' : 'entities'}.`,
+  );
 }
 
 export function addColliderToGlbNodes(
   store: EditorStore,
   targets: GlbNodeColliderTarget[],
-  getNodeBounds?: (entityId: string, nodeUuid: string) => NodeBounds | null,
+  getNodeBounds: ((entityId: string, nodeUuid: string) => NodeBounds | null) | undefined,
+  shape: ColliderShapeChoice,
 ): void {
   const colliderDef = allComponentsForKind(store).find((def) => def.type === 'collider');
   if (!colliderDef) {
@@ -112,7 +132,12 @@ export function addColliderToGlbNodes(
       skipped += 1;
       continue;
     }
-    const component = createComponentForEntity(colliderDef, entity, target.nodeName);
+    const component = createComponentForEntity(
+      colliderDef,
+      entity,
+      target.nodeName,
+      shape,
+    );
     if (component.type === 'collider' && component.shape === 'box') {
       const bounds = getNodeBounds?.(target.entityId, target.nodeUuid);
       if (bounds) {
@@ -140,12 +165,12 @@ export function addColliderToGlbNodes(
 
   store.setNodeOverrideComponentsBatch(
     edits,
-    `Add colliders to ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}`,
+    `Add ${shape} colliders to ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}`,
   );
   showToast(
     skipped > 0
-      ? `Added colliders to ${edits.length} nodes (${skipped} already had one).`
-      : `Added colliders to ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}.`,
+      ? `Added ${shape} colliders to ${edits.length} nodes (${skipped} already had one).`
+      : `Added ${shape} colliders to ${edits.length} ${edits.length === 1 ? 'node' : 'nodes'}.`,
   );
 }
 
@@ -227,6 +252,7 @@ function createComponentForEntity(
   def: ComponentDef,
   entity: EditorEntity,
   subNodeName?: string | null,
+  colliderShape?: ColliderShapeChoice,
 ): PrefabComponent {
   const component = def.createDefault();
   if (component.type === 'animation' && subNodeName) {
@@ -259,33 +285,34 @@ function createComponentForEntity(
   }
   if (component.type !== 'collider') return component;
 
-  // GLB node colliders start as boxes so the node-bounds fitting above can
-  // produce an immediately useful collider. Authors can still opt into a mesh
-  // collider for geometry that needs the more accurate BVH walk surface.
-  if (subNodeName) {
-    return {
-      ...component,
-      shape: 'box',
-      size: { x: 1, y: 1, z: 1 },
-    };
+  const shape =
+    colliderShape ??
+    (subNodeName
+      ? 'box'
+      : entity.primitive?.shape === 'box'
+        ? 'box'
+        : entity.asset
+          ? 'mesh'
+          : 'box');
+
+  if (shape === 'mesh') {
+    return { type: 'collider', shape: 'mesh' };
   }
 
-  // Default new colliders to fit the entity's visual so authors don't end up
-  // with a useless 1x1x1 box on a wall, prop, or hull model.
-  if (entity.primitive?.shape === 'box') {
+  // Box: size from primitive when available; GLB-node boxes are fitted by the
+  // caller when bounds are known. Authors can still switch to mesh in inspector.
+  if (!subNodeName && entity.primitive?.shape === 'box') {
     return {
-      ...component,
+      type: 'collider',
       shape: 'box',
       size: { ...entity.primitive.size },
     };
   }
-  if (entity.asset) {
-    return {
-      ...component,
-      shape: 'mesh',
-    };
-  }
-  return component;
+  return {
+    type: 'collider',
+    shape: 'box',
+    size: { x: 1, y: 1, z: 1 },
+  };
 }
 
 export function addEmptyAtPosition(

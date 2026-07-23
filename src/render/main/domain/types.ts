@@ -40,6 +40,8 @@ export interface WeaponCombatShotPresentation {
   hit: { normal: Vec3; point: Vec3 } | null;
   hitDecalUrl: string | null;
   muzzleFlash: WeaponMarkerWorldPose | null;
+  /** Barrel-end → hit (or max-range end) for cosmetic tracer streaks. */
+  tracer: { end: Vec3; start: Vec3 } | null;
 }
 
 export interface SpikeRenderer {

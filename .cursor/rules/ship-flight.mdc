@@ -1,6 +1,6 @@
 ---
 description: Ship flight IFCS — mass/thrust/torque, dual-reticle aim, coupled mode, preview flight. Use when tuning or changing ship flight.
-globs: src/flight/**,src/app/ship_play_session.ts,src/app/player_controls.ts,src/app/game_loop.ts,src/player/ship_layout.ts,src/render/effects/hud/flight_reticle.ts,src/world/prefabs/ship_runtime.ts,src/world/prefabs/data/*.prefab.json
+globs: src/flight/**,src/app/ship_play_session.ts,src/input/player_controls.ts,src/app/game_loop.ts,src/player/ship_layout.ts,src/render/effects/hud/flight_reticle.ts,src/world/prefabs/ship_runtime.ts,src/world/prefabs/data/*.prefab.json
 alwaysApply: false
 ---
 

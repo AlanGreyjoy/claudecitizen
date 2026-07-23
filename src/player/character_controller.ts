@@ -25,13 +25,14 @@ import type {
   Vec3,
 } from "../types";
 import {
-  animationFromState,
+  animationLayersFromState,
   JUMP_LAND_SECONDS,
   JUMP_START_SECONDS,
   resolveWalkFacing,
+  resolveWalkAiming,
   resolveWalkInputIntent,
+  shouldLockFacingToCamera,
 } from "./character_locomotion";
-import type { ProRifleGait } from "./animation";
 import type { WeaponAnimStanceId } from "./inventory/weapon_select";
 import { getCharacterSettings } from "./character_settings";
 
@@ -119,16 +120,9 @@ export interface LocomotionMotionInput {
   isMoving: boolean;
   desiredDirection: Vec3;
   moveSpeed: number;
-  /** Camera forward on the walk plane — used for rifle 8-way when camera-locked. */
-  cameraForward?: Vec3;
-  cameraLockedFacing?: boolean;
-  crouch?: boolean;
-  walk?: boolean;
-  gait?: ProRifleGait;
 }
 
 export interface LocomotionIntegrationResult {
-  animation: string;
   grounded: boolean;
   jumpPhase: JumpPhase;
   jumpPhaseTime: number;
@@ -155,8 +149,6 @@ export function integrateCharacterLocomotion(
   initialUp: Vec3,
   gravityMetersPerSecond2: number,
   callbacks: LocomotionCallbacks,
-  stanceId: WeaponAnimStanceId = "unarmed",
-  aiming = false,
 ): LocomotionIntegrationResult {
   let position = state.position;
   let velocity = state.velocity;
@@ -222,29 +214,7 @@ export function integrateCharacterLocomotion(
     }
   }
 
-  const facingBasis =
-    motion.cameraLockedFacing && (motion.isMoving || aiming)
-      ? (motion.cameraForward ?? motion.desiredDirection)
-      : motion.isMoving
-        ? motion.desiredDirection
-        : motion.cameraForward ?? motion.desiredDirection;
-
-  const animation = animationFromState({
-    jumpPhase,
-    isMoving: motion.isMoving,
-    isSprinting: motion.wantsSprint,
-    stanceId,
-    aiming,
-    crouch: Boolean(motion.crouch),
-    walk: Boolean(motion.walk),
-    gait: motion.gait,
-    moveDirection: motion.desiredDirection,
-    facing: facingBasis,
-    up,
-  });
-
   return {
-    animation,
     grounded,
     jumpPhase,
     jumpPhaseTime,
@@ -354,6 +324,7 @@ export function updateCharacterState(
   aiming = false,
 ): CharacterState {
   const intent = resolveWalkInputIntent(input);
+  const poseAiming = resolveWalkAiming(aiming, intent);
   const cameraYawRadians = input.cameraYawRadians ?? 0;
   const desiredDirection = movementDirection(
     state.position,
@@ -362,7 +333,6 @@ export function updateCharacterState(
     cameraYawRadians,
   );
   const cameraForward = movementDirection(state.position, 0, 1, cameraYawRadians);
-  const cameraLockedFacing = stanceId === "rifle";
 
   const gravity = planet.gravityMetersPerSecond2 ?? 9.8;
   const motion = integrateCharacterLocomotion(
@@ -373,11 +343,6 @@ export function updateCharacterState(
       isMoving: intent.isMoving,
       desiredDirection,
       moveSpeed: intent.moveSpeedMetersPerSecond,
-      cameraForward,
-      cameraLockedFacing,
-      crouch: intent.isCrouching,
-      walk: intent.isWalking,
-      gait: intent.gait,
     },
     dt,
     radialUp(state.position),
@@ -428,8 +393,6 @@ export function updateCharacterState(
       },
       sampleAirborneUp: radialUp,
     },
-    stanceId,
-    aiming,
   );
 
   const forward = resolveWalkFacing(
@@ -438,15 +401,22 @@ export function updateCharacterState(
       moveDirection: desiredDirection,
       cameraForward,
       up: motion.up,
-      aiming,
-      isMoving: intent.isMoving,
-      cameraLockedFacing,
+      aiming: poseAiming,
+      lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
     },
     dt,
   );
 
+  const layers = animationLayersFromState({
+    stanceId,
+    aiming: poseAiming,
+    isMoving: intent.isMoving,
+    gait: intent.gait,
+    jumpPhase: motion.jumpPhase,
+  });
   return {
-    animation: motion.animation,
+    animation: layers.baseClip,
+    upperBodyAnimation: layers.upperClip,
     forward,
     grounded: motion.grounded,
     jumpPhase: motion.jumpPhase,

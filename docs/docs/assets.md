@@ -38,3 +38,27 @@ Try alternate exports with `?character=ual-mannequin`, `?character=space-suit-ma
 In the editor Project panel, open `protected/characters`, then use a model card's **Character** or **Anims** action to test a mesh against embedded clips or the built-in UAL clip source in the scene view's **Character Preview** tab.
 
 Unity's Mecanim animator controller does not export to GLTF/GLB as a usable browser state machine. The game keeps the state machine in TypeScript (`Idle_Loop`, `Walk_Loop`, `Sprint_Loop`, jump phases) and retargets baked humanoid clips onto the Unity-style skeleton at load time. Export additional Unity animation clips as baked FBX/GLB clips, then add them to the character avatar catalog or map them onto the existing state names.
+
+### Rifle ADS locomotion
+
+Rifle aim uses two animation layers only while the character is walking or running:
+
+- The selected rifle walk or run clip drives the lower body.
+- `idle_aiming` overrides the skeleton from `spine_01` upward.
+- Idle ADS remains the normal full-body `idle_aiming` clip.
+
+The split is an override mask, not an additive animation. Letting both the full gait and ADS clip write the spine and arms produces a blended, inaccurate weapon pose.
+
+While ADS is active, shared character locomotion turns the whole character toward the camera-forward aim direction, including while walking or running. Releasing RMB restores movement-facing. This character-root turn is separate from the skeleton-layer correction below and composes with it safely.
+
+Sprint takes precedence over ADS. Once sprint locomotion is active, the aim pose and camera-facing lock stop, the normal full-body sprint clip plays, and the camera leaves ADS zoom. Holding RMB during the sprint does not restore ADS until the character stops sprinting. The drawn-weapon crosshair remains visible for hip fire.
+
+There is one additional parent-space correction in `src/render/characters/sidekick/animation_runtime.ts`. The rifle locomotion GLBs animate root and pelvis orientations differently from `idle_aiming`. Without compensation, the upper layer inherits the gait's parent rotation and can point away from the authored aim direction. After the mixer runs, the runtime cancels the live gait-parent orientation at `spine_01` and replaces it with the sampled ADS parent orientation. The legs keep the complete gait, while the torso keeps the authored aim direction.
+
+The correction follows the upper layer's fade weight. It is restored before the next mixer update because Three.js can skip writes for unchanged animation tracks; applying the correction repeatedly without restoring the authored pose would accumulate rotation. Full/lower mask switches also copy the active gait time so entering or leaving aim does not restart the foot cycle.
+
+When debugging:
+
+1. If only moving ADS is wrong, inspect the root and pelvis tracks in both the gait and `idle_aiming` GLBs before changing source yaw offsets.
+2. If the full-body gait is also facing incorrectly, correct that clip's controller `yawOffsetDegrees`.
+3. Verify walking and running RMB transitions independently, then verify that sprint enters its full-body clip and suppresses ADS presentation.

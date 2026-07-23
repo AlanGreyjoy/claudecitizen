@@ -405,6 +405,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
           ? null
           : {
               animation: world.character.animation,
+              upperBodyAnimation: world.character.upperBodyAnimation ?? null,
               forward: world.character.forward,
               position: predicted.position,
               up: world.character.up,

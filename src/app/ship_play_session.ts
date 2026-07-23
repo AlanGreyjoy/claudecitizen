@@ -6,15 +6,23 @@ import {
   RenderPass,
   SMAAEffect,
 } from "postprocessing";
-import { createPlayerControls } from "./player_controls";
+import { createPlayerControls } from "../input/player_controls";
 import {
   FIRST_PERSON_PITCH_LIMIT,
   integrateCharacterLocomotion,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
 } from "../player/character_controller";
-import { loadCurrentCharacterSettings } from "../player/character_settings";
-import { resolveWalkInputIntent } from "../player/character_locomotion";
+import { loadCurrentDefaultAnimationController } from "../player/animation";
+import {
+  getCharacterSettings,
+  loadCurrentCharacterSettings,
+} from "../player/character_settings";
+import {
+  animationFromState,
+  resolveWalkInputIntent,
+  WALK_MOVE_THRESHOLD,
+} from "../player/character_locomotion";
 import {
   bedInteractPrompt,
   createDeckCharacterState,
@@ -89,7 +97,7 @@ import {
 } from "../audio/sound_scene";
 import {
   createFootstepController,
-  footstepGaitFromAnimation,
+  footstepGaitFromIntent,
 } from "../audio/footsteps";
 import { createLoopingSfxController, playSfx } from "../audio/sfx";
 import {
@@ -312,8 +320,11 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   if (started) return;
   started = true;
 
-  // Dev: pick up any Base Character settings saved since page load.
-  await loadCurrentCharacterSettings();
+  // Dev: pick up Base Character settings + animation controller saved since page load.
+  await Promise.all([
+    loadCurrentCharacterSettings(),
+    loadCurrentDefaultAnimationController(),
+  ]);
 
   // --- prefab layout ----------------------------------------------------------
   const doc = await loadPrefabDocument(prefabId);
@@ -890,11 +901,6 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
         isMoving,
         desiredDirection,
         moveSpeed,
-        cameraForward: orbit.forward,
-        cameraLockedFacing: false,
-        crouch: intent.isCrouching,
-        walk: intent.isWalking,
-        gait: intent.gait,
       },
       dt,
       WORLD_UP,
@@ -949,7 +955,12 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
 
     character = {
       ...character,
-      animation: motion.animation,
+      animation: animationFromState({
+        isMoving,
+        gait: intent.gait,
+        jumpPhase: motion.jumpPhase,
+      }),
+      upperBodyAnimation: null,
       forward,
       grounded: motion.grounded,
       jumpPhase: motion.jumpPhase,
@@ -1636,6 +1647,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
           ? null
           : {
               animation: character.animation,
+              upperBodyAnimation: character.upperBodyAnimation ?? null,
               forward: character.forward,
               position: character.position,
               up: character.up,
@@ -1695,7 +1707,12 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
                 id: "ship-preview-player",
                 position: footstepPosition,
                 grounded: character.grounded,
-                gait: footstepGaitFromAnimation(character.animation),
+                gait: footstepGaitFromIntent({
+                  isMoving: length(character.velocity) > WALK_MOVE_THRESHOLD,
+                  isSprinting:
+                    length(character.velocity)
+                    >= getCharacterSettings().sprintSpeedMetersPerSecond * 0.85,
+                }),
                 surface: "metal",
                 spatial: false,
               },

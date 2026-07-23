@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { CharacterUpperBodyAim } from '../../../types';
 
 const AIM_HALF_LIFE_SECONDS = 0.055;
+/** Match the ADS upper animation mask (spine_01+). */
 const SPINE_CHAIN = [
   { names: ['spine_01', 'Spine_01'], weight: 0.25 },
   { names: ['spine_02', 'Spine_02'], weight: 0.35 },

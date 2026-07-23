@@ -15,8 +15,9 @@ interface CharacterAvatar {
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
-    upperBodyAim?: CharacterUpperBodyAim | null,
-    headLook?: CharacterUpperBodyAim | null,
+    presentation?: {
+      headLook?: CharacterUpperBodyAim | null;
+    },
   ) => void;
   setEquippedInventory: (
     inventory: InventoryState | null,
@@ -38,20 +39,21 @@ export function createCharacterAvatar(
     character: CharacterRenderState | null | undefined,
     focusPosition: Vec3,
     nowSeconds: number,
-    upperBodyAim: CharacterUpperBodyAim | null = null,
-    headLook: CharacterUpperBodyAim | null = null,
+    presentation: {
+      headLook?: CharacterUpperBodyAim | null;
+    } = {},
   ): void {
     if (!character || instance.hasLoadError()) {
-      instance.setUpperBodyAim?.(null);
       instance.setHeadLook?.(null);
       instance.root.visible = false;
       return;
     }
     instance.root.visible = true;
     instance.setPose(character, focusPosition, renderScale);
+    // Upper before base so aim-while-moving uses the lower-body mask.
+    instance.setUpperBodyAnimation?.(character.upperBodyAnimation ?? null);
     instance.setAnimation(character.animation);
-    instance.setUpperBodyAim?.(upperBodyAim);
-    instance.setHeadLook?.(headLook);
+    instance.setHeadLook?.(presentation.headLook ?? null);
     instance.updateMixer(nowSeconds);
   }
 

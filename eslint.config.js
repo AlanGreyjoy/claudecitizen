@@ -88,7 +88,7 @@ export default tseslint.config(
   },
 
   {
-    files: ['src/**/*.ts', 'scripts/**/*.ts'],
+    files: ['src/**/*.{ts,tsx}', 'scripts/**/*.ts'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -108,14 +108,14 @@ export default tseslint.config(
           project: ['./tsconfig.json'],
         },
         node: {
-          extensions: ['.js', '.ts', '.mjs'],
+          extensions: ['.js', '.ts', '.tsx', '.mjs'],
         },
       },
     },
   },
 
   {
-    files: ['src/**/*.ts', 'scripts/**/*.ts'],
+    files: ['src/**/*.{ts,tsx}', 'scripts/**/*.ts'],
     plugins: {
       sonarjs,
       'import-x': importX,

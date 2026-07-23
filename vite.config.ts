@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
 const EDITOR_ASSET_ROOT = 'editor/assets';
@@ -970,7 +971,15 @@ function editorDevApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [copyReferencedGameAssets(), editorDevApi()],
+  plugins: [react(), copyReferencedGameAssets(), editorDevApi()],
+  // Keep a single React copy (docs/takram also pull react) so Vite's
+  // rolldown prebundle of react-dom/client doesn't import a mismatched chunk.
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+  },
   server: {
     watch: {
       // Editor saves write prefab JSON that the game imports via

@@ -75,7 +75,7 @@ Without a shoot/reload loop:
 
 1. Buy a rifle/handgun and matching ammo at the weapon shop (ARC).
 2. Equip weapon to a hotbar slot; press **1–3** to draw.
-3. Hold **RMB** to aim (existing); **LMB** fires per current fire mode.
+3. Hold **RMB** to aim; ADS turns the character toward the camera-forward aim direction while idle, walking, or running. Sprint takes precedence and suppresses ADS until sprint locomotion stops. **LMB** fires per current fire mode.
 4. Cycle fire mode (binding defined in phase 03; default: a dedicated key such as **B** or hold-to-cycle — lock in phase doc).
 5. **R** (or existing reload binding) reloads from inventory ammo when magazine is empty/partial.
 6. See muzzle flash, hear SFX, see hit decals on walls/floors/terrain, and read mag / reserve / mode on HUD.

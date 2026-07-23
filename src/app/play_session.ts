@@ -1,4 +1,4 @@
-import { createPlayerControls } from './player_controls';
+import { createPlayerControls } from '../input/player_controls';
 import { createGameLoop, type BuildAreaRuntime } from './game_loop';
 import type { LoadingScreenHandle } from './loading_screen';
 import {
@@ -17,6 +17,7 @@ import { createFoodShop } from '../render/effects/hud/food_shop';
 import { createPersonalInventory } from '../render/effects/hud/personal_inventory';
 import { createBuildTerminal } from '../render/effects/hud/build_terminal';
 import { createHangarBuildController } from '../player/hangar_build/build_controller';
+import { loadCurrentDefaultAnimationController } from '../player/animation';
 import { loadCurrentCharacterSettings } from '../player/character_settings';
 import {
   createBuildPropColliderRuntime,
@@ -265,8 +266,11 @@ export async function startPlaySession(
 
   started = true;
 
-  // Dev: pick up any Base Character settings saved since page load.
-  await loadCurrentCharacterSettings();
+  // Dev: pick up Base Character settings + animation controller saved since page load.
+  await Promise.all([
+    loadCurrentCharacterSettings(),
+    loadCurrentDefaultAnimationController(),
+  ]);
 
   // The ship layout must be active before the renderer (hull, doors) and the
   // world state (rig doors) are created.

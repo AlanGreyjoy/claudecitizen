@@ -2,9 +2,11 @@ import { add, cross, length, normalize, scale, tangentize, vec3 } from '../math/
 import { CHARACTER_GROUND_OFFSET_METERS } from './character_controller';
 import {
   advanceJumpAnimationPhase,
-  animationFromState,
+  animationLayersFromState,
+  resolveWalkAiming,
   resolveWalkFacing,
   resolveWalkInputIntent,
+  shouldLockFacingToCamera,
 } from './character_locomotion';
 
 import type { StationPhysics } from '../physics/station_physics';
@@ -142,10 +144,10 @@ export function updateCharacterInStation(
   aiming = false,
 ): StationCharacterState {
   const intent = resolveWalkInputIntent(input);
+  const poseAiming = resolveWalkAiming(aiming, intent);
   const cameraYawRadians = input.cameraYawRadians ?? 0;
   const desiredDirection = stationMovementDirection(frame, intent.moveX, intent.moveY, cameraYawRadians);
   const cameraForward = stationMovementDirection(frame, 0, 1, cameraYawRadians);
-  const cameraLockedFacing = stanceId === 'rifle';
 
   if (!physics) {
     // Physics is required for station locomotion once walk volumes are removed.
@@ -181,28 +183,23 @@ export function updateCharacterInStation(
       moveDirection: desiredDirection,
       cameraForward,
       up: frame.up,
-      aiming,
-      isMoving: intent.isMoving,
-      cameraLockedFacing,
+      aiming: poseAiming,
+      lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
     },
     dt,
   );
 
+  const layers = animationLayersFromState({
+    stanceId,
+    aiming: poseAiming,
+    isMoving: intent.isMoving,
+    gait: intent.gait,
+    jumpPhase: jump.jumpPhase,
+  });
   return {
     ...state,
-    animation: animationFromState({
-      jumpPhase: jump.jumpPhase,
-      isMoving: intent.isMoving,
-      isSprinting: intent.isSprinting,
-      stanceId,
-      aiming,
-      crouch: intent.isCrouching,
-      walk: intent.isWalking,
-      gait: intent.gait,
-      moveDirection: desiredDirection,
-      facing: forward,
-      up: frame.up,
-    }),
+    animation: layers.baseClip,
+    upperBodyAnimation: layers.upperClip,
     forward,
     grounded: !airborne,
     jumpPhase: jump.jumpPhase,
