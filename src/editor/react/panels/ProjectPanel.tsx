@@ -41,7 +41,7 @@ import { UiIcon } from '../UiIcon';
 
 export interface ProjectPanelOptions {
   /** Render a thumbnail data-url for a model asset (provided by render/editor). */
-  getModelThumbnail: (url: string) => Promise<string>;
+  getModelThumbnail: (url: string, assetVersion?: string) => Promise<string>;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
   audioPreview: EditorAudioPreviewController;
@@ -122,6 +122,7 @@ function assetCardTitle(sourcePath: string, kind: 'empty' | 'model' | 'audio' | 
 function AssetThumb({
   fileName,
   url,
+  assetVersion,
   isModel,
   isAudio,
   isEmptyFile,
@@ -129,6 +130,7 @@ function AssetThumb({
 }: {
   fileName: string;
   url: string;
+  assetVersion: string | undefined;
   isModel: boolean;
   isAudio: boolean;
   isEmptyFile: boolean;
@@ -144,6 +146,7 @@ function AssetThumb({
     <div
       className={`ed-asset-thumb${isEmptyFile ? ' is-warning' : ''}`}
       data-thumb-url={isModel && !isEmptyFile && !thumbSrc ? url : undefined}
+      data-thumb-version={isModel && !isEmptyFile && !thumbSrc ? assetVersion : undefined}
       data-thumb-alt={isModel && !isEmptyFile && !thumbSrc ? fileName : undefined}
     >
       {content}
@@ -269,6 +272,10 @@ function AssetCard({
   const isEmptyFile = entry.size === 0;
   const sourcePath = `${entry.root}/${entry.path}`;
   const kind = isEmptyFile ? 'empty' : isModel ? 'model' : isAudio ? 'audio' : 'other';
+  const assetVersion =
+    entry.size !== undefined && entry.modifiedAtMs !== undefined
+      ? `${entry.size}:${Math.trunc(entry.modifiedAtMs)}`
+      : undefined;
 
   const onDragStart = (event: DragEvent<HTMLDivElement>): void => {
     event.dataTransfer.setData(ASSET_DND_TYPE, url);
@@ -285,6 +292,7 @@ function AssetCard({
       <AssetThumb
         fileName={fileName}
         url={url}
+        assetVersion={assetVersion}
         isModel={isModel}
         isAudio={isAudio}
         isEmptyFile={isEmptyFile}
@@ -316,7 +324,7 @@ function AssetCard({
 
 function useLazyModelThumbs(
   gridRef: RefObject<HTMLDivElement | null>,
-  getModelThumbnail: (url: string) => Promise<string>,
+  getModelThumbnail: (url: string, assetVersion?: string) => Promise<string>,
   selectedFolder: string,
   tree: FolderNode,
 ): {
@@ -337,10 +345,12 @@ function useLazyModelThumbs(
           const thumb = entry.target as HTMLElement;
           const url = thumb.dataset.thumbUrl;
           if (!url) continue;
+          const assetVersion = thumb.dataset.thumbVersion;
           observer.unobserve(thumb);
           delete thumb.dataset.thumbUrl;
+          delete thumb.dataset.thumbVersion;
           delete thumb.dataset.thumbAlt;
-          void getModelThumbnail(url).then((dataUrl) => {
+          void getModelThumbnail(url, assetVersion).then((dataUrl) => {
             if (!dataUrl) return;
             setThumbByUrl((prev) => (prev[url] ? prev : { ...prev, [url]: dataUrl }));
           });

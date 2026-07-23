@@ -491,10 +491,37 @@ function editorDevApi(): Plugin {
         next();
         return;
       }
-      res.statusCode = 200;
+      const modifiedAtMs = Math.trunc(fileStat.mtimeMs);
+      const etag = `W/"${fileStat.size.toString(16)}-${modifiedAtMs.toString(16)}"`;
+      const ifNoneMatch = req.headers['if-none-match'];
+      const hasIfNoneMatch = typeof ifNoneMatch === 'string';
+      const hasMatchingEtag =
+        hasIfNoneMatch
+        && ifNoneMatch
+          .split(',')
+          .some((candidate) => candidate.trim() === '*' || candidate.trim() === etag);
+      const ifModifiedSince = req.headers['if-modified-since'];
+      const modifiedSinceMs =
+        typeof ifModifiedSince === 'string' ? Date.parse(ifModifiedSince) : Number.NaN;
+      const hasMatchingModifiedDate =
+        !hasIfNoneMatch
+        && Number.isFinite(modifiedSinceMs)
+        && Math.trunc(fileStat.mtimeMs / 1000) <= Math.trunc(modifiedSinceMs / 1000);
       res.setHeader('Content-Type', contentTypeFor(filePath));
+      res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+      res.setHeader('ETag', etag);
+      res.setHeader('Last-Modified', fileStat.mtime.toUTCString());
+      if (hasMatchingEtag || hasMatchingModifiedDate) {
+        res.statusCode = 304;
+        res.end();
+        return;
+      }
+      res.statusCode = 200;
       res.setHeader('Content-Length', String(fileStat.size));
-      res.setHeader('Cache-Control', 'no-store');
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
       createReadStream(filePath).pipe(res);
     } catch {
       next();
@@ -506,6 +533,7 @@ function editorDevApi(): Plugin {
     path: string;
     kind: 'dir' | 'file';
     size?: number;
+    modifiedAtMs?: number;
   }
 
   async function listAssetsRecursive(rootDir: string): Promise<AssetEntry[]> {
@@ -532,12 +560,15 @@ function editorDevApi(): Plugin {
         const extension = dirent.name.slice(dirent.name.lastIndexOf('.')).toLowerCase();
         if (!LISTED_EXTENSIONS.has(extension)) continue;
         let size = 0;
+        let modifiedAtMs = 0;
         try {
-          size = (await stat(absolute)).size;
+          const fileStat = await stat(absolute);
+          size = fileStat.size;
+          modifiedAtMs = Math.trunc(fileStat.mtimeMs);
         } catch {
-          // Size stays 0 when stat races a deletion.
+          // Metadata stays 0 when stat races a deletion.
         }
-        entries.push({ path: relativePath, kind: 'file', size });
+        entries.push({ path: relativePath, kind: 'file', size, modifiedAtMs });
       }
     }
     entries.sort((a, b) => a.path.localeCompare(b.path));

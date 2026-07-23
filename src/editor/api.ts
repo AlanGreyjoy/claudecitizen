@@ -37,6 +37,8 @@ export interface AssetEntry {
   path: string;
   kind: 'dir' | 'file';
   size?: number;
+  /** Filesystem modification time used only for local editor cache invalidation. */
+  modifiedAtMs?: number;
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {

@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import {
+  getCachedModelThumbnail,
+  putCachedModelThumbnail,
+} from '../../editor/model_thumbnail_cache';
 
 /**
  * Lazy model thumbnails for the asset browser / inventory icons.
@@ -10,6 +14,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 const THUMB_SIZE = 96;
 const MAX_CACHED_THUMBS = 96;
 const CLEAR_COLOR = 0x12161c;
+const PERSISTENT_CACHE_EPOCH = 'model-thumbnail-v1';
 
 const gltfLoader = new GLTFLoader();
 /** Resolved thumbnail data-URLs (insertion order = LRU). */
@@ -116,33 +121,58 @@ async function renderThumbnail(url: string): Promise<string> {
   }
 }
 
-/** Returns a data-url thumbnail for a GLB/GLTF asset (serialized, LRU-cached). */
-export function getModelThumbnail(url: string): Promise<string> {
-  const cached = resolved.get(url);
+function enqueueThumbnailRender(url: string): Promise<string> {
+  const pending = queue.then(() => renderThumbnail(url));
+  queue = pending.then(
+    () => undefined,
+    () => undefined,
+  );
+  return pending;
+}
+
+async function loadThumbnail(url: string, persistentKey: string | null): Promise<string> {
+  if (persistentKey) {
+    const stored = await getCachedModelThumbnail(persistentKey);
+    if (stored) return stored;
+  }
+
+  const dataUrl = await enqueueThumbnailRender(url);
+  if (persistentKey && dataUrl) {
+    await putCachedModelThumbnail(persistentKey, dataUrl);
+  }
+  return dataUrl;
+}
+
+/**
+ * Returns a data-url thumbnail for a GLB/GLTF asset.
+ * Versioned editor assets use an IndexedDB-backed cache; unversioned runtime
+ * callers retain the existing in-memory behavior.
+ */
+export function getModelThumbnail(url: string, assetVersion?: string): Promise<string> {
+  const memoryKey = assetVersion ? `${url}\u0000${assetVersion}` : url;
+  const persistentKey = assetVersion
+    ? `${PERSISTENT_CACHE_EPOCH}:${memoryKey}`
+    : null;
+  const cached = resolved.get(memoryKey);
   if (cached !== undefined) {
-    resolved.delete(url);
-    resolved.set(url, cached);
+    resolved.delete(memoryKey);
+    resolved.set(memoryKey, cached);
     return Promise.resolve(cached);
   }
 
-  let pending = inflight.get(url);
+  let pending = inflight.get(memoryKey);
   if (!pending) {
-    pending = queue
-      .then(() => renderThumbnail(url))
+    pending = loadThumbnail(url, persistentKey)
       .catch((error) => {
         console.warn(`Thumbnail failed for ${url}`, error);
         return '';
       })
       .then((dataUrl) => {
-        inflight.delete(url);
-        rememberResolved(url, dataUrl);
+        inflight.delete(memoryKey);
+        rememberResolved(memoryKey, dataUrl);
         return dataUrl;
       });
-    inflight.set(url, pending);
-    queue = pending.then(
-      () => undefined,
-      () => undefined,
-    );
+    inflight.set(memoryKey, pending);
   }
   return pending;
 }
