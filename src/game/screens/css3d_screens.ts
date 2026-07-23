@@ -11,83 +11,96 @@ export interface Css3dScreens {
   dispose: () => void;
 }
 
+interface ScreenLike {
+  sync: () => void;
+  render: (camera: ReturnType<NonNullable<LoopContext["renderer"]>["getCamera"]>) => void;
+  resize: () => void;
+  dispose: () => void;
+}
+
+function mountScreen<T extends ScreenLike>(
+  bezelId: string,
+  className: string,
+  factory: (opts: { panelEl: HTMLElement }) => T,
+  onResize: () => void,
+): T | null {
+  const bezelEl =
+    document.getElementById(bezelId) ??
+    document.querySelector<HTMLElement>(className);
+  const screen = bezelEl ? factory({ panelEl: bezelEl }) : null;
+  if (screen) window.addEventListener("resize", onResize);
+  return screen;
+}
+
+function renderScreenIfActive(
+  screen: ScreenLike | null,
+  shouldRender: boolean,
+  renderer: NonNullable<LoopContext["renderer"]>,
+): void {
+  if (!screen || !shouldRender) return;
+  const cam = renderer.getCamera();
+  screen.sync();
+  screen.render(cam);
+}
+
 /**
  * Creates the CSS3D bunk (entertainment) and station vendor screens, wires
  * their resize handlers, and exposes the post-WebGL render pass.
  */
 export function createScreens(ctx: LoopContext): Css3dScreens {
-  const esBezelEl =
-    document.getElementById("es-bezel") ??
-    document.querySelector<HTMLElement>(".sc-es-bezel");
-  ctx.esScreen = esBezelEl
-    ? createEntertainmentScreen({ panelEl: esBezelEl })
-    : null;
   const onEsResize = () => ctx.esScreen?.resize();
-  window.addEventListener("resize", onEsResize);
-
-  const weaponShopBezelEl =
-    document.getElementById("weapon-shop-bezel") ??
-    document.querySelector<HTMLElement>(".sc-weapon-shop-bezel");
-  ctx.weaponShopScreen = weaponShopBezelEl
-    ? createWeaponShopScreen({ panelEl: weaponShopBezelEl })
-    : null;
   const onWeaponShopResize = () => ctx.weaponShopScreen?.resize();
-  window.addEventListener("resize", onWeaponShopResize);
-
-  const outfittersBezelEl =
-    document.getElementById("outfitters-bezel") ??
-    document.querySelector<HTMLElement>(".sc-outfitters-bezel");
-  ctx.outfittersScreen = outfittersBezelEl
-    ? createOutfittersScreen({ panelEl: outfittersBezelEl })
-    : null;
   const onOutfittersResize = () => ctx.outfittersScreen?.resize();
-  window.addEventListener("resize", onOutfittersResize);
-
-  const foodShopBezelEl =
-    document.getElementById("food-shop-bezel") ??
-    document.querySelector<HTMLElement>(".sc-food-shop-bezel");
-  ctx.foodShopScreen = foodShopBezelEl
-    ? createFoodShopScreen({ panelEl: foodShopBezelEl })
-    : null;
   const onFoodShopResize = () => ctx.foodShopScreen?.resize();
-  window.addEventListener("resize", onFoodShopResize);
+
+  ctx.esScreen = mountScreen(
+    "es-bezel",
+    ".sc-es-bezel",
+    createEntertainmentScreen,
+    onEsResize,
+  );
+  ctx.weaponShopScreen = mountScreen(
+    "weapon-shop-bezel",
+    ".sc-weapon-shop-bezel",
+    createWeaponShopScreen,
+    onWeaponShopResize,
+  );
+  ctx.outfittersScreen = mountScreen(
+    "outfitters-bezel",
+    ".sc-outfitters-bezel",
+    createOutfittersScreen,
+    onOutfittersResize,
+  );
+  ctx.foodShopScreen = mountScreen(
+    "food-shop-bezel",
+    ".sc-food-shop-bezel",
+    createFoodShopScreen,
+    onFoodShopResize,
+  );
 
   function renderAfterWebGl(): void {
     const renderer = ctx.renderer;
     if (!renderer) return;
-    // CSS3D bunk screen — after WebGL so the camera matrix is final.
-    if (
-      ctx.esScreen &&
-      (ctx.world.mode === MODE_IN_BED || ctx.entertainmentSystem?.isOpen())
-    ) {
-      const cam = renderer.getCamera();
-      ctx.esScreen.sync();
-      ctx.esScreen.render(cam);
-    }
-    if (
-      ctx.weaponShopScreen &&
-      (ctx.world.mode === MODE_IN_STATION || ctx.weaponShop?.isOpen())
-    ) {
-      const cam = renderer.getCamera();
-      ctx.weaponShopScreen.sync();
-      ctx.weaponShopScreen.render(cam);
-    }
-    if (
-      ctx.outfittersScreen &&
-      (ctx.world.mode === MODE_IN_STATION || ctx.outfitters?.isOpen())
-    ) {
-      const cam = renderer.getCamera();
-      ctx.outfittersScreen.sync();
-      ctx.outfittersScreen.render(cam);
-    }
-    if (
-      ctx.foodShopScreen &&
-      (ctx.world.mode === MODE_IN_STATION || ctx.foodShop?.isOpen())
-    ) {
-      const cam = renderer.getCamera();
-      ctx.foodShopScreen.sync();
-      ctx.foodShopScreen.render(cam);
-    }
+    renderScreenIfActive(
+      ctx.esScreen,
+      ctx.world.mode === MODE_IN_BED || Boolean(ctx.entertainmentSystem?.isOpen()),
+      renderer,
+    );
+    renderScreenIfActive(
+      ctx.weaponShopScreen,
+      ctx.world.mode === MODE_IN_STATION || Boolean(ctx.weaponShop?.isOpen()),
+      renderer,
+    );
+    renderScreenIfActive(
+      ctx.outfittersScreen,
+      ctx.world.mode === MODE_IN_STATION || Boolean(ctx.outfitters?.isOpen()),
+      renderer,
+    );
+    renderScreenIfActive(
+      ctx.foodShopScreen,
+      ctx.world.mode === MODE_IN_STATION || Boolean(ctx.foodShop?.isOpen()),
+      renderer,
+    );
   }
 
   function dispose(): void {

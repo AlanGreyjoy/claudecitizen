@@ -44,6 +44,7 @@ import type {
   PlayerControls,
   WeaponCombatRuntimeEvent,
 } from "./types";
+import { resolveLoopContextOptions } from "./loop_context_options";
 
 interface StationAnimationState {
   value: number;
@@ -142,78 +143,48 @@ export interface LoopContext {
  * `createGameLoop`.
  */
 export function createLoopContext(options: GameLoopOptions): LoopContext {
-  const {
-    planet,
-    seed,
-    spawn = 'station',
-    planetId = 'asteron',
-    systemId = 'default',
-    activeStationInstanceId = null,
-    controls,
-    renderer,
-    rendererError,
-    network = null,
-    bootstrap = null,
-    avmsTerminal = null,
-    entertainmentSystem = null,
-    weaponShop = null,
-    outfitters = null,
-    foodShop = null,
-    personalInventory = null,
-    build = null,
-    physics = null,
-    stationPrefab = null,
-    onHudUpdate,
-    onResetPeak,
-    isPaused,
-    getInventoryLoadout = () => ({}),
-    getInventory = () => null,
-    onInventoryUpdate,
-    onWeaponCombatEvents,
-    vitalsSession = null,
-  } = options;
-
-  const world = createWorldState(planet, seed, {
-    spawn,
-    planetId,
-    systemId,
-    activeStationInstanceId,
-    vitals: vitalsSession?.getVitals() ?? bootstrap?.player.vitals,
+  const resolved = resolveLoopContextOptions(options);
+  const world = createWorldState(resolved.planet, resolved.seed, {
+    spawn: resolved.spawn,
+    planetId: resolved.planetId,
+    systemId: resolved.systemId,
+    activeStationInstanceId: resolved.activeStationInstanceId,
+    vitals: resolved.vitalsSession?.getVitals() ?? resolved.bootstrap?.player.vitals,
   });
-  if (bootstrap?.hangar.assignedHangar) {
-    world.assignedHangar = bootstrap.hangar.assignedHangar;
+  if (resolved.bootstrap?.hangar.assignedHangar) {
+    world.assignedHangar = resolved.bootstrap.hangar.assignedHangar;
   }
 
-  const stationFrame = getStationFrame(planet);
+  const stationFrame = getStationFrame(resolved.planet);
 
   return {
-    planet,
-    seed,
-    spawn,
-    planetId,
-    systemId,
-    activeStationInstanceId,
-    controls,
-    renderer,
-    network,
-    bootstrap,
-    avmsTerminal,
-    entertainmentSystem,
-    weaponShop,
-    outfitters,
-    foodShop,
-    personalInventory,
-    build,
-    physics,
-    stationPrefab,
-    onHudUpdate,
-    onResetPeak,
-    isPaused,
-    getInventoryLoadout,
-    getInventory,
-    onInventoryUpdate,
-    onWeaponCombatEvents,
-    vitalsSession,
+    planet: resolved.planet,
+    seed: resolved.seed,
+    spawn: resolved.spawn,
+    planetId: resolved.planetId,
+    systemId: resolved.systemId,
+    activeStationInstanceId: resolved.activeStationInstanceId,
+    controls: resolved.controls,
+    renderer: resolved.renderer,
+    network: resolved.network,
+    bootstrap: resolved.bootstrap,
+    avmsTerminal: resolved.avmsTerminal,
+    entertainmentSystem: resolved.entertainmentSystem,
+    weaponShop: resolved.weaponShop,
+    outfitters: resolved.outfitters,
+    foodShop: resolved.foodShop,
+    personalInventory: resolved.personalInventory,
+    build: resolved.build,
+    physics: resolved.physics,
+    stationPrefab: resolved.stationPrefab,
+    onHudUpdate: resolved.onHudUpdate,
+    onResetPeak: resolved.onResetPeak,
+    isPaused: resolved.isPaused,
+    getInventoryLoadout: resolved.getInventoryLoadout,
+    getInventory: resolved.getInventory,
+    onInventoryUpdate: resolved.onInventoryUpdate,
+    onWeaponCombatEvents: resolved.onWeaponCombatEvents,
+    vitalsSession: resolved.vitalsSession,
 
     flightCameraFeelState: createFlightCameraFeelState(),
     esCameraState: createEntertainmentCameraState(),
@@ -225,7 +196,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     stationNpcPopulation: createStationNpcPopulation(
       getStationLayoutOverride(),
       stationFrame,
-      seed,
+      resolved.seed,
     ),
     weaponFireStates: new Map(),
     ballisticSegments: [],
@@ -243,7 +214,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     lastNearbyPrefabInfoId: null,
     lastMs: performance.now(),
     running: false,
-    frameRendererError: rendererError,
+    frameRendererError: resolved.rendererError,
 
     esScreen: null,
     weaponShopScreen: null,
