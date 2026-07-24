@@ -65,7 +65,7 @@
     "@takram/three-clouds": "^0.7.6",
     "@takram/three-geospatial": "^0.9.1",
     "lucide": "^1.25.0",
-    "n8ao": "^1.10.3",
+    "n8ao": "^2.0.0",
     "postprocessing": "^6.39.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
