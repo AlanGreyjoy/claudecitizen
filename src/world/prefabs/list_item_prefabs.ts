@@ -1,4 +1,5 @@
 import { listBundledPrefabIds, loadPrefabDocument } from './loader';
+import { AUTHORING_ENABLED } from '../../build_mode';
 
 export interface ItemPrefabOption {
   id: string;
@@ -9,7 +10,7 @@ let cachedItemPrefabOptions: ItemPrefabOption[] | null = null;
 
 /** Lists bundled item prefabs for the admin item-definition picker. */
 export async function listItemPrefabOptions(): Promise<ItemPrefabOption[]> {
-  if (import.meta.env.DEV) {
+  if (AUTHORING_ENABLED) {
     try {
       const response = await fetch('/__editor/prefabs');
       if (response.ok) {

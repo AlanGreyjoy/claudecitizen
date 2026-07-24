@@ -4,6 +4,7 @@ import type { ComponentDef } from '../world/prefabs/component_registry';
 import {
   getComponentDef,
   getComponentsForKind,
+  getComponentsForScene,
   searchComponents,
 } from '../world/prefabs/component_registry';
 import type { PrefabComponent, PrefabComponentType } from '../world/prefabs/schema';
@@ -520,7 +521,10 @@ export function componentPaletteForContext(
   options?: { markerOnly?: boolean; targetEntityId?: string },
 ): ComponentDef[] {
   const existing = collectExistingComponentTypes(store);
-  let palette = searchComponents('', store.getState().kind, existing);
+  const state = store.getState();
+  let palette = searchComponents('', state.kind, existing, {
+    documentType: state.documentType,
+  });
   if (options?.markerOnly) palette = palette.filter((def) => def.marker);
   if (options?.targetEntityId) {
     const entity = store.locate(options.targetEntityId)?.entity;
@@ -540,7 +544,9 @@ export function isComponentAvailable(
 }
 
 export function allComponentsForKind(store: EditorStore): ComponentDef[] {
-  return getComponentsForKind(store.getState().kind);
+  const state = store.getState();
+  if (state.documentType === 'scene') return getComponentsForScene();
+  return getComponentsForKind(state.kind);
 }
 
 export function buildComponentsSubmenu(

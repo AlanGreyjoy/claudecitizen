@@ -32,7 +32,7 @@ The Admin App is a deep-link boot mode on the same Vite client as the game. It t
 5. **Vite game client**:
 
    ```bash
-   npm run dev
+   npm run dev:web
    ```
 
 6. **Admin credentials** — copy `backend/.env.example` to `backend/.env` and set at minimum:

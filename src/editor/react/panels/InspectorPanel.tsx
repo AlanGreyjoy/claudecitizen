@@ -458,7 +458,12 @@ function AddComponentCombobox({
   const inputRef = useRef<HTMLInputElement>(null);
 
   let results: ComponentDef[] = open
-    ? searchComponents(query, store.getState().kind, collectExistingComponentTypes(store))
+    ? searchComponents(
+        query,
+        store.getState().kind,
+        collectExistingComponentTypes(store),
+        { documentType: store.getState().documentType },
+      )
     : [];
   if (open && shouldHideShipHullCollider(store, entity)) {
     results = results.filter((def) => def.type !== 'collider');

@@ -171,4 +171,5 @@ export const STORE_EVENTS = [
   'document',
   'structure',
   'entity',
+  'glb-components',
 ] as const;

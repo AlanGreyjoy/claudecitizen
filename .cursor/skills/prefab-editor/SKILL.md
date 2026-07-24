@@ -1,11 +1,14 @@
 ---
 name: prefab-editor
-description: Navigate and debug the ClaudeCitizen in-browser prefab editor — selection, hierarchy, inspector, adding components to entities or GLB nodes, and troubleshooting GLB node name mismatches. Use when authoring or debugging prefabs, the editor, inspector, hierarchy, GLB nodes, node overrides, colliders, doors, or animations.
+description: Navigate and debug the ClaudeCitizen Electron scene and prefab editor — selection, hierarchy, inspector, Play Mode, adding components to entities or GLB nodes, and troubleshooting GLB node name mismatches.
 ---
 
 # Prefab Editor
 
-Dev-only in-browser editor for station/ship/site/prop prefabs. Requires `npm run dev` (port 4173); open via title-screen **Editor** or `?boot=editor`.
+Standalone Electron editor for scenes and station/ship/site/prop prefabs.
+Launch with `npm run editor`; no Vite development server is involved. Scene
+documents live in `src/world/scenes/data/`, Play Mode runs in a separate
+Electron window, and File → Build Web creates the release bundle.
 
 ## Layout
 
@@ -13,10 +16,10 @@ Dev-only in-browser editor for station/ship/site/prop prefabs. Requires `npm run
 |-------|------|------|
 | Shell | `src/editor/react/EditorApp.tsx` | React chrome, tabs, HMR soft-remount |
 | Hierarchy | `src/editor/react/panels/HierarchyPanel.tsx` | Entity tree + expandable GLB node tree under asset entities |
-| Viewport | `src/render/editor/viewport.ts` | 3D scene, picking, gizmo, flythrough (imperative) |
+| Viewport | `src/render/editor/viewport.ts` | Orchestrator; modules: `viewport_scene`, `_flythrough`, `_entity_graph`, `_selection`, `_picking`, `_glb_queries`, `_ship_preview`, … |
 | Inspector | `src/editor/react/panels/InspectorPanel.tsx` | Transform, visual, materials, components |
 | Project | `src/editor/react/panels/ProjectPanel.tsx` | Asset browser |
-| Toolbar | `src/editor/react/panels/Toolbar.tsx` | New/Save/Load/Preview, gizmo modes |
+| Toolbar | `src/editor/react/panels/Toolbar.tsx` | New/Save/Load/Play/Build, gizmo modes |
 
 Canonical data flow: `document.ts` (store) → `serialize.ts` (prefab JSON) → `src/world/prefabs/schema.ts` (validators). React UI sits on top of `EditorStore`; dense component field editors still use `panels/inspector_component_fields_dom.ts`.
 
@@ -25,13 +28,13 @@ Canonical data flow: `document.ts` (store) → `serialize.ts` (prefab JSON) → 
 **Entity** — click in viewport or hierarchy. Clears GLB sub-selection.
 
 **GLB node (sub-selection)** — required before adding node-level components:
-1. **Viewport drill-down**: LMB same spot on a GLB entity repeatedly; each click goes deeper in the hit path (`drillDepth` in `viewport.ts`).
+1. **Viewport pick**: LMB selects the deepest GLB node under the cursor (the mesh you clicked). Re-click the same spot to walk up toward the entity root, then cycle back to the leaf.
 2. **Hierarchy**: expand the GLB subtree under an asset entity; click a node row.
 3. **Context menu** on a GLB row auto-selects that node.
 
 Sub-selection drives the inspector: node name (read-only), **Mesh Transform** section, and **Components** scoped to that node.
 
-Viewport hint bar: `LMB select · re-click drill · RMB sub-mesh: add empty/component · … · F focus · Del delete`
+Viewport hint bar: `LMB select mesh · re-click walk up · RMB sub-mesh: add empty/component · … · F focus · Del delete`
 
 ## Adding Components
 
@@ -127,11 +130,12 @@ node scripts/inspect_glb.mjs path/to/model.glb
 
 Dumps scene hierarchy, mesh bindings, and animation clip targets. Use this **before** wiring `animation`, `ship-door`, `ship-gear`, or `collider.node` fields.
 
-## Preview & Validate
+## Play Mode & Validate
 
-- **Preview** (toolbar): loads play session with current prefab (station or ship).
+- **Play** (`F6`): saves and launches the active scene/document in Electron's
+  separate Play Mode window. Press it again to stop.
 - **Ship kind**: viewport toolbar toggles gear/ramp/doors for in-editor articulation preview.
-- **Ship sandbox**: `?shipPrefab=<id>` (dev) — console helper:
+- **Ship sandbox**: `?shipPrefab=<id>` (authoring build) — console helper:
   ```js
   window.__claudecitizenShipModel.listNodeNames();
   ```

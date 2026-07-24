@@ -24,6 +24,7 @@ import {
 import type { Planet } from '../types';
 import type { PlanetDocument } from '../world/planets/schema';
 import type { PrefabDocument } from '../world/prefabs/schema';
+import { AUTHORING_ENABLED } from '../build_mode';
 
 const DEFAULT_STATION_PREFAB_ID = 'demo-station';
 
@@ -42,13 +43,42 @@ export function readPlayWorldParams(): PlayWorldParams {
     systemId: playParams.get('systemId') ?? DEFAULT_SYSTEM_ID,
     spawnSurface: playParams.get('spawn') === 'surface',
     fromEditor: playParams.get('from') === 'editor',
-    stationPrefabOverride: import.meta.env.DEV ? playParams.get('stationPrefab') : null,
+    stationPrefabOverride: AUTHORING_ENABLED ? playParams.get('stationPrefab') : null,
   };
+}
+
+/**
+ * When Play launches with `?scene=`, prefer GameObject-resolved config from
+ * the scene document (GameManager / Planet / prefab-instance) over bare URL
+ * params. URL params still win when the scene has no matching components.
+ */
+export async function readPlayWorldParamsFromScene(): Promise<PlayWorldParams> {
+  const base = readPlayWorldParams();
+  const sceneId = new URLSearchParams(window.location.search).get('scene');
+  if (!sceneId) return base;
+  try {
+    const { loadSceneDocument } = await import('../world/scenes/loader');
+    const { resolveScenePlayConfig } = await import('../world/scenes/scene_runtime');
+    const scene = await loadSceneDocument(sceneId);
+    if (!scene || (scene.gameObjects?.length ?? 0) === 0) return base;
+    const config = resolveScenePlayConfig(scene);
+    return {
+      planetId: config.planetId || base.planetId,
+      systemId: config.systemId || base.systemId,
+      spawnSurface: config.spawn === 'surface',
+      fromEditor: base.fromEditor,
+      stationPrefabOverride:
+        config.stationPrefabId
+        ?? base.stationPrefabOverride,
+    };
+  } catch {
+    return base;
+  }
 }
 
 async function resolveStationPrefab(preferredId?: string | null): Promise<PrefabDocument | null> {
   const params = new URLSearchParams(window.location.search);
-  const id = import.meta.env.DEV
+  const id = AUTHORING_ENABLED
     ? params.get('stationPrefab') ?? preferredId ?? DEFAULT_STATION_PREFAB_ID
     : preferredId ?? DEFAULT_STATION_PREFAB_ID;
 
@@ -111,7 +141,7 @@ async function loadAdditionalStations(
 export async function loadPlayWorldContext(
   loading: LoadingScreenHandle | undefined,
 ): Promise<PlayWorldContext> {
-  const params = readPlayWorldParams();
+  const params = await readPlayWorldParamsFromScene();
   const planetDocument =
     (await loadPlanetDocument(params.planetId))
     ?? createDefaultPlanetDocument(params.planetId, params.planetId);

@@ -15,7 +15,6 @@ import {
 } from 'react';
 import { ASSET_DND_TYPE, assetUrlFor } from '../../api';
 import { showToast } from '../../dom';
-import { attachColumnSplitter, PANEL_SIZE_BOUNDS } from '../../panel_resize';
 import type { EditorAudioPreviewController } from '../../audio_preview';
 import {
   buildFolderTree,
@@ -38,6 +37,7 @@ import {
 } from '../../panels/project_logic';
 import { UiIcons } from '../../../ui/icons';
 import { UiIcon } from '../UiIcon';
+import { ConsolePanel } from './ConsolePanel';
 
 export interface ProjectPanelOptions {
   /** Render a thumbnail data-url for a model asset (provided by render/editor). */
@@ -53,6 +53,8 @@ export interface ProjectPanelHandle {
 }
 
 export type ProjectPanelProps = ProjectPanelOptions;
+
+type BottomLeftTab = 'project' | 'console';
 
 function FolderRow({
   node,
@@ -369,7 +371,7 @@ function useLazyModelThumbs(
   return { thumbByUrl, clearThumbs };
 }
 
-function ProjectSide({
+function ProjectFolderTree({
   tree,
   selectedFolder,
   expanded,
@@ -384,8 +386,8 @@ function ProjectSide({
 }): ReactElement {
   return (
     <div className="ed-project-side">
-      <div className="ed-panel-title">
-        <span>Project</span>
+      <div className="ed-panel-title ed-project-tree-toolbar">
+        <span>{selectedFolder === '' ? PROJECT_ROOT_LABEL : selectedFolder}</span>
         <div className="ed-panel-title-actions">
           <button
             type="button"
@@ -432,34 +434,40 @@ function ProjectAssetGrid({
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
 }): ReactElement {
+  const folderLabel = selectedFolder === '' ? PROJECT_ROOT_LABEL : selectedFolder;
   return (
-    <div className="ed-asset-grid" ref={gridRef}>
-      {files.length === 0 ? (
-        <div className="ed-empty-note">{emptyNoteForFolder(selectedFolder)}</div>
-      ) : (
-        files.map((entry) => {
-          const url = assetUrlFor(entry.root, entry.path);
-          return (
-            <AssetCard
-              key={`${entry.root}:${entry.path}`}
-              entry={entry}
-              thumbSrc={thumbByUrl[url]}
-              audioPreview={audioPreview}
-              audioTick={audioTick}
-              onAudioToggle={onAudioToggle}
-              onPreviewAnimationSource={onPreviewAnimationSource}
-              onCreateItemPrefab={onCreateItemPrefab}
-            />
-          );
-        })
-      )}
+    <div className="ed-asset-browser-body">
+      <div className="ed-panel-title ed-asset-browser-toolbar">
+        <span>{folderLabel}</span>
+      </div>
+      <div className="ed-asset-grid" ref={gridRef}>
+        {files.length === 0 ? (
+          <div className="ed-empty-note">{emptyNoteForFolder(selectedFolder)}</div>
+        ) : (
+          files.map((entry) => {
+            const url = assetUrlFor(entry.root, entry.path);
+            return (
+              <AssetCard
+                key={`${entry.root}:${entry.path}`}
+                entry={entry}
+                thumbSrc={thumbByUrl[url]}
+                audioPreview={audioPreview}
+                audioTick={audioTick}
+                onAudioToggle={onAudioToggle}
+                onPreviewAnimationSource={onPreviewAnimationSource}
+                onCreateItemPrefab={onCreateItemPrefab}
+              />
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
 
 /**
- * Project browser panel. Mount inside a host with class `ed-project`
- * (shell layout owns that grid cell); this component fills it with side / splitter / grid.
+ * Project browser for the Rogue-style shell.
+ * Renders two grid children (fragment): bottom-left Project|Console dock + center asset grid.
  */
 export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
   function ProjectPanel(options, ref): ReactElement {
@@ -473,6 +481,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
     const [tree, setTree] = useState<FolderNode>(() => emptyFolderNode());
     const [selectedFolder, setSelectedFolder] = useState('');
     const [expanded, setExpanded] = useState(() => new Set<string>(DEFAULT_EXPANDED_FOLDERS));
+    const [bottomTab, setBottomTab] = useState<BottomLeftTab>('project');
     const [audioTick, bumpAudio] = useReducer((n: number) => n + 1, 0);
 
     const pendingFolderRef = useRef<string | null>(null);
@@ -481,7 +490,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
     const selectedFolderRef = useRef(selectedFolder);
     selectedFolderRef.current = selectedFolder;
 
-    const splitterRef = useRef<HTMLDivElement | null>(null);
     const gridRef = useRef<HTMLDivElement | null>(null);
     const { thumbByUrl, clearThumbs } = useLazyModelThumbs(
       gridRef,
@@ -522,16 +530,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       void load();
     }, [load]);
 
-    useEffect(() => {
-      const splitter = splitterRef.current;
-      const project = splitter?.parentElement;
-      if (!project || !splitter) return;
-      attachColumnSplitter(splitter, project, '--ed-project-side-width', {
-        ...PANEL_SIZE_BOUNDS.projectSideWidth,
-        storageKey: 'projectSideWidth',
-      });
-    }, []);
-
     useImperativeHandle(
       ref,
       () => ({
@@ -541,6 +539,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
             return;
           }
           pendingFolderRef.current = null;
+          setBottomTab('project');
           setSelectedFolder(folderPath);
           setExpanded((prev) => {
             const next = new Set(prev);
@@ -570,25 +569,59 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
 
     return (
       <>
-        <ProjectSide
-          tree={tree}
-          selectedFolder={selectedFolder}
-          expanded={expanded}
-          onRefresh={() => void load()}
-          onFolderSelect={onFolderSelect}
-        />
-        <div className="ed-splitter ed-splitter-col" ref={splitterRef} />
-        <ProjectAssetGrid
-          gridRef={gridRef}
-          selectedFolder={selectedFolder}
-          files={files}
-          thumbByUrl={thumbByUrl}
-          audioPreview={audioPreview}
-          audioTick={audioTick}
-          onAudioToggle={bumpAudio}
-          onPreviewAnimationSource={onPreviewAnimationSource}
-          onCreateItemPrefab={onCreateItemPrefab}
-        />
+        <div className="ed-bottom-left">
+          <div className="ed-bottom-left-tabs">
+            <button
+              type="button"
+              className={`ed-scene-tab${bottomTab === 'project' ? ' is-active' : ''}`}
+              onClick={() => setBottomTab('project')}
+            >
+              Project
+            </button>
+            <button
+              type="button"
+              className={`ed-scene-tab${bottomTab === 'console' ? ' is-active' : ''}`}
+              onClick={() => setBottomTab('console')}
+            >
+              Console
+            </button>
+          </div>
+          <div className="ed-bottom-left-body">
+            <div
+              className={`ed-bottom-left-pane${
+                bottomTab === 'project' ? '' : ' is-hidden'
+              }`}
+            >
+              <ProjectFolderTree
+                tree={tree}
+                selectedFolder={selectedFolder}
+                expanded={expanded}
+                onRefresh={() => void load()}
+                onFolderSelect={onFolderSelect}
+              />
+            </div>
+            <div
+              className={`ed-bottom-left-pane${
+                bottomTab === 'console' ? '' : ' is-hidden'
+              }`}
+            >
+              <ConsolePanel />
+            </div>
+          </div>
+        </div>
+        <div className="ed-asset-browser">
+          <ProjectAssetGrid
+            gridRef={gridRef}
+            selectedFolder={selectedFolder}
+            files={files}
+            thumbByUrl={thumbByUrl}
+            audioPreview={audioPreview}
+            audioTick={audioTick}
+            onAudioToggle={bumpAudio}
+            onPreviewAnimationSource={onPreviewAnimationSource}
+            onCreateItemPrefab={onCreateItemPrefab}
+          />
+        </div>
       </>
     );
   },

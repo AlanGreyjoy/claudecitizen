@@ -40,6 +40,16 @@ import { groundCharacterAt } from './ship_sandbox/ground';
 import { startShipSandboxLoop } from './ship_sandbox/frame';
 import type { ShipSandboxSession } from './ship_sandbox/types';
 import { PAD_RADIUS_METERS, SHIP_FORWARD, WORLD_UP } from './ship_sandbox/types';
+import { getDesktopEditorBridge } from '../platform/editor_desktop';
+
+function returnFromPlayMode(fallbackUrl: string): void {
+  const bridge = getDesktopEditorBridge();
+  if (bridge) {
+    void bridge.stopPlay().catch(() => undefined);
+    return;
+  }
+  window.location.href = fallbackUrl;
+}
 
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -75,7 +85,7 @@ function mountBanner(prefabId: string, hintText: string, isWarning: boolean): vo
     cursor: 'pointer',
   } satisfies Partial<CSSStyleDeclaration>);
   button.addEventListener('click', () => {
-    window.location.href = `/?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
+    returnFromPlayMode(`/?boot=editor&prefab=${encodeURIComponent(prefabId)}`);
   });
   document.body.appendChild(button);
 
@@ -237,7 +247,7 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       sfxValueEl: requireElement<HTMLElement>('game-menu-sfx-value'),
       musicValueEl: requireElement<HTMLElement>('game-menu-music-value'),
     },
-    { onExitGame: () => { window.location.href = editorReturnUrl; } },
+    { onExitGame: () => returnFromPlayMode(editorReturnUrl) },
   );
   window.addEventListener('pagehide', () => gameMenu.dispose(), { once: true });
 

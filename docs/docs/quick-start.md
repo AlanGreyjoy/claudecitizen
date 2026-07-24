@@ -11,24 +11,21 @@ title: Quick start
 - Rust 1.96 with the `wasm32-unknown-unknown` target
 - npm
 
-## Run locally
+## Open the project
 
 From the repository root:
 
 ```bash
 npm install
-npm run dev
+npm run editor
 ```
 
-Open [http://localhost:4173](http://localhost:4173). You get a title screen with **Play**; dev builds also show **Editor**. Click the canvas to lock the mouse.
+The Electron editor is the normal project workspace. Use its Play button for
+local testing and **File → Build Web** for a browser release.
 
 ## CC Editor
 
-The in-browser world builder and prefab author is only available under `npm run dev`. See the [CC Editor](/cc-editor) docs for panels, prefab kinds, and preview URLs.
-
-```text
-http://localhost:4173/?boot=editor
-```
+See the [CC Editor](/cc-editor) docs for scenes, prefabs, Play Mode, and builds.
 
 ## Admin App
 
@@ -44,13 +41,13 @@ Requires `npm run dev:infra`, `npm run dev:server`, and admin credentials in `ba
 
 | Script | Description |
 | --- | --- |
-| `npm run dev` | Dev server with hot reload (port 4173) |
+| `npm run editor` | Build and launch the standalone Electron editor |
+| `npm run build:editor:desktop` | Package an unpacked editor |
 | `npm run dev:infra` | Start PostgreSQL, Redis, and Mailpit |
 | `npm run dev:server` | Watch, rebuild, and restart the Rust API and authoritative cell server |
 | `npm run start:server` | Run the Rust backend once without file watching |
 | `npm run backend:migrate` | Apply committed SQLx migrations |
 | `npm run build:wasm` | Build shared Rust prediction code for the browser |
-| `npm run serve` | Same as `dev` |
 | `npm run build` | Typecheck + production build to `dist/` |
 | `npm run build:protected` | Compatibility alias for `npm run build` |
 | `npm run deploy:netlify` | Draft Netlify deploy |

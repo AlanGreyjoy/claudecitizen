@@ -1,35 +1,41 @@
 ---
-description: In-browser prefab editor — selection, GLB nodes, components, hierarchy binding
+description: Electron scene and prefab editor — selection, GLB nodes, components, hierarchy binding
 globs: src/editor/**,src/render/editor/**
 alwaysApply: false
 ---
 
-# Prefab Editor (dev-only)
+# Electron Scene and Prefab Editor
 
-Dev server port **4173** (`npm run dev`). Open via title-screen **Editor** or `?boot=editor`. Dev servers are normally already running — do not start `npm run dev` unless asked.
+Launch the standalone editor with `npm run editor`. It builds the renderer and
+opens Electron through the private `cceditor:` protocol; do not start Vite.
+Scenes live in `src/world/scenes/data/`, prefabs in
+`src/world/prefabs/data/`. The universal Play button opens a separate Play
+Mode window, and File → Build Web creates `dist/`.
 
 ## Architecture
 
 ```
-react/main.tsx → EditorApp (React shell, Fast Refresh)
+editor-desktop/main.mjs → cceditor: protocol / Play Mode / Build Web
+react/main.tsx → EditorApp (React shell)
 document.ts (EditorStore) → serialize.ts → world/prefabs/schema.ts
 react/panels/* (React UI)   panels/*_logic.ts + ImperativeHost leftovers
 component_actions.ts        world/prefabs/component_registry.ts
-glb_binding.ts              render/editor/viewport.ts (Three.js, imperative)
+glb_binding.ts              render/editor/viewport*.ts (Three.js, imperative)
                             render/prefabs/prefab_renderer.ts (runtime)
 ```
 
 - **React UI** lives in `src/editor/react/` (shell, Project, Hierarchy, Toolbar, Inspector chrome, Material Manager).
 - **EditorStore** and serialize stay framework-agnostic in `src/editor/`.
 - **Imperative hosts**: prefab viewport, base-characters stage, planet/system/menu tab editors, and dense inspector component field builders (`inspector_component_fields_dom.ts` / `particle_fields.ts`).
-- HMR: Fast Refresh for React panels; soft remount + sessionStorage snapshot for store/tab/selection; CSS hot-swaps via `styles.ts`. Prefab/planet/system JSON stays on Vite `watch.ignored`.
+- Electron owns document persistence and project asset reads. The renderer has
+  no Node.js or arbitrary filesystem access.
 
 Editor logic stays in `src/editor/`. Three.js viewport in `src/render/editor/`. Prefab JSON contract in `world/prefabs/`.
 
 ## Selection model
 
 - **Entity selection** — LMB viewport or hierarchy row. Clears GLB sub-selection.
-- **GLB sub-selection** — viewport drill-down (LMB same spot), or click a node in the hierarchy GLB tree. Required for node-scoped inspector fields and **Add Component to Node**.
+- **GLB sub-selection** — viewport LMB picks the deepest GLB node under the cursor; re-click walks up toward the entity. Or click a node in the hierarchy GLB tree. Required for node-scoped inspector fields and **Add Component to Node**.
 - GLB overrides persist by **node name**, not UUID. Resolve via `store.getGlbNodeName()` before save.
 
 ## Adding components (`component_actions.ts`)

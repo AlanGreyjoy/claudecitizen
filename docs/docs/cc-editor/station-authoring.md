@@ -16,7 +16,7 @@ Players walk on **real collider geometry**, not abstract walk-volume boxes.
 
 1. Place GLB wall/floor modules from the Project panel
 2. Add **box** or **mesh** `collider` components on entities (or GLB sub-meshes) that match walkable floors and blocking walls
-3. Preview with **Preview Station** and verify on-foot movement
+3. Press **Play** and verify on-foot movement
 
 Use mesh colliders for complex shapes; box colliders for simple floors and walls. Tune `offset` when the collider center does not match the visual mesh.
 
@@ -87,7 +87,7 @@ Lights are visual only in the editor; they serialize and render in play.
 5. Wire elevators between floors
 6. Add hangar-pad markers in ship bays
 7. Place AVMS terminals near hangar access
-8. Save and **Preview Station**
+8. Save and press **Play**
 
 ## Preview URL
 

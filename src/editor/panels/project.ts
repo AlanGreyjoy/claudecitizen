@@ -10,9 +10,9 @@ import {
 export type { ProjectPanelHandle, ProjectPanelOptions };
 
 /**
- * Bridge for leftover imperative hosts: mounts the React Project panel into `container`
- * (expected to have class `ed-project`). Prefer importing `ProjectPanel` from
- * `src/editor/react/panels/ProjectPanel` in new React shell code.
+ * Bridge for leftover imperative hosts: mounts the React Project panel into `container`.
+ * Prefer importing `ProjectPanel` from `src/editor/react/panels/ProjectPanel` in new
+ * React shell code (Rogue layout places bottom-left + asset browser as grid children).
  */
 export function createProjectPanel(
   container: HTMLElement,

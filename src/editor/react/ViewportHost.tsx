@@ -9,33 +9,29 @@ import type { Vec3 } from '../../types';
 type ViewportHostProps = {
   store: EditorStore;
   hidden: boolean;
+  playing?: boolean;
   onReady: (viewport: EditorViewport | null) => void;
   onDropAsset: (url: string, position: Vec3) => void;
-  toolbarSlot: (host: HTMLDivElement | null) => void;
 };
 
 /**
- * Prefab scene viewport: keeps toolbar/hint as siblings; canvas is appended by
- * createEditorViewport (must stay imperative).
+ * Scene / prefab viewport: hint stays a sibling; canvas is appended by
+ * createEditorViewport (must stay imperative). When `playing`, the Scene view
+ * becomes Play view in place (Unity-style).
  */
 export function ViewportHost({
   store,
   hidden,
+  playing = false,
   onReady,
   onDropAsset,
-  toolbarSlot,
 }: ViewportHostProps): ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<EditorViewport | null>(null);
   const onDropRef = useRef(onDropAsset);
   onDropRef.current = onDropAsset;
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
-
-  useEffect(() => {
-    toolbarSlot(toolbarRef.current);
-    return () => toolbarSlot(null);
-  }, [toolbarSlot]);
 
   useEffect(() => {
     const host = containerRef.current;
@@ -45,24 +41,34 @@ export function ViewportHost({
         onDropRef.current(url, position);
       },
     });
+    viewportRef.current = viewport;
     onReadyRef.current(viewport);
     return () => {
+      viewportRef.current = null;
       onReadyRef.current(null);
       viewport.dispose();
     };
   }, [store]);
 
+  useEffect(() => {
+    viewportRef.current?.setPlayMode(playing);
+  }, [playing]);
+
   return (
     <div
       ref={containerRef}
-      className={`ed-viewport${hidden ? ' is-hidden' : ''}`}
+      className={`ed-viewport${hidden ? ' is-hidden' : ''}${playing ? ' is-playing' : ''}`}
     >
-      <div ref={toolbarRef} className="ed-viewport-toolbar" />
       <div className="ed-viewport-hint">
-        LMB select · Ctrl+click multi · re-click drill · RMB sub-mesh: add empty/component ·
-        MMB pan · wheel zoom · hold RMB + WASD fly · W/E/R gizmo · F focus · Ctrl+D duplicate ·
-        Del delete
+        {playing
+          ? 'Play Mode — this is the open scene · hold RMB + WASD fly · F6 or Stop to return to edit'
+          : 'LMB select mesh · Ctrl+click multi · re-click walk up · RMB sub-mesh: add empty/component · MMB pan · wheel zoom · hold RMB + WASD fly · W/E/R gizmo · F focus · Ctrl+D duplicate · Del delete'}
       </div>
+      {playing ? (
+        <div className="ed-play-mode-banner" aria-live="polite">
+          Play Mode
+        </div>
+      ) : null}
     </div>
   );
 }

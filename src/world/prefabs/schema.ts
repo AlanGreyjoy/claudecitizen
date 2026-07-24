@@ -818,6 +818,32 @@ export type PrefabComponent =
       screenWidth?: number;
       /** Powered screen plane height in meters (visual only). */
       screenHeight?: number;
+    }
+  /**
+   * Scene root gameplay config (Unity GameManager-style). Prefer this over
+   * SceneDocument.settings once scene_runtime fully consumes components.
+   */
+  | {
+      type: "game-manager";
+      systemId: string;
+      planetId: string;
+      spawn: "station" | "surface";
+    }
+  /** Planet document reference for the open scene. */
+  | {
+      type: "planet";
+      planetId: string;
+    }
+  /** Player spawn marker for the open scene. */
+  | {
+      type: "player-start";
+      spawn: "station" | "surface";
+    }
+  /** Reference to a reusable prefab instantiated in the scene. */
+  | {
+      type: "prefab-instance";
+      prefabId: string;
+      prefabKind?: "station" | "ship" | "site" | "prop" | "item";
     };
 
 export type PrefabComponentType = PrefabComponent["type"];
@@ -978,6 +1004,14 @@ function parseEntityComponents(
       parseComponent(component, `${path}.components[${index}]`),
     )
     .filter((component): component is PrefabComponent => component !== null);
+}
+
+export function parsePrefabEntity(
+  value: unknown,
+  path = '$.entity',
+  depth = 0,
+): PrefabEntity {
+  return parseEntity(value, path, depth);
 }
 
 function parseEntity(

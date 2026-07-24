@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "id": "title",
+  "name": "Title",
+  "kind": "title",
+  "settings": {
+    "systemId": "default",
+    "planetId": "asteron",
+    "spawn": "station"
+  },
+  "gameObjects": []
+}

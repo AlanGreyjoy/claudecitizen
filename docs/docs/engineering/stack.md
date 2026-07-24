@@ -76,7 +76,7 @@ npm run dev:infra       # PostgreSQL, Redis, Mailpit
 npm run backend:migrate # apply SQLx migrations
 npm run dev:server      # watch/rebuild/restart Rust HTTP + WebTransport backend
 npm run start:server    # one-shot Rust backend
-npm run dev             # build shared WASM and start Vite
+npm run dev:web         # internal browser/admin development server (not the editor)
 ```
 
 Environment variables are documented in `backend/.env.example`. WebTransport uses a generated self-signed development identity unless certificate paths are configured; production supplies a trusted certificate through Kubernetes secrets.

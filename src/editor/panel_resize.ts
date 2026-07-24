@@ -56,21 +56,15 @@ export const PANEL_SIZE_DEFAULTS = {
   hierarchyWidth: 264,
   inspectorWidth: 320,
   projectHeight: 240,
-  projectSideWidth: 280,
 } as const;
 
 export const PANEL_SIZE_BOUNDS = {
   hierarchyWidth: { min: 160, max: 480 },
   inspectorWidth: { min: 200, max: 560 },
   projectHeight: { min: 120, max: () => window.innerHeight * 0.5 },
-  projectSideWidth: { min: 160, max: 480 },
 } as const;
 
-export function restorePanelSizes(
-  root: HTMLElement,
-  mainEl: HTMLElement,
-  projectEl?: HTMLElement,
-): void {
+export function restorePanelSizes(root: HTMLElement, mainEl: HTMLElement): void {
   const hierarchy = readStoredPx('hierarchyWidth');
   if (hierarchy !== null) {
     setCssVarPx(
@@ -97,21 +91,6 @@ export function restorePanelSizes(
       '--ed-project-height',
       clamp(project, PANEL_SIZE_BOUNDS.projectHeight.min, maxHeight),
     );
-  }
-
-  if (projectEl) {
-    const projectSide = readStoredPx('projectSideWidth');
-    if (projectSide !== null) {
-      setCssVarPx(
-        projectEl,
-        '--ed-project-side-width',
-        clamp(
-          projectSide,
-          PANEL_SIZE_BOUNDS.projectSideWidth.min,
-          PANEL_SIZE_BOUNDS.projectSideWidth.max,
-        ),
-      );
-    }
   }
 }
 

@@ -20,7 +20,10 @@ This project is **100% vibe coded** — built iteratively with AI-assisted devel
 
 ## CC Editor
 
-The dev-only **CC Editor** is a Unity-style in-browser world builder for stations, ships, props, and gameplay markers. Drag GLBs into the scene, tune colliders and components in the inspector, and save prefabs as JSON the game loads at runtime.
+The **CC Editor** is a standalone Unity-style Electron workspace for scenes,
+prefabs, world settings, Play Mode, and web builds. Drag GLBs into prefabs,
+tune colliders and components, create launchable scenes, and build the browser
+release from the File menu.
 
 ![CC Editor layout](/img/editor-screenshot.png)
 
@@ -44,7 +47,7 @@ Play the latest build in your browser:
 
 - [Quick start](/quick-start) — run the game locally
 - [Play](/play) — controls and quality presets
-- [CC Editor](/cc-editor) — dev-only world builder and prefab authoring
+- [CC Editor](/cc-editor) — standalone scene and prefab authoring workspace
 - [Admin App](/admin-app) — operator console for catalog, users, and game settings
 - [Assets](/assets) — protected models, Synty packs, character avatars
 - [Roadmap](/roadmap) — living feature checklist

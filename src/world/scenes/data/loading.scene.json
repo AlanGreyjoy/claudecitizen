@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "id": "loading",
+  "name": "Loading",
+  "kind": "loading",
+  "settings": {
+    "systemId": "default",
+    "planetId": "asteron",
+    "spawn": "station"
+  },
+  "gameObjects": []
+}

@@ -1,4 +1,5 @@
 import characterSettingsJson from './data/character-settings.json';
+import { AUTHORING_ENABLED } from '../build_mode';
 
 export const CHARACTER_SETTINGS_SCHEMA_VERSION = 1 as const;
 
@@ -107,7 +108,7 @@ export function setCharacterSettings(next: CharacterSettingsV1): void {
  * settings through the editor API instead of relying on the imported JSON.
  */
 export async function loadCurrentCharacterSettings(): Promise<CharacterSettingsV1> {
-  if (!import.meta.env.DEV) return getCharacterSettings();
+  if (!AUTHORING_ENABLED) return getCharacterSettings();
   try {
     const response = await fetch('/__editor/character-settings', { cache: 'no-store' });
     if (!response.ok) {

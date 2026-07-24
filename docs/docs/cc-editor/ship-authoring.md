@@ -77,7 +77,7 @@ window.__claudecitizenShipModel.listNodeNames()
 4. Place child empties for ramp buttons, door interact, pilot seat — wire their entity ids in the controller
 5. Drill into the GLB → sub-select walk surfaces and doors → add **mesh** colliders per node (`RampParent`, interior floors, `CockpitDoor_L` / `CockpitDoor_R`, …)
 6. Set **cameraBounds** in the controller for interior camera clamp and ramp dismount detection (not walk floors — those are mesh colliders on GLB nodes)
-7. Save and **Preview Ship**
+7. Save and press **Play**
 
 ## Ship sandbox
 

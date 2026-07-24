@@ -13,6 +13,7 @@ import {
 } from '../player/character_settings';
 import { parsePlanetDocument, type PlanetDocument } from '../world/planets/schema';
 import { parseSystemDocument, type SystemDocument } from '../world/systems/schema';
+import { parseSceneDocument, type SceneDocument } from '../world/scenes/schema';
 
 export interface PrefabListEntry {
   id: string;
@@ -20,7 +21,12 @@ export interface PrefabListEntry {
   name: string;
 }
 
-/** Client for the dev-only /__editor API provided by the Vite plugin. */
+export interface SceneListEntry {
+  id: string;
+  name: string;
+}
+
+/** Client for the local /__editor API provided by Vite or the Electron shell. */
 
 /** Drag-and-drop MIME type for Project panel asset cards. */
 export const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
@@ -76,6 +82,31 @@ export async function savePrefab(doc: PrefabDocument): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: doc }),
+  });
+  return payload.path;
+}
+
+export async function fetchSceneList(): Promise<SceneListEntry[]> {
+  const payload = await requestJson<{ scenes: SceneListEntry[] }>('/__editor/scenes');
+  return payload.scenes;
+}
+
+export async function fetchScene(id: string): Promise<SceneDocument> {
+  const payload = await requestJson<{ document: unknown }>(
+    `/__editor/scene?id=${encodeURIComponent(id)}`,
+  );
+  const document = parseSceneDocument(payload.document);
+  if (!document) throw new Error(`invalid scene document for "${id}"`);
+  return document;
+}
+
+export async function saveScene(document: SceneDocument): Promise<string> {
+  const parsed = parseSceneDocument(document);
+  if (!parsed) throw new Error(`invalid scene document for "${document.id}"`);
+  const payload = await requestJson<{ path: string }>('/__editor/scene', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document: parsed }),
   });
   return payload.path;
 }

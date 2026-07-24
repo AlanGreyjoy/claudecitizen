@@ -1,0 +1,55 @@
+---
+description: Editor-first migration — AsteronEngine Projects hub; no Vite/HTML frontend product; Rust backend stays
+alwaysApply: true
+---
+
+# Editor-First Migration (AsteronEngine)
+
+ClaudeCitizen is migrating from a multi-surface setup (browser Vite client, separate desktop shell, editor) to **one product surface**: a Unity-like **Electron desktop editor** powered by **AsteronEngine**. Expect a large cleanup of legacy web/dev paths; prefer deleting or starving old surfaces over extending them.
+
+**Naming:** the engine is **AsteronEngine**. Use that name for engine APIs, window titles, and product copy — not “ClaudeCitizen Engine” or ad-hoc engine labels.
+
+## Launch flow (target)
+
+1. App start opens a **Projects** window (hub), not a blank scene editor.
+2. User **creates** a new project or **opens** an existing one.
+3. Only then does the full editor workspace open on that project root.
+
+Do not skip the Projects hub by auto-binding the git repo as “the” project unless the user explicitly reopens a recent project. Project create/open is the first-class entry.
+
+## Target shape
+
+| Keep / invest | Do not grow |
+|---------------|-------------|
+| `editor-desktop/` + `src/editor/` + `src/render/editor/` | Standalone HTML/Vite **frontend** as an app people run to develop or play |
+| **Projects** window → create/open project → editor | Parallel “open the repo in a browser and `npm run dev:web`” workflows |
+| **File → Build Web** (release artifact into `dist/`) | Shipping features only through a Netlify/browser-first client loop |
+| Rust backend (`backend/`) — editor and Play Mode talk to it | New WebSocket fallbacks or a second client stack |
+
+## Rules of engagement
+
+1. **Editor first.** New authoring, playtest, project, and tooling UX belongs in the Electron editor. Launch: `npm run editor`. Do not start Vite/`dev:web` unless the user explicitly asks.
+2. **Projects hub first.** First window is **Projects**. Create/open selects the project root; the editor then owns scenes, prefabs, assets, and persistence (`cceditor:` / constrained `/__editor` API). Do not reintroduce a separate “web project manager.”
+3. **Web is a build target, not a product.** Browser output comes from **File → Build Web** (release bundle). Do not treat `index.html` + Vite serve as the primary runtime or add features that only make sense on that old path.
+4. **Backend stays.** Authoritative cells, WebTransport, SQLx, Redis remain. Prefer editor ↔ Rust server integration over client-only stubs when multiplayer/auth is in scope.
+5. **Cleanup bias.** When touching legacy `dev:web`, dual desktop packaging, or docs that describe three apps — remove, redirect to the editor, or leave a short TODO. Do not polish abandoned surfaces.
+6. **Play Mode ≠ browser SPA.** In-editor Play opens a separate Play Mode window from the active scene/prefab. That is the interactive QA path agents should assume.
+7. **Clean dead code.** Migration will orphan a lot. Delete it; do not keep “just in case.”
+
+## Clean dead code
+
+This migration produces a ton of unused surface. Treat dead code as a first-class task, not a later polish pass.
+
+- **Delete over deprecate.** Prefer removing unused modules, scripts, HTML entrypoints, dual-desktop packaging, and docs that describe the old three-app workflow.
+- **When you replace a path, finish the job.** Remove callers, exports, `package.json` scripts, imports, and stale README/AGENTS mentions in the same change when practical.
+- **No zombie shims.** Do not leave empty wrappers, re-exports, or “compat” layers for the Vite/HTML frontend or old project-root auto-bind unless something still calls them.
+- **If unsure it’s dead:** confirm nothing imports/runs it (`rg`, script refs); if still ambiguous, delete and note it in the handoff rather than parking it forever.
+- **Do not expand dead trees.** Never add features, fixes, or refactors to code that only serves abandoned surfaces.
+
+## Quick decision
+
+- Feature for creators / content / launch / build → **AsteronEngine editor** (via Projects → project)
+- Simulation authority / persistence / multiplayer → **Rust backend**
+- “Just make the Vite page work” → **push back**; route through editor + Build Web instead
+
+See also: `AGENTS.md` “Editor (Electron desktop)”, `.cursor/rules/prefab-editor.mdc`, `editor-desktop/README.md`.

@@ -6,11 +6,26 @@ import {
   useState,
   type ReactElement,
 } from 'react';
-import { fetchPlanetList, fetchPrefab, fetchPrefabList, savePrefab } from '../api';
+import {
+  fetchPlanetList,
+  fetchPrefab,
+  fetchPrefabList,
+  fetchScene,
+  fetchSceneList,
+  savePrefab,
+  saveScene,
+} from '../api';
 import { createEditorAudioPreviewController } from '../audio_preview';
+import { getDesktopEditorBridge } from '../../platform/editor_desktop';
 import { createEditorStore, type EditorStore } from '../document';
 import { showConfirmDialog, showToast } from '../dom';
-import { fromPrefabDocument, toPrefabDocument } from '../serialize';
+import {
+  fromPrefabDocument,
+  fromSceneDocument,
+  toPrefabDocument,
+  toSceneDocument,
+} from '../serialize';
+import { openSceneSettingsModal } from '../panels/scene_settings';
 import {
   addAssetEntity,
   addBox,
@@ -19,6 +34,7 @@ import {
   itemNameFromUrl,
 } from '../session_helpers';
 import { parsePrefabDocument, slugifyPrefabName } from '../../world/prefabs/schema';
+import { parseSceneDocument, SCENE_ID_PATTERN } from '../../world/scenes/schema';
 import { getModelThumbnail } from '../../render/editor/thumbnails';
 import type { EditorViewport } from '../../render/editor/viewport';
 import type { Vec3 } from '../../types';
@@ -31,12 +47,15 @@ import { MaterialManagerPanel } from './panels/MaterialManagerPanel';
 import { ProjectPanel, type ProjectPanelHandle } from './panels/ProjectPanel';
 import {
   Toolbar,
+  type BrowsePanelKind,
   type ToolbarGizmoMode,
   type ToolbarHandle,
 } from './panels/Toolbar';
 import { TabEditorHosts, type TabEditorHandles } from './TabEditorHosts';
 import { SCENE_EDITOR_TABS, type SceneEditorTab } from './types';
 import { ViewportHost } from './ViewportHost';
+import { sceneLaunchSearch } from '../../app/scene_launch';
+import type { DesktopNativeCommand } from '../../platform/editor_desktop';
 
 function restoreSnapshot(
   store: EditorStore,
@@ -59,6 +78,108 @@ function restoreSnapshot(
   return known ? snapshot.tab : 'scene';
 }
 
+const GIZMO_SHORTCUTS: Readonly<Partial<Record<string, ToolbarGizmoMode>>> = {
+  w: 'translate',
+  e: 'rotate',
+  r: 'scale',
+};
+
+type PreparedPlayRoute =
+  | { handled: true; route: string | null }
+  | { handled: false };
+
+type NativeCommandHandlers = {
+  togglePlay: () => void;
+  stopPlay: () => void;
+  buildWeb: () => void;
+  newScene: () => void;
+  newPrefab: () => void;
+  save: () => void;
+  openBrowse: (panel: BrowsePanelKind) => void;
+  openSceneSettings: () => void;
+  undo: () => void;
+  redo: () => void;
+  duplicate: () => void;
+  deleteSelection: () => void;
+  exitToTitle: () => void;
+};
+
+function dispatchNativeCommand(
+  command: DesktopNativeCommand,
+  handlers: NativeCommandHandlers,
+): void {
+  const actions: Record<DesktopNativeCommand['type'], () => void> = {
+    play: handlers.togglePlay,
+    'stop-play': handlers.stopPlay,
+    'build-web': handlers.buildWeb,
+    'new-scene': handlers.newScene,
+    'new-prefab': handlers.newPrefab,
+    save: handlers.save,
+    'open-scene': () => handlers.openBrowse('scene'),
+    'open-prefab': () => handlers.openBrowse('prefab'),
+    'open-planet': () => handlers.openBrowse('planet'),
+    'open-menu': () => handlers.openBrowse('menu'),
+    'open-scene-settings': handlers.openSceneSettings,
+    undo: handlers.undo,
+    redo: handlers.redo,
+    duplicate: handlers.duplicate,
+    delete: handlers.deleteSelection,
+    'exit-to-title': handlers.exitToTitle,
+  };
+  actions[command.type]?.();
+}
+
+async function prepareSpecializedPlayRoute(
+  current: SceneEditorTab,
+  handles: TabEditorHandles,
+): Promise<PreparedPlayRoute> {
+  if (current === 'planet-authoring') {
+    const editor = handles.planetAuthoringEditor;
+    if (!editor || !(await editor.save())) return { handled: true, route: null };
+    const planet = editor.getDocument();
+    if (!planet) return { handled: true, route: null };
+    const params = new URLSearchParams({
+      boot: 'play',
+      planetId: planet.id,
+      spawn: 'surface',
+      from: 'editor',
+      scene: `planet-${planet.id}-test`,
+    });
+    return { handled: true, route: `/?${params.toString()}` };
+  }
+
+  if (current === 'system-map') {
+    const editor = handles.systemMapEditor;
+    if (!editor || !(await editor.save())) return { handled: true, route: null };
+    const system = editor.getDocument();
+    const planetId = system?.planets[0]?.planetId;
+    if (!system || !planetId) {
+      showToast('Add a planet before playing this system scene.', true);
+      return { handled: true, route: null };
+    }
+    const params = new URLSearchParams({
+      boot: 'play',
+      systemId: system.id,
+      planetId,
+      from: 'editor',
+      scene: `system-${system.id}-test`,
+    });
+    return { handled: true, route: `/?${params.toString()}` };
+  }
+
+  if (current === 'base-characters') {
+    await handles.baseCharacterEditor?.save();
+    return { handled: true, route: '/?boot=sidekickPreview&scene=base-character-test' };
+  }
+
+  if (current === 'menu-manager') {
+    const scene = await fetchScene('main-game');
+    return { handled: true, route: sceneLaunchSearch(scene) };
+  }
+
+  return { handled: false };
+}
+
 export function EditorApp(): ReactElement {
   const store = useEditorStoreInstance(() => createEditorStore());
   const audioPreview = useMemo(() => createEditorAudioPreviewController(), []);
@@ -67,13 +188,14 @@ export function EditorApp(): ReactElement {
     return restoreSnapshot(store, snap);
   });
   const [viewport, setViewport] = useState<EditorViewport | null>(null);
-  const [viewportToolbarHost, setViewportToolbarHost] = useState<HTMLElement | null>(null);
   const [tabHandles, setTabHandles] = useState<TabEditorHandles>({
     baseCharacterEditor: null,
     planetAuthoringEditor: null,
     systemMapEditor: null,
     menuManagerEditor: null,
   });
+  const [playing, setPlaying] = useState(false);
+  const [building, setBuilding] = useState(false);
 
   const toolbarRef = useRef<ToolbarHandle | null>(null);
   const projectRef = useRef<ProjectPanelHandle | null>(null);
@@ -84,11 +206,16 @@ export function EditorApp(): ReactElement {
   viewportRef.current = viewport;
   const tabHandlesRef = useRef(tabHandles);
   tabHandlesRef.current = tabHandles;
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
+
+  const stopInEditorPlay = useCallback(() => {
+    viewportRef.current?.setPlayMode(false);
+    setPlaying(false);
+  }, []);
 
   const rootRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
-  const centerColumnRef = useRef<HTMLDivElement | null>(null);
-  const projectHostRef = useRef<HTMLDivElement | null>(null);
   const hierarchyPanelRef = useRef<HTMLDivElement | null>(null);
   const inspectorPanelRef = useRef<HTMLDivElement | null>(null);
   const hierarchySplitterRef = useRef<HTMLDivElement | null>(null);
@@ -102,7 +229,6 @@ export function EditorApp(): ReactElement {
   usePanelSplitters({
     rootRef,
     mainRef,
-    projectRef: projectHostRef,
     hierarchySplitterRef,
     inspectorSplitterRef,
     projectSplitterRef,
@@ -173,15 +299,14 @@ export function EditorApp(): ReactElement {
     if (current === 'system-map' && next !== current && !handles.systemMapEditor?.canLeave()) {
       return;
     }
+    if (playingRef.current && next !== 'scene' && next !== 'material-manager') {
+      stopInEditorPlay();
+    }
     setTabState(next);
     if (next === 'base-characters') {
       projectRef.current?.selectFolder('protected/animations');
     }
-  }, []);
-
-  const onToolbarSlot = useCallback((host: HTMLDivElement | null) => {
-    setViewportToolbarHost(host);
-  }, []);
+  }, [stopInEditorPlay]);
 
   const onTabHandles = useCallback((handles: TabEditorHandles) => {
     setTabHandles(handles);
@@ -253,8 +378,8 @@ export function EditorApp(): ReactElement {
   }, []);
 
   // Cached so a fetch that finishes before Toolbar mounts is not dropped.
-  // Toolbar only mounts after ViewportHost provides viewportToolbarHost.
   const prefabListCacheRef = useRef<Awaited<ReturnType<typeof fetchPrefabList>> | null>(null);
+  const sceneListCacheRef = useRef<Awaited<ReturnType<typeof fetchSceneList>> | null>(null);
   const planetListCacheRef = useRef<Awaited<ReturnType<typeof fetchPlanetList>> | null>(null);
 
   const refreshPrefabList = useCallback(async () => {
@@ -262,6 +387,16 @@ export function EditorApp(): ReactElement {
       const prefabs = await fetchPrefabList();
       prefabListCacheRef.current = prefabs;
       toolbarRef.current?.setPrefabOptions(prefabs);
+    } catch {
+      // Dev API unavailable.
+    }
+  }, []);
+
+  const refreshSceneList = useCallback(async () => {
+    try {
+      const scenes = await fetchSceneList();
+      sceneListCacheRef.current = scenes;
+      toolbarRef.current?.setSceneOptions(scenes);
     } catch {
       // Dev API unavailable.
     }
@@ -282,16 +417,33 @@ export function EditorApp(): ReactElement {
   const saveCurrent = useCallback(async (): Promise<string | null> => {
     const state = store.getState();
     const id = state.prefabId || slugifyPrefabName(state.prefabName);
+    const isScene = state.documentType === 'scene';
     if (!id) {
-      showToast('Give the prefab a name before saving.', true);
+      showToast(`Give the ${isScene ? 'scene' : 'prefab'} a name before saving.`, true);
       return null;
     }
-    if (state.roots.length === 0) {
-      showToast('Nothing to save — the scene is empty.', true);
+    if (isScene && !SCENE_ID_PATTERN.test(id)) {
+      showToast('Scene id must be a lowercase slug.', true);
       return null;
     }
-    store.setPrefabMeta({ prefabId: id });
+    store.setDocumentMeta({ prefabId: id });
     try {
+      if (isScene) {
+        const doc = parseSceneDocument(toSceneDocument(store.getState()));
+        if (!doc) {
+          showToast('Scene document is invalid.', true);
+          return null;
+        }
+        const path = await saveScene(doc);
+        store.markSaved();
+        showToast(`Saved ${path}`);
+        void refreshSceneList();
+        return id;
+      }
+      if (state.roots.length === 0) {
+        showToast('Nothing to save — the prefab is empty.', true);
+        return null;
+      }
       const doc = parsePrefabDocument(toPrefabDocument(store.getState()));
       const path = await savePrefab(doc);
       store.markSaved();
@@ -302,7 +454,7 @@ export function EditorApp(): ReactElement {
       showToast(`Save failed: ${(error as Error).message}`, true);
       return null;
     }
-  }, [store, refreshPrefabList]);
+  }, [store, refreshPrefabList, refreshSceneList]);
 
   const loadById = useCallback(
     async (id: string) => {
@@ -311,19 +463,44 @@ export function EditorApp(): ReactElement {
       try {
         const doc = await fetchPrefab(id);
         store.loadDocument(fromPrefabDocument(doc));
-        showToast(`Loaded "${id}"`);
+        setTab('scene');
+        showToast(`Loaded prefab "${id}"`);
       } catch (error) {
         showToast(`Load failed: ${(error as Error).message}`, true);
       }
     },
-    [store, audioPreview, confirmDiscard],
+    [store, audioPreview, confirmDiscard, setTab],
+  );
+
+  const loadSceneById = useCallback(
+    async (id: string) => {
+      if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and load?'))) return;
+      audioPreview.stop();
+      try {
+        const doc = await fetchScene(id);
+        store.loadDocument(fromSceneDocument(doc));
+        setTab('scene');
+        showToast(`Loaded scene "${id}"`);
+      } catch (error) {
+        showToast(`Load failed: ${(error as Error).message}`, true);
+      }
+    },
+    [store, audioPreview, confirmDiscard, setTab],
   );
 
   const newDocument = useCallback(async () => {
     if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes?'))) return;
     audioPreview.stop();
     store.newDocument();
-  }, [store, audioPreview, confirmDiscard]);
+    setTab('scene');
+  }, [store, audioPreview, confirmDiscard, setTab]);
+
+  const newSceneDocument = useCallback(async () => {
+    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes?'))) return;
+    audioPreview.stop();
+    store.newScene();
+    setTab('scene');
+  }, [store, audioPreview, confirmDiscard, setTab]);
 
   const createItemPrefab = useCallback(
     async (url: string) => {
@@ -336,7 +513,7 @@ export function EditorApp(): ReactElement {
       audioPreview.stop();
       const name = itemNameFromUrl(url);
       store.newDocument();
-      store.setPrefabMeta({ kind: 'item', prefabName: name, prefabId: slugifyPrefabName(name) });
+      store.setDocumentMeta({ kind: 'item', prefabName: name, prefabId: slugifyPrefabName(name) });
       addAssetEntity(store, url, { x: 0, y: 0, z: 0 });
       setTab('scene');
       showToast(`Created item prefab "${name}". Add sockets if this is a backpack, then save.`);
@@ -344,18 +521,87 @@ export function EditorApp(): ReactElement {
     [store, audioPreview, confirmDiscard, setTab],
   );
 
-  const previewInPlay = useCallback(async () => {
-    const kind = store.getState().kind;
-    if (kind !== 'station' && kind !== 'ship') {
-      showToast('Preview in Play supports station and ship prefabs.', true);
+  const saveActive = useCallback(async (): Promise<boolean> => {
+    const current = tabRef.current;
+    const handles = tabHandlesRef.current;
+    const documentIsActive = current === 'scene' || current === 'material-manager';
+    if (!documentIsActive && store.isDirty() && !(await saveCurrent())) return false;
+    if (current === 'system-map') return handles.systemMapEditor?.save() ?? false;
+    if (current === 'planet-authoring') return handles.planetAuthoringEditor?.save() ?? false;
+    if (current === 'base-characters') {
+      await handles.baseCharacterEditor?.save();
+      return true;
+    }
+    if (current === 'menu-manager') return handles.menuManagerEditor?.save() ?? true;
+    return (await saveCurrent()) !== null;
+  }, [saveCurrent, store]);
+
+  const preparePlayRoute = useCallback(async (): Promise<string | null> => {
+    const current = tabRef.current;
+    const handles = tabHandlesRef.current;
+    audioPreview.stop();
+    const documentIsActive = current === 'scene' || current === 'material-manager';
+    if (!documentIsActive && store.isDirty() && !(await saveCurrent())) return null;
+
+    const specialized = await prepareSpecializedPlayRoute(current, handles);
+    if (specialized.handled) return specialized.route;
+
+    // Scene / prefab documents play in-editor (Scene view → Play view).
+    // Specialized tabs above still use an external Play window route.
+    return null;
+  }, [audioPreview, saveCurrent, store]);
+
+  const togglePlay = useCallback(async () => {
+    const bridge = getDesktopEditorBridge();
+    if (playing) {
+      stopInEditorPlay();
+      if (bridge) await bridge.stopPlay();
       return;
     }
-    const id = await saveCurrent();
-    if (!id) return;
+
+    const current = tabRef.current;
     audioPreview.stop();
-    const param = kind === 'ship' ? 'shipPrefab' : 'stationPrefab';
-    window.location.href = `/?${param}=${encodeURIComponent(id)}`;
-  }, [store, saveCurrent, audioPreview]);
+
+    // Unity-style: Scene / Material Manager play the open document in the viewport.
+    if (current === 'scene' || current === 'material-manager') {
+      if (current !== 'scene') setTabState('scene');
+      viewportRef.current?.setPlayMode(true);
+      setPlaying(true);
+      return;
+    }
+
+    const route = await preparePlayRoute();
+    if (!route) return;
+    if (!bridge) {
+      window.location.href = route;
+      return;
+    }
+    await bridge.play(route);
+    setPlaying(true);
+  }, [playing, preparePlayRoute, audioPreview, stopInEditorPlay]);
+
+  const buildWeb = useCallback(async () => {
+    const bridge = getDesktopEditorBridge();
+    if (!bridge) {
+      showToast('Build Web is available in the Electron editor.', true);
+      return;
+    }
+    if (!(await saveActive())) return;
+    setBuilding(true);
+    try {
+      const result = await bridge.buildWeb();
+      showToast(
+        result.ok
+          ? `Web release built at ${result.outputDir ?? 'dist/'}`
+          : result.message,
+        !result.ok,
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Web build failed.', true);
+    } finally {
+      setBuilding(false);
+    }
+  }, [saveActive]);
 
   const exitToTitle = useCallback(async () => {
     const handles = tabHandlesRef.current;
@@ -378,13 +624,8 @@ export function EditorApp(): ReactElement {
   }, [store, audioPreview, confirmDiscard]);
 
   const onSave = useCallback(() => {
-    const current = tabRef.current;
-    const handles = tabHandlesRef.current;
-    if (current === 'system-map') void handles.systemMapEditor?.save();
-    else if (current === 'planet-authoring') void handles.planetAuthoringEditor?.save();
-    else if (current === 'base-characters') void handles.baseCharacterEditor?.save();
-    else void saveCurrent();
-  }, [saveCurrent]);
+    void saveActive();
+  }, [saveActive]);
 
   const setGizmoMode = useCallback(
     (mode: ToolbarGizmoMode) => {
@@ -404,14 +645,24 @@ export function EditorApp(): ReactElement {
       onGizmoSpace: (space: 'local' | 'world') => viewportRef.current?.setGizmoSpace(space),
       onSnapChange: (enabled: boolean, translate: number, rotate: number) =>
         viewportRef.current?.setSnap(enabled, translate, rotate),
+      onFocusSelection: () => viewportRef.current?.focusSelection(),
       onAddBox: () => addBox(store),
       onAddEmpty: () => addEmpty(store),
-      onNew: () => void newDocument(),
+      onNew: () => {
+        void newDocument();
+      },
+      onNewScene: () => {
+        void newSceneDocument();
+      },
       onSave,
       onLoad: (id: string) => void loadById(id),
+      onLoadScene: (id: string) => void loadSceneById(id),
       onLoadPlanet: (id: string) => {
         setTab('planet-authoring');
         void tabHandlesRef.current.planetAuthoringEditor?.loadPlanet(id);
+      },
+      onOpenSceneSettings: () => {
+        void openSceneSettingsModal(store);
       },
       onOpenMenu: (id: string) => {
         setTab('menu-manager');
@@ -419,51 +670,114 @@ export function EditorApp(): ReactElement {
       },
       onDuplicate: duplicateSelection,
       onDelete: deleteSelection,
-      onPreview: () => void previewInPlay(),
-      onPreviewPlanet: () => void tabHandlesRef.current.planetAuthoringEditor?.previewPlanet(),
+      onTogglePlay: () => void togglePlay(),
+      onStopPlay: () => {
+        stopInEditorPlay();
+        void getDesktopEditorBridge()?.stopPlay();
+      },
+      onBuildWeb: () => void buildWeb(),
+      onOpenProject: () => {
+        void getDesktopEditorBridge()?.returnToProjects();
+      },
       onExit: () => void exitToTitle(),
       onShipPreviewChange: (state: Parameters<EditorViewport['setShipPreview']>[0]) =>
         viewportRef.current?.setShipPreview(state),
-      isPlanetAuthoring: () => tabRef.current === 'planet-authoring',
+      playing,
+      building,
     }),
     [
       store,
       newDocument,
+      newSceneDocument,
       onSave,
       loadById,
+      loadSceneById,
       setTab,
       duplicateSelection,
       deleteSelection,
-      previewInPlay,
+      togglePlay,
+      stopInEditorPlay,
+      buildWeb,
       exitToTitle,
+      playing,
+      building,
     ],
   );
 
-  // Prefab/planet lists — fetch early, and re-apply when Toolbar mounts.
+  // Prefab/planet/scene lists for File → Open… browse dialogs.
   useEffect(() => {
     void refreshPrefabList();
+    void refreshSceneList();
     void refreshPlanetList();
-  }, [refreshPrefabList, refreshPlanetList]);
+  }, [refreshPrefabList, refreshSceneList, refreshPlanetList]);
 
   useEffect(() => {
-    if (!viewportToolbarHost) return;
-    if (prefabListCacheRef.current) {
-      toolbarRef.current?.setPrefabOptions(prefabListCacheRef.current);
-    } else {
-      void refreshPrefabList();
-    }
-    if (planetListCacheRef.current) {
-      toolbarRef.current?.setPlanetOptions(planetListCacheRef.current);
-    } else {
-      void refreshPlanetList();
-    }
-  }, [viewportToolbarHost, refreshPrefabList, refreshPlanetList]);
+    const bridge = getDesktopEditorBridge();
+    if (!bridge) return;
+    // External Play window closed → exit play UI. Do not adopt bridge
+    // playing=true (in-editor Play owns that for the Scene tab).
+    void bridge.getPlayState().then((state) => {
+      if (!state.playing) stopInEditorPlay();
+    });
+    const unsubscribePlay = bridge.onPlayState((state) => {
+      if (!state.playing) stopInEditorPlay();
+    });
+    const unsubscribeBuild = bridge.onBuildState((state) => {
+      setBuilding(state.phase === 'building');
+    });
+    const unsubscribeCommand = bridge.onNativeCommand((command) => {
+      dispatchNativeCommand(command, {
+        togglePlay: () => void togglePlay(),
+        stopPlay: () => {
+          stopInEditorPlay();
+          void bridge.stopPlay();
+        },
+        buildWeb: () => void buildWeb(),
+        newScene: () => void newSceneDocument(),
+        newPrefab: () => void newDocument(),
+        save: onSave,
+        openBrowse: (panel) => toolbarRef.current?.openBrowsePanel(panel),
+        openSceneSettings: () => void openSceneSettingsModal(store),
+        undo: () => store.undo(),
+        redo: () => store.redo(),
+        duplicate: duplicateSelection,
+        deleteSelection,
+        exitToTitle: () => void exitToTitle(),
+      });
+    });
+    return () => {
+      unsubscribePlay();
+      unsubscribeBuild();
+      unsubscribeCommand();
+    };
+  }, [
+    buildWeb,
+    togglePlay,
+    stopInEditorPlay,
+    newSceneDocument,
+    newDocument,
+    onSave,
+    store,
+    duplicateSelection,
+    deleteSelection,
+    exitToTitle,
+  ]);
 
-  // Boot query params
+  // Boot query params + default open main-game scene when starting fresh.
   useEffect(() => {
     const bootParams = new URLSearchParams(window.location.search);
     const prefabParam = bootParams.get('prefab');
-    if (prefabParam) void loadById(prefabParam);
+    const sceneParam = bootParams.get('openScene');
+    if (prefabParam) {
+      setTab('scene');
+      void loadById(prefabParam);
+      return;
+    }
+    if (sceneParam) {
+      setTab('scene');
+      void loadSceneById(sceneParam);
+      return;
+    }
     if (bootParams.get('tab') === 'planet') setTab('planet-authoring');
     if (bootParams.get('tab') === 'system') setTab('system-map');
     if (bootParams.get('tab') === 'menu') {
@@ -472,8 +786,19 @@ export function EditorApp(): ReactElement {
       if (menuId) {
         queueMicrotask(() => tabHandlesRef.current.menuManagerEditor?.openMenu(menuId));
       }
+      return;
     }
-  }, [loadById, setTab]);
+    // Cold start: open main-game scene when the store is still an empty untitled scene.
+    const state = store.getState();
+    if (
+      state.documentType === 'scene'
+      && !state.prefabId
+      && state.roots.length === 0
+      && !takeEditorHmrSnapshot()
+    ) {
+      void loadSceneById('main-game');
+    }
+  }, [loadById, loadSceneById, setTab, store]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -481,11 +806,23 @@ export function EditorApp(): ReactElement {
       if (isTypingTarget(event.target)) return;
       if (viewportRef.current?.isFlying()) return;
 
+      if (event.key === 'F6') {
+        event.preventDefault();
+        void togglePlay();
+        return;
+      }
+
+      // Play Mode: Scene view is live — only fly / stop, no edit shortcuts.
+      if (playingRef.current) return;
+
       if (event.ctrlKey || event.metaKey) {
         const key = event.key.toLowerCase();
         if (key === 's') {
           event.preventDefault();
           onSave();
+        } else if (key === 'b') {
+          event.preventDefault();
+          void buildWeb();
         } else if (key === 'd') {
           event.preventDefault();
           duplicateSelection();
@@ -500,16 +837,14 @@ export function EditorApp(): ReactElement {
         return;
       }
 
-      switch (event.key.toLowerCase()) {
-        case 'w':
-          setGizmoMode('translate');
-          break;
-        case 'e':
-          setGizmoMode('rotate');
-          break;
-        case 'r':
-          setGizmoMode('scale');
-          break;
+      const key = event.key.toLowerCase();
+      const gizmoMode = GIZMO_SHORTCUTS[key];
+      if (gizmoMode) {
+        setGizmoMode(gizmoMode);
+        return;
+      }
+
+      switch (key) {
         case 'f':
           viewportRef.current?.focusSelection();
           break;
@@ -524,7 +859,7 @@ export function EditorApp(): ReactElement {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [store, onSave, duplicateSelection, deleteSelection, setGizmoMode]);
+  }, [store, onSave, buildWeb, togglePlay, duplicateSelection, deleteSelection, setGizmoMode]);
 
   // beforeunload + HMR snapshot
   useEffect(() => {
@@ -576,16 +911,7 @@ export function EditorApp(): ReactElement {
 
   return (
     <>
-      <div className="ed-toolbar">
-        {viewportToolbarHost ? (
-          <Toolbar
-            ref={toolbarRef}
-            store={store}
-            actions={toolbarActions}
-            viewportHost={viewportToolbarHost}
-          />
-        ) : null}
-      </div>
+      <Toolbar ref={toolbarRef} store={store} actions={toolbarActions} />
 
       <div ref={mainRef} className="ed-main">
         <div ref={hierarchyPanelRef} className="ed-panel ed-hierarchy-panel">
@@ -617,56 +943,43 @@ export function EditorApp(): ReactElement {
           className="ed-splitter ed-splitter-col ed-hierarchy-splitter"
         />
 
-        <div ref={centerColumnRef} className="ed-center-column">
-          <div className="ed-scene-shell">
-            <div className="ed-scene-tabs">
-              {SCENE_EDITOR_TABS.map((entry) => (
+        <div className="ed-scene-shell">
+          <div className="ed-scene-tabs">
+            {SCENE_EDITOR_TABS.map((entry) => {
+              const label =
+                entry.id === 'scene' && store.getState().documentType === 'prefab'
+                  ? 'Prefab'
+                  : entry.label;
+              return (
                 <button
                   key={entry.id}
                   type="button"
                   className={`ed-scene-tab${tab === entry.id ? ' is-active' : ''}`}
                   onClick={() => setTab(entry.id)}
                 >
-                  {entry.label}
+                  {label}
                 </button>
-              ))}
-            </div>
-            <div className="ed-scene-body">
-              <ViewportHost
-                store={store}
-                hidden={tab !== 'scene'}
-                onReady={setViewport}
-                onDropAsset={(url: string, position: Vec3) =>
-                  addAssetEntity(store, url, position)
-                }
-                toolbarSlot={onToolbarSlot}
-              />
-              <div
-                className={`ed-scene-panel ed-material-manager${
-                  tab !== 'material-manager' ? ' is-hidden' : ''
-                }`}
-              >
-                <MaterialManagerPanel store={store} />
-              </div>
-              <TabEditorHosts tab={tab} onHandles={onTabHandles} />
-            </div>
+              );
+            })}
           </div>
-
-          <div
-            ref={projectSplitterRef}
-            className="ed-splitter ed-splitter-row ed-project-splitter"
-          />
-          <div ref={projectHostRef} className="ed-project">
-            <ProjectPanel
-              ref={projectRef}
-              audioPreview={audioPreview}
-              getModelThumbnail={getModelThumbnail}
-              onPreviewAnimationSource={async (url) => {
-                setTab('base-characters');
-                await tabHandlesRef.current.baseCharacterEditor?.loadAnimationFromAsset(url);
-              }}
-              onCreateItemPrefab={createItemPrefab}
+          <div className="ed-scene-body">
+            <ViewportHost
+              store={store}
+              hidden={tab !== 'scene'}
+              playing={playing && (tab === 'scene' || tab === 'material-manager')}
+              onReady={setViewport}
+              onDropAsset={(url: string, position: Vec3) =>
+                addAssetEntity(store, url, position)
+              }
             />
+            <div
+              className={`ed-scene-panel ed-material-manager${
+                tab !== 'material-manager' ? ' is-hidden' : ''
+              }`}
+            >
+              <MaterialManagerPanel store={store} />
+            </div>
+            <TabEditorHosts tab={tab} onHandles={onTabHandles} />
           </div>
         </div>
 
@@ -676,7 +989,9 @@ export function EditorApp(): ReactElement {
         />
         <div ref={inspectorPanelRef} className="ed-panel ed-inspector-panel">
           <div
-            className={`ed-panel-swap${tab === 'base-characters' ? ' is-hidden' : ''}`}
+            className={`ed-panel-swap${
+              tab === 'base-characters' ? ' is-hidden' : ''
+            }`}
           >
             {viewport ? (
               <InspectorPanel
@@ -699,6 +1014,21 @@ export function EditorApp(): ReactElement {
             ) : null}
           </div>
         </div>
+
+        <div
+          ref={projectSplitterRef}
+          className="ed-splitter ed-splitter-row ed-project-splitter"
+        />
+        <ProjectPanel
+          ref={projectRef}
+          audioPreview={audioPreview}
+          getModelThumbnail={getModelThumbnail}
+          onPreviewAnimationSource={async (url) => {
+            setTab('base-characters');
+            await tabHandlesRef.current.baseCharacterEditor?.loadAnimationFromAsset(url);
+          }}
+          onCreateItemPrefab={createItemPrefab}
+        />
       </div>
     </>
   );

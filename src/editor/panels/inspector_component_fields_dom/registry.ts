@@ -7,6 +7,12 @@ import { buildPointLightFields, buildAreaLightFields, buildSpotLightFields, buil
 import { buildShipFrameFields, buildShipControllerFields, buildShipStatsFields, buildShipGearFields, buildShipRampFields, buildShipHullFields } from "./builders_4";
 import { buildShipDoorFields, buildPilotSeatFields, buildBedFields, buildRampInteractFields, buildCockpitControlFields, buildEntertainmentSystemFields } from "./builders_5";
 import { buildWeaponShopFields, buildOutfittersFields, buildFoodShopFields, buildDrinksShopFields, buildCanteenFields, buildCockpitStatFields } from "./builders_6";
+import {
+  buildGameManagerFields,
+  buildPlanetFields,
+  buildPlayerStartFields,
+  buildPrefabInstanceFields,
+} from "./builders_scene";
 
 type ComponentFieldBuilder = (
   ctx: ComponentFieldBuildContext,
@@ -58,4 +64,8 @@ export const COMPONENT_FIELD_BUILDERS: Partial<
   "drinks-shop": (ctx, component) => buildDrinksShopFields(ctx, component as Extract<PrefabComponent, { type: "drinks-shop" }>),
   "canteen": (ctx, component) => buildCanteenFields(ctx, component as Extract<PrefabComponent, { type: "canteen" }>),
   "cockpit-stat": (ctx, component) => buildCockpitStatFields(ctx, component as Extract<PrefabComponent, { type: "cockpit-stat" }>),
+  "game-manager": (ctx, component) => buildGameManagerFields(ctx, component as Extract<PrefabComponent, { type: "game-manager" }>),
+  "planet": (ctx, component) => buildPlanetFields(ctx, component as Extract<PrefabComponent, { type: "planet" }>),
+  "player-start": (ctx, component) => buildPlayerStartFields(ctx, component as Extract<PrefabComponent, { type: "player-start" }>),
+  "prefab-instance": (ctx, component) => buildPrefabInstanceFields(ctx, component as Extract<PrefabComponent, { type: "prefab-instance" }>),
 };

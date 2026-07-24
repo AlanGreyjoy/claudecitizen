@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "id": "main-game",
+  "name": "Main Game",
+  "kind": "main-game",
+  "settings": {
+    "systemId": "default",
+    "planetId": "asteron",
+    "spawn": "station"
+  },
+  "gameObjects": [
+    {
+      "id": "game-manager",
+      "name": "GameManager",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "game-manager",
+          "systemId": "default",
+          "planetId": "asteron",
+          "spawn": "station"
+        }
+      ]
+    },
+    {
+      "id": "planet-asteron",
+      "name": "Planet Asteron",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "planet",
+          "planetId": "asteron"
+        }
+      ]
+    },
+    {
+      "id": "station-demo",
+      "name": "Demo Station",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "prefab-instance",
+          "prefabId": "demo-station",
+          "prefabKind": "station"
+        }
+      ]
+    },
+    {
+      "id": "player-start",
+      "name": "PlayerStart",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "player-start",
+          "spawn": "station"
+        }
+      ]
+    }
+  ]
+}

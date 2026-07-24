@@ -18,6 +18,8 @@ export interface ComponentDef {
   label: string;
   /** Prefab kinds whose component palette includes this type. */
   kinds: PrefabKind[];
+  /** Also available when editing a scene document. */
+  scenes?: boolean;
   /** At most one instance per document (frames, hull markers, pilot seats). */
   singleton?: boolean;
   /**
@@ -577,6 +579,55 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint:
       "Bunk mini-TV. Place an Empty on the overhead screen. While in bed, look at it and press F to open the Entertainment System.",
   },
+  {
+    type: "game-manager",
+    label: "Game Manager",
+    kinds: [],
+    scenes: true,
+    singleton: true,
+    createDefault: () => ({
+      type: "game-manager",
+      systemId: "default",
+      planetId: "asteron",
+      spawn: "station",
+    }),
+    hint: "Scene gameplay config: which system/planet to load and default spawn mode.",
+  },
+  {
+    type: "planet",
+    label: "Planet",
+    kinds: [],
+    scenes: true,
+    createDefault: () => ({
+      type: "planet",
+      planetId: "asteron",
+    }),
+    hint: "Planet document reference for this scene.",
+  },
+  {
+    type: "player-start",
+    label: "Player Start",
+    kinds: [],
+    scenes: true,
+    marker: true,
+    createDefault: () => ({
+      type: "player-start",
+      spawn: "station",
+    }),
+    hint: "Player spawn marker. Transform is the spawn pose; spawn mode selects station vs surface.",
+  },
+  {
+    type: "prefab-instance",
+    label: "Prefab Instance",
+    kinds: [],
+    scenes: true,
+    createDefault: () => ({
+      type: "prefab-instance",
+      prefabId: "demo-station",
+      prefabKind: "station",
+    }),
+    hint: "Instantiate a reusable prefab into this scene (station, ship, prop, …).",
+  },
 ];
 
 const registryByType = new Map(
@@ -593,6 +644,20 @@ export function getComponentsForKind(kind: PrefabKind): ComponentDef[] {
   return COMPONENT_REGISTRY.filter((def) => def.kinds.includes(kind));
 }
 
+export function getComponentsForScene(): ComponentDef[] {
+  return COMPONENT_REGISTRY.filter(
+    (def) =>
+      def.scenes
+      || def.kinds.includes("site")
+      || def.type === "collider"
+      || def.type === "point-light"
+      || def.type === "area-light"
+      || def.type === "spot-light"
+      || def.type === "sound"
+      || def.type === "particle-system",
+  );
+}
+
 /**
  * Case-insensitive substring match over type and label, filtered by prefab
  * kind and with already-present singletons removed. An empty query returns
@@ -602,9 +667,14 @@ export function searchComponents(
   query: string,
   kind: PrefabKind,
   existingTypes: readonly PrefabComponentType[],
+  options?: { documentType?: 'scene' | 'prefab' },
 ): ComponentDef[] {
   const needle = query.trim().toLowerCase();
-  return getComponentsForKind(kind).filter((def) => {
+  const palette =
+    options?.documentType === 'scene'
+      ? getComponentsForScene()
+      : getComponentsForKind(kind);
+  return palette.filter((def) => {
     if (def.singleton && existingTypes.includes(def.type)) return false;
     if (!needle) return true;
     return (

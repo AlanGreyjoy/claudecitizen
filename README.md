@@ -25,10 +25,12 @@ This project is **100% vibe coded** — built iteratively with AI-assisted devel
 
 ```bash
 npm install
-npm run dev
+npm run editor
 ```
 
-Open [http://localhost:4173](http://localhost:4173). Click the canvas to lock the mouse.
+The Electron editor is the project workspace. Open or create scenes and
+prefabs, use the universal **Play** button to test the active document, and use
+**File → Build Web** when the game is ready for a browser release.
 
 ## Desktop app
 
@@ -52,6 +54,33 @@ npm run desktop:package
 The unpacked output from `build:desktop` is the intended starting point for a Steam depot.
 Steamworks integration will live in Electron's main process and cross the isolated preload
 bridge; renderer-side Node.js access remains disabled.
+
+## Editor desktop app
+
+The ClaudeCitizen Editor is a standalone Electron application with a
+constrained local project API. It does not require a Vite development server.
+
+```bash
+# Build the editor frontend and launch the Electron editor
+npm run editor
+
+# Create an unpacked editor under release/editor/
+npm run build:editor:desktop
+
+# Create the current platform's editor distributable
+npm run editor:desktop:package
+```
+
+Packaged builds prompt for a ClaudeCitizen repository and remember the selected project.
+The project can also be supplied with
+`--project-root=/path/to/claudecitizen` or
+`CLAUDECITIZEN_EDITOR_PROJECT_ROOT`.
+
+Scene assets live under `src/world/scenes/data/`. The initial runtime adapters
+cover title, loading, character creation, main-game, prefab/instance stages,
+and character test scenes. The Play button launches the active scene in a
+separate Electron Play Mode window; **File → Build Web** writes the release to
+`dist/`.
 
 ## Documentation
 

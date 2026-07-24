@@ -29,7 +29,7 @@ Shows a prompt when the player is within `radius`. Available on **all prefab kin
 
 ## Usage
 
-Place the marker entity at the interact spot. Move it with the gizmo until the prompt feels right in **Preview Station** or ship sandbox.
+Place the marker entity at the interact spot. Move it with the gizmo until the prompt feels right in **Play Mode**.
 
 ### Info prompts
 

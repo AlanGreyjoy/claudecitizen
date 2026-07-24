@@ -152,7 +152,7 @@ Rules:
 - Writing only a single flat PRD with no phases/checklist
 - Phases that say “figure out the design” without pointing at locked PRD decisions
 - Embedding full recipes in placement docs when references are the pattern (or vice versa) without locking it
-- Starting `npm run dev` / implementing code while only asked for the PRD pack
+- Starting `npm run dev:web` / implementing code while only asked for the PRD pack
 - Reopening product naming mid-pack without user sign-off
 
 ## Example

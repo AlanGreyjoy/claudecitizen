@@ -5,11 +5,11 @@
 - **No backend unit tests.** Unit tests are not part of the normal implementation workflow.
 - **User owns interactive QA.** Agents may run non-interactive build and static validation commands such as `cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint` when useful. Agents should not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. When skipping relevant validation, say what was not run. At the end of a multi-file feature or spike, run `npm run lint` and fix any **errors** (and trivial warnings in touched files when practical). For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
 - **SQLx migrations.** Append migration SQL under `backend/migrations/` and run `npm run backend:migrate` only when explicitly applying schema changes. The Rust migration runner owns all schema history; do not introduce another ORM or migration system.
-- **Do not start dev servers.** Vite and API servers are normally already running locally. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
+- **Do not start dev servers.** The editor is a standalone Electron application; it does not use a Vite dev server. Do not run `npm run dev:web`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
 - **Rust server reloads.** `npm run dev:server` uses Watchexec to rebuild and gracefully restart on backend, Protobuf, Cargo, migration, or backend environment changes. `npm run start:server` is the one-shot runner. Install the watcher with `cargo install watchexec-cli --locked`.
 - **TypeScript, ESM** at root (`"type": "module"`). The backend is a Rust 2024 workspace.
 - Browser build = Rust/WASM build, `tsc --noEmit`, then Vite bundle. Agents may run it as non-interactive validation.
-- Dev server on port **4173**: `npm run dev`. Editor only available in dev mode.
+- Editor launch: `npm run editor`. It builds the editor renderer and opens Electron without a local web server. Cold start shows the **AsteronEngine — Projects** hub; open/create a project before the editor workspace loads.
 - **GitHub Actions.** `.github/workflows/quality.yml` runs repository-safety, browser typecheck/lint/build, Rust formatting/clippy/build, and docs builds on pull requests and `main`. `.github/workflows/dependency-review.yml` rejects vulnerable dependency additions. Netlify remains responsible for browser deployment; do not add deploy workflows unless explicitly requested.
 
 ## Workspace structure
@@ -85,24 +85,28 @@ Flight is **not** Rapier. Deck walking may use Rapier; flying uses the custom in
 - **Preview Ship** (`?shipPrefab=` / `ship_play_session.ts`): sit pilot → takeoff/flight over the flat pad (same flight model). Hold **Y** exits the seat anytime (settles onto the pad when nearby).
 - **Tuning workflow**: read `.cursor/skills/ship-flight/SKILL.md` (and `.cursor/rules/ship-flight.mdc`). Symptom → fix tables live there.
 
-## Editor (dev-only)
+## Editor (Electron desktop)
 
-The in-browser prefab editor is only available under `npm run dev`. It assembles prefabs from entities, GLB assets, primitives, and gameplay components.
+The Electron editor (**AsteronEngine**) is the primary authoring workspace. Cold start opens the **Projects** window (New / Open / Recent); choosing a project closes the hub and opens the editor. **File → Open Project…** returns to Projects. Skip the hub with `--project-root=` / `CLAUDECITIZEN_EDITOR_PROJECT_ROOT`. The editor owns project file access through the private `cceditor:` protocol, launches scenes in a separate Play Mode window, and builds the browser release through **File → Build Web**. It assembles reusable prefabs from entities, GLB assets, primitives, and gameplay components; launchable scenes and their GameObject trees live in `src/world/scenes/data/*.scene.json`.
 
 | Path | Role |
 |------|------|
+| `editor-desktop/` | Electron shell, Projects hub IPC, project repository, Play Mode |
 | `src/editor/` | Editor business logic: document store, commands, serialization |
-| `src/editor/react/` | React shell + panels (Fast Refresh); entry `react/main.tsx` |
-| `src/editor/document.ts` | `EditorEntity` model, `EditorStore`, selection, GLB overrides |
-| `src/editor/react/panels/HierarchyPanel.tsx` | Scene tree / outliner |
+| `src/editor/react/` | React shell + panels (Fast Refresh); entry `react/main.tsx`; Projects hub via `?boot=projects` |
+| `src/editor/document.ts` | `EditorEntity` model, `EditorStore`, selection, GLB overrides; `documentType: 'scene' \| 'prefab'` |
+| `src/editor/react/panels/HierarchyPanel.tsx` | Scene/prefab GameObject tree / outliner |
 | `src/editor/react/panels/InspectorPanel.tsx` | Entity properties & component editor chrome |
 | `src/editor/react/panels/ProjectPanel.tsx` | Asset browser |
-| `src/editor/serialize.ts` | Convert editor state to/from `PrefabDocument` |
+| `src/editor/serialize.ts` | Convert editor state to/from `PrefabDocument` / `SceneDocument` |
 | `src/render/editor/viewport.ts` | Three.js editor viewport (imperative host) |
-| `src/world/prefabs/schema.ts` | Canonical prefab JSON schema |
+| `src/world/scenes/` | Launchable scene documents (`gameObjects` + settings), runtime adapters, bundled scene loader |
+| `src/world/scenes/scene_runtime.ts` | Resolve GameManager / Planet / PlayerStart / prefab-instance for Play |
+| `src/world/prefabs/schema.ts` | Canonical prefab JSON schema (+ scene components) |
 | `src/render/prefabs/prefab_renderer.ts` | Runtime prefab rendering |
+| `editor-desktop/` | Sandboxed Electron shell, project repository, Play Mode, and web build command |
 
-React owns editor chrome; `EditorStore` stays framework-agnostic. WebGL/canvas tab editors (viewport, planet, system map, base characters, menu manager) mount via imperative hosts. Dense per-component inspector fields and particle forms still use DOM builders under `panels/`.
+React owns editor chrome; `EditorStore` stays framework-agnostic. The default tab is **Scene** (3D viewport). Prefabs open via **File → Open Prefab**. Scene settings live under **File → Scene → Settings…**. WebGL/canvas tab editors (viewport, planet, system map, base characters, menu manager) mount via imperative hosts. Dense per-component inspector fields and particle forms still use DOM builders under `panels/`.
 
 ### GLB node overrides and deletions
 
@@ -252,7 +256,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/player/ship_layout.ts` | `ShipSpec` + defaults (mass, thrust, torque) |
 | `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) |
 | `src/player/ship_deck.ts` | Ship deck walking + collider step resolution |
-| `src/player/character_settings.ts` | Editor-tunable walk/sprint/jump speeds; persisted in `src/player/data/character-settings.json` via the dev-only `/__editor/character-settings` endpoint (Base Characters → Char Settings) |
+| `src/player/character_settings.ts` | Editor-tunable walk/sprint/jump speeds; persisted in `src/player/data/character-settings.json` via the Electron `/__editor/character-settings` endpoint (Base Characters → Char Settings) |
 | `src/player/character_locomotion.ts` | Shared on-foot locomotion policy for all walkers (planet/station/deck): walk input intent, effective ADS (sprint suppresses aim), facing resolution (active aim faces camera), clip selection, jump animation phases |
 | `src/player/animation/resolve_locomotion.ts` | Selects full-body locomotion and optional rifle ADS upper-body layers |
 | `src/render/characters/sidekick/animation_runtime.ts` | Retargeted clip playback, lower/upper masks, crossfades, and ADS parent-space compensation |

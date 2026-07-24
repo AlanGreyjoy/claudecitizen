@@ -61,7 +61,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache_keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
-- Editor / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (dev-only)"
+- Editor / scene / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (Electron desktop)"
 - Ship flight / mass / thrust / IFCS / dual-reticle / Preview Ship flight → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, and AGENTS.md "Ship flight"
 - PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
@@ -74,6 +74,6 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - No unit tests in this project
 - User owns interactive QA. Agents may run non-interactive build and static validation (`cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint`) when useful. Do not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. At the end of a multi-file feature or spike, run `npm run lint` and fix errors (and trivial warnings in touched files when practical). If relevant validation is skipped, say so in the handoff. For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
 - **SQLx:** append migrations in `backend/migrations/`; `npm run backend:migrate` applies committed migrations. Do not introduce another ORM or migration system.
-- Do not start dev servers. Vite and API servers are normally already running locally. Do not run `npm run dev`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
+- Do not start dev servers. The editor is a standalone Electron application and does not use Vite serving. Do not run `npm run dev:web`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
 - `npm run dev:server` is the Watchexec rebuild/restart loop; `npm run start:server` runs the Rust backend once. Agents still must not start either without explicit authorization.
 - **If it can freeze the tab or tank server tick rate, fix or bound it before shipping**

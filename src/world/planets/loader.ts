@@ -1,4 +1,5 @@
 import { parsePlanetDocument, type PlanetDocument } from './schema';
+import { AUTHORING_ENABLED } from '../../build_mode';
 
 /**
  * Planet JSON files live in src/world/planets/data/<id>.planet.json.
@@ -35,7 +36,7 @@ async function loadFromDevApi(id: string): Promise<PlanetDocument | null> {
 /** Loads and validates a planet document; returns null when missing. */
 export async function loadPlanetDocument(id: string): Promise<PlanetDocument | null> {
   try {
-    if (import.meta.env.DEV) {
+    if (AUTHORING_ENABLED) {
       const fresh = await loadFromDevApi(id).catch(() => null);
       if (fresh) return fresh;
     }
@@ -49,7 +50,7 @@ export async function loadPlanetDocument(id: string): Promise<PlanetDocument | n
 }
 
 export async function listPlanetDocuments(): Promise<Array<{ id: string; name: string }>> {
-  if (import.meta.env.DEV) {
+  if (AUTHORING_ENABLED) {
     try {
       const response = await fetch('/__editor/planets');
       if (response.ok) {

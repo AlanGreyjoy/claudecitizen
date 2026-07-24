@@ -9,6 +9,7 @@ import {
   type ToolbarHandle,
   type ToolbarProps,
   type ShipPreviewToggles,
+  type BrowsePanelKind,
 } from '../react/panels/Toolbar';
 
 export type {
@@ -17,26 +18,25 @@ export type {
   ToolbarHandle,
   ToolbarProps,
   ShipPreviewToggles,
+  BrowsePanelKind,
 };
 
 /**
- * Bridge for leftover imperative hosts: mounts the React Toolbar into `containers.doc`
- * and portals viewport tools into `containers.viewport`. Prefer importing `Toolbar`
- * from `src/editor/react/panels/Toolbar` in new React shell code.
+ * Bridge for leftover imperative hosts: mounts the React Toolbar into `container`.
+ * Prefer importing `Toolbar` from `src/editor/react/panels/Toolbar` in new React shell code.
  */
 export function createToolbar(
-  containers: { doc: HTMLElement; viewport: HTMLElement },
+  container: HTMLElement,
   store: EditorStore,
   actions: ToolbarActions,
 ): ToolbarHandle {
-  const root = createRoot(containers.doc);
+  const root = createRoot(container);
   const panelRef = createRef<ToolbarHandle>();
   flushSync(() => {
     root.render(
       createElement(Toolbar, {
         store,
         actions,
-        viewportHost: containers.viewport,
         ref: panelRef,
       }),
     );
@@ -48,11 +48,17 @@ export function createToolbar(
     setPrefabOptions(entries) {
       panelRef.current?.setPrefabOptions(entries);
     },
+    setSceneOptions(entries) {
+      panelRef.current?.setSceneOptions(entries);
+    },
     setPlanetOptions(entries) {
       panelRef.current?.setPlanetOptions(entries);
     },
     toggleDoorPreview(doorId) {
       panelRef.current?.toggleDoorPreview(doorId);
+    },
+    openBrowsePanel(panel) {
+      panelRef.current?.openBrowsePanel(panel);
     },
   };
 }

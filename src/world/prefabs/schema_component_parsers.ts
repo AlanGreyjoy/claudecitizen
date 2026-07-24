@@ -1305,6 +1305,59 @@ function parseEntertainmentSystemComponent(
         };
 }
 
+function parseGameManagerComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  return {
+    type: "game-manager",
+    systemId: parseString(value.systemId ?? "default", `${path}.systemId`, 64),
+    planetId: parseString(value.planetId ?? "asteron", `${path}.planetId`, 64),
+    spawn: value.spawn === "surface" ? "surface" : "station",
+  };
+}
+
+function parsePlanetComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  return {
+    type: "planet",
+    planetId: parseString(value.planetId ?? "asteron", `${path}.planetId`, 64),
+  };
+}
+
+function parsePlayerStartComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  void path;
+  return {
+    type: "player-start",
+    spawn: value.spawn === "surface" ? "surface" : "station",
+  };
+}
+
+function parsePrefabInstanceComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const kind = value.prefabKind;
+  const prefabKind =
+    kind === "station"
+    || kind === "ship"
+    || kind === "site"
+    || kind === "prop"
+    || kind === "item"
+      ? kind
+      : undefined;
+  return {
+    type: "prefab-instance",
+    prefabId: parseString(value.prefabId, `${path}.prefabId`, 64),
+    ...(prefabKind ? { prefabKind } : {}),
+  };
+}
+
 export const COMPONENT_PARSER_BY_TYPE: Record<
   string,
   (value: Record<string, unknown>, path: string) => PrefabComponent
@@ -1351,6 +1404,10 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "cockpit-control": parseCockpitControlComponent,
   "cockpit-stat": parseCockpitStatComponent,
   "entertainment-system": parseEntertainmentSystemComponent,
+  "game-manager": parseGameManagerComponent,
+  "planet": parsePlanetComponent,
+  "player-start": parsePlayerStartComponent,
+  "prefab-instance": parsePrefabInstanceComponent,
 };
 
 export function parseUnknownComponent(type: unknown, path: string): null {

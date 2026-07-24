@@ -1,4 +1,5 @@
 import { parseSystemDocument, type SystemDocument } from './schema';
+import { AUTHORING_ENABLED } from '../../build_mode';
 
 /**
  * System JSON files live in src/world/systems/data/<id>.system.json.
@@ -35,7 +36,7 @@ async function loadFromDevApi(id: string): Promise<SystemDocument | null> {
 /** Loads and validates a system document; returns null when missing. */
 export async function loadSystemDocument(id: string): Promise<SystemDocument | null> {
   try {
-    if (import.meta.env.DEV) {
+    if (AUTHORING_ENABLED) {
       const fresh = await loadFromDevApi(id).catch(() => null);
       if (fresh) return fresh;
     }
@@ -53,7 +54,7 @@ export function listSystemDocumentIds(): string[] {
 }
 
 export async function listSystemDocuments(): Promise<Array<{ id: string; name: string }>> {
-  if (import.meta.env.DEV) {
+  if (AUTHORING_ENABLED) {
     try {
       const response = await fetch('/__editor/systems');
       if (response.ok) {

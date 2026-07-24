@@ -54,7 +54,7 @@ Mass-scaled thrusters (Star Citizen–style IFCS). Acceleration ≈ thrust / mas
 | `thrustSoundVolume` | 0..1 | Thrust SFX gain (default 1) |
 | `maxHp` / `maxShields` / `shieldRegenPerSec` | — | Combat vitals |
 
-Preview Ship (`?shipPrefab=`) and main play both use these values. Toggle **coupled / decoupled** with **Alt+C** while flying. Camera feel applies in cockpit view only (not external chase cam).
+Prefab Play Mode (`?shipPrefab=` internally) and main play both use these values. Toggle **coupled / decoupled** with **Alt+C** while flying. Camera feel applies in cockpit view only (not external chase cam).
 
 ## Child empties
 

@@ -6,17 +6,19 @@ description: CC Editor layout, panels, toolbar, scene tabs, and keyboard shortcu
 
 # Interface
 
-The CC Editor uses a Unity-inspired layout with resizable panels. Panel sizes persist in `localStorage`.
+The CC Editor is a standalone, Unity-style Electron workspace with resizable
+panels. Panel sizes persist in `localStorage`.
+
+Launch it with `npm run editor`. No Vite development server is required.
 
 ## Layout
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  Toolbar (gizmo, snap, New/Load/Save, prefab name + kind)   │
+│ File/Edit/Game  │       ▶ Play       │ active document      │
 ├──────────┬──────────────────────────────┬─────────────────────┤
-│          │  Scene tabs: Scene |         │                     │
-│ Hierarchy│  Material Manager |          │    Inspector        │
-│          │  Base Characters             │                     │
+│          │  Scene | Material Manager |  │                     │
+│ Hierarchy│  Base Characters | …         │    Inspector        │
 │          │  ┌────────────────────────┐  │                     │
 │          │  │  Viewport / tab panel  │  │                     │
 │          │  └────────────────────────┘  │                     │
@@ -29,7 +31,7 @@ Drag the column and row splitters to resize hierarchy, inspector, and project pa
 
 ## Hierarchy (left)
 
-Scene tree for all root entities and their children.
+GameObject tree for the open scene (or prefab). Roots are entities in the active document.
 
 | Action | How |
 | --- | --- |
@@ -45,7 +47,7 @@ GLB model entities expand to show the **GLB node tree**. Sub-select a node for p
 
 ## Scene view (center)
 
-The main Three.js viewport when the **Scene** tab is active.
+The main Three.js viewport when the **Prefab** tab is active.
 
 ### Camera
 
@@ -62,7 +64,7 @@ While flying, keyboard shortcuts for gizmo modes are disabled so WASD belongs to
 
 | Input | Action |
 | --- | --- |
-| **LMB click** | Select entity (or drill into GLB sub-mesh on re-click) |
+| **LMB click** | Select the GLB mesh under the cursor (re-click walks up to the entity) |
 | **Ctrl+click** | Add/remove from selection |
 | **RMB on sub-mesh** | Context menu — add empty, add component to node |
 | **Escape** | Clear selection |
@@ -108,8 +110,9 @@ Folder tree on the left, thumbnail grid on the right. Model cards support drag-a
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`) |
 | Prefab name + kind | Metadata for save; kind switches component palette |
 | **SHIP EDITOR** chip | Visible when kind is `ship` |
-| **New / Load / Save** | Document lifecycle (`Ctrl+S` saves) |
-| **Preview Station / Preview Ship** | Save and jump to play sandbox (kind-dependent) |
+| **New Scene / New Prefab / Open / Save** | Document lifecycle (`Ctrl+S` saves) |
+| **Play / Stop** | Universal Play Mode for the active scene, prefab, planet, system, or character test (`F6`) |
+| **Build Web** | Save the active document and create the browser release in `dist/` (`Ctrl+B`) |
 | **Exit** | Return to title screen |
 
 ### Ship preview controls (ship kind)
@@ -128,12 +131,14 @@ The center column switches between authoring surfaces:
 
 | Tab | Purpose |
 | --- | --- |
-| **Scene** | Main prefab viewport |
-| **Material Manager** | Batch material overrides across the scene |
+| **Scene** | Open scene (or prefab) 3D viewport — Hierarchy shows its GameObjects |
+| **Material Manager** | Batch material overrides across the document |
 | **Base Characters** | Sidekick equipment, animation controllers, and play-test stage |
 | **Planet Authoring** | Planet terrain / biome documents |
 | **System Map** | Star / planet / station ecliptic layout |
 | **Menu Manager** | Live HaloBand + play menu previews (File → Open Menus) |
+
+Scenes and prefabs open from **File → Open Scene / Open Prefab**. Scene startup settings live under **File → Scene → Settings…**.
 
 See [Material manager](./material-manager), [Planet authoring](./planet-authoring), [System Map](./system-map), and [Menu Manager](./menu-manager).
 
@@ -148,6 +153,8 @@ Shortcuts are ignored while typing in inputs or during RMB flythrough.
 | `Ctrl+D` | Duplicate selected entities |
 | `Del` / `Backspace` | Delete selection (or hide selected GLB node if sub-selected) |
 | `Ctrl+S` | Save |
+| `Ctrl+B` | Build the web release |
+| `F6` | Play/stop the active document |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Shift+Z` / `Ctrl+Y` | Redo |
 | `Escape` | Clear selection |

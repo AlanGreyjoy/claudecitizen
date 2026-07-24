@@ -33,7 +33,7 @@ World-projected pilot instrument while seated. Separate from **Cockpit Control**
 
 1. Add Empty on the dash / panel where the readout should float
 2. Add component **Cockpit Stat** → Kind **speed**
-3. Preview Ship → sit pilot → fly; hold **Shift** to boost
+3. **Play** → sit pilot → fly; hold **Shift** to boost
 
 ## See also
 

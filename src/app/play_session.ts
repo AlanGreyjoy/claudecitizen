@@ -34,6 +34,17 @@ import { loadPlayWorldContext } from './play_session_world';
 import { collectPlaySessionDom, requireElement } from './play_session_dom';
 import { createPlayBuildSystems } from './play_session_build';
 import { createPlayOverlayStack } from './play_session_overlays';
+import { AUTHORING_ENABLED } from '../build_mode';
+import { getDesktopEditorBridge } from '../platform/editor_desktop';
+
+function returnFromPlayMode(fallbackUrl: string): void {
+  const bridge = getDesktopEditorBridge();
+  if (bridge) {
+    void bridge.stopPlay().catch(() => undefined);
+    return;
+  }
+  window.location.href = fallbackUrl;
+}
 
 function mountEditorReturnButton(prefabId: string): HTMLButtonElement {
   const button = document.createElement('button');
@@ -62,7 +73,7 @@ function mountEditorReturnButton(prefabId: string): HTMLButtonElement {
     cursor: 'pointer',
   } satisfies Partial<CSSStyleDeclaration>);
   button.addEventListener('click', () => {
-    window.location.href = `/?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
+    returnFromPlayMode(`/?boot=editor&prefab=${encodeURIComponent(prefabId)}`);
   });
   document.body.appendChild(button);
   return button;
@@ -95,7 +106,9 @@ function mountPlanetEditorReturnButton(planetId: string): HTMLButtonElement {
     cursor: 'pointer',
   } satisfies Partial<CSSStyleDeclaration>);
   button.addEventListener('click', () => {
-    window.location.href = `/?boot=editor&tab=planet&planetId=${encodeURIComponent(planetId)}`;
+    returnFromPlayMode(
+      `/?boot=editor&tab=planet&planetId=${encodeURIComponent(planetId)}`,
+    );
   });
   document.body.appendChild(button);
   return button;
@@ -104,7 +117,7 @@ function mountPlanetEditorReturnButton(planetId: string): HTMLButtonElement {
 function mountPlayEditorReturnButton(
   world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
 ): HTMLButtonElement | null {
-  if (!import.meta.env.DEV) return null;
+  if (!AUTHORING_ENABLED) return null;
   const { params, stationPrefab } = world;
   if (params.fromEditor && params.planetId) {
     return mountPlanetEditorReturnButton(params.planetId);

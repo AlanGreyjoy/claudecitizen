@@ -1,4 +1,5 @@
 import defaultControllerJson from './data/default.controller.json';
+import { AUTHORING_ENABLED } from '../../build_mode';
 import {
   cloneAnimationController,
   parseAnimationController,
@@ -30,7 +31,7 @@ export function setDefaultAnimationController(next: AnimationControllerV1): void
  * Same pattern as `loadCurrentCharacterSettings`.
  */
 export async function loadCurrentDefaultAnimationController(): Promise<AnimationControllerV1> {
-  if (!import.meta.env.DEV) return getDefaultAnimationController();
+  if (!AUTHORING_ENABLED) return getDefaultAnimationController();
   try {
     const response = await fetch('/__editor/animation-controllers?id=default', {
       cache: 'no-store',

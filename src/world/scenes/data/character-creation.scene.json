@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "id": "character-creation",
+  "name": "Character Creation",
+  "kind": "character-creator",
+  "settings": {
+    "systemId": "default",
+    "planetId": "asteron",
+    "spawn": "station"
+  },
+  "gameObjects": []
+}

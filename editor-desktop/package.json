@@ -1,0 +1,49 @@
+{
+  "name": "claudecitizen-editor-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "description": "AsteronEngine desktop editor",
+  "author": "ClaudeCitizen",
+  "license": "AGPL-3.0-only",
+  "build": {
+    "appId": "com.claudecitizen.editor",
+    "productName": "AsteronEngine",
+    "electronVersion": "43.1.1",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "beforeBuild": "./editor-desktop/before-build.cjs",
+    "directories": {
+      "output": "../release/editor"
+    },
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "repository.mjs",
+      "project_hub.mjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist-editor",
+        "to": "editor",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "zip"
+    },
+    "linux": {
+      "category": "Development",
+      "executableName": "claudecitizen-editor",
+      "target": "AppImage"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "zip"
+    }
+  }
+}

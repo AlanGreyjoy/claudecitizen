@@ -70,6 +70,7 @@ const STORE_EVENTS = [
   'sub-selection',
   'glb-tree',
   'glb-visibility',
+  'glb-components',
   'entity',
 ] as const;
 
@@ -516,7 +517,8 @@ export function HierarchyPanel({
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const rangeAnchorIdRef = useRef<string | null>(null);
   const glbRangeAnchorKeyRef = useRef<string | null>(null);
-  const changingGlbFromHierarchyRef = useRef(false);
+  /** True while hierarchy UI is driving selection (skip viewport-only side effects). */
+  const selectionFromHierarchyRef = useRef(false);
   const selectedGlbNodesRef = useRef(selectedGlbNodes);
   selectedGlbNodesRef.current = selectedGlbNodes;
   const prevScrollSelectionKeyRef = useRef<string | null>(null);
@@ -650,7 +652,7 @@ export function HierarchyPanel({
         return false;
       }
       if (!target && !current) return false;
-      changingGlbFromHierarchyRef.current = true;
+      selectionFromHierarchyRef.current = true;
       try {
         if (target) {
           ensureGlbExpanded(target.entityId, target.nodeUuid);
@@ -659,7 +661,7 @@ export function HierarchyPanel({
           store.setEntitySelection(fallbackEntityId ?? null, 'replace');
         }
       } finally {
-        changingGlbFromHierarchyRef.current = false;
+        selectionFromHierarchyRef.current = false;
       }
       return true;
     },
@@ -711,21 +713,26 @@ export function HierarchyPanel({
     (event: MouseEvent, entityId: string): void => {
       setSelectedGlbNodes(new Map());
       glbRangeAnchorKeyRef.current = null;
-      if (event.shiftKey) {
-        store.setEntitySelection(
-          entityId,
-          'range',
-          rangeAnchorIdRef.current ?? undefined,
-          visibleEntityIdsRef.current,
-        );
-      } else if (event.ctrlKey || event.metaKey) {
-        store.setEntitySelection(entityId, 'toggle');
+      selectionFromHierarchyRef.current = true;
+      try {
+        if (event.shiftKey) {
+          store.setEntitySelection(
+            entityId,
+            'range',
+            rangeAnchorIdRef.current ?? undefined,
+            visibleEntityIdsRef.current,
+          );
+        } else if (event.ctrlKey || event.metaKey) {
+          store.setEntitySelection(entityId, 'toggle');
+          rangeAnchorIdRef.current = entityId;
+          return;
+        } else {
+          store.setEntitySelection(entityId, 'replace');
+        }
         rangeAnchorIdRef.current = entityId;
-        return;
-      } else {
-        store.setEntitySelection(entityId, 'replace');
+      } finally {
+        selectionFromHierarchyRef.current = false;
       }
-      rangeAnchorIdRef.current = entityId;
     },
     [store],
   );
@@ -1103,13 +1110,23 @@ export function HierarchyPanel({
         event.type !== 'sub-selection' &&
         event.type !== 'glb-tree' &&
         event.type !== 'glb-visibility' &&
+        event.type !== 'glb-components' &&
         event.type !== 'entity'
       ) {
         return;
       }
 
+      if (
+        (event.type === 'selection' || event.type === 'sub-selection') &&
+        event.entityId &&
+        !selectionFromHierarchyRef.current
+      ) {
+        // Viewport pick: drop the hierarchy search so the selected item is visible in context.
+        setSearchText((prev) => (prev ? '' : prev));
+      }
+
       if (event.type === 'sub-selection') {
-        const fromHierarchy = changingGlbFromHierarchyRef.current;
+        const fromHierarchy = selectionFromHierarchyRef.current;
         const entityId = event.entityId;
         const nodeUuid = event.nodeUuid;
         setSelectedGlbNodes((prev) => {

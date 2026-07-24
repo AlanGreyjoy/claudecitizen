@@ -5,7 +5,10 @@ import type {
   PrefabMaterialOverride,
   PrefabPrimitive,
 } from '../world/prefabs/schema';
+import type { SceneKind, SceneSettings } from '../world/scenes/schema';
 import type { Vec3 } from '../types';
+
+export type EditorDocumentType = 'scene' | 'prefab';
 
 /**
  * Editor-side document model. Rotations are stored as XYZ euler degrees
@@ -33,10 +36,18 @@ export interface EditorEntity {
   children: EditorEntity[];
 }
 
+/**
+ * Shared GameObject-tree document. `prefabId`/`prefabName` are the document
+ * id/name for both scenes and prefabs (legacy field names). Scene-only fields
+ * are ignored when `documentType === 'prefab'`.
+ */
 export interface EditorDocumentState {
+  documentType: EditorDocumentType;
   prefabId: string;
   prefabName: string;
   kind: PrefabKind;
+  sceneKind: SceneKind;
+  sceneSettings: SceneSettings;
   roots: EditorEntity[];
 }
 
@@ -82,6 +93,10 @@ export type EditorEvent =
   | { type: 'glb-tree'; entityId: string }
   | { type: 'glb-transform'; entityId: string; nodeUuid: string; nodeName: string }
   | { type: 'glb-visibility'; entityId: string; nodeName: string }
+  | {
+      type: 'glb-components';
+      edits: ReadonlyArray<{ entityId: string; nodeName: string }>;
+    }
   | { type: 'document' }
   | { type: 'history' };
 
@@ -193,11 +208,20 @@ function pruneEntitySelection(
   return { selection: nextSelection, selectedIds: nextSelected };
 }
 
+const DEFAULT_SCENE_SETTINGS: SceneSettings = {
+  systemId: 'default',
+  planetId: 'asteron',
+  spawn: 'station',
+};
+
 export function createEditorStore() {
   let state: EditorDocumentState = {
+    documentType: 'scene',
     prefabId: '',
-    prefabName: 'Untitled Prefab',
-    kind: 'station',
+    prefabName: 'Untitled Scene',
+    kind: 'site',
+    sceneKind: 'main-game',
+    sceneSettings: { ...DEFAULT_SCENE_SETTINGS },
     roots: [],
   };
   let selection: string | null = null;
@@ -525,13 +549,25 @@ export function createEditorStore() {
           apply(change.entityId, change.nodeName, change.components);
         }
         markDirty();
-        emit({ type: 'document' });
+        emit({
+          type: 'glb-components',
+          edits: changes.map((change) => ({
+            entityId: change.entityId,
+            nodeName: change.nodeName,
+          })),
+        });
       },
       undo() {
         for (const change of changes) {
           apply(change.entityId, change.nodeName, change.before);
         }
-        emit({ type: 'document' });
+        emit({
+          type: 'glb-components',
+          edits: changes.map((change) => ({
+            entityId: change.entityId,
+            nodeName: change.nodeName,
+          })),
+        });
       },
     });
   }
@@ -1287,8 +1323,7 @@ export function createEditorStore() {
     });
   }
 
-  function newDocument(): void {
-    state = { prefabId: '', prefabName: 'Untitled Prefab', kind: 'station', roots: [] };
+  function resetSessionAfterDocumentChange(): void {
     selection = null;
     selectedIds = new Set();
     subSelection = null;
@@ -1301,8 +1336,44 @@ export function createEditorStore() {
     emit({ type: 'selection', entityId: null, selectedIds: [] });
   }
 
+  function newDocument(): void {
+    state = {
+      documentType: 'prefab',
+      prefabId: '',
+      prefabName: 'Untitled Prefab',
+      kind: 'station',
+      sceneKind: 'main-game',
+      sceneSettings: { ...DEFAULT_SCENE_SETTINGS },
+      roots: [],
+    };
+    resetSessionAfterDocumentChange();
+  }
+
+  function newScene(): void {
+    state = {
+      documentType: 'scene',
+      prefabId: '',
+      prefabName: 'Untitled Scene',
+      kind: 'site',
+      sceneKind: 'main-game',
+      sceneSettings: { ...DEFAULT_SCENE_SETTINGS },
+      roots: [],
+    };
+    resetSessionAfterDocumentChange();
+  }
+
   function loadDocument(next: EditorDocumentState): void {
-    state = next;
+    state = {
+      documentType: next.documentType ?? 'prefab',
+      prefabId: next.prefabId,
+      prefabName: next.prefabName,
+      kind: next.kind,
+      sceneKind: next.sceneKind ?? 'main-game',
+      sceneSettings: next.sceneSettings
+        ? structuredClone(next.sceneSettings)
+        : { ...DEFAULT_SCENE_SETTINGS },
+      roots: next.roots,
+    };
     selection = null;
     selectedIds = new Set();
     subSelection = null;
@@ -1315,8 +1386,34 @@ export function createEditorStore() {
     emit({ type: 'selection', entityId: null, selectedIds: [] });
   }
 
-  function setPrefabMeta(meta: Partial<Pick<EditorDocumentState, 'prefabId' | 'prefabName' | 'kind'>>): void {
+  function setPrefabMeta(
+    meta: Partial<Pick<EditorDocumentState, 'prefabId' | 'prefabName' | 'kind'>>,
+  ): void {
     state = { ...state, ...meta };
+    markDirty();
+    emit({ type: 'document' });
+  }
+
+  function setDocumentMeta(
+    meta: Partial<
+      Pick<
+        EditorDocumentState,
+        | 'documentType'
+        | 'prefabId'
+        | 'prefabName'
+        | 'kind'
+        | 'sceneKind'
+        | 'sceneSettings'
+      >
+    >,
+  ): void {
+    state = {
+      ...state,
+      ...meta,
+      ...(meta.sceneSettings
+        ? { sceneSettings: structuredClone(meta.sceneSettings) }
+        : {}),
+    };
     markDirty();
     emit({ type: 'document' });
   }
@@ -1399,8 +1496,10 @@ export function createEditorStore() {
     endGlbTransformGesture,
     commitGlbNodeTransform,
     newDocument,
+    newScene,
     loadDocument,
     setPrefabMeta,
+    setDocumentMeta,
     undo: () => history.undo(),
     redo: () => history.redo(),
     canUndo: () => history.canUndo(),

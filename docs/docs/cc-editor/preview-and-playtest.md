@@ -1,52 +1,42 @@
 ---
 sidebar_position: 13
 title: Preview and playtest
-description: Jump from the editor into station and ship play sandboxes and back.
+description: Use universal Electron Play Mode for scenes, prefabs, and world documents.
 ---
 
 # Preview and playtest
 
-The CC Editor integrates with dev play modes so you can verify prefabs in context without manual URL editing.
+The CC Editor has one universal **Play** button. It saves the active document,
+opens a separate Electron Play Mode window, and chooses the correct runtime
+adapter for the active scene, prefab, planet, system, or character test.
 
-## Preview buttons
+## Universal Play
 
-After saving, the toolbar shows:
-
-| Button | When visible | Action |
-| --- | --- | --- |
-| **Preview Station** | `kind: "station"` | Save → navigate to station playtest |
-| **Preview Ship** | `kind: "ship"` | Save → navigate to ship sandbox |
-| **Test Play** | Planet Authoring tab | Save → surface playtest |
-| **Preview** | Planet Authoring panel | Rebuild heightfield + plant vegetation in the editor viewport (no play mode) |
-
-Other prefab kinds show a toast: *"Preview in Play supports station and ship prefabs."*
-
-Preview always **saves first** — you test the on-disk JSON, not unsaved buffer state.
+Press **Play** or `F6` to start. Press it again, use **Play → Stop**, or close the
+Play Mode window to stop. Play always saves first, so the runtime reads the
+same project data a web build would package.
 
 ## Deep-link URLs
 
-| Mode | URL |
+| Scene/runtime | Internal route |
 | --- | --- |
-| Station playtest | `http://localhost:4173/?stationPrefab=<id>` |
-| Ship sandbox | `http://localhost:4173/?shipPrefab=<id>` |
-| Planet surface playtest | `http://localhost:4173/?boot=play&planetId=<id>&spawn=surface&from=editor&debug=1` |
-| Reopen editor | `http://localhost:4173/?boot=editor&prefab=<id>` |
-| Reopen Planet Authoring | `http://localhost:4173/?boot=editor&tab=planet&planetId=<id>` |
-| Menu Manager (HaloBand preview) | `http://localhost:4173/?boot=editor&tab=menu` |
+| Scene asset | `/?boot=scene&sceneId=<id>` |
+| Station prefab stage | `/?stationPrefab=<id>` |
+| Ship prefab stage | `/?shipPrefab=<id>` |
+| Planet surface test | `/?boot=play&planetId=<id>&spawn=surface&from=editor` |
 
 ### Examples
 
 ```text
 ?stationPrefab=demo-station
 ?shipPrefab=phobos-starhopper
-?boot=play&planetId=asteron&spawn=surface&from=editor&debug=1
-?boot=editor&prefab=demo-station
-?boot=editor&tab=planet&planetId=asteron
+?boot=play&planetId=asteron&spawn=surface&from=editor
+?boot=scene&sceneId=main-game
 ```
 
 ## Station playtest
 
-Loads the prefab station instead of the default procedural layout (dev only).
+Loads the prefab station instead of the default procedural layout in Play Mode.
 
 What comes from the prefab:
 
@@ -74,12 +64,8 @@ Verify in the sandbox:
 
 ## Back to editor
 
-Play sandboxes show a **Back to Editor** banner at the top.
-
-1. Press **Esc** to release pointer lock
-2. Click **Back to Editor**
-
-Navigates to `/?boot=editor&prefab=<id>` and reloads the saved document.
+Play sandboxes show a **Back to Editor** banner. In Electron this closes Play
+Mode and returns focus to the unchanged editor window.
 
 ## Round-trip workflow
 
@@ -90,15 +76,13 @@ sequenceDiagram
   participant Play as Play sandbox
 
   Ed->>Disk: Save (Ctrl+S)
-  Ed->>Play: Preview Station/Ship
+  Ed->>Play: Play active document
   Play->>Play: Walk, interact, test
-  Play->>Ed: Back to Editor
-  Ed->>Disk: Load prefab param
+  Play->>Ed: Stop / Back to Editor
 ```
 
-## Dev-only gates
-
-Preview URLs and the editor itself require `import.meta.env.DEV`. Production builds exclude editor code and dev boot paths.
+The Electron editor bundle enables authoring routes. Browser releases exclude
+the editor UI but bundle scene documents so released scene links can resolve.
 
 ## Catalog integration
 

@@ -1,10 +1,11 @@
 import { parsePrefabDocument, type PrefabDocument } from './schema';
+import { AUTHORING_ENABLED } from '../../build_mode';
 
 /**
  * Prefab JSON files live in src/world/prefabs/data/<id>.prefab.json.
  *
- * Production: files are bundled via import.meta.glob at build time.
- * Dev: files are fetched from the /__editor dev API so freshly saved prefabs
+ * Public game builds bundle files via import.meta.glob. Authoring builds fetch
+ * through /__editor so freshly saved prefabs
  * load without going through Vite's module graph (the data folder is excluded
  * from the dev watcher — HMR reloads there would race editor → Play
  * navigation).
@@ -34,7 +35,7 @@ async function loadFromDevApi(id: string): Promise<PrefabDocument | null> {
 /** Loads and validates a prefab document; returns null when missing. */
 export async function loadPrefabDocument(id: string): Promise<PrefabDocument | null> {
   try {
-    if (import.meta.env.DEV) {
+    if (AUTHORING_ENABLED) {
       const fresh = await loadFromDevApi(id).catch(() => null);
       if (fresh) return fresh;
       // Fall through to the bundled copy (e.g. `vite preview` without the dev API).

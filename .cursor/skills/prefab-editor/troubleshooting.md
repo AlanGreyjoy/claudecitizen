@@ -16,7 +16,7 @@ Animation, ship-door, ship-gear, ship-ramp, and collider bindings reference GLB 
 |---------|---------|
 | `Animation node not found after 300 attempts: …` | `prefab_renderer.ts` `bindAnimationComponent` — names don't exist under entity or root group. Warning lists available names. |
 | `has no collider bound` (per door/animation) | Door animates but no collider references its node(s). Player can't walk through. |
-| `[collider]` debug (ship, iteration 0) | `colliders.ts` — capsule push diagnostics in ship deck mode. |
+| `Editor ship preview: node "…" not found` | Prefab animation/door node name missing in loaded GLBs. Stale Unity-style suffixes (`_5`) are a common cause when the export only has duplicate base names. Warns once per name per rebuild; suppressed while assets are still loading. |
 
 Renderer search order: `targetObject.getObjectByName(name)` then `rootGroup.getObjectByName(name)`. Names are sanitized via `sanitizeNodeName()` — unusual characters may be stripped; prefer simple alphanumeric + underscore names in GLB exports.
 
@@ -36,12 +36,12 @@ Renderer search order: `targetObject.getObjectByName(name)` then `rootGroup.getO
 
 - Model still loading — wait for viewport mesh; context menu shows "Mesh position unavailable".
 - Node hidden via Delete — check `glbNodeHidden`; restore by removing from `hiddenNodes` in JSON or re-import.
-- Click entity first, then drill (re-click same viewport spot) or use hierarchy GLB tree.
+- Click the mesh in the viewport (selects that GLB node), re-click to walk up to the entity, or use the hierarchy GLB tree.
 
 ### Transform override not saving
 
 - Node overrides need a name resolution path: `store.getGlbNodeName()` → `glbNodeTransforms` → `serialize.ts` `nodeOverrides`.
-- If adding new node-level features, update **both** `viewport.ts` and `prefab_renderer.ts`.
+- If adding new node-level features, update the relevant `src/render/editor/viewport_*.ts` module(s) **and** `prefab_renderer.ts`.
 
 ## Play-mode door & animation bugs
 

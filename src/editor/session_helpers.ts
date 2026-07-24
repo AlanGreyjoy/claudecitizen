@@ -106,7 +106,7 @@ export async function maybeOfferShipPrefab(
   store.setPrefabMeta(meta);
   markAsHullIfFirst(store, entityId);
   showToast(
-    'Ship Editor mode — add a ship-controller on the hull, deck colliders, then Preview Ship.',
+    'Ship Editor mode — add a ship-controller on the hull, deck colliders, then press Play.',
   );
 }
 

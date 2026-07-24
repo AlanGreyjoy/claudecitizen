@@ -31,12 +31,13 @@ import {
 import { loadPrefabDocument } from '../../../world/prefabs/loader';
 import type { PrefabTransform } from '../../../world/prefabs/schema';
 import { createPropInstanceGroup } from '../../prefabs/prefab_renderer';
+import { AUTHORING_ENABLED } from '../../../build_mode';
 
 const BUNDLED_EQUIPMENT_DOC = parseBaseCharacterEquipment(baseCharactersJson);
 const IDENTITY_GRIP = identityDrawnGripTransform();
 
 async function loadEquipmentDocument(): Promise<BaseCharacterEquipmentV1> {
-  if (!import.meta.env.DEV) return BUNDLED_EQUIPMENT_DOC;
+  if (!AUTHORING_ENABLED) return BUNDLED_EQUIPMENT_DOC;
 
   try {
     const response = await fetch('/__editor/base-characters', { cache: 'no-store' });

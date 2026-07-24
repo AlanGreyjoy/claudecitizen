@@ -9,7 +9,6 @@ import {
 type PanelSplittersProps = {
   rootRef: RefObject<HTMLElement | null>;
   mainRef: RefObject<HTMLElement | null>;
-  projectRef: RefObject<HTMLElement | null>;
   hierarchySplitterRef: RefObject<HTMLElement | null>;
   inspectorSplitterRef: RefObject<HTMLElement | null>;
   projectSplitterRef: RefObject<HTMLElement | null>;
@@ -19,7 +18,6 @@ type PanelSplittersProps = {
 export function usePanelSplitters({
   rootRef,
   mainRef,
-  projectRef,
   hierarchySplitterRef,
   inspectorSplitterRef,
   projectSplitterRef,
@@ -27,22 +25,14 @@ export function usePanelSplitters({
   useEffect(() => {
     const root = rootRef.current;
     const main = mainRef.current;
-    const project = projectRef.current;
     const hierarchySplitter = hierarchySplitterRef.current;
     const inspectorSplitter = inspectorSplitterRef.current;
     const projectSplitter = projectSplitterRef.current;
-    if (
-      !root ||
-      !main ||
-      !project ||
-      !hierarchySplitter ||
-      !inspectorSplitter ||
-      !projectSplitter
-    ) {
+    if (!root || !main || !hierarchySplitter || !inspectorSplitter || !projectSplitter) {
       return;
     }
 
-    restorePanelSizes(root, main, project);
+    restorePanelSizes(root, main);
     attachColumnSplitter(hierarchySplitter, main, '--ed-hierarchy-width', {
       ...PANEL_SIZE_BOUNDS.hierarchyWidth,
       storageKey: 'hierarchyWidth',
@@ -60,7 +50,6 @@ export function usePanelSplitters({
   }, [
     rootRef,
     mainRef,
-    projectRef,
     hierarchySplitterRef,
     inspectorSplitterRef,
     projectSplitterRef,

@@ -42,7 +42,6 @@ export interface EntityModelLoadContext {
   tagGlbNodes: (object: THREE.Object3D) => void;
   applyGlbOverridesForEntity: (entityId: string) => void;
   applyHiddenNodesForEntity: (entityId: string) => void;
-  applyShipPreview: () => void;
 }
 
 export function attachRestHeightHelperForHull(
@@ -90,13 +89,57 @@ export function attachModelComponentHelpers(
         component,
         usesEntityAssetForMeshCollider(component, entity) ? targetNode : undefined,
       );
-      if (helper) targetNode.add(helper);
+      if (helper) {
+        helper.userData.editorNodeComponentHelper = true;
+        targetNode.add(helper);
+      }
     }
   }
   for (const component of entity.components) {
     if (!usesEntityAssetForMeshCollider(component, entity)) continue;
     const helper = helpers.buildComponentHelper(component, model);
-    if (helper) model.add(helper);
+    if (helper) {
+      helper.userData.editorNodeComponentHelper = true;
+      model.add(helper);
+    }
+  }
+}
+
+/** Remove helpers previously attached by `attachModelComponentHelpers`. */
+export function clearNodeComponentHelpers(node: THREE.Object3D): void {
+  for (const child of [...node.children]) {
+    if (child.userData.editorNodeComponentHelper) node.remove(child);
+  }
+}
+
+/**
+ * Re-attach node-override component helpers for one GLB node without a full
+ * scene rebuild (used when adding/removing colliders from the inspector).
+ */
+export function refreshNodeOverrideComponentHelpers(args: {
+  entity: EditorEntity;
+  model: THREE.Object3D;
+  nodeName: string;
+  helpers: Pick<ViewportComponentHelpers, "buildComponentHelper">;
+  sanitizeNodeName: (name: string) => string;
+}): void {
+  const { entity, model, nodeName, helpers, sanitizeNodeName } = args;
+  const targetNode = model.getObjectByName(sanitizeNodeName(nodeName));
+  if (!targetNode) return;
+  clearNodeComponentHelpers(targetNode);
+  const override = entity.glbNodeTransforms.find(
+    (entry) => entry.nodeName === nodeName,
+  );
+  if (!override || override.components.length === 0) return;
+  for (const component of override.components) {
+    const helper = helpers.buildComponentHelper(
+      component,
+      usesEntityAssetForMeshCollider(component, entity) ? targetNode : undefined,
+    );
+    if (helper) {
+      helper.userData.editorNodeComponentHelper = true;
+      targetNode.add(helper);
+    }
   }
 }
 
@@ -131,7 +174,6 @@ export function finalizeLoadedEntityModel(ctx: EntityModelLoadContext): void {
     tagGlbNodes,
     applyGlbOverridesForEntity,
     applyHiddenNodesForEntity,
-    applyShipPreview,
   } = ctx;
   if (generation !== buildGeneration) return;
   if (recenterAsHull) {
@@ -167,7 +209,6 @@ export function finalizeLoadedEntityModel(ctx: EntityModelLoadContext): void {
     sanitizeNodeName,
   });
   attachModelObjectAnimations({ entity, model, entityRoot });
-  applyShipPreview();
 }
 
 export function attachTopLevelEntityComponents(args: {

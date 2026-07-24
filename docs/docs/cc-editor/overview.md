@@ -1,14 +1,17 @@
 ---
 sidebar_position: 1
 title: Overview
-description: What the CC Editor is — a dev-only world builder and prefab authoring tool.
+description: What the standalone Electron scene and prefab editor does.
 ---
 
 # CC Editor overview
 
-The **CC Editor** (ClaudeCitizen Editor) is the dev-only in-browser authoring environment for ClaudeCitizen. It is both a **3D scene builder** and a **prefab authoring tool**: you assemble environments from GLB models, box primitives, and lights, place gameplay markers and colliders, then save the result as versioned JSON that the game loads at runtime.
+The **CC Editor** is ClaudeCitizen's standalone Electron authoring
+environment. It manages launchable **scenes**, reusable **prefabs**, world
+settings, Play Mode, and web release builds in one Unity-style workspace.
 
-Production builds strip all editor code. The editor is only available under `npm run dev`.
+Launch it with `npm run editor`; no development server is required. Browser
+release builds still strip editor code.
 
 ![CC Editor layout](/img/editor-screenshot.png)
 
@@ -16,11 +19,12 @@ The screenshot shows the Unity-style layout: hierarchy, scene view, inspector, a
 
 ## Builder + prefab author
 
-Think of the CC Editor in two layers:
+Think of the CC Editor in three layers:
 
 | Layer | What you do |
 | --- | --- |
-| **Scene building** | Drag GLBs into the viewport, add boxes and empties, parent and transform entities, edit GLB sub-meshes, tune materials, place lights |
+| **Scene settings** | Create launchable title, loading, character, main-game, test, and instance scenes |
+| **Prefab building** | Drag GLBs into the viewport, add boxes and empties, parent and transform entities, edit GLB sub-meshes, tune materials, place lights |
 | **Prefab authoring** | Pick a **prefab kind** (station, ship, site, prop, item), attach **gameplay components** (spawn points, doors, colliders, interactions), save to `src/world/prefabs/data/<id>.prefab.json` |
 
 Saved prefabs are plain JSON tracked in git (metadata only — asset URLs may point at gitignored protected files). The game bundles them via Vite and the production build copies only referenced assets.
@@ -41,12 +45,14 @@ See [Prefab kinds](./prefab-kinds) for when to use each.
 
 ```mermaid
 flowchart LR
+  Electron["editor-desktop/"]
   UI["src/editor/ panels + document"]
   Viewport["src/render/editor/ viewport"]
   Schema["world/prefabs/schema.ts"]
   JSON["prefab JSON on disk"]
   Game["prefab_renderer + runtime"]
 
+  Electron --> UI
   UI --> Viewport
   UI --> Schema
   UI -->|"serialize.ts"| JSON
@@ -56,26 +62,20 @@ flowchart LR
 
 | Path | Role |
 | --- | --- |
-| `src/editor/` | Document store, panels, commands, serialization, dev API client |
+| `editor-desktop/` | Sandboxed project access, Play Mode window, File → Build Web |
+| `src/editor/` | Document store, panels, commands, serialization, local API client |
 | `src/render/editor/` | Three.js viewport, base-characters stage, thumbnails |
+| `src/world/scenes/` | Scene documents and runtime adapters |
 | `src/world/prefabs/schema.ts` | Canonical prefab JSON contract and validators |
 | `src/world/prefabs/component_registry.ts` | Component palette metadata per prefab kind |
-| Vite `/__editor/*` routes | Dev-only save/load and asset listing |
+| Electron `/__editor/*` routes | Constrained save/load and asset listing |
 
 Domain simulation rules stay in `world/`, `flight/`, and `player/`. The editor writes prefab data; it does not own gameplay logic.
 
 ## Open the editor
 
-From the title screen (**Editor** button) or deep-link:
-
-```text
-http://localhost:4173/?boot=editor
-```
-
-Reopen a saved prefab after playtesting:
-
-```text
-http://localhost:4173/?boot=editor&prefab=<prefab-id>
+```bash
+npm run editor
 ```
 
 ## Doc map
