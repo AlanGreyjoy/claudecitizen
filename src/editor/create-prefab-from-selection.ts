@@ -1,4 +1,4 @@
-import { savePrefab, type AssetRoot } from './api';
+import { savePrefab } from './api';
 import type { EditorEntity, EditorStore } from './document';
 import { showToast } from './dom';
 import { entityToJson } from './serialize';
@@ -61,7 +61,7 @@ export async function createPrefabFromSelection(
   store: EditorStore,
   entityId: string,
   kind?: PrefabKind,
-  target?: { root: AssetRoot; folder: string },
+  folder?: string,
 ): Promise<string | null> {
   const located = store.locate(entityId);
   if (!located) {
@@ -96,7 +96,7 @@ export async function createPrefabFromSelection(
 
   let savedPath: string;
   try {
-    savedPath = await savePrefab(document, target);
+    savedPath = await savePrefab(document, folder);
   } catch (error) {
     showToast(
       error instanceof Error ? error.message : 'Could not save the prefab.',

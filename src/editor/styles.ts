@@ -900,7 +900,8 @@ body.ed-resize-row * {
 /* System Map / Menu Manager / Server hide Project + Console + asset browser. */
 #editor-root.is-system-map .ed-main,
 #editor-root.is-menu-manager .ed-main,
-#editor-root.is-server .ed-main {
+#editor-root.is-server .ed-main,
+.ed-main.is-server-tab {
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -909,19 +910,36 @@ body.ed-resize-row * {
 #editor-root.is-menu-manager .ed-project-splitter,
 #editor-root.is-menu-manager .ed-bottom-dock,
 #editor-root.is-server .ed-project-splitter,
-#editor-root.is-server .ed-bottom-dock {
+#editor-root.is-server .ed-bottom-dock,
+.ed-main.is-server-tab .ed-project-splitter,
+.ed-main.is-server-tab .ed-bottom-dock {
   display: none;
 }
 
-/* Server console owns the whole workspace: no hierarchy, no inspector. */
-#editor-root.is-server .ed-main {
+/* Server console owns the whole workspace: no hierarchy, no inspector.
+   Prefer .ed-main.is-server-tab (set from React) over #editor-root.is-server. */
+#editor-root.is-server .ed-main,
+.ed-main.is-server-tab {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* Scene shell is normally column 3; with a 1-col template it must move to 1
+   or the explicit 1fr track stays empty and Server only fills the right half. */
+#editor-root.is-server .ed-scene-shell,
+.ed-main.is-server-tab .ed-scene-shell {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
 }
 
 #editor-root.is-server .ed-hierarchy-panel,
 #editor-root.is-server .ed-hierarchy-splitter,
 #editor-root.is-server .ed-inspector-panel,
-#editor-root.is-server .ed-inspector-splitter {
+#editor-root.is-server .ed-inspector-splitter,
+.ed-main.is-server-tab .ed-hierarchy-panel,
+.ed-main.is-server-tab .ed-hierarchy-splitter,
+.ed-main.is-server-tab .ed-inspector-panel,
+.ed-main.is-server-tab .ed-inspector-splitter {
   display: none;
 }
 
@@ -930,11 +948,14 @@ body.ed-resize-row * {
   background: var(--ed-viewport);
 }
 
-/* The ported operator console styles assume a full-viewport shell. */
+/* Ported admin chrome uses position:fixed; host + screen are the same node,
+   so override on the host itself (descendant selector never matched). */
+.ed-server-console-host.sc-admin-screen,
 .ed-server-console-host .sc-admin-screen {
-  position: static;
-  inset: auto;
-  min-height: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: auto;
+  min-height: 0;
 }
 
 /* Left-only tab editors: keep hierarchy chrome, drop empty inspector column. */
@@ -3376,8 +3397,12 @@ export function injectEditorStyles(): void {
   style.textContent = EDITOR_CSS;
 }
 
+// Re-inject on every module evaluation so Vite HMR actually swaps CSS text
+// (a bare accept callback from the previous module keeps a stale EDITOR_CSS).
+if (typeof document !== 'undefined' && document.querySelector('style[data-editor-styles]')) {
+  injectEditorStyles();
+}
+
 if (import.meta.hot) {
-  import.meta.hot.accept(() => {
-    injectEditorStyles();
-  });
+  import.meta.hot.accept();
 }

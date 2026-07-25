@@ -447,13 +447,18 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
     loadUalLibrary: async () => {
       if (!ctx.state.animation) return;
       try {
-        ctx.setStageStatus('Loading UAL locomotion…');
+        ctx.setStageStatus('Loading optional UAL pack from project…');
         await ctx.state.animation.loadDefaultLibrary();
         ctx.state.lastLoadedSourceId = UAL_ANIMATION_SOURCE_ID;
         await ctx.ensureAnimatedPose();
         ctx.setStageStatus(`UAL loaded · ${ctx.state.animation.clipNames.length} clip(s).`);
       } catch (error) {
-        ctx.setStageStatus(error instanceof Error ? error.message : 'UAL load failed.', true);
+        ctx.setStageStatus(
+          error instanceof Error
+            ? `UAL optional pack missing (${error.message}). Drag project GLBs onto Controllers instead.`
+            : 'UAL optional pack missing. Drag project GLBs onto Controllers instead.',
+          true,
+        );
       }
       ctx.notifyUiChange();
     },

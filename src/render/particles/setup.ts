@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import type * as THREE from "three";
 import { createParticleSystem } from "./system";
 import type { ParticleSystemHandle } from "./system";
 

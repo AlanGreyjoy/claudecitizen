@@ -20,7 +20,7 @@ import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment
 import type { InventoryState } from '../../../player/inventory/types';
 
 const UAL_AVATAR_URL = UNIVERSAL_ANIMATION_LIBRARY_URL;
-const PROTECTED_CHARACTER_URL_PREFIX = '/src/assets/protected/characters/';
+const PROTECTED_CHARACTER_URL_PREFIX = '/assets/protected/characters/';
 const DEFAULT_CHARACTER_AVATAR_ID = 'ual-mannequin';
 const FALLBACK_CHARACTER_AVATAR_ID = 'ual-mannequin';
 

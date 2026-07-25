@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { retargetClip } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-export const UNIVERSAL_ANIMATION_LIBRARY_URL = new URL(
-  '../../assets/universal-animation-library-1/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb',
-  import.meta.url,
-).href;
+/**
+ * Retarget skeleton and default mannequin. Licensed pack content, so it is
+ * project-supplied under the open project's asset library rather than bundled
+ * with the engine.
+ */
+export const UNIVERSAL_ANIMATION_LIBRARY_URL =
+  '/assets/protected/animations/universal-animation-library/UAL1_Standard.glb';
 
 export const UNITY_HUMANOID_TO_UAL_BONES: Record<string, string> = {
   Hips: 'pelvis',

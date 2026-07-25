@@ -117,7 +117,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "spawn-point",
     label: "Spawn Point",
-    kinds: ["station"],
+    kinds: ["station", "site"],
     marker: true,
     createDefault: () => ({ type: "spawn-point", floorId: "lobby" }),
     hint: "Player spawn. Entity forward (+Z) sets the facing direction.",

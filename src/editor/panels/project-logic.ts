@@ -1,9 +1,7 @@
 import {
   PROJECT_ASSET_ROOT,
-  SOURCE_ASSET_ROOT,
   fetchAssetListing,
   type AssetEntry,
-  type AssetRoot,
   type FolderOrderMap,
 } from '../api';
 
@@ -16,21 +14,16 @@ export const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.m4a'] as const;
 export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.ktx2', '.ktx'] as const;
 export const DEFAULT_EXPANDED_FOLDERS = [''] as const;
 export const PROJECT_ROOT_LABEL = 'Assets';
-export const PROJECT_ASSET_ROOTS: readonly AssetRoot[] = [PROJECT_ASSET_ROOT, SOURCE_ASSET_ROOT];
-
-export type ProjectAssetEntry = AssetEntry & { root: AssetRoot };
 
 export interface FolderNode {
   name: string;
   path: string;
-  /** Asset roots that contain this relative folder path. */
-  roots: Set<AssetRoot>;
   children: Map<string, FolderNode>;
-  files: ProjectAssetEntry[];
+  files: AssetEntry[];
 }
 
 export function emptyFolderNode(): FolderNode {
-  return { name: '', path: '', roots: new Set(), children: new Map(), files: [] };
+  return { name: '', path: '', children: new Map(), files: [] };
 }
 
 export function isModelPath(path: string): boolean {
@@ -67,7 +60,7 @@ export function isDraggableAssetPath(path: string): boolean {
 /** Which card treatment an entry gets in the asset grid. */
 export type AssetCardKind = 'empty' | 'model' | 'audio' | 'prefab' | 'other';
 
-export function assetCardKind(entry: ProjectAssetEntry): AssetCardKind {
+export function assetCardKind(entry: AssetEntry): AssetCardKind {
   if (entry.size === 0) return 'empty';
   if (isModelPath(entry.path)) return 'model';
   if (isAudioPath(entry.path)) return 'audio';
@@ -86,7 +79,7 @@ export function assetCardTitle(sourcePath: string, kind: AssetCardKind): string 
 }
 
 /** Version key used to invalidate the cached model thumbnail for an entry. */
-export function assetVersionOf(entry: ProjectAssetEntry): string | undefined {
+export function assetVersionOf(entry: AssetEntry): string | undefined {
   return entry.size !== undefined && entry.modifiedAtMs !== undefined
     ? `${entry.size}:${Math.trunc(entry.modifiedAtMs)}`
     : undefined;
@@ -101,19 +94,13 @@ export function emptyNoteForFolder(folderPath: string): string {
   return `Nothing in ${fullPath}. Drop assets here, or drag a GameObject from the Hierarchy to save a prefab.`;
 }
 
-export async function fetchProjectAssetEntries(): Promise<ProjectAssetEntry[]> {
-  const listings = await Promise.all(
-    PROJECT_ASSET_ROOTS.map(async (root) => {
-      const entries = await fetchAssetListing(root);
-      return entries.map((entry): ProjectAssetEntry => ({ ...entry, root }));
-    }),
-  );
-  return listings.flat();
+export async function fetchProjectAssetEntries(): Promise<AssetEntry[]> {
+  return fetchAssetListing(PROJECT_ASSET_ROOT);
 }
 
-export function buildFolderTree(entries: ProjectAssetEntry[]): FolderNode {
+export function buildFolderTree(entries: AssetEntry[]): FolderNode {
   const root = emptyFolderNode();
-  const ensureDir = (path: string, assetRoot: AssetRoot): FolderNode => {
+  const ensureDir = (path: string): FolderNode => {
     if (path === '') return root;
     let node = root;
     let current = '';
@@ -121,26 +108,19 @@ export function buildFolderTree(entries: ProjectAssetEntry[]): FolderNode {
       current = current === '' ? segment : `${current}/${segment}`;
       let child = node.children.get(segment);
       if (!child) {
-        child = {
-          name: segment,
-          path: current,
-          roots: new Set(),
-          children: new Map(),
-          files: [],
-        };
+        child = { name: segment, path: current, children: new Map(), files: [] };
         node.children.set(segment, child);
       }
-      child.roots.add(assetRoot);
       node = child;
     }
     return node;
   };
   for (const entry of entries) {
     if (entry.kind === 'dir') {
-      ensureDir(entry.path, entry.root);
+      ensureDir(entry.path);
     } else {
       const slash = entry.path.lastIndexOf('/');
-      const dir = ensureDir(slash === -1 ? '' : entry.path.slice(0, slash), entry.root);
+      const dir = ensureDir(slash === -1 ? '' : entry.path.slice(0, slash));
       dir.files.push(entry);
     }
   }
@@ -188,10 +168,8 @@ export function sortedFolderChildren(
   });
 }
 
-export function sortedFolderFiles(node: FolderNode): ProjectAssetEntry[] {
-  return [...node.files].sort(
-    (a, b) => a.path.localeCompare(b.path) || a.root.localeCompare(b.root),
-  );
+export function sortedFolderFiles(node: FolderNode): AssetEntry[] {
+  return [...node.files].sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /** Breadcrumb segments for a selected folder path (`''` = Assets root). */
@@ -216,19 +194,17 @@ export function collectFolderFiles(
   folderPath: string,
   includeSubfolders: boolean,
   orderMap: FolderOrderMap = {},
-): ProjectAssetEntry[] {
+): AssetEntry[] {
   const folder = findFolder(tree, folderPath) ?? tree;
   if (!includeSubfolders) return sortedFolderFiles(folder);
 
-  const files: ProjectAssetEntry[] = [];
+  const files: AssetEntry[] = [];
   const visit = (node: FolderNode): void => {
     files.push(...node.files);
     for (const child of sortedFolderChildren(node, orderMap)) visit(child);
   };
   visit(folder);
-  return files.sort(
-    (a, b) => a.path.localeCompare(b.path) || a.root.localeCompare(b.root),
-  );
+  return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /**
@@ -391,15 +367,9 @@ export function folderDropZoneFromOffset(
 
 /** Payload carried when dragging a Project entry to another folder. */
 export interface AssetMoveDragPayload {
-  root: AssetRoot;
   path: string;
-  /** Folder rows that span multiple asset roots set this. */
-  roots?: AssetRoot[];
-}
-
-export function moveRootsOf(payload: AssetMoveDragPayload): AssetRoot[] {
-  if (payload.roots && payload.roots.length > 0) return payload.roots;
-  return [payload.root];
+  /** Folder drags reorder and reparent; file drags only move. */
+  kind: 'dir' | 'file';
 }
 
 export function parseAssetMovePayload(data: string): AssetMoveDragPayload | null {
@@ -407,18 +377,8 @@ export function parseAssetMovePayload(data: string): AssetMoveDragPayload | null
   try {
     const parsed = JSON.parse(data) as Partial<AssetMoveDragPayload>;
     if (typeof parsed.path !== 'string' || !parsed.path) return null;
-    if (parsed.root !== PROJECT_ASSET_ROOT && parsed.root !== SOURCE_ASSET_ROOT) return null;
-    const roots = Array.isArray(parsed.roots)
-      ? parsed.roots.filter(
-          (root): root is AssetRoot =>
-            root === PROJECT_ASSET_ROOT || root === SOURCE_ASSET_ROOT,
-        )
-      : undefined;
-    return {
-      root: parsed.root,
-      path: parsed.path,
-      ...(roots && roots.length > 0 ? { roots } : {}),
-    };
+    if (parsed.kind !== 'dir' && parsed.kind !== 'file') return null;
+    return { path: parsed.path, kind: parsed.kind };
   } catch {
     return null;
   }

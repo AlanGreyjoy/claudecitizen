@@ -19,7 +19,11 @@ export const ANIMATION_LOCOMOTION_KINDS = [
 
 export type AnimationLocomotionKind = (typeof ANIMATION_LOCOMOTION_KINDS)[number];
 
-/** Built-in UAL source id — always available via SidekickAnimationRuntime. */
+/**
+ * Legacy optional UAL source id. Not engine-bundled — only resolves if the
+ * project ships UAL (or clips already loaded into the mixer). Prefer real
+ * `sources[]` entries pointing at project `/assets/animations/…` GLBs.
+ */
 export const UAL_ANIMATION_SOURCE_ID = 'ual';
 
 export interface AnimationControllerSourceV1 {
@@ -212,8 +216,13 @@ export function locomotionStateSlug(locomotion: AnimationLocomotionKind): string
   return locomotion.replaceAll('_', '-');
 }
 
-const PRO_RIFLE_ROOT = '/src/assets/protected/animations/pro-rifle';
-const HANDGUN_LOCOMOTION_ROOT = '/src/assets/protected/animations/handgun-locomotions';
+/**
+ * Animation clips are project content: the controller graph is authored here,
+ * but the GLBs it points at come from the open project's `assets/` library,
+ * which the dev server and the build both mount at `/assets/`.
+ */
+const PRO_RIFLE_ROOT = '/assets/animations/ProRifle';
+const HANDGUN_LOCOMOTION_ROOT = '/assets/animations/HandgunLocomotions';
 const RIFLE_IDLE_CLIP = 'idle';
 const RIFLE_AIM_IDLE_CLIP = 'idle_aiming';
 const RIFLE_CROUCH_IDLE_CLIP = 'idle_crouching';
@@ -234,56 +243,63 @@ function packSourceId(prefix: string, clipStem: string): string {
   return `${prefix}-${clipStem.replaceAll('_', '-')}`;
 }
 
-export function buildDefaultAnimationController(): AnimationControllerV1 {
-  const stances: AnimationControllerStanceV1[] = [
+const RIFLE_CLIP_STEMS = [
+  RIFLE_IDLE_CLIP,
+  RIFLE_AIM_IDLE_CLIP,
+  RIFLE_CROUCH_IDLE_CLIP,
+  RIFLE_CROUCH_AIM_IDLE_CLIP,
+  RIFLE_CROUCH_WALK_CLIP,
+  RIFLE_WALK_CLIP,
+  RIFLE_RUN_CLIP,
+  RIFLE_SPRINT_CLIP,
+  RIFLE_JUMP_START_CLIP,
+  RIFLE_JUMP_LOOP_CLIP,
+  RIFLE_JUMP_LAND_CLIP,
+];
+
+const PISTOL_CLIP_STEMS = [
+  PISTOL_IDLE_CLIP,
+  PISTOL_WALK_CLIP,
+  PISTOL_RUN_CLIP,
+  PISTOL_JUMP_CLIP,
+  PISTOL_JUMP_LOOP_CLIP,
+];
+
+// Pro Rifle idle/aim authors ~55° root yaw when Body Orientation remaps.
+// Temporarily 0 while testing Unity import "Based Upon = Original" + re-export.
+// Restore -54 on idle / idle_aiming if facing is still wrong after that.
+const RIFLE_YAW_BY_CLIP: Record<string, number> = {
+  // [RIFLE_IDLE_CLIP]: -54,
+  // [RIFLE_AIM_IDLE_CLIP]: -54,
+};
+
+function buildDefaultStances(): AnimationControllerStanceV1[] {
+  return [
     { id: 'unarmed', label: 'Unarmed' },
     { id: 'rifle', label: 'Rifle' },
     { id: 'pistol', label: 'Pistol' },
   ];
+}
 
-  // Pro Rifle idle/aim authors ~55° root yaw when Body Orientation remaps.
-  // Temporarily 0 while testing Unity import "Based Upon = Original" + re-export.
-  // Restore -54 on idle / idle_aiming if facing is still wrong after that.
-  const rifleYawByClip: Record<string, number> = {
-    // [RIFLE_IDLE_CLIP]: -54,
-    // [RIFLE_AIM_IDLE_CLIP]: -54,
-  };
-  const rifleClips = [
-    RIFLE_IDLE_CLIP,
-    RIFLE_AIM_IDLE_CLIP,
-    RIFLE_CROUCH_IDLE_CLIP,
-    RIFLE_CROUCH_AIM_IDLE_CLIP,
-    RIFLE_CROUCH_WALK_CLIP,
-    RIFLE_WALK_CLIP,
-    RIFLE_RUN_CLIP,
-    RIFLE_SPRINT_CLIP,
-    RIFLE_JUMP_START_CLIP,
-    RIFLE_JUMP_LOOP_CLIP,
-    RIFLE_JUMP_LAND_CLIP,
-  ];
-  const pistolClips = [
-    PISTOL_IDLE_CLIP,
-    PISTOL_WALK_CLIP,
-    PISTOL_RUN_CLIP,
-    PISTOL_JUMP_CLIP,
-    PISTOL_JUMP_LOOP_CLIP,
-  ];
-  const sources: AnimationControllerSourceV1[] = [
-    ...rifleClips.map((clipStem) => ({
+function buildDefaultSources(): AnimationControllerSourceV1[] {
+  return [
+    ...RIFLE_CLIP_STEMS.map((clipStem) => ({
       id: packSourceId('r8', clipStem),
       url: `${PRO_RIFLE_ROOT}/${clipStem}.glb`,
       label: clipStem,
-      yawOffsetDegrees: rifleYawByClip[clipStem] ?? 0,
+      yawOffsetDegrees: RIFLE_YAW_BY_CLIP[clipStem] ?? 0,
     })),
-    ...pistolClips.map((clipStem) => ({
+    ...PISTOL_CLIP_STEMS.map((clipStem) => ({
       id: packSourceId('hg', clipStem),
       url: `${HANDGUN_LOCOMOTION_ROOT}/${clipStem}.glb`,
       label: clipStem,
       yawOffsetDegrees: 0,
     })),
   ];
+}
 
-  const states: AnimationControllerStateV1[] = [
+function buildUnarmedStates(): AnimationControllerStateV1[] {
+  return [
     {
       id: 'unarmed-idle',
       label: 'Unarmed Idle',
@@ -340,6 +356,11 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
       clipName: 'Jump_Land',
       sourceId: UAL_ANIMATION_SOURCE_ID,
     },
+  ];
+}
+
+function buildRifleStates(): AnimationControllerStateV1[] {
+  return [
     {
       id: 'rifle-idle',
       label: 'Rifle Idle',
@@ -428,6 +449,11 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
       clipName: RIFLE_JUMP_LAND_CLIP,
       sourceId: packSourceId('r8', RIFLE_JUMP_LAND_CLIP),
     },
+  ];
+}
+
+function buildPistolStates(): AnimationControllerStateV1[] {
+  return [
     {
       id: 'pistol-idle',
       label: 'Pistol Idle',
@@ -485,13 +511,15 @@ export function buildDefaultAnimationController(): AnimationControllerV1 {
       sourceId: packSourceId('hg', PISTOL_JUMP_CLIP),
     },
   ];
+}
 
+export function buildDefaultAnimationController(): AnimationControllerV1 {
   return {
     schemaVersion: ANIMATION_CONTROLLER_SCHEMA_VERSION,
     id: 'default',
     label: 'Default Character',
-    sources,
-    stances,
-    states,
+    sources: buildDefaultSources(),
+    stances: buildDefaultStances(),
+    states: [...buildUnarmedStates(), ...buildRifleStates(), ...buildPistolStates()],
   };
 }

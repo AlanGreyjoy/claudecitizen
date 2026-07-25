@@ -91,7 +91,7 @@
       "minScale": 0.1,
       "maxScale": 0.5,
       "assetUrls": [
-        "/src/assets/protected/props/env/Grass.png"
+        "/assets/protected/props/env/Grass.png"
       ],
       "color": "#4fcf93"
     },
@@ -101,11 +101,11 @@
       "minScale": 1.5,
       "maxScale": 3.5,
       "assetUrls": [
-        "/src/assets/stylized-nature-magakit/Pine_1.gltf",
-        "/src/assets/stylized-nature-magakit/Pine_2.gltf",
-        "/src/assets/stylized-nature-magakit/Pine_3.gltf",
-        "/src/assets/stylized-nature-magakit/Pine_4.gltf",
-        "/src/assets/stylized-nature-magakit/Pine_5.gltf"
+        "/assets/stylized-nature-magakit/Pine_1.gltf",
+        "/assets/stylized-nature-magakit/Pine_2.gltf",
+        "/assets/stylized-nature-magakit/Pine_3.gltf",
+        "/assets/stylized-nature-magakit/Pine_4.gltf",
+        "/assets/stylized-nature-magakit/Pine_5.gltf"
       ]
     }
   },
@@ -116,7 +116,7 @@
       {
         "id": "spawn-1",
         "name": "Spawn 1",
-        "assetUrl": "/src/assets/protected/props/env/SM_Env_Asteroid_Rock_01.glb",
+        "assetUrl": "/assets/protected/props/env/SM_Env_Asteroid_Rock_01.glb",
         "enabled": true,
         "weight": 1,
         "density": 0.45,
@@ -145,7 +145,7 @@
       {
         "id": "spawn-2",
         "name": "Spawn 2",
-        "assetUrl": "/src/assets/protected/props/env/SM_Env_Asteroid_Rock_02.glb",
+        "assetUrl": "/assets/protected/props/env/SM_Env_Asteroid_Rock_02.glb",
         "enabled": true,
         "weight": 1,
         "density": 1,
@@ -173,7 +173,7 @@
       {
         "id": "spawn-3",
         "name": "Spawn 3",
-        "assetUrl": "/src/assets/stylized-nature-magakit/Bush_Common_Flowers.gltf",
+        "assetUrl": "/assets/stylized-nature-magakit/Bush_Common_Flowers.gltf",
         "enabled": true,
         "weight": 1,
         "density": 1,

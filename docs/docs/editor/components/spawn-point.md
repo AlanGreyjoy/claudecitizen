@@ -6,7 +6,7 @@ description: Player spawn location and facing direction.
 
 # Spawn point
 
-Player spawn marker. **Station** prefabs only.
+Player spawn marker. **Station** and **site** prefabs only.
 
 | Property | Value |
 | --- | --- |

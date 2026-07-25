@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Planet, Vec3 } from '../../../types';
-import { VolumetricFogEffect } from '../../effects';
+import { type VolumetricFogEffect } from '../../effects';
 import {
   HAZE_LOW_COLOR,
   NIGHT_FOG_COLOR,

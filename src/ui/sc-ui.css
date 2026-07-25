@@ -2265,7 +2265,6 @@ kbd {
     linear-gradient(180deg, rgba(4, 8, 18, 0.62) 0%, rgba(2, 5, 13, 0.82) 100%),
     radial-gradient(circle at 24% 18%, rgba(63, 198, 255, 0.08), transparent 34%),
     radial-gradient(circle at 78% 82%, rgba(255, 206, 111, 0.06), transparent 40%),
-    url('../assets/images/wallpaper-1.png') center / cover no-repeat,
     linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
 }
 
@@ -2529,7 +2528,6 @@ kbd {
     linear-gradient(180deg, rgba(4, 8, 18, 0.72) 0%, rgba(2, 5, 13, 0.88) 100%),
     radial-gradient(circle at 24% 18%, rgba(63, 198, 255, 0.08), transparent 34%),
     radial-gradient(circle at 78% 82%, rgba(255, 206, 111, 0.06), transparent 40%),
-    url('../assets/images/wallpaper-1.png') center / cover no-repeat,
     linear-gradient(180deg, #081227 0%, #040812 55%, #02050d 100%);
 }
 

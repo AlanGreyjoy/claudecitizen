@@ -135,268 +135,296 @@ function meshVolume(mesh: SurfaceSpawnMeshCollision): number {
   return hx * hy * hz;
 }
 
-export function createPlanetPhysics(spawnPosition: Vec3): PlanetPhysics {
-  // Gravity is handled by character locomotion; keep Rapier gravity off.
-  const world = createRapierWorld();
-  world.gravity = new RAPIER.Vector3(0, 0, 0);
+interface ActiveColliderEntry {
+  collider: RAPIER.Collider;
+  instance: SurfaceSpawnInstance;
+  /** Changes when mesh bounds load → forces recreate. */
+  shapeSig: string;
+}
 
+interface PlanetPhysicsState {
+  world: RAPIER.World;
   /** Rapier-space origin in world meters (floating origin). */
-  let physicsOrigin: Vec3 = {
-    x: spawnPosition.x,
-    y: spawnPosition.y,
-    z: spawnPosition.z,
-  };
+  physicsOrigin: Vec3;
+  player: RapierWorldHandle;
+  active: Map<string, ActiveColliderEntry>;
+}
 
-  // Player starts at local origin of the physics frame.
-  const player = createPlayerCharacter(world, { x: 0, y: 0, z: 0 });
+interface ResolvedShape {
+  shapeSig: string;
+  halfExtents: [number, number, number];
+  center: [number, number, number];
+  useCapsule: boolean;
+  capsuleRadius: number;
+  capsuleHalfHeight: number;
+}
 
-  const active = new Map<
-    string,
-    {
-      collider: RAPIER.Collider;
-      instance: SurfaceSpawnInstance;
-      /** Changes when mesh bounds load → forces recreate. */
-      shapeSig: string;
-    }
-  >();
+function resolveShape(
+  layer: PlanetSpawnLayer,
+  mesh: SurfaceSpawnMeshCollision | undefined,
+): ResolvedShape {
+  const authored = layer.collider;
+  const preferMesh =
+    mesh != null &&
+    (authored?.shape !== 'capsule') &&
+    meshVolume(mesh) >= Math.max(authoredVolume(layer), 0.01);
 
-  function toLocal(worldPos: Vec3): Vec3 {
+  if (preferMesh && mesh) {
     return {
-      x: worldPos.x - physicsOrigin.x,
-      y: worldPos.y - physicsOrigin.y,
-      z: worldPos.z - physicsOrigin.z,
-    };
-  }
-
-  function clearAll(): void {
-    for (const entry of active.values()) {
-      removeCollider(world, entry.collider);
-    }
-    active.clear();
-  }
-
-  function rebaseOrigin(focus: Vec3): void {
-    physicsOrigin = { x: focus.x, y: focus.y, z: focus.z };
-    clearAll();
-  }
-
-  function resolveShape(
-    layer: PlanetSpawnLayer,
-    mesh: SurfaceSpawnMeshCollision | undefined,
-  ): {
-    shapeSig: string;
-    halfExtents: [number, number, number];
-    center: [number, number, number];
-    useCapsule: boolean;
-    capsuleRadius: number;
-    capsuleHalfHeight: number;
-  } {
-    const authored = layer.collider;
-    const preferMesh =
-      mesh != null &&
-      (authored?.shape !== 'capsule') &&
-      meshVolume(mesh) >= Math.max(authoredVolume(layer), 0.01);
-
-    if (preferMesh && mesh) {
-      return {
-        shapeSig: `mesh:${mesh.halfExtents.map((v) => v.toFixed(3)).join('x')}:${mesh.center.map((v) => v.toFixed(3)).join('x')}`,
-        halfExtents: mesh.halfExtents,
-        center: mesh.center,
-        useCapsule: false,
-        capsuleRadius: 0,
-        capsuleHalfHeight: 0,
-      };
-    }
-
-    if (authored?.shape === 'capsule') {
-      const radius = authored.radius ?? 0.4;
-      const halfHeight = authored.halfHeight ?? 0.5;
-      return {
-        shapeSig: `capsule:${radius.toFixed(3)}:${halfHeight.toFixed(3)}`,
-        halfExtents: [radius, halfHeight + radius, radius],
-        center: [0, halfHeight + radius, 0],
-        useCapsule: true,
-        capsuleRadius: radius,
-        capsuleHalfHeight: halfHeight,
-      };
-    }
-
-    const he = (authored?.halfExtents ?? [0.5, 0.5, 0.5]) as [
-      number,
-      number,
-      number,
-    ];
-    return {
-      shapeSig: `box:${he.map((v) => v.toFixed(3)).join('x')}`,
-      halfExtents: he,
-      center: [0, he[1], 0],
+      shapeSig: `mesh:${mesh.halfExtents.map((v) => v.toFixed(3)).join('x')}:${mesh.center.map((v) => v.toFixed(3)).join('x')}`,
+      halfExtents: mesh.halfExtents,
+      center: mesh.center,
       useCapsule: false,
       capsuleRadius: 0,
       capsuleHalfHeight: 0,
     };
   }
 
-  function addInstanceCollider(
-    key: string,
-    instance: SurfaceSpawnInstance,
-    layer: PlanetSpawnLayer,
-    mesh: SurfaceSpawnMeshCollision | undefined,
-  ): void {
-    if (active.size >= MAX_ACTIVE_COLLIDERS) return;
-    const shape = resolveShape(layer, mesh);
-    const { x, y, z } = basisFromNormalYaw(instance.normal, instance.yawRadians);
-    const rotation = quaternionFromBasis(x, y, z);
-    const localPos = toLocal(instance.position);
-    const s = Math.max(1e-3, instance.scale);
-
-    // Body at surface contact; collider offset matches visual (mesh center / authored).
-    const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-      .setTranslation(localPos.x, localPos.y, localPos.z)
-      .setRotation(rotation);
-    const body = world.createRigidBody(bodyDesc);
-
-    let colliderDesc: RAPIER.ColliderDesc | null = null;
-    if (shape.useCapsule) {
-      const radius = Math.max(0.05, shape.capsuleRadius * s);
-      const halfHeight = Math.max(0.05, shape.capsuleHalfHeight * s);
-      colliderDesc = RAPIER.ColliderDesc.capsule(halfHeight, radius).setTranslation(
-        0,
-        halfHeight + radius,
-        0,
-      );
-    } else {
-      const hx = Math.max(0.05, shape.halfExtents[0] * s);
-      const hy = Math.max(0.05, shape.halfExtents[1] * s);
-      const hz = Math.max(0.05, shape.halfExtents[2] * s);
-      colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(
-        shape.center[0] * s,
-        shape.center[1] * s,
-        shape.center[2] * s,
-      );
-    }
-    if (!colliderDesc) {
-      world.removeRigidBody(body);
-      return;
-    }
-    colliderDesc.setFriction(0.6).setRestitution(0);
-    const rapierCollider = world.createCollider(colliderDesc, body);
-    active.set(key, {
-      collider: rapierCollider,
-      instance,
-      shapeSig: shape.shapeSig,
-    });
+  if (authored?.shape === 'capsule') {
+    const radius = authored.radius ?? 0.4;
+    const halfHeight = authored.halfHeight ?? 0.5;
+    return {
+      shapeSig: `capsule:${radius.toFixed(3)}:${halfHeight.toFixed(3)}`,
+      halfExtents: [radius, halfHeight + radius, radius],
+      center: [0, halfHeight + radius, 0],
+      useCapsule: true,
+      capsuleRadius: radius,
+      capsuleHalfHeight: halfHeight,
+    };
   }
+
+  const he = (authored?.halfExtents ?? [0.5, 0.5, 0.5]) as [
+    number,
+    number,
+    number,
+  ];
+  return {
+    shapeSig: `box:${he.map((v) => v.toFixed(3)).join('x')}`,
+    halfExtents: he,
+    center: [0, he[1], 0],
+    useCapsule: false,
+    capsuleRadius: 0,
+    capsuleHalfHeight: 0,
+  };
+}
+
+function toLocal(state: PlanetPhysicsState, worldPos: Vec3): Vec3 {
+  return {
+    x: worldPos.x - state.physicsOrigin.x,
+    y: worldPos.y - state.physicsOrigin.y,
+    z: worldPos.z - state.physicsOrigin.z,
+  };
+}
+
+function clearAll(state: PlanetPhysicsState): void {
+  for (const entry of state.active.values()) {
+    removeCollider(state.world, entry.collider);
+  }
+  state.active.clear();
+}
+
+function rebaseOrigin(state: PlanetPhysicsState, focus: Vec3): void {
+  state.physicsOrigin = { x: focus.x, y: focus.y, z: focus.z };
+  clearAll(state);
+}
+
+function addInstanceCollider(
+  state: PlanetPhysicsState,
+  key: string,
+  instance: SurfaceSpawnInstance,
+  layer: PlanetSpawnLayer,
+  mesh: SurfaceSpawnMeshCollision | undefined,
+): void {
+  if (state.active.size >= MAX_ACTIVE_COLLIDERS) return;
+  const { world } = state;
+  const shape = resolveShape(layer, mesh);
+  const { x, y, z } = basisFromNormalYaw(instance.normal, instance.yawRadians);
+  const rotation = quaternionFromBasis(x, y, z);
+  const localPos = toLocal(state, instance.position);
+  const s = Math.max(1e-3, instance.scale);
+
+  // Body at surface contact; collider offset matches visual (mesh center / authored).
+  const bodyDesc = RAPIER.RigidBodyDesc.fixed()
+    .setTranslation(localPos.x, localPos.y, localPos.z)
+    .setRotation(rotation);
+  const body = world.createRigidBody(bodyDesc);
+
+  let colliderDesc: RAPIER.ColliderDesc | null = null;
+  if (shape.useCapsule) {
+    const radius = Math.max(0.05, shape.capsuleRadius * s);
+    const halfHeight = Math.max(0.05, shape.capsuleHalfHeight * s);
+    colliderDesc = RAPIER.ColliderDesc.capsule(halfHeight, radius).setTranslation(
+      0,
+      halfHeight + radius,
+      0,
+    );
+  } else {
+    const hx = Math.max(0.05, shape.halfExtents[0] * s);
+    const hy = Math.max(0.05, shape.halfExtents[1] * s);
+    const hz = Math.max(0.05, shape.halfExtents[2] * s);
+    colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(
+      shape.center[0] * s,
+      shape.center[1] * s,
+      shape.center[2] * s,
+    );
+  }
+  if (!colliderDesc) {
+    world.removeRigidBody(body);
+    return;
+  }
+  colliderDesc.setFriction(0.6).setRestitution(0);
+  const rapierCollider = world.createCollider(colliderDesc, body);
+  state.active.set(key, {
+    collider: rapierCollider,
+    instance,
+    shapeSig: shape.shapeSig,
+  });
+}
+
+function syncNearby(
+  state: PlanetPhysicsState,
+  focus: Vec3,
+  instances: readonly SurfaceSpawnInstance[],
+  layers: readonly PlanetSpawnLayer[],
+  collisionLookup?: PlanetPropCollisionLookup,
+): void {
+  const { world, active } = state;
+  if (distance(focus, state.physicsOrigin) >= PHYSICS_REBASE_METERS) {
+    rebaseOrigin(state, focus);
+  }
+
+  const lookup = layerById(layers);
+  const meshByUrl = collisionLookup?.meshByAssetUrl;
+  const radiusSq = COLLIDER_RADIUS_METERS * COLLIDER_RADIUS_METERS;
+  const wanted = new Map<string, SurfaceSpawnInstance>();
+
+  for (const instance of instances) {
+    const dx = instance.position.x - focus.x;
+    const dy = instance.position.y - focus.y;
+    const dz = instance.position.z - focus.z;
+    if (dx * dx + dy * dy + dz * dz > radiusSq) continue;
+    const layer = lookup.get(instance.layerId);
+    if (!layer?.enabled || !layer.assetUrl) continue;
+    wanted.set(instanceKey(instance), instance);
+  }
+
+  for (const key of [...active.keys()]) {
+    if (!wanted.has(key)) {
+      const entry = active.get(key);
+      if (entry) removeCollider(world, entry.collider);
+      active.delete(key);
+    }
+  }
+
+  for (const [key, instance] of wanted) {
+    const layer = lookup.get(instance.layerId);
+    if (!layer) continue;
+    const mesh = meshByUrl?.get(layer.assetUrl);
+    const shape = resolveShape(layer, mesh);
+    const existing = active.get(key);
+    if (existing) {
+      if (existing.shapeSig === shape.shapeSig) continue;
+      removeCollider(world, existing.collider);
+      active.delete(key);
+    }
+    addInstanceCollider(state, key, instance, layer, mesh);
+  }
+}
+
+function filterMovement(state: PlanetPhysicsState, from: Vec3, desiredDelta: Vec3, up: Vec3): Vec3 {
+  const { player, active } = state;
+  if (active.size === 0) return add(from, desiredDelta);
+
+  const localFrom = toLocal(state, from);
+  // Capsule is authored along body +Y; without this, on mid-latitude
+  // surfaces the capsule lies nearly sideways vs rock colliders.
+  player.playerBody.setRotation(quaternionAlignBodyYToUp(up), true);
+  player.playerBody.setTranslation(
+    { x: localFrom.x, y: localFrom.y, z: localFrom.z },
+    true,
+  );
+  player.characterController.setUp({ x: up.x, y: up.y, z: up.z });
+
+  player.characterController.computeColliderMovement(
+    player.playerCollider,
+    new RAPIER.Vector3(desiredDelta.x, desiredDelta.y, desiredDelta.z),
+  );
+  const movement = player.characterController.computedMovement();
+  return {
+    x: from.x + movement.x,
+    y: from.y + movement.y,
+    z: from.z + movement.z,
+  };
+}
+
+function probeSupport(state: PlanetPhysicsState, from: Vec3, up: Vec3): number | null {
+  const { world, player, active } = state;
+  if (active.size === 0) return null;
+  player.playerBody.setRotation(quaternionAlignBodyYToUp(up), true);
+  const worldOrigin = add(from, scale(up, 0.35));
+  const localOrigin = toLocal(state, worldOrigin);
+  const dir = scale(up, -1);
+  const ray = new RAPIER.Ray(
+    { x: localOrigin.x, y: localOrigin.y, z: localOrigin.z },
+    { x: dir.x, y: dir.y, z: dir.z },
+  );
+  const hit = world.castRay(
+    ray,
+    SUPPORT_PROBE_METERS,
+    true,
+    undefined,
+    undefined,
+    player.playerCollider,
+  );
+  if (!hit) return null;
+  // Distance from feet (`from`) along -up to the hit.
+  return Math.max(0, hit.timeOfImpact - 0.35);
+}
+
+function filterCamera(state: PlanetPhysicsState, from: Vec3, to: Vec3): Vec3 {
+  const { world, player, active } = state;
+  if (active.size === 0) return to;
+  const localFrom = toLocal(state, from);
+  const localTo = toLocal(state, to);
+  const clamped = castCameraOcclusion(world, localFrom, localTo, {
+    excludeCollider: player.playerCollider,
+  });
+  return {
+    x: clamped.x + state.physicsOrigin.x,
+    y: clamped.y + state.physicsOrigin.y,
+    z: clamped.z + state.physicsOrigin.z,
+  };
+}
+
+export function createPlanetPhysics(spawnPosition: Vec3): PlanetPhysics {
+  // Gravity is handled by character locomotion; keep Rapier gravity off.
+  const world = createRapierWorld();
+  world.gravity = new RAPIER.Vector3(0, 0, 0);
+
+  const state: PlanetPhysicsState = {
+    world,
+    physicsOrigin: {
+      x: spawnPosition.x,
+      y: spawnPosition.y,
+      z: spawnPosition.z,
+    },
+    // Player starts at local origin of the physics frame.
+    player: createPlayerCharacter(world, { x: 0, y: 0, z: 0 }),
+    active: new Map<string, ActiveColliderEntry>(),
+  };
 
   const physics: PlanetPhysics = {
     world,
-    player,
-    syncNearby(focus, instances, layers, collisionLookup) {
-      if (distance(focus, physicsOrigin) >= PHYSICS_REBASE_METERS) {
-        rebaseOrigin(focus);
-      }
-
-      const lookup = layerById(layers);
-      const meshByUrl = collisionLookup?.meshByAssetUrl;
-      const radiusSq = COLLIDER_RADIUS_METERS * COLLIDER_RADIUS_METERS;
-      const wanted = new Map<string, SurfaceSpawnInstance>();
-
-      for (const instance of instances) {
-        const dx = instance.position.x - focus.x;
-        const dy = instance.position.y - focus.y;
-        const dz = instance.position.z - focus.z;
-        if (dx * dx + dy * dy + dz * dz > radiusSq) continue;
-        const layer = lookup.get(instance.layerId);
-        if (!layer?.enabled || !layer.assetUrl) continue;
-        wanted.set(instanceKey(instance), instance);
-      }
-
-      for (const key of [...active.keys()]) {
-        if (!wanted.has(key)) {
-          const entry = active.get(key);
-          if (entry) removeCollider(world, entry.collider);
-          active.delete(key);
-        }
-      }
-
-      for (const [key, instance] of wanted) {
-        const layer = lookup.get(instance.layerId);
-        if (!layer) continue;
-        const mesh = meshByUrl?.get(layer.assetUrl);
-        const shape = resolveShape(layer, mesh);
-        const existing = active.get(key);
-        if (existing) {
-          if (existing.shapeSig === shape.shapeSig) continue;
-          removeCollider(world, existing.collider);
-          active.delete(key);
-        }
-        addInstanceCollider(key, instance, layer, mesh);
-      }
-    },
-    filterMovement(from, desiredDelta, up) {
-      if (active.size === 0) return add(from, desiredDelta);
-
-      const localFrom = toLocal(from);
-      // Capsule is authored along body +Y; without this, on mid-latitude
-      // surfaces the capsule lies nearly sideways vs rock colliders.
-      player.playerBody.setRotation(quaternionAlignBodyYToUp(up), true);
-      player.playerBody.setTranslation(
-        { x: localFrom.x, y: localFrom.y, z: localFrom.z },
-        true,
-      );
-      player.characterController.setUp({ x: up.x, y: up.y, z: up.z });
-
-      player.characterController.computeColliderMovement(
-        player.playerCollider,
-        new RAPIER.Vector3(desiredDelta.x, desiredDelta.y, desiredDelta.z),
-      );
-      const movement = player.characterController.computedMovement();
-      return {
-        x: from.x + movement.x,
-        y: from.y + movement.y,
-        z: from.z + movement.z,
-      };
-    },
-    probeSupport(from, up) {
-      if (active.size === 0) return null;
-      player.playerBody.setRotation(quaternionAlignBodyYToUp(up), true);
-      const worldOrigin = add(from, scale(up, 0.35));
-      const localOrigin = toLocal(worldOrigin);
-      const dir = scale(up, -1);
-      const ray = new RAPIER.Ray(
-        { x: localOrigin.x, y: localOrigin.y, z: localOrigin.z },
-        { x: dir.x, y: dir.y, z: dir.z },
-      );
-      const hit = world.castRay(
-        ray,
-        SUPPORT_PROBE_METERS,
-        true,
-        undefined,
-        undefined,
-        player.playerCollider,
-      );
-      if (!hit) return null;
-      // Distance from feet (`from`) along -up to the hit.
-      return Math.max(0, hit.timeOfImpact - 0.35);
-    },
-    filterCamera(from, to) {
-      if (active.size === 0) return to;
-      const localFrom = toLocal(from);
-      const localTo = toLocal(to);
-      const clamped = castCameraOcclusion(world, localFrom, localTo, {
-        excludeCollider: player.playerCollider,
-      });
-      return {
-        x: clamped.x + physicsOrigin.x,
-        y: clamped.y + physicsOrigin.y,
-        z: clamped.z + physicsOrigin.z,
-      };
-    },
-    getActiveColliderCount() {
-      return active.size;
-    },
+    player: state.player,
+    syncNearby: (focus, instances, layers, collisionLookup) =>
+      syncNearby(state, focus, instances, layers, collisionLookup),
+    filterMovement: (from, desiredDelta, up) => filterMovement(state, from, desiredDelta, up),
+    probeSupport: (from, up) => probeSupport(state, from, up),
+    filterCamera: (from, to) => filterCamera(state, from, to),
+    getActiveColliderCount: () => state.active.size,
     dispose() {
-      clearAll();
-      player.dispose();
+      clearAll(state);
+      state.player.dispose();
     },
   };
 

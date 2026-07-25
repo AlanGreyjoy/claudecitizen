@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import type { CharacterState, FlightBody, Pose, Vec3 } from '../../types';
 import type { createPlayerControls } from '../../input/player-controls';
 import type { ShipPhysics } from '../../physics/ship-physics';

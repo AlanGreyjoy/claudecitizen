@@ -608,8 +608,8 @@ function bindStationColliderAnimations(
  * up = y, forward = z (matching the render group orientation from
  * updateShipPlacement).
  */
-export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise<StationLayoutOverride | null> {
-  const out: FlattenedComponents = {
+function createEmptyFlattened(): FlattenedComponents {
+  return {
     rooms: [],
     spawnCandidates: [],
     elevatorSeeds: [],
@@ -624,97 +624,80 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     npcWaypoints: [],
     npcPlacements: [],
   };
-  collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
-  for (const issue of validateStationNpcLayout({
-    spawners: out.npcSpawners,
-    waypoints: out.npcWaypoints,
-    placements: out.npcPlacements,
-  })) {
-    console.warn(`Prefab "${doc.id}" NPC authoring: ${issue}`);
-  }
-  const colliders = bindStationColliderAnimations(
-    await buildPrefabColliders(doc),
-    out.animationSpecs,
-    doc.id,
-  );
-  await preloadMeshColliders(colliders);
-  validateMeshColliders(colliders);
+}
 
-  let spawn: StationSpawnPose | null = null;
+function buildStationSpawn(out: FlattenedComponents, docId: string): StationSpawnPose {
   if (out.spawnCandidates.length > 0) {
     const candidate = out.spawnCandidates[0];
-    spawn = {
+    return {
       roomId: candidate.floorId,
       right: candidate.right,
       up: candidate.up,
       forward: candidate.forward,
       face: candidate.face,
     };
-  } else {
-    spawn = { roomId: 'none', right: 0, up: 0, forward: 0, face: { right: 0, forward: 1 } };
-    console.warn(`Prefab "${doc.id}" has no spawn-point; spawning at origin with collider-based floor.`);
   }
+  console.warn(`Prefab "${docId}" has no spawn-point; spawning at origin with collider-based floor.`);
+  return { roomId: 'none', right: 0, up: 0, forward: 0, face: { right: 0, forward: 1 } };
+}
 
-  const elevatorMarkers: StationElevatorMarker[] = [];
-  for (const seed of out.elevatorSeeds) {
-    elevatorMarkers.push({
-      pairId: seed.pairId,
-      floorId: seed.floorId,
-      roomId: seed.floorId,
+function buildElevatorMarkers(out: FlattenedComponents): StationElevatorMarker[] {
+  return out.elevatorSeeds.map((seed) => ({
+    pairId: seed.pairId,
+    floorId: seed.floorId,
+    roomId: seed.floorId,
+    right: seed.right,
+    up: seed.up,
+    forward: seed.forward,
+    radius: MARKER_RADIUS,
+    targetFloor: seed.targetFloor,
+    face: seed.face,
+  }));
+}
+
+function buildHangars(out: FlattenedComponents): HangarSpec[] {
+  // hangar-pad markers are placed at pad surface height; the parked ship's
+  // rest offset above it comes from the active ship layout at call time.
+  return out.hangarSeeds.map((seed) => ({
+    index: seed.padIndex,
+    roomId: seed.floorId,
+    centerRight: seed.right,
+    lobbyDoorForward: 0,
+    padSurfaceLocal: {
       right: seed.right,
       up: seed.up,
       forward: seed.forward,
-      radius: MARKER_RADIUS,
-      targetFloor: seed.targetFloor,
-      face: seed.face,
-    });
-  }
+    },
+  }));
+}
 
-  const hangars: HangarSpec[] = [];
-  for (const seed of out.hangarSeeds) {
-    // hangar-pad markers are placed at pad surface height; the parked ship's
-    // rest offset above it comes from the active ship layout at call time.
-    hangars.push({
-      index: seed.padIndex,
-      roomId: seed.floorId,
-      centerRight: seed.right,
-      lobbyDoorForward: 0,
-      padSurfaceLocal: {
-        right: seed.right,
-        up: seed.up,
-        forward: seed.forward,
-      },
-    });
-  }
+function buildInfoMarkers(out: FlattenedComponents): StationInfoMarker[] {
+  return out.infoSeeds.map((seed) => ({
+    id: seed.id,
+    floorId: seed.floorId,
+    right: seed.right,
+    up: seed.up,
+    forward: seed.forward,
+    radius: seed.radius,
+    prompt: seed.prompt,
+    interactionType: seed.interactionType,
+    targetAnimationId: seed.targetAnimationId,
+    keyLabel: seed.keyLabel,
+  }));
+}
 
-  const infoMarkers: StationInfoMarker[] = [];
-  for (const seed of out.infoSeeds) {
-    infoMarkers.push({
-      id: seed.id,
-      floorId: seed.floorId,
-      right: seed.right,
-      up: seed.up,
-      forward: seed.forward,
-      radius: seed.radius,
-      prompt: seed.prompt,
-      interactionType: seed.interactionType,
-      targetAnimationId: seed.targetAnimationId,
-      keyLabel: seed.keyLabel,
-    });
-  }
+function buildAvmsMarkers(out: FlattenedComponents): StationAvmsMarker[] {
+  return out.avmsSeeds.map((seed) => ({
+    id: seed.id,
+    floorId: seed.floorId,
+    right: seed.right,
+    up: seed.up,
+    forward: seed.forward,
+    radius: seed.radius,
+  }));
+}
 
-  const avmsMarkers: StationAvmsMarker[] = [];
-  for (const seed of out.avmsSeeds) {
-    avmsMarkers.push({
-      id: seed.id,
-      floorId: seed.floorId,
-      right: seed.right,
-      up: seed.up,
-      forward: seed.forward,
-      radius: seed.radius,
-    });
-  }
-
+function buildWeaponShops(out: FlattenedComponents): StationWeaponShopMarker[] {
   const weaponShops: StationWeaponShopMarker[] = [];
   for (const seed of out.weaponShopSeeds) {
     if (weaponShops.some((shop) => shop.id === seed.id)) continue;
@@ -737,7 +720,10 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
       itemDefinitionIds: seed.itemDefinitionIds,
     });
   }
+  return weaponShops;
+}
 
+function buildOutfitters(out: FlattenedComponents): StationOutfittersMarker[] {
   const outfitters: StationOutfittersMarker[] = [];
   for (const seed of out.outfittersSeeds) {
     if (outfitters.some((shop) => shop.id === seed.id)) continue;
@@ -760,7 +746,10 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
       itemDefinitionIds: seed.itemDefinitionIds,
     });
   }
+  return outfitters;
+}
 
+function buildFoodShops(out: FlattenedComponents): StationFoodShopMarker[] {
   const foodShops: StationFoodShopMarker[] = [];
   for (const seed of out.foodShopSeeds) {
     if (foodShops.some((shop) => shop.id === seed.id)) continue;
@@ -784,19 +773,39 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
       itemDefinitionIds: seed.itemDefinitionIds,
     });
   }
+  return foodShops;
+}
+
+export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise<StationLayoutOverride | null> {
+  const out = createEmptyFlattened();
+  collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
+  for (const issue of validateStationNpcLayout({
+    spawners: out.npcSpawners,
+    waypoints: out.npcWaypoints,
+    placements: out.npcPlacements,
+  })) {
+    console.warn(`Prefab "${doc.id}" NPC authoring: ${issue}`);
+  }
+  const colliders = bindStationColliderAnimations(
+    await buildPrefabColliders(doc),
+    out.animationSpecs,
+    doc.id,
+  );
+  await preloadMeshColliders(colliders);
+  validateMeshColliders(colliders);
 
   return {
     rooms: out.rooms,
     doorways: [],
-    hangars,
+    hangars: buildHangars(out),
     colliders,
-    spawn,
-    elevatorMarkers,
-    infoMarkers,
-    avmsMarkers,
-    weaponShops,
-    outfitters,
-    foodShops,
+    spawn: buildStationSpawn(out, doc.id),
+    elevatorMarkers: buildElevatorMarkers(out),
+    infoMarkers: buildInfoMarkers(out),
+    avmsMarkers: buildAvmsMarkers(out),
+    weaponShops: buildWeaponShops(out),
+    outfitters: buildOutfitters(out),
+    foodShops: buildFoodShops(out),
     npcSpawners: out.npcSpawners,
     npcWaypoints: out.npcWaypoints,
     npcPlacements: out.npcPlacements,

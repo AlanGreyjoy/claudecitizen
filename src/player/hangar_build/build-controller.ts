@@ -188,171 +188,207 @@ export interface HangarBuildControllerOptions {
   onPlacementsChange?: (state: HangarBuildState) => void;
 }
 
+interface ControllerRuntime {
+  context: HangarBuildContext;
+  options: HangarBuildControllerOptions;
+  catalogOpen: boolean;
+  pointerNdc: { x: number; y: number };
+}
+
+function notify(rt: ControllerRuntime): void {
+  rt.options.onStateChange?.(rt.context);
+}
+
+function notifyPlacements(rt: ControllerRuntime): void {
+  rt.options.onPlacementsChange?.(rt.context.state);
+}
+
+function applyResponse(rt: ControllerRuntime, response: HangarBuildState & { arcBalance: number }): void {
+  applyHangarBuildResponse(rt.context, response);
+  notify(rt);
+  notifyPlacements(rt);
+}
+
+function buildDeps(rt: ControllerRuntime): BuildActionDeps {
+  return {
+    context: rt.context,
+    notify: () => notify(rt),
+    applyResponse: (response) => applyResponse(rt, response),
+  };
+}
+
+function openCatalog(rt: ControllerRuntime): void {
+  rt.catalogOpen = true;
+  rt.context.toolMode = 'catalog';
+  rt.context.ghost = null;
+  notify(rt);
+}
+
+function closeCatalog(rt: ControllerRuntime): void {
+  rt.catalogOpen = false;
+  notify(rt);
+}
+
+function setToolMode(rt: ControllerRuntime, mode: BuildToolMode): void {
+  rt.context.toolMode = mode;
+  rt.context.selectedPlacementId = null;
+  rt.context.ghost = null;
+  rt.context.statusMessage =
+    mode === 'place'
+      ? 'Move the ghost and click to place. R rotates. Esc exits.'
+      : mode === 'move'
+        ? 'Click a prop to move it. Click again to confirm.'
+        : mode === 'delete'
+          ? 'Click a prop to pick it up.'
+          : '';
+  if (mode !== 'catalog') rt.catalogOpen = false;
+  notify(rt);
+}
+
+function updateGhostFromFloor(
+  rt: ControllerRuntime,
+  floorPoint: { right: number; up: number; forward: number } | null,
+): void {
+  const { context } = rt;
+  if (!floorPoint) return;
+  if (context.toolMode === 'place') {
+    const definition = context.selectedDefinitionId
+      ? findDefinition(context, context.selectedDefinitionId)
+      : null;
+    if (!definition) return;
+    const ghost: PlacementTransform = {
+      right: floorPoint.right,
+      up: floorPoint.up,
+      forward: floorPoint.forward,
+      rotationY: context.ghost?.rotationY ?? 0,
+    };
+    const validation = validateClientPlacement({
+      area: context.state.area,
+      transform: ghost,
+      hangarIndex: context.state.assignedHangar,
+      allowRotateY: definition.allowRotateY,
+      snapGridM: definition.snapGridM,
+      existingPlacements: context.state.placements.map((entry) => ({
+        right: entry.right,
+        up: entry.up,
+        forward: entry.forward,
+        rotationY: entry.rotationY,
+      })),
+    });
+    context.ghost = validation.ok ? validation.transform : ghost;
+    notify(rt);
+    return;
+  }
+
+  if (context.toolMode === 'move' && context.selectedPlacementId && context.ghost) {
+    context.ghost = {
+      ...context.ghost,
+      right: floorPoint.right,
+      up: floorPoint.up,
+      forward: floorPoint.forward,
+    };
+    notify(rt);
+  }
+}
+
+function rotateGhost(rt: ControllerRuntime, deltaRadians: number): void {
+  if (!rt.context.ghost) return;
+  rt.context.ghost = {
+    ...rt.context.ghost,
+    rotationY: rt.context.ghost.rotationY + deltaRadians,
+  };
+  notify(rt);
+}
+
+async function purchaseSelected(rt: ControllerRuntime): Promise<void> {
+  const { context } = rt;
+  const definitionId = context.selectedDefinitionId;
+  if (!definitionId || context.busy) return;
+  context.busy = true;
+  context.statusMessage = 'Purchasing…';
+  notify(rt);
+  try {
+    const response = await purchaseBuildProp(context.state.area, definitionId);
+    applyResponse(rt, response);
+    context.statusMessage = 'Purchase complete.';
+  } catch (error) {
+    context.busy = false;
+    context.statusMessage =
+      error instanceof Error ? error.message : 'Purchase failed.';
+    notify(rt);
+  }
+}
+
+async function handlePrimaryAction(rt: ControllerRuntime, floorPoint: FloorPoint | null): Promise<void> {
+  const { context } = rt;
+  if (context.busy || !floorPoint) return;
+  const deps = buildDeps(rt);
+  if (context.toolMode === 'place') {
+    await handlePlacePrimaryAction(deps, floorPoint);
+    return;
+  }
+  if (context.toolMode === 'move') {
+    await handleMovePrimaryAction(deps, floorPoint);
+    return;
+  }
+  if (context.toolMode === 'delete') {
+    await handleDeletePrimaryAction(deps, floorPoint);
+  }
+}
+
+function cancelTool(rt: ControllerRuntime): void {
+  rt.context.toolMode = 'catalog';
+  rt.context.selectedPlacementId = null;
+  rt.context.ghost = null;
+  rt.context.statusMessage = '';
+  notify(rt);
+}
+
+function syncBootstrap(rt: ControllerRuntime, state: HangarBuildState, arcBalance: number): void {
+  rt.context.state = state;
+  rt.context.arcBalance = arcBalance;
+  notifyPlacements(rt);
+  notify(rt);
+}
+
 export function createHangarBuildController(options: HangarBuildControllerOptions) {
-  const context = createHangarBuildContext(options.initialState, options.arcBalance);
-  let catalogOpen = false;
-  let pointerNdc = { x: 0, y: 0 };
-
-  function notify(): void {
-    options.onStateChange?.(context);
-  }
-
-  function notifyPlacements(): void {
-    options.onPlacementsChange?.(context.state);
-  }
-
-  function applyResponse(response: HangarBuildState & { arcBalance: number }): void {
-    applyHangarBuildResponse(context, response);
-    notify();
-    notifyPlacements();
-  }
+  const rt: ControllerRuntime = {
+    context: createHangarBuildContext(options.initialState, options.arcBalance),
+    options,
+    catalogOpen: false,
+    pointerNdc: { x: 0, y: 0 },
+  };
 
   return {
-    getContext(): HangarBuildContext {
-      return context;
-    },
-    isCatalogOpen(): boolean {
-      return catalogOpen;
-    },
-    isBuildToolActive(): boolean {
-      return context.toolMode !== 'catalog';
-    },
-    isPaused(): boolean {
-      return catalogOpen;
-    },
-    openCatalog(): void {
-      catalogOpen = true;
-      context.toolMode = 'catalog';
-      context.ghost = null;
-      notify();
-    },
-    closeCatalog(): void {
-      catalogOpen = false;
-      notify();
-    },
+    getContext: (): HangarBuildContext => rt.context,
+    isCatalogOpen: (): boolean => rt.catalogOpen,
+    isBuildToolActive: (): boolean => rt.context.toolMode !== 'catalog',
+    isPaused: (): boolean => rt.catalogOpen,
+    openCatalog: (): void => openCatalog(rt),
+    closeCatalog: (): void => closeCatalog(rt),
     toggleCatalog(): void {
-      if (catalogOpen) this.closeCatalog();
-      else this.openCatalog();
+      if (rt.catalogOpen) closeCatalog(rt);
+      else openCatalog(rt);
     },
-    setToolMode(mode: BuildToolMode): void {
-      context.toolMode = mode;
-      context.selectedPlacementId = null;
-      context.ghost = null;
-      context.statusMessage =
-        mode === 'place'
-          ? 'Move the ghost and click to place. R rotates. Esc exits.'
-          : mode === 'move'
-            ? 'Click a prop to move it. Click again to confirm.'
-            : mode === 'delete'
-              ? 'Click a prop to pick it up.'
-              : '';
-      if (mode !== 'catalog') catalogOpen = false;
-      notify();
-    },
+    setToolMode: (mode: BuildToolMode): void => setToolMode(rt, mode),
     selectDefinition(propDefinitionId: string): void {
-      context.selectedDefinitionId = propDefinitionId;
-      notify();
+      rt.context.selectedDefinitionId = propDefinitionId;
+      notify(rt);
     },
     setPointerNdc(x: number, y: number): void {
-      pointerNdc = { x, y };
+      rt.pointerNdc = { x, y };
     },
-    getPointerNdc(): { x: number; y: number } {
-      return pointerNdc;
-    },
-    updateGhostFromFloor(floorPoint: { right: number; up: number; forward: number } | null): void {
-      if (!floorPoint) return;
-      if (context.toolMode === 'place') {
-        const definition = context.selectedDefinitionId
-          ? findDefinition(context, context.selectedDefinitionId)
-          : null;
-        if (!definition) return;
-        const ghost: PlacementTransform = {
-          right: floorPoint.right,
-          up: floorPoint.up,
-          forward: floorPoint.forward,
-          rotationY: context.ghost?.rotationY ?? 0,
-        };
-        const validation = validateClientPlacement({
-          area: context.state.area,
-          transform: ghost,
-          hangarIndex: context.state.assignedHangar,
-          allowRotateY: definition.allowRotateY,
-          snapGridM: definition.snapGridM,
-          existingPlacements: context.state.placements.map((entry) => ({
-            right: entry.right,
-            up: entry.up,
-            forward: entry.forward,
-            rotationY: entry.rotationY,
-          })),
-        });
-        context.ghost = validation.ok ? validation.transform : ghost;
-        notify();
-        return;
-      }
-
-      if (context.toolMode === 'move' && context.selectedPlacementId && context.ghost) {
-        context.ghost = {
-          ...context.ghost,
-          right: floorPoint.right,
-          up: floorPoint.up,
-          forward: floorPoint.forward,
-        };
-        notify();
-      }
-    },
-    rotateGhost(deltaRadians: number): void {
-      if (!context.ghost) return;
-      context.ghost = {
-        ...context.ghost,
-        rotationY: context.ghost.rotationY + deltaRadians,
-      };
-      notify();
-    },
-    async purchaseSelected(): Promise<void> {
-      const definitionId = context.selectedDefinitionId;
-      if (!definitionId || context.busy) return;
-      context.busy = true;
-      context.statusMessage = 'Purchasing…';
-      notify();
-      try {
-        const response = await purchaseBuildProp(context.state.area, definitionId);
-        applyResponse(response);
-        context.statusMessage = 'Purchase complete.';
-      } catch (error) {
-        context.busy = false;
-        context.statusMessage =
-          error instanceof Error ? error.message : 'Purchase failed.';
-        notify();
-      }
-    },
-    async handlePrimaryAction(floorPoint: FloorPoint | null): Promise<void> {
-      if (context.busy || !floorPoint) return;
-      const deps: BuildActionDeps = { context, notify, applyResponse };
-      if (context.toolMode === 'place') {
-        await handlePlacePrimaryAction(deps, floorPoint);
-        return;
-      }
-      if (context.toolMode === 'move') {
-        await handleMovePrimaryAction(deps, floorPoint);
-        return;
-      }
-      if (context.toolMode === 'delete') {
-        await handleDeletePrimaryAction(deps, floorPoint);
-      }
-    },
-    cancelTool(): void {
-      context.toolMode = 'catalog';
-      context.selectedPlacementId = null;
-      context.ghost = null;
-      context.statusMessage = '';
-      notify();
-    },
-    syncBootstrap(state: HangarBuildState, arcBalance: number): void {
-      context.state = state;
-      context.arcBalance = arcBalance;
-      notifyPlacements();
-      notify();
-    },
+    getPointerNdc: (): { x: number; y: number } => rt.pointerNdc,
+    updateGhostFromFloor: (
+      floorPoint: { right: number; up: number; forward: number } | null,
+    ): void => updateGhostFromFloor(rt, floorPoint),
+    rotateGhost: (deltaRadians: number): void => rotateGhost(rt, deltaRadians),
+    purchaseSelected: (): Promise<void> => purchaseSelected(rt),
+    handlePrimaryAction: (floorPoint: FloorPoint | null): Promise<void> =>
+      handlePrimaryAction(rt, floorPoint),
+    cancelTool: (): void => cancelTool(rt),
+    syncBootstrap: (state: HangarBuildState, arcBalance: number): void =>
+      syncBootstrap(rt, state, arcBalance),
   };
 }
 

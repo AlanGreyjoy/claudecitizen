@@ -18,7 +18,6 @@ import { BlendFunction, type NormalPass } from 'postprocessing';
 import { resolveRenderQuality } from '../../main/domain/render-quality';
 
 const GROUND_ALBEDO = new THREE.Color(0x56704b);
-const STBN_LOCAL_URL = new URL('../../../assets/clouds/stbn.bin', import.meta.url).href;
 const PRECOMPUTED_TEXTURES_URL = new URL(
   '../../../assets/atmosphere/transmittance.exr',
   import.meta.url,
@@ -81,18 +80,7 @@ function loadStbnTexture(): Promise<THREE.Data3DTexture> {
   return new Promise((resolve, reject) => {
     const loader = new STBNLoader();
     loader.setCrossOrigin('anonymous');
-    loader.load(
-      STBN_LOCAL_URL,
-      resolve,
-      undefined,
-      async () => {
-        try {
-          loader.load(DEFAULT_STBN_URL, resolve, undefined, reject);
-        } catch (error) {
-          reject(error);
-        }
-      },
-    );
+    loader.load(DEFAULT_STBN_URL, resolve, undefined, reject);
   });
 }
 

@@ -25,7 +25,7 @@ import {
   moveAssetEntry,
   PROJECT_ASSET_ROOT,
   saveFolderOrder,
-  type AssetRoot,
+  type AssetEntry,
   type FolderOrderMap,
 } from '../../api';
 import { showConfirmDialog, showContextMenu, showPromptDialog, showToast } from '../../dom';
@@ -55,7 +55,6 @@ import {
   isPrefabPath,
   isValidAssetEntryName,
   joinFolderPath,
-  moveRootsOf,
   parentFolderOfPath,
   parseAssetMovePayload,
   prefabIdFromPath,
@@ -69,7 +68,6 @@ import {
   type AssetMoveDragPayload,
   type FolderDropZone,
   type FolderNode,
-  type ProjectAssetEntry,
 } from '../../panels/project-logic';
 import { parseDraggedEntityIds } from '../../panels/hierarchy-logic';
 import {
@@ -89,13 +87,10 @@ export interface ProjectPanelOptions {
   /** Open a prefab document for editing (double-click on a prefab card). */
   onOpenPrefab: (prefabId: string) => void;
   /**
-   * Save dragged Hierarchy GameObjects as prefabs in `target`. Resolves to the
+   * Save dragged Hierarchy GameObjects as prefabs in `folder`. Resolves to the
    * ids that were written so the panel can reveal them.
    */
-  onCreatePrefabsInFolder: (
-    entityIds: string[],
-    target: { root: AssetRoot; folder: string },
-  ) => Promise<string[]>;
+  onCreatePrefabsInFolder: (entityIds: string[], folder: string) => Promise<string[]>;
   audioPreview: EditorAudioPreviewController;
 }
 
@@ -171,11 +166,11 @@ function FolderRow({
         }`}
         data-folder-path={node.path}
         style={{ paddingLeft: `${8 + depth * 14}px` }}
-        draggable={!isRoot && node.roots.size > 0}
+        draggable={!isRoot}
         onClick={() => onSelect(node.path)}
         onContextMenu={(event) => onContextMenu(event, node.path)}
         onDragStart={(event) => {
-          if (isRoot || node.roots.size === 0) {
+          if (isRoot) {
             event.preventDefault();
             return;
           }
@@ -383,7 +378,7 @@ function AssetCard({
   onOpenPrefab,
   onContextMenu,
 }: {
-  entry: ProjectAssetEntry;
+  entry: AssetEntry;
   thumbSrc: string | undefined;
   audioPreview: EditorAudioPreviewController;
   audioTick: number;
@@ -391,17 +386,17 @@ function AssetCard({
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
   onOpenPrefab: (prefabId: string) => void;
-  onContextMenu: (event: MouseEvent, entry: ProjectAssetEntry) => void;
+  onContextMenu: (event: MouseEvent, entry: AssetEntry) => void;
 }): ReactElement {
   const fileName = fileNameFromPath(entry.path);
-  const url = assetUrlFor(entry.root, entry.path);
+  const url = assetUrlFor(PROJECT_ASSET_ROOT, entry.path);
   const kind = assetCardKind(entry);
   const isModel = kind === 'model';
   const isAudio = kind === 'audio';
   const isPrefab = isPrefabPath(entry.path);
   const isDraggable = isDraggableAssetPath(entry.path);
   const isEmptyFile = kind === 'empty';
-  const sourcePath = `${entry.root}/${entry.path}`;
+  const sourcePath = `${PROJECT_ASSET_ROOT}/${entry.path}`;
   const assetVersion = assetVersionOf(entry);
 
   const onDragStart = (event: DragEvent<HTMLDivElement>): void => {
@@ -410,7 +405,7 @@ function AssetCard({
     }
     event.dataTransfer.setData(
       ASSET_MOVE_DND_TYPE,
-      JSON.stringify({ root: entry.root, path: entry.path }),
+      JSON.stringify({ path: entry.path, kind: 'file' } satisfies AssetMoveDragPayload),
     );
     event.dataTransfer.setData(ASSET_DND_TYPE, url);
     event.dataTransfer.setData('text/plain', url);
@@ -489,17 +484,11 @@ function FolderCard({
     <div
       className={`ed-asset-card is-folder${dropZone === 'into' ? ' is-drop-target' : ''}`}
       title={`${labelPath}\nDouble-click to open`}
-      draggable={folder.roots.size > 0}
+      draggable
       data-folder-path={folder.path}
       onDoubleClick={() => onOpen(folder.path)}
       onContextMenu={(event) => onContextMenu(event, folder.path)}
-      onDragStart={(event) => {
-        if (folder.roots.size === 0) {
-          event.preventDefault();
-          return;
-        }
-        onFolderDragStart(event, folder);
-      }}
+      onDragStart={(event) => onFolderDragStart(event, folder)}
       onDragEnd={onDragEnd}
       onDragOver={(event) => onDropOver(event, folder.path)}
       onDragLeave={() => onDragLeaveRow(folder.path)}
@@ -696,7 +685,7 @@ function ProjectAssetGrid({
   selectedFolder: string;
   folderScope: FolderScope;
   folders: FolderNode[];
-  files: ProjectAssetEntry[];
+  files: AssetEntry[];
   thumbByUrl: Record<string, string>;
   audioPreview: EditorAudioPreviewController;
   audioTick: number;
@@ -705,7 +694,7 @@ function ProjectAssetGrid({
   onNavigate: (path: string) => void;
   onScopeChange: (scope: FolderScope) => void;
   onContextMenu: (event: MouseEvent, folderPath: string) => void;
-  onAssetContextMenu: (event: MouseEvent, entry: ProjectAssetEntry) => void;
+  onAssetContextMenu: (event: MouseEvent, entry: AssetEntry) => void;
   onOpenPrefab: (prefabId: string) => void;
   onFolderDragStart: (event: DragEvent, folder: FolderNode) => void;
   onDropOver: (event: DragEvent, folderPath: string) => void;
@@ -753,10 +742,10 @@ function ProjectAssetGrid({
               />
             ))}
             {files.map((entry) => {
-              const url = assetUrlFor(entry.root, entry.path);
+              const url = assetUrlFor(PROJECT_ASSET_ROOT, entry.path);
               return (
                 <AssetCard
-                  key={`${entry.root}:${entry.path}`}
+                  key={entry.path}
                   entry={entry}
                   thumbSrc={thumbByUrl[url]}
                   audioPreview={audioPreview}
@@ -805,8 +794,8 @@ function useProjectFileOperations(
     siblingNames: string[],
   ) => Promise<void>;
   renameFolder: (folder: FolderNode) => Promise<void>;
-  renameEntry: (entry: ProjectAssetEntry) => Promise<void>;
-  deleteEntry: (entry: ProjectAssetEntry) => Promise<void>;
+  renameEntry: (entry: AssetEntry) => Promise<void>;
+  deleteEntry: (entry: AssetEntry) => Promise<void>;
   deleteFolder: (folder: FolderNode) => Promise<void>;
 } {
   const createFolderIn = useCallback(
@@ -844,14 +833,9 @@ function useProjectFileOperations(
     async (payload: AssetMoveDragPayload, folderPath: string): Promise<void> => {
       const name = fileNameFromPath(payload.path);
       const toPath = joinFolderPath(folderPath, name);
-      const roots = moveRootsOf(payload);
-      const isFolderMove = roots.length > 1 || payload.roots !== undefined;
       try {
-        const results = [];
-        for (const root of roots) {
-          results.push(await moveAssetEntry(root, payload.path, toPath));
-        }
-        if (isFolderMove || results.some((result) => result.kind === 'dir')) {
+        const result = await moveAssetEntry(PROJECT_ASSET_ROOT, payload.path, toPath);
+        if (payload.kind === 'dir' || result.kind === 'dir') {
           onFolderRenamed(payload.path, toPath);
           await persistOrder(
             applyFolderMoveToOrder(getOrderMap(), payload.path, toPath),
@@ -861,11 +845,9 @@ function useProjectFileOperations(
         const destination = folderPath
           ? `${PROJECT_ROOT_LABEL}/${folderPath}`
           : PROJECT_ROOT_LABEL;
-        const updatedReferences = results.reduce(
-          (total, result) => total + result.updatedReferences,
-          0,
+        showToast(
+          `Moved ${name} to ${destination}${referenceSuffix(result.updatedReferences)}`,
         );
-        showToast(`Moved ${name} to ${destination}${referenceSuffix(updatedReferences)}`);
       } catch (error) {
         showToast(`Could not move ${name}: ${(error as Error).message}`, true);
       }
@@ -881,28 +863,20 @@ function useProjectFileOperations(
     ): Promise<void> => {
       if (payload.path === toPath) return;
       const name = fileNameFromPath(toPath);
-      const roots = moveRootsOf(payload);
-      const completedRoots: AssetRoot[] = [];
-      const results = [];
+      let moved = false;
       try {
-        for (const root of roots) {
-          results.push(await moveAssetEntry(root, payload.path, toPath));
-          completedRoots.push(root);
-        }
+        const result = await moveAssetEntry(PROJECT_ASSET_ROOT, payload.path, toPath);
+        moved = true;
         onFolderRenamed(payload.path, toPath);
         await persistOrder(
           applyFolderMoveToOrder(getOrderMap(), payload.path, toPath, insertIndex),
         );
         await revealFolder(toPath);
-        const updatedReferences = results.reduce(
-          (total, result) => total + result.updatedReferences,
-          0,
-        );
-        showToast(`Moved ${name}${referenceSuffix(updatedReferences)}`);
+        showToast(`Moved ${name}${referenceSuffix(result.updatedReferences)}`);
       } catch (error) {
-        for (const root of completedRoots.reverse()) {
+        if (moved) {
           try {
-            await moveAssetEntry(root, toPath, payload.path);
+            await moveAssetEntry(PROJECT_ASSET_ROOT, toPath, payload.path);
           } catch {
             // Best-effort rollback; surface the original error below.
           }
@@ -932,7 +906,7 @@ function useProjectFileOperations(
 
   const renameFolder = useCallback(
     async (folder: FolderNode): Promise<void> => {
-      if (!folder.path || folder.roots.size === 0) return;
+      if (!folder.path) return;
       const currentName = folder.name;
       const enteredName = await showPromptDialog({
         title: 'Rename Folder',
@@ -949,28 +923,21 @@ function useProjectFileOperations(
       }
 
       const nextPath = joinFolderPath(parentFolderOfPath(folder.path), nextName);
-      const completedRoots: AssetRoot[] = [];
-      const results = [];
+      let renamed = false;
       try {
-        for (const root of folder.roots) {
-          results.push(await moveAssetEntry(root, folder.path, nextPath));
-          completedRoots.push(root);
-        }
+        const result = await moveAssetEntry(PROJECT_ASSET_ROOT, folder.path, nextPath);
+        renamed = true;
         onFolderRenamed(folder.path, nextPath);
         await persistOrder(applyFolderMoveToOrder(getOrderMap(), folder.path, nextPath));
         await revealFolder(nextPath);
-        const updatedReferences = results.reduce(
-          (total, result) => total + result.updatedReferences,
-          0,
-        );
-        showToast(`Renamed to ${nextName}${referenceSuffix(updatedReferences)}`);
+        showToast(`Renamed to ${nextName}${referenceSuffix(result.updatedReferences)}`);
       } catch (error) {
         let rollbackError: unknown = null;
-        for (const root of completedRoots.reverse()) {
+        if (renamed) {
           try {
-            await moveAssetEntry(root, nextPath, folder.path);
+            await moveAssetEntry(PROJECT_ASSET_ROOT, nextPath, folder.path);
           } catch (caught) {
-            rollbackError ??= caught;
+            rollbackError = caught;
           }
         }
         await reload();
@@ -985,7 +952,7 @@ function useProjectFileOperations(
   );
 
   const renameEntry = useCallback(
-    async (entry: ProjectAssetEntry): Promise<void> => {
+    async (entry: AssetEntry): Promise<void> => {
       const currentName = fileNameFromPath(entry.path);
       const enteredName = await showPromptDialog({
         title: 'Rename',
@@ -1002,7 +969,7 @@ function useProjectFileOperations(
       }
       try {
         const result = await moveAssetEntry(
-          entry.root,
+          PROJECT_ASSET_ROOT,
           entry.path,
           joinFolderPath(parentFolderOfPath(entry.path), nextName),
         );
@@ -1016,7 +983,7 @@ function useProjectFileOperations(
   );
 
   const deleteEntry = useCallback(
-    async (entry: ProjectAssetEntry): Promise<void> => {
+    async (entry: AssetEntry): Promise<void> => {
       const name = fileNameFromPath(entry.path);
       const confirmed = await showConfirmDialog({
         title: 'Delete',
@@ -1026,7 +993,7 @@ function useProjectFileOperations(
       });
       if (!confirmed) return;
       try {
-        await deleteAssetEntry(entry.root, entry.path);
+        await deleteAssetEntry(PROJECT_ASSET_ROOT, entry.path);
         await reload();
         showToast(`Deleted ${name}`);
       } catch (error) {
@@ -1038,7 +1005,7 @@ function useProjectFileOperations(
 
   const deleteFolder = useCallback(
     async (folder: FolderNode): Promise<void> => {
-      if (!folder.path || folder.roots.size === 0) return;
+      if (!folder.path) return;
       const name = folder.name;
       if (folder.children.size > 0 || folder.files.length > 0) {
         showToast(`Cannot delete "${name}": folder is not empty.`, true);
@@ -1052,9 +1019,7 @@ function useProjectFileOperations(
       });
       if (!confirmed) return;
       try {
-        for (const root of folder.roots) {
-          await deleteAssetEntry(root, folder.path);
-        }
+        await deleteAssetEntry(PROJECT_ASSET_ROOT, folder.path);
         await persistOrder(
           removeChildFromOrder(getOrderMap(), parentFolderOfPath(folder.path), name),
         );
@@ -1121,7 +1086,7 @@ function handleFolderMoveDrop(options: {
     moveFolderTo,
     reorderFolderAmongSiblings,
   } = options;
-  const isFolderDrag = Boolean(payload.roots && payload.roots.length > 0);
+  const isFolderDrag = payload.kind === 'dir';
 
   if (zone === 'into') {
     if (!canMoveInto(payload, folderPath)) return;
@@ -1200,16 +1165,11 @@ function useProjectFolderDnd(options: {
   const [dropTarget, setDropTarget] = useState<FolderDropTarget | null>(null);
 
   const onFolderDragStart = useCallback((event: DragEvent, folder: FolderNode) => {
-    if (!folder.path || folder.roots.size === 0) {
+    if (!folder.path) {
       event.preventDefault();
       return;
     }
-    const roots = [...folder.roots];
-    const payload: AssetMoveDragPayload = {
-      root: roots[0]!,
-      path: folder.path,
-      roots,
-    };
+    const payload: AssetMoveDragPayload = { path: folder.path, kind: 'dir' };
     event.dataTransfer?.setData(ASSET_MOVE_DND_TYPE, JSON.stringify(payload));
     if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
   }, []);
@@ -1493,10 +1453,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
 
     const savePrefabsInto = useCallback(
       async (entityIds: string[], folderPath: string): Promise<void> => {
-        const created = await onCreatePrefabsInFolder(entityIds, {
-          root: PROJECT_ASSET_ROOT,
-          folder: folderPath,
-        });
+        const created = await onCreatePrefabsInFolder(entityIds, folderPath);
         if (created.length === 0) return;
         await revealFolder(folderPath);
       },
@@ -1532,7 +1489,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
           },
         ];
         const folder = findFolder(treeRef.current, folderPath);
-        if (folderPath && folder && folder.roots.size > 0) {
+        if (folderPath && folder) {
           items.push({
             label: 'Rename…',
             action: () => {
@@ -1560,7 +1517,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
     );
 
     const onAssetContextMenu = useCallback(
-      (event: MouseEvent, entry: ProjectAssetEntry) => {
+      (event: MouseEvent, entry: AssetEntry) => {
         event.preventDefault();
         event.stopPropagation();
         const items = [];

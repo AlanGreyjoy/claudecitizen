@@ -1,21 +1,18 @@
 import {
-  discordStartUrl,
   getSession,
-  login,
-  logout,
-  register,
-  requestPasswordReset,
-  resetPassword,
   type AuthSession,
 } from '../net/api';
-import { createUiIcon, UiIcons } from '../ui/icons';
 import { ensureTitleScreenMarkup } from '../ui/screens/mount';
+import {
+  createTitleAuthRenderers,
+  renderStatus,
+  requireElement,
+  type TitleAuthRenderers,
+} from './title-screen-helpers';
 
 export interface TitleScreenOptions {
   onPlay: (session: AuthSession) => void;
 }
-
-type SceneName = 'login' | 'register' | 'forgot' | 'reset' | 'signed-in';
 
 interface TitleScreenController {
   renderSignedIn: (session: AuthSession) => void;
@@ -35,280 +32,15 @@ export function restoreTitleScreen(session?: AuthSession | null): void {
   titleScreenController.renderLogin();
 }
 
-function requireElement<T extends HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
-  if (!element) throw new Error(`Missing required element #${id}`);
-  return element as T;
-}
-
-function createButton(label: string, variant: 'primary' | 'secondary' = 'primary'): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = variant === 'primary' ? 'sc-title-btn' : 'sc-title-btn sc-title-btn-secondary';
-  button.textContent = label;
-  return button;
-}
-
-function createLinkButton(label: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'sc-title-link-btn';
-  button.textContent = label;
-  return button;
-}
-
-function createField(label: string, input: HTMLInputElement): HTMLLabelElement {
-  const field = document.createElement('label');
-  field.className = 'sc-title-auth-field';
-  const labelEl = document.createElement('span');
-  labelEl.textContent = label;
-  input.className = 'sc-title-auth-input';
-  field.append(labelEl, input);
-  return field;
-}
-
-function setPasswordToggleIcon(toggle: HTMLButtonElement, visible: boolean): void {
-  toggle.replaceChildren(
-    createUiIcon(visible ? UiIcons.eyeOff : UiIcons.eye, {
-      className: 'sc-ui-icon',
-      size: 18,
-    }),
-  );
-}
-
-function createPasswordField(label: string, autocomplete: string): HTMLLabelElement {
-  const field = document.createElement('label');
-  field.className = 'sc-title-auth-field';
-  const labelEl = document.createElement('span');
-  labelEl.textContent = label;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'sc-title-auth-input-wrap';
-
-  const passwordInput = input('password', 'password', autocomplete);
-  passwordInput.className = 'sc-title-auth-input';
-
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'sc-title-auth-input-toggle';
-  toggle.setAttribute('aria-label', 'Show password');
-  toggle.setAttribute('aria-pressed', 'false');
-  setPasswordToggleIcon(toggle, false);
-  toggle.addEventListener('click', () => {
-    const visible = passwordInput.type === 'text';
-    passwordInput.type = visible ? 'password' : 'text';
-    toggle.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
-    toggle.setAttribute('aria-pressed', visible ? 'false' : 'true');
-    setPasswordToggleIcon(toggle, !visible);
-  });
-
-  wrap.append(passwordInput, toggle);
-  field.append(labelEl, wrap);
-  return field;
-}
-
-function input(name: string, type: string, autocomplete: string): HTMLInputElement {
-  const element = document.createElement('input');
-  element.name = name;
-  element.type = type;
-  element.setAttribute('autocomplete', autocomplete);
-  element.required = true;
-  return element;
-}
-
-function formValue(form: HTMLFormElement, name: string): string {
-  const value = new FormData(form).get(name);
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-export function showTitleScreen(options: TitleScreenOptions): void {
-  const screen = ensureTitleScreenMarkup();
-  const actions = requireElement<HTMLElement>('title-actions');
-  let currentScene: SceneName | null = null;
-  let lastSession: AuthSession | null = null;
-
-  screen.classList.remove('is-hidden');
-
-  function setStatus(message: string, isError = false): void {
-    const status = actions.querySelector<HTMLElement>('[data-auth-status]');
-    if (!status) return;
-    status.textContent = message;
-    status.classList.toggle('is-error', isError);
-  }
-
-  function play(session: AuthSession): void {
-    screen.classList.add('is-hidden');
-    options.onPlay(session);
-  }
-
-  function renderLinks(...links: HTMLButtonElement[]): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'sc-title-auth-links';
-    row.append(...links);
-    return row;
-  }
-
-  function renderStatus(message = ''): HTMLElement {
-    const status = document.createElement('p');
-    status.className = 'sc-title-auth-message';
-    status.dataset.authStatus = 'true';
-    status.textContent = message;
-    return status;
-  }
-
-  function replaceScene(scene: SceneName, nodes: Node[]): void {
-    currentScene = scene;
-    actions.replaceChildren(...nodes);
-  }
-
-  function renderSignedIn(session: AuthSession): void {
-    lastSession = session;
-    const title = document.createElement('p');
-    title.className = 'sc-title-auth-title';
-    title.textContent = `Welcome, ${session.player.displayName}`;
-
-    const continueBtn = createButton('Continue');
-    continueBtn.addEventListener('click', () => play(session));
-
-    const logoutBtn = createButton('Logout', 'secondary');
-    logoutBtn.addEventListener('click', () => {
-      setStatus('Signing out...');
-      logout()
-        .then(() => {
-          lastSession = null;
-          renderLogin();
-        })
-        .catch((error) => setStatus((error as Error).message, true));
-    });
-
-    replaceScene('signed-in', [title, continueBtn, logoutBtn, renderStatus()]);
-  }
-
-  function renderLogin(message = ''): void {
-    const form = document.createElement('form');
-    form.className = 'sc-title-auth-form';
-    const title = document.createElement('p');
-    title.className = 'sc-title-auth-title';
-    title.textContent = 'Login';
-
-    const identifier = input('identifier', 'text', 'username');
-    const submit = createButton('Login');
-    submit.type = 'submit';
-    const discord = createButton('Login with Discord', 'secondary');
-    discord.addEventListener('click', () => {
-      window.location.href = discordStartUrl();
-    });
-    const forgot = createLinkButton('Forgot password');
-    forgot.addEventListener('click', () => renderForgot());
-    const create = createLinkButton('Register');
-    create.addEventListener('click', () => renderRegister());
-
-    form.append(
-      title,
-      createField('Email or handle', identifier),
-      createPasswordField('Password', 'current-password'),
-      submit,
-      discord,
-      renderLinks(forgot, create),
-      renderStatus(message),
-    );
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      setStatus('Authenticating...');
-      login(formValue(form, 'identifier'), formValue(form, 'password'))
-        .then(play)
-        .catch((error) => setStatus((error as Error).message, true));
-    });
-    replaceScene('login', [form]);
-  }
-
-  function renderRegister(): void {
-    const form = document.createElement('form');
-    form.className = 'sc-title-auth-form';
-    const title = document.createElement('p');
-    title.className = 'sc-title-auth-title';
-    title.textContent = 'Register';
-
-    const email = input('email', 'email', 'email');
-    const username = input('username', 'text', 'username');
-    const submit = createButton('Register');
-    submit.type = 'submit';
-    const back = createLinkButton('Login');
-    back.addEventListener('click', () => renderLogin());
-
-    form.append(
-      title,
-      createField('Email', email),
-      createField('Handle', username),
-      createPasswordField('Password', 'new-password'),
-      submit,
-      renderLinks(back),
-      renderStatus(),
-    );
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      setStatus('Creating citizen record...');
-      register(formValue(form, 'email'), formValue(form, 'username'), formValue(form, 'password'))
-        .then(play)
-        .catch((error) => setStatus((error as Error).message, true));
-    });
-    replaceScene('register', [form]);
-  }
-
-  function renderForgot(): void {
-    const form = document.createElement('form');
-    form.className = 'sc-title-auth-form';
-    const title = document.createElement('p');
-    title.className = 'sc-title-auth-title';
-    title.textContent = 'Reset Access';
-
-    const email = input('email', 'email', 'email');
-    const submit = createButton('Send Reset');
-    submit.type = 'submit';
-    const back = createLinkButton('Login');
-    back.addEventListener('click', () => renderLogin());
-
-    form.append(title, createField('Email', email), submit, renderLinks(back), renderStatus());
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      setStatus('Sending reset link...');
-      requestPasswordReset(formValue(form, 'email'))
-        .then(() => setStatus('If that account exists, a reset link is inbound.'))
-        .catch((error) => setStatus((error as Error).message, true));
-    });
-    replaceScene('forgot', [form]);
-  }
-
-  function renderReset(token: string): void {
-    const form = document.createElement('form');
-    form.className = 'sc-title-auth-form';
-    const title = document.createElement('p');
-    title.className = 'sc-title-auth-title';
-    title.textContent = 'New Password';
-
-    const submit = createButton('Reset');
-    submit.type = 'submit';
-    const back = createLinkButton('Login');
-    back.addEventListener('click', () => renderLogin());
-
-    form.append(title, createPasswordField('Password', 'new-password'), submit, renderLinks(back), renderStatus());
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      setStatus('Resetting password...');
-      resetPassword(token, formValue(form, 'password'))
-        .then(() => {
-          window.history.replaceState({}, '', window.location.pathname);
-          renderLogin('Password reset. Log in with the new password.');
-        })
-        .catch((error) => setStatus((error as Error).message, true));
-    });
-    replaceScene('reset', [form]);
-  }
-
+function bootTitleAuthSession(
+  actions: HTMLElement,
+  auth: TitleAuthRenderers,
+  play: (session: AuthSession) => void,
+): void {
   const params = new URLSearchParams(window.location.search);
   const authMode = params.get('auth');
   if (authMode === 'reset') {
-    renderReset(params.get('token') ?? '');
+    auth.renderReset(params.get('token') ?? '');
     return;
   }
 
@@ -321,21 +53,36 @@ export function showTitleScreen(options: TitleScreenOptions): void {
           play(session);
           return;
         }
-        renderSignedIn(session);
+        auth.renderSignedIn(session);
         return;
       }
       if (authMode === 'discord-error') {
-        renderLogin(params.get('reason') ?? 'Discord login failed.');
+        auth.renderLogin(params.get('reason') ?? 'Discord login failed.');
         return;
       }
-      renderLogin();
+      auth.renderLogin();
     })
     .catch(() => {
-      if (currentScene === null && lastSession === null) renderLogin();
+      if (auth.getCurrentScene() === null && auth.getLastSession() === null) auth.renderLogin();
     });
+}
+
+export function showTitleScreen(options: TitleScreenOptions): void {
+  const screen = ensureTitleScreenMarkup();
+  const actions = requireElement<HTMLElement>('title-actions');
+
+  screen.classList.remove('is-hidden');
+
+  function play(session: AuthSession): void {
+    screen.classList.add('is-hidden');
+    options.onPlay(session);
+  }
+
+  const auth = createTitleAuthRenderers({ actions, play });
+  bootTitleAuthSession(actions, auth, play);
 
   titleScreenController = {
-    renderSignedIn,
-    renderLogin,
+    renderSignedIn: auth.renderSignedIn,
+    renderLogin: auth.renderLogin,
   };
 }

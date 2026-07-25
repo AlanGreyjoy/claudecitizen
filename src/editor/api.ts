@@ -44,11 +44,12 @@ export const PREFAB_DND_TYPE = 'application/x-claudecitizen-prefab';
 /** Drag-and-drop MIME type for moving a Project entry; payload is JSON. */
 export const ASSET_MOVE_DND_TYPE = 'application/x-claudecitizen-asset-move';
 
-/** Project-local authoring library (`<project>/assets/…`). */
+/**
+ * The project's only asset library (`<project>/assets/…`), served at
+ * `/assets/`. The engine checkout's `src/assets/` is not a project root.
+ */
 export const PROJECT_ASSET_ROOT = 'assets' as const;
-/** Runtime / source assets under the open project (`<project>/src/assets/…`). */
-export const SOURCE_ASSET_ROOT = 'src/assets' as const;
-export type AssetRoot = typeof PROJECT_ASSET_ROOT | typeof SOURCE_ASSET_ROOT;
+export type AssetRoot = typeof PROJECT_ASSET_ROOT;
 
 export interface AssetEntry {
   /** Path relative to the root, forward slashes. */
@@ -141,19 +142,16 @@ export async function fetchPrefab(id: string): Promise<PrefabDocument> {
 
 /**
  * Saves a prefab document. An existing prefab is written back over its current
- * file wherever that is; a new one lands in `target` (or the default prefab
- * folder when no target is given).
+ * file wherever that is; a new one lands in `folder` (or the default prefab
+ * folder when no folder is given).
  */
-export async function savePrefab(
-  doc: PrefabDocument,
-  target?: { root: AssetRoot; folder: string },
-): Promise<string> {
+export async function savePrefab(doc: PrefabDocument, folder?: string): Promise<string> {
   const payload = await requestJson<{ path: string }>('/__editor/prefab', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       document: doc,
-      ...(target ? { root: target.root, folder: target.folder } : {}),
+      ...(folder ? { root: PROJECT_ASSET_ROOT, folder } : {}),
     }),
   });
   return payload.path;

@@ -34,8 +34,11 @@ target* produced by **File → Build Web**, not a place features are developed.
 | `backend/` | Authoritative API + cell simulation (Cargo workspace root) | Rust 2024 | Axum, Rapier, SQLx, Redis, WebTransport |
 | `proto/` | Realtime wire contract | Protobuf | prost + browser codec |
 
-Authoring assets live **inside the open AsteronEngine project** (`<project>/assets/`
-and `<project>/src/assets/`), not at the engine repo root.
+Authoring assets live **inside the open AsteronEngine project**, in the single
+asset library `<project>/assets/` served at `/assets/`, not at the engine repo
+root. The engine checkout's own `src/assets/` holds engine-owned assets only
+(atmosphere LUTs, skybox, star catalog, brand art), is reached exclusively
+through ESM imports, and is **not** a project asset root.
 
 ## Scenes own everything
 
@@ -77,7 +80,7 @@ navigation must not reload the page.
 
 ## Prefab & Animation Architecture
 
-- **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`, `<project>/src/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
+- **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
 - **Schema** (`src/world/prefabs/schema.ts`) defines every component type and its validator. Read this first when a component's fields are unclear.
 - **Ship runtime** (`src/world/prefabs/ship_runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
 - **Station runtime** (`src/world/prefabs/station_runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
@@ -145,9 +148,11 @@ The Electron editor (**AsteronEngine**) is the only authoring workspace. Cold st
 | Path | Role |
 |------|------|
 | `editor-desktop/main.mjs` | Electron shell: `cceditor:` protocol, `/__editor` API, backend proxy, menus, Build Web |
+| `editor-desktop/agent_server.mjs` | Loopback agent HTTP API + discovery file for AsteronEngine MCP |
 | `editor-desktop/project_hub.mjs` | Recent projects, validation, new-project scaffolding |
 | `editor-desktop/repository.mjs` | Project-scoped document read/write, including project settings |
 | `src/editor/` | Editor business logic: document store, commands, serialization |
+| `src/editor/agent-bridge.ts` | Live EditorStore snapshot/commands for the agent IPC bridge |
 | `src/editor/react/` | React shell + panels (Fast Refresh); entry `react/main.tsx` |
 | `src/editor/document.ts` | `EditorEntity` model, `EditorStore`, selection, GLB overrides; `documentType: 'scene' \| 'prefab'` |
 | `src/editor/play_in_editor.ts` | Play / Pause / Stop of the open document in the Game view |
@@ -160,8 +165,11 @@ The Electron editor (**AsteronEngine**) is the only authoring workspace. Cold st
 | `src/app/scene_host.ts` | Runtime scene host: load, switch, pause, dispose |
 | `src/app/play-chrome.ts` | Mountable in-play HUD tree (`play-chrome.html`) |
 | `src/world/prefabs/schema.ts` | Canonical prefab JSON schema (+ scene components) |
+| `tools/asteron-mcp/` | Stdio MCP server (Cursor) → live editor agent API |
 
 React owns editor chrome and all panel/form UI; `EditorStore` stays framework-agnostic. Tabs: **Scene** (default), Material Manager, Base Characters, Planet Authoring, System Map, Menu Manager, **Server**. WebGL/canvas preview stages (viewport, planet terrain, system map, base-character stage, menu HUD) stay imperative behind React hosts. Component field editors live in `src/editor/react/panels/component_fields/`.
+
+**Live project/scene context for agents:** use the **AsteronEngine MCP** (`asteron-engine` in `.cursor/mcp.json`). It reads `~/.asteron/agent.json` written by a running editor and exposes session, open document, hierarchy, selection, play state, disk catalogs, and safe play/save/select/open commands. See `editor-desktop/README.md` (“AsteronEngine MCP”).
 
 ### Play mode
 
@@ -264,10 +272,12 @@ When unsure whether probes catch a code change, bump. Stale veg tiles with wrong
 
 ## Protected assets security
 
-- Project authoring packs live under the open project's `assets/` (and optional
-  `src/assets/protected/`). Those trees are local to the project — **never stage
-  or commit** paid/protected packs. The engine repo also gitignores
-  `public/assets/protected/` and `src/assets/protected/` for the same reason.
+- Project authoring packs live under the open project's `assets/protected/`.
+  That tree is local to the project — **never stage or commit** paid/protected
+  packs. The engine repo also gitignores `public/assets/protected/` for the same
+  reason. A few protected paths are looked up by fixed convention rather than by
+  reference (UAL retarget skeleton, rifle/pistol locomotion packs, the character
+  avatar catalog); the scaffolded `assets/README.md` lists them.
 - `npm run build:web` strips `dist/assets/protected/` then copies only files
   referenced by saved prefab JSON. Prefabs only store asset paths, so they are
   safe to commit.
@@ -326,6 +336,7 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 | `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) |
 | `src/player/ship_deck.ts` | Ship deck walking + collider step resolution |
 | `src/player/character_settings.ts` | Editor-tunable walk/sprint/jump speeds; persisted in `src/player/data/character-settings.json` via the Electron `/__editor/character-settings` endpoint (Base Characters → Char Settings) |
+| `src/player/animation/data/*.controller.json` | Engine-owned animation controllers (stance → clip bindings). Base Characters → Controllers reads/writes these via `/__editor/animation-controllers`. Clip GLBs live in the open project under `assets/animations/` |
 | `src/player/character_locomotion.ts` | Shared on-foot locomotion policy for all walkers (planet/station/deck): walk input intent, effective ADS (sprint suppresses aim), facing resolution (active aim faces camera), clip selection, jump animation phases |
 | `src/player/animation/resolve_locomotion.ts` | Selects full-body locomotion and optional rifle ADS upper-body layers |
 | `src/render/characters/sidekick/animation_runtime.ts` | Retargeted clip playback, lower/upper masks, crossfades, and ADS parent-space compensation |

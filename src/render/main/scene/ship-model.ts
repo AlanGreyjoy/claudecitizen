@@ -14,7 +14,6 @@ import { deduplicateObjectTextures } from '../../assets/texture-dedup';
 
 const PROTECTED_SHIP_URL =
   '/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
-const FALLBACK_SHIP_URL = new URL('../../../assets/ships/Ship_Large.gltf', import.meta.url).href;
 const SHIP_FORWARD_ALIGNMENT_RADIANS = 0;
 
 export interface ShipArticulation {
@@ -229,7 +228,7 @@ export function createShipModel(
     }));
   }
 
-  function loadShip(url: string, allowFallback: boolean): void {
+  function loadShip(url: string): void {
     loader.load(
       url,
       (gltf) => {
@@ -253,17 +252,13 @@ export function createShipModel(
       },
       undefined,
       (error) => {
-        if (allowFallback) {
-          console.warn('ClaudeCitizen protected ship asset missing; using tracked fallback ship.', error);
-          loadShip(FALLBACK_SHIP_URL, false);
-          return;
-        }
-        console.warn('ClaudeCitizen fallback ship failed to load.', error);
+        // Ship hulls are project content; there is no engine-side fallback.
+        console.warn(`ClaudeCitizen ship hull "${url}" failed to load.`, error);
       },
     );
   }
 
-  loadShip(options?.hullUrl ?? PROTECTED_SHIP_URL, true);
+  loadShip(options?.hullUrl ?? PROTECTED_SHIP_URL);
 
   function measure(): Record<string, unknown> | null {
     const sceneRoot = group.children[0];

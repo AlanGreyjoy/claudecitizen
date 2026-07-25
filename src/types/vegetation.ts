@@ -4,7 +4,7 @@ export interface VegetationLayerSettings {
   minScale: number;
   maxScale: number;
   /**
-   * Absolute `/src/assets/...` paths.
+   * Absolute `/assets/...` paths into the open project's asset library.
    * Grass: `.png` / `.jpg` / `.webp` billboard textures (empty → procedural).
    * Trees: `.glb` / `.gltf` meshes.
    */

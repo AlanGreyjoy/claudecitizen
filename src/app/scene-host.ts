@@ -1,23 +1,18 @@
 import { loadSceneDocument } from '../world/scenes/loader';
 import { resolveScenePlayConfig } from '../world/scenes/scene-runtime';
 import type { SceneDocument } from '../world/scenes/schema';
-import type { SceneUiScreen } from '../world/prefabs/schema';
-import {
-  fetchGameBootstrap,
-  getSession,
-  type AuthSession,
-  type GameBootstrap,
-} from '../net/api';
-import { showLoadingScreen, type LoadingScreenHandle } from './loading-screen';
-import { showTitleScreen } from './title-screen';
-import { showCharacterCreationScreen } from './character-creation-screen';
+import type { AuthSession } from '../net/api';
+import { getSession } from '../net/api';
+import type { LoadingScreenHandle } from './loading-screen';
 import {
   isPlaySessionRunning,
   setPlaySessionPaused,
-  startPlaySession,
   stopPlaySession,
 } from './play-session';
-import { playWorldParamsFromScene } from './play-session-world';
+import {
+  mountSceneUiScreens,
+  startSceneGameplay,
+} from './scene-host-helpers';
 
 /**
  * Scene host — the runtime counterpart to a scene document.
@@ -76,91 +71,18 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
     );
   }
 
-  async function mountUiScreens(
-    screens: SceneUiScreen[],
-    scene: SceneDocument,
-  ): Promise<void> {
-    const next = resolveScenePlayConfig(scene).sceneLinks.find((link) => !link.auto);
-    const advance = (): void => {
-      if (next) void loadScene(next.sceneId);
-    };
-
-    for (const screen of screens) {
-      if (disposed) return;
-      if (screen === 'loading') {
-        loading = showLoadingScreen();
-        continue;
-      }
-      if (screen === 'title' || screen === 'login') {
-        showTitleScreen({
-          onPlay: (session) => {
-            if (next) void loadScene(next.sceneId, session);
-            else void startGameplay(scene, session);
-          },
-        });
-        continue;
-      }
-      if (screen === 'character-create') {
-        const appearance = await showCharacterCreationScreen();
-        if (appearance) advance();
-        continue;
-      }
-      // `menu` screens are authored documents previewed by the Menu Manager;
-      // in play they are opened by gameplay, not mounted by the scene itself.
-    }
-  }
-
-  /**
-   * A signed-in player without a saved appearance has to build one before the
-   * world loads. This is the only hard gate in the scene flow; everything else
-   * is authored with `scene-link`.
-   */
-  async function resolveBootstrap(
-    session: AuthSession | null,
-    screen: LoadingScreenHandle,
-  ): Promise<GameBootstrap | null> {
-    if (!options.requireAuth || !session) return null;
-    screen.setStatus('Loading citizen record...');
-    const bootstrap = await fetchGameBootstrap();
-    if (bootstrap.player.characterAppearance) return bootstrap;
-
-    screen.hide();
-    const appearance = await showCharacterCreationScreen();
-    if (!appearance) return null;
-    bootstrap.player.characterAppearance = appearance;
-    return bootstrap;
-  }
-
   async function startGameplay(
     scene: SceneDocument,
     session: AuthSession | null,
   ): Promise<void> {
-    if (isPlaySessionRunning()) stopPlaySession({ restoreTitle: false });
-    let screen = loading ?? showLoadingScreen();
-    loading = screen;
-    try {
-      const bootstrap = await resolveBootstrap(session, screen);
-      if (options.requireAuth && session && !bootstrap) {
-        // Character creation was cancelled; hand control back to the entry scene.
-        loading = null;
-        showTitleScreen({ onPlay: (next) => void startGameplay(scene, next) });
-        return;
-      }
-      if (bootstrap && !screen.isVisible()) {
-        screen = showLoadingScreen();
-        loading = screen;
-      }
-      await startPlaySession(screen, {
-        requireAuth: options.requireAuth ?? false,
-        session,
-        ...(bootstrap ? { bootstrap } : {}),
-        worldParams: playWorldParamsFromScene(scene, {
-          fromEditor: options.fromEditor ?? false,
-        }),
-      });
-    } finally {
-      loading = null;
-    }
+    await startSceneGameplay({
+      scene,
+      session,
+      requireAuth: options.requireAuth ?? false,
+      fromEditor: options.fromEditor ?? false,
+      getLoading: () => loading,
+      setLoading: (handle) => { loading = handle; },
+    });
   }
 
   async function loadScene(sceneId: string, session?: AuthSession | null): Promise<void> {
@@ -190,7 +112,14 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
       return;
     }
 
-    await mountUiScreens(screens, scene);
+    await mountSceneUiScreens({
+      screens,
+      scene,
+      disposed: () => disposed,
+      setLoading: (handle) => { loading = handle; },
+      loadScene,
+      startGameplay,
+    });
     scheduleAutoLinks(scene);
   }
 

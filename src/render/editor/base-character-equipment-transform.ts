@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import type * as THREE from "three";
 import type { CharacterEquipmentSlotV1, CharacterBoneMountV1 } from "../../player/equipment/base-character-equipment";
 import type { PrefabEntity, PrefabTransform } from "../../world/prefabs/schema";
 

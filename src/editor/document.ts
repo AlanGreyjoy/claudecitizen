@@ -1,1485 +1,113 @@
 import { createCommandStack } from './commands';
 import type {
-  PrefabComponent,
-  PrefabKind,
-  PrefabMaterialOverride,
-  PrefabPrimitive,
-} from '../world/prefabs/schema';
-import type { SceneKind } from '../world/scenes/schema';
-import type { Vec3 } from '../types';
+  EditorDocumentState,
+  EditorEvent,
+  EntityLocation,
+  EntityTransform,
+  GlbNodeRef,
+  SubSelection,
+} from './document-types';
+import {
+  cloneTransform,
+  isDescendantOf,
+  locateEntity,
+} from './document-entity-utils';
+import { findGlbNodeName, glbOverrideKey } from './document-glb-tree';
+import type { EditorStoreCtx } from './document-store-ctx';
+import { attachEntityPropMethods } from './document-store-entity-props';
+import { attachGlbMethods } from './document-store-glb';
+import { attachSelectionMethods } from './document-store-selection';
+import { attachStructureMethods } from './document-store-structure';
+import { attachTransformLifecycleMethods } from './document-store-transforms';
 
-export type EditorDocumentType = 'scene' | 'prefab';
+export type {
+  EditorDocumentType,
+  EditorEntity,
+  EditorDocumentState,
+  EntityTransform,
+  GlbNodeTransformOverride,
+  NodeOverrideComponentsEdit,
+  GlbNodeRef,
+  SubSelection,
+  EntitySelectionMode,
+  EditorEvent,
+  EntityLocation,
+} from './document-types';
 
-/**
- * Editor-side document model. Rotations are stored as XYZ euler degrees
- * (friendlier for inspector fields); serialization converts to quaternions.
- * Coordinates are prefab/scene axes — what you see in the viewport is what
- * the game renders.
- */
-export interface EditorEntity {
-  id: string;
-  name: string;
-  position: Vec3;
-  /** Euler XYZ in degrees. */
-  rotation: Vec3;
-  scale: Vec3;
-  visible: boolean;
-  asset: { url: string; castShadow?: boolean; node?: string } | null;
-  primitive: PrefabPrimitive | null;
-  glbNodeTransforms: GlbNodeTransformOverride[];
-  /** Names of GLB nodes hidden (deleted) for this entity instance. */
-  glbNodeHidden: string[];
-  materialOverrides: PrefabMaterialOverride[];
-  components: PrefabComponent[];
-  /** GLB node name this entity is parented under in the hierarchy outliner. */
-  glbAnchor?: string;
-  children: EditorEntity[];
-}
-
-/**
- * Shared GameObject-tree document. `prefabId`/`prefabName` are the document
- * id/name for both scenes and prefabs (legacy field names). Scene-only fields
- * are ignored when `documentType === 'prefab'`.
- */
-export interface EditorDocumentState {
-  documentType: EditorDocumentType;
-  prefabId: string;
-  prefabName: string;
-  kind: PrefabKind;
-  sceneKind: SceneKind;
-  roots: EditorEntity[];
-}
-
-export interface EntityTransform {
-  position: Vec3;
-  rotation: Vec3;
-  scale: Vec3;
-}
-
-export interface GlbNodeTransformOverride {
-  nodeName: string;
-  transform?: EntityTransform;
-  components: PrefabComponent[];
-}
-
-export interface NodeOverrideComponentsEdit {
-  entityId: string;
-  nodeName: string;
-  components: PrefabComponent[];
-}
-
-/** Read-only GLB scene graph node cached after model load (not serialized). */
-export interface GlbNodeRef {
-  uuid: string;
-  name: string;
-  children: GlbNodeRef[];
-  /**
-   * Identity Group with exactly one child and no own mesh/light/camera.
-   * Hierarchy may hide these export/loader wrappers; the live graph keeps them.
-   */
-  passthrough?: boolean;
-}
-
-export interface SubSelection {
-  entityId: string;
-  nodeUuid: string;
-  nodeName: string;
-}
-
-export type EntitySelectionMode = 'replace' | 'toggle' | 'range';
-
-export type EditorEvent =
-  | { type: 'structure' }
-  | { type: 'transform'; entityId: string }
-  | { type: 'entity'; entityId: string }
-  | { type: 'selection'; entityId: string | null; selectedIds: string[] }
-  | { type: 'sub-selection'; entityId: string | null; nodeUuid: string | null }
-  | { type: 'glb-tree'; entityId: string }
-  | { type: 'glb-transform'; entityId: string; nodeUuid: string; nodeName: string }
-  | { type: 'glb-visibility'; entityId: string; nodeName: string }
-  | {
-      type: 'glb-components';
-      edits: ReadonlyArray<{ entityId: string; nodeName: string }>;
-    }
-  | { type: 'document' }
-  | { type: 'history' };
-
-export interface EntityLocation {
-  entity: EditorEntity;
-  /** Sibling list that contains the entity (roots for top-level). */
-  siblings: EditorEntity[];
-  index: number;
-  parent: EditorEntity | null;
-}
-
-function makeEntityId(): string {
-  return `e-${crypto.randomUUID().slice(0, 8)}`;
-}
-
-function cloneVec(v: Vec3): Vec3 {
-  return { x: v.x, y: v.y, z: v.z };
-}
-
-function cloneTransform(t: EntityTransform): EntityTransform {
-  return { position: cloneVec(t.position), rotation: cloneVec(t.rotation), scale: cloneVec(t.scale) };
-}
-
-export function createEmptyEntity(name: string): EditorEntity {
-  return {
-    id: makeEntityId(),
-    name,
-    position: { x: 0, y: 0, z: 0 },
-    rotation: { x: 0, y: 0, z: 0 },
-    scale: { x: 1, y: 1, z: 1 },
-    visible: true,
-    asset: null,
-    primitive: null,
-    glbNodeTransforms: [],
-    glbNodeHidden: [],
-    materialOverrides: [],
-    components: [],
-    children: [],
-  };
-}
-
-function regenerateIds(entity: EditorEntity): void {
-  entity.id = makeEntityId();
-  for (const child of entity.children) regenerateIds(child);
-}
+export { createEmptyEntity } from './document-entity-utils';
 
 export type EditorStore = ReturnType<typeof createEditorStore>;
 
-function applyEntitySelectionMode(
-  mode: EntitySelectionMode,
-  id: string,
-  currentSelection: string | null,
-  currentSelected: Set<string>,
-  rangeAnchorId?: string,
-  visibleOrder?: readonly string[],
-): { selection: string | null; selectedIds: Set<string> } {
-  if (mode === 'replace') {
-    return { selection: id, selectedIds: new Set([id]) };
-  }
-
-  const nextSelected = new Set(currentSelected);
-  let nextSelection = currentSelection;
-
-  if (mode === 'toggle') {
-    if (nextSelected.has(id)) {
-      nextSelected.delete(id);
-      if (currentSelection === id) {
-        nextSelection = nextSelected.size > 0 ? [...nextSelected].at(-1)! : null;
-      }
-    } else {
-      nextSelected.add(id);
-      nextSelection = id;
-    }
-    return { selection: nextSelection, selectedIds: nextSelected };
-  }
-
-  const anchor = rangeAnchorId ?? currentSelection;
-  if (!anchor || !visibleOrder || visibleOrder.length === 0) {
-    return { selection: id, selectedIds: new Set([id]) };
-  }
-  const anchorIndex = visibleOrder.indexOf(anchor);
-  const clickIndex = visibleOrder.indexOf(id);
-  if (anchorIndex === -1 || clickIndex === -1) {
-    nextSelected.add(id);
-  } else {
-    const start = Math.min(anchorIndex, clickIndex);
-    const end = Math.max(anchorIndex, clickIndex);
-    for (let index = start; index <= end; index += 1) {
-      nextSelected.add(visibleOrder[index]!);
-    }
-  }
-  return { selection: id, selectedIds: nextSelected };
-}
-
-function pruneEntitySelection(
-  selectedIds: Set<string>,
-  selection: string | null,
-  exists: (id: string) => boolean,
-): { selection: string | null; selectedIds: Set<string> } {
-  const nextSelected = new Set(selectedIds);
-  for (const selectedId of [...nextSelected]) {
-    if (!exists(selectedId)) nextSelected.delete(selectedId);
-  }
-  let nextSelection = selection;
-  if (nextSelection && !nextSelected.has(nextSelection)) {
-    nextSelection = nextSelected.size > 0 ? [...nextSelected].at(-1)! : null;
-  }
-  if (nextSelected.size === 0) nextSelection = null;
-  return { selection: nextSelection, selectedIds: nextSelected };
-}
-
-export function createEditorStore() {
-  let state: EditorDocumentState = {
-    documentType: 'scene',
-    prefabId: '',
-    prefabName: 'Untitled Scene',
-    kind: 'site',
-    sceneKind: 'main-game',
-    roots: [],
-  };
-  let selection: string | null = null;
-  let selectedIds = new Set<string>();
-  let subSelection: SubSelection | null = null;
-  const glbTreesByEntityId = new Map<string, GlbNodeRef>();
-  const glbNodeOverrides = new Map<string, EntityTransform>();
-  let dirty = false;
-
-  const listeners = new Set<(event: EditorEvent) => void>();
-
-  function emit(event: EditorEvent): void {
-    for (const listener of listeners) listener(event);
-  }
-
-  const history = createCommandStack(() => emit({ type: 'history' }));
-
-  function markDirty(): void {
-    dirty = true;
-  }
-
-  function locate(id: string): EntityLocation | null {
-    const stack: { list: EditorEntity[]; parent: EditorEntity | null }[] = [
-      { list: state.roots, parent: null },
-    ];
-    while (stack.length > 0) {
-      const { list, parent } = stack.pop()!;
-      for (let index = 0; index < list.length; index += 1) {
-        const entity = list[index];
-        if (entity.id === id) return { entity, siblings: list, index, parent };
-        stack.push({ list: entity.children, parent: entity });
-      }
-    }
-    return null;
-  }
-
-  function isDescendant(ancestorId: string, id: string): boolean {
-    const ancestor = locate(ancestorId)?.entity;
-    if (!ancestor) return false;
-    const stack = [...ancestor.children];
-    while (stack.length > 0) {
-      const entity = stack.pop()!;
-      if (entity.id === id) return true;
-      stack.push(...entity.children);
-    }
-    return false;
-  }
-
-  function pruneSelectedIds(): void {
-    for (const id of [...selectedIds]) {
-      if (!locate(id)) selectedIds.delete(id);
-    }
-    if (selection && !selectedIds.has(selection)) {
-      selection = selectedIds.size > 0 ? [...selectedIds].at(-1)! : null;
-    }
-    if (selectedIds.size === 0) selection = null;
-  }
-
-  function selectionSetsEqual(a: Set<string>, b: Set<string>): boolean {
-    if (a.size !== b.size) return false;
-    for (const id of a) {
-      if (!b.has(id)) return false;
-    }
-    return true;
-  }
-
-  function emitSelection(): void {
-    emit({
-      type: 'selection',
-      entityId: selection,
-      selectedIds: [...selectedIds],
-    });
-  }
-
-  function removeIdsFromSelection(ids: Iterable<string>): void {
-    let changed = false;
-    for (const id of ids) {
-      if (selectedIds.delete(id)) changed = true;
-    }
-    if (!changed) return;
-    if (selection && !selectedIds.has(selection)) {
-      selection = selectedIds.size > 0 ? [...selectedIds].at(-1)! : null;
-    }
-    emitSelection();
-  }
-
-  function clearSelection(): void {
-    const hadSelection = selectedIds.size > 0 || selection !== null;
-    const hadSub = subSelection !== null;
-    selection = null;
-    selectedIds = new Set();
-    subSelection = null;
-    if (hadSelection) emitSelection();
-    if (hadSub) {
-      emit({ type: 'sub-selection', entityId: null, nodeUuid: null });
-    }
-  }
-
-  function setEntitySelection(
-    id: string | null,
-    mode: EntitySelectionMode = 'replace',
-    rangeAnchorId?: string,
-    visibleOrder?: readonly string[],
-  ): void {
-    if (id === null) {
-      clearSelection();
-      return;
-    }
-
-    const hadSub = subSelection !== null;
-    subSelection = null;
-
-    const prevPrimary = selection;
-    const prevSelected = new Set(selectedIds);
-    const applied = applyEntitySelectionMode(
-      mode,
-      id,
-      selection,
-      selectedIds,
-      rangeAnchorId,
-      visibleOrder,
-    );
-    const pruned = pruneEntitySelection(applied.selectedIds, applied.selection, (selectedId) =>
-      Boolean(locate(selectedId)),
-    );
-
-    const selectionChanged =
-      prevPrimary !== pruned.selection || !selectionSetsEqual(prevSelected, pruned.selectedIds);
-    selection = pruned.selection;
-    selectedIds = pruned.selectedIds;
-
-    if (selectionChanged) emitSelection();
-    if (hadSub) {
-      emit({ type: 'sub-selection', entityId: selection, nodeUuid: null });
-    }
-  }
-
-  function setSelection(id: string | null): void {
-    setEntitySelection(id, 'replace');
-  }
-
-  function setSubSelection(entityId: string, nodeUuid: string): void {
-    const nodeName = resolveGlbNodeName(entityId, nodeUuid) ?? '';
-    const prev = subSelection;
-    subSelection = { entityId, nodeUuid, nodeName };
-    const prevPrimary = selection;
-    const prevSelected = new Set(selectedIds);
-    selection = entityId;
-    selectedIds = new Set([entityId]);
-    const selectionChanged =
-      prevPrimary !== selection || !selectionSetsEqual(prevSelected, selectedIds);
-    if (selectionChanged) emitSelection();
-    if (
-      !prev ||
-      prev.entityId !== entityId ||
-      prev.nodeUuid !== nodeUuid
-    ) {
-      emit({ type: 'sub-selection', entityId, nodeUuid });
-    }
-  }
-
-  function findGlbNodeName(tree: GlbNodeRef, nodeUuid: string): string | null {
-    if (tree.uuid === nodeUuid) return tree.name;
-    for (const child of tree.children) {
-      const name = findGlbNodeName(child, nodeUuid);
-      if (name) return name;
-    }
-    return null;
-  }
-
-  function findGlbNodeUuid(tree: GlbNodeRef, nodeName: string): string | null {
-    if (tree.name === nodeName) return tree.uuid;
-    for (const child of tree.children) {
-      const uuid = findGlbNodeUuid(child, nodeName);
-      if (uuid) return uuid;
-    }
-    return null;
-  }
-
-  function findGlbNodeRef(tree: GlbNodeRef, nodeUuid: string): GlbNodeRef | null {
-    if (tree.uuid === nodeUuid) return tree;
-    for (const child of tree.children) {
-      const found = findGlbNodeRef(child, nodeUuid);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  function collectGlbNodeNames(node: GlbNodeRef, names = new Set<string>()): Set<string> {
-    names.add(node.name);
-    for (const child of node.children) collectGlbNodeNames(child, names);
-    return names;
-  }
-
-  function setGlbTree(entityId: string, tree: GlbNodeRef | null): void {
-    if (tree) {
-      glbTreesByEntityId.set(entityId, tree);
-      if (subSelection && subSelection.entityId === entityId && subSelection.nodeName) {
-        const newUuid = findGlbNodeUuid(tree, subSelection.nodeName);
-        if (newUuid && subSelection.nodeUuid !== newUuid) {
-          subSelection.nodeUuid = newUuid;
-          emit({ type: 'sub-selection', entityId, nodeUuid: newUuid });
-        }
-      }
-    } else {
-      glbTreesByEntityId.delete(entityId);
-    }
-    emit({ type: 'glb-tree', entityId });
-  }
-
-  function clearGlbTrees(): void {
-    if (glbTreesByEntityId.size === 0) return;
-    glbTreesByEntityId.clear();
-    emit({ type: 'glb-tree', entityId: '' });
-  }
-
-  function glbOverrideKey(entityId: string, nodeName: string): string {
-    return `${entityId}::${nodeName}`;
-  }
-
-  function resolveGlbNodeName(entityId: string, nodeUuid: string): string | null {
-    const tree = glbTreesByEntityId.get(entityId);
-    if (!tree) return null;
-    return findGlbNodeName(tree, nodeUuid);
-  }
-
-  function clearGlbOverridesForEntity(entityId: string): void {
-    const prefix = `${entityId}::`;
-    for (const key of [...glbNodeOverrides.keys()]) {
-      if (key.startsWith(prefix)) glbNodeOverrides.delete(key);
-    }
-    const entity = locate(entityId)?.entity;
-    if (entity) entity.glbNodeTransforms = [];
-  }
-
-  function emitGlbTransform(
-    entityId: string,
-    nodeUuid: string,
-    nodeName: string,
-  ): void {
-    emit({ type: 'glb-transform', entityId, nodeUuid, nodeName });
-  }
-
-  function setGlbOverride(
-    entityId: string,
-    nodeName: string,
-    nodeUuid: string,
-    transform: EntityTransform,
-  ): void {
-    const transformCopy = cloneTransform(transform);
-    glbNodeOverrides.set(glbOverrideKey(entityId, nodeName), transformCopy);
-    const entity = locate(entityId)?.entity;
-    if (entity) {
-      const existing = entity.glbNodeTransforms.find(
-        (entry) => entry.nodeName === nodeName,
-      );
-      if (existing) {
-        existing.transform = cloneTransform(transformCopy);
-      } else {
-        entity.glbNodeTransforms.push({
-          nodeName,
-          transform: cloneTransform(transformCopy),
-          components: [],
-        });
-      }
-    }
-    markDirty();
-    emitGlbTransform(entityId, nodeUuid, nodeName);
-  }
-
-  function setNodeOverrideComponentsBatch(
-    edits: NodeOverrideComponentsEdit[],
-    label = 'Edit node components',
-  ): void {
-    const unique = new Map<string, NodeOverrideComponentsEdit>();
-    for (const edit of edits) {
-      if (!locate(edit.entityId)) continue;
-      unique.set(`${edit.entityId}::${edit.nodeName}`, {
-        ...edit,
-        components: structuredClone(edit.components),
-      });
-    }
-    if (unique.size === 0) return;
-    const changes = [...unique.values()].map((edit) => ({
-      ...edit,
-      before:
-        structuredClone(
-          locate(edit.entityId)?.entity.glbNodeTransforms.find(
-            (entry) => entry.nodeName === edit.nodeName,
-          )?.components ?? [],
-        ),
-    }));
-
-    const apply = (
-      entityId: string,
-      nodeName: string,
-      components: PrefabComponent[],
-    ): void => {
-      const target = locate(entityId)?.entity;
-      if (!target) return;
-      const override = target.glbNodeTransforms.find(
-        (entry) => entry.nodeName === nodeName,
-      );
-      if (!override) {
-        if (components.length > 0) {
-          target.glbNodeTransforms.push({
-            nodeName,
-            components: structuredClone(components),
-          });
-        }
-        return;
-      }
-      override.components = structuredClone(components);
-      if (override.components.length === 0 && !override.transform) {
-        target.glbNodeTransforms = target.glbNodeTransforms.filter(
-          (entry) => entry.nodeName !== nodeName,
-        );
-      }
-    };
-
-    history.execute({
-      label,
-      do() {
-        for (const change of changes) {
-          apply(change.entityId, change.nodeName, change.components);
-        }
-        markDirty();
-        emit({
-          type: 'glb-components',
-          edits: changes.map((change) => ({
-            entityId: change.entityId,
-            nodeName: change.nodeName,
-          })),
-        });
-      },
-      undo() {
-        for (const change of changes) {
-          apply(change.entityId, change.nodeName, change.before);
-        }
-        emit({
-          type: 'glb-components',
-          edits: changes.map((change) => ({
-            entityId: change.entityId,
-            nodeName: change.nodeName,
-          })),
-        });
-      },
-    });
-  }
-
-  function setNodeOverrideComponents(
-    entityId: string,
-    nodeName: string,
-    components: PrefabComponent[],
-  ): void {
-    setNodeOverrideComponentsBatch(
-      [{ entityId, nodeName, components }],
-      `Edit node ${nodeName} components`,
-    );
-  }
-
-  function getNodeOverrideComponents(
-    entityId: string,
-    nodeName: string,
-  ): PrefabComponent[] {
-    const entity = locate(entityId)?.entity;
-    if (!entity) return [];
-    const override = entity.glbNodeTransforms.find(
-      (entry) => entry.nodeName === nodeName,
-    );
-    return override ? override.components : [];
-  }
-
-  function rebuildGlbOverridesFromState(): void {
-    glbNodeOverrides.clear();
-    const visit = (entities: EditorEntity[]): void => {
-      for (const entity of entities) {
-        for (const override of entity.glbNodeTransforms) {
-          if (!override.transform) continue;
-          glbNodeOverrides.set(
-            glbOverrideKey(entity.id, override.nodeName),
-            cloneTransform(override.transform),
-          );
-        }
-        visit(entity.children);
-      }
-    };
-    visit(state.roots);
-  }
-
-  function notifyGlbNodeTransform(entityId: string, nodeUuid: string): void {
-    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
-    if (!nodeName) return;
-    emitGlbTransform(entityId, nodeUuid, nodeName);
-  }
-
-  function hideGlbNode(entityId: string, nodeUuid: string): void {
-    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
-    if (!nodeName) return;
-    const entity = locate(entityId)?.entity;
-    if (!entity || entity.glbNodeHidden.includes(nodeName)) return;
-
-    const clearSubSelection =
-      subSelection?.entityId === entityId && subSelection?.nodeUuid === nodeUuid;
-
-    history.execute({
-      label: `Delete mesh ${nodeName}`,
-      do() {
-        const target = locate(entityId)?.entity;
-        if (!target || target.glbNodeHidden.includes(nodeName)) return;
-        target.glbNodeHidden.push(nodeName);
-        markDirty();
-        if (clearSubSelection) {
-          // Clear the owning entity too. Del is handled by both the window
-          // keydown and the Electron Edit → Delete accelerator; if we only
-          // drop subSelection, the second call deletes the whole entity.
-          subSelection = null;
-          selection = null;
-          selectedIds = new Set();
-          emitSelection();
-          emit({ type: 'sub-selection', entityId, nodeUuid: null });
-        }
-        emit({ type: 'glb-visibility', entityId, nodeName });
-      },
-      undo() {
-        const target = locate(entityId)?.entity;
-        if (!target) return;
-        target.glbNodeHidden = target.glbNodeHidden.filter((n) => n !== nodeName);
-        emit({ type: 'glb-visibility', entityId, nodeName });
-      },
-    });
-  }
-
-  function showGlbNode(entityId: string, nodeName: string): void {
-    const entity = locate(entityId)?.entity;
-    if (!entity || !entity.glbNodeHidden.includes(nodeName)) return;
-    history.execute({
-      label: `Restore mesh ${nodeName}`,
-      do() {
-        const target = locate(entityId)?.entity;
-        if (!target) return;
-        target.glbNodeHidden = target.glbNodeHidden.filter((n) => n !== nodeName);
-        markDirty();
-        emit({ type: 'glb-visibility', entityId, nodeName });
-      },
-      undo() {
-        const target = locate(entityId)?.entity;
-        if (!target || target.glbNodeHidden.includes(nodeName)) return;
-        target.glbNodeHidden.push(nodeName);
-        emit({ type: 'glb-visibility', entityId, nodeName });
-      },
-    });
-  }
-
-  function isGlbNodeHidden(entityId: string, nodeName: string): boolean {
-    return locate(entityId)?.entity.glbNodeHidden.includes(nodeName) ?? false;
-  }
-
-  function insertEntity(entity: EditorEntity, parentId: string | null, index?: number): void {
-    const list = parentId === null ? state.roots : locate(parentId)?.entity.children;
-    if (!list) return;
-    list.splice(index ?? list.length, 0, entity);
-  }
-
-  function detachEntity(id: string): { entity: EditorEntity; parentId: string | null; index: number } | null {
-    const location = locate(id);
-    if (!location) return null;
-    location.siblings.splice(location.index, 1);
-    return {
-      entity: location.entity,
-      parentId: location.parent?.id ?? null,
-      index: location.index,
-    };
-  }
-
-  function addEntity(entity: EditorEntity, parentId: string | null = null): string {
-    history.execute({
-      label: `Add ${entity.name}`,
-      do() {
-        insertEntity(entity, parentId);
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        detachEntity(entity.id);
-        removeIdsFromSelection([entity.id]);
-        emit({ type: 'structure' });
-      },
-    });
-    setSelection(entity.id);
-    return entity.id;
-  }
-
-  function deleteEntity(id: string): void {
-    deleteEntities([id]);
-  }
-
-  function deleteEntities(ids: string[]): void {
-    const unique = [...new Set(ids)].filter((id) => locate(id));
-    if (unique.length === 0) return;
-
-    const snapshots = unique.map((id) => {
-      const location = locate(id)!;
-      return {
-        entity: structuredClone(location.entity),
-        parentId: location.parent?.id ?? null,
-        index: location.index,
-      };
-    });
-
-    const label =
-      unique.length === 1
-        ? `Delete ${snapshots[0].entity.name}`
-        : `Delete ${unique.length} entities`;
-
-    history.execute({
-      label,
-      do() {
-        for (const id of unique) {
-          detachEntity(id);
-          clearGlbOverridesForEntity(id);
-        }
-        removeIdsFromSelection(unique);
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        for (const snapshot of snapshots) {
-          insertEntity(snapshot.entity, snapshot.parentId, snapshot.index);
-        }
-        emit({ type: 'structure' });
-      },
-    });
-  }
-
-  function duplicateEntity(id: string): string | null {
-    const results = duplicateEntities([id]);
-    return results[0] ?? null;
-  }
-
-  function createGlbNodeEntity(
-    source: EditorEntity,
-    nodeName: string,
-    transform: EntityTransform,
-    subtreeNodeNames = new Set([nodeName]),
-    entityName = `${nodeName} Copy`,
-  ): EditorEntity {
-    const copy = createEmptyEntity(entityName);
-    copy.position = cloneVec(transform.position);
-    copy.rotation = cloneVec(transform.rotation);
-    copy.scale = cloneVec(transform.scale);
-    copy.asset = { ...source.asset!, node: nodeName };
-    copy.materialOverrides = structuredClone(source.materialOverrides);
-    const rootOverride = source.glbNodeTransforms.find(
-      (candidate) => candidate.nodeName === nodeName,
-    );
-    const sourceComponents =
-      rootOverride?.components ??
-      (source.asset?.node === nodeName ? source.components : []);
-    copy.components = structuredClone(sourceComponents);
-    copy.glbNodeTransforms = structuredClone(
-      source.glbNodeTransforms.filter(
-        (override) =>
-          override.nodeName !== nodeName && subtreeNodeNames.has(override.nodeName),
-      ),
-    );
-    return copy;
-  }
-
-  function clearGlbOverrideMapForEntityId(entityId: string): void {
-    const prefix = `${entityId}::`;
-    for (const key of [...glbNodeOverrides.keys()]) {
-      if (key.startsWith(prefix)) glbNodeOverrides.delete(key);
-    }
-  }
-
-  function syncGlbOverrideMapForEntity(entity: EditorEntity): void {
-    clearGlbOverrideMapForEntityId(entity.id);
-    for (const override of entity.glbNodeTransforms) {
-      if (!override.transform) continue;
-      glbNodeOverrides.set(
-        glbOverrideKey(entity.id, override.nodeName),
-        cloneTransform(override.transform),
-      );
-    }
-  }
-
-  function duplicateGlbNode(
-    entityId: string,
-    nodeName: string,
-    transform: EntityTransform,
-  ): string | null {
-    const source = locate(entityId)?.entity;
-    if (!source?.asset) return null;
-
-    const copy = createGlbNodeEntity(source, nodeName, transform);
-
-    history.execute({
-      label: `Duplicate ${nodeName}`,
-      do() {
-        insertEntity(copy, entityId);
-        syncGlbOverrideMapForEntity(copy);
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        detachEntity(copy.id);
-        clearGlbOverrideMapForEntityId(copy.id);
-        removeIdsFromSelection([copy.id]);
-        emit({ type: 'structure' });
-      },
-    });
-
-    selection = copy.id;
-    selectedIds = new Set([copy.id]);
-    subSelection = null;
-    emitSelection();
-    return copy.id;
-  }
-
-  function extractGlbNode(
-    entityId: string,
-    nodeUuid: string,
-    targetParentId: string | null,
-    transform: EntityTransform,
-  ): string | null {
-    const source = locate(entityId)?.entity;
-    const tree = glbTreesByEntityId.get(entityId);
-    const node = tree ? findGlbNodeRef(tree, nodeUuid) : null;
-    if (!source?.asset || !node) return null;
-    if (targetParentId !== null && !locate(targetParentId)) return null;
-
-    const subtreeNodeNames = collectGlbNodeNames(node);
-    const copy = createGlbNodeEntity(
-      source,
-      node.name,
-      transform,
-      subtreeNodeNames,
-      node.name,
-    );
-    const sourceOverridesBefore = structuredClone(source.glbNodeTransforms);
-    const hiddenNodesBefore = [...source.glbNodeHidden];
-
-    history.execute({
-      label: `Move ${node.name} out of model`,
-      do() {
-        const target = locate(entityId)?.entity;
-        if (!target) return;
-        target.glbNodeTransforms = target.glbNodeTransforms.filter(
-          (override) => !subtreeNodeNames.has(override.nodeName),
-        );
-        if (!target.glbNodeHidden.includes(node.name)) {
-          target.glbNodeHidden.push(node.name);
-        }
-        syncGlbOverrideMapForEntity(target);
-        insertEntity(copy, targetParentId);
-        syncGlbOverrideMapForEntity(copy);
-        if (subSelection?.entityId === entityId && subSelection.nodeUuid === nodeUuid) {
-          subSelection = null;
-          emit({ type: 'sub-selection', entityId, nodeUuid: null });
-        }
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        detachEntity(copy.id);
-        clearGlbOverrideMapForEntityId(copy.id);
-        const target = locate(entityId)?.entity;
-        if (target) {
-          target.glbNodeTransforms = structuredClone(sourceOverridesBefore);
-          target.glbNodeHidden = [...hiddenNodesBefore];
-          syncGlbOverrideMapForEntity(target);
-        }
-        removeIdsFromSelection([copy.id]);
-        emit({ type: 'structure' });
-      },
-    });
-
-    selection = copy.id;
-    selectedIds = new Set([copy.id]);
-    subSelection = null;
-    emitSelection();
-    return copy.id;
-  }
-
-  function duplicateEntities(ids: string[]): string[] {
-    const unique = [...new Set(ids)].filter((id) => locate(id));
-    if (unique.length === 0) return [];
-
-    const snapshots = unique.map((id) => {
-      const location = locate(id)!;
-      const copy = structuredClone(location.entity);
-      regenerateIds(copy);
-      copy.name = `${copy.name} Copy`;
-      return {
-        copy,
-        parentId: location.parent?.id ?? null,
-        index: location.index + 1,
-      };
-    });
-
-    const label =
-      unique.length === 1
-        ? `Duplicate ${locate(unique[0])!.entity.name}`
-        : `Duplicate ${unique.length} entities`;
-
-    history.execute({
-      label,
-      do() {
-        for (const snapshot of snapshots) {
-          insertEntity(snapshot.copy, snapshot.parentId, snapshot.index);
-        }
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        for (const snapshot of snapshots) {
-          detachEntity(snapshot.copy.id);
-          removeIdsFromSelection([snapshot.copy.id]);
-        }
-        emit({ type: 'structure' });
-      },
-    });
-
-    const copyIds = snapshots.map((snapshot) => snapshot.copy.id);
-    selection = copyIds[copyIds.length - 1] ?? null;
-    selectedIds = new Set(copyIds);
-    subSelection = null;
-    emitSelection();
-    return copyIds;
-  }
-
-  function reparentEntity(id: string, newParentId: string | null): void {
-    reparentEntities([id], newParentId);
-  }
-
-  function reparentEntities(ids: string[], newParentId: string | null): void {
-    const validIds = ids.filter((id) => {
-      if (id === newParentId) return false;
-      if (newParentId && isDescendant(id, newParentId)) return false;
-      const location = locate(id);
-      if (!location) return false;
-      const oldParentId = location.parent?.id ?? null;
-      return oldParentId !== newParentId;
-    });
-    if (validIds.length === 0) return;
-
-    const snapshots = validIds.map((id) => {
-      const location = locate(id)!;
-      return {
-        id,
-        parentId: location.parent?.id ?? null,
-        index: location.index,
-      };
-    });
-
-    const label =
-      validIds.length === 1
-        ? `Move ${locate(validIds[0])!.entity.name}`
-        : `Move ${validIds.length} entities`;
-
-    history.execute({
-      label,
-      do() {
-        for (const id of validIds) {
-          const detached = detachEntity(id);
-          if (detached) insertEntity(detached.entity, newParentId);
-        }
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        for (let index = snapshots.length - 1; index >= 0; index -= 1) {
-          const snapshot = snapshots[index];
-          const detached = detachEntity(snapshot.id);
-          if (detached) insertEntity(detached.entity, snapshot.parentId, snapshot.index);
-        }
-        emit({ type: 'structure' });
-      },
-    });
-  }
-
-  function groupSelectedInEmpty(): string | null {
-    pruneSelectedIds();
-    const ids = [...selectedIds];
-    if (ids.length === 0) return null;
-
-    const parents = ids.map((id) => locate(id)?.parent?.id ?? null);
-    const sharedParent = parents.every((parent) => parent === parents[0])
-      ? parents[0]
-      : null;
-
-    const empty = createEmptyEntity('Empty');
-    const entitySnapshots = ids.map((id) => {
-      const location = locate(id)!;
-      return {
-        id,
-        parentId: location.parent?.id ?? null,
-        index: location.index,
-      };
-    });
-
-    history.execute({
-      label: `Group ${ids.length} entities`,
-      do() {
-        insertEntity(empty, sharedParent);
-        for (const id of ids) {
-          const detached = detachEntity(id);
-          if (detached) insertEntity(detached.entity, empty.id);
-        }
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        for (let index = entitySnapshots.length - 1; index >= 0; index -= 1) {
-          const snapshot = entitySnapshots[index];
-          const detached = detachEntity(snapshot.id);
-          if (detached) insertEntity(detached.entity, snapshot.parentId, snapshot.index);
-        }
-        detachEntity(empty.id);
-        emit({ type: 'structure' });
-      },
-    });
-
-    setSelection(empty.id);
-    return empty.id;
-  }
-
-  /**
-   * Swaps an authored subtree for a single `prefab-instance` GameObject after
-   * the subtree has been extracted into a prefab document. The instance keeps
-   * the original transform so nothing appears to move.
-   */
-  function replaceEntityWithPrefabInstance(
-    id: string,
-    prefabId: string,
-    prefabKind: PrefabKind,
-  ): string | null {
-    const location = locate(id);
-    if (!location) return null;
-
-    const parentId = location.parent?.id ?? null;
-    const index = location.index;
-    const original = location.entity;
-    const instance: EditorEntity = {
-      ...createEmptyEntity(original.name),
-      position: { ...original.position },
-      rotation: { ...original.rotation },
-      scale: { ...original.scale },
-      components: [{ type: 'prefab-instance', prefabId, prefabKind }],
-    };
-
-    history.execute({
-      label: `Create prefab "${prefabId}"`,
-      do() {
-        detachEntity(id);
-        insertEntity(instance, parentId, index);
-        markDirty();
-        emit({ type: 'structure' });
-      },
-      undo() {
-        detachEntity(instance.id);
-        insertEntity(original, parentId, index);
-        emit({ type: 'structure' });
-      },
-    });
-
-    setSelection(instance.id);
-    return instance.id;
-  }
-
-  function patchEntity(
-    id: string,
-    label: string,
-    apply: (entity: EditorEntity) => void,
-    revert: (entity: EditorEntity) => void,
-  ): void {
-    history.execute({
-      label,
-      do() {
-        const entity = locate(id)?.entity;
-        if (!entity) return;
-        apply(entity);
-        markDirty();
-        emit({ type: 'entity', entityId: id });
-      },
-      undo() {
-        const entity = locate(id)?.entity;
-        if (!entity) return;
-        revert(entity);
-        emit({ type: 'entity', entityId: id });
-      },
-    });
-  }
-
-  function renameEntity(id: string, name: string): void {
-    const before = locate(id)?.entity.name;
-    if (before === undefined || before === name) return;
-    patchEntity(
-      id,
-      `Rename to ${name}`,
-      (entity) => {
-        entity.name = name;
-      },
-      (entity) => {
-        entity.name = before;
-      },
-    );
-  }
-
-  function setVisible(id: string, visible: boolean): void {
-    const before = locate(id)?.entity.visible;
-    if (before === undefined || before === visible) return;
-    patchEntity(
-      id,
-      visible ? 'Show' : 'Hide',
-      (entity) => {
-        entity.visible = visible;
-      },
-      (entity) => {
-        entity.visible = before;
-      },
-    );
-  }
-
-  function setPrimitive(id: string, primitive: PrefabPrimitive | null): void {
-    const before = locate(id)?.entity.primitive ?? null;
-    patchEntity(
-      id,
-      'Edit primitive',
-      (entity) => {
-        entity.primitive = primitive ? structuredClone(primitive) : null;
-      },
-      (entity) => {
-        entity.primitive = before ? structuredClone(before) : null;
-      },
-    );
-  }
-
-  function setAsset(id: string, asset: { url: string; castShadow?: boolean } | null): void {
-    const before = locate(id)?.entity.asset ?? null;
-    const beforeOverrides = locate(id)?.entity.materialOverrides ?? [];
-    const beforeOverridesCopy = structuredClone(beforeOverrides);
-    patchEntity(
-      id,
-      'Edit asset',
-      (entity) => {
-        const nextAsset = asset ? { ...asset } : null;
-        entity.asset = nextAsset;
-        if (before?.url !== nextAsset?.url) entity.materialOverrides = [];
-      },
-      (entity) => {
-        entity.asset = before ? { ...before } : null;
-        entity.materialOverrides = structuredClone(beforeOverridesCopy);
-      },
-    );
-  }
-
-  function setMaterialOverride(
-    id: string,
-    material: string,
-    override: PrefabMaterialOverride | null,
-  ): void {
-    const before = locate(id)?.entity.materialOverrides;
-    if (!before) return;
-    const beforeCopy = structuredClone(before);
-    const next = beforeCopy.filter((entry) => entry.material !== material);
-    if (override) next.push(structuredClone(override));
-    next.sort((a, b) => a.material.localeCompare(b.material));
-    if (JSON.stringify(beforeCopy) === JSON.stringify(next)) return;
-    patchEntity(
-      id,
-      `Edit material ${material}`,
-      (entity) => {
-        entity.materialOverrides = structuredClone(next);
-      },
-      (entity) => {
-        entity.materialOverrides = structuredClone(beforeCopy);
-      },
-    );
-  }
-
-  function setComponents(id: string, components: PrefabComponent[]): void {
-    const before = locate(id)?.entity.components;
-    if (!before) return;
-    const beforeCopy = structuredClone(before);
-    const nextCopy = structuredClone(components);
-    patchEntity(
-      id,
-      'Edit components',
-      (entity) => {
-        entity.components = structuredClone(nextCopy);
-      },
-      (entity) => {
-        entity.components = structuredClone(beforeCopy);
-      },
-    );
-  }
-
-  function setTransform(id: string, transform: EntityTransform): void {
-    const entity = locate(id)?.entity;
-    if (!entity) return;
-    const before = cloneTransform(entity);
-    const after = cloneTransform(transform);
-    history.execute({
-      label: `Transform ${entity.name}`,
-      do() {
-        const target = locate(id)?.entity;
-        if (!target) return;
-        target.position = cloneVec(after.position);
-        target.rotation = cloneVec(after.rotation);
-        target.scale = cloneVec(after.scale);
-        markDirty();
-        emit({ type: 'transform', entityId: id });
-      },
-      undo() {
-        const target = locate(id)?.entity;
-        if (!target) return;
-        target.position = cloneVec(before.position);
-        target.rotation = cloneVec(before.rotation);
-        target.scale = cloneVec(before.scale);
-        emit({ type: 'transform', entityId: id });
-      },
-    });
-  }
-
-  // Gizmo drags preview live and collapse into a single undo entry on release.
-  let gesture: { entityId: string; before: EntityTransform } | null = null;
-  let glbGesture: {
-    entityId: string;
-    nodeUuid: string;
-    nodeName: string;
-    before: EntityTransform;
-  } | null = null;
-
-  function beginGlbTransformGesture(
-    entityId: string,
-    nodeUuid: string,
-    before: EntityTransform,
-  ): void {
-    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
-    if (!nodeName) return;
-    glbGesture = {
-      entityId,
-      nodeUuid,
-      nodeName,
-      before: cloneTransform(before),
-    };
-  }
-
-  function previewGlbTransform(
-    entityId: string,
-    nodeUuid: string,
-    transform: EntityTransform,
-  ): void {
-    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
-    if (!nodeName) return;
-    setGlbOverride(entityId, nodeName, nodeUuid, transform);
-  }
-
-  function endGlbTransformGesture(): void {
-    if (!glbGesture) return;
-    const { entityId, nodeUuid, nodeName, before } = glbGesture;
-    glbGesture = null;
-    const key = glbOverrideKey(entityId, nodeName);
-    const after = glbNodeOverrides.get(key);
-    if (!after) return;
-    const afterCopy = cloneTransform(after);
-    const beforeCopy = cloneTransform(before);
-    if (JSON.stringify(beforeCopy) === JSON.stringify(afterCopy)) return;
-    history.execute({
-      label: `Transform mesh ${nodeName}`,
-      do() {
-        setGlbOverride(entityId, nodeName, nodeUuid, afterCopy);
-      },
-      undo() {
-        setGlbOverride(entityId, nodeName, nodeUuid, beforeCopy);
-      },
-    });
-  }
-
-  function commitGlbNodeTransform(
-    entityId: string,
-    nodeUuid: string,
-    before: EntityTransform,
-    after: EntityTransform,
-  ): void {
-    const nodeName = resolveGlbNodeName(entityId, nodeUuid);
-    if (!nodeName) return;
-    const beforeCopy = cloneTransform(before);
-    const afterCopy = cloneTransform(after);
-    if (JSON.stringify(beforeCopy) === JSON.stringify(afterCopy)) return;
-    history.execute({
-      label: `Transform mesh ${nodeName}`,
-      do() {
-        setGlbOverride(entityId, nodeName, nodeUuid, afterCopy);
-      },
-      undo() {
-        setGlbOverride(entityId, nodeName, nodeUuid, beforeCopy);
-      },
-    });
-  }
-
-  function beginTransformGesture(id: string): void {
-    const entity = locate(id)?.entity;
-    if (!entity) return;
-    gesture = { entityId: id, before: cloneTransform(entity) };
-  }
-
-  function previewTransform(id: string, transform: EntityTransform): void {
-    const entity = locate(id)?.entity;
-    if (!entity) return;
-    entity.position = cloneVec(transform.position);
-    entity.rotation = cloneVec(transform.rotation);
-    entity.scale = cloneVec(transform.scale);
-    markDirty();
-    emit({ type: 'transform', entityId: id });
-  }
-
-  function endTransformGesture(): void {
-    if (!gesture) return;
-    const { entityId, before } = gesture;
-    gesture = null;
-    const entity = locate(entityId)?.entity;
-    if (!entity) return;
-    const after = cloneTransform(entity);
-    const unchanged = JSON.stringify(before) === JSON.stringify(after);
-    if (unchanged) return;
-    history.execute({
-      label: `Transform ${entity.name}`,
-      do() {
-        const target = locate(entityId)?.entity;
-        if (!target) return;
-        target.position = cloneVec(after.position);
-        target.rotation = cloneVec(after.rotation);
-        target.scale = cloneVec(after.scale);
-        markDirty();
-        emit({ type: 'transform', entityId });
-      },
-      undo() {
-        const target = locate(entityId)?.entity;
-        if (!target) return;
-        target.position = cloneVec(before.position);
-        target.rotation = cloneVec(before.rotation);
-        target.scale = cloneVec(before.scale);
-        emit({ type: 'transform', entityId });
-      },
-    });
-  }
-
-  function resetSessionAfterDocumentChange(): void {
-    selection = null;
-    selectedIds = new Set();
-    subSelection = null;
-    glbTreesByEntityId.clear();
-    glbNodeOverrides.clear();
-    dirty = false;
-    history.clear();
-    emit({ type: 'document' });
-    emit({ type: 'structure' });
-    emit({ type: 'selection', entityId: null, selectedIds: [] });
-  }
-
-  function newDocument(): void {
-    state = {
-      documentType: 'prefab',
-      prefabId: '',
-      prefabName: 'Untitled Prefab',
-      kind: 'station',
-      sceneKind: 'main-game',
-      roots: [],
-    };
-    resetSessionAfterDocumentChange();
-  }
-
-  /**
-   * Empty scene shell. Callers that want a starting GameObject set load
-   * `createSceneEditorStateFromTemplate()` instead.
-   */
-  function newScene(): void {
-    state = {
+function buildStoreCtx(
+  emit: (event: EditorEvent) => void,
+): EditorStoreCtx {
+  const ctx = {
+    state: {
       documentType: 'scene',
       prefabId: '',
       prefabName: 'Untitled Scene',
       kind: 'site',
       sceneKind: 'main-game',
       roots: [],
-    };
-    resetSessionAfterDocumentChange();
-  }
+    } as EditorDocumentState,
+    selection: null as string | null,
+    selectedIds: new Set<string>(),
+    subSelection: null as SubSelection | null,
+    glbTreesByEntityId: new Map<string, GlbNodeRef>(),
+    glbNodeOverrides: new Map<string, EntityTransform>(),
+    dirty: false,
+    history: null as unknown as EditorStoreCtx['history'],
+  } as EditorStoreCtx;
 
-  function loadDocument(next: EditorDocumentState): void {
-    state = {
-      documentType: next.documentType ?? 'prefab',
-      prefabId: next.prefabId,
-      prefabName: next.prefabName,
-      kind: next.kind,
-      sceneKind: next.sceneKind ?? 'main-game',
-      roots: next.roots,
-    };
-    selection = null;
-    selectedIds = new Set();
-    subSelection = null;
-    glbTreesByEntityId.clear();
-    rebuildGlbOverridesFromState();
-    dirty = false;
-    history.clear();
-    emit({ type: 'document' });
-    emit({ type: 'structure' });
-    emit({ type: 'selection', entityId: null, selectedIds: [] });
-  }
+  ctx.emit = emit;
+  ctx.markDirty = (): void => {
+    ctx.dirty = true;
+  };
+  ctx.history = createCommandStack(() => ctx.emit({ type: 'history' }));
+  ctx.locate = (id: string): EntityLocation | null => locateEntity(ctx.state.roots, id);
+  ctx.isDescendant = (ancestorId: string, id: string): boolean =>
+    isDescendantOf(ctx.state.roots, ancestorId, id);
 
-  function setPrefabMeta(
-    meta: Partial<Pick<EditorDocumentState, 'prefabId' | 'prefabName' | 'kind'>>,
-  ): void {
-    state = { ...state, ...meta };
-    markDirty();
-    emit({ type: 'document' });
-  }
+  attachSelectionMethods(ctx);
+  attachGlbMethods(ctx);
+  attachStructureMethods(ctx);
+  attachEntityPropMethods(ctx);
+  attachTransformLifecycleMethods(ctx);
 
-  function setDocumentMeta(
-    meta: Partial<
-      Pick<
-        EditorDocumentState,
-        | 'documentType'
-        | 'prefabId'
-        | 'prefabName'
-        | 'kind'
-        | 'sceneKind'
-      >
-    >,
-  ): void {
-    state = { ...state, ...meta };
-    markDirty();
-    emit({ type: 'document' });
-  }
+  return ctx;
+}
+
+export function createEditorStore() {
+  const listeners = new Set<(event: EditorEvent) => void>();
+  const emit = (event: EditorEvent): void => {
+    for (const listener of listeners) listener(event);
+  };
+  const ctx = buildStoreCtx(emit);
 
   return {
     subscribe(listener: (event: EditorEvent) => void): () => void {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    getState: () => state,
-    getSelection: () => selection,
-    getSelectedIds: () => [...selectedIds],
-    isEntitySelected: (id: string) => selectedIds.has(id),
-    getSubSelection: () => subSelection,
-    getGlbTree: (entityId: string) => glbTreesByEntityId.get(entityId) ?? null,
+    getState: () => ctx.state,
+    getSelection: () => ctx.selection,
+    getSelectedIds: () => [...ctx.selectedIds],
+    isEntitySelected: (id: string) => ctx.selectedIds.has(id),
+    getSubSelection: () => ctx.subSelection,
+    getGlbTree: (entityId: string) => ctx.glbTreesByEntityId.get(entityId) ?? null,
     getGlbNodeName: (entityId: string, nodeUuid: string) => {
-      const tree = glbTreesByEntityId.get(entityId);
+      const tree = ctx.glbTreesByEntityId.get(entityId);
       return tree ? findGlbNodeName(tree, nodeUuid) : null;
     },
     getGlbNodeOverride: (entityId: string, nodeUuid: string) => {
-      const nodeName = resolveGlbNodeName(entityId, nodeUuid);
+      const nodeName = ctx.resolveGlbNodeName(entityId, nodeUuid);
       if (!nodeName) return null;
-      return glbNodeOverrides.get(glbOverrideKey(entityId, nodeName)) ?? null;
+      return ctx.glbNodeOverrides.get(glbOverrideKey(entityId, nodeName)) ?? null;
     },
     getGlbOverridesForEntity: (entityId: string) => {
       const prefix = `${entityId}::`;
       const overrides: { nodeName: string; transform: EntityTransform }[] = [];
-      for (const [key, transform] of glbNodeOverrides.entries()) {
+      for (const [key, transform] of ctx.glbNodeOverrides.entries()) {
         if (!key.startsWith(prefix)) continue;
         overrides.push({
           nodeName: key.slice(prefix.length),
@@ -1489,63 +117,63 @@ export function createEditorStore() {
       return overrides;
     },
     getGlbHiddenNodes: (entityId: string) =>
-      locate(entityId)?.entity.glbNodeHidden.slice() ?? [],
-    isGlbNodeHidden,
-    getSelectedEntity: () => (selection ? locate(selection)?.entity ?? null : null),
-    isDirty: () => dirty,
+      ctx.locate(entityId)?.entity.glbNodeHidden.slice() ?? [],
+    isGlbNodeHidden: ctx.isGlbNodeHidden,
+    getSelectedEntity: () => (ctx.selection ? ctx.locate(ctx.selection)?.entity ?? null : null),
+    isDirty: () => ctx.dirty,
     markSaved: () => {
-      dirty = false;
+      ctx.dirty = false;
     },
     /** Restore a suspended dirty bit after `loadDocument` (prefab isolation). */
     setDirty: (value: boolean) => {
-      dirty = value;
+      ctx.dirty = value;
     },
-    locate,
-    setSelection,
-    setEntitySelection,
-    clearSelection,
-    setSubSelection,
-    setGlbTree,
-    clearGlbTrees,
-    notifyGlbNodeTransform,
-    hideGlbNode,
-    showGlbNode,
-    addEntity,
-    deleteEntity,
-    deleteEntities,
-    duplicateEntity,
-    duplicateGlbNode,
-    extractGlbNode,
-    duplicateEntities,
-    reparentEntity,
-    reparentEntities,
-    groupSelectedInEmpty,
-    replaceEntityWithPrefabInstance,
-    renameEntity,
-    setVisible,
-    setPrimitive,
-    setAsset,
-    setMaterialOverride,
-    setComponents,
-    setNodeOverrideComponents,
-    setNodeOverrideComponentsBatch,
-    getNodeOverrideComponents,
-    setTransform,
-    beginTransformGesture,
-    previewTransform,
-    endTransformGesture,
-    beginGlbTransformGesture,
-    previewGlbTransform,
-    endGlbTransformGesture,
-    commitGlbNodeTransform,
-    newDocument,
-    newScene,
-    loadDocument,
-    setPrefabMeta,
-    setDocumentMeta,
-    undo: () => history.undo(),
-    redo: () => history.redo(),
-    canUndo: () => history.canUndo(),
-    canRedo: () => history.canRedo(),
+    locate: ctx.locate,
+    setSelection: ctx.setSelection,
+    setEntitySelection: ctx.setEntitySelection,
+    clearSelection: ctx.clearSelection,
+    setSubSelection: ctx.setSubSelection,
+    setGlbTree: ctx.setGlbTree,
+    clearGlbTrees: ctx.clearGlbTrees,
+    notifyGlbNodeTransform: ctx.notifyGlbNodeTransform,
+    hideGlbNode: ctx.hideGlbNode,
+    showGlbNode: ctx.showGlbNode,
+    addEntity: ctx.addEntity,
+    deleteEntity: ctx.deleteEntity,
+    deleteEntities: ctx.deleteEntities,
+    duplicateEntity: ctx.duplicateEntity,
+    duplicateGlbNode: ctx.duplicateGlbNode,
+    extractGlbNode: ctx.extractGlbNode,
+    duplicateEntities: ctx.duplicateEntities,
+    reparentEntity: ctx.reparentEntity,
+    reparentEntities: ctx.reparentEntities,
+    groupSelectedInEmpty: ctx.groupSelectedInEmpty,
+    replaceEntityWithPrefabInstance: ctx.replaceEntityWithPrefabInstance,
+    renameEntity: ctx.renameEntity,
+    setVisible: ctx.setVisible,
+    setPrimitive: ctx.setPrimitive,
+    setAsset: ctx.setAsset,
+    setMaterialOverride: ctx.setMaterialOverride,
+    setComponents: ctx.setComponents,
+    setNodeOverrideComponents: ctx.setNodeOverrideComponents,
+    setNodeOverrideComponentsBatch: ctx.setNodeOverrideComponentsBatch,
+    getNodeOverrideComponents: ctx.getNodeOverrideComponents,
+    setTransform: ctx.setTransform,
+    beginTransformGesture: ctx.beginTransformGesture,
+    previewTransform: ctx.previewTransform,
+    endTransformGesture: ctx.endTransformGesture,
+    beginGlbTransformGesture: ctx.beginGlbTransformGesture,
+    previewGlbTransform: ctx.previewGlbTransform,
+    endGlbTransformGesture: ctx.endGlbTransformGesture,
+    commitGlbNodeTransform: ctx.commitGlbNodeTransform,
+    newDocument: ctx.newDocument,
+    newScene: ctx.newScene,
+    loadDocument: ctx.loadDocument,
+    setPrefabMeta: ctx.setPrefabMeta,
+    setDocumentMeta: ctx.setDocumentMeta,
+    undo: () => ctx.history.undo(),
+    redo: () => ctx.history.redo(),
+    canUndo: () => ctx.history.canUndo(),
+    canRedo: () => ctx.history.canRedo(),
   };
 }

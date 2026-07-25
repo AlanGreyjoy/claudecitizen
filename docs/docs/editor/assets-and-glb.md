@@ -7,14 +7,17 @@ description: Project asset libraries, protected packs, GLB node editing, and ins
 # Assets and GLB
 
 AsteronEngine serves assets from the **open project**, not from the engine
-checkout. The Project panel merges two roots under that project:
+checkout. The Project panel browses a single root under that project:
 
-## Asset roots
+## Asset root
 
 | Root | Path on disk (in the project) | Served at |
 | --- | --- | --- |
 | **Project library** | `assets/` | `/assets/...` |
-| **Source assets** | `src/assets/` | `/src/assets/...` |
+
+The engine checkout's own `src/assets/` holds engine-owned assets (atmosphere
+LUTs, skybox, star catalog, brand art), is reached only through ESM imports,
+and is not a project asset root.
 
 New projects are scaffolded with `assets/free/` and `assets/protected/`. Prefab
 JSON stores absolute URLs like `/assets/protected/synty/.../Wall_01.glb`.

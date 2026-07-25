@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld(
     buildWeb: () => ipcRenderer.invoke('editor:build-web'),
     onBuildState: (callback) => subscribe('editor:build-state', callback),
     onNativeCommand: (callback) => subscribe('editor:native-command', callback),
+    onAgentRequest: (callback) => subscribe('agent:request', callback),
+    replyAgentRequest: (payload) => {
+      ipcRenderer.send('agent:response', payload);
+    },
     listRecentProjects: () => ipcRenderer.invoke('projects:listRecent'),
     openProject: (projectRoot) => ipcRenderer.invoke('projects:open', projectRoot),
     chooseAndOpenProject: () => ipcRenderer.invoke('projects:chooseAndOpen'),

@@ -52,8 +52,7 @@ npm run editor:desktop:package
 
 The production shell serves `dist-editor/` through the private `cceditor:`
 protocol. The same protocol provides the constrained `/__editor` persistence
-API and serves project assets from the open project's `assets/` and
-`src/assets/` trees.
+API and serves project assets from the open project's `assets/` tree.
 
 ## Unity-style workflow
 
@@ -91,6 +90,35 @@ A valid project has `package.json` and an `assets/` folder.
 Use **File → Open Project…** to leave the editor and return to the Projects
 hub.
 
+## AsteronEngine MCP (agent bridge)
+
+Cursor (and other MCP clients) can query the **live** editor — open project,
+selection, hierarchy, play state — not only on-disk files.
+
+1. Install MCP deps once: `npm install --prefix tools/asteron-mcp`
+2. Start AsteronEngine (`npm run editor:dev` or `npm run editor`) and open a project
+3. Project MCP config lives at [`.cursor/mcp.json`](../.cursor/mcp.json) (`asteron-engine`,
+`type: "stdio"`). After adding/changing it: **Cursor Settings → MCP** (or
+**Customize → MCP**), enable `asteron-engine`, then reload if it stays grey.
+Check **Output → MCP Logs** if it fails to start.
+
+**Claude Code:** repo-root [`.mcp.json`](../.mcp.json) (same server). Path arg must
+use `${CLAUDE_PROJECT_DIR:-.}` — bare `${CLAUDE_PROJECT_DIR}` is unset at config
+parse time and breaks connect. Approve when prompted, or
+`claude mcp reset-project-choices` if previously rejected. Verify with
+`claude mcp list`.
+
+When the app starts, Electron writes `~/.asteron/agent.json` (`port`, `token`,
+`pid`) and serves a loopback HTTP API on `127.0.0.1`. The stdio MCP at
+`tools/asteron-mcp` reads that file and calls `/agent/v1/*`.
+
+Useful tools: `session`, `open_document`, `hierarchy`, `selection`, `entity`,
+`play_state`, `list_scenes` / `list_prefabs`, `get_scene` / `get_prefab`, plus
+safe commands `play` / `stop_play` / `save` / `select_entity` /
+`open_document_by_id`.
+
+If the editor is not running, tools return `editor_unavailable` (they do not hang).
+
 ## Security boundary
 
 - Renderer sandboxing and context isolation remain enabled.
@@ -101,3 +129,5 @@ hub.
 - Backend calls are proxied through the main process at `/__editor/backend/*`
   and are pinned to the configured `backendUrl`. Session cookies live in the
   main-process jar, never in the renderer origin.
+- The agent HTTP API binds `127.0.0.1` only and requires the bearer token from
+  `~/.asteron/agent.json`.

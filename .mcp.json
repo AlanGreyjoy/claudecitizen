@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "asteron-engine": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PROJECT_DIR:-.}/tools/asteron-mcp/src/index.mjs"
+      ]
+    }
+  }
+}

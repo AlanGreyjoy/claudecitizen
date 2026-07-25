@@ -7,6 +7,7 @@ import {
   retargetUnityHumanoidAnimations,
   UNIVERSAL_ANIMATION_LIBRARY_URL,
 } from '../unity-humanoid-retarget';
+import { createUpperParentCompensation } from './upper-parent-compensation';
 
 const LOOPING_CLIPS = new Set(['Idle_Loop', 'Jump_Loop', 'Sprint_Loop', 'Walk_Loop']);
 
@@ -171,38 +172,13 @@ export async function createSidekickAnimationRuntime(
   const sourceClips = new Map<string, THREE.AnimationClip>();
   const maskedClips = new Map<string, THREE.AnimationClip>();
   const actions = new Map<string, THREE.AnimationAction>();
-  const quaternionSamplers = new Map<
-    string,
-    ((timeSeconds: number, target: THREE.Quaternion) => THREE.Quaternion) | null
-  >();
-
-  const upperSpineBone = mixerMesh?.skeleton.getBoneByName('spine_01')
-    ?? mixerMesh?.skeleton.getBoneByName('Spine_01')
-    ?? null;
-  const upperParentBones: THREE.Bone[] = [];
-  let upperParent = upperSpineBone?.parent ?? null;
-  while (upperParent instanceof THREE.Bone) {
-    upperParentBones.unshift(upperParent);
-    upperParent = upperParent.parent;
-  }
-  const upperParentRestQuaternions = new Map(
-    upperParentBones.map((bone) => [bone.name, bone.quaternion.clone()]),
-  );
-  const currentUpperParentQuaternion = new THREE.Quaternion();
-  const referenceUpperParentQuaternion = new THREE.Quaternion();
-  const sampledParentQuaternion = new THREE.Quaternion();
-  const upperParentCorrection = new THREE.Quaternion();
-  const weightedUpperParentCorrection = new THREE.Quaternion();
-  const uncompensatedUpperSpineQuaternion = new THREE.Quaternion();
-  let upperParentCompensationApplied = false;
+  const upperParentCompensation = createUpperParentCompensation(mixerMesh, sourceClips);
 
   let activeBaseAction: THREE.AnimationAction | null = null;
   let activeUpperAction: THREE.AnimationAction | null = null;
   let activeBaseName = '';
   let activeBaseLayer: Extract<LayerKind, 'full' | 'lower'> = 'full';
   let activeUpperName: string | null = null;
-  let upperCorrectionAction: THREE.AnimationAction | null = null;
-  let upperCorrectionClipName: string | null = null;
   let playing = true;
   let timeScale = 1;
   let sourceLabel = 'none';
@@ -211,83 +187,6 @@ export async function createSidekickAnimationRuntime(
     action: THREE.AnimationAction;
     remainingSeconds: number;
   }> = [];
-
-  const quaternionSamplerFor = (
-    clip: THREE.AnimationClip,
-    boneName: string,
-  ): ((timeSeconds: number, target: THREE.Quaternion) => THREE.Quaternion) | null => {
-    const key = `${clip.uuid}:${boneName}`;
-    if (quaternionSamplers.has(key)) return quaternionSamplers.get(key) ?? null;
-    const track = clip.tracks.find((candidate): candidate is THREE.QuaternionKeyframeTrack =>
-      candidate instanceof THREE.QuaternionKeyframeTrack
-      && boneNameFromTrack(candidate.name) === boneName,
-    );
-    if (!track) {
-      quaternionSamplers.set(key, null);
-      return null;
-    }
-    const interpolant = track.InterpolantFactoryMethodLinear(new Float32Array(4));
-    const firstTime = track.times[0] ?? 0;
-    const lastTime = track.times[track.times.length - 1] ?? firstTime;
-    const sampler = (timeSeconds: number, result: THREE.Quaternion): THREE.Quaternion => {
-      const time = Math.max(firstTime, Math.min(lastTime, timeSeconds));
-      return result.fromArray(interpolant.evaluate(time)).normalize();
-    };
-    quaternionSamplers.set(key, sampler);
-    return sampler;
-  };
-
-  const restoreUpperParentCompensation = (): void => {
-    if (!upperSpineBone || !upperParentCompensationApplied) return;
-    upperSpineBone.quaternion.copy(uncompensatedUpperSpineQuaternion);
-    upperParentCompensationApplied = false;
-  };
-
-  /**
-   * Rifle gait clips animate root/pelvis in incompatible orientations. Keep
-   * those transforms for the legs, then cancel them at spine_01 so the masked
-   * torso retains the authored ADS parent space instead of looking down/left.
-   */
-  const applyUpperParentCompensation = (): void => {
-    if (
-      !upperSpineBone
-      || upperParentBones.length === 0
-      || !upperCorrectionAction
-      || !upperCorrectionClipName
-    ) {
-      return;
-    }
-    const weight = THREE.MathUtils.clamp(upperCorrectionAction.getEffectiveWeight(), 0, 1);
-    if (weight <= 1e-4) return;
-    const referenceClip = sourceClips.get(upperCorrectionClipName);
-    if (!referenceClip) return;
-
-    currentUpperParentQuaternion.identity();
-    referenceUpperParentQuaternion.identity();
-    for (const bone of upperParentBones) {
-      currentUpperParentQuaternion.multiply(bone.quaternion);
-      const rest = upperParentRestQuaternions.get(bone.name);
-      const sampler = quaternionSamplerFor(referenceClip, bone.name);
-      if (sampler) {
-        sampler(upperCorrectionAction.time, sampledParentQuaternion);
-      } else if (rest) {
-        sampledParentQuaternion.copy(rest);
-      } else {
-        sampledParentQuaternion.identity();
-      }
-      referenceUpperParentQuaternion.multiply(sampledParentQuaternion);
-    }
-
-    upperParentCorrection
-      .copy(currentUpperParentQuaternion)
-      .invert()
-      .multiply(referenceUpperParentQuaternion)
-      .normalize();
-    weightedUpperParentCorrection.identity().slerp(upperParentCorrection, weight);
-    uncompensatedUpperSpineQuaternion.copy(upperSpineBone.quaternion);
-    upperParentCompensationApplied = true;
-    upperSpineBone.quaternion.premultiply(weightedUpperParentCorrection).normalize();
-  };
 
   const ensureLayerClip = (
     name: string,
@@ -393,8 +292,7 @@ export async function createSidekickAnimationRuntime(
 
     activeUpperAction = next;
     activeUpperName = name;
-    upperCorrectionAction = next;
-    upperCorrectionClipName = name;
+    upperParentCompensation.setCorrection(next, name);
     return true;
   };
 
@@ -405,9 +303,8 @@ export async function createSidekickAnimationRuntime(
         queueFadeStop(activeUpperAction, fadeSeconds);
       } else {
         activeUpperAction.stop();
-        if (upperCorrectionAction === activeUpperAction) {
-          upperCorrectionAction = null;
-          upperCorrectionClipName = null;
+        if (upperParentCompensation.getCorrectionAction() === activeUpperAction) {
+          upperParentCompensation.setCorrection(null, null);
         }
       }
     }
@@ -432,9 +329,8 @@ export async function createSidekickAnimationRuntime(
         activeUpperAction = null;
         activeUpperName = null;
       }
-      if (upperCorrectionAction === action) {
-        upperCorrectionAction = null;
-        upperCorrectionClipName = null;
+      if (upperParentCompensation.getCorrectionAction() === action) {
+        upperParentCompensation.setCorrection(null, null);
       }
     }
     maskedClips.delete(actionKey(name, 'lower'));
@@ -442,7 +338,7 @@ export async function createSidekickAnimationRuntime(
   };
 
   const clearActions = (): void => {
-    restoreUpperParentCompensation();
+    upperParentCompensation.restore();
     mixer.stopAllAction();
     for (const action of actions.values()) {
       mixer.uncacheAction(action.getClip(), mixerRoot);
@@ -450,15 +346,14 @@ export async function createSidekickAnimationRuntime(
     actions.clear();
     sourceClips.clear();
     maskedClips.clear();
-    quaternionSamplers.clear();
+    upperParentCompensation.clearSamplers();
     pendingFadeStops.length = 0;
     activeBaseAction = null;
     activeUpperAction = null;
     activeBaseName = '';
     activeBaseLayer = 'full';
     activeUpperName = null;
-    upperCorrectionAction = null;
-    upperCorrectionClipName = null;
+    upperParentCompensation.setCorrection(null, null);
     clipNames = [];
   };
 
@@ -506,6 +401,10 @@ export async function createSidekickAnimationRuntime(
     return retargetUnityHumanoidAnimations(target, source, asset.animations);
   };
 
+  /**
+   * Optional convenience pack. Controllers + gameplay load project GLBs via
+   * `loadAnimationSource` — runtime creation must not depend on UAL existing.
+   */
   const loadDefaultLibrary = async (): Promise<void> => {
     const library = await loadAnimationLibrary();
     registerClips(retargetFromAsset(library), true);
@@ -540,8 +439,8 @@ export async function createSidekickAnimationRuntime(
     if (preferred) setAnimation(preferred, 0);
   };
 
-  await loadDefaultLibrary();
-
+  // Empty mixer is valid: clip GLBs come from the open project / controller
+  // sources. Do not hard-require a protected UAL pack at create time.
   return {
     get clipNames() {
       return clipNames;
@@ -582,9 +481,9 @@ export async function createSidekickAnimationRuntime(
       const delta = Math.max(0, Math.min(1, deltaSeconds));
       // The mixer may skip unchanged tracks, so undo last frame's procedural
       // correction before asking it to apply the authored pose again.
-      restoreUpperParentCompensation();
+      upperParentCompensation.restore();
       mixer.update(delta);
-      applyUpperParentCompensation();
+      upperParentCompensation.apply();
       if (pendingFadeStops.length > 0) {
         for (let index = pendingFadeStops.length - 1; index >= 0; index -= 1) {
           const entry = pendingFadeStops[index]!;
@@ -593,9 +492,8 @@ export async function createSidekickAnimationRuntime(
           if (entry.action !== activeBaseAction && entry.action !== activeUpperAction) {
             entry.action.stop();
           }
-          if (entry.action === upperCorrectionAction && entry.action !== activeUpperAction) {
-            upperCorrectionAction = null;
-            upperCorrectionClipName = null;
+          if (entry.action === upperParentCompensation.getCorrectionAction() && entry.action !== activeUpperAction) {
+            upperParentCompensation.setCorrection(null, null);
           }
           pendingFadeStops.splice(index, 1);
         }

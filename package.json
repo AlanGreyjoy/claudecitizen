@@ -25,6 +25,7 @@
     "bake:spawn-tiles": "tsx scripts/bake_spawn_tiles.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "mcp:asteron": "node tools/asteron-mcp/src/index.mjs",
     "docs:dev": "npm run start -w docs",
     "docs:build": "npm run build -w docs"
   },

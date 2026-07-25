@@ -27,6 +27,7 @@ import {
   validateSidekickPack,
 } from './sidekick_pack.mjs';
 import { startDevRenderer } from './dev_renderer.mjs';
+import { createAgentServer, createRendererAgentTransport } from './agent_server.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
 const EDITOR_HOST = 'app';
@@ -42,6 +43,8 @@ const editorDevMode =
   || process.env.CLAUDECITIZEN_EDITOR_DEV === '1';
 /** @type {null | (() => Promise<void>)} */
 let disposeDevRenderer = null;
+/** @type {ReturnType<typeof createAgentServer> | null} */
+let agentServer = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -97,18 +100,13 @@ function resolveStaticPath(pathname) {
 }
 
 function resolveProjectAsset(repository, pathname) {
-  // Longer prefixes first so `/src/assets/` is not swallowed by `/assets/`.
-  const mounts = [
-    { prefix: '/src/assets/', root: 'src/assets' },
-    { prefix: '/assets/', root: 'assets' },
-  ];
-  for (const mount of mounts) {
-    if (!pathname.startsWith(mount.prefix)) continue;
-    const relativePath = decodeRelativePath(pathname, mount.prefix);
-    if (relativePath === null || relativePath.includes('\0')) return null;
-    return repository.resolveAssetPath(mount.root, relativePath);
-  }
-  return null;
+  // `/assets/` is the only project mount. `/src/assets/` stays with the engine
+  // checkout so Vite keeps owning its bundled imports.
+  const prefix = '/assets/';
+  if (!pathname.startsWith(prefix)) return null;
+  const relativePath = decodeRelativePath(pathname, prefix);
+  if (relativePath === null || relativePath.includes('\0')) return null;
+  return repository.resolveAssetPath('assets', relativePath);
 }
 
 async function serveFile(request, path) {
@@ -710,6 +708,10 @@ if (!hasSingleInstanceLock) {
   const trustedOrigins = new Set();
 
   const projectHub = createProjectHub({ settingsPath });
+  const { requestRenderer } = createRendererAgentTransport(
+    () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
+    ipcMain,
+  );
 
   const withWindowTransition = async (work) => {
     keepAliveForTransition = true;
@@ -911,7 +913,7 @@ if (!hasSingleInstanceLock) {
       throw new Error('The selected folder is not an AsteronEngine project.');
     }
     await projectHub.rememberProject(root);
-    repository = createEditorRepository(root);
+    repository = createEditorRepository(root, { engineRoot: repositoryRoot });
     return root;
   };
 
@@ -1215,6 +1217,14 @@ if (!hasSingleInstanceLock) {
         return buildWeb();
       });
 
+      agentServer = createAgentServer({
+        getRepository: () => repository,
+        getEditorWindow: () =>
+          mainWindow && !mainWindow.isDestroyed() ? mainWindow : null,
+        requestRenderer,
+      });
+      await agentServer.start();
+
       const explicit = parseProjectRootArgument();
       if (explicit) {
         if (!(await isAsteronEngineProject(explicit))) {
@@ -1243,6 +1253,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  if (agentServer) {
+    const server = agentServer;
+    agentServer = null;
+    void server.stop();
+  }
   if (!disposeDevRenderer) return;
   const dispose = disposeDevRenderer;
   disposeDevRenderer = null;

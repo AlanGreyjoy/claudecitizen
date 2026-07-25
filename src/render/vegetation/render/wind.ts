@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 
 /**
  * GPU wind sway for instanced vegetation.

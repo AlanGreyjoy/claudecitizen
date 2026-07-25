@@ -6,19 +6,25 @@ import { defineConfig, type Plugin } from 'vite';
 
 const PROJECT_ASSET_ROOT = 'assets';
 const PROJECT_ASSET_URL_PREFIX = '/assets/';
-/** Asset roots searched for `*.prefab.json`. Mirrors PROJECT_ASSET_ROOTS in editor-desktop/repository.mjs. */
-const PREFAB_SEARCH_ROOTS = ['assets', 'src/assets'];
+/** Asset root searched for `*.prefab.json`. Mirrors PROJECT_ASSET_ROOTS in editor-desktop/repository.mjs. */
+const PREFAB_SEARCH_ROOTS = ['assets'];
 /** Stable runtime URL for the configured Sidekick pack. */
 const SIDEKICK_VIRTUAL_URL_PREFIX = '/asteron/content/synty-sidekick/';
+/**
+ * Referenced by the engine's character catalog rather than by any prefab, so
+ * the prefab scan cannot discover them. Absent in projects that do not license
+ * the pack, hence "optional".
+ */
 const OPTIONAL_RUNTIME_ASSET_URLS = [
   `${SIDEKICK_VIRTUAL_URL_PREFIX}manifest.json`,
-  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienArmor_01.glb',
-  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienChef_01.gltf',
-  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienCombat_01.gltf',
-  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienRock_01.gltf',
-  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_Soldier_Male_01.glb',
-  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_SpaceSuit_Male_01.glb',
-  '/src/assets/protected/characters/SM_Chr_ScifiWorlds_Strider_Male_01.glb',
+  '/assets/protected/animations/universal-animation-library/UAL1_Standard.glb',
+  '/assets/protected/characters/SM_Chr_ScifiWorlds_AlienArmor_01.glb',
+  '/assets/protected/characters/SM_Chr_ScifiWorlds_AlienChef_01.gltf',
+  '/assets/protected/characters/SM_Chr_ScifiWorlds_AlienCombat_01.gltf',
+  '/assets/protected/characters/SM_Chr_ScifiWorlds_AlienRock_01.gltf',
+  '/assets/protected/characters/SM_Chr_ScifiWorlds_Soldier_Male_01.glb',
+  '/assets/protected/characters/SM_Chr_ScifiWorlds_SpaceSuit_Male_01.glb',
+  '/assets/protected/characters/SM_Chr_ScifiWorlds_Strider_Male_01.glb',
 ];
 
 interface AssetMount {
@@ -50,11 +56,6 @@ const BUILD_ASSET_MOUNTS: AssetMount[] = [
     urlPrefix: PROJECT_ASSET_URL_PREFIX,
     sourceRoot: 'public/assets',
     outputRoot: PROJECT_ASSET_ROOT,
-  },
-  {
-    urlPrefix: '/src/assets/',
-    sourceRoot: 'src/assets',
-    outputRoot: 'src/assets',
   },
 ];
 
@@ -484,11 +485,11 @@ export default defineConfig({
     },
   },
   // Electron `--dev` starts Vite and proxies editor APIs + project asset mounts
-  // through a main-process HTTP bridge. Do not proxy `/src/assets`: Vite must
-  // own those for `?import` transforms (e.g. the brand logo PNG). Runtime GLB
-  // URLs under `/src/assets` are served from the engine checkout by Vite.
-  // Project library files live under the open project's `assets/` and are
-  // served via the bridge at `/assets/...`.
+  // through a main-process HTTP bridge. `/src/assets` is never proxied: it is
+  // the engine checkout's own bundled assets (brand logo, atmosphere LUTs,
+  // stars), reached only through ESM imports that Vite must own. All project
+  // content lives under the open project's `assets/` and is served via the
+  // bridge at `/assets/...`.
   server: editorBridgeTarget
     ? {
         host: '127.0.0.1',

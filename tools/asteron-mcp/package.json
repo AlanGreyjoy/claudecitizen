@@ -1,0 +1,17 @@
+{
+  "name": "asteron-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stdio MCP bridge for live AsteronEngine editor state",
+  "bin": {
+    "asteron-mcp": "./src/index.mjs"
+  },
+  "scripts": {
+    "start": "node ./src/index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.25.0"
+  }
+}

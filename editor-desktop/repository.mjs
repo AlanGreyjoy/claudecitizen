@@ -1,8 +1,12 @@
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-/** Asset roots are always resolved under the open project root. */
-export const PROJECT_ASSET_ROOTS = Object.freeze(['assets', 'src/assets']);
+/**
+ * The single project asset library, resolved under the open project root and
+ * served at `/assets/`. `src/assets/` belongs to the engine checkout and is
+ * owned by Vite, so it is never a project root.
+ */
+export const PROJECT_ASSET_ROOTS = Object.freeze(['assets']);
 
 /** Matches the client fallback in src/net/api.ts. */
 const DEFAULT_BACKEND_URL = 'http://localhost:3000';
@@ -153,12 +157,25 @@ async function listAssetsRecursive(rootDir) {
   return entries;
 }
 
-export function createEditorRepository(rawProjectRoot) {
+/**
+ * @param {string} rawProjectRoot Open Asteron project root (scenes, assets, …).
+ * @param {{ engineRoot?: string }} [options]
+ *   `engineRoot` is the AsteronEngine checkout. Animation controllers are
+ *   engine-authored (stance → clip bindings); project only supplies the GLB
+ *   files those controllers reference under `/assets/…`.
+ */
+export function createEditorRepository(rawProjectRoot, options = {}) {
   const projectRoot = resolve(rawProjectRoot);
+  const engineRoot = resolve(
+    typeof options.engineRoot === 'string' && options.engineRoot.trim()
+      ? options.engineRoot
+      : rawProjectRoot,
+  );
   const sceneDataDir = () => resolve(projectRoot, 'src/world/scenes/data');
   const planetDataDir = () => resolve(projectRoot, 'src/world/planets/data');
   const systemDataDir = () => resolve(projectRoot, 'src/world/systems/data');
-  const animationControllerDataDir = () => resolve(projectRoot, 'src/player/animation/data');
+  /** Engine-owned: `*.controller.json` next to the bundled runtime default. */
+  const animationControllerDataDir = () => resolve(engineRoot, 'src/player/animation/data');
   const baseCharacterEquipmentPath = () =>
     resolve(projectRoot, 'src/player/equipment/data/base-characters.json');
   const characterSettingsPath = () =>
@@ -478,7 +495,7 @@ export function createEditorRepository(rawProjectRoot) {
         }
       }
     } catch {
-      // A new project may not have controller data yet.
+      // Engine checkout may lack the data dir in odd layouts; callers fall back.
     }
     controllers.sort((left, right) => left.id.localeCompare(right.id));
     return { controllers };
@@ -504,7 +521,7 @@ export function createEditorRepository(rawProjectRoot) {
     }
     const id = requireSlugId(document.id);
     const path = await writeJson(
-      projectRoot,
+      engineRoot,
       join(animationControllerDataDir(), `${id}.controller.json`),
       document,
     );
@@ -771,6 +788,7 @@ export function createEditorRepository(rawProjectRoot) {
 
   return Object.freeze({
     projectRoot,
+    engineRoot,
     resolveAssetPath,
     listAssets: async (root) => ({
       root,

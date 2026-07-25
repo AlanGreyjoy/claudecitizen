@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import { cross, normalize, rotateAroundAxis, scale, add } from '../../math/vec3';
 import type { Vec3 } from '../../types';
 import { resolveSeatLookForward } from '../../flight/flight-aim';

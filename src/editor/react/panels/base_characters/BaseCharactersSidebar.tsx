@@ -94,7 +94,7 @@ function AnimationTab({ api }: BaseCharactersSidebarProps): ReactElement {
         <button
           type="button"
           className="ed-btn"
-          title="Load Universal Animation Library locomotion clips"
+          title="Optional: load UAL from project assets/protected/animations/universal-animation-library/UAL1_Standard.glb if present"
           disabled={!animation}
           onClick={() => void api.loadUalLibrary()}
         >
@@ -134,11 +134,16 @@ function AnimationTab({ api }: BaseCharactersSidebarProps): ReactElement {
         />
       </label>
       <div className="ed-base-note">
-        {animation ? `Source: ${animation.sourceLabel}` : 'Animation runtime unavailable.'}
+        {animation
+          ? `Source: ${animation.sourceLabel}${
+              animation.clipNames.length === 0
+                ? ' — no clips yet. Load GLB… or drag onto Controllers.'
+                : ''
+            }`
+          : 'Animation runtime unavailable.'}
       </div>
       <div className="ed-base-note">
-        Quick scrubber for loaded clips. Assign stance bindings on the Controllers tab (or Project →
-        Anims).
+        Engine has no bundled clips. Load project GLBs here or assign them on Controllers.
       </div>
     </div>
   );
@@ -258,8 +263,8 @@ function ControllerPanel({ api }: BaseCharactersSidebarProps): ReactElement {
         })}
       </div>
       <div className="ed-base-note">
-        Idle-only controller: each stance maps to one idle clip (unarmed Idle_Loop, rifle idle,
-        pistol pistol_idle).
+        Engine owns controller bindings only. Clip GLBs live in the project under
+        /assets/animations/…. Drag a GLB onto a row or Load GLB… then Save Ctrl.
       </div>
     </div>
   );

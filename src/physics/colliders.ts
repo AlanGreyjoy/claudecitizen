@@ -332,6 +332,52 @@ export function prepareShipHullGltf(
   if (recenterHull) recenterGltfSceneRoot(scene);
 }
 
+const preparedSceneCache = new Map<string, Promise<THREE.Object3D | null>>();
+
+function preparedSceneKey(
+  assetUrl: string,
+  overrides: readonly PrefabNodeOverride[] | undefined,
+  recenterHull: boolean,
+): string {
+  return JSON.stringify({ url: assetUrl, overrides: overrides ?? [], recenterHull });
+}
+
+/**
+ * Parses a GLB once per distinct prepare inputs and hands the same prepared
+ * scene to every caller.
+ *
+ * A station prefab attaches one collider per GLB node, so a single station GLB
+ * routinely backs a hundred-plus colliders. Keying the parse by node as well
+ * would refetch and reparse that file — tens of megabytes — once per collider,
+ * with every copy resident at the same time because `preloadMeshColliders`
+ * bakes them concurrently. Everything downstream of `prepareShipHullGltf` only
+ * reads from the scene (matrices and positions are cloned out), so one prepared
+ * copy serves them all.
+ */
+function loadPreparedScene(
+  assetUrl: string,
+  overrides: readonly PrefabNodeOverride[] | undefined,
+  recenterHull: boolean,
+): Promise<THREE.Object3D | null> {
+  const key = preparedSceneKey(assetUrl, overrides, recenterHull);
+  let pending = preparedSceneCache.get(key);
+  if (!pending) {
+    pending = gltfLoader
+      .loadAsync(assetUrl)
+      .then((gltf) => {
+        prepareShipHullGltf(gltf.scene, overrides, recenterHull);
+        return gltf.scene as THREE.Object3D;
+      })
+      .catch((error) => {
+        console.warn(`Collider GLB failed to load: ${assetUrl}`, error);
+        preparedSceneCache.delete(key);
+        return null;
+      });
+    preparedSceneCache.set(key, pending);
+  }
+  return pending;
+}
+
 /**
  * Descendant GLB nodes that already have their own mesh colliders (doors,
  * ramp, cockpit pieces). Parent hull bakes must skip them — otherwise the
@@ -378,11 +424,17 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
   );
   let pending = meshAssetCache.get(key);
   if (!pending) {
-    pending = gltfLoader
-      .loadAsync(collider.assetUrl)
-      .then((gltf) => {
-        const scene = gltf.scene;
-        prepareShipHullGltf(scene, collider.nodeOverrides, collider.recenterHull ?? false);
+    pending = loadPreparedScene(
+      collider.assetUrl,
+      collider.nodeOverrides,
+      collider.recenterHull ?? false,
+    )
+      .then((scene) => {
+        if (!scene) {
+          meshAssetCache.delete(key);
+          meshAssetReady.delete(key);
+          return null;
+        }
         const root = collider.node ? scene.getObjectByName(sanitizeNodeName(collider.node)) : scene;
         if (!root) {
           console.warn(
@@ -443,7 +495,8 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
         return asset;
       })
       .catch((error) => {
-        console.warn(`Collider mesh failed to load: ${collider.assetUrl}`, error);
+        // Load errors are reported by loadPreparedScene; this is a bake failure.
+        console.warn(`Collider mesh failed to bake: ${collider.assetUrl}`, error);
         meshAssetCache.delete(key);
         meshAssetReady.delete(key);
         return null;
@@ -698,20 +751,16 @@ export function sceneMatrixToGameplayMatrix(sceneMatrix: THREE.Matrix4): THREE.M
   return SCENE_TO_GAMEPLAY.clone().multiply(sceneMatrix);
 }
 
-const nodeWorldMatrixCache = new Map<string, Promise<Map<string, THREE.Matrix4>>>();
-
-function nodeMatrixCacheKey(
-  assetUrl: string,
-  overrides: readonly PrefabNodeOverride[] | undefined,
-  recenterHull: boolean,
-): string {
-  return JSON.stringify({ url: assetUrl, overrides: overrides ?? [], recenterHull });
-}
-
 /**
  * Loads a GLB once, applies node overrides, and returns the world matrices of
  * all named nodes in a single pass. Used by collider_runtime to position box
  * colliders attached to GLB nodes via node-override components.
+ *
+ * Shares its parse with the mesh collider bakes through loadPreparedScene, so
+ * a station's box and mesh colliders cost one load between them. Only the
+ * matrices are memoized per scene — reading them back is a cheap tree lookup,
+ * and recomputing per call keeps callers that ask for different node names
+ * from receiving an earlier caller's map.
  */
 export async function loadNodeWorldMatrices(
   assetUrl: string,
@@ -720,29 +769,14 @@ export async function loadNodeWorldMatrices(
   recenterHull = false,
 ): Promise<Map<string, THREE.Matrix4>> {
   if (nodeNames.length === 0) return new Map();
-  const key = nodeMatrixCacheKey(assetUrl, nodeOverrides, recenterHull);
-  let pending = nodeWorldMatrixCache.get(key);
-  if (!pending) {
-    pending = gltfLoader
-      .loadAsync(assetUrl)
-      .then((gltf) => {
-        const scene = gltf.scene;
-        prepareShipHullGltf(scene, nodeOverrides, recenterHull);
-        const out = new Map<string, THREE.Matrix4>();
-        for (const name of nodeNames) {
-          const node = scene.getObjectByName(sanitizeNodeName(name));
-          if (node) out.set(name, node.matrixWorld.clone());
-        }
-        return out;
-      })
-      .catch((error) => {
-        console.warn(`Failed to load GLB for node matrices: ${assetUrl}`, error);
-        nodeWorldMatrixCache.delete(key);
-        return new Map();
-      });
-    nodeWorldMatrixCache.set(key, pending);
+  const scene = await loadPreparedScene(assetUrl, nodeOverrides, recenterHull);
+  const out = new Map<string, THREE.Matrix4>();
+  if (!scene) return out;
+  for (const name of nodeNames) {
+    const node = scene.getObjectByName(sanitizeNodeName(name));
+    if (node) out.set(name, node.matrixWorld.clone());
   }
-  return pending;
+  return out;
 }
 
 export function cloneColliderWithTransform(

@@ -35,6 +35,19 @@ export interface DesktopNativeCommand {
   type: DesktopNativeCommandType;
 }
 
+export interface DesktopAgentRequest {
+  id: string;
+  kind: string;
+  params?: Record<string, unknown>;
+}
+
+export interface DesktopAgentResponse {
+  id: string;
+  ok: boolean;
+  result?: unknown;
+  error?: { code?: string; message: string; status?: number };
+}
+
 export interface DesktopRecentProject {
   path: string;
   name: string;
@@ -69,6 +82,8 @@ export interface ClaudeCitizenEditorDesktopBridge {
   buildWeb: () => Promise<DesktopBuildResult>;
   onBuildState: (callback: (state: DesktopBuildState) => void) => () => void;
   onNativeCommand: (callback: (command: DesktopNativeCommand) => void) => () => void;
+  onAgentRequest: (callback: (request: DesktopAgentRequest) => void) => () => void;
+  replyAgentRequest: (payload: DesktopAgentResponse) => void;
   listRecentProjects: () => Promise<DesktopRecentProjectsResult>;
   openProject: (projectRoot: string) => Promise<DesktopOpenProjectResult>;
   chooseAndOpenProject: () => Promise<DesktopOpenProjectResult>;
