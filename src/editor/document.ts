@@ -5,7 +5,7 @@ import type {
   PrefabMaterialOverride,
   PrefabPrimitive,
 } from '../world/prefabs/schema';
-import type { SceneKind, SceneSettings } from '../world/scenes/schema';
+import type { SceneKind } from '../world/scenes/schema';
 import type { Vec3 } from '../types';
 
 export type EditorDocumentType = 'scene' | 'prefab';
@@ -47,7 +47,6 @@ export interface EditorDocumentState {
   prefabName: string;
   kind: PrefabKind;
   sceneKind: SceneKind;
-  sceneSettings: SceneSettings;
   roots: EditorEntity[];
 }
 
@@ -208,12 +207,6 @@ function pruneEntitySelection(
   return { selection: nextSelection, selectedIds: nextSelected };
 }
 
-const DEFAULT_SCENE_SETTINGS: SceneSettings = {
-  systemId: 'default',
-  planetId: 'asteron',
-  spawn: 'station',
-};
-
 export function createEditorStore() {
   let state: EditorDocumentState = {
     documentType: 'scene',
@@ -221,7 +214,6 @@ export function createEditorStore() {
     prefabName: 'Untitled Scene',
     kind: 'site',
     sceneKind: 'main-game',
-    sceneSettings: { ...DEFAULT_SCENE_SETTINGS },
     roots: [],
   };
   let selection: string | null = null;
@@ -1044,6 +1036,49 @@ export function createEditorStore() {
     return empty.id;
   }
 
+  /**
+   * Swaps an authored subtree for a single `prefab-instance` GameObject after
+   * the subtree has been extracted into a prefab document. The instance keeps
+   * the original transform so nothing appears to move.
+   */
+  function replaceEntityWithPrefabInstance(
+    id: string,
+    prefabId: string,
+    prefabKind: PrefabKind,
+  ): string | null {
+    const location = locate(id);
+    if (!location) return null;
+
+    const parentId = location.parent?.id ?? null;
+    const index = location.index;
+    const original = location.entity;
+    const instance: EditorEntity = {
+      ...createEmptyEntity(original.name),
+      position: { ...original.position },
+      rotation: { ...original.rotation },
+      scale: { ...original.scale },
+      components: [{ type: 'prefab-instance', prefabId, prefabKind }],
+    };
+
+    history.execute({
+      label: `Create prefab "${prefabId}"`,
+      do() {
+        detachEntity(id);
+        insertEntity(instance, parentId, index);
+        markDirty();
+        emit({ type: 'structure' });
+      },
+      undo() {
+        detachEntity(instance.id);
+        insertEntity(original, parentId, index);
+        emit({ type: 'structure' });
+      },
+    });
+
+    setSelection(instance.id);
+    return instance.id;
+  }
+
   function patchEntity(
     id: string,
     label: string,
@@ -1343,12 +1378,15 @@ export function createEditorStore() {
       prefabName: 'Untitled Prefab',
       kind: 'station',
       sceneKind: 'main-game',
-      sceneSettings: { ...DEFAULT_SCENE_SETTINGS },
       roots: [],
     };
     resetSessionAfterDocumentChange();
   }
 
+  /**
+   * Empty scene shell. Callers that want the default Game Manager / Planet /
+   * Player Start GameObjects load `createEmptySceneEditorState()` instead.
+   */
   function newScene(): void {
     state = {
       documentType: 'scene',
@@ -1356,7 +1394,6 @@ export function createEditorStore() {
       prefabName: 'Untitled Scene',
       kind: 'site',
       sceneKind: 'main-game',
-      sceneSettings: { ...DEFAULT_SCENE_SETTINGS },
       roots: [],
     };
     resetSessionAfterDocumentChange();
@@ -1369,9 +1406,6 @@ export function createEditorStore() {
       prefabName: next.prefabName,
       kind: next.kind,
       sceneKind: next.sceneKind ?? 'main-game',
-      sceneSettings: next.sceneSettings
-        ? structuredClone(next.sceneSettings)
-        : { ...DEFAULT_SCENE_SETTINGS },
       roots: next.roots,
     };
     selection = null;
@@ -1403,17 +1437,10 @@ export function createEditorStore() {
         | 'prefabName'
         | 'kind'
         | 'sceneKind'
-        | 'sceneSettings'
       >
     >,
   ): void {
-    state = {
-      ...state,
-      ...meta,
-      ...(meta.sceneSettings
-        ? { sceneSettings: structuredClone(meta.sceneSettings) }
-        : {}),
-    };
+    state = { ...state, ...meta };
     markDirty();
     emit({ type: 'document' });
   }
@@ -1478,6 +1505,7 @@ export function createEditorStore() {
     reparentEntity,
     reparentEntities,
     groupSelectedInEmpty,
+    replaceEntityWithPrefabInstance,
     renameEntity,
     setVisible,
     setPrimitive,

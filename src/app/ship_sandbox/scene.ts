@@ -6,7 +6,7 @@ import {
   RenderPass,
   SMAAEffect,
 } from 'postprocessing';
-import { resolveRenderQuality } from '../../render/main/domain/render_quality';
+import { resolveRenderQuality } from '../../render/main/domain/render-quality';
 import { PAD_RADIUS_METERS } from './types';
 
 export interface ShipSandboxScene {

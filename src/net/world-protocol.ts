@@ -5,7 +5,7 @@ import type {
   NetworkShipRig,
   Vec3,
 } from '../types';
-import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
 
 export const WORLD_PROTOCOL_VERSION = 1;
 export const WORLD_SIMULATION_VERSION = 1;

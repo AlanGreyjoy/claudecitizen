@@ -1,10 +1,10 @@
 import type { FlightBody } from "../types";
-import type { ShipLayout, ShipSpec } from "../player/ship_layout";
+import type { ShipLayout, ShipSpec } from "../player/ship-layout";
 import {
   createShipRigState,
   type ShipRigOptions,
   type ShipRigState,
-} from "../player/ship_rig";
+} from "../player/ship-rig";
 
 export interface ShipVitals {
   hp: number;

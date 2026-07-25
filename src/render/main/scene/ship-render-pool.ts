@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { RenderShipInstance } from '../../../types';
-import { getShipLayoutForPrefab } from '../../../player/ship_layout';
-import { createShipModel, type ShipModelHandle } from './ship_model';
-import { updateShipPlacement } from '../update/sun_system';
+import { getShipLayoutForPrefab } from '../../../player/ship-layout';
+import { createShipModel, type ShipModelHandle } from './ship-model';
+import { updateShipPlacement } from '../update/sun-system';
 
 export interface ShipRenderPool {
   sync: (

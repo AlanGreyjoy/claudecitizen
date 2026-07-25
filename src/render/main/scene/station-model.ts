@@ -11,7 +11,7 @@ import {
   type StationSide,
   type StationWindow,
 } from '../../../world/station';
-import { applyDefaultFrustumCulling } from '../../frustum_policy';
+import { applyDefaultFrustumCulling } from '../../frustum-policy';
 
 /**
  * Procedural station interior/hull built from the shared layout in

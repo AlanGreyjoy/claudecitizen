@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { getShipLayoutForPrefab } from '../../../player/ship_layout';
+import { getShipLayoutForPrefab } from '../../../player/ship-layout';
 import type { NetworkRenderEntity, NetworkShipRig, Vec3 } from '../../../types';
 import {
   createCharacterAvatarInstance,
   type CharacterAvatarInstance,
-} from './character_avatar_model';
-import { createShipModel, type ShipModelHandle } from './ship_model';
+} from './character-avatar-model';
+import { createShipModel, type ShipModelHandle } from './ship-model';
 import {
   playerCharacterAppearanceKey,
   type PlayerCharacterAppearanceV1,
-} from '../../../player/character_creator/player_character_appearance';
+} from '../../../player/character_creator/player-character-appearance';
 
 interface RemotePresenceHandle {
   dispose: () => void;

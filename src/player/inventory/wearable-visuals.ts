@@ -1,15 +1,15 @@
-import { getPresetParts } from '../character_creator/sidekick_catalog';
+import { getPresetParts } from '../character_creator/sidekick-catalog';
 import {
   cloneSidekickDefinition,
   setDefinitionPart,
   type SidekickCharacterDefinitionV2,
-} from '../character_creator/sidekick_definition';
+} from '../character_creator/sidekick-definition';
 import {
   CharacterPartType,
   type SidekickCatalog,
-} from '../character_creator/sidekick_manifest';
+} from '../character_creator/sidekick-manifest';
 import type { InventoryState, WearableSlotType } from './types';
-import { resolveEquippedWearables } from './wearable_loadout';
+import { resolveEquippedWearables } from './wearable-loadout';
 
 const SLOT_PART_TYPES: Record<WearableSlotType, readonly CharacterPartType[]> = {
   head: [

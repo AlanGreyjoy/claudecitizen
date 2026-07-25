@@ -19,8 +19,8 @@ import {
   type LocomotionGait,
   type LocomotionLayers,
 } from "./animation";
-import { getCharacterSettings } from "./character_settings";
-import type { WeaponAnimStanceId } from "./inventory/weapon_select";
+import { getCharacterSettings } from "./character-settings";
+import type { WeaponAnimStanceId } from "./inventory/weapon-select";
 
 /**
  * Shared on-foot locomotion policy for every walker (planet surface, station

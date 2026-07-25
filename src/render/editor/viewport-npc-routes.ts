@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { EditorEntity, EditorStore } from "../../editor/document";
 import type { PrefabComponent } from "../../world/prefabs/schema";
-import type { ViewportResourceTracker } from "./viewport_component_helpers";
+import type { ViewportResourceTracker } from "./viewport-component-helpers";
 
 interface NpcRouteLine {
   from: THREE.Object3D;

@@ -3,7 +3,7 @@ import {
   CSS3DObject,
   CSS3DRenderer,
 } from "three/examples/jsm/renderers/CSS3DRenderer.js";
-import type { EntertainmentSystemSpec } from "../../player/ship_layout";
+import type { EntertainmentSystemSpec } from "../../player/ship-layout";
 
 /**
  * In-world bunk Entertainment System panel via CSS3D.

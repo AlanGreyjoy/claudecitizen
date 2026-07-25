@@ -1,12 +1,12 @@
 import { MODE_IN_STATION } from "../../player/modes";
-import type { StationCharacterState } from "../../player/station_walk";
+import type { StationCharacterState } from "../../player/station-walk";
 import type { BuildArea } from "../../net/api";
 import type { BuildAreaRuntime } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import {
   syncBuildPropsVisuals,
   updateBuildTool as runUpdateBuildTool,
-} from "./build_ghost_sync";
+} from "./build-ghost-sync";
 
 export interface BuildTool {
   buildRuntimes: () => BuildAreaRuntime[];

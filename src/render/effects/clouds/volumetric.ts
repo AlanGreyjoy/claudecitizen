@@ -15,7 +15,7 @@ import {
 } from '@takram/three-clouds';
 import { DEFAULT_STBN_URL, Ellipsoid, STBNLoader } from '@takram/three-geospatial';
 import { BlendFunction, type NormalPass } from 'postprocessing';
-import { resolveRenderQuality } from '../../main/domain/render_quality';
+import { resolveRenderQuality } from '../../main/domain/render-quality';
 
 const GROUND_ALBEDO = new THREE.Color(0x56704b);
 const STBN_LOCAL_URL = new URL('../../../assets/clouds/stbn.bin', import.meta.url).href;

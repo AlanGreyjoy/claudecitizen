@@ -1,18 +1,18 @@
-import { getActiveShip } from "../../player/world_state";
-import { getShipLayout } from "../../player/ship_layout";
+import { getActiveShip } from "../../player/world-state";
+import { getShipLayout } from "../../player/ship-layout";
 import {
   getBedEyeLocal,
   localOffsetToWorld,
-} from "../../player/ship_interaction";
-import { resolveSeatLookForward } from "../../flight/flight_aim";
+} from "../../player/ship-interaction";
+import { resolveSeatLookForward } from "../../flight/flight-aim";
 import {
   entertainmentSystemLabel,
   resolveEntertainmentGazeTarget,
   type EntertainmentGazeHit,
-} from "../../player/entertainment_gaze";
+} from "../../player/entertainment-gaze";
 import { beginGetUpFromBedTransition } from "../../player/transitions";
 import type { FrameActions } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
 
 function resolveBedEntertainmentHit(

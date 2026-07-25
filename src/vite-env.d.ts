@@ -1,23 +1,15 @@
 /// <reference types="vite/client" />
 
-interface ImportMetaEnv {
-  readonly VITE_API_BASE_URL?: string;
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv;
-}
-
 declare global {
   interface Window {
     __claudecitizenRenderStats: import('./types').RenderStats | null;
-    __claudecitizenWorld?: import('./player/world_state').WorldState;
-    __claudecitizenShipModel?: import('./render/main/scene/ship_model').ShipModelHandle;
+    __claudecitizenWorld?: import('./player/world-state').WorldState;
+    __claudecitizenShipModel?: import('./render/main/scene/ship-model').ShipModelHandle;
     __claudecitizenDev?: {
       callShip: () => Promise<number>;
       teleportToHangar: (index: number) => void;
       teleportToSurface?: (
-        destination: import('./world/biome_teleport').SurfaceDestination,
+        destination: import('./world/biome-teleport').SurfaceDestination,
       ) => boolean;
       face: (yawRadians: number, pitchRadians?: number) => void;
       setColorCorrection: (settings: Partial<import('./types').ColorCorrectionSettings>) => void;

@@ -1,9 +1,9 @@
 import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
-import { directionFromCubeFace, faceUvFromDirection } from './cube_sphere';
+import { directionFromCubeFace, faceUvFromDirection } from './cube-sphere';
 import { sampleSurfaceHeightDetails, type SurfaceHeightDetails } from './elevation';
 import { getActivePlanetConfig, type PlanetRuntimeConfig } from './planets/runtime';
-import { clamp } from './terrain_noise';
-import { terrainCellUsesNorthwestSoutheastDiagonal } from './terrain_triangulation';
+import { clamp } from './terrain-noise';
+import { terrainCellUsesNorthwestSoutheastDiagonal } from './terrain-triangulation';
 import type { CubeFace, Planet, RenderableSurfaceCacheStats, TileBounds, Vec3 } from '../types';
 
 export const RENDER_SURFACE_LEVEL = 17;

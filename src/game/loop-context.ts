@@ -1,36 +1,36 @@
-import { createWorldState, type WorldState } from "../player/world_state";
+import { createWorldState, type WorldState } from "../player/world-state";
 import {
   createFlightCameraFeelState,
-} from "../player/flight_camera_feel";
-import { createEntertainmentCameraState } from "../player/entertainment_camera";
+} from "../player/flight-camera-feel";
+import { createEntertainmentCameraState } from "../player/entertainment-camera";
 import { createLoopingSfxController } from "../audio/sfx";
-import { createSoundSceneController } from "../audio/sound_scene";
+import { createSoundSceneController } from "../audio/sound-scene";
 import { createFootstepController } from "../audio/footsteps";
-import { createStationNpcPopulation } from "../npc/station_population";
+import { createStationNpcPopulation } from "../npc/station-population";
 import {
   getStationFrame,
   getStationLayoutOverride,
   type StationFrame,
 } from "../world/station";
-import type { WeaponFireState } from "../player/weapon_fire";
-import type { BallisticSegment } from "../player/weapon_ballistics";
-import type { ShipPhysics } from "../physics/ship_physics";
-import type { PlanetPhysics } from "../physics/planet_physics";
-import type { StationPhysics } from "../physics/station_physics";
-import type { EntertainmentScreenHandle } from "../render/effects/entertainment_screen";
-import type { WeaponShopScreenHandle } from "../render/effects/weapon_shop_screen";
-import type { OutfittersScreenHandle } from "../render/effects/outfitters_screen";
-import type { FoodShopScreenHandle } from "../render/effects/food_shop_screen";
+import type { WeaponFireState } from "../player/weapon-fire";
+import type { BallisticSegment } from "../player/weapon-ballistics";
+import type { ShipPhysics } from "../physics/ship-physics";
+import type { PlanetPhysics } from "../physics/planet-physics";
+import type { StationPhysics } from "../physics/station-physics";
+import type { EntertainmentScreenHandle } from "../render/effects/entertainment-screen";
+import type { WeaponShopScreenHandle } from "../render/effects/weapon-shop-screen";
+import type { OutfittersScreenHandle } from "../render/effects/outfitters-screen";
+import type { FoodShopScreenHandle } from "../render/effects/food-shop-screen";
 import type { SpikeRenderer } from "../render/main";
-import type { WorldClient } from "../net/world_client";
+import type { WorldClient } from "../net/world-client";
 import type { GameBootstrap } from "../net/api";
-import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
-import type { EntertainmentSystemController } from "../render/effects/hud/entertainment_system";
-import type { WeaponShopController } from "../render/effects/hud/weapon_shop";
+import type { AvmsTerminalController } from "../render/effects/hud/avms-terminal";
+import type { EntertainmentSystemController } from "../render/effects/hud/entertainment-system";
+import type { WeaponShopController } from "../render/effects/hud/weapon-shop";
 import type { OutfittersController } from "../render/effects/hud/outfitters";
-import type { FoodShopController } from "../render/effects/hud/food_shop";
-import type { PersonalInventoryController } from "../render/effects/hud/personal_inventory";
-import type { PlayerVitalsSessionController } from "../app/player_vitals_session";
+import type { FoodShopController } from "../render/effects/hud/food-shop";
+import type { PersonalInventoryController } from "../render/effects/hud/personal-inventory";
+import type { PlayerVitalsSessionController } from "../app/player-vitals-session";
 import type { HudUpdateParams } from "../render/effects";
 import type { PrefabDocument } from "../world/prefabs/schema";
 import type {
@@ -44,7 +44,7 @@ import type {
   PlayerControls,
   WeaponCombatRuntimeEvent,
 } from "./types";
-import { resolveLoopContextOptions } from "./loop_context_options";
+import { resolveLoopContextOptions } from "./loop-context-options";
 
 interface StationAnimationState {
   value: number;

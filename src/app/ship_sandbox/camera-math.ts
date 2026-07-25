@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { cross, normalize, rotateAroundAxis, scale, add } from '../../math/vec3';
 import type { Vec3 } from '../../types';
-import { resolveSeatLookForward } from '../../flight/flight_aim';
+import { resolveSeatLookForward } from '../../flight/flight-aim';
 import { SHIP_FORWARD, WORLD_UP } from './types';
 
 export function clamp(value: number, min: number, max: number): number {

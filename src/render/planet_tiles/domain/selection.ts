@@ -1,5 +1,5 @@
 import type { CubeFace, Planet, TileInfo, Vec3 } from '../../../types';
-import { CUBE_FACES, faceUvFromDirection } from '../../../world/cube_sphere';
+import { CUBE_FACES, faceUvFromDirection } from '../../../world/cube-sphere';
 import { radialUp } from '../../../world/coordinates';
 import { MIN_LEVEL } from './constants';
 import {
@@ -7,8 +7,8 @@ import {
   shouldSplitTile,
   type TileSelectionView,
 } from './lod';
-import { makeTileInfo, tileKey } from './tile_info';
-import { clamp } from './tile_key';
+import { makeTileInfo, tileKey } from './tile-info';
+import { clamp } from './tile-key';
 
 export type { TileSelectionView };
 

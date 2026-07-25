@@ -3,11 +3,11 @@ import type { StationNpcRenderState, Vec3 } from '../../../types';
 import {
   playerCharacterAppearanceKey,
   type PlayerCharacterAppearanceV1,
-} from '../../../player/character_creator/player_character_appearance';
+} from '../../../player/character_creator/player-character-appearance';
 import {
   createCharacterAvatarInstance,
   type CharacterAvatarInstance,
-} from './character_avatar_model';
+} from './character-avatar-model';
 
 const NPC_RENDER_DISTANCE_METERS = 90;
 const NPC_RENDER_DISTANCE_SQUARED = NPC_RENDER_DISTANCE_METERS * NPC_RENDER_DISTANCE_METERS;

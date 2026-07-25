@@ -1,20 +1,21 @@
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import {
-  createBaseCharacterEquipmentEditor,
+  BaseCharactersPanel,
   type BaseCharacterEquipmentEditor,
-} from '../../render/editor/base_character_equipment_editor';
+} from './panels/BaseCharactersPanel';
 import {
-  createMenuManagerEditor,
-  type MenuManagerEditor,
-} from '../panels/menu_manager';
-import {
-  createPlanetAuthoringEditor,
+  PlanetAuthoringPanel,
   type PlanetAuthoringEditor,
-} from '../panels/planet_authoring';
+} from './panels/PlanetAuthoringPanel';
 import {
-  createSystemMapEditor,
+  SystemMapPanel,
   type SystemMapEditor,
-} from '../panels/system_map';
+} from './panels/SystemMapPanel';
+import {
+  MenuManagerPanel,
+  type MenuManagerEditor,
+} from './panels/MenuManagerPanel';
+import { ServerConsolePanel } from './panels/server/ServerConsolePanel';
 import type { SceneEditorTab } from './types';
 
 export type TabEditorHandles = {
@@ -30,14 +31,14 @@ type TabEditorHostsProps = {
 };
 
 /**
- * Imperative tab editors (Three/canvas + dense forms). React owns visibility /
- * activate lifecycle; factories stay in their modules.
+ * Tab editors with React chrome and imperative preview stages. React owns visibility /
+ * activate lifecycle; preview runtimes stay in their modules.
  */
 export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactElement {
-  const baseRef = useRef<HTMLDivElement | null>(null);
-  const planetRef = useRef<HTMLDivElement | null>(null);
-  const systemRef = useRef<HTMLDivElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const baseCharacterRef = useRef<BaseCharacterEquipmentEditor | null>(null);
+  const planetRef = useRef<PlanetAuthoringEditor | null>(null);
+  const systemRef = useRef<SystemMapEditor | null>(null);
+  const menuManagerRef = useRef<MenuManagerEditor | null>(null);
 
   const handlesRef = useRef<TabEditorHandles>({
     baseCharacterEditor: null,
@@ -46,22 +47,28 @@ export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactEl
     menuManagerEditor: null,
   });
 
-  // Eager mount so Project → Anims can load clips without waiting for the first tab visit.
-  useEffect(() => {
-    const host = baseRef.current;
-    if (!host) return;
-    const editor = createBaseCharacterEquipmentEditor(host);
-    handlesRef.current.baseCharacterEditor = editor;
+  const syncHandles = useCallback((): void => {
     onHandles({ ...handlesRef.current });
-    return () => {
-      editor.dispose();
-      handlesRef.current.baseCharacterEditor = null;
-      onHandles({ ...handlesRef.current });
-    };
   }, [onHandles]);
+
+  const setBaseCharacterEditor = useCallback(
+    (editor: BaseCharacterEquipmentEditor | null): void => {
+      handlesRef.current.baseCharacterEditor = editor;
+      syncHandles();
+    },
+    [syncHandles],
+  );
+
+  useEffect(() => {
+    syncHandles();
+  }, [syncHandles]);
 
   useEffect(() => {
     const h = handlesRef.current;
+    h.planetAuthoringEditor = planetRef.current;
+    h.systemMapEditor = systemRef.current;
+    h.menuManagerEditor = menuManagerRef.current;
+
     if (tab === 'base-characters') {
       h.baseCharacterEditor?.activate();
     } else {
@@ -69,37 +76,25 @@ export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactEl
     }
 
     if (tab === 'planet-authoring') {
-      const host = planetRef.current;
-      if (host) {
-        h.planetAuthoringEditor ??= createPlanetAuthoringEditor(host);
-        h.planetAuthoringEditor.activate();
-      }
+      h.planetAuthoringEditor?.activate();
     } else {
       h.planetAuthoringEditor?.deactivate();
     }
 
     if (tab === 'system-map') {
-      const host = systemRef.current;
-      if (host) {
-        h.systemMapEditor ??= createSystemMapEditor(host);
-        h.systemMapEditor.activate();
-      }
+      h.systemMapEditor?.activate();
     } else {
       h.systemMapEditor?.deactivate();
     }
 
     if (tab === 'menu-manager') {
-      const host = menuRef.current;
-      if (host) {
-        h.menuManagerEditor ??= createMenuManagerEditor(host);
-        h.menuManagerEditor.activate();
-      }
+      h.menuManagerEditor?.activate();
     } else {
       h.menuManagerEditor?.deactivate();
     }
 
-    onHandles({ ...h });
-  }, [tab, onHandles]);
+    syncHandles();
+  }, [tab, syncHandles]);
 
   useEffect(() => {
     return () => {
@@ -108,35 +103,30 @@ export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactEl
       h.planetAuthoringEditor?.deactivate();
       h.systemMapEditor?.deactivate();
       h.menuManagerEditor?.deactivate();
+      h.menuManagerEditor?.dispose?.();
     };
   }, []);
 
   return (
     <>
-      <div
-        ref={baseRef}
-        className={`ed-scene-panel ed-base-characters ed-base-character-editor${
-          tab !== 'base-characters' ? ' is-hidden' : ''
-        }`}
+      <BaseCharactersPanel
+        ref={baseCharacterRef}
+        hidden={tab !== 'base-characters'}
+        onReady={setBaseCharacterEditor}
       />
-      <div
+      <PlanetAuthoringPanel
         ref={planetRef}
-        className={`ed-scene-panel ed-planet-authoring-host${
-          tab !== 'planet-authoring' ? ' is-hidden' : ''
-        }`}
+        hidden={tab !== 'planet-authoring'}
       />
-      <div
+      <SystemMapPanel
         ref={systemRef}
-        className={`ed-scene-panel ed-system-map-host${
-          tab !== 'system-map' ? ' is-hidden' : ''
-        }`}
+        hidden={tab !== 'system-map'}
       />
-      <div
-        ref={menuRef}
-        className={`ed-scene-panel ed-menu-manager-host${
-          tab !== 'menu-manager' ? ' is-hidden' : ''
-        }`}
+      <MenuManagerPanel
+        ref={menuManagerRef}
+        hidden={tab !== 'menu-manager'}
       />
+      <ServerConsolePanel active={tab === 'server'} />
     </>
   );
 }

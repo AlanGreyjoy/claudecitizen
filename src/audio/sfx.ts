@@ -2,7 +2,7 @@ import {
   GAME_SETTINGS_CHANGED_EVENT,
   loadGameSettings,
   type GameSettings,
-} from '../settings/game_settings';
+} from '../settings/game-settings';
 
 let audioContext: AudioContext | null = null;
 let masterGain: GainNode | null = null;

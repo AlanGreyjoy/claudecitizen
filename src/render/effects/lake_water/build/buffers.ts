@@ -7,17 +7,17 @@ import type {
   WaterBody,
 } from '../../../../types';
 import { distance, scale } from '../../../../math/vec3';
-import { directionFromCubeFace } from '../../../../world/cube_sphere';
-import { oceanWaterLevelMeters } from '../../../../world/coastal_profile';
-import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../../world/terrain_triangulation';
+import { directionFromCubeFace } from '../../../../world/cube-sphere';
+import { oceanWaterLevelMeters } from '../../../../world/coastal-profile';
+import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../../world/terrain-triangulation';
 import {
   RENDER_SURFACE_SEGMENTS,
   samplePlanetSurface,
-} from '../../../../world/planet_surface';
+} from '../../../../world/planet-surface';
 import {
   renderableCellSampleSpacingMeters,
   renderableGridSampleSpacingMeters,
-} from '../../../../world/renderable_surface';
+} from '../../../../world/renderable-surface';
 
 const TILE_SEGMENTS = RENDER_SURFACE_SEGMENTS;
 const SHORE_PADDING_METERS = 28;

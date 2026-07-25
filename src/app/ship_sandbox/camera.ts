@@ -3,16 +3,16 @@ import {
   FIRST_PERSON_PITCH_LIMIT,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-} from '../../player/character_controller';
-import { resolveDeckCameraOrbit } from '../../flight/flight_aim';
-import { getBedEyeLocal, localOffsetToWorld } from '../../player/ship_interaction';
-import { updateEntertainmentCameraFeel } from '../../player/entertainment_camera';
-import { resolveEntertainmentGazeTarget } from '../../player/entertainment_gaze';
-import { occludeShipCamera } from '../../physics/ship_physics';
-import { getShipLayout } from '../../player/ship_layout';
+} from '../../player/character-controller';
+import { resolveDeckCameraOrbit } from '../../flight/flight-aim';
+import { getBedEyeLocal, localOffsetToWorld } from '../../player/ship-interaction';
+import { updateEntertainmentCameraFeel } from '../../player/entertainment-camera';
+import { resolveEntertainmentGazeTarget } from '../../player/entertainment-gaze';
+import { occludeShipCamera } from '../../physics/ship-physics';
+import { getShipLayout } from '../../player/ship-layout';
 import type { ShipSandboxSession } from './types';
 import { WORLD_UP } from './types';
-import { resolveSandboxOrbit, resolveShipSeatLook, smoothVector } from './camera_math';
+import { resolveSandboxOrbit, resolveShipSeatLook, smoothVector } from './camera-math';
 
 function updateInBedSandboxCamera(session: ShipSandboxSession, dt: number): void {
   session.flightCameraFeelFrame = null;

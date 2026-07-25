@@ -1,4 +1,4 @@
-import type { ShipInstance } from "./ship_instance";
+import type { ShipInstance } from "./ship-instance";
 
 const instances = new Map<string, ShipInstance>();
 

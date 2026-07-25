@@ -11,9 +11,9 @@ import {
   MODE_RIDING_ELEVATOR,
   modeLabel,
 } from '../../../player/modes';
-import type { WorldState } from '../../../player/world_state';
-import { getActiveShip, getActiveShipBody } from '../../../player/world_state';
-import { flightModeLabel } from '../../../flight/flight_modes';
+import type { WorldState } from '../../../player/world-state';
+import { getActiveShip, getActiveShipBody } from '../../../player/world-state';
+import { flightModeLabel } from '../../../flight/flight-modes';
 import type { Planet, PlanetSurfaceSample, RenderStats, Vec3 } from '../../../types';
 
 export interface StatsPanelElements {

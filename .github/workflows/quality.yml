@@ -30,11 +30,11 @@ jobs:
         run: |
           unexpected="$({
             git ls-files \
-              'editor/assets/**' \
+              'assets/**' \
               'public/assets/protected/**' \
               'src/assets/protected/**'
           } | grep -Ev \
-            '^(editor/assets/(README\.md|free/README\.md|protected/README\.md)|public/assets/protected/README\.md|src/assets/protected/(README\.md|characters/synty_sidekick/README\.md))$' \
+            '^(public/assets/protected/README\.md|src/assets/protected/(README\.md|characters/synty_sidekick/README\.md))$' \
             || true)"
 
           if [[ -n "$unexpected" ]]; then
@@ -68,6 +68,8 @@ jobs:
 
       - name: Cache Cargo
         uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          workspaces: backend
 
       - name: Install dependencies
         run: npm ci
@@ -78,16 +80,21 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build browser game
+      - name: Build editor renderer
+        run: npm run build:editor:web
+
+      - name: Build web release target
         run: npm run build:web
 
       - name: Build API server
         run: npm run build:server
 
       - name: Check Rust formatting
+        working-directory: backend
         run: cargo fmt --all -- --check
 
       - name: Lint Rust backend
+        working-directory: backend
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Build documentation

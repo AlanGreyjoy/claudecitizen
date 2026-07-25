@@ -1,28 +1,28 @@
-import { getActiveShip } from "../../player/world_state";
-import { getShipLayout, usesColliderDeck } from "../../player/ship_layout";
-import { doorBlends } from "../../player/ship_rig";
+import { getActiveShip } from "../../player/world-state";
+import { getShipLayout, usesColliderDeck } from "../../player/ship-layout";
+import { doorBlends } from "../../player/ship-rig";
 import {
   isShipParked,
   isWithinShipPadHorizontal,
-} from "../../player/ship_interaction";
+} from "../../player/ship-interaction";
 import {
   updateCharacterOnDeck,
   type DeckCharacterState,
-} from "../../player/ship_deck";
-import { syncShipArticulationColliders } from "../../physics/ship_physics";
+} from "../../player/ship-deck";
+import { syncShipArticulationColliders } from "../../physics/ship-physics";
 import { radialUp } from "../../world/coordinates";
 import type { WalkModeInput } from "../types";
-import type { LoopContext } from "../loop_context";
-import type { WeaponCombat } from "../combat/weapon_combat";
-import type { PadInterest } from "../station/pad_interest";
+import type { LoopContext } from "../loop-context";
+import type { WeaponCombat } from "../combat/weapon-combat";
+import type { PadInterest } from "../station/pad-interest";
 import type { ShipSystems } from "../ship/systems";
 import type { Prompts } from "../station/prompts";
-import { syncShipExteriorFeetToPlanet } from "./deck_exterior_feet";
-import { handleDeckInteriorInteractions } from "./deck_interior_interactions";
+import { syncShipExteriorFeetToPlanet } from "./deck-exterior-feet";
+import { handleDeckInteriorInteractions } from "./deck-interior-interactions";
 import {
   classifyCurrentDeckPose,
   classifyPriorDeckPose,
-} from "./deck_pose";
+} from "./deck-pose";
 
 function syncArticulation(
   ctx: LoopContext,

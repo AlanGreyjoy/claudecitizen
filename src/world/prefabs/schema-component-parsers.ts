@@ -1,8 +1,16 @@
 import { isWeaponSlotType } from "../../types/equipment";
-import type { PrefabComponent, PrefabSoundZone, ShipSeatRole } from "./schema";
+import type {
+  PrefabComponent,
+  PrefabSoundZone,
+  SceneInstanceScope,
+  SceneUiScreen,
+  ShipSeatRole,
+} from "./schema";
 import {
   COCKPIT_CONTROL_ACTIONS,
   COCKPIT_STAT_KINDS,
+  SCENE_INSTANCE_SCOPES,
+  SCENE_UI_SCREENS,
   SHIP_SEAT_ROLES,
 } from "./schema";
 import {
@@ -19,9 +27,9 @@ import {
   parseUnitValue,
   parseVec2,
   parseVec3,
-} from "./schema_parse_common";
-import { parseParticleSystemComponent } from "./schema_particle_parser";
-import { parseShipControllerComponent } from "./schema_ship_controller_parser";
+} from "./schema-parse-common";
+import { parseParticleSystemComponent } from "./schema-particle-parser";
+import { parseShipControllerComponent } from "./schema-ship-controller-parser";
 
 function parseTypeOnlyComponent<T extends PrefabComponent["type"]>(
   type: T,
@@ -1358,6 +1366,53 @@ function parsePrefabInstanceComponent(
   };
 }
 
+function parseUiScreenComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const screen = SCENE_UI_SCREENS.includes(value.screen as SceneUiScreen)
+    ? (value.screen as SceneUiScreen)
+    : "title";
+  const menuId =
+    screen === "menu" && typeof value.menuId === "string" && value.menuId.trim()
+      ? parseString(value.menuId, `${path}.menuId`, 64)
+      : undefined;
+  return {
+    type: "ui-screen",
+    screen,
+    ...(menuId ? { menuId } : {}),
+  };
+}
+
+function parseSceneLinkComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const delaySeconds =
+    value.delaySeconds === undefined
+      ? undefined
+      : Math.max(0, parseFiniteNumber(value.delaySeconds, `${path}.delaySeconds`));
+  return {
+    type: "scene-link",
+    sceneId: parseString(value.sceneId, `${path}.sceneId`, 64),
+    ...(value.auto === true ? { auto: true } : {}),
+    ...(delaySeconds === undefined ? {} : { delaySeconds }),
+  };
+}
+
+function parseInstancedSceneComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  void path;
+  return {
+    type: "instanced-scene",
+    scope: SCENE_INSTANCE_SCOPES.includes(value.scope as SceneInstanceScope)
+      ? (value.scope as SceneInstanceScope)
+      : "player",
+  };
+}
+
 export const COMPONENT_PARSER_BY_TYPE: Record<
   string,
   (value: Record<string, unknown>, path: string) => PrefabComponent
@@ -1408,6 +1463,9 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "planet": parsePlanetComponent,
   "player-start": parsePlayerStartComponent,
   "prefab-instance": parsePrefabInstanceComponent,
+  "ui-screen": parseUiScreenComponent,
+  "scene-link": parseSceneLinkComponent,
+  "instanced-scene": parseInstancedSceneComponent,
 };
 
 export function parseUnknownComponent(type: unknown, path: string): null {

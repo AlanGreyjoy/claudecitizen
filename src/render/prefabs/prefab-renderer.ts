@@ -6,7 +6,7 @@ import {
   PREFAB_PRIMITIVE_MATERIAL_NAME,
   applyMaterialOverride,
   configureShipMaterial,
-} from '../materials/ship_material';
+} from '../materials/ship-material';
 import type {
   PrefabComponent,
   PrefabDocument,
@@ -22,9 +22,9 @@ import {
 import {
   bindObjectAnimationComponent,
   setupUpdateObjectAnimations,
-} from './object_animation';
-import { applyDefaultFrustumCulling } from '../frustum_policy';
-import { deduplicateObjectTextures } from '../assets/texture_dedup';
+} from './object-animation';
+import { applyDefaultFrustumCulling } from '../frustum-policy';
+import { deduplicateObjectTextures } from '../assets/texture-dedup';
 
 /**
  * Builds Three.js scene graphs from prefab documents. Shared by the runtime

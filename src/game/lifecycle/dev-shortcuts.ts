@@ -1,11 +1,11 @@
-import { createStationCharacterAt } from "../../player/station_walk";
-import { callShipToHangar } from "../../player/station_interaction";
+import { createStationCharacterAt } from "../../player/station-walk";
+import { callShipToHangar } from "../../player/station-interaction";
 import { getStationHangars } from "../../world/station";
 import { MODE_IN_STATION } from "../../player/modes";
 import type { ColorCorrectionSettings, SsaoSettings } from "../../types";
-import type { SurfaceDestination } from "../../world/biome_teleport";
-import type { LoopContext } from "../loop_context";
-import { getSurfaceSpawnDebug } from "./surface_spawn_debug";
+import type { SurfaceDestination } from "../../world/biome-teleport";
+import type { LoopContext } from "../loop-context";
+import { getSurfaceSpawnDebug } from "./surface-spawn-debug";
 
 /** Console-only dev shortcuts (mirrors the __spikeScene diagnostic). */
 export function attachDevShortcuts(

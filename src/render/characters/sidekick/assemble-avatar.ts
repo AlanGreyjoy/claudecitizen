@@ -1,19 +1,19 @@
 import * as THREE from 'three';
-import type { SidekickCatalog } from '../../../player/character_creator/sidekick_manifest';
+import type { SidekickCatalog } from '../../../player/character_creator/sidekick-manifest';
 import type {
   SidekickCharacterDefinitionV2,
   SidekickSerializedBlendShapes,
   SidekickSerializedColorRow,
   SidekickSerializedMaterialEffects,
-} from '../../../player/character_creator/sidekick_definition';
-import { getBaseModelUrl, getPartMeshUrl } from '../../../player/character_creator/sidekick_catalog';
+} from '../../../player/character_creator/sidekick-definition';
+import { getBaseModelUrl, getPartMeshUrl } from '../../../player/character_creator/sidekick-catalog';
 import {
   createSharedBoneMap,
   getSharedSkeletonRoot,
   hideBaseRenderMeshes,
   loadBaseRigScene,
   loadPartMeshes,
-} from './load_part';
+} from './load-part';
 import { loadSidekickMaterialResources } from './materials';
 
 export interface SidekickAvatarDiagnostics {

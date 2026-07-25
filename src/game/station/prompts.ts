@@ -1,5 +1,5 @@
-import type { KeyboardActionId } from "../../flight/input_settings";
-import type { LoopContext } from "../loop_context";
+import type { KeyboardActionId } from "../../flight/input-settings";
+import type { LoopContext } from "../loop-context";
 
 export interface Prompts {
   keyLabel: (action: KeyboardActionId) => string;

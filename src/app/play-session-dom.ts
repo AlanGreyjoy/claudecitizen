@@ -1,9 +1,13 @@
-function requireElement<T extends HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
+function requireElementIn<T extends HTMLElement>(id: string, root: ParentNode): T {
+  const element = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
   if (!element) {
     throw new Error(`Missing required element #${id}`);
   }
   return element as T;
+}
+
+function requireElement<T extends HTMLElement>(id: string): T {
+  return requireElementIn<T>(id, document);
 }
 
 export interface PlaySessionDom {
@@ -69,7 +73,9 @@ export interface PlaySessionDom {
   halobandEl: HTMLElement;
 }
 
-export function collectPlaySessionDom(): PlaySessionDom {
+/** Resolves the HUD nodes mounted by `mountPlayChrome`, scoped to that root. */
+export function collectPlaySessionDom(root: ParentNode = document): PlaySessionDom {
+  const requireElement = <T extends HTMLElement>(id: string): T => requireElementIn<T>(id, root);
   return {
     canvas: requireElement<HTMLCanvasElement>('view'),
     fpsEl: requireElement<HTMLElement>('hud-fps-value'),
@@ -78,7 +84,7 @@ export function collectPlaySessionDom(): PlaySessionDom {
     debugBtnEl: requireElement<HTMLButtonElement>('hud-debug-btn'),
     debugMenuEl: requireElement<HTMLElement>('hud-debug-menu'),
     statsPanelEl: requireElement<HTMLElement>('hud-stats'),
-    tutorialBannerEl: document.getElementById('hud-tutorial-banner'),
+    tutorialBannerEl: root.querySelector<HTMLElement>('#hud-tutorial-banner'),
     promptEl: requireElement<HTMLElement>('prompt'),
     readoutsEl: requireElement<HTMLElement>('readouts'),
     statusEl: requireElement<HTMLElement>('status'),

@@ -1,17 +1,17 @@
-import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
+import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player-character-appearance';
 import {
   buildPlayerSidekickDefinition,
   DEFAULT_PLAYER_CHARACTER_APPEARANCE,
-} from '../../../player/character_creator/player_character_appearance';
-import { loadSidekickCatalog } from '../../../player/character_creator/sidekick_catalog';
-import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick_definition';
+} from '../../../player/character_creator/player-character-appearance';
+import { loadSidekickCatalog } from '../../../player/character_creator/sidekick-catalog';
+import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick-definition';
 import type { InventoryState } from '../../../player/inventory/types';
-import { applyWearableLoadoutToDefinition } from '../../../player/inventory/wearable_visuals';
+import { applyWearableLoadoutToDefinition } from '../../../player/inventory/wearable-visuals';
 import {
   createSidekickPreviewStage,
   type SidekickPreviewStage,
-} from '../../characters/sidekick/preview_stage';
-import { createEquipmentAttachmentController } from '../../characters/sidekick/equipment_attach';
+} from '../../characters/sidekick/preview-stage';
+import { createEquipmentAttachmentController } from '../../characters/sidekick/equipment-attach';
 
 export interface InventoryAvatarPreview {
   dispose: () => void;

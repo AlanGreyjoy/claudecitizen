@@ -3,8 +3,8 @@ import type { EditorEntity, EditorStore } from '../document';
 import {
   MAIN_SURFACE_MATERIAL,
   PREFAB_PRIMITIVE_MATERIAL_NAME,
-} from '../../render/materials/ship_material';
-import { loadPrefabModel } from '../../render/prefabs/prefab_renderer';
+} from '../../render/materials/ship-material';
+import { loadPrefabModel } from '../../render/prefabs/prefab-renderer';
 import type { PrefabMaterialOverride } from '../../world/prefabs/schema';
 
 export interface MaterialValues {

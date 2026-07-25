@@ -1,12 +1,12 @@
 import type {
   RenderQualityPreset,
   ShadowQualitySetting,
-} from '../render/main/domain/render_quality';
+} from '../render/main/domain/render-quality';
 import { DEFAULT_GRASS_DISTANCE_METERS } from '../render/vegetation/domain/constants';
 import {
   normalizeInputSettings,
   type InputSettings,
-} from '../flight/input_settings';
+} from '../flight/input-settings';
 
 /**
  * Cloud rendering path. 'off' disables clouds; 'shell' is the cheap

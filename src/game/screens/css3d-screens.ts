@@ -1,9 +1,9 @@
-import { createEntertainmentScreen } from "../../render/effects/entertainment_screen";
-import { createWeaponShopScreen } from "../../render/effects/weapon_shop_screen";
-import { createOutfittersScreen } from "../../render/effects/outfitters_screen";
-import { createFoodShopScreen } from "../../render/effects/food_shop_screen";
+import { createEntertainmentScreen } from "../../render/effects/entertainment-screen";
+import { createWeaponShopScreen } from "../../render/effects/weapon-shop-screen";
+import { createOutfittersScreen } from "../../render/effects/outfitters-screen";
+import { createFoodShopScreen } from "../../render/effects/food-shop-screen";
 import { MODE_IN_BED, MODE_IN_STATION } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export interface Css3dScreens {
   /** CSS3D vendor/bunk screens render after WebGL so the camera matrix is final. */

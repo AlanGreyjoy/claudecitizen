@@ -2,7 +2,7 @@ import { parsePrefabDocument, type PrefabDocument, type PrefabKind } from '../wo
 import {
   parseBaseCharacterEquipment,
   type BaseCharacterEquipmentV1,
-} from '../player/equipment/base_character_equipment';
+} from '../player/equipment/base-character-equipment';
 import {
   parseAnimationController,
   type AnimationControllerV1,
@@ -10,7 +10,7 @@ import {
 import {
   parseCharacterSettings,
   type CharacterSettingsV1,
-} from '../player/character_settings';
+} from '../player/character-settings';
 import { parsePlanetDocument, type PlanetDocument } from '../world/planets/schema';
 import { parseSystemDocument, type SystemDocument } from '../world/systems/schema';
 import { parseSceneDocument, type SceneDocument } from '../world/scenes/schema';
@@ -34,9 +34,11 @@ export const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
 /** Drag-and-drop MIME type for Hierarchy panel entity rows. */
 export const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
 
-export const EDITOR_ASSET_ROOT = 'editor/assets' as const;
+/** Project-local authoring library (`<project>/assets/…`). */
+export const PROJECT_ASSET_ROOT = 'assets' as const;
+/** Runtime / source assets under the open project (`<project>/src/assets/…`). */
 export const SOURCE_ASSET_ROOT = 'src/assets' as const;
-export type AssetRoot = typeof EDITOR_ASSET_ROOT | typeof SOURCE_ASSET_ROOT;
+export type AssetRoot = typeof PROJECT_ASSET_ROOT | typeof SOURCE_ASSET_ROOT;
 
 export interface AssetEntry {
   /** Path relative to the root, forward slashes. */
@@ -65,6 +67,20 @@ export async function fetchAssetListing(root: AssetRoot): Promise<AssetEntry[]> 
   return payload.entries;
 }
 
+/** Create a folder under the project asset library (`assets/` by default). */
+export async function createAssetFolder(
+  parentPath: string,
+  name: string,
+  root: AssetRoot = PROJECT_ASSET_ROOT,
+): Promise<{ path: string }> {
+  const payload = await requestJson<{ path: string }>('/__editor/assets/folder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ root, parentPath, name }),
+  });
+  return { path: payload.path };
+}
+
 export async function fetchPrefabList(): Promise<PrefabListEntry[]> {
   const payload = await requestJson<{ prefabs: PrefabListEntry[] }>('/__editor/prefabs');
   return payload.prefabs;
@@ -84,6 +100,35 @@ export async function savePrefab(doc: PrefabDocument): Promise<string> {
     body: JSON.stringify({ document: doc }),
   });
   return payload.path;
+}
+
+export interface ProjectSettingsDocument {
+  schemaVersion: 1;
+  name: string;
+  backendUrl: string;
+  defaultScene: string;
+  build: { outDir: string };
+}
+
+export async function fetchProjectSettings(): Promise<ProjectSettingsDocument> {
+  const payload = await requestJson<{ document: ProjectSettingsDocument }>(
+    '/__editor/project-settings',
+  );
+  return payload.document;
+}
+
+export async function saveProjectSettings(
+  document: ProjectSettingsDocument,
+): Promise<ProjectSettingsDocument> {
+  const payload = await requestJson<{ document: ProjectSettingsDocument }>(
+    '/__editor/project-settings',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document }),
+    },
+  );
+  return payload.document;
 }
 
 export async function fetchSceneList(): Promise<SceneListEntry[]> {

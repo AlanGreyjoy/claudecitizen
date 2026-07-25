@@ -1,6 +1,6 @@
 import { DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD } from "../../physics/colliders";
 import type { PrefabEntity } from "../../world/prefabs/schema";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export interface StationAnimations {
   toggleStationAnimation: (id: string) => void;

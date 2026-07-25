@@ -2,9 +2,9 @@ import type { EditorEntity, EditorStore, EntityTransform } from '../document';
 import type { PrefabComponent } from '../../world/prefabs/schema';
 import type { StationFloorId } from '../../world/station';
 import type { Vec3 } from '../../types';
-import type { EditorAudioPreviewController } from '../audio_preview';
-import type { ParticlePreviewControls } from './particle_fields';
-import type { NodeBounds } from '../component_actions';
+import type { EditorAudioPreviewController } from '../audio-preview';
+import type { ParticlePreviewControls } from './particle-preview';
+import type { NodeBounds } from '../component-actions';
 
 export const FLOOR_OPTIONS: StationFloorId[] = ['hab', 'lobby', 'hangar'];
 

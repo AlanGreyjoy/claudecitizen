@@ -1,6 +1,6 @@
-import type { QuantumTravelState } from '../../../flight/quantum_travel';
+import type { QuantumTravelState } from '../../../flight/quantum-travel';
 import { MODE_IN_SHIP } from '../../../player/modes';
-import type { ShipFlightMode } from '../../../flight/flight_modes';
+import type { ShipFlightMode } from '../../../flight/flight-modes';
 import type { GameMode, Vec3 } from '../../../types';
 
 export interface FlightReticleElements {

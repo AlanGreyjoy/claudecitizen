@@ -6,7 +6,7 @@ import type {
   Vec3,
 } from '../../types';
 import { cartesianFromLatLonAlt } from '../../world/coordinates';
-import { samplePlanetSurface } from '../../world/planet_surface';
+import { samplePlanetSurface } from '../../world/planet-surface';
 import {
   acceptsSurface,
   applyTerrainInset,
@@ -17,15 +17,15 @@ import {
   createPlacementGrid,
   registerPlacement,
   type PlacementGrid,
-} from '../../world/surface_spawns/placement_grid';
+} from '../../world/surface_spawns/placement-grid';
 import { clamp01, hash01, lerp, scaledSampleCount } from '../../world/surface_spawns/hash';
-import { loadSurfaceSpawnAsset } from '../../render/surface_spawns/asset_cache';
-import { composeSurfaceSpawnMatrix } from '../../render/surface_spawns/instance_matrix';
-import type { InstancedAsset } from '../../render/vegetation/render/instanced_assets';
+import { loadSurfaceSpawnAsset } from '../../render/surface_spawns/asset-cache';
+import { composeSurfaceSpawnMatrix } from '../../render/surface_spawns/instance-matrix';
+import type { InstancedAsset } from '../../render/vegetation/render/instanced-assets';
 import {
   PREVIEW_PLANT_RADIUS_FRACTION,
   type PlanetPreviewPatch,
-} from './planet_preview_vegetation';
+} from './planet-preview-vegetation';
 
 /**
  * Bounded sample budgets so Preview never freezes the editor tab.

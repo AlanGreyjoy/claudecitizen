@@ -1,4 +1,4 @@
-import type { CharacterPartType } from './sidekick_manifest';
+import type { CharacterPartType } from './sidekick-manifest';
 
 export const SIDEKICK_DEFINITION_SCHEMA_VERSION = 2 as const;
 

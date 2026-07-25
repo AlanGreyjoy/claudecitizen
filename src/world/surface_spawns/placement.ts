@@ -8,17 +8,17 @@ import type {
   Vec3,
 } from '../../types';
 import { normalize, scale } from '../../math/vec3';
-import { directionFromCubeFace } from '../cube_sphere';
+import { directionFromCubeFace } from '../cube-sphere';
 import { classifyBiome } from '../climate';
-import { samplePlanetSurface } from '../planet_surface';
-import { sampleVisibleSurfaceFrame } from '../renderable_surface';
+import { samplePlanetSurface } from '../planet-surface';
+import { sampleVisibleSurfaceFrame } from '../renderable-surface';
 import { clamp01, hash01, lerp, scaledSampleCount } from './hash';
 import {
   canPlaceWithGap,
   createPlacementGrid,
   registerPlacement,
   type PlacementGrid,
-} from './placement_grid';
+} from './placement-grid';
 
 const FACE_INDEX: Record<CubeFace, number> = {
   nx: 1,

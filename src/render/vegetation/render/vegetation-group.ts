@@ -2,14 +2,14 @@ import * as THREE from 'three';
 import type { Vec3 } from '../../../types';
 import { getGrassDistanceMeters } from '../domain/constants';
 import type { StoredVegetationInstance, StoredVegetationTile } from '../domain/storage';
-import type { InstancedAsset } from './instanced_assets';
+import type { InstancedAsset } from './instanced-assets';
 import {
   createTreeLodState,
   hasTreeNearFocus,
   initializeTreeLodAllLow,
   type TreeLodMeshes,
   updateTreeLodMeshes,
-} from './tree_lod_update';
+} from './tree-lod-update';
 
 export interface VegetationRenderGroup {
   group: THREE.Group;

@@ -2,14 +2,14 @@
 // src/render/planet_tiles/manager.ts. Counts selected tiles per level WITHOUT
 // building geometry, so we can test LOD fixes quickly.
 import { dot, distance, normalize, scale } from '../src/math/vec3';
-import { CUBE_FACES, directionFromCubeFace, faceUvFromDirection } from '../src/world/cube_sphere';
+import { CUBE_FACES, directionFromCubeFace, faceUvFromDirection } from '../src/world/cube-sphere';
 import { radialUp, cartesianFromLatLonAlt } from '../src/world/coordinates';
 import {
   RENDER_SURFACE_LEVEL,
   sampleRenderablePlanetSurface,
-} from '../src/world/planet_surface';
+} from '../src/world/planet-surface';
 import { CLAUDECITIZEN_PLANET as planet } from '../src/world/planet';
-import { resolveLandingSite } from '../src/world/landing_sites';
+import { resolveLandingSite } from '../src/world/landing-sites';
 import type { CubeFace, TileBounds, TileInfo, Vec3 } from '../src/types';
 
 const R = planet.radiusMeters;

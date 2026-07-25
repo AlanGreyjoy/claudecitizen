@@ -2,12 +2,12 @@ import * as THREE from "three";
 import type { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import type { EditorStore } from "../../editor/document";
-import type { ViewportGlbQueries } from "./viewport_glb_queries";
+import type { ViewportGlbQueries } from "./viewport-glb-queries";
 import {
   findObjectByUuid,
   RAD_TO_DEG,
   withLightRangesHidden,
-} from "./viewport_transforms";
+} from "./viewport-transforms";
 
 const PRIMARY_BOX_COLOR = 0x8bd8ff;
 const SECONDARY_BOX_COLOR = 0x5a9cb8;

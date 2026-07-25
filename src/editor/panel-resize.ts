@@ -56,12 +56,15 @@ export const PANEL_SIZE_DEFAULTS = {
   hierarchyWidth: 264,
   inspectorWidth: 320,
   projectHeight: 240,
+  /** Bottom Project tree column (independent of hierarchy). */
+  projectSideWidth: 264,
 } as const;
 
 export const PANEL_SIZE_BOUNDS = {
   hierarchyWidth: { min: 160, max: 480 },
   inspectorWidth: { min: 200, max: 560 },
   projectHeight: { min: 120, max: () => window.innerHeight * 0.5 },
+  projectSideWidth: { min: 160, max: 560 },
 } as const;
 
 export function restorePanelSizes(root: HTMLElement, mainEl: HTMLElement): void {
@@ -92,6 +95,21 @@ export function restorePanelSizes(root: HTMLElement, mainEl: HTMLElement): void 
       clamp(project, PANEL_SIZE_BOUNDS.projectHeight.min, maxHeight),
     );
   }
+}
+
+/** Restore the bottom Project tree width onto the bottom dock host. */
+export function restoreProjectSideWidth(dockEl: HTMLElement): void {
+  const side = readStoredPx('projectSideWidth');
+  if (side === null) return;
+  setCssVarPx(
+    dockEl,
+    '--ed-project-side-width',
+    clamp(
+      side,
+      PANEL_SIZE_BOUNDS.projectSideWidth.min,
+      PANEL_SIZE_BOUNDS.projectSideWidth.max,
+    ),
+  );
 }
 
 export function attachColumnSplitter(

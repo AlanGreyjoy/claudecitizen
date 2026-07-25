@@ -5,6 +5,25 @@ export const MAX_RECENT_PROJECTS = 20;
 
 const PROJECT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$/;
 
+/** Keep in sync with SCENE_SCHEMA_VERSION in src/world/scenes/schema.ts. */
+const SCENE_SCHEMA_VERSION = 3;
+
+function identityTransform() {
+  return {
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+    scale: { x: 1, y: 1, z: 1 },
+  };
+}
+
+function sceneObject(id, name, components) {
+  return { id, name, transform: identityTransform(), components };
+}
+
+function sceneDocument(id, name, kind, gameObjects) {
+  return { schemaVersion: SCENE_SCHEMA_VERSION, id, name, kind, gameObjects };
+}
+
 function identityMount(bone = 'spine_01') {
   return {
     bone,
@@ -171,7 +190,7 @@ export function createProjectHub({ settingsPath }) {
       'src/player/animation/data',
       'src/player/equipment/data',
       'src/player/data',
-      'editor/assets',
+      'assets',
     ];
     for (const relativeDir of dirs) {
       await mkdir(join(projectRoot, relativeDir), { recursive: true });
@@ -184,6 +203,14 @@ export function createProjectHub({ settingsPath }) {
         .replace(/^-+|-+$/g, '') || 'asteron-project',
       private: true,
       asteronEngine: { projectVersion: 1 },
+    });
+
+    await writeJson(join(projectRoot, 'asteron.project.json'), {
+      schemaVersion: 1,
+      name,
+      backendUrl: 'http://localhost:3000',
+      defaultScene: 'title',
+      build: { outDir: 'dist' },
     });
 
     await writeJson(join(projectRoot, 'src/world/prefabs/data/untitled-prefab.prefab.json'), {
@@ -204,25 +231,41 @@ export function createProjectHub({ settingsPath }) {
       },
     });
 
-    const sceneSettings = {
-      systemId: 'default',
-      planetId: 'asteron',
-      spawn: 'station',
-    };
-    await writeJson(join(projectRoot, 'src/world/scenes/data/title.scene.json'), {
-      schemaVersion: 1,
-      id: 'title',
-      name: 'Title',
-      kind: 'title',
-      settings: sceneSettings,
-    });
-    await writeJson(join(projectRoot, 'src/world/scenes/data/main-game.scene.json'), {
-      schemaVersion: 1,
-      id: 'main-game',
-      name: 'Main Game',
-      kind: 'main-game',
-      settings: sceneSettings,
-    });
+    await writeJson(
+      join(projectRoot, 'src/world/scenes/data/title.scene.json'),
+      sceneDocument('title', 'Title', 'title', [
+        sceneObject('title-screen', 'Title Screen', [
+          { type: 'ui-screen', screen: 'title' },
+          { type: 'scene-link', sceneId: 'main-game' },
+        ]),
+      ]),
+    );
+    await writeJson(
+      join(projectRoot, 'src/world/scenes/data/character-creation.scene.json'),
+      sceneDocument('character-creation', 'Character Creation', 'character-creator', [
+        sceneObject('character-create-screen', 'Character Create Screen', [
+          { type: 'ui-screen', screen: 'character-create' },
+          { type: 'scene-link', sceneId: 'main-game' },
+        ]),
+      ]),
+    );
+    await writeJson(
+      join(projectRoot, 'src/world/scenes/data/main-game.scene.json'),
+      sceneDocument('main-game', 'Main Game', 'main-game', [
+        sceneObject('game-manager', 'Game Manager', [
+          {
+            type: 'game-manager',
+            systemId: 'default',
+            planetId: 'asteron',
+            spawn: 'station',
+          },
+        ]),
+        sceneObject('planet', 'Planet', [{ type: 'planet', planetId: 'asteron' }]),
+        sceneObject('player-start', 'Player Start', [
+          { type: 'player-start', spawn: 'station' },
+        ]),
+      ]),
+    );
 
     await writeJson(join(projectRoot, 'src/world/planets/data/asteron.planet.json'), {
       id: 'asteron',
@@ -272,7 +315,18 @@ export function createProjectHub({ settingsPath }) {
     });
 
     // Keep empty asset dirs discoverable in Project panel listings.
-    await writeFile(join(projectRoot, 'editor/assets/.gitkeep'), '');
+    await writeFile(join(projectRoot, 'assets/.gitkeep'), '');
+    await writeFile(
+      join(projectRoot, 'assets/README.md'),
+      [
+        '# Project assets',
+        '',
+        'Drop importable GLBs, textures, and audio here. AsteronEngine serves',
+        'them at `/assets/...` for the open project only. Organize folders',
+        'however you like — use New Folder from the Project panel.',
+        '',
+      ].join('\n'),
+    );
 
     if (!(await isAsteronEngineProject(projectRoot))) {
       throw new Error('Failed to create a valid AsteronEngine project.');

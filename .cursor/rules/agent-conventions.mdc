@@ -11,7 +11,9 @@ Before architectural or cross-cutting changes, read the project's agent docs:
 2. `claude.md` at repo root, if present
 3. `agents.md` at repo root, if present
 
-Also scan `.agents/` for any additional convention files. Use those docs for bounded-context ownership, import boundaries, terrain/foot sync, security, and performance pitfalls. Do not restate them here — read the source files.
+Use those docs for bounded-context ownership, import boundaries, terrain/foot
+sync, security, and performance pitfalls. Do not restate them here — read the
+source files.
 
 Project skills (read when the domain matches): `.cursor/skills/prefab-editor/SKILL.md`, `.cursor/skills/ship-flight/SKILL.md`, `.cursor/skills/prd/SKILL.md`.
 
@@ -74,6 +76,6 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - No unit tests in this project
 - User owns interactive QA. Agents may run non-interactive build and static validation (`cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint`) when useful. Do not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. At the end of a multi-file feature or spike, run `npm run lint` and fix errors (and trivial warnings in touched files when practical). If relevant validation is skipped, say so in the handoff. For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
 - **SQLx:** append migrations in `backend/migrations/`; `npm run backend:migrate` applies committed migrations. Do not introduce another ORM or migration system.
-- Do not start dev servers. The editor is a standalone Electron application and does not use Vite serving. Do not run `npm run dev:web`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
+- Do not start bare Vite or backend watchers. Editor HMR is `npm run editor:dev` (Electron owns Vite). Do not run `npm run dev:server`, standalone `vite`, `tsx watch`, or similar unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
 - `npm run dev:server` is the Watchexec rebuild/restart loop; `npm run start:server` runs the Rust backend once. Agents still must not start either without explicit authorization.
 - **If it can freeze the tab or tank server tick rate, fix or bound it before shipping**

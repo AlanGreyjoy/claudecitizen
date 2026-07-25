@@ -2,7 +2,7 @@ import {
   SURFACE_DESTINATION_TARGETS,
   surfaceDestinationDisplayName,
   type SurfaceDestination,
-} from '../../../world/biome_teleport';
+} from '../../../world/biome-teleport';
 
 export interface SurfaceTeleportPanelCallbacks {
   onTeleport: (destination: SurfaceDestination) => boolean;

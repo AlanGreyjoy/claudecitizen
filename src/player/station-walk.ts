@@ -1,5 +1,5 @@
 import { add, cross, length, normalize, scale, tangentize, vec3 } from '../math/vec3';
-import { CHARACTER_GROUND_OFFSET_METERS } from './character_controller';
+import { CHARACTER_GROUND_OFFSET_METERS } from './character-controller';
 import {
   advanceJumpAnimationPhase,
   animationLayersFromState,
@@ -7,15 +7,15 @@ import {
   resolveWalkFacing,
   resolveWalkInputIntent,
   shouldLockFacingToCamera,
-} from './character_locomotion';
+} from './character-locomotion';
 
-import type { StationPhysics } from '../physics/station_physics';
+import type { StationPhysics } from '../physics/station-physics';
 import {
   getStationPlayerPosition,
   isStationPlayerGrounded,
   moveStationPlayer,
   stepStationPhysics,
-} from '../physics/station_physics';
+} from '../physics/station-physics';
 import {
   getStationFrame,
   getStationRoom,
@@ -28,7 +28,7 @@ import {
   type StationFrame,
 } from '../world/station';
 import type { CharacterInput, CharacterState, Planet, Vec3 } from '../types';
-import type { WeaponAnimStanceId } from './inventory/weapon_select';
+import type { WeaponAnimStanceId } from './inventory/weapon-select';
 
 export interface StationLocal2 {
   right: number;

@@ -8,11 +8,11 @@ import {
   RENDER_SURFACE_LEVEL,
   samplePlanetSurface,
   sampleRenderablePlanetSurface,
-} from '../src/world/planet_surface';
-import { sampleVisibleSurfaceFrame } from '../src/world/renderable_surface';
+} from '../src/world/planet-surface';
+import { sampleVisibleSurfaceFrame } from '../src/world/renderable-surface';
 import { cartesianFromLatLonAlt } from '../src/world/coordinates';
-import { resolveLandingSite } from '../src/world/landing_sites';
-import { faceUvFromDirection, directionFromCubeFace } from '../src/world/cube_sphere';
+import { resolveLandingSite } from '../src/world/landing-sites';
+import { faceUvFromDirection, directionFromCubeFace } from '../src/world/cube-sphere';
 import { normalize, scale } from '../src/math/vec3';
 
 const seed = 20061;

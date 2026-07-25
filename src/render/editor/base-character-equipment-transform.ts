@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { CharacterEquipmentSlotV1, CharacterBoneMountV1 } from "../../player/equipment/base_character_equipment";
+import type { CharacterEquipmentSlotV1, CharacterBoneMountV1 } from "../../player/equipment/base-character-equipment";
 import type { PrefabEntity, PrefabTransform } from "../../world/prefabs/schema";
 
 export type EquipmentTransformSource = "character" | "backpack-socket" | "weapon-grip";

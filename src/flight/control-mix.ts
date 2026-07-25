@@ -4,7 +4,7 @@ import {
   isKeyboardActionActive,
   type KeyboardActionId,
   type KeyboardBindings,
-} from './input_settings';
+} from './input-settings';
 
 function clampAxis(value: number): number {
   return Math.max(-1, Math.min(1, value));

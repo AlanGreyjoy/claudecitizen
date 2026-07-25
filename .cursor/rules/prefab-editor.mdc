@@ -6,19 +6,20 @@ alwaysApply: false
 
 # Electron Scene and Prefab Editor
 
-Launch the standalone editor with `npm run editor`. It builds the renderer and
-opens Electron through the private `cceditor:` protocol; do not start Vite.
-Scenes live in `src/world/scenes/data/`, prefabs in
-`src/world/prefabs/data/`. The universal Play button opens a separate Play
-Mode window, and File → Build Web creates `dist/`.
+Launch with `npm run editor:dev` for HMR (Electron spawns Vite) or
+`npm run editor` for a production-like `dist-editor` build. Do not start a
+standalone Vite process.
+Scenes live in `src/world/scenes/data/`, prefabs in `src/world/prefabs/data/`.
+Play (F6) runs the open document in the Game view in-window, Pause is F7, and
+File → Build Web writes the release plus `asteron.runtime.json`.
 
 ## Architecture
 
 ```
-editor-desktop/main.mjs → cceditor: protocol / Play Mode / Build Web
+editor-desktop/main.mjs → cceditor: protocol / backend proxy / Build Web
 react/main.tsx → EditorApp (React shell)
 document.ts (EditorStore) → serialize.ts → world/prefabs/schema.ts
-react/panels/* (React UI)   panels/*_logic.ts + ImperativeHost leftovers
+react/panels/* (React UI)   panels/*_logic.ts + imperative tab editors
 component_actions.ts        world/prefabs/component_registry.ts
 glb_binding.ts              render/editor/viewport*.ts (Three.js, imperative)
                             render/prefabs/prefab_renderer.ts (runtime)
@@ -26,7 +27,7 @@ glb_binding.ts              render/editor/viewport*.ts (Three.js, imperative)
 
 - **React UI** lives in `src/editor/react/` (shell, Project, Hierarchy, Toolbar, Inspector chrome, Material Manager).
 - **EditorStore** and serialize stay framework-agnostic in `src/editor/`.
-- **Imperative hosts**: prefab viewport, base-characters stage, planet/system/menu tab editors, and dense inspector component field builders (`inspector_component_fields_dom.ts` / `particle_fields.ts`).
+- **Imperative hosts**: prefab viewport and canvas/WebGL preview stages (base-characters, planet terrain, system map, menu HUD preview). All editor chrome and inspector fields are React under `src/editor/react/`.
 - Electron owns document persistence and project asset reads. The renderer has
   no Node.js or arbitrary filesystem access.
 
@@ -67,7 +68,7 @@ Hierarchy uses `entityTargetsGlbNode` / `entityBoundToAnyGlbNode` from `glb_bind
 
 | Task | Files |
 |------|-------|
-| New component type | `schema.ts`, `component_registry.ts`, `InspectorPanel.tsx` / `inspector_component_fields_dom.ts` |
+| New component type | `schema.ts`, `component_registry.ts`, `InspectorPanel.tsx` / `react/panels/component_fields/` |
 | Ship flight stats on ship-controller | `schema.ts`, inspector fields, `ship_runtime.ts` — tune via `.cursor/skills/ship-flight/SKILL.md` |
 | Add-component / context menus | `component_actions.ts`, `HierarchyPanel.tsx`, `viewport.ts` |
 | Node overrides | `document.ts`, `serialize.ts`, `viewport.ts`, `prefab_renderer.ts` |

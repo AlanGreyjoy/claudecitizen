@@ -1,6 +1,6 @@
 import type { Planet, Vec3 } from '../types';
 import { radialUp } from './coordinates';
-import { applyCoastalShelf } from './coastal_profile';
+import { applyCoastalShelf } from './coastal-profile';
 import { carveLakeElevationFromMask, sampleLakeMask } from './lakes';
 import { getActivePlanetConfig } from './planets/runtime';
 import {
@@ -11,8 +11,8 @@ import {
   maximumNoiseFrequencyForSpacing,
   ridgedNoise3d,
   ridgedNoise3dBandLimited,
-} from './terrain_noise';
-import { sampleTerrainRegions } from './terrain_regions';
+} from './terrain-noise';
+import { sampleTerrainRegions } from './terrain-regions';
 
 export interface SurfaceHeightSampleOptions {
   sampleSpacingMeters?: number;

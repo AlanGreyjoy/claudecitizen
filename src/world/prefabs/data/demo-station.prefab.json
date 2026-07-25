@@ -130,7 +130,7 @@
           }
         },
         "asset": {
-          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
+          "url": "/assets/protected/props/SM_Prop_Monitor_06.glb"
         },
         "children": [
           {
@@ -187,7 +187,7 @@
           }
         },
         "asset": {
-          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
+          "url": "/assets/protected/props/SM_Prop_Monitor_06.glb"
         },
         "children": [
           {
@@ -244,7 +244,7 @@
           }
         },
         "asset": {
-          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
+          "url": "/assets/protected/props/SM_Prop_Monitor_06.glb"
         },
         "children": [
           {
@@ -15458,7 +15458,7 @@
           }
         },
         "asset": {
-          "url": "/editor/assets/protected/props/SM_Prop_Monitor_06.glb"
+          "url": "/assets/protected/props/SM_Prop_Monitor_06.glb"
         },
         "children": [
           {

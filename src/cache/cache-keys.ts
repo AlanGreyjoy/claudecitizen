@@ -1,4 +1,4 @@
-import { terrainFingerprint } from '../world/terrain_fingerprint';
+import { terrainFingerprint } from '../world/terrain-fingerprint';
 import type {
   CubeFace,
   Planet,

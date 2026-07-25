@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { SidekickCatalog } from '../../../player/character_creator/sidekick_manifest';
-import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick_definition';
-import { assembleSidekickCharacter } from './assemble_avatar';
-import { createSidekickAnimationRuntime } from './animation_runtime';
+import type { SidekickCatalog } from '../../../player/character_creator/sidekick-manifest';
+import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick-definition';
+import { assembleSidekickCharacter } from './assemble-avatar';
+import { createSidekickAnimationRuntime } from './animation-runtime';
 
 export interface SidekickPreviewStage {
   readonly avatarRoot: THREE.Group;

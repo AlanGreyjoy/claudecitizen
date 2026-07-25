@@ -1,22 +1,22 @@
 import * as THREE from "three";
 import type { EditorStore } from "../../editor/document";
-import { attachViewportDrop } from "./viewport_drop";
-import { createViewportEntityGraph } from "./viewport_entity_graph";
-import { createViewportFlythrough } from "./viewport_flythrough";
-import { createViewportGlbQueries } from "./viewport_glb_queries";
-import { createViewportParticles } from "./viewport_particles";
-import { createViewportPicking } from "./viewport_picking";
-import { createViewportScene } from "./viewport_scene";
-import { createViewportSelection } from "./viewport_selection";
-import { createViewportShipPreview } from "./viewport_ship_preview";
-import { createViewportSnap } from "./viewport_snap";
+import { attachViewportDrop } from "./viewport-drop";
+import { createViewportEntityGraph } from "./viewport-entity-graph";
+import { createViewportFlythrough } from "./viewport-flythrough";
+import { createViewportGlbQueries } from "./viewport-glb-queries";
+import { createViewportParticles } from "./viewport-particles";
+import { createViewportPicking } from "./viewport-picking";
+import { createViewportScene } from "./viewport-scene";
+import { createViewportSelection } from "./viewport-selection";
+import { createViewportShipPreview } from "./viewport-ship-preview";
+import { createViewportSnap } from "./viewport-snap";
 import type {
   EditorViewport,
   EditorViewportOptions,
   GizmoMode,
   GizmoSpace,
   ShipPreviewState,
-} from "./viewport_types";
+} from "./viewport-types";
 
 export type {
   EditorViewport,
@@ -24,7 +24,7 @@ export type {
   GizmoMode,
   GizmoSpace,
   ShipPreviewState,
-} from "./viewport_types";
+} from "./viewport-types";
 
 export function createEditorViewport(
   container: HTMLElement,

@@ -13,12 +13,13 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { ASSET_DND_TYPE, assetUrlFor } from '../../api';
-import { showToast } from '../../dom';
-import type { EditorAudioPreviewController } from '../../audio_preview';
+import { ASSET_DND_TYPE, assetUrlFor, createAssetFolder } from '../../api';
+import { showContextMenu, showPromptDialog, showToast } from '../../dom';
+import type { EditorAudioPreviewController } from '../../audio-preview';
 import {
   buildFolderTree,
   canCreateItemPrefabFromPath,
+  collectFolderFiles,
   DEFAULT_EXPANDED_FOLDERS,
   emptyFolderNode,
   emptyNoteForFolder,
@@ -26,15 +27,20 @@ import {
   fetchProjectAssetEntries,
   fileNameFromPath,
   findFolder,
+  folderBreadcrumbs,
   isAudioPath,
   isDraggableAssetPath,
   isModelPath,
   PROJECT_ROOT_LABEL,
   sortedFolderChildren,
-  sortedFolderFiles,
   type FolderNode,
   type ProjectAssetEntry,
-} from '../../panels/project_logic';
+} from '../../panels/project-logic';
+import {
+  attachColumnSplitter,
+  PANEL_SIZE_BOUNDS,
+  restoreProjectSideWidth,
+} from '../../panel-resize';
 import { UiIcons } from '../../../ui/icons';
 import { UiIcon } from '../UiIcon';
 import { ConsolePanel } from './ConsolePanel';
@@ -55,6 +61,7 @@ export interface ProjectPanelHandle {
 export type ProjectPanelProps = ProjectPanelOptions;
 
 type BottomLeftTab = 'project' | 'console';
+type FolderScope = 'this-folder' | 'all-subfolders';
 
 function FolderRow({
   node,
@@ -62,12 +69,16 @@ function FolderRow({
   selectedFolder,
   expanded,
   onSelect,
+  onToggleExpand,
+  onContextMenu,
 }: {
   node: FolderNode;
   depth: number;
   selectedFolder: string;
   expanded: ReadonlySet<string>;
-  onSelect: (path: string, hasChildren: boolean, isExpanded: boolean) => void;
+  onSelect: (path: string) => void;
+  onToggleExpand: (path: string) => void;
+  onContextMenu: (event: MouseEvent, folderPath: string) => void;
 }): ReactElement {
   const hasChildren = node.children.size > 0;
   const isExpanded = expanded.has(node.path);
@@ -78,25 +89,36 @@ function FolderRow({
       <div
         className={`ed-folder-row${node.path === selectedFolder ? ' is-selected' : ''}`}
         data-folder-path={node.path}
-        style={{ paddingLeft: `${10 + depth * 12}px` }}
-        onClick={() => onSelect(node.path, hasChildren, isExpanded)}
+        style={{ paddingLeft: `${8 + depth * 14}px` }}
+        onClick={() => onSelect(node.path)}
+        onContextMenu={(event) => onContextMenu(event, node.path)}
       >
-        {hasChildren ? (
-          <UiIcon
-            icon={isExpanded ? UiIcons.chevronDown : UiIcons.chevronRight}
-            className="ed-ui-icon"
-            size={14}
-            strokeWidth={2}
-          />
-        ) : (
-          <UiIcon
-            icon={UiIcons.chevronRight}
-            className="ed-ui-icon ed-ui-icon-muted"
-            size={12}
-            strokeWidth={2}
-          />
-        )}
-        <span>{label}</span>
+        <button
+          type="button"
+          className={`ed-folder-chevron${hasChildren ? '' : ' is-leaf'}`}
+          aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
+          disabled={!hasChildren}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (hasChildren) onToggleExpand(node.path);
+          }}
+        >
+          {hasChildren ? (
+            <UiIcon
+              icon={isExpanded ? UiIcons.chevronDown : UiIcons.chevronRight}
+              className="ed-ui-icon"
+              size={12}
+              strokeWidth={2.25}
+            />
+          ) : null}
+        </button>
+        <UiIcon
+          icon={isExpanded && hasChildren ? UiIcons.folderOpen : UiIcons.folder}
+          className="ed-ui-icon ed-folder-icon"
+          size={14}
+          strokeWidth={1.75}
+        />
+        <span className="ed-folder-name">{label}</span>
       </div>
       {isExpanded
         ? sortedFolderChildren(node).map((child) => (
@@ -107,6 +129,8 @@ function FolderRow({
               selectedFolder={selectedFolder}
               expanded={expanded}
               onSelect={onSelect}
+              onToggleExpand={onToggleExpand}
+              onContextMenu={onContextMenu}
             />
           ))
         : null}
@@ -375,40 +399,84 @@ function ProjectFolderTree({
   tree,
   selectedFolder,
   expanded,
-  onRefresh,
   onFolderSelect,
+  onToggleExpand,
+  onContextMenu,
 }: {
   tree: FolderNode;
   selectedFolder: string;
   expanded: ReadonlySet<string>;
-  onRefresh: () => void;
-  onFolderSelect: (path: string, hasChildren: boolean, isExpanded: boolean) => void;
+  onFolderSelect: (path: string) => void;
+  onToggleExpand: (path: string) => void;
+  onContextMenu: (event: MouseEvent, folderPath: string) => void;
 }): ReactElement {
   return (
     <div className="ed-project-side">
-      <div className="ed-panel-title ed-project-tree-toolbar">
-        <span>{selectedFolder === '' ? PROJECT_ROOT_LABEL : selectedFolder}</span>
-        <div className="ed-panel-title-actions">
-          <button
-            type="button"
-            className="ed-btn"
-            title="Refresh assets"
-            aria-label="Refresh assets"
-            onClick={onRefresh}
-          >
-            ↻
-          </button>
-        </div>
-      </div>
-      <div className="ed-folder-tree">
+      <div
+        className="ed-folder-tree"
+        onContextMenu={(event) => {
+          if ((event.target as HTMLElement).closest('.ed-folder-row')) return;
+          onContextMenu(event, selectedFolder);
+        }}
+      >
         <FolderRow
           node={tree}
           depth={0}
           selectedFolder={selectedFolder}
           expanded={expanded}
           onSelect={onFolderSelect}
+          onToggleExpand={onToggleExpand}
+          onContextMenu={onContextMenu}
         />
       </div>
+    </div>
+  );
+}
+
+function ProjectAssetToolbar({
+  selectedFolder,
+  folderScope,
+  onNavigate,
+  onScopeChange,
+}: {
+  selectedFolder: string;
+  folderScope: FolderScope;
+  onNavigate: (path: string) => void;
+  onScopeChange: (scope: FolderScope) => void;
+}): ReactElement {
+  const crumbs = folderBreadcrumbs(selectedFolder);
+  return (
+    <div className="ed-asset-browser-toolbar">
+      <nav className="ed-asset-breadcrumbs" aria-label="Asset folder path">
+        {crumbs.map((crumb, index) => {
+          const isLast = index === crumbs.length - 1;
+          return (
+            <span key={crumb.path === '' ? 'root' : crumb.path} className="ed-asset-breadcrumb">
+              {index > 0 ? <span className="ed-asset-breadcrumb-sep">/</span> : null}
+              {isLast ? (
+                <span className="ed-asset-breadcrumb-current">{crumb.label}</span>
+              ) : (
+                <button
+                  type="button"
+                  className="ed-asset-breadcrumb-link"
+                  onClick={() => onNavigate(crumb.path)}
+                >
+                  {crumb.label}
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </nav>
+      <select
+        className="ed-select ed-asset-scope-select"
+        value={folderScope}
+        aria-label="Folder scope"
+        onChange={(event) => onScopeChange(event.target.value as FolderScope)}
+      >
+        <option value="this-folder">This folder</option>
+        <option value="all-subfolders">All subfolders</option>
+      </select>
     </div>
   );
 }
@@ -416,30 +484,46 @@ function ProjectFolderTree({
 function ProjectAssetGrid({
   gridRef,
   selectedFolder,
+  folderScope,
   files,
   thumbByUrl,
   audioPreview,
   audioTick,
+  onNavigate,
+  onScopeChange,
+  onContextMenu,
   onAudioToggle,
   onPreviewAnimationSource,
   onCreateItemPrefab,
 }: {
   gridRef: RefObject<HTMLDivElement | null>;
   selectedFolder: string;
+  folderScope: FolderScope;
   files: ProjectAssetEntry[];
   thumbByUrl: Record<string, string>;
   audioPreview: EditorAudioPreviewController;
   audioTick: number;
+  onNavigate: (path: string) => void;
+  onScopeChange: (scope: FolderScope) => void;
+  onContextMenu: (event: MouseEvent, folderPath: string) => void;
   onAudioToggle: () => void;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
 }): ReactElement {
-  const folderLabel = selectedFolder === '' ? PROJECT_ROOT_LABEL : selectedFolder;
   return (
-    <div className="ed-asset-browser-body">
-      <div className="ed-panel-title ed-asset-browser-toolbar">
-        <span>{folderLabel}</span>
-      </div>
+    <div
+      className="ed-asset-browser-body"
+      onContextMenu={(event) => {
+        if ((event.target as HTMLElement).closest('.ed-asset-card')) return;
+        onContextMenu(event, selectedFolder);
+      }}
+    >
+      <ProjectAssetToolbar
+        selectedFolder={selectedFolder}
+        folderScope={folderScope}
+        onNavigate={onNavigate}
+        onScopeChange={onScopeChange}
+      />
       <div className="ed-asset-grid" ref={gridRef}>
         {files.length === 0 ? (
           <div className="ed-empty-note">{emptyNoteForFolder(selectedFolder)}</div>
@@ -467,7 +551,7 @@ function ProjectAssetGrid({
 
 /**
  * Project browser for the Rogue-style shell.
- * Renders two grid children (fragment): bottom-left Project|Console dock + center asset grid.
+ * Bottom dock: Project tree | assets grid, or full-width Console.
  */
 export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
   function ProjectPanel(options, ref): ReactElement {
@@ -481,6 +565,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
     const [tree, setTree] = useState<FolderNode>(() => emptyFolderNode());
     const [selectedFolder, setSelectedFolder] = useState('');
     const [expanded, setExpanded] = useState(() => new Set<string>(DEFAULT_EXPANDED_FOLDERS));
+    const [folderScope, setFolderScope] = useState<FolderScope>('this-folder');
     const [bottomTab, setBottomTab] = useState<BottomLeftTab>('project');
     const [audioTick, bumpAudio] = useReducer((n: number) => n + 1, 0);
 
@@ -490,6 +575,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
     const selectedFolderRef = useRef(selectedFolder);
     selectedFolderRef.current = selectedFolder;
 
+    const dockRef = useRef<HTMLDivElement | null>(null);
+    const sideSplitterRef = useRef<HTMLDivElement | null>(null);
     const gridRef = useRef<HTMLDivElement | null>(null);
     const { thumbByUrl, clearThumbs } = useLazyModelThumbs(
       gridRef,
@@ -497,6 +584,17 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       selectedFolder,
       tree,
     );
+
+    useEffect(() => {
+      const dock = dockRef.current;
+      const splitter = sideSplitterRef.current;
+      if (!dock || !splitter) return;
+      restoreProjectSideWidth(dock);
+      attachColumnSplitter(splitter, dock, '--ed-project-side-width', {
+        ...PANEL_SIZE_BOUNDS.projectSideWidth,
+        storageKey: 'projectSideWidth',
+      });
+    }, []);
 
     const load = useCallback(async (): Promise<void> => {
       let nextTree: FolderNode;
@@ -551,24 +649,95 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       [],
     );
 
-    const onFolderSelect = useCallback(
-      (path: string, hasChildren: boolean, isExpanded: boolean) => {
-        setSelectedFolder(path);
-        if (!hasChildren) return;
-        setExpanded((prev) => {
-          const next = new Set(prev);
-          if (isExpanded) next.delete(path);
-          else next.add(path);
-          return next;
+    const onFolderSelect = useCallback((path: string) => {
+      setSelectedFolder(path);
+      setExpanded((prev) => {
+        if (prev.has(path)) return prev;
+        const node = findFolder(treeRef.current, path);
+        if (!node || node.children.size === 0) return prev;
+        const next = new Set(prev);
+        next.add(path);
+        return next;
+      });
+    }, []);
+
+    const onToggleExpand = useCallback((path: string) => {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) next.delete(path);
+        else next.add(path);
+        return next;
+      });
+    }, []);
+
+    const onNavigateFolder = useCallback((path: string) => {
+      setSelectedFolder(path);
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        expandAncestorsInto(next, path);
+        return next;
+      });
+    }, []);
+
+    const createFolderIn = useCallback(
+      async (parentPath: string): Promise<void> => {
+        const parentLabel = parentPath
+          ? `${PROJECT_ROOT_LABEL}/${parentPath}`
+          : PROJECT_ROOT_LABEL;
+        const name = await showPromptDialog({
+          title: 'New Folder',
+          message: `Create a folder in ${parentLabel}`,
+          defaultValue: 'New Folder',
+          confirmLabel: 'Create',
         });
+        if (!name) return;
+        try {
+          const created = await createAssetFolder(parentPath, name);
+          pendingFolderRef.current = created.path;
+          setBottomTab('project');
+          setExpanded((prev) => {
+            const next = new Set(prev);
+            expandAncestorsInto(next, created.path);
+            return next;
+          });
+          await load();
+          showToast(`Created ${PROJECT_ROOT_LABEL}/${created.path}`);
+        } catch (error) {
+          showToast(`Could not create folder: ${(error as Error).message}`, true);
+        }
       },
-      [],
+      [load],
     );
 
-    const files = sortedFolderFiles(findFolder(tree, selectedFolder) ?? tree);
+    const onProjectContextMenu = useCallback(
+      (event: MouseEvent, folderPath: string) => {
+        event.preventDefault();
+        event.stopPropagation();
+        showContextMenu(event.clientX, event.clientY, [
+          {
+            label: 'New Folder',
+            action: () => {
+              void createFolderIn(folderPath);
+            },
+          },
+          {
+            label: 'Refresh',
+            action: () => {
+              void load();
+            },
+          },
+        ]);
+      },
+      [createFolderIn, load],
+    );
+
+    const files = collectFolderFiles(tree, selectedFolder, folderScope === 'all-subfolders');
 
     return (
-      <>
+      <div
+        ref={dockRef}
+        className={`ed-bottom-dock${bottomTab === 'console' ? ' is-console' : ''}`}
+      >
         <div className="ed-bottom-left">
           <div className="ed-bottom-left-tabs">
             <button
@@ -596,8 +765,9 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
                 tree={tree}
                 selectedFolder={selectedFolder}
                 expanded={expanded}
-                onRefresh={() => void load()}
                 onFolderSelect={onFolderSelect}
+                onToggleExpand={onToggleExpand}
+                onContextMenu={onProjectContextMenu}
               />
             </div>
             <div
@@ -609,20 +779,28 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
             </div>
           </div>
         </div>
+        <div
+          ref={sideSplitterRef}
+          className="ed-splitter ed-splitter-col ed-project-side-splitter"
+        />
         <div className="ed-asset-browser">
           <ProjectAssetGrid
             gridRef={gridRef}
             selectedFolder={selectedFolder}
+            folderScope={folderScope}
             files={files}
             thumbByUrl={thumbByUrl}
             audioPreview={audioPreview}
             audioTick={audioTick}
+            onNavigate={onNavigateFolder}
+            onScopeChange={setFolderScope}
+            onContextMenu={onProjectContextMenu}
             onAudioToggle={bumpAudio}
             onPreviewAnimationSource={onPreviewAnimationSource}
             onCreateItemPrefab={onCreateItemPrefab}
           />
         </div>
-      </>
+      </div>
     );
   },
 );

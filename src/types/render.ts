@@ -7,7 +7,7 @@ import type {
 } from './character';
 import type { FlightBody } from './flight';
 import type { Vec3 } from './math';
-import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
 
 export interface FogSettings {
   density: number;
@@ -219,6 +219,6 @@ export interface SpikeRenderWorld {
   /** Authored ambient station NPCs. Local/cosmetic until NPCs become cell entities. */
   stationNpcs?: StationNpcRenderState[];
   /** Piloting sub-mode for ship HUD / quantum VFX. */
-  flightMode?: import('../flight/flight_modes').ShipFlightMode;
-  quantum?: import('../flight/quantum_travel').QuantumTravelState;
+  flightMode?: import('../flight/flight-modes').ShipFlightMode;
+  quantum?: import('../flight/quantum-travel').QuantumTravelState;
 }

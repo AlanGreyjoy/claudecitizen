@@ -22,7 +22,7 @@ import {
   parseOptionalGradient,
   parseUnitValue,
   parseVec3,
-} from "./schema_parse_common";
+} from "./schema-parse-common";
 
 function parseParticleOptionalModule<T>(
   raw: unknown,

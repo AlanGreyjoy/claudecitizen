@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import {
   getCachedModelThumbnail,
   putCachedModelThumbnail,
-} from '../../editor/model_thumbnail_cache';
+} from '../../editor/model-thumbnail-cache';
 
 /**
  * Lazy model thumbnails for the asset browser / inventory icons.

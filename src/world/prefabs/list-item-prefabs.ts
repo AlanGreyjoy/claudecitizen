@@ -1,5 +1,5 @@
 import { listBundledPrefabIds, loadPrefabDocument } from './loader';
-import { AUTHORING_ENABLED } from '../../build_mode';
+import { AUTHORING_ENABLED } from '../../build-mode';
 
 export interface ItemPrefabOption {
   id: string;

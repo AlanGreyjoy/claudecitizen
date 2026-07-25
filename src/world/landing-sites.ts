@@ -1,7 +1,7 @@
 import { cartesianFromLatLonAlt } from './coordinates';
-import { samplePlanetSurface } from './planet_surface';
+import { samplePlanetSurface } from './planet-surface';
 import { getActivePlanetConfig } from './planets/runtime';
-import { terrainFingerprint } from './terrain_fingerprint';
+import { terrainFingerprint } from './terrain-fingerprint';
 import type { Biome, LandingSite, LandingSiteHint, Planet, PlanetSurfaceSample } from '../types';
 
 export const DEFAULT_SPAWN_SITE: LandingSiteHint = {

@@ -12,11 +12,11 @@ import {
   systemPlanetDestinationId,
   systemStationDestinationId,
   type QuantumDestination,
-} from '../world/quantum_destinations';
+} from '../world/quantum-destinations';
 import type { FlightBody, Planet, Vec3 } from '../types';
-import type { ShipFlightMode } from './flight_modes';
-import { FLIGHT_CONFIG } from './flight_config';
-import { clearNavRoute, getNavRoute } from './nav_route';
+import type { ShipFlightMode } from './flight-modes';
+import { FLIGHT_CONFIG } from './flight-config';
+import { clearNavRoute, getNavRoute } from './nav-route';
 
 export interface NavDestinationMarker {
   id: string;

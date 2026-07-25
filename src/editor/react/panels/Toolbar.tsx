@@ -41,10 +41,12 @@ export interface ToolbarActions {
   onLoadScene: (id: string) => void;
   onLoadPlanet: (id: string) => void;
   onOpenSceneSettings: () => void;
+  onOpenProjectSettings: () => void;
   onOpenMenu: (id: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onTogglePlay: () => void;
+  onTogglePause: () => void;
   onStopPlay: () => void;
   onBuildWeb: () => void;
   onOpenProject: () => void;
@@ -52,6 +54,7 @@ export interface ToolbarActions {
   /** Ship kind: editor-viewport articulation preview (gear / ramp / doors). */
   onShipPreviewChange: (state: ShipPreviewToggles) => void;
   playing: boolean;
+  paused: boolean;
   building: boolean;
 }
 
@@ -419,6 +422,7 @@ function UserMenu({
   onBuildWeb,
   onOpenProject,
   onOpenSceneSettings,
+  onOpenProjectSettings,
   onExit,
 }: {
   building: boolean;
@@ -426,6 +430,7 @@ function UserMenu({
   onBuildWeb: () => void;
   onOpenProject: () => void;
   onOpenSceneSettings: () => void;
+  onOpenProjectSettings: () => void;
   onExit: () => void;
 }): ReactElement {
   const [open, setOpen] = useState(false);
@@ -480,6 +485,9 @@ function UserMenu({
           <div className="ed-menu-sep" />
           <button type="button" className="ed-menu-item" onClick={() => run(onOpenSceneSettings)}>
             <span className="ed-menu-item-label">Scene Settings…</span>
+          </button>
+          <button type="button" className="ed-menu-item" onClick={() => run(onOpenProjectSettings)}>
+            <span className="ed-menu-item-label">Project Settings…</span>
           </button>
           <button type="button" className="ed-menu-item" onClick={() => run(onOpenProject)}>
             <span className="ed-menu-item-label">Open Project…</span>
@@ -800,7 +808,14 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
             />
             <ToolIconButton
               icon={UiIcons.pause}
-              title="Stop Play Mode (F6)"
+              title={actions.paused ? 'Resume (F7)' : 'Pause (F7)'}
+              active={actions.paused}
+              disabled={!actions.playing}
+              onClick={() => actions.onTogglePause()}
+            />
+            <ToolIconButton
+              icon={UiIcons.square}
+              title="Stop (F6)"
               disabled={!actions.playing}
               onClick={() => actions.onStopPlay()}
             />
@@ -814,6 +829,7 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
             onBuildWeb={actions.onBuildWeb}
             onOpenProject={actions.onOpenProject}
             onOpenSceneSettings={actions.onOpenSceneSettings}
+            onOpenProjectSettings={actions.onOpenProjectSettings}
             onExit={actions.onExit}
           />
         </div>

@@ -1,6 +1,6 @@
 import type { Vec3 } from '../../../types';
 import { cross, normalize } from '../../../math/vec3';
-import { buildSurfaceFrame } from './surface_frame';
+import { buildSurfaceFrame } from './surface-frame';
 
 export function composeInstanceMatrix(
   position: Vec3,

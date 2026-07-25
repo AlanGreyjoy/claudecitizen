@@ -5,9 +5,9 @@ import {
   type TileManagerUpdateResult,
 } from '../src/render/planet_tiles';
 import { CLAUDECITIZEN_PLANET as planet } from '../src/world/planet';
-import { sampleRenderablePlanetSurface } from '../src/world/planet_surface';
+import { sampleRenderablePlanetSurface } from '../src/world/planet-surface';
 import { cartesianFromLatLonAlt } from '../src/world/coordinates';
-import { resolveLandingSite } from '../src/world/landing_sites';
+import { resolveLandingSite } from '../src/world/landing-sites';
 import { normalize, scale } from '../src/math/vec3';
 import type { Scene } from 'three';
 import type { Vec3 } from '../src/types';

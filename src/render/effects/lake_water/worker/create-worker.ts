@@ -2,7 +2,7 @@ export function createSurfaceWaterBuildWorker(): Worker | null {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') return null;
 
   try {
-    return new Worker(new URL('./water_worker', import.meta.url), {
+    return new Worker(new URL('./water-worker', import.meta.url), {
       type: 'module',
     });
   } catch (error) {

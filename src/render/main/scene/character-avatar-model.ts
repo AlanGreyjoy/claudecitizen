@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkinnedScene } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { CHARACTER_GROUND_OFFSET_METERS } from '../../../player/character_controller';
+import { CHARACTER_GROUND_OFFSET_METERS } from '../../../player/character-controller';
 import type {
   CharacterRenderState,
   CharacterUpperBodyAim,
@@ -12,11 +12,11 @@ import {
   findFirstSkinnedMesh,
   retargetUnityHumanoidAnimations,
   UNIVERSAL_ANIMATION_LIBRARY_URL,
-} from '../../characters/unity_humanoid_retarget';
-import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
-import { createSidekickGameplayAvatar } from '../../characters/sidekick/gameplay_avatar';
-import { applyDefaultFrustumCulling } from '../../frustum_policy';
-import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment_attach';
+} from '../../characters/unity-humanoid-retarget';
+import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player-character-appearance';
+import { createSidekickGameplayAvatar } from '../../characters/sidekick/gameplay-avatar';
+import { applyDefaultFrustumCulling } from '../../frustum-policy';
+import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment-attach';
 import type { InventoryState } from '../../../player/inventory/types';
 
 const UAL_AVATAR_URL = UNIVERSAL_ANIMATION_LIBRARY_URL;

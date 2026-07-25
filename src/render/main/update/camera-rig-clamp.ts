@@ -1,12 +1,12 @@
 import type { SpikeRenderWorld, Vec3 } from '../../../types';
-import { getShipLayout } from '../../../player/ship_layout';
-import type { ShipCameraBounds } from '../../../player/ship_layout';
+import { getShipLayout } from '../../../player/ship-layout';
+import type { ShipCameraBounds } from '../../../player/ship-layout';
 import {
   getStationRoom,
   worldToStationLocal,
 } from '../../../world/station';
 import { add, cross, dot, normalize, scale, sub } from '../../../math/vec3';
-import type { StationCameraContext } from './camera_rig_types';
+import type { StationCameraContext } from './camera-rig-types';
 
 function clampValue(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));

@@ -1,9 +1,9 @@
-import type { StoredTerrainTile } from './terrain_tile_cache';
+import type { StoredTerrainTile } from './terrain-tile-cache';
 import {
   TERRAIN_CACHE_VERSION,
   VEGETATION_CACHE_VERSION,
-} from './cache_keys';
-import { putCachedTile } from './tile_cache_store';
+} from './cache-keys';
+import { putCachedTile } from './tile-cache-store';
 
 /** Binary spawn pack: small JSON manifest + sibling .bin of tile buffers. */
 export interface SpawnPackTerrainRecord {

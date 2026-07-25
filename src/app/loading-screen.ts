@@ -1,8 +1,11 @@
+import { ensureLoadingScreenMarkup } from '../ui/screens/mount';
+
 export interface LoadingScreenHandle {
   setProgress: (value: number) => void;
   setStatus: (text: string) => void;
   complete: () => Promise<void>;
   hide: () => void;
+  isVisible: () => boolean;
 }
 
 function requireElement<T extends HTMLElement>(id: string): T {
@@ -20,7 +23,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function showLoadingScreen(): LoadingScreenHandle {
-  const screen = requireElement<HTMLElement>('loading-screen');
+  const screen = ensureLoadingScreenMarkup();
   const bar = requireElement<HTMLElement>('loading-bar');
   const fill = requireElement<HTMLElement>('loading-bar-fill');
   const statusEl = requireElement<HTMLElement>('loading-status');
@@ -96,6 +99,10 @@ export function showLoadingScreen(): LoadingScreenHandle {
       completed = true;
       stopPlaceholderAnimation();
       screen.classList.add('is-hidden');
+    },
+
+    isVisible() {
+      return !screen.classList.contains('is-hidden');
     },
   };
 }

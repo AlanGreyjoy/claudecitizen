@@ -1,45 +1,45 @@
 import {
   getActiveShipBody,
   getActiveShipRig,
-} from "../../player/world_state";
+} from "../../player/world-state";
 import {
   getShipLayout,
   getShipRestHeightMeters,
   usesColliderDeck,
-} from "../../player/ship_layout";
+} from "../../player/ship-layout";
 import { sampleHangarRest, worldToStationLocal } from "../../world/station";
 import {
   isNearParkedShipPad,
   worldToShipLocal,
-} from "../../player/ship_interaction";
-import { doorBlends } from "../../player/ship_rig";
+} from "../../player/ship-interaction";
+import { doorBlends } from "../../player/ship-rig";
 import {
   createDeckCharacterState,
   DECK_FLOOR_OFFSET_METERS,
-} from "../../player/ship_deck";
+} from "../../player/ship-deck";
 import {
   syncShipArticulationColliders,
   teleportShipPlayerLocal,
-} from "../../physics/ship_physics";
+} from "../../physics/ship-physics";
 import {
   createStationCharacterAt,
   type StationCharacterState,
-} from "../../player/station_walk";
+} from "../../player/station-walk";
 import {
   CHARACTER_GROUND_OFFSET_METERS,
   createCharacterState,
-} from "../../player/character_controller";
-import { sampleFootPlanetSurface } from "../../world/planet_surface";
+} from "../../player/character-controller";
+import { sampleFootPlanetSurface } from "../../world/planet-surface";
 import { surfacePointFromPosition } from "../../world/coordinates";
-import { teleportStationPlayer } from "../../physics/station_physics";
+import { teleportStationPlayer } from "../../physics/station-physics";
 import { dot } from "../../math/vec3";
 import {
   MODE_IN_STATION,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
 } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
-import type { DeckPhysics } from "../ship/deck_physics";
+import type { LoopContext } from "../loop-context";
+import type { DeckPhysics } from "../ship/deck-physics";
 
 export interface PadInterest {
   tryEnterShipPadInterest: () => boolean;

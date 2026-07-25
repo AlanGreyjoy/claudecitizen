@@ -9,7 +9,7 @@ description: Open the CC Editor, create your first prefab, and save it to disk.
 ## Prerequisites
 
 - Dependencies installed with `npm install`
-- Optional: models in `editor/assets/` or `src/assets/` (see [Assets and GLB](./assets-and-glb))
+- Optional: models in `assets/` or `src/assets/` (see [Assets and GLB](./assets-and-glb))
 
 ## Open the editor
 
@@ -56,7 +56,7 @@ Closing the window or switching documents prompts when there are unsaved edits.
 | Explore an existing station | Load `demo-station`, then press **Play** |
 | Edit the default player ship | Load `phobos-starhopper`, then press **Play** |
 | Make a hangar decoration | Set kind to `prop`, build geometry, save as `hangar-crate-01` style |
-| Drop a ship GLB | Drag from `editor/assets/.../ships/` — editor offers Ship Editor mode |
+| Drop a ship GLB | Drag from `assets/.../ships/` — editor offers Ship Editor mode |
 
 ## Next steps
 

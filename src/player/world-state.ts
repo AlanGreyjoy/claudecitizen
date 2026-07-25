@@ -7,30 +7,30 @@ import type {
   Pose,
   ShipCameraView,
 } from '../types';
-import type { ShipInstance } from '../flight/ship_instance';
+import type { ShipInstance } from '../flight/ship-instance';
 import {
   clearShipWorld,
   getShipInstance,
   registerShipInstance,
-} from '../flight/ship_world';
-import { createShipInstance } from '../flight/ship_instance';
-import type { DeckCharacterState } from './ship_deck';
-import type { ShipRigState } from './ship_rig';
-import type { StationElevatorRide } from './station_interaction';
-import type { StationCharacterState } from './station_walk';
+} from '../flight/ship-world';
+import { createShipInstance } from '../flight/ship-instance';
+import type { DeckCharacterState } from './ship-deck';
+import type { ShipRigState } from './ship-rig';
+import type { StationElevatorRide } from './station-interaction';
+import type { StationCharacterState } from './station-walk';
 import { MODE_IN_STATION, MODE_ON_FOOT } from './modes';
 import { createSpawnCharacter, createSpawnShip, initialCameraYaw } from './spawn';
-import { createStationSpawnCharacter, initialStationCameraYaw } from './station_walk';
+import { createStationSpawnCharacter, initialStationCameraYaw } from './station-walk';
 import {
   DEFAULT_SHIP_LAYOUT,
   getShipLayoutForPrefab,
-} from './ship_layout';
+} from './ship-layout';
 import { DEFAULT_SHIP_PREFAB_ID } from '../world/ships';
-import type { ShipFlightMode } from '../flight/flight_modes';
+import type { ShipFlightMode } from '../flight/flight-modes';
 import {
   createQuantumTravelState,
   type QuantumTravelState,
-} from '../flight/quantum_travel';
+} from '../flight/quantum-travel';
 import {
   createPlayerVitals,
   type PlayerSurvivalVitals,

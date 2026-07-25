@@ -11,7 +11,7 @@ import {
   normalizeInventoryState,
 } from "../../../player/inventory/types";
 import type { StationFoodShopMarker } from "../../../world/station";
-import { paintItemIcon } from "./item_icon";
+import { paintItemIcon } from "./item-icon";
 
 export interface FoodShopElements {
   rootEl: HTMLElement;

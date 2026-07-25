@@ -1,4 +1,4 @@
-import { RENDER_SURFACE_LEVEL, RENDER_SURFACE_SEGMENTS } from '../../../world/renderable_surface';
+import { RENDER_SURFACE_LEVEL, RENDER_SURFACE_SEGMENTS } from '../../../world/renderable-surface';
 
 // Mesh segment count must stay fixed: the low-poly triangle layout, foot sampler,
 // lake mesh, and disk cache all assume this shared grid resolution.

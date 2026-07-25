@@ -1,12 +1,12 @@
 import { createEmptyEntity, type EditorEntity, type EditorStore } from './document';
 import { showToast, type ContextMenuEntry } from './dom';
-import type { ComponentDef } from '../world/prefabs/component_registry';
+import type { ComponentDef } from '../world/prefabs/component-registry';
 import {
   getComponentDef,
   getComponentsForKind,
   getComponentsForScene,
   searchComponents,
-} from '../world/prefabs/component_registry';
+} from '../world/prefabs/component-registry';
 import type { PrefabComponent, PrefabComponentType } from '../world/prefabs/schema';
 import type { Vec3 } from '../types';
 

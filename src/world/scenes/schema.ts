@@ -1,9 +1,19 @@
-import type { PrefabEntity } from '../prefabs/schema';
+import type { PrefabEntity, PrefabTransform } from '../prefabs/schema';
 import { parsePrefabEntity } from '../prefabs/schema';
 
-export const SCENE_SCHEMA_VERSION = 2 as const;
-export const SCENE_SCHEMA_VERSION_V1 = 1 as const;
+function identityTransform(): PrefabTransform {
+  return {
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+    scale: { x: 1, y: 1, z: 1 },
+  };
+}
+
+export const SCENE_SCHEMA_VERSION = 3 as const;
 export const SCENE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/** Versions accepted on read and migrated forward to the current version. */
+const MIGRATABLE_VERSIONS = new Set([1, 2, SCENE_SCHEMA_VERSION]);
 
 export const SCENE_KINDS = [
   'title',
@@ -12,32 +22,23 @@ export const SCENE_KINDS = [
   'main-game',
   'instance',
   'prefab-stage',
-  'sidekick-preview',
 ] as const;
 
 export type SceneKind = (typeof SCENE_KINDS)[number];
 export type SceneSpawnMode = 'station' | 'surface';
 export type ScenePrefabKind = 'station' | 'ship';
 
-export interface SceneSettings {
-  systemId: string;
-  planetId: string;
-  spawn: SceneSpawnMode;
-  prefabId?: string;
-  prefabKind?: ScenePrefabKind;
-}
-
 /**
- * A scene is a launchable project document. It owns a GameObject tree
- * (`gameObjects`) plus startup settings (kept during migration until
- * GameManager / Planet / PlayerStart components fully own config).
+ * A scene is a launchable project document. Its GameObject tree owns everything
+ * the runtime needs: `game-manager` for system/planet/spawn, `planet` for the
+ * planet document, `player-start` for the spawn pose, `prefab-instance` for
+ * placed content, and `ui-screen` / `scene-link` for menu flow.
  */
 export interface SceneDocument {
   schemaVersion: typeof SCENE_SCHEMA_VERSION;
   id: string;
   name: string;
   kind: SceneKind;
-  settings: SceneSettings;
   gameObjects: PrefabEntity[];
 }
 
@@ -57,36 +58,57 @@ function readSceneKind(value: unknown): SceneKind | null {
   return SCENE_KINDS.includes(value as SceneKind) ? (value as SceneKind) : null;
 }
 
-function readSceneSettings(value: unknown): SceneSettings {
-  const source = readRecord(value) ?? {};
-  const prefabKind =
-    source.prefabKind === 'ship' || source.prefabKind === 'station'
-      ? source.prefabKind
-      : undefined;
-  return {
-    systemId: readSlug(source.systemId, 'default'),
-    planetId: readSlug(source.planetId, 'asteron'),
-    spawn: source.spawn === 'surface' ? 'surface' : 'station',
-    ...(readSlug(source.prefabId) ? { prefabId: readSlug(source.prefabId) } : {}),
-    ...(prefabKind ? { prefabKind } : {}),
-  };
-}
-
 function readGameObjects(value: unknown): PrefabEntity[] {
-  if (value === undefined) return [];
   if (!Array.isArray(value)) return [];
   const out: PrefabEntity[] = [];
   for (let i = 0; i < value.length; i += 1) {
     try {
       out.push(parsePrefabEntity(value[i], `$.gameObjects[${i}]`));
     } catch (error) {
-      console.warn(
-        `Scene gameObject[${i}] failed to parse and was skipped.`,
-        error,
-      );
+      console.warn(`Scene gameObject[${i}] failed to parse and was skipped.`, error);
     }
   }
   return out;
+}
+
+function sceneObject(
+  id: string,
+  name: string,
+  components: PrefabEntity['components'],
+): PrefabEntity {
+  return { id, name, transform: identityTransform(), components };
+}
+
+/**
+ * Pre-v3 scenes stored startup config in a `settings` object. Rebuild that as
+ * the GameObjects the runtime now reads so old documents keep launching.
+ */
+function migrateLegacySettings(raw: Record<string, unknown>): PrefabEntity[] {
+  const settings = readRecord(raw.settings) ?? {};
+  const systemId = readSlug(settings.systemId, 'default');
+  const planetId = readSlug(settings.planetId, 'asteron');
+  const spawn: SceneSpawnMode = settings.spawn === 'surface' ? 'surface' : 'station';
+  const prefabId = readSlug(settings.prefabId);
+  const prefabKind: ScenePrefabKind | undefined =
+    settings.prefabKind === 'ship' || settings.prefabKind === 'station'
+      ? settings.prefabKind
+      : undefined;
+
+  const objects: PrefabEntity[] = [
+    sceneObject('game-manager', 'Game Manager', [
+      { type: 'game-manager', systemId, planetId, spawn },
+    ]),
+    sceneObject('planet', 'Planet', [{ type: 'planet', planetId }]),
+    sceneObject('player-start', 'Player Start', [{ type: 'player-start', spawn }]),
+  ];
+  if (prefabId) {
+    objects.push(
+      sceneObject(`prefab-${prefabId}`, prefabId, [
+        { type: 'prefab-instance', prefabId, ...(prefabKind ? { prefabKind } : {}) },
+      ]),
+    );
+  }
+  return objects;
 }
 
 export function parseSceneDocument(raw: unknown): SceneDocument | null {
@@ -94,32 +116,26 @@ export function parseSceneDocument(raw: unknown): SceneDocument | null {
   if (!source) return null;
 
   const version = source.schemaVersion;
-  if (version !== SCENE_SCHEMA_VERSION && version !== SCENE_SCHEMA_VERSION_V1) {
-    return null;
-  }
+  if (typeof version !== 'number' || !MIGRATABLE_VERSIONS.has(version)) return null;
 
   const id = readSlug(source.id);
   const name = typeof source.name === 'string' ? source.name.trim() : '';
   const kind = readSceneKind(source.kind);
   if (!id || !name || !kind) return null;
 
-  const settings = readSceneSettings(source.settings);
-  if (
-    (kind === 'prefab-stage' || kind === 'instance')
-    && (!settings.prefabId || !settings.prefabKind)
-  ) {
-    return null;
-  }
-
+  const parsed = readGameObjects(source.gameObjects);
+  // Legacy documents either had no GameObjects at all (v1) or kept authoritative
+  // config in `settings` alongside them (v2).
   const gameObjects =
-    version === SCENE_SCHEMA_VERSION_V1 ? [] : readGameObjects(source.gameObjects);
+    version === SCENE_SCHEMA_VERSION || parsed.length > 0
+      ? parsed
+      : migrateLegacySettings(source);
 
   return {
     schemaVersion: SCENE_SCHEMA_VERSION,
     id,
     name,
     kind,
-    settings,
     gameObjects,
   };
 }
@@ -133,11 +149,19 @@ export function createDefaultSceneDocument(
     id,
     name,
     kind: 'main-game',
-    settings: {
-      systemId: 'default',
-      planetId: 'asteron',
-      spawn: 'station',
-    },
-    gameObjects: [],
+    gameObjects: [
+      sceneObject('game-manager', 'Game Manager', [
+        {
+          type: 'game-manager',
+          systemId: 'default',
+          planetId: 'asteron',
+          spawn: 'station',
+        },
+      ]),
+      sceneObject('planet', 'Planet', [{ type: 'planet', planetId: 'asteron' }]),
+      sceneObject('player-start', 'Player Start', [
+        { type: 'player-start', spawn: 'station' },
+      ]),
+    ],
   };
 }

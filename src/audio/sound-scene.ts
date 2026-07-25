@@ -1,6 +1,6 @@
 import { rotateVec3ByQuat } from '../math/quat';
 import type { Vec3 } from '../types';
-import type { PrefabSoundSpec } from '../world/prefabs/sound_runtime';
+import type { PrefabSoundSpec } from '../world/prefabs/sound-runtime';
 import {
   getSfxAudioGraph,
   loadSfxBuffer,

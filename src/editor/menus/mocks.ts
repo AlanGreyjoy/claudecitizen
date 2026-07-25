@@ -1,5 +1,5 @@
 import type { InventoryState, ItemDefinition } from '../../player/inventory/types';
-import type { AvmsShipRecord } from '../../render/effects/hud/avms_terminal';
+import type { AvmsShipRecord } from '../../render/effects/hud/avms-terminal';
 import type {
   StationFoodShopMarker,
   StationOutfittersMarker,

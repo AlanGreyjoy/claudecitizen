@@ -6,7 +6,7 @@ description: Configure starting ARC and starter loadouts for new players.
 
 # Game settings
 
-**Game settings** is a singleton row (`GameSettings` id `"singleton"`) that controls what new players receive when they first bootstrap into the online game. Edit it from the Admin App **Game Settings** tab.
+**Game settings** is a singleton row (`GameSettings` id `"singleton"`) that controls what new players receive when they first bootstrap into the online game. Edit it from the Server console **Game Settings** tab.
 
 ## Fields
 

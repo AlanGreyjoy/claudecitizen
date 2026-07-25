@@ -1,7 +1,7 @@
 ---
 sidebar_position: 4
 title: Users
-description: Inspect registered accounts and owned ships in the Admin App.
+description: Inspect registered accounts and owned ships in the Server console.
 ---
 
 # Users

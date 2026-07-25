@@ -1,6 +1,6 @@
 import { cartesianFromLatLonAlt } from './coordinates';
-import { resolveLandingSite } from './landing_sites';
-import { samplePlanetSurface } from './planet_surface';
+import { resolveLandingSite } from './landing-sites';
+import { samplePlanetSurface } from './planet-surface';
 import { getActivePlanetConfig } from './planets/runtime';
 import type { Planet, Vec3 } from '../types';
 import {

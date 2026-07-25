@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadPrefabDocument } from '../../world/prefabs/loader';
-import { createPropInstanceGroupAsync } from './prefab_renderer';
+import { createPropInstanceGroupAsync } from './prefab-renderer';
 
 /** Square PNG capture size for admin item icons. */
 const SCREENSHOT_SIZE = 512;

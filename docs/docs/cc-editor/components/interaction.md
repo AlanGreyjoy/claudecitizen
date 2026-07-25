@@ -52,7 +52,7 @@ Assign optional SFX from the Project panel (`.ogg`, `.mp3`, `.wav`, `.m4a`):
 - **Proximity SFX** — plays once when the player walks into the interaction radius; retriggers after leaving and re-entering
 - **Interact SFX** — plays when the player presses the bound key (e.g. **F**)
 
-Drag an audio file from the Project panel onto the inspector field, or paste the asset URL (e.g. `/editor/assets/free/sfx/door-creak.ogg`). Store files under `editor/assets/free/sfx/` or `src/assets/sfx/`.
+Drag an audio file from the Project panel onto the inspector field, or paste the asset URL (e.g. `/assets/free/sfx/door-creak.ogg`). Store files under `assets/free/sfx/` or `src/assets/sfx/`.
 
 Playback respects **Master** and **SFX** volume in the game menu. Station play / preview only today.
 

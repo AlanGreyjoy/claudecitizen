@@ -2,8 +2,8 @@ import type { CubeFace, Planet, PlanetSpawnCatalog } from '../../../types';
 import {
   hashSurfaceSpawnCatalog,
   surfaceSpawnStorageKey,
-} from '../../../cache/cache_keys';
-import { getCachedTile, putCachedTile } from '../../../cache/tile_cache_store';
+} from '../../../cache/cache-keys';
+import { getCachedTile, putCachedTile } from '../../../cache/tile-cache-store';
 import {
   isValidStoredSurfaceSpawnTile,
   type StoredSurfaceSpawnTile,

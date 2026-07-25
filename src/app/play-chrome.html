@@ -1,0 +1,1022 @@
+      <canvas id="view" aria-label="ClaudeCitizen spike flight view"></canvas>
+
+      <div class="sc-panel sc-hud-fps" aria-live="polite">
+        <div class="sc-label">Frame Rate</div>
+        <div>
+          <span class="sc-hud-fps-value" id="hud-fps-value">0</span><span class="sc-hud-fps-unit">FPS</span>
+        </div>
+      </div>
+
+      <section
+        class="sc-panel sc-survival-vitals is-hidden"
+        id="survival-vitals"
+        aria-label="Survival reserves"
+      ></section>
+
+      <div
+        class="sc-vitals-sync-warning"
+        id="vitals-sync-warning"
+        role="status"
+        aria-live="assertive"
+      ></div>
+
+      <div class="sc-panel sc-hud-chat">
+        <div class="sc-hud-chat-header">
+          <div class="sc-label">Comms</div>
+        </div>
+        <div class="sc-hud-chat-messages" id="hud-chat-messages"></div>
+        <div class="sc-hud-chat-input-wrap">
+          <input
+            class="sc-hud-chat-input"
+            id="hud-chat-input"
+            type="text"
+            maxlength="240"
+            placeholder="Transmit message..."
+            autocomplete="off"
+          />
+        </div>
+      </div>
+
+      <div
+        class="sc-biome-teleport is-hidden"
+        id="biome-teleport"
+        aria-label="Biome teleport"
+      ></div>
+
+      <button
+        class="sc-hud-build-btn is-hidden"
+        id="hud-build-btn"
+        type="button"
+        aria-label="Open build mode"
+        title="Build mode"
+      ></button>
+
+      <div class="sc-hud-debug-wrap">
+        <button
+          class="sc-hud-debug-btn"
+          id="hud-debug-btn"
+          type="button"
+          aria-label="Open debug menu"
+          aria-expanded="false"
+          aria-controls="hud-debug-menu"
+        >
+        </button>
+        <div class="sc-hud-debug-menu" id="hud-debug-menu" role="menu">
+          <p class="sc-hud-debug-menu-title">Debug Overlays</p>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="showStatsPanel" />
+            Performance stats
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="showControlsReference" />
+            Control reference
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="showTutorialBanner" />
+            Tutorial banner
+          </label>
+          <p class="sc-hud-debug-menu-title sc-hud-debug-menu-subtitle">Toggles</p>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="renderGrass" checked />
+            Grass
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="checkbox" data-debug-key="renderTrees" checked />
+            Trees
+          </label>
+          <p class="sc-hud-debug-menu-title sc-hud-debug-menu-subtitle">Time of Day</p>
+          <label class="sc-hud-debug-option">
+            <input type="radio" name="hud-time-override" value="auto" data-time-override />
+            Auto cycle
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="radio" name="hud-time-override" value="day" data-time-override />
+            Force day
+          </label>
+          <label class="sc-hud-debug-option">
+            <input type="radio" name="hud-time-override" value="night" data-time-override />
+            Force night
+          </label>
+          <p class="sc-hud-debug-menu-title sc-hud-debug-menu-subtitle">SSAO Tuning</p>
+          <div class="sc-hud-debug-sliders">
+            <label class="sc-hud-debug-slider">
+              <span class="sc-hud-debug-slider-row">
+                <span>Intensity</span>
+                <span data-ssao-output="intensity">2.50</span>
+              </span>
+              <input type="range" min="0" max="8" step="0.05" value="2.5" data-ssao-key="intensity" />
+            </label>
+            <label class="sc-hud-debug-slider">
+              <span class="sc-hud-debug-slider-row">
+                <span>Radius</span>
+                <span data-ssao-output="aoRadius">0.55m</span>
+              </span>
+              <input type="range" min="0.05" max="3" step="0.05" value="0.55" data-ssao-key="aoRadius" />
+            </label>
+            <label class="sc-hud-debug-slider">
+              <span class="sc-hud-debug-slider-row">
+                <span>Distance Falloff</span>
+                <span data-ssao-output="distanceFalloff">1.00</span>
+              </span>
+              <input type="range" min="0.1" max="5" step="0.05" value="1" data-ssao-key="distanceFalloff" />
+            </label>
+            <button class="sc-hud-debug-reset" type="button" data-ssao-reset>Reset SSAO</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sc-panel sc-hud-tutorial sc-debug-panel" id="hud-tutorial-banner">
+        Walk the landing site in third person, board the ship with <kbd>F</kbd>,
+        then lift off and climb until the local cloud field gives way to the
+        planet-wide shell and a darker orbit sky.
+      </div>
+
+      <section class="hud sc-debug-panel" id="hud-stats" aria-live="polite">
+        <h1>ClaudeCitizen Spike</h1>
+        <p class="muted">World-scale procedural planet, one ship, surface to orbit.</p>
+        <div class="readout-grid" id="readouts"></div>
+        <div class="controls" id="hud-controls">
+          <div><kbd>Click</kbd> lock mouse</div>
+          <div>Mouse look / steer</div>
+          <div><kbd>W</kbd>/<kbd>S</kbd> move or throttle</div>
+          <div><kbd>Shift</kbd> boost</div>
+          <div><kbd>A</kbd>/<kbd>D</kbd> strafe / ground steer</div>
+          <div><kbd>Q</kbd>/<kbd>E</kbd> roll</div>
+          <div><kbd>←</kbd>/<kbd>→</kbd> yaw</div>
+          <div><kbd>↑</kbd>/<kbd>↓</kbd> pitch</div>
+          <div><kbd>Space</kbd>/<kbd>C</kbd> jump or lift</div>
+          <div><kbd>B</kbd> brake</div>
+          <div><kbd>F</kbd> interact / enter / exit</div>
+          <div><kbd>1</kbd>-<kbd>3</kbd> hangar elevator</div>
+          <div><kbd>V</kbd> first / third person, cockpit / external</div>
+          <div><kbd>U</kbd> tap flight mode · hold (Nav) quantum</div>
+          <div><kbd>R</kbd> reset</div>
+        </div>
+        <div class="prompt" id="prompt"></div>
+        <div class="status" id="status"></div>
+      </section>
+      <div class="sc-interact-prompt" id="interact-prompt" aria-live="polite"></div>
+      <div id="flight-reticle" class="sc-flight-reticle" aria-hidden="true">
+        <div class="sc-flight-reticle-ring"></div>
+        <div class="sc-flight-reticle-brackets"></div>
+        <div class="sc-flight-reticle-arms"></div>
+        <div class="sc-flight-reticle-core"></div>
+        <div class="sc-flight-reticle-aim"></div>
+        <div class="sc-flight-reticle-nose"></div>
+      </div>
+      <div id="weapon-crosshair" class="sc-weapon-crosshair" aria-hidden="true"></div>
+      <div id="combat-ammo" class="sc-combat-ammo" aria-hidden="true">
+        <div class="sc-combat-ammo-mode" data-combat-fire-mode>SEMI</div>
+        <div class="sc-combat-ammo-count">
+          <span class="sc-combat-ammo-value" data-combat-magazine>0 / 0</span>
+          <span class="sc-combat-ammo-label">MAG</span>
+        </div>
+        <div class="sc-combat-ammo-reserve">
+          <span data-combat-reserve>0</span>
+          <span class="sc-combat-ammo-label">RES</span>
+        </div>
+      </div>
+      <div id="cockpit-gaze" class="sc-cockpit-gaze" aria-hidden="true">
+        <div class="sc-cockpit-gaze-label"></div>
+      </div>
+      <div id="cockpit-speed" class="sc-cockpit-speed-root" aria-hidden="true"></div>
+      <div class="sc-screen-fade" id="screen-fade"></div>
+      <div
+        class="sc-game-menu"
+        id="game-menu"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="game-menu-title"
+        aria-hidden="true"
+      >
+        <div class="sc-game-menu-shell">
+          <nav class="sc-game-menu-nav" aria-label="Settings sections">
+            <h2 class="sc-game-menu-title" id="game-menu-title">Menu</h2>
+            <button
+              class="sc-game-menu-nav-btn is-active"
+              type="button"
+              data-game-menu-tab="video"
+              aria-controls="game-menu-panel-video"
+            >
+              Video
+            </button>
+            <button
+              class="sc-game-menu-nav-btn"
+              type="button"
+              data-game-menu-tab="audio"
+              aria-controls="game-menu-panel-audio"
+            >
+              Audio
+            </button>
+            <button
+              class="sc-game-menu-nav-btn"
+              type="button"
+              data-game-menu-tab="controls"
+              aria-controls="game-menu-panel-controls"
+            >
+              Controls
+            </button>
+            <button
+              class="sc-game-menu-nav-btn is-danger"
+              type="button"
+              data-game-menu-tab="exit"
+              aria-controls="game-menu-panel-exit"
+            >
+              Exit Game
+            </button>
+          </nav>
+          <div class="sc-game-menu-main">
+            <section
+              class="sc-game-menu-panel is-active"
+              id="game-menu-panel-video"
+              data-game-menu-panel="video"
+            >
+              <h3 class="sc-game-menu-panel-title">Video</h3>
+              <p class="sc-game-menu-note">Render quality applies after reload.</p>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-quality" value="performance" />
+                Performance
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-quality" value="balanced" />
+                Balanced
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-quality" value="high" />
+                High
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="auto" />
+                Shadows: Auto
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="off" />
+                Shadows: Off
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="low" />
+                Shadows: Low
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="medium" />
+                Shadows: Medium
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-shadows" value="high" />
+                Shadows: High
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="checkbox" id="game-menu-ambient-occlusion" />
+                Ambient Occlusion
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="checkbox" id="game-menu-motion-blur" />
+                Motion Blur
+              </label>
+              <p class="sc-game-menu-note">Clouds apply immediately.</p>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-clouds" value="off" />
+                Clouds: Off
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-clouds" value="shell" />
+                Clouds: 2D Shell
+              </label>
+              <label class="sc-game-menu-option">
+                <input type="radio" name="game-menu-clouds" value="volumetric" />
+                Clouds: Volumetric (Experimental)
+              </label>
+              <p class="sc-game-menu-note">Grass distance applies immediately.</p>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">Grass Distance</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-grass-distance-value">20 m</span>
+                <input
+                  type="range"
+                  id="game-menu-grass-distance"
+                  min="5"
+                  max="80"
+                  step="1"
+                  value="20"
+                />
+              </div>
+            </section>
+            <section
+              class="sc-game-menu-panel"
+              id="game-menu-panel-audio"
+              data-game-menu-panel="audio"
+            >
+              <h3 class="sc-game-menu-panel-title">Audio</h3>
+              <p class="sc-game-menu-note">Saved for when audio ships.</p>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">Master</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-master-value">100%</span>
+                <input
+                  type="range"
+                  id="game-menu-master-volume"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="100"
+                />
+              </div>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">SFX</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-sfx-value">100%</span>
+                <input type="range" id="game-menu-sfx-volume" min="0" max="100" step="1" value="100" />
+              </div>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">Music</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-music-value">100%</span>
+                <input
+                  type="range"
+                  id="game-menu-music-volume"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value="100"
+                />
+              </div>
+            </section>
+            <section
+              class="sc-game-menu-panel"
+              id="game-menu-panel-controls"
+              data-game-menu-panel="controls"
+            >
+              <h3 class="sc-game-menu-panel-title">Controls</h3>
+              <div class="sc-game-menu-controls" id="game-menu-controls"></div>
+            </section>
+            <section
+              class="sc-game-menu-panel"
+              id="game-menu-panel-exit"
+              data-game-menu-panel="exit"
+            >
+              <h3 class="sc-game-menu-panel-title">Exit Game</h3>
+              <p class="sc-game-menu-exit-copy">
+                Leave Asteron and return to the title screen. Your session stays signed in.
+              </p>
+              <button class="sc-title-btn sc-title-btn-secondary" type="button" id="game-menu-exit-btn">
+                Exit to Title Screen
+              </button>
+            </section>
+            <div class="sc-game-menu-footer">
+              <button class="sc-title-btn sc-game-menu-resume" type="button" id="game-menu-resume-btn">
+                Resume
+              </button>
+              <span class="sc-game-menu-hint">Press Esc to resume</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-avms"
+        id="avms-terminal"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="avms-title"
+        aria-modal="true"
+      >
+        <div class="sc-avms-bezel" id="avms-bezel">
+          <div class="sc-avms-screen">
+            <header class="sc-avms-header">
+              <div class="sc-avms-brand">
+                <span class="sc-avms-kicker">Asteron Vehicle Management System</span>
+                <h2 class="sc-avms-title" id="avms-title">AVMS</h2>
+              </div>
+              <div class="sc-avms-header-meta">
+                <span class="sc-avms-version">v1.0</span>
+                <div class="sc-avms-header-actions">
+                  <button class="sc-avms-icon-btn" type="button" id="avms-power-btn" title="Power off">
+                  </button>
+                  <button class="sc-avms-icon-btn" type="button" id="avms-close-btn" title="Close">
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="sc-avms-body">
+              <div class="sc-avms-columns">
+                <section class="sc-avms-panel" aria-label="Registered vehicles">
+                  <h3 class="sc-avms-panel-title">Inventory</h3>
+                  <div class="sc-avms-ship-list" id="avms-ship-list"></div>
+                </section>
+                <section class="sc-avms-panel sc-avms-detail" aria-label="Selected vehicle">
+                  <h3 class="sc-avms-panel-title">Vehicle Status</h3>
+                  <p class="sc-avms-detail-name" id="avms-detail-name">—</p>
+                  <p class="sc-avms-detail-prefab" id="avms-detail-prefab">—</p>
+                  <div class="sc-avms-stat">
+                    <span class="sc-avms-stat-label">Hull</span>
+                    <div class="sc-avms-stat-bar">
+                      <span class="sc-avms-stat-fill sc-avms-stat-fill-hp" id="avms-detail-hp-bar"></span>
+                    </div>
+                    <span class="sc-avms-stat-value" id="avms-detail-hp-value">—</span>
+                  </div>
+                  <div class="sc-avms-stat">
+                    <span class="sc-avms-stat-label">Shields</span>
+                    <div class="sc-avms-stat-bar">
+                      <span class="sc-avms-stat-fill sc-avms-stat-fill-shield" id="avms-detail-shield-bar"></span>
+                    </div>
+                    <span class="sc-avms-stat-value" id="avms-detail-shield-value">—</span>
+                  </div>
+                </section>
+              </div>
+              <p class="sc-avms-status" id="avms-status" data-kind="info">Awaiting input…</p>
+              <div class="sc-avms-actions">
+                <button class="sc-avms-deliver" type="button" id="avms-deliver-btn">
+                  Request Delivery
+                </button>
+                <button class="sc-avms-store" type="button" id="avms-store-btn">
+                  Store Ship
+                </button>
+              </div>
+            </div>
+            <footer class="sc-avms-footer">
+              <span>Esc — close · Hangar bay assigned automatically by station dispatch</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-avms sc-build"
+        id="build-terminal"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="build-title"
+        aria-modal="true"
+      >
+        <div class="sc-avms-bezel" id="build-bezel">
+          <div class="sc-avms-screen">
+            <header class="sc-avms-header">
+              <div class="sc-avms-brand">
+                <span class="sc-avms-kicker" id="build-kicker">Workshop</span>
+                <h2 class="sc-avms-title" id="build-title">Build Mode</h2>
+              </div>
+              <div class="sc-avms-header-meta">
+                <span class="sc-avms-version" id="build-version">Layout</span>
+                <div class="sc-avms-header-actions">
+                  <button class="sc-avms-icon-btn" type="button" id="build-close-btn" title="Close">
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="sc-avms-body">
+              <div class="sc-avms-columns">
+                <section class="sc-avms-panel" aria-label="Owned props">
+                  <h3 class="sc-avms-panel-title">Inventory</h3>
+                  <div class="sc-avms-ship-list" id="build-prop-list"></div>
+                </section>
+                <section class="sc-avms-panel sc-avms-detail" aria-label="Selected prop">
+                  <h3 class="sc-avms-panel-title">Prop Details</h3>
+                  <p class="sc-avms-detail-name" id="build-detail-name">—</p>
+                  <p class="sc-avms-detail-prefab" id="build-detail-meta">—</p>
+                  <p class="sc-build-desc" id="build-detail-desc">—</p>
+                  <p class="sc-build-stat"><span>Owned</span> <strong id="build-detail-qty">—</strong></p>
+                  <p class="sc-build-stat"><span>Cost</span> <strong id="build-detail-cost">—</strong></p>
+                </section>
+              </div>
+              <p class="sc-avms-status" id="build-status" data-kind="info">Select a prop or choose a tool.</p>
+              <p class="sc-avms-note" id="build-note">Place, move, rotate (R), and delete props in your private space.</p>
+              <div class="sc-avms-actions sc-build-actions">
+                <button class="sc-avms-store" type="button" id="build-purchase-btn">Purchase</button>
+                <button class="sc-avms-deliver" type="button" id="build-place-btn">Place</button>
+                <button class="sc-avms-store" type="button" id="build-move-btn">Move</button>
+                <button class="sc-avms-store" type="button" id="build-delete-btn">Delete</button>
+              </div>
+            </div>
+            <footer class="sc-avms-footer">
+              <span>Esc — close · Place, move, rotate (R), and delete props</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-es sc-es-world"
+        id="entertainment-system"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="es-title"
+        aria-modal="true"
+      >
+        <div class="sc-es-bezel" id="es-bezel">
+          <div class="sc-es-screen">
+            <header class="sc-es-header">
+              <div class="sc-es-brand">
+                <span class="sc-es-kicker">Ship Entertainment</span>
+                <h2 class="sc-es-title" id="es-title">Entertainment System</h2>
+              </div>
+              <div class="sc-es-header-actions">
+                <button class="sc-es-icon-btn" type="button" id="es-back-btn" hidden title="Back">
+                  </button>
+                <button class="sc-es-icon-btn" type="button" id="es-power-btn" title="Power off">
+                  </button>
+                <button class="sc-es-icon-btn" type="button" id="es-close-btn" title="Close">
+                  </button>
+              </div>
+            </header>
+            <div class="sc-es-body">
+              <div class="sc-es-home" id="es-home">
+                <p class="sc-es-home-hint">Choose an app</p>
+                <div class="sc-es-app-grid">
+                  <button class="sc-es-app-tile" type="button" id="es-docs-tile" data-es-app="docs">
+                    <span class="sc-es-app-icon sc-es-app-icon-docs"></span>
+                    <span class="sc-es-app-name">ClaudeCitizen Docs</span>
+                  </button>
+                  <button class="sc-es-app-tile" type="button" id="es-youtube-tile" data-es-app="youtube">
+                    <span class="sc-es-app-icon sc-es-app-icon-yt"></span>
+                    <span class="sc-es-app-name">YouTube</span>
+                  </button>
+                  <button class="sc-es-app-tile" type="button" id="es-nasa-tile" data-es-app="nasa">
+                    <span class="sc-es-app-icon sc-es-app-icon-nasa"></span>
+                    <span class="sc-es-app-name">NASA TV</span>
+                  </button>
+                  <button class="sc-es-app-tile" type="button" id="es-localnow-tile" data-es-app="localnow">
+                    <span class="sc-es-app-icon sc-es-app-icon-localnow"></span>
+                    <span class="sc-es-app-name">Local Now</span>
+                  </button>
+                </div>
+              </div>
+              <div class="sc-es-app-view" id="es-docs" hidden>
+                <iframe
+                  class="sc-es-frame"
+                  id="es-docs-frame"
+                  title="ClaudeCitizen Docs"
+                  referrerpolicy="no-referrer-when-downgrade"
+                ></iframe>
+              </div>
+              <div class="sc-es-app-view" id="es-nasa" hidden>
+                <iframe
+                  class="sc-es-frame"
+                  id="es-nasa-frame"
+                  title="NASA TV"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen
+                  referrerpolicy="strict-origin-when-cross-origin"
+                ></iframe>
+                <p class="sc-es-nasa-note">
+                  Official NASA Live stream via YouTube. May be offline between events —
+                  <a href="https://www.nasa.gov/live/" target="_blank" rel="noopener noreferrer">nasa.gov/live</a>
+                </p>
+              </div>
+              <div class="sc-es-app-view" id="es-localnow" hidden>
+                <div class="sc-es-external">
+                  <p class="sc-es-external-title">Local Now</p>
+                  <p class="sc-es-external-body">
+                    Free local news &amp; weather. Their site blocks in-game embedding, so this
+                    opens in a new browser tab.
+                  </p>
+                  <button class="sc-title-btn" type="button" id="es-localnow-open-btn">
+                    Open localnow.com
+                  </button>
+                </div>
+              </div>
+              <div class="sc-es-app-view" id="es-youtube" hidden>
+                <div class="sc-es-youtube-bar">
+                  <input
+                    class="sc-es-youtube-input"
+                    id="es-youtube-url"
+                    type="url"
+                    placeholder="Paste a YouTube URL or video id"
+                    autocomplete="off"
+                  />
+                  <button class="sc-title-btn" type="button" id="es-youtube-load-btn">
+                    Play
+                  </button>
+                </div>
+                <div class="sc-es-youtube-stage">
+                  <iframe
+                    class="sc-es-frame sc-es-youtube-frame"
+                    id="es-youtube-frame"
+                    title="YouTube"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    referrerpolicy="strict-origin-when-cross-origin"
+                  ></iframe>
+                  <div class="sc-es-video-grid" id="es-youtube-grid"></div>
+                </div>
+              </div>
+            </div>
+            <footer class="sc-es-footer">
+              <span>Esc — back / close · Hold Y — get up</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-weapon-shop sc-weapon-shop-world"
+        id="weapon-shop"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="weapon-shop-title"
+        aria-modal="true"
+      >
+        <div class="sc-weapon-shop-bezel" id="weapon-shop-bezel">
+          <div class="sc-weapon-shop-screen">
+            <header class="sc-weapon-shop-header">
+              <div class="sc-weapon-shop-brand">
+                <span class="sc-weapon-shop-kicker">Pew Pew&apos;s Fun &apos;n&apos; Gun</span>
+                <h2 class="sc-weapon-shop-title" id="weapon-shop-title">Weapon Shop</h2>
+              </div>
+              <div class="sc-weapon-shop-header-meta">
+                <span class="sc-weapon-shop-balance" id="weapon-shop-balance">ARC —</span>
+                <div class="sc-weapon-shop-header-actions">
+                  <button class="sc-weapon-shop-icon-btn" type="button" id="weapon-shop-power-btn" title="Power off">
+                  </button>
+                  <button class="sc-weapon-shop-icon-btn" type="button" id="weapon-shop-close-btn" title="Close">
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="sc-weapon-shop-body">
+              <div class="sc-weapon-shop-list" id="weapon-shop-list"></div>
+              <p class="sc-weapon-shop-status" id="weapon-shop-status" data-kind="info"></p>
+            </div>
+            <footer class="sc-weapon-shop-footer">
+              <span>Esc — close · Buy with ARC · Inventory updates in HaloBand</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-food-shop sc-food-shop-world"
+        id="food-shop"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="food-shop-title"
+        aria-modal="true"
+      >
+        <div class="sc-food-shop-bezel" id="food-shop-bezel">
+          <div class="sc-food-shop-screen">
+            <header class="sc-food-shop-header">
+              <div class="sc-food-shop-brand">
+                <span class="sc-food-shop-kicker" id="food-shop-kicker">Station Canteen</span>
+                <h2 class="sc-food-shop-title" id="food-shop-title">Canteen</h2>
+              </div>
+              <div class="sc-food-shop-header-meta">
+                <span class="sc-food-shop-balance" id="food-shop-balance">ARC —</span>
+                <div class="sc-food-shop-header-actions">
+                  <button class="sc-food-shop-icon-btn" type="button" id="food-shop-power-btn" title="Power off">
+                  </button>
+                  <button class="sc-food-shop-icon-btn" type="button" id="food-shop-close-btn" title="Close">
+                  </button>
+                </div>
+              </div>
+            </header>
+            <div class="sc-food-shop-body">
+              <div class="sc-food-shop-list" id="food-shop-list"></div>
+              <p class="sc-food-shop-status" id="food-shop-status" data-kind="info"></p>
+            </div>
+            <footer class="sc-food-shop-footer">
+              <span>Esc — close · Buy with ARC · Use from Inventory (I) to restore hunger/thirst</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-outfitters sc-outfitters-world"
+        id="outfitters"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="outfitters-title"
+        aria-modal="true"
+      >
+        <div class="sc-outfitters-bezel" id="outfitters-bezel">
+          <div class="sc-outfitters-screen">
+            <header class="sc-outfitters-header">
+              <div class="sc-outfitters-brand">
+                <span class="sc-outfitters-kicker">Station Outfitters</span>
+                <h2 class="sc-outfitters-title" id="outfitters-title">Outfitters</h2>
+              </div>
+              <div class="sc-outfitters-header-meta">
+                <span class="sc-outfitters-balance" id="outfitters-balance">ARC —</span>
+                <div class="sc-outfitters-header-actions">
+                  <button class="sc-outfitters-icon-btn" type="button" id="outfitters-power-btn" title="Power off">
+                  </button>
+                  <button class="sc-outfitters-icon-btn" type="button" id="outfitters-close-btn" title="Close">
+                  </button>
+                </div>
+              </div>
+            </header>
+            <nav class="sc-outfitters-tabs" id="outfitters-tabs" aria-label="Gear categories"></nav>
+            <div class="sc-outfitters-body">
+              <div class="sc-outfitters-list" id="outfitters-list"></div>
+              <p class="sc-outfitters-status" id="outfitters-status" data-kind="info"></p>
+            </div>
+            <footer class="sc-outfitters-footer">
+              <span>Esc — close · Buy with ARC · Equip from Inventory (I)</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <div
+        class="sc-personal-inv"
+        id="personal-inventory"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="personal-inventory-title"
+        aria-modal="true"
+      >
+        <div class="sc-personal-inv-backdrop" aria-hidden="true"></div>
+        <div class="sc-personal-inv-shell">
+          <header class="sc-personal-inv-header">
+            <div class="sc-personal-inv-brand">
+              <h2 class="sc-personal-inv-title" id="personal-inventory-title">Inventory</h2>
+            </div>
+            <div class="sc-personal-inv-header-tools">
+              <div class="sc-personal-inv-capacity">
+                <div class="sc-personal-inv-capacity-track">
+                  <div class="sc-personal-inv-capacity-fill" id="personal-inventory-capacity-fill"></div>
+                </div>
+                <span class="sc-personal-inv-capacity-label" id="personal-inventory-capacity-label">—</span>
+              </div>
+              <input
+                class="sc-personal-inv-search"
+                id="personal-inventory-search"
+                type="search"
+                placeholder="Search…"
+                autocomplete="off"
+                maxlength="80"
+              />
+              <label class="sc-personal-inv-sort-label">
+                <span>Sort</span>
+                <select class="sc-personal-inv-sort" id="personal-inventory-sort">
+                  <option value="type">Type</option>
+                  <option value="name">Name</option>
+                  <option value="rarity">Rarity</option>
+                  <option value="quantity">Quantity</option>
+                </select>
+              </label>
+              <button
+                class="sc-personal-inv-close"
+                type="button"
+                id="personal-inventory-close"
+                title="Close"
+              >
+                  </button>
+            </div>
+          </header>
+          <div class="sc-personal-inv-filters" id="personal-inventory-filters"></div>
+          <main class="sc-personal-inv-workspace">
+            <section class="sc-personal-inv-browser" aria-label="Stored items">
+              <div class="sc-personal-inv-grid" id="personal-inventory-grid" role="grid"></div>
+            </section>
+            <section class="sc-personal-inv-presentation" aria-label="Character and loadout">
+              <div class="sc-personal-inv-avatar-stage" id="personal-inventory-avatar-stage">
+                <canvas
+                  class="sc-personal-inv-avatar-canvas"
+                  id="personal-inventory-avatar-canvas"
+                  aria-label="Rotatable character preview"
+                ></canvas>
+                <span class="sc-personal-inv-avatar-label">Live loadout link</span>
+                <span class="sc-personal-inv-avatar-rotate">Drag to rotate · 360°</span>
+              </div>
+              <div class="sc-personal-inv-gear-slots" id="personal-inventory-gear-slots"></div>
+              <div class="sc-personal-inv-detail-panel">
+                <div class="sc-personal-inv-detail" id="personal-inventory-detail"></div>
+                <button
+                  class="sc-personal-inv-quick-equip"
+                  type="button"
+                  id="personal-inventory-quick-equip"
+                >
+                  No action
+                </button>
+              </div>
+              <div class="sc-personal-inv-weapon-bars" id="personal-inventory-weapon-bars"></div>
+            </section>
+          </main>
+          <footer class="sc-personal-inv-footer">
+            <p class="sc-personal-inv-status" id="personal-inventory-status" data-kind="info"></p>
+            <div class="sc-personal-inv-hints">
+              <span>Arrows — browse</span>
+              <span>Enter — action</span>
+              <span>/ — search</span>
+              <span>Drag — exact slot</span>
+              <span>Esc / I — close</span>
+            </div>
+          </footer>
+        </div>
+      </div>
+      <div
+        class="sc-haloband"
+        id="haloband"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="haloband-title"
+        aria-modal="true"
+      >
+        <div class="sc-haloband-backdrop"></div>
+        <div class="sc-haloband-bezel">
+          <div class="sc-haloband-screen">
+            <canvas class="sc-haloband-holo" id="haloband-holo" aria-hidden="true"></canvas>
+            <h2 class="sc-haloband-sr-title" id="haloband-title">HaloBand</h2>
+            <div class="sc-haloband-chrome-brand" aria-hidden="true">HaloBand</div>
+            <div class="sc-haloband-shell">
+              <div class="sc-haloband-main">
+                <section
+                  class="sc-haloband-panel is-active"
+                  id="haloband-panel-home"
+                  data-haloband-panel="home"
+                >
+                  <div class="sc-haloband-home">
+                    <div class="sc-haloband-home-col sc-haloband-home-col-left">
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Contracts</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-contracts"
+                            id="haloband-home-contracts"
+                          ></div>
+                        </div>
+                      </article>
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Notifications</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-notifications"
+                            id="haloband-home-notifications"
+                          ></div>
+                        </div>
+                      </article>
+                    </div>
+                    <div class="sc-haloband-home-col sc-haloband-home-col-center">
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Vehicles</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-vehicles"
+                            id="haloband-home-vehicles"
+                          ></div>
+                        </div>
+                      </article>
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Environment</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-environment"
+                            id="haloband-home-environment"
+                          ></div>
+                        </div>
+                      </article>
+                    </div>
+                    <div class="sc-haloband-home-col sc-haloband-home-col-right">
+                      <article class="sc-haloband-tile">
+                        <header class="sc-haloband-tile-header">
+                          <h3 class="sc-haloband-tile-title">Status</h3>
+                          <span class="sc-haloband-tile-expand" aria-hidden="true"></span>
+                        </header>
+                        <div class="sc-haloband-tile-body">
+                          <div
+                            class="sc-haloband-home-vitals"
+                            id="haloband-home-vitals"
+                          ></div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-comms"
+                  data-haloband-panel="comms"
+                >
+                  <h3 class="sc-haloband-panel-title">Commlink</h3>
+                  <div class="sc-haloband-chat" id="haloband-chat-messages"></div>
+                  <div class="sc-haloband-chat-input-row">
+                    <input
+                      class="sc-haloband-chat-input"
+                      id="haloband-chat-input"
+                      type="text"
+                      placeholder="Send a message..."
+                      autocomplete="off"
+                      maxlength="240"
+                    />
+                    <button
+                      class="sc-title-btn sc-title-btn-secondary"
+                      type="button"
+                      id="haloband-chat-send"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-missions"
+                  data-haloband-panel="missions"
+                >
+                  <h3 class="sc-haloband-panel-title">Contracts</h3>
+                  <p class="sc-haloband-empty" id="haloband-missions-empty">
+                    No active contracts.
+                  </p>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-map"
+                  data-haloband-panel="map"
+                >
+                  <h3 class="sc-haloband-panel-title">System Map</h3>
+                  <div class="sc-haloband-system-map-host" id="haloband-system-map"></div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-inventory"
+                  data-haloband-panel="inventory"
+                >
+                  <h3 class="sc-haloband-panel-title">Inventory</h3>
+                  <div class="sc-haloband-inventory-filters" id="haloband-inventory-filters"></div>
+                  <div class="sc-haloband-inventory-body">
+                    <div class="sc-haloband-inventory-grid" id="haloband-inventory-grid"></div>
+                    <div class="sc-haloband-inventory-detail" id="haloband-inventory-detail"></div>
+                  </div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
+                  id="haloband-panel-ship"
+                  data-haloband-panel="ship"
+                >
+                  <h3 class="sc-haloband-panel-title">Vehicle Status</h3>
+                  <div class="sc-haloband-ship" id="haloband-ship-status"></div>
+                </section>
+              </div>
+            </div>
+            <footer class="sc-haloband-dock" id="haloband-dock">
+              <div class="sc-haloband-balance" id="haloband-balance">
+                <span class="sc-haloband-balance-label">ARC</span>
+                <span class="sc-haloband-balance-value" id="haloband-balance-value">—</span>
+              </div>
+              <nav class="sc-haloband-dock-nav" aria-label="HaloBand apps">
+                <button
+                  class="sc-haloband-dock-btn is-active"
+                  type="button"
+                  data-haloband-tab="home"
+                  aria-controls="haloband-panel-home"
+                  aria-label="Home"
+                  title="Home"
+                >
+                  <span class="sc-haloband-dock-label">Home</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="comms"
+                  aria-controls="haloband-panel-comms"
+                  aria-label="Comms"
+                  title="Comms"
+                >
+                  <span class="sc-haloband-dock-label">Comms</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="missions"
+                  aria-controls="haloband-panel-missions"
+                  aria-label="Missions"
+                  title="Missions"
+                >
+                  <span class="sc-haloband-dock-label">Missions</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="map"
+                  aria-controls="haloband-panel-map"
+                  aria-label="Map"
+                  title="Map"
+                >
+                  <span class="sc-haloband-dock-label">Map</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="inventory"
+                  aria-controls="haloband-panel-inventory"
+                  aria-label="Inventory"
+                  title="Inventory"
+                >
+                  <span class="sc-haloband-dock-label">Inventory</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn sc-haloband-ship-only is-hidden"
+                  type="button"
+                  data-haloband-tab="ship"
+                  aria-controls="haloband-panel-ship"
+                  aria-label="Ship"
+                  title="Ship"
+                >
+                  <span class="sc-haloband-dock-label">Ship</span>
+                </button>
+              </nav>
+              <span class="sc-haloband-hint">F2 close</span>
+            </footer>
+          </div>
+        </div>
+      </div>

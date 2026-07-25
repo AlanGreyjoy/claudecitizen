@@ -1,20 +1,20 @@
 import { cross, dot, normalize, scale, sub, tangentize } from '../math/vec3';
-import { createFlightBody } from '../flight/flight_body';
+import { createFlightBody } from '../flight/flight-body';
 import {
   CHARACTER_GROUND_OFFSET_METERS,
   createCharacterState,
-} from './character_controller';
+} from './character-controller';
 import {
   cartesianFromLatLonAlt,
   eastVector,
   radialUp,
   surfacePointFromPosition,
 } from '../world/coordinates';
-import { resolveLandingSite } from '../world/landing_sites';
-import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from '../world/planet_surface';
+import { resolveLandingSite } from '../world/landing-sites';
+import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from '../world/planet-surface';
 import type { CharacterState, FlightBody, Planet, Vec3 } from '../types';
 
-import { getShipRestHeightMeters } from './ship_layout';
+import { getShipRestHeightMeters } from './ship-layout';
 
 const CHARACTER_SPAWN_SIDE_METERS = 12;
 

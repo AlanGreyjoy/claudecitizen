@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import type { ParticlePreviewControls } from "../../editor/panels/particle_fields";
+import type { ParticlePreviewControls } from "../../editor/panels/particle-preview";
 import type { ParticleSystemHandle } from "../particles";
 
 export interface ViewportParticles {

@@ -1,25 +1,30 @@
 ---
 sidebar_position: 12
 title: Assets and GLB
-description: Asset libraries, protected packs, GLB node editing, and inspection tools.
+description: Project asset libraries, protected packs, GLB node editing, and inspection tools.
 ---
 
 # Assets and GLB
 
-The CC Editor pulls from two on-disk asset roots exposed by the Vite dev server.
+AsteronEngine serves assets from the **open project**, not from the engine
+checkout. The Project panel merges two roots under that project:
 
 ## Asset roots
 
-| Root | Path on disk | Served at |
+| Root | Path on disk (in the project) | Served at |
 | --- | --- | --- |
-| **Editor library** | `editor/assets/` | `/editor/assets/...` |
-| **Game assets** | `src/assets/` | `/src/assets/...` |
+| **Project library** | `assets/` | `/assets/...` |
+| **Source assets** | `src/assets/` | `/src/assets/...` |
 
-The Project panel merges both into one browser. Prefab JSON stores absolute dev-server URLs like `/editor/assets/protected/synty/.../Wall_01.glb`.
+New projects are scaffolded with `assets/free/` and `assets/protected/`. Prefab
+JSON stores absolute URLs like `/assets/protected/synty/.../Wall_01.glb`.
 
 ### Protected packs
 
-`editor/assets/protected/` is **gitignored** — Synty and other licensed packs live here locally. Prefabs reference only the files they need; production builds copy referenced protected assets into `dist/` (see [Assets](/assets) doc).
+`assets/protected/` is for paid or otherwise non-redistributable packs. Keep
+those out of git. Prefabs reference only the files they need; **File → Build
+Web** copies referenced protected assets into the release (see
+[Assets](/assets)).
 
 Never commit protected source libraries. Commit prefab JSON (metadata only).
 
@@ -37,7 +42,7 @@ Empty files show a warning badge (`!`) — usually a bad export or Git LFS miss.
 Dragging a GLB creates an entity with:
 
 ```json
-"asset": { "url": "/editor/assets/...", "castShadow": true }
+"asset": { "url": "/assets/...", "castShadow": true }
 ```
 
 Toggle `castShadow` in the Inspector when a model should not cast shadows.
@@ -75,12 +80,12 @@ Avoid relying on `EntityName (NodeName)` suffix parsing. Prefer explicit `glbAnc
 
 `src/render/editor/thumbnails.ts` renders GLB thumbnails offscreen for the Project grid. Thumbnails cache in memory for the session.
 
-## Dev API
+## Editor API
 
-Asset listing uses the Vite middleware:
+Asset listing (proxied by Electron):
 
 ```text
-GET /__editor/assets?root=editor/assets
+GET /__editor/assets?root=assets
 GET /__editor/assets?root=src/assets
 ```
 
@@ -88,15 +93,15 @@ Returns `{ entries: [{ path, kind, size? }] }`.
 
 ## Build pipeline
 
-On `npm run build`:
+On **File → Build Web** / `npm run build:web`:
 
 1. Prefab JSON is bundled via `import.meta.glob`
 2. Referenced asset URLs are traced
-3. Only referenced files copy from `editor/assets/` into `dist/editor/assets/`
+3. Only referenced files copy from the project's `assets/` into `dist/assets/`
 4. Unreferenced protected library files stay out of the deploy
 
 ## Related docs
 
 - [Assets](/assets) — Synty packs, character avatars, deployment rules
-- [Ship authoring](./ship-authoring) — binding hull nodes
-- [Station authoring](./station-authoring) — kitbashing station modules
+- [Building scenes](./building-scenes) — drag-drop and hierarchy
+- [Prefab kinds](./prefab-kinds) — ship / station / prop authoring

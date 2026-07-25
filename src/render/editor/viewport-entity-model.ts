@@ -2,12 +2,12 @@ import * as THREE from "three";
 import {
   applyPrefabMaterialOverrides,
   isolatePrefabModelNode,
-} from "../prefabs/prefab_renderer";
-import { bindObjectAnimationComponent } from "../prefabs/object_animation";
+} from "../prefabs/prefab-renderer";
+import { bindObjectAnimationComponent } from "../prefabs/object-animation";
 import type { EditorEntity, EditorStore, GlbNodeRef } from "../../editor/document";
 import type { PrefabComponent } from "../../world/prefabs/schema";
 import type { ParticleSystemHandle } from "../particles";
-import type { ViewportComponentHelpers } from "./viewport_component_helpers";
+import type { ViewportComponentHelpers } from "./viewport-component-helpers";
 
 export function usesEntityAssetForMeshCollider(
   component: PrefabComponent,

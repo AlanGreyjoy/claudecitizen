@@ -1,11 +1,11 @@
 import { dot, length, normalize, scale, sub } from "../math/vec3";
 import type { FlightBody, Vec3 } from "../types";
-import { localOffsetToWorld } from "./ship_interaction";
+import { localOffsetToWorld } from "./ship-interaction";
 import type {
   CockpitControlAction,
   CockpitControlSpec,
-} from "./ship_layout";
-import type { ShipRigState } from "./ship_rig";
+} from "./ship-layout";
+import type { ShipRigState } from "./ship-rig";
 
 /**
  * Gaze pick for cockpit look-at controls: while Hold F free-looking, score

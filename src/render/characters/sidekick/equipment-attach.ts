@@ -11,13 +11,13 @@ import {
   type BaseCharacterEquipmentV1,
   type BaseCharacterType,
   type CharacterBoneMountV1,
-} from '../../../player/equipment/base_character_equipment';
+} from '../../../player/equipment/base-character-equipment';
 import {
   findItemDefinition,
   type InventoryState,
   type LoadoutState,
 } from '../../../player/inventory/types';
-import { PLAY_LOADOUT_SLOTS } from '../../../player/inventory/loadout_slots';
+import { PLAY_LOADOUT_SLOTS } from '../../../player/inventory/loadout-slots';
 import {
   collectBarrelEnd,
   collectDrawnGrip,
@@ -27,11 +27,11 @@ import {
   identityDrawnGripTransform,
   type WeaponCombatLayout,
   validateBackpackPrefab,
-} from '../../../world/prefabs/item_runtime';
+} from '../../../world/prefabs/item-runtime';
 import { loadPrefabDocument } from '../../../world/prefabs/loader';
 import type { PrefabTransform } from '../../../world/prefabs/schema';
-import { createPropInstanceGroup } from '../../prefabs/prefab_renderer';
-import { AUTHORING_ENABLED } from '../../../build_mode';
+import { createPropInstanceGroup } from '../../prefabs/prefab-renderer';
+import { AUTHORING_ENABLED } from '../../../build-mode';
 
 const BUNDLED_EQUIPMENT_DOC = parseBaseCharacterEquipment(baseCharactersJson);
 const IDENTITY_GRIP = identityDrawnGripTransform();

@@ -19,7 +19,7 @@ ClaudeCitizen has one browser client and one horizontally scalable Rust backend.
 | Authority | `backend/crates/sim-core/` | Native Rapier 3D, fixed-step simulation |
 | Durable state | `backend/migrations/` | PostgreSQL, SQLx |
 | Coordination | backend runtime | Redis leases, streams, Pub/Sub, tickets |
-| Deployment | `deploy/k8s/` | Kubernetes Deployment, Service, HPA, PDB |
+| Deployment | `backend/Dockerfile` + host compose | Container image; Postgres/Redis external or compose |
 
 ```mermaid
 flowchart LR
@@ -76,13 +76,13 @@ npm run dev:infra       # PostgreSQL, Redis, Mailpit
 npm run backend:migrate # apply SQLx migrations
 npm run dev:server      # watch/rebuild/restart Rust HTTP + WebTransport backend
 npm run start:server    # one-shot Rust backend
-npm run dev:web         # internal browser/admin development server (not the editor)
+npm run editor          # build the editor renderer and launch AsteronEngine
 ```
 
-Environment variables are documented in `backend/.env.example`. WebTransport uses a generated self-signed development identity unless certificate paths are configured; production supplies a trusted certificate through Kubernetes secrets.
+Environment variables are documented in `backend/.env.example`. WebTransport uses a generated self-signed development identity unless certificate paths are configured; production supplies a trusted certificate on the host.
 
 ## Deployment
 
-`backend/Dockerfile` builds one server image. `deploy/k8s/` runs at least three replicas behind TCP/UDP services, with readiness/liveness probes, a migration Job, horizontal autoscaling, disruption protection, and restricted network policy. Browser delivery remains separate from backend orchestration.
+`backend/Dockerfile` builds one server image. Run it on your host (for example Vultr) with Docker Compose alongside Postgres and Redis, or point the image at managed databases. Browser delivery remains separate from backend orchestration — ship the web build via **File → Build Web**.
 
 See [Rust Backend Cutover PRD](./rust-backend-cutover-prd) and [Cutover Implementation Plan](./rust-backend-cutover-plan) for requirements and acceptance criteria.

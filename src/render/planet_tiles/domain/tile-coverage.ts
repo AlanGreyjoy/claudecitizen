@@ -1,7 +1,7 @@
 import type { TileInfo, Vec3 } from '../../../types';
 import { normalize } from '../../../math/vec3';
-import { faceUvFromDirection } from '../../../world/cube_sphere';
-import { tileKey } from './tile_info';
+import { faceUvFromDirection } from '../../../world/cube-sphere';
+import { tileKey } from './tile-info';
 
 export function tileContainsDirection(tile: TileInfo, position: Vec3): boolean {
   const faceUv = faceUvFromDirection(normalize(position));

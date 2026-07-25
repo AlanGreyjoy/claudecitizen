@@ -1,4 +1,4 @@
-import { AUTHORING_ENABLED } from '../../build_mode';
+import { AUTHORING_ENABLED } from '../../build-mode';
 import { parseSceneDocument, type SceneDocument } from './schema';
 
 const sceneModules = import.meta.glob('./data/*.scene.json', { import: 'default' }) as Record<

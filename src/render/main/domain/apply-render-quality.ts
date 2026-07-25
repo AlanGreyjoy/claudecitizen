@@ -1,6 +1,6 @@
 import { configureTileLod } from '../../planet_tiles/domain/constants';
 import { configureVegetationDensity } from '../../vegetation/domain/constants';
-import { resolveRenderQuality } from './render_quality';
+import { resolveRenderQuality } from './render-quality';
 
 export function applyRenderQualitySettings(): void {
   const quality = resolveRenderQuality();

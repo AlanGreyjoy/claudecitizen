@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   QUANTUM_DROP_OUT_SECONDS,
   type QuantumTravelState,
-} from '../../flight/quantum_travel';
+} from '../../flight/quantum-travel';
 import type { Vec3 } from '../../types';
 
 const HYPERSPACE_RADIUS_METERS = 42;

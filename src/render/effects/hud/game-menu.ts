@@ -7,7 +7,7 @@ import {
   saveGameSettings,
   type CloudModeSetting,
   type GameSettings,
-} from '../../../settings/game_settings';
+} from '../../../settings/game-settings';
 import {
   createDefaultInputSettings,
   DEVICE_BUTTON_ACTIONS,
@@ -25,12 +25,12 @@ import {
   type FlightAnalogControlId,
   type InputSettings,
   type KeyboardActionId,
-} from '../../../flight/input_settings';
+} from '../../../flight/input-settings';
 import type {
   RenderQualityPreset,
   ShadowQualitySetting,
-} from '../../main/domain/render_quality';
-import { createBindingAxisPreview } from './binding_axis_preview';
+} from '../../main/domain/render-quality';
+import { createBindingAxisPreview } from './binding-axis-preview';
 
 export interface GameMenuElements {
   rootEl: HTMLElement;

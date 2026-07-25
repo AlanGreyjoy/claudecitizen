@@ -16,7 +16,7 @@ import {
   radialUp,
   surfacePointFromPosition,
 } from "../world/coordinates";
-import { sampleFootPlanetSurface } from "../world/planet_surface";
+import { sampleFootPlanetSurface } from "../world/planet-surface";
 import type {
   CharacterInput,
   CharacterState,
@@ -32,9 +32,9 @@ import {
   resolveWalkAiming,
   resolveWalkInputIntent,
   shouldLockFacingToCamera,
-} from "./character_locomotion";
-import type { WeaponAnimStanceId } from "./inventory/weapon_select";
-import { getCharacterSettings } from "./character_settings";
+} from "./character-locomotion";
+import type { WeaponAnimStanceId } from "./inventory/weapon-select";
+import { getCharacterSettings } from "./character-settings";
 
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
 const AIR_CONTROL = 0.18;

@@ -5,12 +5,12 @@ import {
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
   resolveOrbitCamera,
-} from '../../../player/character_controller';
-import { getBedEyeLocal, getPilotEyeLocal } from '../../../player/ship_interaction';
+} from '../../../player/character-controller';
+import { getBedEyeLocal, getPilotEyeLocal } from '../../../player/ship-interaction';
 import { add, cross, normalize, rotateAroundAxis, scale } from '../../../math/vec3';
 import { v3 } from '../domain/math';
-import type { StationCameraContext } from './camera_rig_types';
-import { clampOffsetToRoom, clampOffsetToShipZone } from './camera_rig_clamp';
+import type { StationCameraContext } from './camera-rig-types';
+import { clampOffsetToRoom, clampOffsetToShipZone } from './camera-rig-clamp';
 
 const WEAPON_AIM_ZOOM_SCALE = 0.86;
 

@@ -8,17 +8,17 @@ import type {
   Vec3,
 } from '../../../types';
 import { distance } from '../../../math/vec3';
-import { CUBE_FACES } from '../../../world/cube_sphere';
-import { loadTerrainTile, saveTerrainTile } from '../../../cache/terrain_tile_cache';
+import { CUBE_FACES } from '../../../world/cube-sphere';
+import { loadTerrainTile, saveTerrainTile } from '../../../cache/terrain-tile-cache';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
-import { buildTerrainTileBuffers } from '../build/terrain_buffers';
+import { buildTerrainTileBuffers } from '../build/terrain-buffers';
 import {
   MAX_CACHED_TILES,
   MIN_LEVEL,
   TILE_CACHE_ACTIVE_HEADROOM,
   TILE_CACHE_STALE_FRAMES,
 } from '../domain/constants';
-import { makeTileInfo, parentTileInfo, tileKey } from '../domain/tile_info';
+import { makeTileInfo, parentTileInfo, tileKey } from '../domain/tile-info';
 import type {
   PendingBuildJob,
   ResolvedTile,
@@ -27,8 +27,8 @@ import type {
   TileFrameCounters,
   TileMeshEntry,
 } from '../domain/types';
-import { createReadyMesh } from '../render/tile_geometry';
-import { createTileBuildWorkers } from '../worker/create_worker';
+import { createReadyMesh } from '../render/tile-geometry';
+import { createTileBuildWorkers } from '../worker/create-worker';
 
 export interface BuildBudget {
   remaining: number;

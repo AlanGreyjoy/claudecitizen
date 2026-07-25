@@ -13,11 +13,7 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     isDesktopEditor: true,
     platform: process.platform,
-    play: (route) => ipcRenderer.invoke('editor:play', route),
-    stopPlay: () => ipcRenderer.invoke('editor:stop-play'),
-    getPlayState: () => ipcRenderer.invoke('editor:get-play-state'),
     buildWeb: () => ipcRenderer.invoke('editor:build-web'),
-    onPlayState: (callback) => subscribe('editor:play-state', callback),
     onBuildState: (callback) => subscribe('editor:build-state', callback),
     onNativeCommand: (callback) => subscribe('editor:native-command', callback),
     listRecentProjects: () => ipcRenderer.invoke('projects:listRecent'),

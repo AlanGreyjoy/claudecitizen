@@ -1,11 +1,11 @@
 import { MODE_IN_BED, MODE_IN_SHIP, MODE_ON_FOOT } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
-import type { WeaponCombat } from "../combat/weapon_combat";
+import type { LoopContext } from "../loop-context";
+import type { WeaponCombat } from "../combat/weapon-combat";
 import type { ShipSystems } from "../ship/systems";
 import type { StationAnimations } from "../station/animations";
-import type { BuildTool } from "../station/build_tool";
-import type { ModeHandlers } from "../modes/dispatch_mode";
-import { dispatchMode } from "../modes/dispatch_mode";
+import type { BuildTool } from "../station/build-tool";
+import type { ModeHandlers } from "../modes/dispatch-mode";
+import { dispatchMode } from "../modes/dispatch-mode";
 import type { CameraState } from "../types";
 
 export interface SimTickDeps {

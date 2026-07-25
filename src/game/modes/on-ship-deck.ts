@@ -1,10 +1,10 @@
 import type { WalkModeInput } from "../types";
-import type { LoopContext } from "../loop_context";
-import type { WeaponCombat } from "../combat/weapon_combat";
-import type { PadInterest } from "../station/pad_interest";
+import type { LoopContext } from "../loop-context";
+import type { WeaponCombat } from "../combat/weapon-combat";
+import type { PadInterest } from "../station/pad-interest";
 import type { ShipSystems } from "../ship/systems";
 import type { Prompts } from "../station/prompts";
-import { updateDeckMode } from "./deck_locomotion";
+import { updateDeckMode } from "./deck-locomotion";
 
 export interface OnShipDeckMode {
   updateOnShipDeckMode: (input: WalkModeInput) => void;

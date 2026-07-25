@@ -3,8 +3,8 @@ import {
   hashVegetationQualityBudgets,
   hashVegetationSettings,
   vegetationStorageKey,
-} from '../../../cache/cache_keys';
-import { getCachedTile, putCachedTile } from '../../../cache/tile_cache_store';
+} from '../../../cache/cache-keys';
+import { getCachedTile, putCachedTile } from '../../../cache/tile-cache-store';
 import {
   getGrassSampleCount,
   getTreeSampleCount,

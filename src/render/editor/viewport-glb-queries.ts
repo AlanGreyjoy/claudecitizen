@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { EditorStore, EntityTransform } from "../../editor/document";
 import type { Vec3 } from "../../types";
-import { findObjectByUuid, RAD_TO_DEG } from "./viewport_transforms";
+import { findObjectByUuid, RAD_TO_DEG } from "./viewport-transforms";
 
 export interface ViewportGlbQueries {
   getGlbNodeLocalTransform: (

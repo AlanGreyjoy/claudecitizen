@@ -1,7 +1,3 @@
-export interface DesktopPlayState {
-  playing: boolean;
-}
-
 export interface DesktopBuildResult {
   ok: boolean;
   message: string;
@@ -15,6 +11,7 @@ export interface DesktopBuildState extends DesktopBuildResult {
 
 export type DesktopNativeCommandType =
   | 'play'
+  | 'pause-play'
   | 'stop-play'
   | 'build-web'
   | 'new-scene'
@@ -25,11 +22,13 @@ export type DesktopNativeCommandType =
   | 'open-planet'
   | 'open-menu'
   | 'open-scene-settings'
+  | 'open-project-settings'
   | 'undo'
   | 'redo'
   | 'duplicate'
   | 'delete'
-  | 'exit-to-title';
+  | 'exit-to-title'
+  | 'new-project';
 
 export interface DesktopNativeCommand {
   type: DesktopNativeCommandType;
@@ -62,11 +61,7 @@ export interface DesktopCreateProjectRequest {
 export interface ClaudeCitizenEditorDesktopBridge {
   readonly isDesktopEditor: true;
   readonly platform: string;
-  play: (route: string) => Promise<DesktopPlayState>;
-  stopPlay: () => Promise<DesktopPlayState>;
-  getPlayState: () => Promise<DesktopPlayState>;
   buildWeb: () => Promise<DesktopBuildResult>;
-  onPlayState: (callback: (state: DesktopPlayState) => void) => () => void;
   onBuildState: (callback: (state: DesktopBuildState) => void) => () => void;
   onNativeCommand: (callback: (command: DesktopNativeCommand) => void) => () => void;
   listRecentProjects: () => Promise<DesktopRecentProjectsResult>;

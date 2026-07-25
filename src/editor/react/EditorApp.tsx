@@ -15,36 +15,39 @@ import {
   savePrefab,
   saveScene,
 } from '../api';
-import { createEditorAudioPreviewController } from '../audio_preview';
-import { getDesktopEditorBridge } from '../../platform/editor_desktop';
+import { createEditorAudioPreviewController } from '../audio-preview';
+import { getDesktopEditorBridge } from '../../platform/editor-desktop';
 import { createEditorStore, type EditorStore } from '../document';
 import { showConfirmDialog, showToast } from '../dom';
 import {
+  createEmptySceneEditorState,
   fromPrefabDocument,
   fromSceneDocument,
   toPrefabDocument,
   toSceneDocument,
 } from '../serialize';
-import { openSceneSettingsModal } from '../panels/scene_settings';
+import { startEditorPlay, type EditorPlaySession } from '../play-in-editor';
 import {
   addAssetEntity,
   addBox,
   addEmpty,
   isTypingTarget,
   itemNameFromUrl,
-} from '../session_helpers';
+} from '../session-helpers';
 import { parsePrefabDocument, slugifyPrefabName } from '../../world/prefabs/schema';
 import { parseSceneDocument, SCENE_ID_PATTERN } from '../../world/scenes/schema';
 import { getModelThumbnail } from '../../render/editor/thumbnails';
 import type { EditorViewport } from '../../render/editor/viewport';
 import type { Vec3 } from '../../types';
-import { saveEditorHmrSnapshot, takeEditorHmrSnapshot } from './hmr_snapshot';
+import { saveEditorHmrSnapshot, takeEditorHmrSnapshot } from './hmr-snapshot';
 import { useEditorStoreInstance } from './hooks';
 import { usePanelSplitters } from './PanelSplitters';
 import { HierarchyPanel } from './panels/HierarchyPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
 import { MaterialManagerPanel } from './panels/MaterialManagerPanel';
 import { ProjectPanel, type ProjectPanelHandle } from './panels/ProjectPanel';
+import { ProjectSettingsModal } from './panels/ProjectSettingsModal';
+import { SceneSettingsModal } from './panels/SceneSettingsModal';
 import {
   Toolbar,
   type BrowsePanelKind,
@@ -54,8 +57,7 @@ import {
 import { TabEditorHosts, type TabEditorHandles } from './TabEditorHosts';
 import { SCENE_EDITOR_TABS, type SceneEditorTab } from './types';
 import { ViewportHost } from './ViewportHost';
-import { sceneLaunchSearch } from '../../app/scene_launch';
-import type { DesktopNativeCommand } from '../../platform/editor_desktop';
+import type { DesktopNativeCommand } from '../../platform/editor-desktop';
 
 function restoreSnapshot(
   store: EditorStore,
@@ -84,12 +86,9 @@ const GIZMO_SHORTCUTS: Readonly<Partial<Record<string, ToolbarGizmoMode>>> = {
   r: 'scale',
 };
 
-type PreparedPlayRoute =
-  | { handled: true; route: string | null }
-  | { handled: false };
-
 type NativeCommandHandlers = {
   togglePlay: () => void;
+  togglePause: () => void;
   stopPlay: () => void;
   buildWeb: () => void;
   newScene: () => void;
@@ -97,6 +96,7 @@ type NativeCommandHandlers = {
   save: () => void;
   openBrowse: (panel: BrowsePanelKind) => void;
   openSceneSettings: () => void;
+  openProjectSettings: () => void;
   undo: () => void;
   redo: () => void;
   duplicate: () => void;
@@ -110,6 +110,7 @@ function dispatchNativeCommand(
 ): void {
   const actions: Record<DesktopNativeCommand['type'], () => void> = {
     play: handlers.togglePlay,
+    'pause-play': handlers.togglePause,
     'stop-play': handlers.stopPlay,
     'build-web': handlers.buildWeb,
     'new-scene': handlers.newScene,
@@ -120,64 +121,15 @@ function dispatchNativeCommand(
     'open-planet': () => handlers.openBrowse('planet'),
     'open-menu': () => handlers.openBrowse('menu'),
     'open-scene-settings': handlers.openSceneSettings,
+    'open-project-settings': handlers.openProjectSettings,
     undo: handlers.undo,
     redo: handlers.redo,
     duplicate: handlers.duplicate,
     delete: handlers.deleteSelection,
     'exit-to-title': handlers.exitToTitle,
+    'new-project': () => {},
   };
   actions[command.type]?.();
-}
-
-async function prepareSpecializedPlayRoute(
-  current: SceneEditorTab,
-  handles: TabEditorHandles,
-): Promise<PreparedPlayRoute> {
-  if (current === 'planet-authoring') {
-    const editor = handles.planetAuthoringEditor;
-    if (!editor || !(await editor.save())) return { handled: true, route: null };
-    const planet = editor.getDocument();
-    if (!planet) return { handled: true, route: null };
-    const params = new URLSearchParams({
-      boot: 'play',
-      planetId: planet.id,
-      spawn: 'surface',
-      from: 'editor',
-      scene: `planet-${planet.id}-test`,
-    });
-    return { handled: true, route: `/?${params.toString()}` };
-  }
-
-  if (current === 'system-map') {
-    const editor = handles.systemMapEditor;
-    if (!editor || !(await editor.save())) return { handled: true, route: null };
-    const system = editor.getDocument();
-    const planetId = system?.planets[0]?.planetId;
-    if (!system || !planetId) {
-      showToast('Add a planet before playing this system scene.', true);
-      return { handled: true, route: null };
-    }
-    const params = new URLSearchParams({
-      boot: 'play',
-      systemId: system.id,
-      planetId,
-      from: 'editor',
-      scene: `system-${system.id}-test`,
-    });
-    return { handled: true, route: `/?${params.toString()}` };
-  }
-
-  if (current === 'base-characters') {
-    await handles.baseCharacterEditor?.save();
-    return { handled: true, route: '/?boot=sidekickPreview&scene=base-character-test' };
-  }
-
-  if (current === 'menu-manager') {
-    const scene = await fetchScene('main-game');
-    return { handled: true, route: sceneLaunchSearch(scene) };
-  }
-
-  return { handled: false };
 }
 
 export function EditorApp(): ReactElement {
@@ -195,7 +147,10 @@ export function EditorApp(): ReactElement {
     menuManagerEditor: null,
   });
   const [playing, setPlaying] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
 
   const toolbarRef = useRef<ToolbarHandle | null>(null);
   const projectRef = useRef<ProjectPanelHandle | null>(null);
@@ -209,8 +164,13 @@ export function EditorApp(): ReactElement {
   const playingRef = useRef(playing);
   playingRef.current = playing;
 
+  const playSessionRef = useRef<EditorPlaySession | null>(null);
+
   const stopInEditorPlay = useCallback(() => {
+    playSessionRef.current?.stop();
+    playSessionRef.current = null;
     viewportRef.current?.setPlayMode(false);
+    setPaused(false);
     setPlaying(false);
   }, []);
 
@@ -241,6 +201,7 @@ export function EditorApp(): ReactElement {
     root.classList.toggle('is-planet-authoring', tab === 'planet-authoring');
     root.classList.toggle('is-system-map', tab === 'system-map');
     root.classList.toggle('is-menu-manager', tab === 'menu-manager');
+    root.classList.toggle('is-server', tab === 'server');
   }, [tab]);
 
   // Dock tab-editor sidebars into Scene hierarchy/inspector so scene tabs sit
@@ -498,7 +459,7 @@ export function EditorApp(): ReactElement {
   const newSceneDocument = useCallback(async () => {
     if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes?'))) return;
     audioPreview.stop();
-    store.newScene();
+    store.loadDocument(createEmptySceneEditorState('', 'Untitled Scene'));
     setTab('scene');
   }, [store, audioPreview, confirmDiscard, setTab]);
 
@@ -524,6 +485,8 @@ export function EditorApp(): ReactElement {
   const saveActive = useCallback(async (): Promise<boolean> => {
     const current = tabRef.current;
     const handles = tabHandlesRef.current;
+    // The Server console writes straight to the backend; nothing to save here.
+    if (current === 'server') return true;
     const documentIsActive = current === 'scene' || current === 'material-manager';
     if (!documentIsActive && store.isDirty() && !(await saveCurrent())) return false;
     if (current === 'system-map') return handles.systemMapEditor?.save() ?? false;
@@ -536,49 +499,48 @@ export function EditorApp(): ReactElement {
     return (await saveCurrent()) !== null;
   }, [saveCurrent, store]);
 
-  const preparePlayRoute = useCallback(async (): Promise<string | null> => {
+  /**
+   * Unity-style Play: every tab plays the open document in the Game view. Tabs
+   * with their own editor save first so the runtime reads current data.
+   */
+  const togglePlay = useCallback(async () => {
+    if (playing) {
+      stopInEditorPlay();
+      return;
+    }
+
     const current = tabRef.current;
     const handles = tabHandlesRef.current;
     audioPreview.stop();
-    const documentIsActive = current === 'scene' || current === 'material-manager';
-    if (!documentIsActive && store.isDirty() && !(await saveCurrent())) return null;
 
-    const specialized = await prepareSpecializedPlayRoute(current, handles);
-    if (specialized.handled) return specialized.route;
-
-    // Scene / prefab documents play in-editor (Scene view → Play view).
-    // Specialized tabs above still use an external Play window route.
-    return null;
-  }, [audioPreview, saveCurrent, store]);
-
-  const togglePlay = useCallback(async () => {
-    const bridge = getDesktopEditorBridge();
-    if (playing) {
-      stopInEditorPlay();
-      if (bridge) await bridge.stopPlay();
+    if (current === 'planet-authoring' && !(await handles.planetAuthoringEditor?.save())) {
       return;
     }
-
-    const current = tabRef.current;
-    audioPreview.stop();
-
-    // Unity-style: Scene / Material Manager play the open document in the viewport.
-    if (current === 'scene' || current === 'material-manager') {
-      if (current !== 'scene') setTabState('scene');
-      viewportRef.current?.setPlayMode(true);
-      setPlaying(true);
+    if (current === 'system-map' && !(await handles.systemMapEditor?.save())) return;
+    if (current === 'base-characters') {
+      await handles.baseCharacterEditor?.save();
+      showToast('Use the Play Test control in the Base Characters panel.');
       return;
     }
-
-    const route = await preparePlayRoute();
-    if (!route) return;
-    if (!bridge) {
-      window.location.href = route;
+    if (current === 'server') {
+      showToast('Open a scene to play.', true);
       return;
     }
-    await bridge.play(route);
+    if (current !== 'scene') setTabState('scene');
+
+    viewportRef.current?.setPlayMode(true);
+    playSessionRef.current = startEditorPlay(store);
+    setPaused(false);
     setPlaying(true);
-  }, [playing, preparePlayRoute, audioPreview, stopInEditorPlay]);
+  }, [playing, audioPreview, stopInEditorPlay, store]);
+
+  const togglePause = useCallback(() => {
+    const session = playSessionRef.current;
+    if (!session) return;
+    const next = !session.isPaused();
+    session.setPaused(next);
+    setPaused(next);
+  }, []);
 
   const buildWeb = useCallback(async () => {
     const bridge = getDesktopEditorBridge();
@@ -627,6 +589,18 @@ export function EditorApp(): ReactElement {
     void saveActive();
   }, [saveActive]);
 
+  const openSceneSettings = useCallback(() => {
+    if (store.getState().documentType !== 'scene') {
+      showToast('Open a scene to edit Scene Settings.', true);
+      return;
+    }
+    setSceneSettingsOpen(true);
+  }, [store]);
+
+  const openProjectSettings = useCallback(() => {
+    setProjectSettingsOpen(true);
+  }, []);
+
   const setGizmoMode = useCallback(
     (mode: ToolbarGizmoMode) => {
       if (tabRef.current === 'base-characters') {
@@ -661,9 +635,8 @@ export function EditorApp(): ReactElement {
         setTab('planet-authoring');
         void tabHandlesRef.current.planetAuthoringEditor?.loadPlanet(id);
       },
-      onOpenSceneSettings: () => {
-        void openSceneSettingsModal(store);
-      },
+      onOpenSceneSettings: openSceneSettings,
+      onOpenProjectSettings: openProjectSettings,
       onOpenMenu: (id: string) => {
         setTab('menu-manager');
         queueMicrotask(() => tabHandlesRef.current.menuManagerEditor?.openMenu(id));
@@ -671,10 +644,8 @@ export function EditorApp(): ReactElement {
       onDuplicate: duplicateSelection,
       onDelete: deleteSelection,
       onTogglePlay: () => void togglePlay(),
-      onStopPlay: () => {
-        stopInEditorPlay();
-        void getDesktopEditorBridge()?.stopPlay();
-      },
+      onTogglePause: togglePause,
+      onStopPlay: stopInEditorPlay,
       onBuildWeb: () => void buildWeb(),
       onOpenProject: () => {
         void getDesktopEditorBridge()?.returnToProjects();
@@ -683,6 +654,7 @@ export function EditorApp(): ReactElement {
       onShipPreviewChange: (state: Parameters<EditorViewport['setShipPreview']>[0]) =>
         viewportRef.current?.setShipPreview(state),
       playing,
+      paused,
       building,
     }),
     [
@@ -690,16 +662,20 @@ export function EditorApp(): ReactElement {
       newDocument,
       newSceneDocument,
       onSave,
+      openSceneSettings,
+      openProjectSettings,
       loadById,
       loadSceneById,
       setTab,
       duplicateSelection,
       deleteSelection,
       togglePlay,
+      togglePause,
       stopInEditorPlay,
       buildWeb,
       exitToTitle,
       playing,
+      paused,
       building,
     ],
   );
@@ -714,30 +690,21 @@ export function EditorApp(): ReactElement {
   useEffect(() => {
     const bridge = getDesktopEditorBridge();
     if (!bridge) return;
-    // External Play window closed → exit play UI. Do not adopt bridge
-    // playing=true (in-editor Play owns that for the Scene tab).
-    void bridge.getPlayState().then((state) => {
-      if (!state.playing) stopInEditorPlay();
-    });
-    const unsubscribePlay = bridge.onPlayState((state) => {
-      if (!state.playing) stopInEditorPlay();
-    });
     const unsubscribeBuild = bridge.onBuildState((state) => {
       setBuilding(state.phase === 'building');
     });
     const unsubscribeCommand = bridge.onNativeCommand((command) => {
       dispatchNativeCommand(command, {
         togglePlay: () => void togglePlay(),
-        stopPlay: () => {
-          stopInEditorPlay();
-          void bridge.stopPlay();
-        },
+        togglePause,
+        stopPlay: stopInEditorPlay,
         buildWeb: () => void buildWeb(),
         newScene: () => void newSceneDocument(),
         newPrefab: () => void newDocument(),
         save: onSave,
         openBrowse: (panel) => toolbarRef.current?.openBrowsePanel(panel),
-        openSceneSettings: () => void openSceneSettingsModal(store),
+        openSceneSettings,
+        openProjectSettings: openProjectSettings,
         undo: () => store.undo(),
         redo: () => store.redo(),
         duplicate: duplicateSelection,
@@ -746,17 +713,19 @@ export function EditorApp(): ReactElement {
       });
     });
     return () => {
-      unsubscribePlay();
       unsubscribeBuild();
       unsubscribeCommand();
     };
   }, [
     buildWeb,
     togglePlay,
+    togglePause,
     stopInEditorPlay,
     newSceneDocument,
     newDocument,
     onSave,
+    openSceneSettings,
+    openProjectSettings,
     store,
     duplicateSelection,
     deleteSelection,
@@ -1030,6 +999,16 @@ export function EditorApp(): ReactElement {
           onCreateItemPrefab={createItemPrefab}
         />
       </div>
+
+      <SceneSettingsModal
+        open={sceneSettingsOpen}
+        store={store}
+        onClose={() => setSceneSettingsOpen(false)}
+      />
+      <ProjectSettingsModal
+        open={projectSettingsOpen}
+        onClose={() => setProjectSettingsOpen(false)}
+      />
     </>
   );
 }

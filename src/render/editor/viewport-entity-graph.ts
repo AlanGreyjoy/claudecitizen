@@ -4,8 +4,8 @@ import {
   loadPrefabModel,
   createPrimitiveMesh,
   createPropInstanceGroup,
-} from "../prefabs/prefab_renderer";
-import { setupUpdateObjectAnimations } from "../prefabs/object_animation";
+} from "../prefabs/prefab-renderer";
+import { setupUpdateObjectAnimations } from "../prefabs/object-animation";
 import {
   createParticleSystem,
   type ParticleSystemHandle,
@@ -15,13 +15,13 @@ import { loadPrefabDocument } from "../../world/prefabs/loader";
 import {
   createViewportComponentHelpers,
   type ViewportResourceTracker,
-} from "./viewport_component_helpers";
+} from "./viewport-component-helpers";
 import {
   attachTopLevelEntityComponents,
   finalizeLoadedEntityModel,
   refreshNodeOverrideComponentHelpers,
-} from "./viewport_entity_model";
-import { createViewportNpcRoutes } from "./viewport_npc_routes";
+} from "./viewport-entity-model";
+import { createViewportNpcRoutes } from "./viewport-npc-routes";
 import {
   applyEntityTransformToObject,
   applyTransformToObject3D,
@@ -29,7 +29,7 @@ import {
   findGlbNodeByName,
   sanitizeNodeName,
   tagGlbNodes,
-} from "./viewport_transforms";
+} from "./viewport-transforms";
 
 export interface ViewportEntityGraph {
   objectsById: Map<string, THREE.Group>;

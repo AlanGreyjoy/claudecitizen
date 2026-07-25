@@ -1,12 +1,29 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "id": "loading",
   "name": "Loading",
   "kind": "loading",
-  "settings": {
-    "systemId": "default",
-    "planetId": "asteron",
-    "spawn": "station"
-  },
-  "gameObjects": []
+  "gameObjects": [
+    {
+      "id": "loading-screen",
+      "name": "Loading Screen",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "ui-screen",
+          "screen": "loading"
+        },
+        {
+          "type": "scene-link",
+          "sceneId": "main-game",
+          "auto": true,
+          "delaySeconds": 0.5
+        }
+      ]
+    }
+  ]
 }

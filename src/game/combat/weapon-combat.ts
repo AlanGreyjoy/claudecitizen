@@ -1,23 +1,23 @@
 import {
   resolveWeaponSlotPress,
   stanceIdForWeaponSlot,
-} from "../../player/inventory/weapon_select";
+} from "../../player/inventory/weapon-select";
 import {
   resolveWalkAiming,
   resolveWalkInputIntent,
-} from "../../player/character_locomotion";
+} from "../../player/character-locomotion";
 import { itemQuantity } from "../../player/inventory/types";
-import { currentWeaponFireMode } from "../../player/weapon_fire";
+import { currentWeaponFireMode } from "../../player/weapon-fire";
 import type { HudUpdateParams } from "../../render/effects";
 import type { CharacterInput } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { EquippedInventory } from "../inventory/equipped";
-import { resolveActiveFirearm } from "./resolve_active_firearm";
+import { resolveActiveFirearm } from "./resolve-active-firearm";
 import {
   fireStateFor,
   updateWeaponCombat as runWeaponCombatUpdate,
   type WeaponCombatActions,
-} from "./update_weapon_combat";
+} from "./update-weapon-combat";
 
 export interface WeaponCombat {
   currentAnimStance: () => ReturnType<typeof stanceIdForWeaponSlot>;

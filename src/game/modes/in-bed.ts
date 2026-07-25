@@ -1,7 +1,7 @@
 import type { FrameActions } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
-import { updateBedEntertainment } from "./bed_entertainment";
+import { updateBedEntertainment } from "./bed-entertainment";
 
 export interface InBedMode {
   updateInBedMode: (actions: FrameActions) => void;

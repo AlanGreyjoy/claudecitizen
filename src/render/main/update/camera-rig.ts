@@ -10,11 +10,11 @@ import {
   updateCharacterOrbitCameraRig,
   updateInBedCameraRig,
   updateInShipCameraRig,
-} from './camera_rig_modes';
-import type { StationCameraContext } from './camera_rig_types';
+} from './camera-rig-modes';
+import type { StationCameraContext } from './camera-rig-types';
 
-export type { StationCameraContext } from './camera_rig_types';
-export { clampOffsetToRoom, clampOffsetToShipZone } from './camera_rig_clamp';
+export type { StationCameraContext } from './camera-rig-types';
+export { clampOffsetToRoom, clampOffsetToShipZone } from './camera-rig-clamp';
 
 const WEAPON_AIM_ZOOM_HALF_LIFE_SECONDS = 0.07;
 

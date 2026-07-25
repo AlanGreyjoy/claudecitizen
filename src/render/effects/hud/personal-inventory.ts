@@ -17,17 +17,17 @@ import {
 import {
   GAME_SETTINGS_CHANGED_EVENT,
   loadGameSettings,
-} from '../../../settings/game_settings';
-import { getKeyboardBindingCodes } from '../../../flight/input_settings';
+} from '../../../settings/game-settings';
+import { getKeyboardBindingCodes } from '../../../flight/input-settings';
 import { consumeInventoryItem, equipInventoryItem } from '../../../net/api';
-import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
+import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player-character-appearance';
 import {
   ALL_PLAY_LOADOUT_SLOTS,
   PLAY_LOADOUT_SLOTS,
   WEAPON_BAR_SLOT_IDS,
   WEARABLE_LOADOUT_SLOTS,
   type PlayLoadoutSlot,
-} from '../../../player/inventory/loadout_slots';
+} from '../../../player/inventory/loadout-slots';
 import {
   findItemDefinition,
   itemCompatibleWithSlot,
@@ -43,10 +43,10 @@ import type { PlayerSurvivalVitals } from '../../../player/vitals';
 import {
   equippedWearableAtSlot,
   resolveEquippedWearables,
-} from '../../../player/inventory/wearable_loadout';
+} from '../../../player/inventory/wearable-loadout';
 import { createUiIcon } from '../../../ui/icons';
-import { paintItemIcon } from './item_icon';
-import { createInventoryAvatarPreview } from './inventory_avatar_preview';
+import { paintItemIcon } from './item-icon';
+import { createInventoryAvatarPreview } from './inventory-avatar-preview';
 
 export const INVENTORY_DND_TYPE = 'application/x-claudecitizen-inventory-item';
 

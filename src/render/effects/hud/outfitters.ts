@@ -10,7 +10,7 @@ import {
   normalizeInventoryState,
 } from "../../../player/inventory/types";
 import type { StationOutfittersMarker } from "../../../world/station";
-import { paintItemIcon } from "./item_icon";
+import { paintItemIcon } from "./item-icon";
 
 export type OutfittersCategory =
   | "head"

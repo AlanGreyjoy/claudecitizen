@@ -1,9 +1,9 @@
 import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
 import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
-import { DEFAULT_SPAWN_SITE } from './landing_sites';
+import { DEFAULT_SPAWN_SITE } from './landing-sites';
 import type { LandingSiteHint, Planet, Vec3 } from '../types';
 import type { GameplayCollider } from '../physics/colliders';
-import type { PrefabSoundSpec } from './prefabs/sound_runtime';
+import type { PrefabSoundSpec } from './prefabs/sound-runtime';
 import type {
   StationNpcPlacementSpec,
   StationNpcSpawnerSpec,

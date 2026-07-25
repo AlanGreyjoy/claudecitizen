@@ -3,7 +3,7 @@ import {
   type InventoryState,
   type LoadoutState,
 } from "../../player/inventory/types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export interface EquippedInventory {
   syncEquippedInventory: (inventory?: InventoryState | null) => void;

@@ -1,4 +1,4 @@
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 function nearestSurfaceSpawnDistance(
   focus: { x: number; y: number; z: number },

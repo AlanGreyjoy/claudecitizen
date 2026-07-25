@@ -24,9 +24,11 @@ import {
   removeComponentTypeFromGlbNodes,
   removeComponentTypeMenuEntries,
   type GlbNodeColliderTarget,
-} from '../../component_actions';
+} from '../../component-actions';
 import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../../document';
 import { showContextMenu, type ContextMenuEntry } from '../../dom';
+import { createPrefabFromSelection } from '../../create-prefab-from-selection';
+import { PREFAB_KINDS } from '../../../world/prefabs/schema';
 import {
   collectEntitySubtreeIds,
   collectExpandUuids,
@@ -53,8 +55,8 @@ import {
   parseDraggedGlbNode,
   resolveGlbClickSelection,
   type HierarchyPanelOptions,
-} from '../../panels/hierarchy_logic';
-import { getComponentDef } from '../../../world/prefabs/component_registry';
+} from '../../panels/hierarchy-logic';
+import { getComponentDef } from '../../../world/prefabs/component-registry';
 import type { PrefabComponentType } from '../../../world/prefabs/schema';
 import type { Vec3 } from '../../../types';
 import { UiIcons } from '../../../ui/icons';
@@ -853,6 +855,13 @@ export function HierarchyPanel({
         'sep',
         buildEntityComponentsSubmenu(store, entity.id, spawnPositionForEntity(entity.id)),
         'sep',
+        {
+          label: 'Create Prefab from Selection',
+          children: PREFAB_KINDS.map((kind) => ({
+            label: kind,
+            action: () => void createPrefabFromSelection(store, entity.id, kind),
+          })),
+        },
         { label: 'Filter', action: () => filterByItemName(entity.name) },
         { label: 'Rename', action: () => beginRename(entity.id) },
         { label: 'Duplicate', action: () => store.duplicateEntity(entity.id) },

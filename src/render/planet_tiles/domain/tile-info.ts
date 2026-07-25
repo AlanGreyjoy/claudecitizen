@@ -1,7 +1,7 @@
 import type { CubeFace, Planet, TileInfo } from '../../../types';
 import { distance, scale } from '../../../math/vec3';
-import { directionFromCubeFace } from '../../../world/cube_sphere';
-import { tileBounds, tileKey } from './tile_key';
+import { directionFromCubeFace } from '../../../world/cube-sphere';
+import { tileBounds, tileKey } from './tile-key';
 
 export function makeTileInfo(face: CubeFace, level: number, x: number, y: number, planet: Planet): TileInfo {
   const bounds = tileBounds(level, x, y);

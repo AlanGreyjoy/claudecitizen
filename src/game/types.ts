@@ -1,28 +1,28 @@
-import type { createPlayerControls } from "../input/player_controls";
-import type { HangarBuildController } from "../player/hangar_build/build_controller";
-import type { BuildPropColliderRuntime } from "../player/hangar_build/prop_colliders";
-import type { HangarPropRenderer } from "../render/hangar/prop_instances";
-import type { BuildTerminalController } from "../render/effects/hud/build_terminal";
-import type { AvmsTerminalController } from "../render/effects/hud/avms_terminal";
-import type { EntertainmentSystemController } from "../render/effects/hud/entertainment_system";
-import type { WeaponShopController } from "../render/effects/hud/weapon_shop";
+import type { createPlayerControls } from "../input/player-controls";
+import type { HangarBuildController } from "../player/hangar_build/build-controller";
+import type { BuildPropColliderRuntime } from "../player/hangar_build/prop-colliders";
+import type { HangarPropRenderer } from "../render/hangar/prop-instances";
+import type { BuildTerminalController } from "../render/effects/hud/build-terminal";
+import type { AvmsTerminalController } from "../render/effects/hud/avms-terminal";
+import type { EntertainmentSystemController } from "../render/effects/hud/entertainment-system";
+import type { WeaponShopController } from "../render/effects/hud/weapon-shop";
 import type { OutfittersController } from "../render/effects/hud/outfitters";
-import type { FoodShopController } from "../render/effects/hud/food_shop";
-import type { PersonalInventoryController } from "../render/effects/hud/personal_inventory";
-import type { PlayerVitalsSessionController } from "../app/player_vitals_session";
+import type { FoodShopController } from "../render/effects/hud/food-shop";
+import type { PersonalInventoryController } from "../render/effects/hud/personal-inventory";
+import type { PlayerVitalsSessionController } from "../app/player-vitals-session";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
 import type { BuildArea, GameBootstrap } from "../net/api";
-import type { WorldClient } from "../net/world_client";
-import type { StationPhysics } from "../physics/station_physics";
+import type { WorldClient } from "../net/world-client";
+import type { StationPhysics } from "../physics/station-physics";
 import type { PrefabDocument } from "../world/prefabs/schema";
-import type { SurfaceDestination } from "../world/biome_teleport";
+import type { SurfaceDestination } from "../world/biome-teleport";
 import type {
   InventoryState,
   LoadoutState,
   WeaponFireMode,
 } from "../player/inventory/types";
-import type { WeaponGeometryHit } from "../player/weapon_ballistics";
+import type { WeaponGeometryHit } from "../player/weapon-ballistics";
 import type { Planet, Vec3 } from "../types";
 
 export type PlayerControls = ReturnType<typeof createPlayerControls>;

@@ -13,8 +13,8 @@ import {
   removeStaticColliders,
   type RapierWorldHandle,
   type PhysicsRayHit,
-} from "./rapier_world";
-import { castCameraOcclusion } from "./camera_occlusion";
+} from "./rapier-world";
+import { castCameraOcclusion } from "./camera-occlusion";
 
 export interface StationPhysics {
   world: RAPIER.World;

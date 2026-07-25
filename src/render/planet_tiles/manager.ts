@@ -3,9 +3,9 @@ import type { Planet, PlanetSurfaceSample, TileInfo, Vec3 } from '../../types';
 import { distance } from '../../math/vec3';
 import {
   sampleRenderablePlanetSurface,
-} from '../../world/planet_surface';
-import { createTileMeshCache } from './cache/mesh_cache';
-import { createTerrainMaterial } from './render/terrain_material';
+} from '../../world/planet-surface';
+import { createTileMeshCache } from './cache/mesh-cache';
+import { createTerrainMaterial } from './render/terrain-material';
 import {
   MAX_CACHED_TILES,
   MAX_LEVEL,
@@ -13,14 +13,14 @@ import {
   PLANET_RENDER_SCALE,
   TILE_BUILD_BUDGET_PER_FRAME,
 } from './domain/constants';
-import { setFootSurfaceSampleLevel } from '../../world/foot_surface_level';
-import { planApproachPrefetch } from './domain/approach_prefetch';
-import { collectTilesNearPosition } from './domain/spawn_tiles';
+import { setFootSurfaceSampleLevel } from '../../world/foot-surface-level';
+import { planApproachPrefetch } from './domain/approach-prefetch';
+import { collectTilesNearPosition } from './domain/spawn-tiles';
 import {
   finestSelectedTileLevel,
   hasSelectedTileAncestor,
-} from './domain/tile_coverage';
-import { tileKey } from './domain/tile_info';
+} from './domain/tile-coverage';
+import { tileKey } from './domain/tile-info';
 import {
   visitSelectedTiles,
   type TileSelectionView,
@@ -29,7 +29,7 @@ import type { ResolvedTile, TileManagerUpdateResult } from './domain/types';
 import {
   updateTerrainSeamStitching,
   type TerrainSeamTile,
-} from './render/seam_stitching';
+} from './render/seam-stitching';
 
 const APPROACH_PREFETCH_INTERVAL_FRAMES = 12;
 /** Total speculative starts across every look-ahead focus in one pass. */

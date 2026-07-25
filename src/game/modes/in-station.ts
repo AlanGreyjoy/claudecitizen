@@ -1,14 +1,14 @@
 import {
   updateCharacterInStation,
   type StationCharacterState,
-} from "../../player/station_walk";
-import type { LoopContext } from "../loop_context";
-import type { WeaponCombat } from "../combat/weapon_combat";
-import type { PadInterest } from "../station/pad_interest";
+} from "../../player/station-walk";
+import type { LoopContext } from "../loop-context";
+import type { WeaponCombat } from "../combat/weapon-combat";
+import type { PadInterest } from "../station/pad-interest";
 import type { ShipSystems } from "../ship/systems";
 import type { Prompts } from "../station/prompts";
 import type { StationAnimations } from "../station/animations";
-import type { BuildTool } from "../station/build_tool";
+import type { BuildTool } from "../station/build-tool";
 import { handleStationVendors } from "../station/vendors";
 import { handleStationInteraction } from "../station/interactions";
 import type { BuildAreaRuntime, WalkModeInput } from "../types";

@@ -1,9 +1,9 @@
-import { usesColliderDeck } from "../../player/ship_layout";
-import { DECK_FLOOR_OFFSET_METERS } from "../../player/ship_deck";
-import { teleportShipPlayerLocal } from "../../physics/ship_physics";
+import { usesColliderDeck } from "../../player/ship-layout";
+import { DECK_FLOOR_OFFSET_METERS } from "../../player/ship-deck";
+import { teleportShipPlayerLocal } from "../../physics/ship-physics";
 import { updateTransition } from "../../player/transitions";
-import type { LoopContext } from "../loop_context";
-import type { DeckPhysics } from "../ship/deck_physics";
+import type { LoopContext } from "../loop-context";
+import type { DeckPhysics } from "../ship/deck-physics";
 
 export interface Transitions {
   updateTransitionMode: (dt: number) => void;

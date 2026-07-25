@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { RendererMode } from '../domain/types';
-import { resolveRenderQuality } from '../domain/render_quality';
+import { resolveRenderQuality } from '../domain/render-quality';
 
 export interface WebGlRendererContext {
   rendererMode: RendererMode;

@@ -8,22 +8,19 @@ import {
   listWeaponDefinitions,
   type BackpackDefinition,
   type WeaponDefinition,
-} from '../../net/admin_api';
+} from '../../net/admin-api';
 import {
   cloneBaseCharacterEquipment,
-  identityCharacterMount,
   parseBaseCharacterEquipment,
   type BaseCharacterEquipmentV1,
   type BaseCharacterType,
   type CharacterBoneMountV1,
   type CharacterEquipmentSlotV1,
-} from '../../player/equipment/base_character_equipment';
+} from '../../player/equipment/base-character-equipment';
 import {
-  ANIMATION_LOCOMOTION_KINDS,
   UAL_ANIMATION_SOURCE_ID,
   buildDefaultAnimationController,
   cloneAnimationController,
-  locomotionStateSlug,
   parseAnimationController,
   resolveControllerClip,
   resolveControllerState,
@@ -32,12 +29,12 @@ import {
 } from '../../player/animation/schema';
 import {
   setDefaultAnimationController,
-} from '../../player/animation/default_controller';
+} from '../../player/animation/default-controller';
 import {
   integrateCharacterLocomotion,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-} from '../../player/character_controller';
+} from '../../player/character-controller';
 import {
   animationLayersFromState,
   resolveWalkAiming,
@@ -45,23 +42,21 @@ import {
   resolveWalkInputIntent,
   shouldLockFacingToCamera,
   type WalkGait,
-} from '../../player/character_locomotion';
+} from '../../player/character-locomotion';
 import {
   cloneCharacterSettings,
-  DEFAULT_CHARACTER_SETTINGS,
   getCharacterSettings,
   parseCharacterSettings,
   setCharacterSettings,
   type CharacterSettingsV1,
-} from '../../player/character_settings';
-import { createPlayerControls } from '../../input/player_controls';
-import { resolveDeckCameraOrbit } from '../../flight/flight_aim';
+} from '../../player/character-settings';
+import { createPlayerControls } from '../../input/player-controls';
+import { resolveDeckCameraOrbit } from '../../flight/flight-aim';
 import { add, normalize, scale, vec3 } from '../../math/vec3';
 import type { CharacterState, JumpPhase, Vec3 } from '../../types';
-import { buildDefaultDefinition, findPreviewSpecies, loadSidekickCatalog } from '../../player/character_creator/sidekick_catalog';
-import type { SidekickCharacterDefinitionV2 } from '../../player/character_creator/sidekick_definition';
+import { buildDefaultDefinition, findPreviewSpecies, loadSidekickCatalog } from '../../player/character_creator/sidekick-catalog';
+import type { SidekickCharacterDefinitionV2 } from '../../player/character_creator/sidekick-definition';
 import {
-  ASSET_DND_TYPE,
   fetchAnimationController,
   fetchAnimationControllerList,
   fetchBaseCharacterEquipment,
@@ -72,17 +67,17 @@ import {
   savePrefab,
   type AnimationControllerListEntry,
 } from '../../editor/api';
-import { assembleSidekickCharacter, type SidekickAvatarInstance } from '../characters/sidekick/assemble_avatar';
-import { createSidekickAnimationRuntime, type SidekickAnimationRuntime } from '../characters/sidekick/animation_runtime';
+import { assembleSidekickCharacter, type SidekickAvatarInstance } from '../characters/sidekick/assemble-avatar';
+import { createSidekickAnimationRuntime, type SidekickAnimationRuntime } from '../characters/sidekick/animation-runtime';
 import {
   createSidekickUpperBodyAimController,
   type SidekickUpperBodyAimController,
-} from '../characters/sidekick/upper_body_aim';
+} from '../characters/sidekick/upper-body-aim';
 import { loadPrefabDocument } from '../../world/prefabs/loader';
 import {
   collectDrawnGrip,
   identityDrawnGripTransform,
-} from '../../world/prefabs/item_runtime';
+} from '../../world/prefabs/item-runtime';
 import {
   parsePrefabDocument,
   type PrefabDocument,
@@ -96,25 +91,27 @@ import {
   reportDrawnAuthoringStatus,
   setupEquipmentDrawnPivots,
   setupEquipmentMountPivots,
-} from "./base_character_equipment_preview";
-import { applyPlayTestAnimationLayers, buildPlayTestAnimationStateKey } from "./base_character_equipment_play_test";
+} from "./base-character-equipment-preview";
+import { applyPlayTestAnimationLayers, buildPlayTestAnimationStateKey } from "./base-character-equipment-play-test";
 import {
   resolveEquipmentTransformTarget,
   type MountEditMode,
-} from "./base_character_equipment_transform";
-import { renderEquipmentInspector } from "./base_character_equipment_inspector";
+} from "./base-character-equipment-transform";
+import type {
+  BaseCharacterEditorUiApi,
+  BaseCharacterEquipmentEditorOptions,
+  BaseCharacterLeftTab,
+  CharacterPreviewPose,
+  EquipmentGizmoMode,
+} from './base-character-equipment-ui';
+import { createBaseCharacterEditorUiApi } from './base-character-equipment-ui-api';
 import {
   WEAPON_SELECT_SLOT_IDS,
   stanceIdForWeaponSlot,
   type WeaponSelectSlotId,
-} from '../../player/inventory/weapon_select';
-
-const EQUIPMENT_DND_TYPE = 'application/x-claudecitizen-equipment-definition';
+} from '../../player/inventory/weapon-select';
 
 type CatalogDefinition = WeaponDefinition | BackpackDefinition;
-type CharacterPreviewPose = 'reference' | 'animated';
-type EquipmentGizmoMode = 'translate' | 'rotate' | 'scale';
-type BaseCharacterLeftTab = 'equipment' | 'animation' | 'controllers' | 'settings';
 /** holster = resting; drawn = character hand bone; weapon-grip = per-weapon prefab pose */
 
 interface PlayTestDefaultAssignment {
@@ -278,8 +275,11 @@ export interface BaseCharacterEquipmentEditor {
   getLeftPanel: () => HTMLElement;
   /** Right inspector chrome — dock into Scene inspector panel (full height). */
   getRightPanel: () => HTMLElement;
+  getUiApi: () => BaseCharacterEditorUiApi;
   dispose: () => void;
 }
+
+export type { BaseCharacterEquipmentEditorOptions } from './base-character-equipment-ui';
 
 const LOCOMOTION_LABELS: Record<AnimationLocomotionKind, string> = {
   idle: 'Idle',
@@ -322,48 +322,6 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   node.className = 'ed-btn';
   node.textContent = label;
   node.addEventListener('click', onClick);
-  return node;
-}
-
-function input(
-  value: string,
-  onChange: (value: string) => void,
-  type = 'text',
-  step?: number,
-): HTMLInputElement {
-  const node = document.createElement('input');
-  node.className = 'ed-input';
-  node.type = type;
-  if (step !== undefined) node.step = String(step);
-  node.value = value;
-  node.addEventListener('change', () => onChange(node.value));
-  return node;
-}
-
-function field(label: string, control: HTMLElement): HTMLLabelElement {
-  const node = document.createElement('label');
-  node.className = 'ed-base-field';
-  const text = document.createElement('span');
-  text.textContent = label;
-  node.append(text, control);
-  return node;
-}
-
-function select(
-  value: string,
-  options: Array<{ value: string; label: string }>,
-  onChange: (value: string) => void,
-): HTMLSelectElement {
-  const node = document.createElement('select');
-  node.className = 'ed-select';
-  for (const option of options) {
-    const child = document.createElement('option');
-    child.value = option.value;
-    child.textContent = option.label;
-    child.selected = option.value === value;
-    node.append(child);
-  }
-  node.addEventListener('change', () => onChange(node.value));
   return node;
 }
 
@@ -468,14 +426,13 @@ function compatible(slot: CharacterEquipmentSlotV1, definition: CatalogDefinitio
 }
 
 export function createBaseCharacterEquipmentEditor(
-  container: HTMLElement,
+  options: BaseCharacterEquipmentEditorOptions,
 ): BaseCharacterEquipmentEditor {
+  const { stageHost, leftHost, rightHost, onUiChange } = options;
   // Stage fills the Scene center body. Left/right chrome docks into the outer
   // hierarchy/inspector panels so scene tabs sit between them (same as Scene).
   // Clear any prior mount (HMR / Strict Mode) so panels don't stack twice.
-  container.replaceChildren();
-  const left = document.createElement('aside');
-  left.className = 'ed-base-sidebar';
+  stageHost.replaceChildren();
   const stage = document.createElement('div');
   stage.className = 'ed-base-stage';
   const canvas = document.createElement('canvas');
@@ -504,9 +461,10 @@ export function createBaseCharacterEquipmentEditor(
   const stageStatus = document.createElement('div');
   stageStatus.className = 'ed-base-stage-status';
   stage.append(canvas, playTestHud, stageStatus);
-  const right = document.createElement('aside');
-  right.className = 'ed-base-sidebar ed-base-inspector';
-  container.append(stage);
+  stageHost.append(stage);
+
+const notifyUiChangeRef = { current: (): void => { onUiChange(); } };
+  const notifyUiChange = (): void => notifyUiChangeRef.current();
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -823,7 +781,7 @@ export function createBaseCharacterEquipmentEditor(
 
   const markDirty = (): void => {
     dirty = true;
-    renderLeft();
+    notifyUiChange();
   };
 
   const markControllerDirty = (): void => {
@@ -832,22 +790,22 @@ export function createBaseCharacterEquipmentEditor(
     if (controllerState?.id === 'default') {
       setDefaultAnimationController(controllerState);
     }
-    renderLeft();
+    notifyUiChange();
   };
 
   const markSettingsDirty = (): void => {
     settingsDirty = true;
-    renderLeft();
+    notifyUiChange();
   };
 
   const markBackpackPrefabDirty = (prefabId: string): void => {
     dirtyBackpackPrefabIds.add(prefabId);
-    renderLeft();
+    notifyUiChange();
   };
 
   const markWeaponPrefabDirty = (prefabId: string): void => {
     dirtyWeaponPrefabIds.add(prefabId);
-    renderLeft();
+    notifyUiChange();
   };
 
   const hasUnsavedChanges = (): boolean =>
@@ -940,7 +898,7 @@ export function createBaseCharacterEquipmentEditor(
     if (playTestActive) return;
     gizmoMode = mode;
     gizmo.setMode(mode);
-    renderInspector();
+    notifyUiChange();
   };
 
   gizmo.addEventListener('objectChange', () => {
@@ -954,8 +912,8 @@ export function createBaseCharacterEquipmentEditor(
     } else {
       dirty = true;
     }
-    renderLeft();
-    renderInspector();
+    notifyUiChange();
+    notifyUiChange();
   });
 
   const loadBackpackPrefabDraft = async (prefabId: string): Promise<PrefabDocument | null> => {
@@ -1037,8 +995,8 @@ export function createBaseCharacterEquipmentEditor(
     if (playTestActive) gizmo.detach();
     else syncGizmo();
     renderPlayTestHud();
-    renderLeft();
-    renderInspector();
+    notifyUiChange();
+    notifyUiChange();
   };
 
   const applyCharacterType = async (): Promise<void> => {
@@ -1062,7 +1020,7 @@ export function createBaseCharacterEquipmentEditor(
   const setPreviewPose = async (nextPose: CharacterPreviewPose): Promise<void> => {
     if (previewPose === nextPose) return;
     previewPose = nextPose;
-    renderLeft();
+    notifyUiChange();
     if (!avatar) return;
     if (previewPose === 'reference') {
       controllerUpperBodyAim?.restore();
@@ -1111,7 +1069,7 @@ export function createBaseCharacterEquipmentEditor(
 
   const refreshCatalog = async (): Promise<void> => {
     catalogMessage = 'Refreshing Admin catalog…';
-    renderInspector();
+    notifyUiChange();
     try {
       [weapons, backpacks] = await Promise.all([listWeaponDefinitions(), listBackpackDefinitions()]);
       catalogMessage = `${weapons.length} weapons · ${backpacks.length} backpacks`;
@@ -1121,7 +1079,7 @@ export function createBaseCharacterEquipmentEditor(
         ? 'Admin authentication is required. Sign in through the Admin portal, then refresh.'
         : error instanceof Error ? error.message : 'Catalog refresh failed.';
     }
-    renderInspector();
+    notifyUiChange();
   };
 
   const assignDefinition = (slot: CharacterEquipmentSlotV1, definition: CatalogDefinition): void => {
@@ -1176,7 +1134,7 @@ export function createBaseCharacterEquipmentEditor(
     setStageStatus(
       `Loaded ${labelFromUrl(url)} · ${animation.clipNames.length} clip(s). Assign via Controllers.`,
     );
-    renderLeft();
+    notifyUiChange();
   };
 
   const loadController = async (id: string, opts?: { force?: boolean }): Promise<void> => {
@@ -1205,7 +1163,7 @@ export function createBaseCharacterEquipmentEditor(
       if (controllerState.id === 'default') {
         setDefaultAnimationController(controllerState);
       }
-      renderLeft();
+      notifyUiChange();
     } catch (error) {
       controllerState = cloneAnimationController(buildDefaultAnimationController());
       selectedControllerId = controllerState.id;
@@ -1218,7 +1176,7 @@ export function createBaseCharacterEquipmentEditor(
           : 'Controller load failed; using in-memory default.',
         true,
       );
-      renderLeft();
+      notifyUiChange();
     }
   };
 
@@ -1303,7 +1261,7 @@ export function createBaseCharacterEquipmentEditor(
     setStageStatus(
       `Controller preview · ${selectedStanceId} ${previewLocomotion} → ${clipName}`,
     );
-    renderLeft();
+    notifyUiChange();
   };
 
   const resolvePlayTestUpperBodyAim = (): {
@@ -1401,7 +1359,7 @@ export function createBaseCharacterEquipmentEditor(
       });
       if (!applied) return;
       renderPlayTestHud();
-      renderInspector();
+      notifyUiChange();
     } catch (error) {
       if (!playTestActive || generation !== playTestAnimationGeneration) return;
       setStageStatus(
@@ -1689,8 +1647,8 @@ export function createBaseCharacterEquipmentEditor(
         );
         await syncPlayTestAnimation(true);
         canvas.focus();
-        renderLeft();
-        renderInspector();
+        notifyUiChange();
+        notifyUiChange();
       } catch (error) {
         stopPlayTestControls();
         playTestActive = false;
@@ -1738,8 +1696,8 @@ export function createBaseCharacterEquipmentEditor(
     controls.saveState();
     authoringCameraSuspended = false;
     setStageStatus('Play test stopped. Authoring controls restored.');
-    renderLeft();
-    renderInspector();
+    notifyUiChange();
+    notifyUiChange();
     syncGizmo();
   };
 
@@ -1772,590 +1730,152 @@ export function createBaseCharacterEquipmentEditor(
     markControllerDirty();
   };
 
-  function renderControllerPanel(): HTMLElement {
-    const panel = document.createElement('div');
-    panel.className = 'ed-base-anim-panel ed-base-controller-panel';
-    if (!controllerState) {
-      panel.append(Object.assign(document.createElement('div'), {
-        className: 'ed-base-note',
-        textContent: 'Loading animation controller…',
-      }));
-      return panel;
-    }
+  const uiState = {
+    documentState: null as BaseCharacterEquipmentV1 | null,
+    controllerState: null as AnimationControllerV1 | null,
+    controllerList: [] as AnimationControllerListEntry[],
+    selectedControllerId: 'default',
+    controllerDirty: false,
+    settingsState,
+    settingsDirty: false,
+    leftTab: 'equipment' as BaseCharacterLeftTab,
+    selectedType: 1 as BaseCharacterType,
+    previewPose: 'reference' as CharacterPreviewPose,
+    selectedStanceId: 'unarmed',
+    previewLocomotion: 'idle' as AnimationLocomotionKind,
+    selectedSlotId: 'backpack',
+    assignments,
+    mountEditMode: 'holster' as MountEditMode,
+    simulateDrawnSlotId: null as string | null,
+    gizmoMode: 'translate' as EquipmentGizmoMode,
+    gizmoSpace: 'local' as 'local' | 'world',
+    catalogMessage,
+    weapons,
+    backpacks,
+    playTestActive,
+    playTestWeaponSlotId: null as WeaponSelectSlotId | null,
+    animation: null as SidekickAnimationRuntime | null,
+    lastLoadedSourceId,
+    animationObjectUrl: null as string | null,
+  };
 
-    const controllerSelect = select(
-      selectedControllerId,
-      (controllerList.length > 0
-        ? controllerList
-        : [{ id: controllerState.id, label: controllerState.label }]
-      ).map((entry) => ({ value: entry.id, label: entry.label })),
-      (value) => {
-        void loadController(value);
-      },
-    );
-    const saveControllerBtn = button(controllerDirty ? 'Save Ctrl *' : 'Save Ctrl', () => {
-      void (async () => {
-        if (!controllerState) return;
-        try {
-          const parsed = parseAnimationController(controllerState);
-          const path = await saveAnimationController(parsed);
-          controllerState = cloneAnimationController(parsed);
-          controllerDirty = false;
-          controllerList = await fetchAnimationControllerList();
-          setStageStatus(`Saved ${path}`);
-          renderLeft();
-        } catch (error) {
-          setStageStatus(error instanceof Error ? error.message : 'Controller save failed.', true);
-        }
-      })();
-    });
-    const actions = document.createElement('div');
-    actions.className = 'ed-base-actions';
-    actions.append(saveControllerBtn);
+  const syncClosureToUiState = (): void => {
+    uiState.documentState = documentState;
+    uiState.controllerState = controllerState;
+    uiState.controllerList = controllerList;
+    uiState.selectedControllerId = selectedControllerId;
+    uiState.controllerDirty = controllerDirty;
+    uiState.settingsState = settingsState;
+    uiState.settingsDirty = settingsDirty;
+    uiState.leftTab = leftTab;
+    uiState.selectedType = selectedType;
+    uiState.previewPose = previewPose;
+    uiState.selectedStanceId = selectedStanceId;
+    uiState.previewLocomotion = previewLocomotion;
+    uiState.selectedSlotId = selectedSlotId;
+    uiState.assignments = assignments;
+    uiState.mountEditMode = mountEditMode;
+    uiState.simulateDrawnSlotId = simulateDrawnSlotId;
+    uiState.gizmoMode = gizmoMode;
+    uiState.gizmoSpace = gizmoSpace;
+    uiState.catalogMessage = catalogMessage;
+    uiState.weapons = weapons;
+    uiState.backpacks = backpacks;
+    uiState.playTestActive = playTestActive;
+    uiState.playTestWeaponSlotId = playTestWeaponSlotId;
+    uiState.animation = animation;
+    uiState.lastLoadedSourceId = lastLoadedSourceId;
+    uiState.animationObjectUrl = animationObjectUrl;
+  };
 
-    const stanceRow = document.createElement('div');
-    stanceRow.className = 'ed-base-type-toggle';
-    for (const stance of controllerState.stances) {
-      const node = button(stance.label, () => {
-        selectedStanceId = stance.id;
-        renderLeft();
-      });
-      node.classList.toggle('is-active', stance.id === selectedStanceId);
-      stanceRow.append(node);
-    }
-    const addStanceBtn = button('+ Stance', () => {
-      if (!controllerState) return;
-      const id = window.prompt('New stance id (lowercase slug):')?.trim();
-      if (!id || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return;
-      if (controllerState.stances.some((stance) => stance.id === id)) return;
-      const label = window.prompt('Stance label:', id.replace(/-/g, ' '))?.trim() || id;
-      controllerState.stances.push({ id, label });
-      for (const locomotion of ANIMATION_LOCOMOTION_KINDS) {
-        controllerState.states.push({
-          id: `${id}-${locomotionStateSlug(locomotion)}`,
-          label: `${label} ${LOCOMOTION_LABELS[locomotion]}`,
-          locomotion,
-          stanceId: id,
-          clipName: '',
-          sourceId: UAL_ANIMATION_SOURCE_ID,
-        });
-      }
-      selectedStanceId = id;
-      markControllerDirty();
-    });
-    stanceRow.append(addStanceBtn);
+  const syncUiStateToClosure = (): void => {
+    documentState = uiState.documentState;
+    controllerState = uiState.controllerState;
+    controllerList = uiState.controllerList;
+    selectedControllerId = uiState.selectedControllerId;
+    controllerDirty = uiState.controllerDirty;
+    settingsState = uiState.settingsState;
+    settingsDirty = uiState.settingsDirty;
+    leftTab = uiState.leftTab;
+    selectedType = uiState.selectedType;
+    previewPose = uiState.previewPose;
+    selectedStanceId = uiState.selectedStanceId;
+    previewLocomotion = uiState.previewLocomotion;
+    selectedSlotId = uiState.selectedSlotId;
+    assignments = uiState.assignments;
+    mountEditMode = uiState.mountEditMode;
+    simulateDrawnSlotId = uiState.simulateDrawnSlotId;
+    gizmoMode = uiState.gizmoMode;
+    gizmoSpace = uiState.gizmoSpace;
+    catalogMessage = uiState.catalogMessage;
+    weapons = uiState.weapons;
+    backpacks = uiState.backpacks;
+    playTestActive = uiState.playTestActive;
+    playTestWeaponSlotId = uiState.playTestWeaponSlotId;
+    animation = uiState.animation;
+    lastLoadedSourceId = uiState.lastLoadedSourceId;
+    animationObjectUrl = uiState.animationObjectUrl;
+  };
 
-    const renameStanceBtn = button('Rename', () => {
-      if (!controllerState) return;
-      const stance = controllerState.stances.find((entry) => entry.id === selectedStanceId);
-      if (!stance) return;
-      const next = window.prompt('Stance label:', stance.label)?.trim();
-      if (!next) return;
-      stance.label = next;
-      markControllerDirty();
-    });
+  const uiApi = createBaseCharacterEditorUiApi({
+    getState: () => uiState,
+    state: uiState,
+    hasUnsavedChanges,
+    notifyUiChange: () => {
+      syncUiStateToClosure();
+      syncClosureToUiState();
+      notifyUiChange();
+    },
+    markDirty,
+    markControllerDirty,
+    markSettingsDirty,
+    markBackpackPrefabDirty,
+    markWeaponPrefabDirty,
+    currentSlot,
+    currentMount,
+    currentDrawnMount,
+    currentTransformTarget,
+    displayNumber,
+    transformEulerDegrees,
+    setTransformEulerDegrees,
+    applyTransform,
+    gizmo,
+    save,
+    loadDocument,
+    setPreviewPose,
+    applyCharacterType,
+    previewControllerState,
+    rebuildEquipmentPreview,
+    refreshCatalog,
+    assignDefinition,
+    loadController,
+    loadAnimationFromAsset,
+    loadWeaponPrefabDraft,
+    ensureDrawnGripEntity,
+    setPlayTestActive,
+    equipDefaultPlayTestLoadout,
+    assignClipToState,
+    ensureAnimatedPose,
+    ensureAvatar,
+    revokeAnimationObjectUrl,
+    setStageStatus,
+    syncGizmo,
+    setGizmoModeInternal: (mode) => {
+      if (playTestActive) return;
+      gizmoMode = mode;
+      gizmo.setMode(mode);
+      notifyUiChange();
+    },
+    setDefaultAnimationController,
+    get avatar() { return avatar; },
+    get defaultDefinition() { return defaultDefinition; },
+  });
 
-    const previewRow = document.createElement('div');
-    previewRow.className = 'ed-base-actions';
-    const locoSelect = select(
-      previewLocomotion,
-      ANIMATION_LOCOMOTION_KINDS.map((kind) => ({
-        value: kind,
-        label: LOCOMOTION_LABELS[kind],
-      })),
-      (value) => {
-        previewLocomotion = value as AnimationLocomotionKind;
-        void previewControllerState();
-      },
-    );
-    const previewBtn = button('Preview', () => void previewControllerState());
-    previewBtn.disabled = !animation;
-    previewRow.append(field('Idle clip', locoSelect), previewBtn);
-
-    const table = document.createElement('div');
-    table.className = 'ed-base-controller-states';
-    for (const locomotion of ANIMATION_LOCOMOTION_KINDS) {
-      const state = controllerState.states.find(
-        (entry) => entry.stanceId === selectedStanceId && entry.locomotion === locomotion,
-      );
-      if (!state) continue;
-      const clipOptions = [
-        { value: '', label: '(unassigned)' },
-        ...(animation?.clipNames ?? []).map((name) => ({ value: name, label: name })),
-      ];
-      if (state.clipName && !clipOptions.some((option) => option.value === state.clipName)) {
-        clipOptions.push({
-          value: state.clipName,
-          label: `${state.clipName} (not loaded)`,
-        });
-      }
-      const row = document.createElement('div');
-      row.className = 'ed-base-controller-state-row';
-      const label = document.createElement('span');
-      label.textContent = LOCOMOTION_LABELS[locomotion];
-      const clipSelect = select(state.clipName, clipOptions, (value) => {
-        assignClipToState(state.id, value);
-      });
-      clipSelect.title = 'Assign loaded clip';
-      const sourceBadge = document.createElement('code');
-      sourceBadge.className = 'ed-base-source-badge';
-      sourceBadge.textContent = state.sourceId;
-      row.append(label, clipSelect, sourceBadge);
-      row.addEventListener('dragover', (event) => event.preventDefault());
-      row.addEventListener('drop', (event) => {
-        event.preventDefault();
-        const url = event.dataTransfer?.getData(ASSET_DND_TYPE)
-          || event.dataTransfer?.getData('text/plain')
-          || '';
-        if (!url || !/\.(glb|gltf)(?:[?#].*)?$/i.test(url)) return;
-        void (async () => {
-          try {
-            await loadAnimationFromAsset(url);
-            const clip = animation?.activeClipName || animation?.clipNames[0] || '';
-            if (clip) assignClipToState(state.id, clip);
-            selectedStanceId = state.stanceId;
-            previewLocomotion = state.locomotion;
-            await previewControllerState();
-          } catch (error) {
-            setStageStatus(error instanceof Error ? error.message : 'Drop assign failed.', true);
-          }
-        })();
-      });
-      table.append(row);
-    }
-
-    const note = document.createElement('div');
-    note.className = 'ed-base-note';
-    note.textContent =
-      'Idle-only controller: each stance maps to one idle clip (unarmed Idle_Loop, rifle idle, pistol pistol_idle).';
-
-    panel.append(
-      field('Controller', controllerSelect),
-      actions,
-      field('Stance', stanceRow),
-      renameStanceBtn,
-      previewRow,
-      table,
-      note,
-    );
-    return panel;
-  }
-
-  function renderEquipmentTab(): DocumentFragment {
-    const fragment = document.createDocumentFragment();
-    const types = document.createElement('div');
-    types.className = 'ed-base-type-toggle';
-    for (const type of [1, 2] as const) {
-      const node = button(`Type ${type}`, () => {
-        selectedType = type;
-        renderLeft();
-        renderInspector();
-        void applyCharacterType();
-      });
-      node.classList.toggle('is-active', selectedType === type);
-      types.append(node);
-    }
-    const poseLabel = document.createElement('div');
-    poseLabel.className = 'ed-base-subtitle';
-    poseLabel.textContent = 'Authoring pose';
-    const poses = document.createElement('div');
-    poses.className = 'ed-base-type-toggle';
-    for (const [label, pose] of [
-      ['Reference Pose', 'reference'],
-      ['Animation Preview', 'animated'],
-    ] as const) {
-      const node = button(label, () => void setPreviewPose(pose));
-      node.classList.toggle('is-active', previewPose === pose);
-      poses.append(node);
-    }
-    const stanceLabel = document.createElement('div');
-    stanceLabel.className = 'ed-base-subtitle';
-    stanceLabel.textContent = 'Animation stance (for lining up drawn weapons)';
-    const stanceRow = document.createElement('div');
-    stanceRow.className = 'ed-base-type-toggle';
-    const stanceIds = controllerState?.stances.map((stance) => stance.id)
-      ?? ['unarmed', 'rifle', 'pistol'];
-    for (const stanceId of stanceIds) {
-      const node = button(stanceId, () => {
-        selectedStanceId = stanceId;
-        void previewControllerState();
-        renderLeft();
-      });
-      node.classList.toggle('is-active', stanceId === selectedStanceId);
-      stanceRow.append(node);
-    }
-    const locoRow = document.createElement('div');
-    locoRow.className = 'ed-base-actions';
-    locoRow.style.marginTop = '0.35rem';
-    const locoSelect = select(
-      previewLocomotion,
-      ANIMATION_LOCOMOTION_KINDS.map((kind) => ({
-        value: kind,
-        label: LOCOMOTION_LABELS[kind],
-      })),
-      (value) => {
-        previewLocomotion = value as AnimationLocomotionKind;
-        void previewControllerState();
-        renderLeft();
-      },
-    );
-    locoSelect.title = 'Locomotion clip for the selected stance';
-    const previewStanceBtn = button('Play stance', () => void previewControllerState());
-    locoRow.append(locoSelect, previewStanceBtn);
-    const stanceHint = document.createElement('p');
-    stanceHint.className = 'ed-base-note';
-    stanceHint.textContent =
-      'Switch to Animation Preview, pick Rifle/Pistol, enable Simulate drawn, then gizmo the drawn mount.';
-
-    const slotsLabel = document.createElement('div');
-    slotsLabel.className = 'ed-base-subtitle';
-    slotsLabel.textContent = 'Equipment slots';
-    const slots = document.createElement('div');
-    slots.className = 'ed-base-slot-list';
-    for (const slot of documentState?.slots ?? []) {
-      const unavailable = Boolean(slot.requiresSlotId && !assignments.has(slot.requiresSlotId));
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'ed-base-slot';
-      row.classList.toggle('is-selected', slot.id === selectedSlotId);
-      row.classList.toggle('is-unavailable', unavailable);
-      row.textContent = `${slot.label}${assignments.has(slot.id) ? ' · equipped' : ''}`;
-      row.addEventListener('click', () => {
-        selectedSlotId = slot.id;
-        if (slot.kind !== 'weapon') mountEditMode = 'holster';
-        renderLeft();
-        renderInspector();
-        syncGizmo();
-      });
-      row.addEventListener('dragover', (event) => event.preventDefault());
-      row.addEventListener('drop', (event) => {
-        event.preventDefault();
-        const id = event.dataTransfer?.getData(EQUIPMENT_DND_TYPE);
-        const definition = [...weapons, ...backpacks].find((entry) => entry.id === id);
-        if (definition) assignDefinition(slot, definition);
-      });
-      slots.append(row);
-    }
-    const add = button('Add slot', () => {
-      if (!documentState) return;
-      const id = window.prompt('New slot id (lowercase slug):')?.trim();
-      if (!id || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return;
-      if (documentState.slots.some((slot) => slot.id === id)) return;
-      const kind = window.prompt('Slot kind: weapon or backpack?', 'weapon') === 'backpack' ? 'backpack' : 'weapon';
-      const newSlot: CharacterEquipmentSlotV1 = kind === 'weapon'
-        ? { id, label: id.replace(/-/g, ' '), kind, weaponSlotType: 'rifle' }
-        : { id, label: id.replace(/-/g, ' '), kind };
-      documentState.slots.push(newSlot);
-      documentState.variants['1'].mounts[id] = identityCharacterMount('backAttach');
-      documentState.variants['2'].mounts[id] = identityCharacterMount('backAttach');
-      selectedSlotId = id;
-      markDirty();
-      renderInspector();
-      void rebuildEquipmentPreview();
-    });
-    fragment.append(
-      types,
-      poseLabel,
-      poses,
-      stanceLabel,
-      stanceRow,
-      locoRow,
-      stanceHint,
-      slotsLabel,
-      slots,
-      add,
-    );
-    return fragment;
-  }
-
-  function renderAnimationTab(): HTMLElement {
-    const animPanel = document.createElement('div');
-    animPanel.className = 'ed-base-anim-panel';
-    const clipSelect = select(
-      animation?.activeClipName ?? '',
-      (animation?.clipNames ?? []).map((name) => ({ value: name, label: name })),
-      (value) => {
-        void ensureAnimatedPose().then(() => {
-          animation?.setAnimation(value, 0.12);
-          animation?.setPlaying(true);
-          setStageStatus(`Playing ${value}. Equipment follows animated attachment bones.`);
-          renderLeft();
-        });
-      },
-    );
-    clipSelect.disabled = !animation || animation.clipNames.length === 0;
-    clipSelect.title = 'Animation clip';
-    const playBtn = button(animation?.playing === false ? 'Play' : 'Pause', () => {
-      void ensureAnimatedPose().then(() => {
-        const next = !(animation?.playing ?? true);
-        animation?.setPlaying(next);
-        setStageStatus(next ? `Playing ${animation?.activeClipName ?? 'clip'}.` : 'Animation paused.');
-        renderLeft();
-      });
-    });
-    playBtn.disabled = !animation;
-    const ualBtn = button('UAL', () => {
-      void (async () => {
-        if (!animation) return;
-        try {
-          setStageStatus('Loading UAL locomotion…');
-          await animation.loadDefaultLibrary();
-          lastLoadedSourceId = UAL_ANIMATION_SOURCE_ID;
-          await ensureAnimatedPose();
-          setStageStatus(`UAL loaded · ${animation.clipNames.length} clip(s).`);
-        } catch (error) {
-          setStageStatus(error instanceof Error ? error.message : 'UAL load failed.', true);
-        }
-        renderLeft();
-      })();
-    });
-    ualBtn.title = 'Load Universal Animation Library locomotion clips';
-    ualBtn.disabled = !animation;
-    const loadGlbBtn = button('Load GLB…', () => {
-      const picker = document.createElement('input');
-      picker.type = 'file';
-      picker.accept = '.glb,.gltf,model/gltf-binary,model/gltf+json';
-      picker.addEventListener('change', () => {
-        const file = picker.files?.[0];
-        if (!file || !animation) return;
-        void (async () => {
-          try {
-            setStageStatus(`Loading ${file.name}…`);
-            revokeAnimationObjectUrl();
-            animationObjectUrl = URL.createObjectURL(file);
-            await animation.loadAnimationSource(animationObjectUrl, file.name);
-            if (avatar && defaultDefinition) await applyCharacterType();
-            await ensureAnimatedPose();
-            animation.setAnimation(animation.activeClipName || 'Rifle_Idle', 0);
-            animation.setPlaying(true);
-            animation.update(0);
-            setStageStatus(
-              `Loaded ${file.name} · ${animation.clipNames.length} clip(s) retargeted to Sidekick.`,
-            );
-          } catch (error) {
-            setStageStatus(error instanceof Error ? error.message : 'Animation GLB load failed.', true);
-          }
-          renderLeft();
-        })();
-      });
-      picker.click();
-    });
-    loadGlbBtn.title = 'Load Mixamo/Unity animation GLB and retarget onto this Sidekick';
-    loadGlbBtn.disabled = !animation;
-    const animActions = document.createElement('div');
-    animActions.className = 'ed-base-actions';
-    animActions.append(playBtn, ualBtn, loadGlbBtn);
-    const speed = document.createElement('input');
-    speed.className = 'ed-input ed-base-anim-speed';
-    speed.type = 'range';
-    speed.min = '0';
-    speed.max = '2';
-    speed.step = '0.05';
-    speed.value = String(animation?.timeScale ?? 1);
-    speed.disabled = !animation;
-    speed.title = 'Playback speed';
-    speed.addEventListener('input', () => {
-      animation?.setTimeScale(Number(speed.value));
-    });
-    const sourceNote = document.createElement('div');
-    sourceNote.className = 'ed-base-note';
-    sourceNote.textContent = animation
-      ? `Source: ${animation.sourceLabel}`
-      : 'Animation runtime unavailable.';
-    const tip = document.createElement('div');
-    tip.className = 'ed-base-note';
-    tip.textContent =
-      'Quick scrubber for loaded clips. Assign stance bindings on the Controllers tab (or Project → Anims).';
-    animPanel.append(
-      field('Clip', clipSelect),
-      animActions,
-      field('Speed', speed),
-      sourceNote,
-      tip,
-    );
-    return animPanel;
-  }
-
-  function renderSettingsPanel(): HTMLElement {
-    const panel = document.createElement('div');
-    panel.className = 'ed-base-anim-panel ed-base-settings-panel';
-
-    const speedField = (
-      label: string,
-      key:
-        | 'walkSpeedMetersPerSecond'
-        | 'runSpeedMetersPerSecond'
-        | 'sprintSpeedMetersPerSecond'
-        | 'jumpSpeedMetersPerSecond',
-    ): HTMLLabelElement =>
-      field(label, input(String(settingsState[key]), (raw) => {
-        const value = Number(raw);
-        if (!Number.isFinite(value) || value <= 0) return;
-        settingsState = { ...settingsState, [key]: value };
-        setCharacterSettings(settingsState);
-        markSettingsDirty();
-      }, 'number', 0.1));
-
-    const saveSettingsBtn = button(
-      settingsDirty ? 'Save Settings *' : 'Save Settings',
-      () => void save(),
-    );
-    const resetDefaults = button('Reset defaults', () => {
-      settingsState = cloneCharacterSettings(DEFAULT_CHARACTER_SETTINGS);
-      setCharacterSettings(settingsState);
-      markSettingsDirty();
-    });
-    const actions = document.createElement('div');
-    actions.className = 'ed-base-actions';
-    actions.append(saveSettingsBtn, resetDefaults);
-
-    const note = document.createElement('p');
-    note.className = 'ed-base-note';
-    note.textContent =
-      'On-foot locomotion for every character (planet, station, and ship decks). '
-      + 'Changes apply immediately — start a Play Test to feel them. '
-      + 'Save writes src/player/data/character-settings.json.';
-
-    panel.append(
-      speedField('Walk speed (m/s)', 'walkSpeedMetersPerSecond'),
-      speedField('Run speed (m/s)', 'runSpeedMetersPerSecond'),
-      speedField('Sprint speed (m/s)', 'sprintSpeedMetersPerSecond'),
-      speedField('Jump speed (m/s)', 'jumpSpeedMetersPerSecond'),
-      actions,
-      note,
-    );
-    return panel;
-  }
-
-  function renderLeft(): void {
-    left.replaceChildren();
-    const title = document.createElement('div');
-    title.className = 'ed-base-panel-title';
-    title.textContent = 'Base Characters';
-    const saveButton = button(hasUnsavedChanges() ? 'Save *' : 'Save', () => void save());
-    const reload = button('Reload', () => void loadDocument());
-    saveButton.disabled = playTestActive;
-    reload.disabled = playTestActive;
-    const playTestButton = button(playTestActive ? 'Stop Test' : 'Play Test', () => {
-      void setPlayTestActive(!playTestActive);
-    });
-    playTestButton.classList.toggle('is-active', playTestActive);
-    playTestButton.title = playTestActive
-      ? 'Stop character play test and restore authoring controls'
-      : 'Test locomotion, jumping, and the default backpack/weapon loadout';
-    const charSettingsButton = button('Char Settings', () => {
-      leftTab = 'settings';
-      renderLeft();
-    });
-    charSettingsButton.classList.toggle('is-active', leftTab === 'settings');
-    charSettingsButton.title =
-      'Tune walk, sprint, and jump speeds — applies live, even during Play Test';
-    const toolbar = document.createElement('div');
-    toolbar.className = 'ed-base-actions';
-    toolbar.append(saveButton, reload, playTestButton, charSettingsButton);
-
-    const tabs = document.createElement('div');
-    tabs.className = 'ed-base-tabs';
-    tabs.setAttribute('role', 'tablist');
-    for (const [id, label] of [
-      ['equipment', 'Equipment'],
-      ['animation', 'Animation'],
-      ['controllers', 'Controllers'],
-    ] as const) {
-      const tab = button(label, () => {
-        leftTab = id;
-        renderLeft();
-        if (id === 'equipment') renderInspector();
-      });
-      tab.className = 'ed-base-tab';
-      tab.classList.toggle('is-active', leftTab === id);
-      tab.disabled = playTestActive;
-      tab.setAttribute('role', 'tab');
-      tab.setAttribute('aria-selected', leftTab === id ? 'true' : 'false');
-      tabs.append(tab);
-    }
-
-    const body = document.createElement('div');
-    body.className = 'ed-base-tab-body';
-    if (playTestActive && leftTab !== 'settings') {
-      const panel = document.createElement('div');
-      panel.className = 'ed-base-anim-panel ed-base-playtest-panel';
-      const note = document.createElement('p');
-      note.className = 'ed-base-note';
-      note.textContent =
-        'Click the stage, then use WASD, Shift, Space, and 1–3. Weapon slots switch stance idle clips (unarmed / rifle / pistol).';
-      const reset = button('Reset default loadout', () => {
-        equipDefaultPlayTestLoadout(true);
-        void rebuildEquipmentPreview().then(() => canvas.focus());
-      });
-      const stop = button('Stop Play Test', () => void setPlayTestActive(false));
-      const actions = document.createElement('div');
-      actions.className = 'ed-base-actions';
-      actions.append(reset, stop);
-      panel.append(note, actions);
-      body.append(panel);
-    } else if (leftTab === 'settings') body.append(renderSettingsPanel());
-    else if (leftTab === 'equipment') body.append(renderEquipmentTab());
-    else if (leftTab === 'animation') body.append(renderAnimationTab());
-    else body.append(renderControllerPanel());
-
-    left.append(title, toolbar, tabs, body);
-  }
-
-  function renderInspector(): void {
-    renderEquipmentInspector({
-      right,
-      playTestActive,
-      playTestWeaponSlotId,
-      previewLocomotion,
-      animation,
-      assignments,
-      locomotionLabels: LOCOMOTION_LABELS,
-      currentSlot,
-      currentMount,
-      currentDrawnMount,
-      currentTransformTarget,
-      documentState,
-      markDirty,
-      rebuildEquipmentPreview,
-      renderLeft,
-      renderInspector,
-      mountEditMode,
-      setMountEditMode: (mode) => { mountEditMode = mode; },
-      selectedStanceId,
-      setSelectedStanceId: (stanceId) => { selectedStanceId = stanceId; },
-      simulateDrawnSlotId,
-      setSimulateDrawnSlotId: (slotId) => { simulateDrawnSlotId = slotId; },
-      selectedType,
-      selectedSlotId,
-      setSelectedSlotId: (slotId) => { selectedSlotId = slotId; },
-      assignmentsMap: assignments,
-      loadWeaponPrefabDraft,
-      ensureDrawnGripEntity,
-      markWeaponPrefabDirty,
-      previewControllerState,
-      gizmoMode,
-      setGizmoMode,
-      gizmoSpace,
-      setGizmoSpace: (space) => { gizmoSpace = space; },
-      gizmo,
-      markBackpackPrefabDirty,
-      catalogMessage,
-      refreshCatalog,
-      backpacks,
-      weapons,
-      assignDefinition,
-      equipmentDndType: EQUIPMENT_DND_TYPE,
-      button,
-      input,
-      field,
-      select,
-      displayNumber,
-      applyTransform,
-      transformEulerDegrees,
-      setTransformEulerDegrees,
-    });
-  }
+  notifyUiChangeRef.current = (): void => {
+    syncUiStateToClosure();
+    syncClosureToUiState();
+    onUiChange();
+  };
 
   async function loadDocument(): Promise<void> {
     if (hasUnsavedChanges() && !window.confirm('Discard unsaved Base Character, controller, settings, backpack socket, or weapon grip changes?')) return;
@@ -2383,8 +1903,7 @@ export function createBaseCharacterEquipmentEditor(
       await ensureAvatar();
       await applyCharacterType();
       await loadController(selectedControllerId, { force: true });
-      renderLeft();
-      renderInspector();
+      notifyUiChange();
     } catch (error) {
       setStageStatus(error instanceof Error ? error.message : 'Base Character load failed.', true);
     }
@@ -2442,7 +1961,7 @@ export function createBaseCharacterEquipmentEditor(
         savedPaths.push(path);
       }
       setStageStatus(savedPaths.length > 0 ? `Saved ${savedPaths.join(', ')}` : 'No changes to save.');
-      renderLeft();
+      notifyUiChange();
     } catch (error) {
       setStageStatus(error instanceof Error ? error.message : 'Base Character save failed.', true);
     }
@@ -2463,8 +1982,9 @@ export function createBaseCharacterEquipmentEditor(
     setGizmoMode,
     save,
     loadAnimationFromAsset,
-    getLeftPanel: () => left,
-    getRightPanel: () => right,
+    getLeftPanel: () => leftHost,
+    getRightPanel: () => rightHost,
+    getUiApi: () => uiApi,
     dispose: () => {
       disposed = true;
       endFly();
@@ -2484,9 +2004,7 @@ export function createBaseCharacterEquipmentEditor(
       avatar?.dispose();
       environmentTarget.dispose();
       renderer.dispose();
-      left.remove();
       stage.remove();
-      right.remove();
     },
   };
 }

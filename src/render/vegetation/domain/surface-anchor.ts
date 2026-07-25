@@ -3,8 +3,8 @@ import { scale } from '../../../math/vec3';
 import {
   renderableSurfacePointFromDirection,
   sampleRenderablePlanetSurface,
-} from '../../../world/planet_surface';
-import { buildSurfaceFrame } from './surface_frame';
+} from '../../../world/planet-surface';
+import { buildSurfaceFrame } from './surface-frame';
 
 export interface SurfaceAnchor {
   bitangent: Vec3;

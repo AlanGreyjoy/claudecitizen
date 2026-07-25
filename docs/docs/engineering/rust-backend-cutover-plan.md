@@ -55,7 +55,7 @@ This plan executes the [Rust Backend Hard Cutover PRD](./rust-backend-cutover-pr
 ## 6. Deploy and remove the old runtime
 
 - [x] Add production Docker image and local Rust backend service to Compose.
-- [x] Add Kubernetes namespace/config, secret example, migration job, deployment, TCP/UDP services, HPA, PDB, and network policy.
+- [x] Add container packaging (`backend/Dockerfile`) plus health/readiness, metrics, and migration runner suitable for Compose or other host orchestration.
 - [x] Update GitHub quality checks for Rust format/clippy/build, SQLx migrations, WASM, browser, and docs.
 - [x] Update root scripts, lockfiles, environment examples, runbooks, stack/DDD/admin docs, and agent conventions.
 - [x] Delete the complete legacy TypeScript/Prisma `server/` workspace and remove its dependencies/scripts.

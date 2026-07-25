@@ -2,7 +2,7 @@ export function createSurfaceSpawnBuildWorker(): Worker | null {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') return null;
 
   try {
-    return new Worker(new URL('./spawn_worker', import.meta.url), {
+    return new Worker(new URL('./spawn-worker', import.meta.url), {
       type: 'module',
     });
   } catch (error) {

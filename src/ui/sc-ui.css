@@ -2482,33 +2482,6 @@ kbd {
   color: #ff9b9b;
 }
 
-.sc-title-editor-access {
-  position: absolute;
-  top: 28px;
-  right: 28px;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  max-width: min(280px, calc(100vw - 56px));
-}
-
-.sc-title-editor-btn {
-  min-width: 0;
-  padding: 10px 22px;
-  font-size: 14px;
-}
-
-.sc-title-editor-hint {
-  margin: 0;
-  max-width: 240px;
-  font: 500 11px/1.4 var(--sc-font);
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  text-align: right;
-}
-
 .sc-title-footnote {
   margin: 22px 0 0;
   max-width: 380px;

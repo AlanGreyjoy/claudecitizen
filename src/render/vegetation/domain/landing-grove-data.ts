@@ -1,25 +1,25 @@
 import type { Planet, VegetationSettings, Vec3 } from '../../../types';
 import { add, scale, sub } from '../../../math/vec3';
 import { cartesianFromLatLonAlt } from '../../../world/coordinates';
-import { resolveLandingSite } from '../../../world/landing_sites';
+import { resolveLandingSite } from '../../../world/landing-sites';
 import {
   renderableSurfacePointFromDirection,
   sampleRenderablePlanetSurface,
-} from '../../../world/planet_surface';
-import type { VegetationAssetCatalog } from './asset_catalog';
+} from '../../../world/planet-surface';
+import type { VegetationAssetCatalog } from './asset-catalog';
 import {
   getLandingGrassCount,
   getLandingTreeCount,
 } from './constants';
 import { clamp01, hash01, lerp, scaledSampleCount } from './hash';
-import { composeInstanceMatrix } from './instance_matrix';
+import { composeInstanceMatrix } from './instance-matrix';
 import { grassScaleCoverageMultiplier } from '../settings';
 import {
   canPlaceWithGap,
   createPlacementGrid,
   registerPlacement,
-} from './placement_grid';
-import { createAnchorFromDirection } from './surface_anchor';
+} from './placement-grid';
+import { createAnchorFromDirection } from './surface-anchor';
 import type { StoredVegetationInstance, StoredVegetationTile } from './storage';
 
 function normalizeVec3(x: number, y: number, z: number): Vec3 {

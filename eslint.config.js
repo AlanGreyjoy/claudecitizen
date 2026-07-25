@@ -1,4 +1,5 @@
 import eslint from '@eslint/js';
+import checkFile from 'eslint-plugin-check-file';
 import importX from 'eslint-plugin-import-x';
 import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
@@ -61,6 +62,23 @@ const DOMAIN_GLOBAL_RESTRICTIONS = [
   },
 ];
 
+/** Target SRP budget for factories and pure functions. */
+const MAX_FN_LINES = {
+  max: 120,
+  skipBlankLines: true,
+  skipComments: true,
+};
+
+/**
+ * Temporary hard ceiling for editor/render UI factories. Target remains 120;
+ * lower this toward 120 as megafunctions are split.
+ */
+const MAX_FN_LINES_EDITOR_RENDER = {
+  max: 400,
+  skipBlankLines: true,
+  skipComments: true,
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -69,9 +87,7 @@ export default tseslint.config(
       'release/**',
       'target/**',
       'node_modules/**',
-      'vendor/**',
       'docs/**',
-      'false/**',
       '**/*.d.ts',
       'scripts/**/*.mjs',
       'vite.config.ts',
@@ -85,6 +101,27 @@ export default tseslint.config(
     rules: {
       // Handled by TypeScript. Avoid false positives on .mjs scripts and build output.
       'no-undef': 'off',
+    },
+  },
+
+  // Filename convention:
+  // - *.ts  → kebab-case  (modules, hooks, utilities)
+  // - *.tsx → PascalCase  (React UI), except Vite entry main.tsx
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/**/*.d.ts', 'src/**/main.tsx'],
+    plugins: {
+      'check-file': checkFile,
+    },
+    rules: {
+      'check-file/filename-naming-convention': [
+        'error',
+        {
+          '**/*.tsx': 'PASCAL_CASE',
+          '**/*.ts': 'KEBAB_CASE',
+        },
+        { ignoreMiddleExtensions: true },
+      ],
     },
   },
 
@@ -134,10 +171,7 @@ export default tseslint.config(
       complexity: ['error', { max: 20 }],
       'max-depth': ['warn', { max: 4 }],
       'max-params': ['error', { max: 8 }],
-      'max-lines-per-function': [
-        'warn',
-        { max: 120, skipBlankLines: true, skipComments: true },
-      ],
+      'max-lines-per-function': ['error', MAX_FN_LINES],
       'sonarjs/cognitive-complexity': ['error', 20],
 
       // --- SOLID (what ESLint can reasonably enforce) ---
@@ -172,6 +206,7 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': DOMAIN_IMPORT_RESTRICTIONS,
       'no-restricted-globals': DOMAIN_GLOBAL_RESTRICTIONS,
+      'max-lines-per-function': ['error', MAX_FN_LINES],
     },
   },
 
@@ -197,17 +232,28 @@ export default tseslint.config(
           ],
         },
       ],
+      // Temporary debt ceiling — target remains MAX_FN_LINES (120).
+      'max-lines-per-function': ['error', MAX_FN_LINES_EDITOR_RENDER],
     },
   },
 
-  // DDD + SRP: app/bootstrap wires modules; keep domain logic out of giant orchestrators.
+  // Editor chrome / panel factories — same temporary ceiling as render/.
   {
-    files: ['src/app/**/*.ts'],
+    files: ['src/editor/**/*.{ts,tsx}'],
+    rules: {
+      'max-lines-per-function': ['error', MAX_FN_LINES_EDITOR_RENDER],
+    },
+  },
+
+  // DDD + SRP: entry modules wire features; keep domain logic out of giant orchestrators.
+  {
+    files: ['src/app/**/*.ts', 'src/game-main.ts', 'src/editor-main.ts'],
     rules: {
       'max-lines': [
-        'warn',
+        'error',
         { max: 900, skipBlankLines: true, skipComments: true },
       ],
+      'max-lines-per-function': ['error', MAX_FN_LINES],
       'sonarjs/cognitive-complexity': ['warn', 20],
     },
   },
@@ -217,9 +263,10 @@ export default tseslint.config(
     files: ['src/game/**/*.ts'],
     rules: {
       'max-lines': [
-        'warn',
+        'error',
         { max: 900, skipBlankLines: true, skipComments: true },
       ],
+      'max-lines-per-function': ['error', MAX_FN_LINES],
       'sonarjs/cognitive-complexity': ['warn', 20],
     },
   },

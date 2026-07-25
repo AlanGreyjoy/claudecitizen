@@ -21,6 +21,22 @@ export type PrefabKind = "station" | "ship" | "site" | "prop" | "item";
 
 export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site", "prop", "item"];
 
+/** UI surfaces a scene can mount through the `ui-screen` component. */
+export const SCENE_UI_SCREENS = [
+  "title",
+  "login",
+  "character-create",
+  "loading",
+  "menu",
+] as const;
+
+export type SceneUiScreen = (typeof SCENE_UI_SCREENS)[number];
+
+/** Ownership scope for `instanced-scene` content (habs, hangars). */
+export const SCENE_INSTANCE_SCOPES = ["player", "party", "shared"] as const;
+
+export type SceneInstanceScope = (typeof SCENE_INSTANCE_SCOPES)[number];
+
 /** Horizontal (XZ plane) extent, in prefab/scene axes. */
 export interface PrefabVec2 {
   x: number;
@@ -43,7 +59,7 @@ export interface PrefabNodeOverride {
 }
 
 export interface PrefabAsset {
-  /** Absolute dev-server url, e.g. "/editor/assets/protected/synty/.../Wall_01.glb". */
+  /** Absolute dev-server url, e.g. "/assets/protected/synty/.../Wall_01.glb". */
   url: string;
   castShadow?: boolean;
   /** Render only this named GLB node subtree, normalized to the entity transform. */
@@ -844,6 +860,28 @@ export type PrefabComponent =
       type: "prefab-instance";
       prefabId: string;
       prefabKind?: "station" | "ship" | "site" | "prop" | "item";
+    }
+  /** Full-screen UI surface the scene mounts instead of (or over) 3D play. */
+  | {
+      type: "ui-screen";
+      screen: SceneUiScreen;
+      /** Menu document id when `screen` is "menu". */
+      menuId?: string;
+    }
+  /** Navigation target: which scene this object sends the player to. */
+  | {
+      type: "scene-link";
+      sceneId: string;
+      /** Fire as soon as the scene finishes loading instead of on activation. */
+      auto?: boolean;
+      /** Delay before an automatic transition, in seconds. */
+      delaySeconds?: number;
+    }
+  /** Marks the scene as per-player instanced content (habs, hangars). */
+  | {
+      type: "instanced-scene";
+      /** Ownership scope for the instance. */
+      scope: SceneInstanceScope;
     };
 
 export type PrefabComponentType = PrefabComponent["type"];
@@ -883,11 +921,11 @@ export function slugifyPrefabName(name: string): string {
 }
 
 
-export { createDefaultParticleSystemComponent } from "./schema_parse_common";
+export { createDefaultParticleSystemComponent } from "./schema-parse-common";
 import {
   COMPONENT_PARSER_BY_TYPE,
   parseUnknownComponent,
-} from "./schema_component_parsers";
+} from "./schema-component-parsers";
 import {
   fail,
   isRecord,
@@ -896,7 +934,7 @@ import {
   parseString,
   parseTransform,
   parseVec3,
-} from "./schema_parse_common";
+} from "./schema-parse-common";
 
 function parseComponent(value: unknown, path: string): PrefabComponent | null {
   if (!isRecord(value)) fail(path, "expected component object");

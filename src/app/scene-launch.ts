@@ -1,10 +1,10 @@
 import type { SceneDocument } from '../world/scenes/schema';
-import { resolveScenePlayConfig } from '../world/scenes/scene_runtime';
+import { resolveScenePlayConfig } from '../world/scenes/scene-runtime';
 
 /**
- * Converts a scene asset into a Play Mode / runtime route.
- * For gameplay scenes, prefers GameObject components (GameManager, Planet,
- * PlayerStart, prefab-instance) over legacy settings.
+ * Converts a scene asset into a runtime route for surfaces that still navigate
+ * by URL (the external Play Mode window and editor tab previews). In-process
+ * scene switching goes through `scene_host.ts` instead.
  */
 export function sceneLaunchSearch(document: SceneDocument): string {
   const params = new URLSearchParams();
@@ -18,9 +18,6 @@ export function sceneLaunchSearch(document: SceneDocument): string {
       break;
     case 'character-creator':
       params.set('boot', 'characterCreator');
-      break;
-    case 'sidekick-preview':
-      params.set('boot', 'sidekickPreview');
       break;
     case 'main-game': {
       const config = resolveScenePlayConfig(document);
@@ -36,17 +33,11 @@ export function sceneLaunchSearch(document: SceneDocument): string {
     case 'instance':
     case 'prefab-stage': {
       const config = resolveScenePlayConfig(document);
-      if (config.shipPrefabId || document.settings.prefabKind === 'ship') {
-        params.set(
-          'shipPrefab',
-          config.shipPrefabId ?? document.settings.prefabId ?? '',
-        );
+      if (config.shipPrefabId) {
+        params.set('shipPrefab', config.shipPrefabId);
       } else {
         params.set('boot', 'play');
-        params.set(
-          'stationPrefab',
-          config.stationPrefabId ?? document.settings.prefabId ?? '',
-        );
+        params.set('stationPrefab', config.stationPrefabId ?? '');
       }
       break;
     }

@@ -1,18 +1,18 @@
 import {
   findSurfaceDestination,
   type SurfaceDestination,
-} from "../../world/biome_teleport";
+} from "../../world/biome-teleport";
 import { cartesianFromLatLonAlt, surfacePointFromPosition } from "../../world/coordinates";
-import { warmRenderableHeightRing } from "../../world/spawn_warm";
-import { sampleFootPlanetSurface } from "../../world/planet_surface";
+import { warmRenderableHeightRing } from "../../world/spawn-warm";
+import { sampleFootPlanetSurface } from "../../world/planet-surface";
 import {
   CHARACTER_GROUND_OFFSET_METERS,
   createCharacterState,
-} from "../../player/character_controller";
+} from "../../player/character-controller";
 import { initialCameraYaw } from "../../player/spawn";
-import { createQuantumTravelState } from "../../flight/quantum_travel";
+import { createQuantumTravelState } from "../../flight/quantum-travel";
 import { MODE_ON_FOOT } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export function teleportToSurface(
   ctx: LoopContext,

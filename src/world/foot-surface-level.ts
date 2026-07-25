@@ -1,4 +1,4 @@
-import { RENDER_SURFACE_LEVEL } from './renderable_surface';
+import { RENDER_SURFACE_LEVEL } from './renderable-surface';
 
 let footSurfaceSampleLevel = RENDER_SURFACE_LEVEL;
 

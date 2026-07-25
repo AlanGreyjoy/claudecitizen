@@ -20,7 +20,7 @@ import {
   getNavRoute,
   setNavRoute,
   type NavRouteTarget,
-} from '../../../flight/nav_route';
+} from '../../../flight/nav-route';
 
 type MapSelection =
   | { kind: 'none' }

@@ -1,56 +1,46 @@
-import { createPlayerControls } from '../input/player_controls';
+import { createPlayerControls } from '../input/player-controls';
+import { mountPlayChrome } from './play-chrome';
 import { loadCurrentDefaultAnimationController } from '../player/animation';
-import { loadCurrentCharacterSettings } from '../player/character_settings';
+import { loadCurrentCharacterSettings } from '../player/character-settings';
 import {
   createDeckCharacterState,
   DECK_FLOOR_OFFSET_METERS,
   getSandboxDeckSpawn,
-} from '../player/ship_deck';
+} from '../player/ship-deck';
 import {
   getShipLayout,
   getShipRestHeightMeters,
   usesColliderDeck,
-} from '../player/ship_layout';
-import { createShipPhysics, syncShipArticulationColliders } from '../physics/ship_physics';
+} from '../player/ship-layout';
+import { createShipPhysics, syncShipArticulationColliders } from '../physics/ship-physics';
 import type { ShipColliderRigState } from '../physics/colliders';
-import { createShipRigState, doorBlends } from '../player/ship_rig';
-import { createCharacterAvatar } from '../render/main/scene/character_avatar';
-import { createShipModel } from '../render/main/scene/ship_model';
+import { createShipRigState, doorBlends } from '../player/ship-rig';
+import { createCharacterAvatar } from '../render/main/scene/character-avatar';
+import { createShipModel } from '../render/main/scene/ship-model';
 import { attachPrefabParticleSystems } from '../render/particles';
-import { attachPrefabObjectAnimations } from '../render/prefabs/object_animation';
+import { attachPrefabObjectAnimations } from '../render/prefabs/object-animation';
 import { vec3 } from '../math/vec3';
 import type { FlightBody } from '../types';
 import { createUiIcon, UiIcons } from '../ui/icons';
-import { createSoundSceneController } from '../audio/sound_scene';
+import { createSoundSceneController } from '../audio/sound-scene';
 import { createFootstepController } from '../audio/footsteps';
 import { createLoopingSfxController } from '../audio/sfx';
-import { createFlightReticle } from '../render/effects/hud/flight_reticle';
-import { createCockpitGazeHud } from '../render/effects/hud/cockpit_gaze_hud';
-import { createCockpitSpeedHud } from '../render/effects/hud/cockpit_speed_hud';
-import { createGameMenu } from '../render/effects/hud/game_menu';
-import { createEntertainmentSystem } from '../render/effects/hud/entertainment_system';
-import { createEntertainmentScreen } from '../render/effects/entertainment_screen';
-import { createEntertainmentCameraState } from '../player/entertainment_camera';
-import { createFlightCameraFeelState } from '../player/flight_camera_feel';
-import { createQuantumTravelState } from '../flight/quantum_travel';
-import { playShipGearToggleSfx } from '../player/ship_articulation_sfx';
+import { createFlightReticle } from '../render/effects/hud/flight-reticle';
+import { createCockpitGazeHud } from '../render/effects/hud/cockpit-gaze-hud';
+import { createCockpitSpeedHud } from '../render/effects/hud/cockpit-speed-hud';
+import { createGameMenu } from '../render/effects/hud/game-menu';
+import { createEntertainmentSystem } from '../render/effects/hud/entertainment-system';
+import { createEntertainmentScreen } from '../render/effects/entertainment-screen';
+import { createEntertainmentCameraState } from '../player/entertainment-camera';
+import { createFlightCameraFeelState } from '../player/flight-camera-feel';
+import { createQuantumTravelState } from '../flight/quantum-travel';
+import { playShipGearToggleSfx } from '../player/ship-articulation-sfx';
 import { loadShipSandboxPrefab } from './ship_sandbox/setup';
 import { createShipSandboxScene, resizeShipSandboxScene } from './ship_sandbox/scene';
 import { groundCharacterAt } from './ship_sandbox/ground';
 import { startShipSandboxLoop } from './ship_sandbox/frame';
 import type { ShipSandboxSession } from './ship_sandbox/types';
 import { PAD_RADIUS_METERS, SHIP_FORWARD, WORLD_UP } from './ship_sandbox/types';
-import { getDesktopEditorBridge } from '../platform/editor_desktop';
-
-function returnFromPlayMode(fallbackUrl: string): void {
-  const bridge = getDesktopEditorBridge();
-  if (bridge) {
-    void bridge.stopPlay().catch(() => undefined);
-    return;
-  }
-  window.location.href = fallbackUrl;
-}
-
 function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Missing required element #${id}`);
@@ -85,7 +75,7 @@ function mountBanner(prefabId: string, hintText: string, isWarning: boolean): vo
     cursor: 'pointer',
   } satisfies Partial<CSSStyleDeclaration>);
   button.addEventListener('click', () => {
-    returnFromPlayMode(`/?boot=editor&prefab=${encodeURIComponent(prefabId)}`);
+    window.location.href = `/editor.html?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
   });
   document.body.appendChild(button);
 
@@ -188,10 +178,10 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
   ]);
 
   const { doc, prefabApplied, walkable, hint } = await loadShipSandboxPrefab(prefabId);
-  const editorReturnUrl = `/?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
+  const editorReturnUrl = `/editor.html?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
-  requireElement<HTMLElement>('app').classList.remove('is-hidden');
+  mountPlayChrome(document.body).classList.remove('is-hidden');
   mountBanner(prefabId, hint, !walkable);
   hideFullGameHudChrome();
 
@@ -247,7 +237,11 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       sfxValueEl: requireElement<HTMLElement>('game-menu-sfx-value'),
       musicValueEl: requireElement<HTMLElement>('game-menu-music-value'),
     },
-    { onExitGame: () => returnFromPlayMode(editorReturnUrl) },
+    {
+      onExitGame: () => {
+        window.location.href = editorReturnUrl;
+      },
+    },
   );
   window.addEventListener('pagehide', () => gameMenu.dispose(), { once: true });
 

@@ -1,6 +1,12 @@
-import type { PrefabComponent, PrefabDocument, PrefabEntity } from '../prefabs/schema';
+import type {
+  PrefabComponent,
+  PrefabDocument,
+  PrefabEntity,
+  SceneInstanceScope,
+  SceneUiScreen,
+} from '../prefabs/schema';
 import { loadPrefabDocument } from '../prefabs/loader';
-import type { SceneDocument, SceneSettings } from './schema';
+import type { SceneDocument } from './schema';
 
 export interface ScenePlayConfig {
   systemId: string;
@@ -17,6 +23,17 @@ export interface ScenePlayConfig {
     prefabKind?: 'station' | 'ship' | 'site' | 'prop' | 'item';
     transform: PrefabEntity['transform'];
   }>;
+  /** UI surfaces the scene mounts, in document order. */
+  uiScreens: Array<{ screen: SceneUiScreen; menuId?: string }>;
+  /** Scene transitions authored on this scene's GameObjects. */
+  sceneLinks: Array<{
+    entityId: string;
+    sceneId: string;
+    auto: boolean;
+    delaySeconds: number;
+  }>;
+  /** Set when the scene is per-player instanced content (hab, hangar). */
+  instanceScope: SceneInstanceScope | null;
 }
 
 function walkEntities(
@@ -41,22 +58,17 @@ function findComponent<T extends PrefabComponent['type']>(
   return null;
 }
 
-/**
- * Resolve Unity-style scene GameObject components into play config.
- * Falls back to SceneDocument.settings when components are absent (v1 migration).
- */
+/** Resolve Unity-style scene GameObject components into play config. */
 export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
-  const settings: SceneSettings = scene.settings;
-  let systemId = settings.systemId;
-  let planetId = settings.planetId;
-  let spawn = settings.spawn;
-  let stationPrefabId: string | null = settings.prefabKind === 'station'
-    ? (settings.prefabId ?? null)
-    : null;
-  let shipPrefabId: string | null = settings.prefabKind === 'ship'
-    ? (settings.prefabId ?? null)
-    : null;
+  let systemId = 'default';
+  let planetId = 'asteron';
+  let spawn: ScenePlayConfig['spawn'] = 'station';
+  let stationPrefabId: string | null = null;
+  let shipPrefabId: string | null = null;
+  let instanceScope: SceneInstanceScope | null = null;
   const prefabInstances: ScenePlayConfig['prefabInstances'] = [];
+  const uiScreens: ScenePlayConfig['uiScreens'] = [];
+  const sceneLinks: ScenePlayConfig['sceneLinks'] = [];
 
   walkEntities(scene.gameObjects ?? [], (entity) => {
     const gameManager = findComponent(entity, 'game-manager');
@@ -91,6 +103,24 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
         shipPrefabId = instance.prefabId;
       }
     }
+    const uiScreen = findComponent(entity, 'ui-screen');
+    if (uiScreen) {
+      uiScreens.push({
+        screen: uiScreen.screen,
+        ...(uiScreen.menuId ? { menuId: uiScreen.menuId } : {}),
+      });
+    }
+    const sceneLink = findComponent(entity, 'scene-link');
+    if (sceneLink) {
+      sceneLinks.push({
+        entityId: entity.id,
+        sceneId: sceneLink.sceneId,
+        auto: sceneLink.auto === true,
+        delaySeconds: sceneLink.delaySeconds ?? 0,
+      });
+    }
+    const instanced = findComponent(entity, 'instanced-scene');
+    if (instanced) instanceScope = instanced.scope;
   });
 
   return {
@@ -100,6 +130,9 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
     stationPrefabId,
     shipPrefabId,
     prefabInstances,
+    uiScreens,
+    sceneLinks,
+    instanceScope,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { LoadingScreenHandle } from './loading_screen';
+import type { LoadingScreenHandle } from './loading-screen';
 import { CLAUDECITIZEN_PLANET, DEFAULT_PLANET_ID, DEFAULT_PLANET_SEED } from '../world/planet';
 import { activatePlanetDocument } from '../world/planets/runtime';
 import { loadPlanetDocument } from '../world/planets/loader';
@@ -11,9 +11,9 @@ import {
   pickPrimarySystemStation,
   resolveStationAltitudeMeters,
 } from '../world/systems/runtime';
-import { hydrateSpawnPackFromUrl } from '../cache/spawn_pack';
+import { hydrateSpawnPackFromUrl } from '../cache/spawn-pack';
 import { loadPrefabDocument } from '../world/prefabs/loader';
-import { buildStationLayoutFromPrefab } from '../world/prefabs/station_runtime';
+import { buildStationLayoutFromPrefab } from '../world/prefabs/station-runtime';
 import {
   orbitHintFromSystemOffset,
   setStationLayoutOverride,
@@ -24,7 +24,9 @@ import {
 import type { Planet } from '../types';
 import type { PlanetDocument } from '../world/planets/schema';
 import type { PrefabDocument } from '../world/prefabs/schema';
-import { AUTHORING_ENABLED } from '../build_mode';
+import type { SceneDocument } from '../world/scenes/schema';
+import { resolveScenePlayConfig } from '../world/scenes/scene-runtime';
+import { AUTHORING_ENABLED } from '../build-mode';
 
 const DEFAULT_STATION_PREFAB_ID = 'demo-station';
 
@@ -47,6 +49,22 @@ export function readPlayWorldParams(): PlayWorldParams {
   };
 }
 
+/** Resolve world config straight from a scene document's GameObjects. */
+export function playWorldParamsFromScene(
+  scene: SceneDocument,
+  overrides: Partial<PlayWorldParams> = {},
+): PlayWorldParams {
+  const config = resolveScenePlayConfig(scene);
+  return {
+    planetId: config.planetId || DEFAULT_PLANET_ID,
+    systemId: config.systemId || DEFAULT_SYSTEM_ID,
+    spawnSurface: config.spawn === 'surface',
+    fromEditor: false,
+    stationPrefabOverride: config.stationPrefabId,
+    ...overrides,
+  };
+}
+
 /**
  * When Play launches with `?scene=`, prefer GameObject-resolved config from
  * the scene document (GameManager / Planet / prefab-instance) over bare URL
@@ -58,7 +76,7 @@ export async function readPlayWorldParamsFromScene(): Promise<PlayWorldParams> {
   if (!sceneId) return base;
   try {
     const { loadSceneDocument } = await import('../world/scenes/loader');
-    const { resolveScenePlayConfig } = await import('../world/scenes/scene_runtime');
+    const { resolveScenePlayConfig } = await import('../world/scenes/scene-runtime');
     const scene = await loadSceneDocument(sceneId);
     if (!scene || (scene.gameObjects?.length ?? 0) === 0) return base;
     const config = resolveScenePlayConfig(scene);
@@ -77,10 +95,7 @@ export async function readPlayWorldParamsFromScene(): Promise<PlayWorldParams> {
 }
 
 async function resolveStationPrefab(preferredId?: string | null): Promise<PrefabDocument | null> {
-  const params = new URLSearchParams(window.location.search);
-  const id = AUTHORING_ENABLED
-    ? params.get('stationPrefab') ?? preferredId ?? DEFAULT_STATION_PREFAB_ID
-    : preferredId ?? DEFAULT_STATION_PREFAB_ID;
+  const id = preferredId ?? DEFAULT_STATION_PREFAB_ID;
 
   const doc = await loadPrefabDocument(id);
   if (!doc) {
@@ -140,8 +155,9 @@ async function loadAdditionalStations(
 
 export async function loadPlayWorldContext(
   loading: LoadingScreenHandle | undefined,
+  paramsOverride?: PlayWorldParams,
 ): Promise<PlayWorldContext> {
-  const params = await readPlayWorldParamsFromScene();
+  const params = paramsOverride ?? (await readPlayWorldParamsFromScene());
   const planetDocument =
     (await loadPlanetDocument(params.planetId))
     ?? createDefaultPlanetDocument(params.planetId, params.planetId);
@@ -193,7 +209,9 @@ export async function loadPlayWorldContext(
   }
 
   const stationPrefab = await resolveStationPrefab(
-    primaryStation?.stationPrefabId ?? DEFAULT_STATION_PREFAB_ID,
+    params.stationPrefabOverride
+    ?? primaryStation?.stationPrefabId
+    ?? DEFAULT_STATION_PREFAB_ID,
   );
 
   const additionalStations = await loadAdditionalStations(systemStations, primaryStation, planet);

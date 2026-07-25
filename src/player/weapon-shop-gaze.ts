@@ -8,7 +8,7 @@ import {
 import {
   CHARACTER_EYE_HEIGHT_METERS,
   ORBIT_PITCH_LIMIT,
-} from "./character_controller";
+} from "./character-controller";
 
 /**
  * Gaze pick for station weapon-shop markers while on foot

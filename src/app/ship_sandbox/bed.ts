@@ -1,12 +1,12 @@
-import { getBedAnchor, getBedEyeLocal, getBedSpec, localOffsetToWorld } from '../../player/ship_interaction';
-import { getDeckWorldPose } from '../../player/ship_deck';
+import { getBedAnchor, getBedEyeLocal, getBedSpec, localOffsetToWorld } from '../../player/ship-interaction';
+import { getDeckWorldPose } from '../../player/ship-deck';
 import {
   entertainmentSystemLabel,
   resolveEntertainmentGazeTarget,
-} from '../../player/entertainment_gaze';
-import { resolveSeatLookForward } from '../../flight/flight_aim';
-import { projectWorldPointToScreenOffset } from '../../player/cockpit_gaze';
-import { getShipLayout } from '../../player/ship_layout';
+} from '../../player/entertainment-gaze';
+import { resolveSeatLookForward } from '../../flight/flight-aim';
+import { projectWorldPointToScreenOffset } from '../../player/cockpit-gaze';
+import { getShipLayout } from '../../player/ship-layout';
 import { GET_UP_FROM_BED_SECONDS } from '../../player/modes';
 import type { ShipSandboxSession, SandboxBedActions } from './types';
 

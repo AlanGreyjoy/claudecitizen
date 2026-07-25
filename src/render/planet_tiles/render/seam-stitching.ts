@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import type { Planet, TileInfo, Vec3 } from '../../../types';
-import { directionFromCubeFace, faceUvFromDirection } from '../../../world/cube_sphere';
-import { sampleVisibleSurfaceFrame } from '../../../world/renderable_surface';
-import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../world/terrain_triangulation';
+import { directionFromCubeFace, faceUvFromDirection } from '../../../world/cube-sphere';
+import { sampleVisibleSurfaceFrame } from '../../../world/renderable-surface';
+import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../world/terrain-triangulation';
 import {
   MAX_LEVEL,
   TERRAIN_SKIRT_VERTICES_PER_SEGMENT,
   TERRAIN_SURFACE_VERTEX_COUNT,
   TILE_SEGMENTS,
 } from '../domain/constants';
-import { tileKey } from '../domain/tile_info';
+import { tileKey } from '../domain/tile-info';
 
 const NORTHWEST_SOUTHEAST_TRIANGLES = [0, 1, 3, 0, 3, 2] as const;
 const NORTHEAST_SOUTHWEST_TRIANGLES = [0, 1, 2, 1, 3, 2] as const;

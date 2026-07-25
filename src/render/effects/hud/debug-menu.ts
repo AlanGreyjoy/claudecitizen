@@ -1,11 +1,11 @@
-import type { DebugSettingsController } from './debug_settings';
+import type { DebugSettingsController } from './debug-settings';
 import type { SsaoSettings } from '../../../types';
-import { resolveRenderQuality } from '../../main/domain/render_quality';
+import { resolveRenderQuality } from '../../main/domain/render-quality';
 import {
   resetSsaoSettings,
   resolveSsaoSettings,
   saveSsaoSettings,
-} from '../../main/domain/ssao_settings';
+} from '../../main/domain/ssao-settings';
 
 export interface DebugMenuElements {
   debugBtnEl: HTMLButtonElement;

@@ -5,11 +5,11 @@ import {
   resolveDoorInteractAim,
   seatInteractPrompt,
   type DeckCharacterState,
-} from "../../player/ship_deck";
+} from "../../player/ship-deck";
 import { beginLieTransition, beginSitTransition } from "../../player/transitions";
-import type { getActiveShipBody } from "../../player/world_state";
+import type { getActiveShipBody } from "../../player/world-state";
 import type { FrameActions } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
 
 /** Seat/bed prompts. Returns true when the interaction owns the prompt. */

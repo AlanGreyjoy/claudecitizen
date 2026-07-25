@@ -1,15 +1,15 @@
 import type { BuildAreaRuntime } from '../game/types';
 import type { BuildArea, GameBootstrap } from '../net/api';
-import { createHangarBuildController } from '../player/hangar_build/build_controller';
+import { createHangarBuildController } from '../player/hangar_build/build-controller';
 import {
   createBuildPropColliderRuntime,
   type BuildPropColliderRuntime,
-} from '../player/hangar_build/prop_colliders';
-import { createHangarPropRenderer, type HangarPropRenderer } from '../render/hangar/prop_instances';
-import { createBuildTerminal } from '../render/effects/hud/build_terminal';
-import type { BuildTerminalController } from '../render/effects/hud/build_terminal';
+} from '../player/hangar_build/prop-colliders';
+import { createHangarPropRenderer, type HangarPropRenderer } from '../render/hangar/prop-instances';
+import { createBuildTerminal } from '../render/effects/hud/build-terminal';
+import type { BuildTerminalController } from '../render/effects/hud/build-terminal';
 import type { SpikeRenderer } from '../render/main';
-import type { PlaySessionDom } from './play_session_dom';
+import type { PlaySessionDom } from './play-session-dom';
 
 export interface PlayBuildSystems {
   buildAreas: Partial<Record<BuildArea, BuildAreaRuntime>>;

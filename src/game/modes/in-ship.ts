@@ -1,15 +1,15 @@
-import { getActiveShip } from "../../player/world_state";
-import { cycleFlightMode } from "../../flight/flight_modes";
+import { getActiveShip } from "../../player/world-state";
+import { cycleFlightMode } from "../../flight/flight-modes";
 import {
   evaluateQuantumEligibility,
   tryBeginQuantumTravel,
-} from "../../flight/quantum_travel";
+} from "../../flight/quantum-travel";
 import { beginStandTransition } from "../../player/transitions";
 import type { CameraState, FrameActions } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
-import { advanceQuantum } from "./ship_quantum";
-import { advanceManualFlight } from "./ship_manual_flight";
+import { advanceQuantum } from "./ship-quantum";
+import { advanceManualFlight } from "./ship-manual-flight";
 
 interface InShipInput {
   actions: FrameActions;

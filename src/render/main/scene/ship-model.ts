@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { prepareShipHullGltf } from '../../../physics/colliders';
-import { configureShipMaterial } from '../../materials/ship_material';
+import { configureShipMaterial } from '../../materials/ship-material';
 import {
   DEFAULT_STARHOPPER_GEAR_HINGES,
   DEFAULT_STARHOPPER_RAMP_HINGE,
   type ShipGearHingeSpec,
   type ShipRampHingeSpec,
-} from '../../../player/ship_layout';
+} from '../../../player/ship-layout';
 import type { PrefabNodeOverride } from '../../../world/prefabs/schema';
-import { applyDefaultFrustumCulling } from '../../frustum_policy';
-import { deduplicateObjectTextures } from '../../assets/texture_dedup';
+import { applyDefaultFrustumCulling } from '../../frustum-policy';
+import { deduplicateObjectTextures } from '../../assets/texture-dedup';
 
 const PROTECTED_SHIP_URL =
-  '/editor/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
+  '/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
 const FALLBACK_SHIP_URL = new URL('../../../assets/ships/Ship_Large.gltf', import.meta.url).href;
 const SHIP_FORWARD_ALIGNMENT_RADIANS = 0;
 

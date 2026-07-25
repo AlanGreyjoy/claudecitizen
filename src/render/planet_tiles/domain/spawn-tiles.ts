@@ -1,9 +1,9 @@
 import type { Planet, TileInfo, Vec3 } from '../../../types';
 import { distance, normalize } from '../../../math/vec3';
-import { faceUvFromDirection } from '../../../world/cube_sphere';
+import { faceUvFromDirection } from '../../../world/cube-sphere';
 import { MAX_LEVEL, MIN_LEVEL } from './constants';
-import { makeTileInfo } from './tile_info';
-import { clamp } from './tile_key';
+import { makeTileInfo } from './tile-info';
+import { clamp } from './tile-key';
 
 export interface CollectTilesNearOptions {
   maxLevel?: number;

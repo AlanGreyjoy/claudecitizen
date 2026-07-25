@@ -8,19 +8,19 @@ import {
   rejectWeaponReload,
   resolveWeaponReload,
   type WeaponFireState,
-} from "../../player/weapon_fire";
-import { buildBallisticPath } from "../../player/weapon_ballistics";
+} from "../../player/weapon-fire";
+import { buildBallisticPath } from "../../player/weapon-ballistics";
 import { normalize } from "../../math/vec3";
 import { playSfx } from "../../audio/sfx";
 import { consumeInventoryAmmo } from "../../net/api";
 import type { Vec3 } from "../../types";
 import type { WeaponCombatRuntimeEvent } from "../types";
-import type { LoopContext } from "../loop_context";
-import type { ActiveFirearm } from "./resolve_active_firearm";
+import type { LoopContext } from "../loop-context";
+import type { ActiveFirearm } from "./resolve-active-firearm";
 import {
   fallbackWeaponPose,
   resolveWeaponBallisticHit,
-} from "./weapon_hit_resolution";
+} from "./weapon-hit-resolution";
 
 export interface WeaponCombatActions {
   cycleWeaponFireModePressed: boolean;

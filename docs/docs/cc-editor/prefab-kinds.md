@@ -58,7 +58,7 @@ Typically a single root with `prop-frame` plus a visual child (GLB or box primit
 
 Examples in the repo: `hangar-crate-01`, `hangar-bench-01`, `hangar-lamp-01`.
 
-Prop definitions in the [Admin App](/admin-app/prop-definitions) link catalog rows to these prefab ids.
+Prop definitions in the [Server console](/admin-app/prop-definitions) link catalog rows to these prefab ids.
 
 → [Props and items](./props-and-items)
 
@@ -68,7 +68,7 @@ Compact prefabs for **inventory items** — consumables, weapons, materials.
 
 Often minimal geometry (or icon-only with no prefab). The `item-frame` marks the origin for world drops or pickup visuals.
 
-Item definitions in the [Admin App](/admin-app/item-definitions) reference item prefab ids when a 3D representation is needed.
+Item definitions in the [Server console](/admin-app/item-definitions) reference item prefab ids when a 3D representation is needed.
 
 → [Props and items](./props-and-items)
 

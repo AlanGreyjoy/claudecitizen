@@ -1,13 +1,8 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "id": "main-game",
   "name": "Main Game",
   "kind": "main-game",
-  "settings": {
-    "systemId": "default",
-    "planetId": "asteron",
-    "spawn": "station"
-  },
   "gameObjects": [
     {
       "id": "game-manager",

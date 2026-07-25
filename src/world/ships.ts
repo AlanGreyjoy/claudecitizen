@@ -1,11 +1,11 @@
-import { createFlightBody } from "../flight/flight_body";
+import { createFlightBody } from "../flight/flight-body";
 import {
   createShipInstance,
-} from "../flight/ship_instance";
+} from "../flight/ship-instance";
 import {
   getShipInstance,
   registerShipInstance,
-} from "../flight/ship_world";
+} from "../flight/ship-world";
 import type { GameBootstrap } from "../net/api";
 import {
   DEFAULT_SHIP_LAYOUT,
@@ -14,10 +14,10 @@ import {
   setActiveShipPrefabId,
   setShipLayoutOverride,
   type ShipLayout,
-} from "../player/ship_layout";
-import { PLAYER_SHIP_INSTANCE_ID } from "../player/world_state";
+} from "../player/ship-layout";
+import { PLAYER_SHIP_INSTANCE_ID } from "../player/world-state";
 import { loadPrefabDocument } from "./prefabs/loader";
-import { buildShipLayoutFromPrefab } from "./prefabs/ship_runtime";
+import { buildShipLayoutFromPrefab } from "./prefabs/ship-runtime";
 
 /**
  * The player ship is a ship prefab: hull model, colliders, doors, pilot

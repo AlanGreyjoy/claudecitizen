@@ -1,13 +1,11 @@
-import { createReadStream } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
-const EDITOR_ASSET_ROOT = 'editor/assets';
-const EDITOR_ASSET_URL_PREFIX = '/editor/assets/';
-const SOURCE_ASSET_ROOT = 'src/assets';
+const PROJECT_ASSET_ROOT = 'assets';
+const PROJECT_ASSET_URL_PREFIX = '/assets/';
 const OPTIONAL_RUNTIME_ASSET_URLS = [
   '/src/assets/protected/characters/synty_sidekick/manifest.json',
   '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienArmor_01.glb',
@@ -39,14 +37,15 @@ interface GltfManifest {
 
 const BUILD_ASSET_MOUNTS: AssetMount[] = [
   {
-    urlPrefix: EDITOR_ASSET_URL_PREFIX,
-    sourceRoot: EDITOR_ASSET_ROOT,
-    outputRoot: EDITOR_ASSET_ROOT,
+    urlPrefix: PROJECT_ASSET_URL_PREFIX,
+    sourceRoot: PROJECT_ASSET_ROOT,
+    outputRoot: PROJECT_ASSET_ROOT,
   },
   {
-    urlPrefix: '/assets/',
+    // Legacy checkout layout: protected packs under public/ before projects owned assets/.
+    urlPrefix: PROJECT_ASSET_URL_PREFIX,
     sourceRoot: 'public/assets',
-    outputRoot: 'assets',
+    outputRoot: PROJECT_ASSET_ROOT,
   },
   {
     urlPrefix: '/src/assets/',
@@ -82,15 +81,17 @@ function resolveAssetUrl(projectRoot: string, outDir: string, rawUrl: string): R
   for (const mount of BUILD_ASSET_MOUNTS) {
     if (!pathname.startsWith(mount.urlPrefix)) continue;
     const relativeUrlPath = pathname.slice(mount.urlPrefix.length);
-    if (!relativeUrlPath || relativeUrlPath.includes('\0')) return null;
+    if (!relativeUrlPath || relativeUrlPath.includes('\0')) continue;
 
     const sourceRoot = resolve(projectRoot, mount.sourceRoot);
     const outputRoot = resolve(projectRoot, outDir, mount.outputRoot);
     const sourcePath = resolve(sourceRoot, relativeUrlPath);
     const outputPath = resolve(outputRoot, relativeUrlPath);
     if (!isInsidePath(sourcePath, sourceRoot) || !isInsidePath(outputPath, outputRoot)) {
-      return null;
+      continue;
     }
+    // Prefer project `assets/` over legacy `public/assets/` when both claim `/assets/`.
+    if (!existsSync(sourcePath)) continue;
     return { sourcePath, outputPath, sourceRoot, outputRoot };
   }
   return null;
@@ -308,10 +309,9 @@ function copyReferencedGameAssets(): Plugin {
       outDir = config.build.outDir;
     },
     async closeBundle() {
-      // Vite copies public/ wholesale; protected public assets are local library
-      // material and should be re-added only when a prefab actually references one.
+      // Vite copies public/ wholesale; protected packs are project-local and
+      // should be re-added only when a prefab actually references one.
       await rm(resolve(root, outDir, 'assets/protected'), { recursive: true, force: true });
-      await rm(resolve(root, outDir, EDITOR_ASSET_ROOT), { recursive: true, force: true });
 
       const queue = [
         ...(await listPrefabAssetUrls(root))
@@ -356,653 +356,39 @@ function copyReferencedGameAssets(): Plugin {
   };
 }
 
-/**
- * Dev-only editor backend served by the Vite dev server (never part of a
- * production build):
- *
- *   GET  /__editor/assets?root=editor/assets             — recursive file listing
- *   GET  /__editor/assets?root=src/assets                — recursive source asset listing
- *   GET  /__editor/prefabs                               — saved prefab metadata (id, kind, name)
- *   GET  /__editor/prefab?id=<id>                        — prefab JSON
- *   POST /__editor/prefab                                — save prefab JSON
- *   GET  /__editor/base-characters                       — base character equipment JSON
- *   POST /__editor/base-characters                       — save base character equipment JSON
- *   GET  /__editor/character-settings                    — character locomotion settings JSON
- *   POST /__editor/character-settings                    — save character locomotion settings JSON
- *   GET  /__editor/animation-controllers                 — list animation controllers
- *   GET  /__editor/animation-controllers?id=<id>         — animation controller JSON
- *   POST /__editor/animation-controllers                 — save animation controller JSON
- *   GET  /__editor/planets                               — saved planet metadata (id, name)
- *   GET  /__editor/planet?id=<id>                        — planet JSON
- *   POST /__editor/planet                                — save planet JSON
- *   GET  /__editor/systems                               — saved system metadata (id, name)
- *   GET  /__editor/system?id=<id>                        — system JSON
- *   POST /__editor/system                                — save system JSON
- *
- * Prefabs are written to src/world/prefabs/data/<id>.prefab.json so the game
- * bundles them via import.meta.glob. Planets write to
- * src/world/planets/data/<id>.planet.json. Systems write to
- * src/world/systems/data/<id>.system.json.
- */
-function editorDevApi(): Plugin {
-  const ASSET_ROOTS = [EDITOR_ASSET_ROOT, SOURCE_ASSET_ROOT];
-  const LISTED_EXTENSIONS = new Set([
-    '.glb',
-    '.gltf',
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.webp',
-    '.bmp',
-    '.ogg',
-    '.mp3',
-    '.wav',
-    '.m4a',
-  ]);
-  const MIME_TYPES = new Map<string, string>([
-    ['.bin', 'application/octet-stream'],
-    ['.bmp', 'image/bmp'],
-    ['.glb', 'model/gltf-binary'],
-    ['.gltf', 'model/gltf+json'],
-    ['.jpeg', 'image/jpeg'],
-    ['.jpg', 'image/jpeg'],
-    ['.m4a', 'audio/mp4'],
-    ['.mp3', 'audio/mpeg'],
-    ['.ogg', 'audio/ogg'],
-    ['.png', 'image/png'],
-    ['.wav', 'audio/wav'],
-    ['.webp', 'image/webp'],
-  ]);
-  const PREFAB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
-  const PREFAB_KINDS = new Set(['station', 'ship', 'site', 'prop', 'item']);
-  const MAX_LISTING_ENTRIES = 20_000;
-  const MAX_BODY_BYTES = 8 * 1024 * 1024;
-
-  let projectRoot = process.cwd();
-
-  function prefabDataDir(): string {
-    return resolve(projectRoot, 'src/world/prefabs/data');
-  }
-
-  function planetDataDir(): string {
-    return resolve(projectRoot, 'src/world/planets/data');
-  }
-
-  function systemDataDir(): string {
-    return resolve(projectRoot, 'src/world/systems/data');
-  }
-
-  function baseCharacterEquipmentPath(): string {
-    return resolve(projectRoot, 'src/player/equipment/data/base-characters.json');
-  }
-
-  function characterSettingsPath(): string {
-    return resolve(projectRoot, 'src/player/data/character-settings.json');
-  }
-
-  function animationControllerDataDir(): string {
-    return resolve(projectRoot, 'src/player/animation/data');
-  }
-
-  function editorAssetDir(): string {
-    return resolve(projectRoot, EDITOR_ASSET_ROOT);
-  }
-
-  function sendJson(res: ServerResponse, status: number, payload: unknown): void {
-    res.statusCode = status;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store');
-    res.end(JSON.stringify(payload));
-  }
-
-  /** Resolves an allowed asset root; rejects anything outside the project. */
-  function resolveAssetRoot(rootParam: string | null): string | null {
-    if (!rootParam || !ASSET_ROOTS.includes(rootParam)) return null;
-    const absolute = resolve(projectRoot, rootParam);
-    if (!isInsidePath(absolute, projectRoot)) return null;
-    return absolute;
-  }
-
-  function contentTypeFor(path: string): string {
-    return MIME_TYPES.get(extname(path).toLowerCase()) ?? 'application/octet-stream';
-  }
-
-  async function serveEditorAsset(
-    req: IncomingMessage,
-    res: ServerResponse,
-    next: () => void,
-  ): Promise<void> {
-    const requestUrl = new URL(req.url ?? '/', 'http://localhost');
-    const decodedPath = decodePathComponent(requestUrl.pathname.slice(1));
-    if (decodedPath === null) {
-      res.statusCode = 400;
-      res.end('bad asset path');
-      return;
-    }
-    const filePath = resolve(editorAssetDir(), decodedPath);
-    if (!isInsidePath(filePath, editorAssetDir())) {
-      res.statusCode = 403;
-      res.end('forbidden');
-      return;
-    }
-    try {
-      const fileStat = await stat(filePath);
-      if (!fileStat.isFile()) {
-        next();
-        return;
-      }
-      const modifiedAtMs = Math.trunc(fileStat.mtimeMs);
-      const etag = `W/"${fileStat.size.toString(16)}-${modifiedAtMs.toString(16)}"`;
-      const ifNoneMatch = req.headers['if-none-match'];
-      const hasIfNoneMatch = typeof ifNoneMatch === 'string';
-      const hasMatchingEtag =
-        hasIfNoneMatch
-        && ifNoneMatch
-          .split(',')
-          .some((candidate) => candidate.trim() === '*' || candidate.trim() === etag);
-      const ifModifiedSince = req.headers['if-modified-since'];
-      const modifiedSinceMs =
-        typeof ifModifiedSince === 'string' ? Date.parse(ifModifiedSince) : Number.NaN;
-      const hasMatchingModifiedDate =
-        !hasIfNoneMatch
-        && Number.isFinite(modifiedSinceMs)
-        && Math.trunc(fileStat.mtimeMs / 1000) <= Math.trunc(modifiedSinceMs / 1000);
-      res.setHeader('Content-Type', contentTypeFor(filePath));
-      res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
-      res.setHeader('ETag', etag);
-      res.setHeader('Last-Modified', fileStat.mtime.toUTCString());
-      if (hasMatchingEtag || hasMatchingModifiedDate) {
-        res.statusCode = 304;
-        res.end();
-        return;
-      }
-      res.statusCode = 200;
-      res.setHeader('Content-Length', String(fileStat.size));
-      if (req.method === 'HEAD') {
-        res.end();
-        return;
-      }
-      createReadStream(filePath).pipe(res);
-    } catch {
-      next();
-    }
-  }
-
-  interface AssetEntry {
-    /** Path relative to the requested root, always with forward slashes. */
-    path: string;
-    kind: 'dir' | 'file';
-    size?: number;
-    modifiedAtMs?: number;
-  }
-
-  async function listAssetsRecursive(rootDir: string): Promise<AssetEntry[]> {
-    const entries: AssetEntry[] = [];
-    const queue: string[] = [rootDir];
-    while (queue.length > 0 && entries.length < MAX_LISTING_ENTRIES) {
-      const dir = queue.shift()!;
-      let dirents;
-      try {
-        dirents = await readdir(dir, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      for (const dirent of dirents) {
-        if (dirent.name.startsWith('.')) continue;
-        const absolute = join(dir, dirent.name);
-        const relativePath = relative(rootDir, absolute).split(sep).join('/');
-        if (dirent.isDirectory()) {
-          entries.push({ path: relativePath, kind: 'dir' });
-          queue.push(absolute);
-          continue;
-        }
-        if (!dirent.isFile()) continue;
-        const extension = dirent.name.slice(dirent.name.lastIndexOf('.')).toLowerCase();
-        if (!LISTED_EXTENSIONS.has(extension)) continue;
-        let size = 0;
-        let modifiedAtMs = 0;
-        try {
-          const fileStat = await stat(absolute);
-          size = fileStat.size;
-          modifiedAtMs = Math.trunc(fileStat.mtimeMs);
-        } catch {
-          // Metadata stays 0 when stat races a deletion.
-        }
-        entries.push({ path: relativePath, kind: 'file', size, modifiedAtMs });
-      }
-    }
-    entries.sort((a, b) => a.path.localeCompare(b.path));
-    return entries;
-  }
-
-  async function readBody(req: IncomingMessage): Promise<string> {
-    return new Promise((resolvePromise, rejectPromise) => {
-      let total = 0;
-      const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => {
-        total += chunk.length;
-        if (total > MAX_BODY_BYTES) {
-          rejectPromise(new Error('Request body too large'));
-          req.destroy();
-          return;
-        }
-        chunks.push(chunk);
-      });
-      req.on('end', () => resolvePromise(Buffer.concat(chunks).toString('utf8')));
-      req.on('error', rejectPromise);
-    });
-  }
-
-  async function handleListAssets(url: URL, res: ServerResponse): Promise<void> {
-    const rootParam = url.searchParams.get('root');
-    const rootDir = resolveAssetRoot(rootParam);
-    if (!rootDir) {
-      sendJson(res, 400, { error: `root must be one of: ${ASSET_ROOTS.join(', ')}` });
-      return;
-    }
-    sendJson(res, 200, { root: rootParam, entries: await listAssetsRecursive(rootDir) });
-  }
-
-  async function handleListPrefabs(res: ServerResponse): Promise<void> {
-    const prefabs: { id: string; kind: string; name: string }[] = [];
-    try {
-      const filenames = (await readdir(prefabDataDir())).filter((name) => name.endsWith('.prefab.json'));
-      for (const filename of filenames) {
-        const id = filename.replace('.prefab.json', '');
-        try {
-          const contents = await readFile(join(prefabDataDir(), filename), 'utf8');
-          const doc = JSON.parse(contents) as { kind?: unknown; name?: unknown };
-          const kind =
-            typeof doc.kind === 'string' && PREFAB_KINDS.has(doc.kind) ? doc.kind : 'station';
-          const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.trim() : id;
-          prefabs.push({ id, kind, name });
-        } catch {
-          prefabs.push({ id, kind: 'station', name: id });
-        }
-      }
-    } catch {
-      // Missing data dir means no prefabs yet.
-    }
-    prefabs.sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
-    sendJson(res, 200, { prefabs });
-  }
-
-  async function handleGetPrefab(url: URL, res: ServerResponse): Promise<void> {
-    const id = url.searchParams.get('id') ?? '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'invalid prefab id' });
-      return;
-    }
-    try {
-      const contents = await readFile(join(prefabDataDir(), `${id}.prefab.json`), 'utf8');
-      sendJson(res, 200, { document: JSON.parse(contents) });
-    } catch {
-      sendJson(res, 404, { error: `prefab "${id}" not found` });
-    }
-  }
-
-  async function handleSavePrefab(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    let document: { id?: unknown };
-    try {
-      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
-      if (typeof parsed.document !== 'object' || parsed.document === null) {
-        throw new Error('missing document');
-      }
-      document = parsed.document as { id?: unknown };
-    } catch (error) {
-      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
-      return;
-    }
-    const id = typeof document.id === 'string' ? document.id : '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'document.id must be a lowercase slug (a-z, 0-9, -)' });
-      return;
-    }
-    await mkdir(prefabDataDir(), { recursive: true });
-    const filePath = join(prefabDataDir(), `${id}.prefab.json`);
-    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
-    sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
-  }
-
-  async function handleGetBaseCharacters(res: ServerResponse): Promise<void> {
-    try {
-      const contents = await readFile(baseCharacterEquipmentPath(), 'utf8');
-      sendJson(res, 200, { document: JSON.parse(contents) });
-    } catch {
-      sendJson(res, 404, { error: 'base character equipment document not found' });
-    }
-  }
-
-  async function handleSaveBaseCharacters(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    let document: Record<string, unknown>;
-    try {
-      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
-      if (typeof parsed.document !== 'object' || parsed.document === null) {
-        throw new Error('missing document');
-      }
-      document = parsed.document as Record<string, unknown>;
-      if (document.schemaVersion !== 1 || !Array.isArray(document.slots)) {
-        throw new Error('invalid base character equipment document');
-      }
-    } catch (error) {
-      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
-      return;
-    }
-    const filePath = baseCharacterEquipmentPath();
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
-    sendJson(res, 200, { saved: true, path: relative(projectRoot, filePath) });
-  }
-
-  async function handleGetCharacterSettings(res: ServerResponse): Promise<void> {
-    try {
-      const contents = await readFile(characterSettingsPath(), 'utf8');
-      sendJson(res, 200, { document: JSON.parse(contents) });
-    } catch {
-      sendJson(res, 404, { error: 'character settings document not found' });
-    }
-  }
-
-  async function handleSaveCharacterSettings(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    let document: Record<string, unknown>;
-    try {
-      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
-      if (typeof parsed.document !== 'object' || parsed.document === null) {
-        throw new Error('missing document');
-      }
-      document = parsed.document as Record<string, unknown>;
-      const speeds = [
-        document.walkSpeedMetersPerSecond,
-        document.sprintSpeedMetersPerSecond,
-        document.jumpSpeedMetersPerSecond,
-      ];
-      if (
-        document.schemaVersion !== 1
-        || speeds.some((value) => typeof value !== 'number' || !Number.isFinite(value))
-      ) {
-        throw new Error('invalid character settings document');
-      }
-    } catch (error) {
-      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
-      return;
-    }
-    const filePath = characterSettingsPath();
-    await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
-    sendJson(res, 200, { saved: true, path: relative(projectRoot, filePath) });
-  }
-
-  async function handleListAnimationControllers(res: ServerResponse): Promise<void> {
-    const controllers: { id: string; label: string }[] = [];
-    try {
-      const filenames = (await readdir(animationControllerDataDir())).filter((name) =>
-        name.endsWith('.controller.json'),
-      );
-      for (const filename of filenames) {
-        const id = filename.replace(/\.controller\.json$/, '');
-        try {
-          const contents = await readFile(join(animationControllerDataDir(), filename), 'utf8');
-          const doc = JSON.parse(contents) as { label?: unknown };
-          const label = typeof doc.label === 'string' && doc.label.trim() ? doc.label.trim() : id;
-          controllers.push({ id, label });
-        } catch {
-          controllers.push({ id, label: id });
-        }
-      }
-    } catch {
-      // Directory may not exist yet.
-    }
-    controllers.sort((a, b) => a.id.localeCompare(b.id));
-    sendJson(res, 200, { controllers });
-  }
-
-  async function handleGetAnimationController(
-    url: URL,
-    res: ServerResponse,
-  ): Promise<void> {
-    const id = url.searchParams.get('id')?.trim() ?? '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'id must be a lowercase slug (a-z, 0-9, -)' });
-      return;
-    }
-    try {
-      const contents = await readFile(
-        join(animationControllerDataDir(), `${id}.controller.json`),
-        'utf8',
-      );
-      sendJson(res, 200, { document: JSON.parse(contents) });
-    } catch {
-      sendJson(res, 404, { error: `animation controller "${id}" not found` });
-    }
-  }
-
-  async function handleSaveAnimationController(
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<void> {
-    let document: { id?: unknown; schemaVersion?: unknown; stances?: unknown; states?: unknown };
-    try {
-      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
-      if (typeof parsed.document !== 'object' || parsed.document === null) {
-        throw new Error('missing document');
-      }
-      document = parsed.document as {
-        id?: unknown;
-        schemaVersion?: unknown;
-        stances?: unknown;
-        states?: unknown;
-      };
-      if (
-        document.schemaVersion !== 1 ||
-        !Array.isArray(document.stances) ||
-        !Array.isArray(document.states)
-      ) {
-        throw new Error('invalid animation controller document');
-      }
-    } catch (error) {
-      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
-      return;
-    }
-    const id = typeof document.id === 'string' ? document.id : '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'document.id must be a lowercase slug (a-z, 0-9, -)' });
-      return;
-    }
-    await mkdir(animationControllerDataDir(), { recursive: true });
-    const filePath = join(animationControllerDataDir(), `${id}.controller.json`);
-    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
-    sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
-  }
-
-  async function handleListPlanets(res: ServerResponse): Promise<void> {
-    const planets: { id: string; name: string }[] = [];
-    try {
-      const filenames = (await readdir(planetDataDir())).filter((name) =>
-        name.endsWith('.planet.json'),
-      );
-      for (const filename of filenames) {
-        const id = filename.replace('.planet.json', '');
-        try {
-          const contents = await readFile(join(planetDataDir(), filename), 'utf8');
-          const doc = JSON.parse(contents) as { name?: unknown };
-          const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.trim() : id;
-          planets.push({ id, name });
-        } catch {
-          planets.push({ id, name: id });
-        }
-      }
-    } catch {
-      // Missing data dir means no planets yet.
-    }
-    planets.sort(
-      (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
-    );
-    sendJson(res, 200, { planets });
-  }
-
-  async function handleGetPlanet(url: URL, res: ServerResponse): Promise<void> {
-    const id = url.searchParams.get('id') ?? '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'invalid planet id' });
-      return;
-    }
-    try {
-      const contents = await readFile(join(planetDataDir(), `${id}.planet.json`), 'utf8');
-      sendJson(res, 200, { document: JSON.parse(contents) });
-    } catch {
-      sendJson(res, 404, { error: `planet "${id}" not found` });
-    }
-  }
-
-  async function handleSavePlanet(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    let document: { id?: unknown };
-    try {
-      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
-      if (typeof parsed.document !== 'object' || parsed.document === null) {
-        throw new Error('missing document');
-      }
-      document = parsed.document as { id?: unknown };
-    } catch (error) {
-      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
-      return;
-    }
-    const id = typeof document.id === 'string' ? document.id : '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'document.id must be a lowercase slug (a-z, 0-9, -)' });
-      return;
-    }
-    await mkdir(planetDataDir(), { recursive: true });
-    const filePath = join(planetDataDir(), `${id}.planet.json`);
-    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
-    sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
-  }
-
-  async function handleListSystems(res: ServerResponse): Promise<void> {
-    const systems: { id: string; name: string }[] = [];
-    try {
-      const filenames = (await readdir(systemDataDir())).filter((name) =>
-        name.endsWith('.system.json'),
-      );
-      for (const filename of filenames) {
-        const id = filename.replace('.system.json', '');
-        try {
-          const contents = await readFile(join(systemDataDir(), filename), 'utf8');
-          const doc = JSON.parse(contents) as { name?: unknown };
-          const name = typeof doc.name === 'string' && doc.name.trim() ? doc.name.trim() : id;
-          systems.push({ id, name });
-        } catch {
-          systems.push({ id, name: id });
-        }
-      }
-    } catch {
-      // Missing data dir means no systems yet.
-    }
-    systems.sort(
-      (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
-    );
-    sendJson(res, 200, { systems });
-  }
-
-  async function handleGetSystem(url: URL, res: ServerResponse): Promise<void> {
-    const id = url.searchParams.get('id') ?? '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'invalid system id' });
-      return;
-    }
-    try {
-      const contents = await readFile(join(systemDataDir(), `${id}.system.json`), 'utf8');
-      sendJson(res, 200, { document: JSON.parse(contents) });
-    } catch {
-      sendJson(res, 404, { error: `system "${id}" not found` });
-    }
-  }
-
-  async function handleSaveSystem(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    let document: { id?: unknown };
-    try {
-      const parsed = JSON.parse(await readBody(req)) as { document?: unknown };
-      if (typeof parsed.document !== 'object' || parsed.document === null) {
-        throw new Error('missing document');
-      }
-      document = parsed.document as { id?: unknown };
-    } catch (error) {
-      sendJson(res, 400, { error: `invalid request body: ${(error as Error).message}` });
-      return;
-    }
-    const id = typeof document.id === 'string' ? document.id : '';
-    if (!PREFAB_ID_PATTERN.test(id)) {
-      sendJson(res, 400, { error: 'document.id must be a lowercase slug (a-z, 0-9, -)' });
-      return;
-    }
-    await mkdir(systemDataDir(), { recursive: true });
-    const filePath = join(systemDataDir(), `${id}.system.json`);
-    await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
-    sendJson(res, 200, { saved: true, id, path: relative(projectRoot, filePath) });
-  }
-
-  return {
-    name: 'claudecitizen-editor-dev-api',
-    apply: 'serve',
-    configResolved(config) {
-      projectRoot = config.root;
-    },
-    configureServer(server) {
-      server.middlewares.use('/editor/assets', (req, res, next) => {
-        void serveEditorAsset(req, res, next).catch((error) => {
-          console.error('[editor-assets]', error);
-          if (!res.headersSent) {
-            res.statusCode = 500;
-            res.end('internal error');
-          }
-        });
-      });
-      server.middlewares.use('/__editor', (req, res) => {
-        const url = new URL(req.url ?? '/', 'http://localhost');
-        const route = `${req.method ?? 'GET'} ${url.pathname}`;
-        const handled = (async () => {
-          if (route === 'GET /assets') return handleListAssets(url, res);
-          if (route === 'GET /prefabs') return handleListPrefabs(res);
-          if (route === 'GET /prefab') return handleGetPrefab(url, res);
-          if (route === 'POST /prefab') return handleSavePrefab(req, res);
-          if (route === 'GET /base-characters') return handleGetBaseCharacters(res);
-          if (route === 'POST /base-characters') return handleSaveBaseCharacters(req, res);
-          if (route === 'GET /character-settings') return handleGetCharacterSettings(res);
-          if (route === 'POST /character-settings') {
-            return handleSaveCharacterSettings(req, res);
-          }
-          if (route === 'GET /animation-controllers') {
-            return url.searchParams.has('id')
-              ? handleGetAnimationController(url, res)
-              : handleListAnimationControllers(res);
-          }
-          if (route === 'POST /animation-controllers') {
-            return handleSaveAnimationController(req, res);
-          }
-          if (route === 'GET /planets') return handleListPlanets(res);
-          if (route === 'GET /planet') return handleGetPlanet(url, res);
-          if (route === 'POST /planet') return handleSavePlanet(req, res);
-          if (route === 'GET /systems') return handleListSystems(res);
-          if (route === 'GET /system') return handleGetSystem(url, res);
-          if (route === 'POST /system') return handleSaveSystem(req, res);
-          sendJson(res, 404, { error: `unknown editor api route: ${route}` });
-        })();
-        handled.catch((error) => {
-          console.error('[editor-dev-api]', error);
-          if (!res.headersSent) sendJson(res, 500, { error: 'internal error' });
-        });
-      });
-    },
-  };
-}
+const editorBridgePort = process.env.CLAUDECITIZEN_EDITOR_BRIDGE_PORT?.trim();
+const editorBridgeTarget = editorBridgePort
+  ? `http://127.0.0.1:${editorBridgePort}`
+  : null;
 
 export default defineConfig({
-  plugins: [react(), copyReferencedGameAssets(), editorDevApi()],
+  plugins: [react(), copyReferencedGameAssets()],
+  build: {
+    rollupOptions: {
+      // `index.html` is the shipped game; `editor.html` is the AsteronEngine
+      // renderer that Electron loads. Both ship in the editor bundle so
+      // in-editor Play can open the game entry from the same origin.
+      input: {
+        index: resolve(process.cwd(), 'index.html'),
+        editor: resolve(process.cwd(), 'editor.html'),
+      },
+    },
+  },
+  // Electron `--dev` starts Vite and proxies editor APIs + project asset mounts
+  // through a main-process HTTP bridge. Do not proxy `/src/assets`: Vite must
+  // own those for `?import` transforms (e.g. the brand logo PNG). Runtime GLB
+  // URLs under `/src/assets` are served from the engine checkout by Vite.
+  // Project library files live under the open project's `assets/` and are
+  // served via the bridge at `/assets/...`.
+  server: editorBridgeTarget
+    ? {
+        host: '127.0.0.1',
+        proxy: {
+          '/__editor': editorBridgeTarget,
+          '/assets': editorBridgeTarget,
+        },
+      }
+    : undefined,
   // Keep a single React copy (docs/takram also pull react) so Vite's
   // rolldown prebundle of react-dom/client doesn't import a mismatched chunk.
   resolve: {
@@ -1010,22 +396,5 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
-  },
-  server: {
-    watch: {
-      // Editor saves write prefab JSON that the game imports via
-      // import.meta.glob. Without this, every save triggers a full page
-      // reload that races (and cancels) the editor's jump into Play preview.
-      // Dev builds read prefabs through /__editor/prefab instead, so no HMR
-      // is needed for these files.
-      ignored: [
-        '**/src/world/prefabs/data/**',
-        '**/src/world/planets/data/**',
-        '**/src/world/systems/data/**',
-        '**/src/player/equipment/data/base-characters.json',
-        '**/src/player/animation/data/**',
-        '**/src/player/data/**',
-      ],
-    },
   },
 });

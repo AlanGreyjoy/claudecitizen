@@ -1,5 +1,5 @@
-import { CHARACTER_EYE_HEIGHT_METERS } from "../player/character_controller";
-import { characterHeadLookTowardPoint } from "../player/screen_hotspot";
+import { CHARACTER_EYE_HEIGHT_METERS } from "../player/character-controller";
+import { characterHeadLookTowardPoint } from "../player/screen-hotspot";
 import { add, normalize, scale } from "../math/vec3";
 import type { StationNpcRenderState, Vec3 } from "../types";
 

@@ -1,5 +1,5 @@
 import { parsePrefabDocument, type PrefabDocument } from './schema';
-import { AUTHORING_ENABLED } from '../../build_mode';
+import { AUTHORING_ENABLED } from '../../build-mode';
 
 /**
  * Prefab JSON files live in src/world/prefabs/data/<id>.prefab.json.

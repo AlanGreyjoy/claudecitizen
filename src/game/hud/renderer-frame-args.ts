@@ -6,14 +6,14 @@ import {
 import {
   getActiveShipBody,
   getActiveShipRig,
-} from "../../player/world_state";
-import { listShipInstances } from "../../flight/ship_world";
-import { doorBlends } from "../../player/ship_rig";
-import type { EntertainmentCameraFeel } from "../../player/entertainment_camera";
-import type { LoopContext } from "../loop_context";
+} from "../../player/world-state";
+import { listShipInstances } from "../../flight/ship-world";
+import { doorBlends } from "../../player/ship-rig";
+import type { EntertainmentCameraFeel } from "../../player/entertainment-camera";
+import type { LoopContext } from "../loop-context";
 import type { CameraState } from "../types";
 import type { CameraOcclusion } from "../camera/occlusion";
-import { characterVisibleInMode } from "./entertainment_camera_frame";
+import { characterVisibleInMode } from "./entertainment-camera-frame";
 
 function isWeaponWalkMode(mode: string): boolean {
   return (

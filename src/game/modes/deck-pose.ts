@@ -1,18 +1,18 @@
-import type { getActiveShip } from "../../player/world_state";
-import { getShipLayout } from "../../player/ship_layout";
+import type { getActiveShip } from "../../player/world-state";
+import { getShipLayout } from "../../player/ship-layout";
 import {
   isShipParked,
   isWithinShipPadHorizontal,
   worldToShipLocal,
-} from "../../player/ship_interaction";
+} from "../../player/ship-interaction";
 import { sampleColliderGroundHeight } from "../../physics/colliders";
 import {
   isShipInteriorWalkPose,
   type DeckCharacterState,
-} from "../../player/ship_deck";
-import type { doorBlends } from "../../player/ship_rig";
-import type { LoopContext } from "../loop_context";
-import { isPlanetFeetGrounded } from "./deck_exterior_feet";
+} from "../../player/ship-deck";
+import type { doorBlends } from "../../player/ship-rig";
+import type { LoopContext } from "../loop-context";
+import { isPlanetFeetGrounded } from "./deck-exterior-feet";
 
 type ColliderRig = {
   gear01: number;

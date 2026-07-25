@@ -7,15 +7,15 @@ import type {
   Vec3,
 } from '../../../types';
 import { scale } from '../../../math/vec3';
-import { directionFromCubeFace } from '../../../world/cube_sphere';
+import { directionFromCubeFace } from '../../../world/cube-sphere';
 import {
   coastTreatmentMaxHeightMeters,
   oceanWaterLevelMeters,
-} from '../../../world/coastal_profile';
+} from '../../../world/coastal-profile';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
-import { sampleAnalyticPlanetSurface } from '../../../world/planet_surface';
-import { renderableGridSampleSpacingMeters } from '../../../world/renderable_surface';
-import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../world/terrain_triangulation';
+import { sampleAnalyticPlanetSurface } from '../../../world/planet-surface';
+import { renderableGridSampleSpacingMeters } from '../../../world/renderable-surface';
+import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../world/terrain-triangulation';
 import {
   TERRAIN_SKIRT_DEPTH_FACTOR,
   TERRAIN_SKIRT_MAX_DEPTH_METERS,

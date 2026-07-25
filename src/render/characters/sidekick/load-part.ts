@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
-import { buildBoneNameMap, findSkinnedMeshes, findSkeletonRootBone } from './skeleton_map';
+import { buildBoneNameMap, findSkinnedMeshes, findSkeletonRootBone } from './skeleton-map';
 
 const loader = new GLTFLoader();
 

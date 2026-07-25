@@ -9,7 +9,7 @@ import {
   parseString,
   parseVec2,
   parseVec3,
-} from "./schema_parse_common";
+} from "./schema-parse-common";
 
 function parseShipControllerHingeAxis(
   raw: unknown,

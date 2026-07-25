@@ -1,5 +1,5 @@
 import type { TransformControls } from "three/examples/jsm/controls/TransformControls";
-import { DEG_TO_RAD } from "./viewport_transforms";
+import { DEG_TO_RAD } from "./viewport-transforms";
 
 export interface ViewportSnap {
   isEnabled: () => boolean;

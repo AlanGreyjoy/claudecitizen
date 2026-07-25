@@ -1,5 +1,5 @@
-import type { WeaponAnimStanceId } from '../inventory/weapon_select';
-import { PISTOL_IDLE_CLIP } from './pistol_clips';
+import type { WeaponAnimStanceId } from '../inventory/weapon-select';
+import { PISTOL_IDLE_CLIP } from './pistol-clips';
 import type { JumpPhase } from '../../types';
 
 const UNARMED_IDLE_CLIP = 'Idle_Loop';

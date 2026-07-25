@@ -1,5 +1,5 @@
 import type { Planet } from './planet';
-import type { PlanetSpawnCatalog, SurfaceSpawnInstance } from './surface_spawn';
+import type { PlanetSpawnCatalog, SurfaceSpawnInstance } from './surface-spawn';
 import type { TileInfo } from './terrain';
 import type { PlanetDocument } from '../world/planets/schema';
 

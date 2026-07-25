@@ -88,4 +88,4 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Authoritative cell simulation over WebTransport + Protobuf
 - [x] Authoritative multiplayer — client sends intents, server owns state
 - [x] Persistence — accounts, ship loadouts, and checkpointed cell state
-- [x] Rate limiting, Kubernetes secrets, health/readiness, metrics, and fenced ownership
+- [x] Rate limiting, secrets handling, health/readiness, metrics, and fenced ownership

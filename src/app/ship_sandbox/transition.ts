@@ -5,11 +5,11 @@ import {
   getDeckSpawnFloorHint,
   getDeckWorldPose,
   getLeavePilotStandPose,
-} from '../../player/ship_deck';
-import { createTransitionPose, getBedSpec, worldToShipLocal } from '../../player/ship_interaction';
-import { teleportShipPlayerLocal } from '../../physics/ship_physics';
-import { doorBlends } from '../../player/ship_rig';
-import { clamp } from './camera_math';
+} from '../../player/ship-deck';
+import { createTransitionPose, getBedSpec, worldToShipLocal } from '../../player/ship-interaction';
+import { teleportShipPlayerLocal } from '../../physics/ship-physics';
+import { doorBlends } from '../../player/ship-rig';
+import { clamp } from './camera-math';
 import type { ShipSandboxSession } from './types';
 
 const SIT_SECONDS = 1.3;

@@ -12,8 +12,8 @@ import {
   createRapierWorld,
   removeCollider,
   type RapierWorldHandle,
-} from './rapier_world';
-import { castCameraOcclusion } from './camera_occlusion';
+} from './rapier-world';
+import { castCameraOcclusion } from './camera-occlusion';
 
 const COLLIDER_RADIUS_METERS = 36;
 const MAX_ACTIVE_COLLIDERS = 220;

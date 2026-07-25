@@ -1,24 +1,24 @@
-import type { getActiveShip } from "../../player/world_state";
+import type { getActiveShip } from "../../player/world-state";
 import {
   flightOptionsFromSpec,
   integrateFlightBody,
-} from "../../flight/flight_body";
+} from "../../flight/flight-body";
 import {
   recenterAimAsNoseTracks,
   resolveAimForward,
   resolveSeatLookForward,
-} from "../../flight/flight_aim";
-import { buildNavPrompt } from "../../flight/quantum_travel";
-import { updateFlightCameraFeel } from "../../player/flight_camera_feel";
+} from "../../flight/flight-aim";
+import { buildNavPrompt } from "../../flight/quantum-travel";
+import { updateFlightCameraFeel } from "../../player/flight-camera-feel";
 import {
   applyCockpitControlAction,
   resolveCockpitGazeTarget,
-} from "../../player/cockpit_gaze";
-import { localOffsetToWorld } from "../../player/ship_interaction";
-import { getShipLayout } from "../../player/ship_layout";
-import { playCockpitControlToggleSfx } from "../../player/ship_articulation_sfx";
+} from "../../player/cockpit-gaze";
+import { localOffsetToWorld } from "../../player/ship-interaction";
+import { getShipLayout } from "../../player/ship-layout";
+import { playCockpitControlToggleSfx } from "../../player/ship-articulation-sfx";
 import type { CameraState, FrameActions } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
 
 type ShipInstance = ReturnType<typeof getActiveShip>;

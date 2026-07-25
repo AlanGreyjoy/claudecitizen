@@ -1,9 +1,9 @@
-import type { getActiveShipBody } from "../../player/world_state";
-import { getShipRight, worldToShipLocal } from "../../player/ship_interaction";
+import type { getActiveShipBody } from "../../player/world-state";
+import { getShipRight, worldToShipLocal } from "../../player/ship-interaction";
 import { worldToStationLocal } from "../../world/station";
 import { dot, normalize } from "../../math/vec3";
 import type { Vec3 } from "../../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 type ShipBody = ReturnType<typeof getActiveShipBody>;
 

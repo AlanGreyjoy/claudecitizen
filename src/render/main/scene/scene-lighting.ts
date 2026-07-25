@@ -5,7 +5,7 @@ import {
   DEFAULT_FOG_NEAR,
   SKY_HIGH_COLOR,
 } from '../domain/constants';
-import { resolveRenderQuality } from '../domain/render_quality';
+import { resolveRenderQuality } from '../domain/render-quality';
 
 export interface SceneLighting {
   ambient: THREE.HemisphereLight;

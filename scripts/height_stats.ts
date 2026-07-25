@@ -1,5 +1,5 @@
 import { sampleSurfaceHeight } from '../src/world/elevation';
-import { sampleTerrainRegions } from '../src/world/terrain_regions';
+import { sampleTerrainRegions } from '../src/world/terrain-regions';
 import { CLAUDECITIZEN_PLANET } from '../src/world/planet';
 import type { Vec3 } from '../src/types';
 

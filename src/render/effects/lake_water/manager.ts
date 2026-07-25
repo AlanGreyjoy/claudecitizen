@@ -10,7 +10,7 @@ import type {
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
 import { buildSurfaceWaterGeometry } from './build/buffers';
 import { createSurfaceWaterMaterial } from './render/material';
-import { createSurfaceWaterBuildWorker } from './worker/create_worker';
+import { createSurfaceWaterBuildWorker } from './worker/create-worker';
 
 const MAX_WATER_CACHE_ENTRIES = 256;
 const WATER_CACHE_STALE_FRAMES = 300;

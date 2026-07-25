@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { stat } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
 import {
   app,
   BrowserWindow,
@@ -18,14 +18,22 @@ import {
   isInsidePath,
 } from './repository.mjs';
 import { createProjectHub, isAsteronEngineProject } from './project_hub.mjs';
+import { startDevRenderer } from './dev_renderer.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
 const EDITOR_HOST = 'app';
 const EDITOR_ORIGIN = `${EDITOR_SCHEME}://${EDITOR_HOST}`;
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+/** Renderer path prefix forwarded to the project's configured Rust API. */
+const BACKEND_PROXY_PREFIX = '/__editor/backend/';
 const editorDesktopRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = dirname(editorDesktopRoot);
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const editorDevMode =
+  process.argv.includes('--dev')
+  || process.env.CLAUDECITIZEN_EDITOR_DEV === '1';
+/** @type {null | (() => Promise<void>)} */
+let disposeDevRenderer = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -81,24 +89,16 @@ function resolveStaticPath(pathname) {
 }
 
 function resolveProjectAsset(repository, pathname) {
+  // Longer prefixes first so `/src/assets/` is not swallowed by `/assets/`.
   const mounts = [
-    { prefix: '/editor/assets/', root: 'editor/assets' },
     { prefix: '/src/assets/', root: 'src/assets' },
+    { prefix: '/assets/', root: 'assets' },
   ];
   for (const mount of mounts) {
     if (!pathname.startsWith(mount.prefix)) continue;
     const relativePath = decodeRelativePath(pathname, mount.prefix);
     if (relativePath === null || relativePath.includes('\0')) return null;
     return repository.resolveAssetPath(mount.root, relativePath);
-  }
-
-  const protectedPrefix = '/assets/protected/';
-  if (pathname.startsWith(protectedPrefix)) {
-    const relativePath = decodeRelativePath(pathname, protectedPrefix);
-    if (relativePath === null || relativePath.includes('\0')) return null;
-    const root = resolve(repository.projectRoot, 'public/assets/protected');
-    const candidate = resolve(root, relativePath);
-    return isInsidePath(candidate, root) ? candidate : null;
   }
   return null;
 }
@@ -140,12 +140,27 @@ async function parseDocumentBody(request) {
   return payload?.document;
 }
 
+async function parseJsonBody(request) {
+  try {
+    return await request.json();
+  } catch {
+    throw new EditorRepositoryError('invalid JSON request body');
+  }
+}
+
 async function handleEditorApi(repository, request, url) {
   const route = `${request.method} ${url.pathname}`;
   try {
     switch (route) {
       case 'GET /__editor/assets':
         return jsonResponse(200, await repository.listAssets(url.searchParams.get('root')));
+      case 'POST /__editor/assets/folder': {
+        const body = await parseJsonBody(request);
+        return jsonResponse(
+          200,
+          await repository.createAssetFolder(body?.root, body?.parentPath, body?.name),
+        );
+      }
       case 'GET /__editor/prefabs':
         return jsonResponse(200, await repository.listPrefabs());
       case 'GET /__editor/prefab':
@@ -171,6 +186,13 @@ async function handleEditorApi(repository, request, url) {
         return jsonResponse(
           200,
           await repository.saveCharacterSettings(await parseDocumentBody(request)),
+        );
+      case 'GET /__editor/project-settings':
+        return jsonResponse(200, await repository.getProjectSettings());
+      case 'POST /__editor/project-settings':
+        return jsonResponse(
+          200,
+          await repository.saveProjectSettings(await parseDocumentBody(request)),
         );
       case 'GET /__editor/animation-controllers':
         return jsonResponse(
@@ -208,10 +230,72 @@ async function handleEditorApi(repository, request, url) {
   }
 }
 
+/**
+ * Forwards `/__editor/backend/<path>` to the project's configured Rust API.
+ *
+ * The renderer runs on the `cceditor://app` origin, which the backend's
+ * single-origin CORS policy rejects and whose non-HTTP scheme cannot hold the
+ * `cc_at` / `cc_rt` / `cc_admin` cookies. Proxying through the main process
+ * sidesteps both: `net.fetch` is not subject to CORS and the main session owns
+ * a normal cookie jar keyed to the backend's own origin.
+ */
+async function proxyBackendRequest(repository, request, url) {
+  const { document: settings } = await repository.getProjectSettings();
+  let target;
+  try {
+    target = new URL(
+      `${url.pathname.slice(BACKEND_PROXY_PREFIX.length - 1)}${url.search}`,
+      `${settings.backendUrl}/`,
+    );
+  } catch {
+    return jsonResponse(400, { error: 'invalid backend request path' });
+  }
+  if (!target.href.startsWith(`${settings.backendUrl}/`)) {
+    return jsonResponse(403, { error: 'backend request escapes the configured host' });
+  }
+
+  const headers = new Headers();
+  for (const name of ['content-type', 'accept']) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+
+  const hasBody = !['GET', 'HEAD'].includes(request.method);
+  try {
+    const response = await net.fetch(target.toString(), {
+      method: request.method,
+      headers,
+      ...(hasBody ? { body: await request.arrayBuffer() } : {}),
+      credentials: 'include',
+    });
+    // Strip Set-Cookie: the main session already stored it, and the renderer
+    // origin cannot hold backend cookies anyway.
+    const forwarded = new Headers(response.headers);
+    forwarded.delete('set-cookie');
+    forwarded.delete('access-control-allow-origin');
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: forwarded,
+    });
+  } catch (error) {
+    return jsonResponse(502, {
+      error: `backend request failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+    });
+  }
+}
+
 async function serveEditorRequest(getRepository, request) {
   const url = new URL(request.url);
   if (url.protocol !== `${EDITOR_SCHEME}:` || url.host !== EDITOR_HOST) {
     return new Response('Not found', { status: 404 });
+  }
+  if (url.pathname.startsWith(BACKEND_PROXY_PREFIX)) {
+    const repository = getRepository();
+    if (!repository) {
+      return jsonResponse(503, { error: 'No AsteronEngine project is open.' });
+    }
+    return proxyBackendRequest(repository, request, url);
   }
   if (url.pathname.startsWith('/__editor/')) {
     const repository = getRepository();
@@ -228,9 +312,15 @@ async function serveEditorRequest(getRepository, request) {
   return serveFile(request, resolveStaticPath(url.pathname));
 }
 
-function isTrustedNavigation(rawUrl) {
-  const url = new URL(rawUrl);
-  return url.protocol === `${EDITOR_SCHEME}:` && url.host === EDITOR_HOST;
+function isTrustedNavigation(rawUrl, trustedOrigins) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (url.protocol === `${EDITOR_SCHEME}:` && url.host === EDITOR_HOST) return true;
+  return trustedOrigins.has(url.origin);
 }
 
 function openExternal(rawUrl) {
@@ -246,19 +336,36 @@ function openExternal(rawUrl) {
   });
 }
 
-function configureNavigation(window) {
+function configureNavigation(window, trustedOrigins) {
   window.webContents.setWindowOpenHandler(({ url }) => {
     openExternal(url);
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event, url) => {
-    if (isTrustedNavigation(url)) return;
+    if (isTrustedNavigation(url, trustedOrigins)) return;
     event.preventDefault();
     openExternal(url);
   });
   window.webContents.on('will-attach-webview', (event) => {
     event.preventDefault();
   });
+  window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (!editorDevMode || level < 2) return;
+    console.error(`[renderer] ${message} (${sourceId}:${line})`);
+  });
+  window.webContents.on('did-fail-load', (_event, code, description, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    console.error(`[renderer] did-fail-load ${code} ${description} ${validatedURL}`);
+  });
+  if (editorDevMode) {
+    window.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
+/** Rewrite a bridge HTTP request onto the privileged editor origin. */
+function toEditorProtocolRequest(request) {
+  const url = new URL(request.url);
+  return new Request(`${EDITOR_ORIGIN}${url.pathname}${url.search}`, request);
 }
 
 function browserWindowOptions(overrides = {}) {
@@ -277,17 +384,6 @@ function browserWindowOptions(overrides = {}) {
   };
 }
 
-function resolveEditorRoute(rawRoute) {
-  if (typeof rawRoute !== 'string' || rawRoute.length > 2_048) return null;
-  try {
-    const url = new URL(rawRoute, `${EDITOR_ORIGIN}/`);
-    if (url.protocol !== `${EDITOR_SCHEME}:` || url.host !== EDITOR_HOST) return null;
-    return url;
-  } catch {
-    return null;
-  }
-}
-
 function sendState(window, channel, state) {
   if (!window || window.isDestroyed()) return;
   window.webContents.send(channel, state);
@@ -297,13 +393,58 @@ function sendEditorCommand(getWindow, type) {
   sendState(getWindow(), 'editor:native-command', { type });
 }
 
-function installApplicationMenu({
-  getWindow,
-  getProjectRoot,
-  returnToProjects,
-  stopPlay,
-  isPlaying,
-}) {
+function viewMenuTemplate() {
+  return {
+    label: 'View',
+    submenu: [
+      { role: 'reload' },
+      { role: 'forceReload' },
+      { role: 'toggleDevTools' },
+      { type: 'separator' },
+      { role: 'resetZoom' },
+      { role: 'zoomIn' },
+      { role: 'zoomOut' },
+      { role: 'togglefullscreen' },
+    ],
+  };
+}
+
+/** Menu for the Projects hub — no scene/prefab/play actions. */
+function installProjectsApplicationMenu({ getProjectsWindow, onOpenProject }) {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Project',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendEditorCommand(getProjectsWindow, 'new-project'),
+        },
+        {
+          label: 'Open Project…',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => void onOpenProject(),
+        },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    viewMenuTemplate(),
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Create or open a project to start authoring.',
+          enabled: false,
+        },
+      ],
+    },
+  ]);
+  Menu.setApplicationMenu(menu);
+}
+
+/** Full authoring menu — only while an editor workspace is open. */
+function installEditorApplicationMenu({ getWindow, getProjectRoot, returnToProjects }) {
   const menu = Menu.buildFromTemplate([
     {
       label: 'File',
@@ -319,6 +460,10 @@ function installApplicationMenu({
         {
           label: 'Scene Settings…',
           click: () => sendEditorCommand(getWindow, 'open-scene-settings'),
+        },
+        {
+          label: 'Project Settings…',
+          click: () => sendEditorCommand(getWindow, 'open-project-settings'),
         },
         { type: 'separator' },
         {
@@ -401,39 +546,23 @@ function installApplicationMenu({
       label: 'Play',
       submenu: [
         {
-          id: 'play-active-scene',
-          label: 'Play Active Scene',
+          label: 'Play / Stop',
           accelerator: 'F6',
-          click: () => {
-            if (isPlaying()) stopPlay();
-            else sendEditorCommand(getWindow, 'play');
-          },
+          click: () => sendEditorCommand(getWindow, 'play'),
         },
         {
-          id: 'stop-play',
+          label: 'Pause / Resume',
+          accelerator: 'F7',
+          click: () => sendEditorCommand(getWindow, 'pause-play'),
+        },
+        {
           label: 'Stop',
           accelerator: 'Shift+F6',
-          enabled: isPlaying(),
-          click: () => {
-            stopPlay();
-            sendEditorCommand(getWindow, 'stop-play');
-          },
+          click: () => sendEditorCommand(getWindow, 'stop-play'),
         },
       ],
     },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { role: 'togglefullscreen' },
-      ],
-    },
+    viewMenuTemplate(),
     {
       label: 'Help',
       submenu: [
@@ -458,14 +587,6 @@ function installApplicationMenu({
   Menu.setApplicationMenu(menu);
 }
 
-function updatePlayMenuState(isPlaying) {
-  const menu = Menu.getApplicationMenu();
-  const playItem = menu?.getMenuItemById('play-active-scene');
-  const stopItem = menu?.getMenuItemById('stop-play');
-  if (playItem) playItem.label = isPlaying ? 'Stop Playing' : 'Play Active Scene';
-  if (stopItem) stopItem.enabled = isPlaying;
-}
-
 let keepAliveForTransition = false;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -474,9 +595,10 @@ if (!hasSingleInstanceLock) {
 } else {
   let projectsWindow = null;
   let mainWindow = null;
-  let playWindow = null;
   let repository = null;
   let buildProcess = null;
+  let rendererOrigin = EDITOR_ORIGIN;
+  const trustedOrigins = new Set();
 
   const projectHub = createProjectHub({ settingsPath });
 
@@ -489,17 +611,23 @@ if (!hasSingleInstanceLock) {
     }
   };
 
-  const publishPlayState = () => {
-    const playing = Boolean(playWindow && !playWindow.isDestroyed());
-    updatePlayMenuState(playing);
-    sendState(mainWindow, 'editor:play-state', { playing });
+  const showProjectsMenu = () => {
+    installProjectsApplicationMenu({
+      getProjectsWindow: () => projectsWindow,
+      onOpenProject: () => chooseAndOpenProject(),
+    });
   };
 
-  const stopPlay = () => {
-    if (playWindow && !playWindow.isDestroyed()) playWindow.close();
+  const showEditorMenu = () => {
+    installEditorApplicationMenu({
+      getWindow: () => mainWindow,
+      getProjectRoot: () => repository?.projectRoot ?? null,
+      returnToProjects,
+    });
   };
 
   const createProjectsWindow = async () => {
+    showProjectsMenu();
     if (projectsWindow && !projectsWindow.isDestroyed()) {
       projectsWindow.show();
       projectsWindow.focus();
@@ -514,16 +642,17 @@ if (!hasSingleInstanceLock) {
       minWidth: 720,
       minHeight: 480,
     });
-    configureNavigation(projectsWindow);
+    configureNavigation(projectsWindow, trustedOrigins);
     projectsWindow.once('ready-to-show', () => projectsWindow?.show());
     projectsWindow.once('closed', () => {
       projectsWindow = null;
     });
-    await projectsWindow.loadURL(`${EDITOR_ORIGIN}/?boot=projects`);
+    await projectsWindow.loadURL(`${rendererOrigin}/editor.html?boot=projects`);
     return projectsWindow;
   };
 
   const createEditorWindow = async () => {
+    showEditorMenu();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
       mainWindow.focus();
@@ -538,7 +667,7 @@ if (!hasSingleInstanceLock) {
       minWidth: 1024,
       minHeight: 640,
     });
-    configureNavigation(mainWindow);
+    configureNavigation(mainWindow, trustedOrigins);
     mainWindow.once('ready-to-show', () => mainWindow?.show());
     mainWindow.once('closed', () => {
       mainWindow = null;
@@ -546,7 +675,7 @@ if (!hasSingleInstanceLock) {
       repository = null;
       void withWindowTransition(() => createProjectsWindow());
     });
-    await mainWindow.loadURL(`${EDITOR_ORIGIN}/?boot=editor`);
+    await mainWindow.loadURL(`${rendererOrigin}/editor.html?boot=editor`);
     return mainWindow;
   };
 
@@ -562,7 +691,6 @@ if (!hasSingleInstanceLock) {
 
   const openProjectRoot = async (projectRoot) => {
     await bindProject(projectRoot);
-    stopPlay();
     return withWindowTransition(async () => {
       if (projectsWindow && !projectsWindow.isDestroyed()) {
         projectsWindow.close();
@@ -573,7 +701,6 @@ if (!hasSingleInstanceLock) {
   };
 
   const returnToProjects = async () => {
-    stopPlay();
     await withWindowTransition(async () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.close();
@@ -595,35 +722,28 @@ if (!hasSingleInstanceLock) {
     return resolve(result.filePaths[0]);
   };
 
-  const play = async (rawRoute) => {
-    const url = resolveEditorRoute(rawRoute);
-    if (!url) throw new Error('Play route must stay inside the editor application.');
-
-    if (playWindow && !playWindow.isDestroyed()) {
-      await playWindow.loadURL(url.toString());
-      playWindow.show();
-      playWindow.focus();
-      publishPlayState();
-      return { playing: true };
+  const chooseAndOpenProject = async () => {
+    const candidate = await chooseDirectory({
+      title: 'Open AsteronEngine Project',
+      message: 'Select an AsteronEngine project folder.',
+      properties: ['openDirectory'],
+    });
+    if (!candidate) return { canceled: true };
+    if (!(await isAsteronEngineProject(candidate))) {
+      const parent =
+        (projectsWindow && !projectsWindow.isDestroyed() && projectsWindow)
+        || null;
+      const messageOptions = {
+        type: 'error',
+        title: 'Invalid AsteronEngine Project',
+        message: 'The selected folder is not an AsteronEngine project.',
+        detail: 'Expected package.json and src/world/prefabs/data/.',
+      };
+      if (parent) await dialog.showMessageBox(parent, messageOptions);
+      else await dialog.showMessageBox(messageOptions);
+      return { canceled: true, error: 'invalid-project' };
     }
-
-    playWindow = new BrowserWindow({
-      ...browserWindowOptions(),
-      title: 'AsteronEngine — Play Mode',
-      width: 1440,
-      height: 900,
-      minWidth: 960,
-      minHeight: 600,
-    });
-    configureNavigation(playWindow);
-    playWindow.once('ready-to-show', () => playWindow?.show());
-    playWindow.once('closed', () => {
-      playWindow = null;
-      publishPlayState();
-    });
-    await playWindow.loadURL(url.toString());
-    publishPlayState();
-    return { playing: true };
+    return openProjectRoot(candidate);
   };
 
   const buildWeb = async ({ showResultDialog = false } = {}) => {
@@ -635,7 +755,8 @@ if (!hasSingleInstanceLock) {
     }
 
     const projectRoot = repository.projectRoot;
-    const outputDir = join(projectRoot, 'dist');
+    const { document: projectSettings } = await repository.getProjectSettings();
+    const outputDir = join(projectRoot, projectSettings.build.outDir);
     let outputTail = '';
     sendState(mainWindow, 'editor:build-state', {
       phase: 'building',
@@ -682,6 +803,30 @@ if (!hasSingleInstanceLock) {
       });
     });
 
+    // The release reads its backend URL at runtime, so the same bundle can be
+    // pointed at any deployment by re-stamping this file.
+    if (result.ok) {
+      try {
+        await writeFile(
+          join(outputDir, 'asteron.runtime.json'),
+          `${JSON.stringify(
+            {
+              schemaVersion: 1,
+              project: projectSettings.name,
+              backendUrl: projectSettings.backendUrl,
+              bootScene: projectSettings.defaultScene,
+            },
+            null,
+            2,
+          )}\n`,
+          'utf8',
+        );
+      } catch (error) {
+        result.ok = false;
+        result.message = `Web build succeeded but runtime config could not be written: ${error.message}`;
+      }
+    }
+
     sendState(mainWindow, 'editor:build-state', {
       phase: result.ok ? 'success' : 'error',
       ...result,
@@ -727,6 +872,21 @@ if (!hasSingleInstanceLock) {
         (request) => serveEditorRequest(() => repository, request),
       );
 
+      if (editorDevMode) {
+        console.log('[editor-dev] Starting Vite HMR renderer…');
+        const dev = await startDevRenderer({
+          repositoryRoot,
+          npmCommand,
+          serveEditorRequest,
+          getRepository: () => repository,
+          toEditorProtocolRequest,
+        });
+        rendererOrigin = dev.rendererOrigin;
+        trustedOrigins.add(dev.rendererOrigin);
+        disposeDevRenderer = dev.dispose;
+        console.log(`[editor-dev] Renderer: ${rendererOrigin}/editor.html`);
+      }
+
       ipcMain.handle('projects:listRecent', () => projectHub.listRecentProjects());
       ipcMain.handle('projects:open', async (_event, projectRoot) => {
         if (typeof projectRoot !== 'string' || !projectRoot.trim()) {
@@ -734,29 +894,7 @@ if (!hasSingleInstanceLock) {
         }
         return openProjectRoot(projectRoot);
       });
-      ipcMain.handle('projects:chooseAndOpen', async () => {
-        const candidate = await chooseDirectory({
-          title: 'Open AsteronEngine Project',
-          message: 'Select an AsteronEngine project folder.',
-          properties: ['openDirectory'],
-        });
-        if (!candidate) return { canceled: true };
-        if (!(await isAsteronEngineProject(candidate))) {
-          const parent =
-            (projectsWindow && !projectsWindow.isDestroyed() && projectsWindow)
-            || null;
-          const messageOptions = {
-            type: 'error',
-            title: 'Invalid AsteronEngine Project',
-            message: 'The selected folder is not an AsteronEngine project.',
-            detail: 'Expected package.json and src/world/prefabs/data/.',
-          };
-          if (parent) await dialog.showMessageBox(parent, messageOptions);
-          else await dialog.showMessageBox(messageOptions);
-          return { canceled: true, error: 'invalid-project' };
-        }
-        return openProjectRoot(candidate);
-      });
+      ipcMain.handle('projects:chooseAndOpen', () => chooseAndOpenProject());
       ipcMain.handle('projects:pickDirectory', async () => {
         const candidate = await chooseDirectory({
           title: 'Choose Project Location',
@@ -803,40 +941,12 @@ if (!hasSingleInstanceLock) {
         return { ok: true };
       });
 
-      ipcMain.handle('editor:get-play-state', () => ({
-        playing: Boolean(playWindow && !playWindow.isDestroyed()),
-      }));
-      ipcMain.handle('editor:play', (event, rawRoute) => {
-        if (event.sender !== mainWindow?.webContents) {
-          throw new Error('Only the editor window may start Play Mode.');
-        }
-        return play(rawRoute);
-      });
-      ipcMain.handle('editor:stop-play', (event) => {
-        if (
-          event.sender !== mainWindow?.webContents
-          && event.sender !== playWindow?.webContents
-        ) {
-          return { playing: false };
-        }
-        stopPlay();
-        return { playing: false };
-      });
       ipcMain.handle('editor:build-web', (event) => {
         if (event.sender !== mainWindow?.webContents) {
           throw new Error('Only the editor window may build the project.');
         }
         return buildWeb();
       });
-
-      installApplicationMenu({
-        getWindow: () => mainWindow,
-        getProjectRoot: () => repository?.projectRoot ?? null,
-        returnToProjects,
-        stopPlay,
-        isPlaying: () => Boolean(playWindow && !playWindow.isDestroyed()),
-      });
-      publishPlayState();
 
       const explicit = parseProjectRootArgument();
       if (explicit) {
@@ -863,4 +973,11 @@ if (!hasSingleInstanceLock) {
 app.on('window-all-closed', () => {
   if (keepAliveForTransition) return;
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('will-quit', () => {
+  if (!disposeDevRenderer) return;
+  const dispose = disposeDevRenderer;
+  disposeDevRenderer = null;
+  void dispose();
 });

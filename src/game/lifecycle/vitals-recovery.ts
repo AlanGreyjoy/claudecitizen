@@ -1,10 +1,10 @@
-import { createStationCharacterAt } from "../../player/station_walk";
-import { createQuantumTravelState } from "../../flight/quantum_travel";
+import { createStationCharacterAt } from "../../player/station-walk";
+import { createQuantumTravelState } from "../../flight/quantum-travel";
 import { STATION_SPAWN } from "../../world/station";
-import { teleportStationPlayer } from "../../physics/station_physics";
+import { teleportStationPlayer } from "../../physics/station-physics";
 import { MODE_IN_STATION, MODE_ON_FOOT } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
-import type { DeckPhysics } from "../ship/deck_physics";
+import type { LoopContext } from "../loop-context";
+import type { DeckPhysics } from "../ship/deck-physics";
 
 export function setVitalsSyncLocked(ctx: LoopContext, locked: boolean): void {
   ctx.world.vitalsSyncLocked = locked;

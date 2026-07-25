@@ -1,8 +1,8 @@
 import { length, sub } from "../math/vec3";
 import type { FlightBody, Vec3 } from "../types";
-import { localOffsetToWorld } from "./ship_interaction";
-import type { CockpitStatSpec } from "./ship_layout";
-import { projectWorldPointToScreenOffset } from "./cockpit_gaze";
+import { localOffsetToWorld } from "./ship-interaction";
+import type { CockpitStatSpec } from "./ship-layout";
+import { projectWorldPointToScreenOffset } from "./cockpit-gaze";
 
 /**
  * Resolve world-projected cockpit-stat instruments for the pilot HUD.

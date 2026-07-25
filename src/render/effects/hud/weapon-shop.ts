@@ -10,7 +10,7 @@ import {
   normalizeInventoryState,
 } from "../../../player/inventory/types";
 import type { StationWeaponShopMarker } from "../../../world/station";
-import { paintItemIcon } from "./item_icon";
+import { paintItemIcon } from "./item-icon";
 
 /** Weapons remain unique gear; ammunition is a normal stackable item. */
 function ownsWeapon(inventory: InventoryState, itemDefinitionId: string): boolean {

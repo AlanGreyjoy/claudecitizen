@@ -3,7 +3,7 @@
  * base-characters.json / server game.loadout.ts.
  */
 
-import type { CharacterEquipmentSlotV1 } from '../equipment/base_character_equipment';
+import type { CharacterEquipmentSlotV1 } from '../equipment/base-character-equipment';
 import type { WearableSlotType } from './types';
 
 export interface WearableLoadoutSlot {

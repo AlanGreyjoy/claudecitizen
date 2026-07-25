@@ -1,4 +1,4 @@
-import { PISTOL_IDLE_CLIP } from './pistol_clips';
+import { PISTOL_IDLE_CLIP } from './pistol-clips';
 
 export const ANIMATION_CONTROLLER_SCHEMA_VERSION = 1 as const;
 

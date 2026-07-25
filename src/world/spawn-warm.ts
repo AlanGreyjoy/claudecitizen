@@ -1,10 +1,10 @@
 import type { Planet, Vec3 } from '../types';
 import { add, normalize, scale } from '../math/vec3';
 import { cartesianFromLatLonAlt } from './coordinates';
-import { resolveLandingSite } from './landing_sites';
+import { resolveLandingSite } from './landing-sites';
 import {
   sampleRenderableSurfaceHeightDetails,
-} from './renderable_surface';
+} from './renderable-surface';
 import { warmRiverNetwork } from './rivers';
 
 const DEFAULT_HEIGHT_RING_RADIUS_METERS = 900;

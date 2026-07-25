@@ -8,9 +8,9 @@ import {
 } from '../world/prefabs/schema';
 import {
   createDefaultSceneDocument,
+  SCENE_SCHEMA_VERSION,
   type SceneDocument,
   type SceneKind,
-  type SceneSettings,
 } from '../world/scenes/schema';
 import { createEmptyEntity, type EditorDocumentState, type EditorEntity } from './document';
 
@@ -169,7 +169,6 @@ export function fromPrefabDocument(doc: PrefabDocument): EditorDocumentState {
     prefabName: doc.name,
     kind: doc.kind,
     sceneKind: 'main-game',
-    sceneSettings: createDefaultSceneDocument().settings,
     roots: (doc.root.children ?? []).map(entityFromJson),
   };
 }
@@ -178,11 +177,10 @@ export function fromPrefabDocument(doc: PrefabDocument): EditorDocumentState {
 export function toSceneDocument(state: EditorDocumentState): SceneDocument {
   const id = state.prefabId || slugifyPrefabName(state.prefabName) || 'untitled';
   return {
-    schemaVersion: 2,
+    schemaVersion: SCENE_SCHEMA_VERSION,
     id,
     name: state.prefabName,
     kind: state.sceneKind,
-    settings: structuredClone(state.sceneSettings),
     gameObjects: state.roots.map(entityToJson),
   };
 }
@@ -194,16 +192,18 @@ export function fromSceneDocument(doc: SceneDocument): EditorDocumentState {
     prefabName: doc.name,
     kind: 'site',
     sceneKind: doc.kind,
-    sceneSettings: structuredClone(doc.settings),
     roots: doc.gameObjects.map(entityFromJson),
   };
 }
 
+/**
+ * New scenes start with the GameObjects the runtime needs (Game Manager,
+ * Planet, Player Start) so a fresh scene is immediately playable.
+ */
 export function createEmptySceneEditorState(
   id = '',
   name = 'Untitled Scene',
   sceneKind: SceneKind = 'main-game',
-  sceneSettings?: SceneSettings,
 ): EditorDocumentState {
   const defaults = createDefaultSceneDocument(id || 'new-scene', name);
   return {
@@ -212,7 +212,6 @@ export function createEmptySceneEditorState(
     prefabName: name,
     kind: 'site',
     sceneKind,
-    sceneSettings: sceneSettings ? structuredClone(sceneSettings) : defaults.settings,
-    roots: [],
+    roots: defaults.gameObjects.map(entityFromJson),
   };
 }

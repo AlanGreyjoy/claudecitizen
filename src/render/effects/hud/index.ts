@@ -6,9 +6,9 @@ export {
   type HaloBandTab,
   type HaloBandUpdateParams,
 } from './haloband';
-export { buildHaloBandDom } from './haloband_dom';
-export { createHalobandHolo, type HalobandHoloController } from './haloband_holo';
+export { buildHaloBandDom } from './haloband-dom';
+export { createHalobandHolo, type HalobandHoloController } from './haloband-holo';
 export {
   createPersonalInventory,
   type PersonalInventoryController,
-} from './personal_inventory';
+} from './personal-inventory';

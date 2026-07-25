@@ -13,13 +13,13 @@ import {
   collectExistingComponentTypes,
   removeComponentTypeFromEntities,
   shouldHideShipHullCollider,
-} from '../../component_actions';
+} from '../../component-actions';
 import type { EditorEntity, EditorStore, EntityTransform } from '../../document';
 import {
   collectMaterialRowsForEntity,
   formatMaterialNumber,
   type MaterialRow,
-} from '../../panels/material_manager';
+} from '../../panels/material-manager';
 import {
   ENTITY_TRANSFORM_ROWS,
   GLB_TRANSFORM_ROWS,
@@ -28,17 +28,17 @@ import {
   listInspectorComponents,
   type InspectorPanelOptions,
   type TransformFieldKey,
-} from '../../panels/inspector_logic';
+} from '../../panels/inspector-logic';
 import {
   getComponentDef,
   searchComponents,
   type ComponentDef,
-} from '../../../world/prefabs/component_registry';
+} from '../../../world/prefabs/component-registry';
 import type { PrefabComponent } from '../../../world/prefabs/schema';
 import { UiIcons } from '../../../ui/icons';
 import { useEditorStore } from '../hooks';
 import { UiIcon } from '../UiIcon';
-import { ComponentFields } from './inspector_component_fields';
+import { ComponentFields } from './InspectorComponentFields';
 import {
   CheckboxRow,
   ColorField,
@@ -46,7 +46,7 @@ import {
   FieldRow,
   RemoveButton,
   TextField,
-} from './inspector_form';
+} from './InspectorForm';
 
 export type { InspectorPanelOptions };
 

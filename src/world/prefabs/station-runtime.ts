@@ -17,14 +17,14 @@ import {
 } from '../station';
 import type { PrefabComponent, PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
-import { buildPrefabColliders } from '../../physics/prefab_colliders';
+import { buildPrefabColliders } from '../../physics/prefab-colliders';
 import {
   type ColliderAnimationBinding,
   type GameplayCollider,
   preloadMeshColliders,
   validateMeshColliders,
 } from '../../physics/colliders';
-import { buildPrefabSounds } from './sound_runtime';
+import { buildPrefabSounds } from './sound-runtime';
 import {
   type StationNpcPlacementSpec,
   type StationNpcSpawnerSpec,

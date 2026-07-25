@@ -11,7 +11,7 @@ import {
 } from "../math/vec3";
 import type { Vec3 } from "../types";
 import type { StationFrame } from "../world/station";
-import { CHARACTER_EYE_HEIGHT_METERS } from "./character_controller";
+import { CHARACTER_EYE_HEIGHT_METERS } from "./character-controller";
 
 /**
  * Station vendor-screen hotspots: when the player is near a screen (and in

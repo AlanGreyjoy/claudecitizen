@@ -19,11 +19,11 @@ export {
   getDefaultAnimationController,
   loadCurrentDefaultAnimationController,
   setDefaultAnimationController,
-} from './default_controller';
+} from './default-controller';
 export {
   PISTOL_IDLE_CLIP,
   PISTOL_IDLE_CLIPS,
-} from './pistol_clips';
+} from './pistol-clips';
 export {
   resolveLocomotionClip,
   resolveLocomotionAiming,
@@ -31,4 +31,4 @@ export {
   type LocomotionGait,
   type LocomotionLayers,
   type ResolveLocomotionClipParams,
-} from './resolve_locomotion';
+} from './resolve-locomotion';

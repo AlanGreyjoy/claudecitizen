@@ -2,7 +2,7 @@ export function createTileBuildWorker(): Worker | null {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') return null;
 
   try {
-    return new Worker(new URL('./tile_worker', import.meta.url), {
+    return new Worker(new URL('./tile-worker', import.meta.url), {
       type: 'module',
     });
   } catch (error) {

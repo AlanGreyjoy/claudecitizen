@@ -2,18 +2,18 @@ import {
   buildDefaultDefinition,
   findPreviewSpecies,
   getPartsForSpecies,
-} from './sidekick_catalog';
+} from './sidekick-catalog';
 import {
   CharacterPartType,
   type SidekickCatalog,
   type SidekickManifestPart,
-} from './sidekick_manifest';
+} from './sidekick-manifest';
 import {
   setDefinitionBody,
   setDefinitionColorRow,
   setDefinitionPart,
   type SidekickCharacterDefinitionV2,
-} from './sidekick_definition';
+} from './sidekick-definition';
 
 export const PLAYER_CHARACTER_APPEARANCE_SCHEMA_VERSION = 1 as const;
 export const DEFAULT_PLAYER_HAIR_COLOR = '26272D';

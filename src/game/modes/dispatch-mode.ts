@@ -6,13 +6,13 @@ import {
   MODE_ON_SHIP_DECK,
   MODE_RIDING_ELEVATOR,
 } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { CameraState, CharacterInput, FrameActions } from "../types";
-import type { OnFootMode } from "./on_foot";
-import type { InShipMode } from "./in_ship";
-import type { InBedMode } from "./in_bed";
-import type { OnShipDeckMode } from "./on_ship_deck";
-import type { InStationMode } from "./in_station";
+import type { OnFootMode } from "./on-foot";
+import type { InShipMode } from "./in-ship";
+import type { InBedMode } from "./in-bed";
+import type { OnShipDeckMode } from "./on-ship-deck";
+import type { InStationMode } from "./in-station";
 import type { ElevatorMode } from "./elevator";
 import type { Transitions } from "./transitions";
 

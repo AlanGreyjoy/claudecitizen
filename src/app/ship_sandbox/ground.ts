@@ -2,15 +2,15 @@ import { add, normalize, scale, vec3 } from '../../math/vec3';
 import {
   integrateCharacterLocomotion,
   ORBIT_PITCH_LIMIT,
-} from '../../player/character_controller';
+} from '../../player/character-controller';
 import {
   animationFromState,
   resolveWalkInputIntent,
-} from '../../player/character_locomotion';
+} from '../../player/character-locomotion';
 import type { CharacterState, Vec3 } from '../../types';
 import type { ShipSandboxSession, SandboxWalkActions } from './types';
 import { PAD_RADIUS_METERS, SANDBOX_GROUND_Y_METERS, SANDBOX_GRAVITY, WORLD_UP } from './types';
-import { resolveSandboxOrbit, clamp } from './camera_math';
+import { resolveSandboxOrbit, clamp } from './camera-math';
 
 const TURN_SPEED = 10;
 

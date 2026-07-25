@@ -8,7 +8,6 @@ let mountGeneration = 0;
 let activeSession: 'editor' | 'projects' | null = null;
 
 function prepareEditorDom(): HTMLElement {
-  document.getElementById('title-screen')?.classList.add('is-hidden');
   document.getElementById('app')?.classList.add('is-hidden');
   injectEditorStyles();
   const root = document.getElementById('editor-root');

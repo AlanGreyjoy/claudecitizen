@@ -3,11 +3,11 @@ import {
   MODE_ON_FOOT,
   MODE_RIDING_ELEVATOR,
 } from "../../player/modes";
-import { getActiveShipBody } from "../../player/world_state";
-import { occludeStationCamera } from "../../physics/station_physics";
-import { occludeShipCamera } from "../../physics/ship_physics";
+import { getActiveShipBody } from "../../player/world-state";
+import { occludeStationCamera } from "../../physics/station-physics";
+import { occludeShipCamera } from "../../physics/ship-physics";
 import type { Vec3 } from "../../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export interface CameraOcclusion {
   resolveCameraOcclusion: (from: Vec3, to: Vec3) => Vec3;

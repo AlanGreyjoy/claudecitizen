@@ -1,10 +1,10 @@
 import type { Planet, Vec3 } from '../types';
 import { cross, dot, normalize } from '../math/vec3';
-import { samplePreRiverHeightDetails } from './base_elevation';
-import { faceUvFromDirection } from './cube_sphere';
+import { samplePreRiverHeightDetails } from './base-elevation';
+import { faceUvFromDirection } from './cube-sphere';
 import { radialUp } from './coordinates';
 import { getActivePlanetConfig, type PlanetRuntimeConfig } from './planets/runtime';
-import { clamp01, getNoise3D } from './terrain_noise';
+import { clamp01, getNoise3D } from './terrain-noise';
 
 interface RiverRoutePoint {
   direction: Vec3;

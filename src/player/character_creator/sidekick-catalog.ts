@@ -8,13 +8,13 @@ import {
   type SidekickManifestPart,
   type SidekickManifestPartPreset,
   type SidekickManifestSpecies,
-} from './sidekick_manifest';
+} from './sidekick-manifest';
 import {
   createEmptySidekickDefinition,
   setDefinitionPart,
   type SidekickCharacterDefinitionV2,
   type SidekickSerializedColorRow,
-} from './sidekick_definition';
+} from './sidekick-definition';
 
 let catalogPromise: Promise<SidekickCatalog> | null = null;
 

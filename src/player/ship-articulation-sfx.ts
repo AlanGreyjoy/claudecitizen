@@ -1,6 +1,6 @@
 import { playSfx } from "../audio/sfx";
-import type { CockpitControlAction, ShipSpec } from "./ship_layout";
-import type { ShipRigState } from "./ship_rig";
+import type { CockpitControlAction, ShipSpec } from "./ship-layout";
+import type { ShipRigState } from "./ship-rig";
 
 /**
  * One-shot SFX for ship gear / ramp toggles. URLs come from ship-controller

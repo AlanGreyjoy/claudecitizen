@@ -1,5 +1,5 @@
 import type { EntityTransform } from "../../editor/document";
-import type { ParticlePreviewControls } from "../../editor/panels/particle_fields";
+import type { ParticlePreviewControls } from '../../editor/panels/particle-preview';
 import type { Vec3 } from "../../types";
 
 export type GizmoMode = "translate" | "rotate" | "scale";

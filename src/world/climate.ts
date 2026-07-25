@@ -1,9 +1,9 @@
 import { altitudeForPosition, latLonForPosition, radialUp } from './coordinates';
-import { oceanWaterLevelMeters } from './coastal_profile';
+import { oceanWaterLevelMeters } from './coastal-profile';
 import { sampleLakeSurface } from './lakes';
 import { sampleRiverSurface } from './rivers';
-import { clamp01, fbm3d, getNoise3D } from './terrain_noise';
-import { sampleTerrainRegions } from './terrain_regions';
+import { clamp01, fbm3d, getNoise3D } from './terrain-noise';
+import { sampleTerrainRegions } from './terrain-regions';
 import type { Biome, Planet, PlanetSurfaceSample, Vec3, WaterBody } from '../types';
 import type { SurfaceHeightDetails } from './elevation';
 import { getActivePlanetConfig } from './planets/runtime';

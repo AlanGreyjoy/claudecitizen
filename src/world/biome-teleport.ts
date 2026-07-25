@@ -1,8 +1,8 @@
 import type { Biome, Planet, PlanetSurfaceSample, WaterBody } from '../types';
 import { biomeDisplayName } from './climate';
-import { oceanWaterLevelMeters } from './coastal_profile';
+import { oceanWaterLevelMeters } from './coastal-profile';
 import { cartesianFromLatLonAlt, latLonForPosition } from './coordinates';
-import { samplePlanetSurface } from './planet_surface';
+import { samplePlanetSurface } from './planet-surface';
 import { riverCenterlineDirectionAt } from './rivers';
 import { getActivePlanetConfig } from './planets/runtime';
 

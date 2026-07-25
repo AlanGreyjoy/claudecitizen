@@ -1,6 +1,6 @@
-import { updateElevatorRide } from "../../player/station_interaction";
-import { stationYawForDir } from "../../player/station_walk";
-import type { LoopContext } from "../loop_context";
+import { updateElevatorRide } from "../../player/station-interaction";
+import { stationYawForDir } from "../../player/station-walk";
+import type { LoopContext } from "../loop-context";
 
 export interface ElevatorMode {
   updateElevatorMode: (dt: number) => void;

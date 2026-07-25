@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { InstancedAsset } from './instanced_assets';
+import type { InstancedAsset } from './instanced-assets';
 import { applyWindToMaterial } from './wind';
 
 const CONE_RADIUS = 0.55;

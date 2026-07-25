@@ -1,11 +1,11 @@
 import { length, normalize, scale } from '../math/vec3';
-import { getFootSurfaceSampleLevel } from './foot_surface_level';
+import { getFootSurfaceSampleLevel } from './foot-surface-level';
 import { sampleSurfaceClimate } from './climate';
 import { sampleSurfaceHeightDetails } from './elevation';
 import {
   sampleRenderableSurfaceHeight,
   sampleVisibleSurfaceFrame,
-} from './renderable_surface';
+} from './renderable-surface';
 import type { SurfaceHeightSampleOptions } from './elevation';
 import type { Planet, PlanetSurfaceSample, Vec3 } from '../types';
 
@@ -15,7 +15,7 @@ export {
   RENDER_SURFACE_LEVEL,
   RENDER_SURFACE_SEGMENTS,
   sampleRenderableSurfaceHeight,
-} from './renderable_surface';
+} from './renderable-surface';
 
 interface SurfaceAtDirectionResult {
   point: Vec3;

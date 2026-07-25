@@ -1,17 +1,17 @@
-import type { VegetationAssetCatalog } from './asset_catalog';
+import type { VegetationAssetCatalog } from './asset-catalog';
 import type { Planet, TileInfo, VegetationSettings, Vec3 } from '../../../types';
 import { scale, sub } from '../../../math/vec3';
-import { directionFromCubeFace } from '../../../world/cube_sphere';
+import { directionFromCubeFace } from '../../../world/cube-sphere';
 import {
   classifyBiome,
   classifyWaterBody,
   vegetationDensitiesForBiome,
 } from '../../../world/climate';
-import { sampleRenderablePlanetSurface } from '../../../world/planet_surface';
+import { sampleRenderablePlanetSurface } from '../../../world/planet-surface';
 import {
   sampleRenderableSurfaceHeightDetails,
   sampleVisibleSurfaceFrame,
-} from '../../../world/renderable_surface';
+} from '../../../world/renderable-surface';
 import {
   FACE_INDEX,
   getGrassSampleCount,
@@ -20,14 +20,14 @@ import {
   treeSampleMultiplier,
 } from './constants';
 import { clamp01, hash01, lerp, scaledSampleCount } from './hash';
-import { composeInstanceMatrix } from './instance_matrix';
+import { composeInstanceMatrix } from './instance-matrix';
 import { grassScaleCoverageMultiplier } from '../settings';
 import {
   canPlaceWithGap,
   createPlacementGrid,
   registerPlacement,
-} from './placement_grid';
-import { createAnchorFromTile, type SurfaceAnchor } from './surface_anchor';
+} from './placement-grid';
+import { createAnchorFromTile, type SurfaceAnchor } from './surface-anchor';
 import type { StoredVegetationInstance, StoredVegetationTile } from './storage';
 
 type AllowPlacementFn = (surface: import('../../../types').PlanetSurfaceSample, i: number) => boolean;

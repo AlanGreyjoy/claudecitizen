@@ -4,7 +4,7 @@ import {
   attachRowSplitter,
   PANEL_SIZE_BOUNDS,
   restorePanelSizes,
-} from '../panel_resize';
+} from '../panel-resize';
 
 type PanelSplittersProps = {
   rootRef: RefObject<HTMLElement | null>;

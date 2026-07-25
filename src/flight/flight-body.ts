@@ -15,12 +15,12 @@ import {
   radialUp,
   surfacePointFromPosition,
 } from '../world/coordinates';
-import { sampleRenderablePlanetSurface } from '../world/planet_surface';
+import { sampleRenderablePlanetSurface } from '../world/planet-surface';
 import { getStationFrame, sampleHangarRest, worldToStationLocal } from '../world/station';
-import { getShipRestHeightMeters, type ShipSpec } from '../player/ship_layout';
+import { getShipRestHeightMeters, type ShipSpec } from '../player/ship-layout';
 import type { FlightBody, FlightInput, Planet, Vec3 } from '../types';
-import { FLIGHT_CONFIG, resolveSpeedCapMps } from './flight_config';
-import { aimTorqueDemand01 } from './flight_aim';
+import { FLIGHT_CONFIG, resolveSpeedCapMps } from './flight-config';
+import { aimTorqueDemand01 } from './flight-aim';
 
 export function flightOptionsFromSpec(
   spec: Pick<

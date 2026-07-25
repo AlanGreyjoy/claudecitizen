@@ -8,7 +8,7 @@ description: Manage hangar and apartment decoration catalog entries.
 
 A **prop definition** describes a placeable decoration players can own and deploy in personal spaces (hangar, apartment). Each definition points at a bundled prop prefab and carries placement rules and an ARC cost.
 
-Rows are stored in `PropDefinition`. Manage them from the Admin App **Props** tab.
+Rows are stored in `PropDefinition`. Manage them from the Server console **Props** tab.
 
 ## List view
 

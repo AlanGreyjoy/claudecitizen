@@ -1,6 +1,6 @@
 import { createEmptyEntity, type EditorStore } from './document';
 import { showConfirmDialog, showToast } from './dom';
-import { getComponentDef } from '../world/prefabs/component_registry';
+import { getComponentDef } from '../world/prefabs/component-registry';
 import { slugifyPrefabName } from '../world/prefabs/schema';
 import type { Vec3 } from '../types';
 

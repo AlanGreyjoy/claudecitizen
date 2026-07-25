@@ -1,4 +1,5 @@
-import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import { backendRequestUrl, runtimeConfig } from './runtime-config';
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
 import type { PlayerSurvivalVitals } from '../player/vitals';
 import type {
   InventoryState as PlayerInventoryState,
@@ -100,14 +101,16 @@ export type PlayerItemEntry = PlayerItemStack;
 export type InventoryState = PlayerInventoryState;
 export type { LoadoutState };
 
-const DEFAULT_API_BASE_URL = 'http://localhost:3000';
-
 export function apiBaseUrl(): string {
-  return (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '');
+  return runtimeConfig().backendUrl;
 }
 
+/**
+ * Resolves a backend path for fetch. Inside the editor this is the main-process
+ * proxy route; in the shipped web build it is the configured backend directly.
+ */
 export function apiUrl(path: string): string {
-  return `${apiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
+  return backendRequestUrl(path);
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
@@ -188,8 +191,12 @@ export async function resetPassword(token: string, password: string): Promise<vo
   });
 }
 
+/**
+ * Real browser navigation, not a fetch, so this always points at the backend
+ * directly — the main-process proxy cannot carry an OAuth redirect.
+ */
 export function discordStartUrl(): string {
-  return apiUrl('/auth/discord/start');
+  return `${apiBaseUrl()}/auth/discord/start`;
 }
 
 export function fetchGameBootstrap(): Promise<GameBootstrap> {

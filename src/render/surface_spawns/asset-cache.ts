@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { deduplicateObjectTextures } from '../assets/texture_dedup';
-import { extractInstancedAsset, type InstancedAsset } from '../vegetation/render/instanced_assets';
+import { deduplicateObjectTextures } from '../assets/texture-dedup';
+import { extractInstancedAsset, type InstancedAsset } from '../vegetation/render/instanced-assets';
 
 const loader = new GLTFLoader();
 const cache = new Map<string, Promise<InstancedAsset | null>>();

@@ -1,4 +1,4 @@
-import { getShipLayout, type ShipDoorSpec } from './ship_layout';
+import { getShipLayout, type ShipDoorSpec } from './ship-layout';
 
 /**
  * Articulation state for the active ship: landing gear, rear boarding ramp,

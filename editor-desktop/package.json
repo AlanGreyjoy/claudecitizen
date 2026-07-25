@@ -22,6 +22,7 @@
       "preload.cjs",
       "repository.mjs",
       "project_hub.mjs",
+      "dev_renderer.mjs",
       "package.json"
     ],
     "extraResources": [

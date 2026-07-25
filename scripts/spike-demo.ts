@@ -1,8 +1,8 @@
 import { dot, length } from '../src/math/vec3';
-import { createFlightBody, integrateFlightBody } from '../src/flight/flight_body';
+import { createFlightBody, integrateFlightBody } from '../src/flight/flight-body';
 import { CLAUDECITIZEN_PLANET } from '../src/world/planet';
 import { cartesianFromLatLonAlt, eastVector, radialUp } from '../src/world/coordinates';
-import { sampleRenderablePlanetSurface } from '../src/world/planet_surface';
+import { sampleRenderablePlanetSurface } from '../src/world/planet-surface';
 import type { FlightBody, FlightInput } from '../src/types';
 
 const seed = 20061;

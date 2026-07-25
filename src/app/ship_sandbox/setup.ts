@@ -1,6 +1,6 @@
 import { loadPrefabDocument } from '../../world/prefabs/loader';
-import { buildShipLayoutFromPrefab } from '../../world/prefabs/ship_runtime';
-import { setShipLayoutOverride, usesColliderDeck } from '../../player/ship_layout';
+import { buildShipLayoutFromPrefab } from '../../world/prefabs/ship-runtime';
+import { setShipLayoutOverride, usesColliderDeck } from '../../player/ship-layout';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 
 export interface ShipSandboxPrefabLoad {

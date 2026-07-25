@@ -1,5 +1,5 @@
 import { parsePlanetDocument, type PlanetDocument } from './schema';
-import { AUTHORING_ENABLED } from '../../build_mode';
+import { AUTHORING_ENABLED } from '../../build-mode';
 
 /**
  * Planet JSON files live in src/world/planets/data/<id>.planet.json.

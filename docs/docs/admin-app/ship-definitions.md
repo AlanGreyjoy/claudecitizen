@@ -1,7 +1,7 @@
 ---
 sidebar_position: 5
 title: Ship definitions
-description: Create and edit playable ship catalog entries in the Admin App.
+description: Create and edit playable ship catalog entries in the Server console.
 ---
 
 # Ship definitions
@@ -53,7 +53,7 @@ Prefab ids must match `^[a-z0-9][a-z0-9-]{0,63}$`.
 
 - **Starter loadout** — definitions referenced in [Game settings](./game-settings) are instantiated as owned ships on first player bootstrap. Order in the starter list matters: the first entry becomes the default primary ship.
 - **Owned ships** — each player `Ship` row may reference a `shipDefinitionId`. Stats on the definition are copied when the ship is created; later definition edits do not automatically patch existing owned ships.
-- **No delete in UI** — ship definitions cannot be removed from the Admin App. Existing player ships keep a nullable foreign key (`onDelete: SetNull`) if a definition were removed at the database level.
+- **No delete in UI** — ship definitions cannot be removed from the Server console. Existing player ships keep a nullable foreign key (`onDelete: SetNull`) if a definition were removed at the database level.
 
 ## API
 

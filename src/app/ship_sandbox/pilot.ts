@@ -3,27 +3,27 @@ import type { Vec3 } from '../../types';
 import {
   flightOptionsFromSpec,
   integrateSandboxFlightBody,
-} from '../../flight/flight_body';
+} from '../../flight/flight-body';
 import {
   recenterAimAsNoseTracks,
   resolveAimForward,
   resolveSeatLookForward,
-} from '../../flight/flight_aim';
-import { resolveBoostMaxSpeedMps } from '../../flight/flight_config';
-import { projectDirectionToReticleOffset } from '../../render/effects/hud/flight_reticle';
+} from '../../flight/flight-aim';
+import { resolveBoostMaxSpeedMps } from '../../flight/flight-config';
+import { projectDirectionToReticleOffset } from '../../render/effects/hud/flight-reticle';
 import {
   applyCockpitControlAction,
   cockpitControlLabel,
   projectWorldPointToScreenOffset,
   resolveCockpitGazeTarget,
-} from '../../player/cockpit_gaze';
-import { resolveVisibleCockpitSpeedInstruments } from '../../player/cockpit_stats';
-import { updateFlightCameraFeel } from '../../player/flight_camera_feel';
-import { getShipLayout, getShipRestHeightMeters } from '../../player/ship_layout';
-import { getPilotSeatAnchor, localOffsetToWorld } from '../../player/ship_interaction';
-import { getLeavePilotStandPose } from '../../player/ship_deck';
-import { playCockpitControlToggleSfx } from '../../player/ship_articulation_sfx';
-import { FIRST_PERSON_PITCH_LIMIT } from '../../player/character_controller';
+} from '../../player/cockpit-gaze';
+import { resolveVisibleCockpitSpeedInstruments } from '../../player/cockpit-stats';
+import { updateFlightCameraFeel } from '../../player/flight-camera-feel';
+import { getShipLayout, getShipRestHeightMeters } from '../../player/ship-layout';
+import { getPilotSeatAnchor, localOffsetToWorld } from '../../player/ship-interaction';
+import { getLeavePilotStandPose } from '../../player/ship-deck';
+import { playCockpitControlToggleSfx } from '../../player/ship-articulation-sfx';
+import { FIRST_PERSON_PITCH_LIMIT } from '../../player/character-controller';
 import { MODE_IN_SHIP } from '../../player/modes';
 import type { ShipSandboxSession, SandboxPilotActions } from './types';
 import { SANDBOX_GRAVITY, SANDBOX_GROUND_Y_METERS, SHIP_FORWARD, WORLD_UP } from './types';

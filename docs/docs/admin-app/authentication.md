@@ -55,6 +55,6 @@ The client treats any `401` from an admin API call as an expired session and ret
 
 - Use a long random `ADMIN_PASSWORD` in any shared or deployed environment.
 - Rotate `ADMIN_SESSION_SECRET` if you suspect a session token leak — this invalidates all existing admin sessions.
-- Restrict who can reach `?boot=admin` on public deployments (VPN, IP allowlist, or separate admin hostname).
+- The Server console only exists in the editor, never in a shipped release, but still restrict who can reach `/admin/*` on public deployments (VPN, IP allowlist, or a separate admin hostname).
 
 For endpoint details, see [API reference](./api-reference).

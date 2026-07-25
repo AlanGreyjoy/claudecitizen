@@ -1,0 +1,306 @@
+import type { ReactElement } from 'react';
+import type { PlanetListEntry, PrefabListEntry } from '../../../api';
+import {
+  DEFAULT_STATION_ALTITUDE_METERS,
+  SYSTEM_ID_PATTERN,
+  SYSTEM_STAR_PARENT_ID,
+  type SystemDocument,
+} from '../../../../world/systems/schema';
+import { stationWorldPos } from '../../../panels/system-map-canvas';
+import type { SystemMapSelection } from '../../../panels/system-map-canvas';
+import {
+  SystemEmpty,
+  SystemListRow,
+  SystemNumberField,
+  SystemSection,
+  SystemSelectField,
+  SystemTextField,
+} from './Fields';
+
+export type SystemMapFormProps = {
+  doc: SystemDocument;
+  selection: SystemMapSelection;
+  planetList: PlanetListEntry[];
+  stationPrefabs: PrefabListEntry[];
+  onSelect: (selection: SystemMapSelection) => void;
+  onMarkDirty: () => void;
+  onMarkDirtyAndRebuild: () => void;
+  onSelectionIdChange: (id: string) => void;
+};
+
+export function SystemMapForm({
+  doc,
+  selection,
+  planetList,
+  stationPrefabs,
+  onSelect,
+  onMarkDirty,
+  onMarkDirtyAndRebuild,
+  onSelectionIdChange,
+}: SystemMapFormProps): ReactElement {
+  return (
+    <>
+      <SystemSection title="System">
+        <SystemTextField label="Id" value={doc.id} readOnly />
+        <SystemTextField
+          label="Name"
+          value={doc.name}
+          onChange={(value) => {
+            doc.name = value;
+            onMarkDirty();
+          }}
+        />
+        <SystemTextField
+          label="Star name"
+          value={doc.star.name}
+          onChange={(value) => {
+            doc.star.name = value;
+            onMarkDirty();
+          }}
+        />
+      </SystemSection>
+
+      <SystemSection title="Planets">
+        {doc.planets.length > 0 ? (
+          doc.planets.map((planet) => (
+            <SystemListRow
+              key={planet.id}
+              label={`${planet.name ?? planet.planetId} (${planet.id})`}
+              selected={selection.kind === 'planet' && selection.id === planet.id}
+              onClick={() => onSelect({ kind: 'planet', id: planet.id })}
+            />
+          ))
+        ) : (
+          <SystemEmpty>No planet entries</SystemEmpty>
+        )}
+      </SystemSection>
+
+      <SystemSection title="Stations">
+        {doc.stations.length > 0 ? (
+          doc.stations.map((station) => (
+            <SystemListRow
+              key={station.id}
+              label={`${station.name} (${station.id})`}
+              selected={selection.kind === 'station' && selection.id === station.id}
+              onClick={() => onSelect({ kind: 'station', id: station.id })}
+            />
+          ))
+        ) : (
+          <SystemEmpty>No station entries</SystemEmpty>
+        )}
+      </SystemSection>
+
+      {selection.kind === 'planet' ? (
+        <SelectedPlanetForm
+          doc={doc}
+          planetId={selection.id}
+          planetList={planetList}
+          onMarkDirty={onMarkDirty}
+          onMarkDirtyAndRebuild={onMarkDirtyAndRebuild}
+        />
+      ) : null}
+
+      {selection.kind === 'station' ? (
+        <SelectedStationForm
+          doc={doc}
+          stationId={selection.id}
+          stationPrefabs={stationPrefabs}
+          onMarkDirty={onMarkDirty}
+          onMarkDirtyAndRebuild={onMarkDirtyAndRebuild}
+          onSelectionIdChange={onSelectionIdChange}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function SelectedPlanetForm({
+  doc,
+  planetId,
+  planetList,
+  onMarkDirty,
+  onMarkDirtyAndRebuild,
+}: {
+  doc: SystemDocument;
+  planetId: string;
+  planetList: PlanetListEntry[];
+  onMarkDirty: () => void;
+  onMarkDirtyAndRebuild: () => void;
+}): ReactElement | null {
+  const planet = doc.planets.find((entry) => entry.id === planetId);
+  if (!planet) return null;
+
+  const planetOptions = planetList.map((entry) => ({
+    value: entry.id,
+    label: `${entry.name} (${entry.id})`,
+  }));
+  if (!planetOptions.some((option) => option.value === planet.planetId)) {
+    planetOptions.unshift({
+      value: planet.planetId,
+      label: `${planet.planetId} (missing)`,
+    });
+  }
+
+  return (
+    <SystemSection title="Selected planet">
+      <SystemTextField label="Entry id" value={planet.id} readOnly />
+      <SystemSelectField
+        label="Planet document"
+        value={planet.planetId}
+        options={planetOptions}
+        onChange={(value) => {
+          planet.planetId = value;
+          const meta = planetList.find((entry) => entry.id === value);
+          if (meta && !planet.name) planet.name = meta.name;
+          onMarkDirtyAndRebuild();
+        }}
+      />
+      <SystemTextField
+        label="Display name"
+        value={planet.name ?? ''}
+        onChange={(value) => {
+          planet.name = value.trim() || undefined;
+          onMarkDirty();
+        }}
+      />
+      <SystemNumberField
+        label="Position X (m)"
+        value={planet.positionMeters.x}
+        step={1_000_000}
+        onChange={(value) => {
+          planet.positionMeters.x = value;
+          onMarkDirty();
+        }}
+      />
+      <SystemNumberField
+        label="Position Z (m)"
+        value={planet.positionMeters.z}
+        step={1_000_000}
+        onChange={(value) => {
+          planet.positionMeters.z = value;
+          onMarkDirty();
+        }}
+      />
+    </SystemSection>
+  );
+}
+
+function SelectedStationForm({
+  doc,
+  stationId,
+  stationPrefabs,
+  onMarkDirty,
+  onMarkDirtyAndRebuild,
+  onSelectionIdChange,
+}: {
+  doc: SystemDocument;
+  stationId: string;
+  stationPrefabs: PrefabListEntry[];
+  onMarkDirty: () => void;
+  onMarkDirtyAndRebuild: () => void;
+  onSelectionIdChange: (id: string) => void;
+}): ReactElement | null {
+  const station = doc.stations.find((entry) => entry.id === stationId);
+  if (!station) return null;
+
+  const prefabOptions = stationPrefabs.map((entry) => ({
+    value: entry.id,
+    label: `${entry.name} (${entry.id})`,
+  }));
+  if (!prefabOptions.some((option) => option.value === station.stationPrefabId)) {
+    prefabOptions.unshift({
+      value: station.stationPrefabId,
+      label: `${station.stationPrefabId} (missing)`,
+    });
+  }
+
+  const parentOptions = [
+    { value: SYSTEM_STAR_PARENT_ID, label: 'Star' },
+    ...doc.planets.map((planet) => ({
+      value: planet.id,
+      label: planet.name ?? planet.id,
+    })),
+  ];
+
+  return (
+    <SystemSection title="Selected station">
+      <SystemTextField
+        label="Instance id"
+        value={station.id}
+        onChange={(value) => {
+          const next = value.trim().toLowerCase();
+          if (!SYSTEM_ID_PATTERN.test(next)) return;
+          if (doc.stations.some((other) => other.id === next && other !== station)) return;
+          station.id = next;
+          onSelectionIdChange(next);
+          onMarkDirtyAndRebuild();
+        }}
+      />
+      <SystemTextField
+        label="Name"
+        value={station.name}
+        onChange={(value) => {
+          station.name = value;
+          onMarkDirty();
+        }}
+      />
+      <SystemSelectField
+        label="Station prefab"
+        value={station.stationPrefabId}
+        options={prefabOptions}
+        onChange={(value) => {
+          station.stationPrefabId = value;
+          onMarkDirty();
+        }}
+      />
+      <SystemSelectField
+        label="Parent body"
+        value={station.parentBodyId}
+        options={parentOptions}
+        onChange={(value) => {
+          const world = stationWorldPos(doc, station);
+          station.parentBodyId = value;
+          const parentPos =
+            value === SYSTEM_STAR_PARENT_ID
+              ? { x: 0, z: 0 }
+              : doc.planets.find((planet) => planet.id === value)?.positionMeters ?? {
+                  x: 0,
+                  z: 0,
+                };
+          station.offsetMeters = {
+            x: world.x - parentPos.x,
+            z: world.z - parentPos.z,
+          };
+          onMarkDirtyAndRebuild();
+        }}
+      />
+      <SystemNumberField
+        label="Offset X (m)"
+        value={station.offsetMeters.x}
+        step={1_000_000}
+        onChange={(value) => {
+          station.offsetMeters.x = value;
+          onMarkDirty();
+        }}
+      />
+      <SystemNumberField
+        label="Offset Z (m)"
+        value={station.offsetMeters.z}
+        step={1_000_000}
+        onChange={(value) => {
+          station.offsetMeters.z = value;
+          onMarkDirty();
+        }}
+      />
+      <SystemNumberField
+        label="Altitude (m)"
+        value={station.altitudeMeters ?? DEFAULT_STATION_ALTITUDE_METERS}
+        step={1000}
+        onChange={(value) => {
+          station.altitudeMeters = value;
+          onMarkDirty();
+        }}
+      />
+    </SystemSection>
+  );
+}

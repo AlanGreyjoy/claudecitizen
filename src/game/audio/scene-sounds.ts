@@ -1,8 +1,8 @@
-import { getActiveShip } from "../../player/world_state";
-import { getShipLayoutForPrefab } from "../../player/ship_layout";
-import { worldToShipLocal } from "../../player/ship_interaction";
+import { getActiveShip } from "../../player/world-state";
+import { getShipLayoutForPrefab } from "../../player/ship-layout";
+import { worldToShipLocal } from "../../player/ship-interaction";
 import { getStationLayoutOverride, worldToStationLocal } from "../../world/station";
-import type { SoundListenerPose } from "../../audio/sound_scene";
+import type { SoundListenerPose } from "../../audio/sound-scene";
 import {
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
@@ -21,17 +21,17 @@ import type {
   StationNpcRenderState,
   Vec3,
 } from "../../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import {
   scenePointFromShip,
   sceneVectorFromShip,
   sceneVectorFromStation,
-} from "./scene_transforms";
+} from "./scene-transforms";
 import {
   localFootstepActor,
   remoteFootstepActors,
   stationFootstepActors,
-} from "./footstep_actors";
+} from "./footstep-actors";
 
 export const STATION_SOUND_MODES = new Set<GameMode>([
   MODE_IN_STATION,

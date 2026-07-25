@@ -27,7 +27,7 @@ ClaudeCitizen needs a backend foundation that:
 - uses the same movement/prediction math in native server code and browser WASM;
 - supports low-latency unreliable snapshots and reliable commands;
 - preserves durable account/economy/catalog data;
-- can be deployed and drained safely on Kubernetes.
+- can be deployed and drained safely as a container (Docker Compose or similar).
 
 ## 3. Goals
 
@@ -39,7 +39,7 @@ ClaudeCitizen needs a backend foundation that:
 6. Replace realtime JSON/WebSocket traffic with versioned Protobuf over WebTransport.
 7. Use SQLx with the existing PostgreSQL schema and forward-only migrations.
 8. Use Redis for short-lived auth coordination, rate limits, cell leases, cross-pod commands, and snapshot fan-out—not as the durable source of truth.
-9. Provide container, Kubernetes, health, readiness, metrics, shutdown, and migration paths suitable for horizontal replicas.
+9. Provide container, health, readiness, metrics, shutdown, and migration paths suitable for horizontal replicas.
 10. Complete one hard cutover with no dual backend, compatibility proxy, or rollback to the retired runtime.
 
 ## 4. Non-goals
@@ -166,7 +166,6 @@ flowchart LR
 | `backend/migrations` | Imported schema history plus authoritative simulation additions |
 | `proto/` | Canonical Protobuf schemas |
 | `src/net/` | Browser REST client, Protobuf codec, WebTransport session, WASM prediction adapter |
-| `deploy/k8s/` | Kubernetes deployment, service, autoscaling, disruption, config, and migration job |
 
 ## 8. Data and protocol compatibility
 
@@ -214,7 +213,7 @@ Structured tracing includes request/session IDs, node ID, cell ID, epoch, tick, 
 - A server cell uses native Rapier and an exclusive Redis lease/epoch.
 - Non-owner pods route inputs to the owner and can fan snapshots back to their sessions.
 - Browser prediction calls the WASM build of `cc-sim-core`; the server links that same crate.
-- Kubernetes manifests provide migration job, multi-replica deployment, TCP/UDP service, HPA, PDB, probes, security context, and graceful termination.
+- Container image (`backend/Dockerfile`) supports multi-replica operation with health/readiness probes, metrics, and graceful termination; host orchestration (e.g. Docker Compose) runs migrations separately from app replicas.
 - Documentation and agent conventions describe only the Rust backend as the current server architecture.
 - Repository lint completes without errors. Agents may run non-interactive builds and typechecks; tests, browser QA, screenshots, and dev servers require separate authorization.
 

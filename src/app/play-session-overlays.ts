@@ -1,25 +1,25 @@
 import { createHud, createHaloBand } from '../render/effects';
-import { createGameMenu } from '../render/effects/hud/game_menu';
-import { createAvmsTerminal } from '../render/effects/hud/avms_terminal';
-import { createEntertainmentSystem } from '../render/effects/hud/entertainment_system';
-import { createWeaponShop } from '../render/effects/hud/weapon_shop';
+import { createGameMenu } from '../render/effects/hud/game-menu';
+import { createAvmsTerminal } from '../render/effects/hud/avms-terminal';
+import { createEntertainmentSystem } from '../render/effects/hud/entertainment-system';
+import { createWeaponShop } from '../render/effects/hud/weapon-shop';
 import { createOutfitters } from '../render/effects/hud/outfitters';
-import { createFoodShop } from '../render/effects/hud/food_shop';
-import { createPersonalInventory } from '../render/effects/hud/personal_inventory';
-import { collectHaloBandElements } from '../render/effects/hud/haloband_dom';
+import { createFoodShop } from '../render/effects/hud/food-shop';
+import { createPersonalInventory } from '../render/effects/hud/personal-inventory';
+import { collectHaloBandElements } from '../render/effects/hud/haloband-dom';
 import type { HaloBandController } from '../render/effects/hud/haloband';
-import { createWorldClient, type WorldClient } from '../net/world_client';
+import { createWorldClient, type WorldClient } from '../net/world-client';
 import type { GameBootstrap, AuthSession } from '../net/api';
 import {
   normalizeInventoryState,
   type InventoryState,
 } from '../player/inventory/types';
-import type { createPlayerControls } from '../input/player_controls';
-import type { createGameLoop } from '../game/create_game_loop';
+import type { createPlayerControls } from '../input/player-controls';
+import type { createGameLoop } from '../game/create-game-loop';
 import type { SpikeRenderer } from '../render/main';
-import type { PlaySessionDom } from './play_session_dom';
-import type { PlayerVitalsSessionController } from './player_vitals_session';
-import { stopPlaySession } from './play_session';
+import type { PlaySessionDom } from './play-session-dom';
+import type { PlayerVitalsSessionController } from './player-vitals-session';
+import { stopPlaySession } from './play-session';
 
 export interface PlayOverlayEconomy {
   getArcBalance: () => number | null;

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createPrefabLightObject } from "../prefabs/prefab_renderer";
+import { createPrefabLightObject } from "../prefabs/prefab-renderer";
 import { createParticleShapeHelper } from "../particles";
 import type { PrefabComponent } from "../../world/prefabs/schema";
 

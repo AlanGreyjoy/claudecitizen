@@ -1,24 +1,24 @@
-import type { StationCharacterState } from "../../player/station_walk";
+import type { StationCharacterState } from "../../player/station-walk";
 import {
   getActiveShip,
   PLAYER_SHIP_INSTANCE_ID,
-} from "../../player/world_state";
-import { getShipInstance } from "../../flight/ship_world";
+} from "../../player/world-state";
+import { getShipInstance } from "../../flight/ship-world";
 import {
   beginElevatorRide,
   callShipToHangar,
   elevatorDestinationFor,
   resolveStationInteraction,
   type StationInteraction,
-} from "../../player/station_interaction";
+} from "../../player/station-interaction";
 import { playSfx } from "../../audio/sfx";
 import {
   resetAssignedHangarBay,
   setAssignedHangarBay,
   type GameBootstrap,
 } from "../../net/api";
-import type { LoopContext } from "../loop_context";
-import type { BuildTool } from "./build_tool";
+import type { LoopContext } from "../loop-context";
+import type { BuildTool } from "./build-tool";
 import type { StationAnimations } from "./animations";
 import type { FrameActions } from "../types";
 

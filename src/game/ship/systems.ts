@@ -1,20 +1,20 @@
 import {
   flightOptionsFromSpec,
   integrateHoveringShip,
-} from "../../flight/flight_body";
-import { regenerateShipShields } from "../../flight/ship_instance";
-import { listShipInstances } from "../../flight/ship_world";
+} from "../../flight/flight-body";
+import { regenerateShipShields } from "../../flight/ship-instance";
+import { listShipInstances } from "../../flight/ship-world";
 import {
   getActiveShip,
   getActiveShipBody,
   getActiveShipRig,
-} from "../../player/world_state";
-import { updateShipRig } from "../../player/ship_rig";
-import { getShipLayout } from "../../player/ship_layout";
-import { nearShipRampOutside } from "../../player/ship_interaction";
-import { playShipRampToggleSfx } from "../../player/ship_articulation_sfx";
+} from "../../player/world-state";
+import { updateShipRig } from "../../player/ship-rig";
+import { getShipLayout } from "../../player/ship-layout";
+import { nearShipRampOutside } from "../../player/ship-interaction";
+import { playShipRampToggleSfx } from "../../player/ship-articulation-sfx";
 import { MODE_IN_SHIP } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
 
 export interface ShipSystems {

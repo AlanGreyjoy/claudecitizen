@@ -8,7 +8,7 @@ import {
   type ItemDefinition,
   type WeaponFireMode,
 } from "../../player/inventory/types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export interface ActiveFirearm {
   ammoItemDefinitionId: string;

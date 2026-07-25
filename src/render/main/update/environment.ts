@@ -12,9 +12,9 @@ import {
   SPACE_FOG_COLOR,
 } from '../domain/constants';
 import { clamp01 } from '../domain/math';
-import type { ComposerStack } from '../scene/composer_stack';
-import type { SceneLighting } from '../scene/scene_lighting';
-import type { SunSystemState } from './sun_system';
+import type { ComposerStack } from '../scene/composer-stack';
+import type { SceneLighting } from '../scene/scene-lighting';
+import type { SunSystemState } from './sun-system';
 
 const backgroundColor = new THREE.Color();
 const fogColor = new THREE.Color();

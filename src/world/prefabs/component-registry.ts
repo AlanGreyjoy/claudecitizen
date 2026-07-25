@@ -628,6 +628,42 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     }),
     hint: "Instantiate a reusable prefab into this scene (station, ship, prop, …).",
   },
+  {
+    type: "ui-screen",
+    label: "UI Screen",
+    kinds: [],
+    scenes: true,
+    createDefault: () => ({
+      type: "ui-screen",
+      screen: "title",
+    }),
+    hint:
+      "Mount a full-screen UI surface (title, login, character create, loading, or a menu document) when this scene loads.",
+  },
+  {
+    type: "scene-link",
+    label: "Scene Link",
+    kinds: [],
+    scenes: true,
+    createDefault: () => ({
+      type: "scene-link",
+      sceneId: "main-game",
+    }),
+    hint:
+      "Target scene for this object. Enable Auto to transition as soon as the scene finishes loading.",
+  },
+  {
+    type: "instanced-scene",
+    label: "Instanced Scene",
+    kinds: [],
+    scenes: true,
+    singleton: true,
+    createDefault: () => ({
+      type: "instanced-scene",
+      scope: "player",
+    }),
+    hint: "Marks this scene as per-player instanced content, such as a hab or hangar.",
+  },
 ];
 
 const registryByType = new Map(

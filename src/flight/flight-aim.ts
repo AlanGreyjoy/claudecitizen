@@ -1,5 +1,5 @@
 import { add, cross, normalize, rotateAroundAxis, scale } from '../math/vec3';
-import { FLIGHT_CONFIG } from './flight_config';
+import { FLIGHT_CONFIG } from './flight-config';
 import type { FlightAimState, FlightBody, Vec3 } from '../types';
 
 const AIM_HALF = FLIGHT_CONFIG.AIM_CONE_HALF_ANGLE_RAD;

@@ -1,5 +1,5 @@
 import characterSettingsJson from './data/character-settings.json';
-import { AUTHORING_ENABLED } from '../build_mode';
+import { AUTHORING_ENABLED } from '../build-mode';
 
 export const CHARACTER_SETTINGS_SCHEMA_VERSION = 1 as const;
 

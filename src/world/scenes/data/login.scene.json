@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 3,
+  "id": "login",
+  "name": "Login",
+  "kind": "title",
+  "gameObjects": [
+    {
+      "id": "login-screen",
+      "name": "Login Screen",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "ui-screen",
+          "screen": "login"
+        },
+        {
+          "type": "scene-link",
+          "sceneId": "character-creation"
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { radialUp } from './coordinates';
 import { getActivePlanetConfig } from './planets/runtime';
-import { clamp01, fbm3d, getNoise3D } from './terrain_noise';
+import { clamp01, fbm3d, getNoise3D } from './terrain-noise';
 import type { Planet, Vec3 } from '../types';
 
 interface LakeCarvingResult {

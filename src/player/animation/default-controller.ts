@@ -1,5 +1,5 @@
 import defaultControllerJson from './data/default.controller.json';
-import { AUTHORING_ENABLED } from '../../build_mode';
+import { AUTHORING_ENABLED } from '../../build-mode';
 import {
   cloneAnimationController,
   parseAnimationController,

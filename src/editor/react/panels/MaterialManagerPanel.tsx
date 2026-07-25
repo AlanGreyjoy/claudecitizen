@@ -7,7 +7,7 @@ import {
   valuesToOverride,
   type MaterialRow,
   type MaterialValues,
-} from '../../panels/material_manager';
+} from '../../panels/material-manager';
 import { useEditorStore } from '../hooks';
 
 type MaterialManagerPanelProps = {

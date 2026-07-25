@@ -11,18 +11,18 @@ import {
   seatInteractPrompt,
   updateCharacterOnDeck,
   type DeckCharacterState,
-} from '../../player/ship_deck';
-import { getShipLayout } from '../../player/ship_layout';
+} from '../../player/ship-deck';
+import { getShipLayout } from '../../player/ship-layout';
 import {
   getShipPlayerLocal,
   getShipPlayerWorldPosition,
   syncShipArticulationColliders,
   teleportShipPlayerLocal,
-} from '../../physics/ship_physics';
-import { getPilotSeatAnchor, getBedAnchor, nearShipRampOutside } from '../../player/ship_interaction';
-import { doorBlends } from '../../player/ship_rig';
+} from '../../physics/ship-physics';
+import { getPilotSeatAnchor, getBedAnchor, nearShipRampOutside } from '../../player/ship-interaction';
+import { doorBlends } from '../../player/ship-rig';
 import { playSfx } from '../../audio/sfx';
-import { playShipRampToggleSfx } from '../../player/ship_articulation_sfx';
+import { playShipRampToggleSfx } from '../../player/ship-articulation-sfx';
 import { LIE_TRANSITION_SECONDS } from '../../player/modes';
 import type { ShipSandboxSession, SandboxWalkActions } from './types';
 import { PAD_RADIUS_METERS, SANDBOX_GRAVITY } from './types';

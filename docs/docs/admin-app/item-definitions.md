@@ -8,7 +8,7 @@ description: Manage inventory item catalog entries for the online game.
 
 An **item definition** is a server-side catalog entry for player inventory — consumables, ammunition, weapons, materials, and other stackable types. Items can optionally link to a bundled prefab for 3D representation and/or an icon URL for HUD display.
 
-Stored in `ItemDefinition`. Managed from the Admin App **Items** tab.
+Stored in `ItemDefinition`. Managed from the Server console **Items** tab.
 
 ## List view
 

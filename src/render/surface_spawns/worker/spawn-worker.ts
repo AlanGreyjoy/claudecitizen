@@ -3,7 +3,7 @@ import { collectTileSurfaceSpawns } from '../../../world/surface_spawns';
 import type {
   SurfaceSpawnWorkerInMessage,
   SurfaceSpawnWorkerOutMessage,
-} from '../../../types/surface_spawn_worker';
+} from '../../../types/surface-spawn-worker';
 
 const readyMessage: SurfaceSpawnWorkerOutMessage = { ready: true };
 globalThis.postMessage(readyMessage);

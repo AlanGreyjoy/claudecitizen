@@ -11,38 +11,38 @@ import { radialUp } from '../../world/coordinates';
 import {
   getRenderableSurfaceCacheStats,
   sampleRenderablePlanetSurface,
-} from '../../world/planet_surface';
+} from '../../world/planet-surface';
 import { clamp01 } from './domain/math';
 import type { RenderMode } from './domain/types';
 import type { StationFrame } from '../../world/station';
-import { getShipLayout } from '../../player/ship_layout';
-import { updateLocalLightShadowCull } from '../prefabs/prefab_renderer';
+import { getShipLayout } from '../../player/ship-layout';
+import { updateLocalLightShadowCull } from '../prefabs/prefab-renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
-import { updateCameraRig, updateSpeedBlur } from './update/camera_rig';
+import { updateCameraRig, updateSpeedBlur } from './update/camera-rig';
 import { updateEnvironment } from './update/environment';
-import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun_system';
+import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun-system';
 import {
   evaluateQuantumEligibility,
   createQuantumTravelState,
   listNavDestinationMarkers,
   resolveNavDestinationId,
-} from '../../flight/quantum_travel';
-import { planApproachPrefetch } from '../planet_tiles/domain/approach_prefetch';
-import type { CloudModeSetting } from '../../settings/game_settings';
+} from '../../flight/quantum-travel';
+import { planApproachPrefetch } from '../planet_tiles/domain/approach-prefetch';
+import type { CloudModeSetting } from '../../settings/game-settings';
 import type { createPlanetTileManager } from '../planet_tiles';
 import type { createPlanetVegetationManager } from '../vegetation';
 import type { createSurfaceSpawnManager } from '../surface_spawns';
 import type { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
-import type { createComposerStack } from './scene/composer_stack';
-import type { createShipRenderPool } from './scene/ship_render_pool';
-import type { createCharacterAvatar } from './scene/character_avatar';
-import type { createRemotePresenceRenderer } from './scene/remote_presence';
-import type { createStationNpcRenderer } from './scene/station_npcs';
-import type { createQuantumBubble } from '../effects/quantum_bubble';
-import type { createMuzzleFlashRenderer } from '../effects/muzzle_flash';
-import type { createHitDecalRenderer } from '../effects/hit_decals';
+import type { createComposerStack } from './scene/composer-stack';
+import type { createShipRenderPool } from './scene/ship-render-pool';
+import type { createCharacterAvatar } from './scene/character-avatar';
+import type { createRemotePresenceRenderer } from './scene/remote-presence';
+import type { createStationNpcRenderer } from './scene/station-npcs';
+import type { createQuantumBubble } from '../effects/quantum-bubble';
+import type { createMuzzleFlashRenderer } from '../effects/muzzle-flash';
+import type { createHitDecalRenderer } from '../effects/hit-decals';
 import type { createTracerRenderer } from '../effects/tracers';
-import type { createSceneLighting } from './scene/scene_lighting';
+import type { createSceneLighting } from './scene/scene-lighting';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 const QUANTUM_RENDER_LAYER = 1;

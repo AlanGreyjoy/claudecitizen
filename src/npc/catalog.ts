@@ -1,7 +1,7 @@
 import {
   DEFAULT_PLAYER_CHARACTER_APPEARANCE,
   type PlayerCharacterAppearanceV1,
-} from '../player/character_creator/player_character_appearance';
+} from '../player/character_creator/player-character-appearance';
 
 export interface NpcDefinition {
   id: string;

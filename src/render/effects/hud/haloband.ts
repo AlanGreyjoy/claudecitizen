@@ -1,8 +1,8 @@
 import {
   GAME_SETTINGS_CHANGED_EVENT,
   loadGameSettings,
-} from '../../../settings/game_settings';
-import { getKeyboardBindingCodes } from '../../../flight/input_settings';
+} from '../../../settings/game-settings';
+import { getKeyboardBindingCodes } from '../../../flight/input-settings';
 import { length } from '../../../math/vec3';
 import {
   MODE_ENTERING_SHIP,
@@ -10,8 +10,8 @@ import {
   MODE_LEAVING_PILOT,
   MODE_ON_SHIP_DECK,
 } from '../../../player/modes';
-import { deriveEnvironmentStatus } from '../../../player/environment_status';
-import { getActiveShip, type WorldState } from '../../../player/world_state';
+import { deriveEnvironmentStatus } from '../../../player/environment-status';
+import { getActiveShip, type WorldState } from '../../../player/world-state';
 import {
   findItemDefinition,
   itemsByType,
@@ -21,12 +21,12 @@ import {
 } from '../../../player/inventory/types';
 import type { GameMode, Planet, PlanetSurfaceSample } from '../../../types';
 import { createUiIcon, UiIcons } from '../../../ui/icons';
-import { paintItemIcon } from './item_icon';
-import { mountHaloBandDockIcons } from './haloband_icons';
-import { createSystemMapPanel, type SystemMapPanel } from './system_map_panel';
-import type { HaloBandElements } from './haloband_dom';
+import { paintItemIcon } from './item-icon';
+import { mountHaloBandDockIcons } from './haloband-icons';
+import { createSystemMapPanel, type SystemMapPanel } from './system-map-panel';
+import type { HaloBandElements } from './haloband-dom';
 
-export type { HaloBandElements } from './haloband_dom';
+export type { HaloBandElements } from './haloband-dom';
 
 export interface HaloBandUpdateParams {
   world: WorldState;

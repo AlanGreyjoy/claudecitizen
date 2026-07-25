@@ -12,7 +12,7 @@ import {
 import {
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-} from "./character_controller";
+} from "./character-controller";
 import {
   advanceJumpAnimationPhase,
   animationLayersFromState,
@@ -20,12 +20,12 @@ import {
   resolveWalkFacing,
   resolveWalkInputIntent,
   shouldLockFacingToCamera,
-} from "./character_locomotion";
+} from "./character-locomotion";
 import {
   sampleColliderGroundHeight,
   type ShipColliderRigState,
 } from "../physics/colliders";
-import type { ShipPhysics } from "../physics/ship_physics";
+import type { ShipPhysics } from "../physics/ship-physics";
 import {
   getShipPlayerLocal,
   getShipPlayerWorldPosition,
@@ -33,18 +33,18 @@ import {
   moveShipPlayer,
   shipHasFloorBelow,
   stepShipPhysics,
-} from "../physics/ship_physics";
+} from "../physics/ship-physics";
 import {
   getShipLayout,
   type ShipBedSpec,
   type ShipCameraBounds,
   type ShipSeatSpec,
-} from "./ship_layout";
+} from "./ship-layout";
 import {
   getShipRight,
   localOffsetToWorld,
-} from "./ship_interaction";
-import { resolveDeckCameraOrbit } from "../flight/flight_aim";
+} from "./ship-interaction";
+import { resolveDeckCameraOrbit } from "../flight/flight-aim";
 import type {
   CharacterInput,
   CharacterState,
@@ -52,7 +52,7 @@ import type {
   Pose,
   Vec3,
 } from "../types";
-import type { WeaponAnimStanceId } from "./inventory/weapon_select";
+import type { WeaponAnimStanceId } from "./inventory/weapon-select";
 
 /**
  * Walkable ship interior via ship-local Rapier colliders (including the ramp).

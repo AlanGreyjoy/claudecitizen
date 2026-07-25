@@ -3,8 +3,8 @@ import {
   getPartMeshUrl,
   getPresetParts,
   loadSidekickCatalog,
-} from '../../../player/character_creator/sidekick_catalog';
-import { wearablePartTypes } from '../../../player/inventory/wearable_visuals';
+} from '../../../player/character_creator/sidekick-catalog';
+import { wearablePartTypes } from '../../../player/inventory/wearable-visuals';
 import { getModelThumbnail } from '../../editor/thumbnails';
 import { loadPrefabDocument } from '../../../world/prefabs/loader';
 import type { PrefabEntity } from '../../../world/prefabs/schema';

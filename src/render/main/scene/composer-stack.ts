@@ -6,13 +6,13 @@ import {
   createVolumetricCloudManager,
   VolumetricFogEffect,
 } from '../../effects';
-import { SpeedBlurEffect } from '../effects/speed_blur';
-import { MotionBlurEffect } from '../effects/motion_blur';
-import { ColorCorrectionEffect } from '../effects/color_correction';
+import { SpeedBlurEffect } from '../effects/speed-blur';
+import { MotionBlurEffect } from '../effects/motion-blur';
+import { ColorCorrectionEffect } from '../effects/color-correction';
 import { SURFACE_FOG_RAY_STEPS } from '../domain/constants';
-import { resolveRenderQuality } from '../domain/render_quality';
-import { resolveSsaoSettings } from '../domain/ssao_settings';
-import { createSpaceSkybox, type SpaceSkybox } from './space_skybox';
+import { resolveRenderQuality } from '../domain/render-quality';
+import { resolveSsaoSettings } from '../domain/ssao-settings';
+import { createSpaceSkybox, type SpaceSkybox } from './space-skybox';
 import {
   EffectComposer,
   EffectPass,

@@ -41,14 +41,14 @@ Play the latest build in your browser:
 - **Flight** — inertial ship body with radial gravity, drag, and hover assist near the pad
 - **Player** — third-person character, ship boarding animations, walkable ship deck
 - **Rendering** — tiled terrain meshing (Web Worker), instanced vegetation, star field, Takram atmosphere/clouds, volumetric fog, post-processing
-- **Online backend** — Axum APIs, native Rapier cell authority, PostgreSQL/SQLx persistence, Redis coordination, and Kubernetes deployment
+- **Online backend** — Axum APIs, native Rapier cell authority, PostgreSQL/SQLx persistence, Redis coordination, and container deployment (`backend/Dockerfile`)
 
 ## Next steps
 
 - [Quick start](/quick-start) — run the game locally
 - [Play](/play) — controls and quality presets
 - [CC Editor](/cc-editor) — standalone scene and prefab authoring workspace
-- [Admin App](/admin-app) — operator console for catalog, users, and game settings
+- [Server console](/admin-app) — operator console for catalog, users, and game settings
 - [Assets](/assets) — protected models, Synty packs, character avatars
 - [Roadmap](/roadmap) — living feature checklist
 - [Engineering](/engineering) — stack, DDD, planet math, and design principles

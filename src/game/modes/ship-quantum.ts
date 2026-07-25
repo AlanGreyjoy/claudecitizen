@@ -1,10 +1,10 @@
-import type { getActiveShip } from "../../player/world_state";
+import type { getActiveShip } from "../../player/world-state";
 import {
   advanceQuantumTravel,
   consumePendingHandoffPlanetId,
-} from "../../flight/quantum_travel";
-import { updateFlightCameraFeel } from "../../player/flight_camera_feel";
-import type { LoopContext } from "../loop_context";
+} from "../../flight/quantum-travel";
+import { updateFlightCameraFeel } from "../../player/flight-camera-feel";
+import type { LoopContext } from "../loop-context";
 
 type ShipInstance = ReturnType<typeof getActiveShip>;
 

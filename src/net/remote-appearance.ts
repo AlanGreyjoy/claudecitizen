@@ -1,5 +1,5 @@
 import type { NetworkLod } from '../types';
-import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
 
 export function resolveSnapshotCharacterAppearance(
   lod: NetworkLod,

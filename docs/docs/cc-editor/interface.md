@@ -94,7 +94,7 @@ Edits the current selection:
 
 Merged asset browser over:
 
-- `editor/assets/` — local library (free + `protected/` gitignored packs)
+- `assets/` — local library (free + `protected/` gitignored packs)
 - `src/assets/` — tracked game assets
 
 Folder tree on the left, thumbnail grid on the right. Model cards support drag-and-drop into the scene. GLB cards also expose an **Anims** button that loads clips into the **Base Characters** tab.

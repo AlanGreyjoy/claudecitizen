@@ -1,6 +1,6 @@
 import type { Planet, TileInfo, Vec3 } from '../../../types';
 import { distance, dot, sub } from '../../../math/vec3';
-import { directionFromCubeFace } from '../../../world/cube_sphere';
+import { directionFromCubeFace } from '../../../world/cube-sphere';
 import {
   BACKFACE_CULL_DOT,
   HORIZON_MARGIN_RADIANS,
@@ -9,7 +9,7 @@ import {
   TERRAIN_SKIRT_MAX_DEPTH_METERS,
   minProjectedError,
 } from './constants';
-import { clamp, clamp01 } from './tile_key';
+import { clamp, clamp01 } from './tile-key';
 
 // Force max terrain detail near the player so the visible mesh matches foot sampling.
 const GROUND_MAX_LOD_ALTITUDE_METERS = 2_000;

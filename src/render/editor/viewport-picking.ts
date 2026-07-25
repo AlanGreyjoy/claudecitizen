@@ -1,14 +1,14 @@
 import * as THREE from "three";
 import type { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { showContextMenu } from "../../editor/dom";
-import { buildGlbAuthoringMenu } from "../../editor/component_actions";
+import { buildGlbAuthoringMenu } from "../../editor/component-actions";
 import type { EditorStore } from "../../editor/document";
-import type { ViewportGlbQueries } from "./viewport_glb_queries";
+import type { ViewportGlbQueries } from "./viewport-glb-queries";
 import {
   entityIdFromObject,
   isEffectivelyVisible,
   pathFromEntityRoot,
-} from "./viewport_transforms";
+} from "./viewport-transforms";
 
 export interface ViewportPicking {
   noteSelectionEntity: (entityId: string | null) => void;

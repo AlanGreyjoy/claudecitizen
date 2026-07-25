@@ -3,7 +3,7 @@ import {
   getDesktopEditorBridge,
   type ClaudeCitizenEditorDesktopBridge,
   type DesktopRecentProject,
-} from '../../platform/editor_desktop';
+} from '../../platform/editor-desktop';
 
 function formatOpenedAt(openedAt: number): string {
   if (!openedAt) return '';
@@ -180,8 +180,15 @@ export function ProjectsApp(): ReactElement {
         setError(err instanceof Error ? err.message : 'Could not load recent projects.');
       }
     });
+    const unsubscribe = bridge.onNativeCommand((command) => {
+      if (command.type === 'new-project') {
+        setShowCreate(true);
+        setError(null);
+      }
+    });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [bridge, setError]);
 

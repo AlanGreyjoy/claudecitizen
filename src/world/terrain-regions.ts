@@ -1,5 +1,5 @@
 import { getActivePlanetConfig } from './planets/runtime';
-import { clamp01, fbm3d, getNoise3D } from './terrain_noise';
+import { clamp01, fbm3d, getNoise3D } from './terrain-noise';
 
 // Low-frequency mask that partitions land into macro regions (flat plains,
 // rolling hills, mountain ranges) independently of continent elevation, so

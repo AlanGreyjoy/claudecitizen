@@ -2,13 +2,13 @@ import type { JumpPhase } from "../../types";
 import {
   animationLayersFromState,
   type WalkGait,
-} from "../../player/character_locomotion";
+} from "../../player/character-locomotion";
 import {
   stanceIdForWeaponSlot,
   type WeaponSelectSlotId,
-} from "../../player/inventory/weapon_select";
+} from "../../player/inventory/weapon-select";
 import type { AnimationLocomotionKind } from "../../player/animation/schema";
-import type { SidekickAnimationRuntime } from "../characters/sidekick/animation_runtime";
+import type { SidekickAnimationRuntime } from "../characters/sidekick/animation-runtime";
 
 export function resolvePlayTestPreviewLocomotion(args: {
   stanceId: ReturnType<typeof stanceIdForWeaponSlot>;

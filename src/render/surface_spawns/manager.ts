@@ -9,7 +9,7 @@ import type {
   Vec3,
 } from '../../types';
 import { distance } from '../../math/vec3';
-import { hashSurfaceSpawnCatalog } from '../../cache/cache_keys';
+import { hashSurfaceSpawnCatalog } from '../../cache/cache-keys';
 import { createDefaultSpawnCatalog } from '../../world/planets/schema';
 import { getActivePlanetConfig } from '../../world/planets/runtime';
 import {
@@ -19,16 +19,16 @@ import {
 import type {
   SurfaceSpawnWorkerInMessage,
   SurfaceSpawnWorkerOutMessage,
-} from '../../types/surface_spawn_worker';
-import { loadSurfaceSpawnAsset, disposeSurfaceSpawnAssetCache } from './asset_cache';
-import { composeSurfaceSpawnMatrix } from './instance_matrix';
+} from '../../types/surface-spawn-worker';
+import { loadSurfaceSpawnAsset, disposeSurfaceSpawnAssetCache } from './asset-cache';
+import { composeSurfaceSpawnMatrix } from './instance-matrix';
 import {
   loadSurfaceSpawnTile,
   saveSurfaceSpawnTile,
-} from './cache/tile_cache';
+} from './cache/tile-cache';
 import { STORED_SURFACE_SPAWN_TILE_VERSION } from './domain/storage';
-import { createSurfaceSpawnBuildWorker } from './worker/create_worker';
-import type { InstancedAsset } from '../vegetation/render/instanced_assets';
+import { createSurfaceSpawnBuildWorker } from './worker/create-worker';
+import type { InstancedAsset } from '../vegetation/render/instanced-assets';
 
 const BUILD_BUDGET_PER_FRAME = 4;
 const BUILD_BUDGET_MS = 10;

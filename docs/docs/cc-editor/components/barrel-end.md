@@ -28,4 +28,4 @@ Fire runtime may fall back to the weapon root when this marker is missing, but a
 
 - [Muzzle flash](./muzzle-flash)
 - [Weapon combat](./weapon-combat)
-- Admin App [item definitions](/admin-app/item-definitions#weapon-combat-fields)
+- Server console [item definitions](/admin-app/item-definitions#weapon-combat-fields)

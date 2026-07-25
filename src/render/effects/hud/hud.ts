@@ -1,21 +1,21 @@
-import type { WorldState } from '../../../player/world_state';
+import type { WorldState } from '../../../player/world-state';
 import type { Planet, PlanetSurfaceSample, RenderStats, SsaoSettings, Vec3 } from '../../../types';
-import { createChatPanel } from './chat_panel';
-import { createDebugMenu } from './debug_menu';
-import { createDebugSettings } from './debug_settings';
-import { createFpsCounter } from './fps_counter';
-import { createStatsPanel } from './stats_panel';
-import { createFlightReticle } from './flight_reticle';
-import { createCockpitGazeHud } from './cockpit_gaze_hud';
+import { createChatPanel } from './chat-panel';
+import { createDebugMenu } from './debug-menu';
+import { createDebugSettings } from './debug-settings';
+import { createFpsCounter } from './fps-counter';
+import { createStatsPanel } from './stats-panel';
+import { createFlightReticle } from './flight-reticle';
+import { createCockpitGazeHud } from './cockpit-gaze-hud';
 import {
   createCockpitSpeedHud,
   type CockpitSpeedInstrumentUpdate,
-} from './cockpit_speed_hud';
-import { createSurvivalVitalsHud } from './survival_vitals_hud';
+} from './cockpit-speed-hud';
+import { createSurvivalVitalsHud } from './survival-vitals-hud';
 import {
   createCombatAmmoHud,
   type CombatAmmoHudState,
-} from './combat_ammo';
+} from './combat-ammo';
 
 export interface HudElements {
   fpsEl: HTMLElement;

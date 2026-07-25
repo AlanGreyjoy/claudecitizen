@@ -1,4 +1,4 @@
-import type { HangarBuildController } from '../../../player/hangar_build/build_controller';
+import type { HangarBuildController } from '../../../player/hangar_build/build-controller';
 import {
   findDefinition,
   inventoryQuantity,

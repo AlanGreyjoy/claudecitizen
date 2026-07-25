@@ -6,7 +6,7 @@ import {
   type SidekickManifestColorPreset,
   type SidekickManifestPart,
   type SidekickManifestPartPreset,
-} from './sidekick_manifest';
+} from './sidekick-manifest';
 import {
   buildDefaultDefinition,
   getColorPresetRows,
@@ -18,7 +18,7 @@ import {
   getPlayableSpecies,
   getPresetParts,
   isPartCompatible,
-} from './sidekick_catalog';
+} from './sidekick-catalog';
 import {
   cloneSidekickDefinition,
   getDefinitionPartName,
@@ -30,7 +30,7 @@ import {
   type SidekickSerializedBlendShapes,
   type SidekickSerializedColorRow,
   type SidekickSerializedMaterialEffects,
-} from './sidekick_definition';
+} from './sidekick-definition';
 
 export interface SidekickCreatorState {
   definition: SidekickCharacterDefinitionV2;

@@ -1,14 +1,14 @@
 import { MODE_IN_BED, MODE_IN_SHIP } from "../../player/modes";
-import type { getActiveShipBody } from "../../player/world_state";
-import { getShipLayout } from "../../player/ship_layout";
-import { getBedEyeLocal, localOffsetToWorld } from "../../player/ship_interaction";
-import { resolveSeatLookForward } from "../../flight/flight_aim";
-import { resolveEntertainmentGazeTarget } from "../../player/entertainment_gaze";
+import type { getActiveShipBody } from "../../player/world-state";
+import { getShipLayout } from "../../player/ship-layout";
+import { getBedEyeLocal, localOffsetToWorld } from "../../player/ship-interaction";
+import { resolveSeatLookForward } from "../../flight/flight-aim";
+import { resolveEntertainmentGazeTarget } from "../../player/entertainment-gaze";
 import {
   updateEntertainmentCameraFeel,
   type EntertainmentCameraFeel,
-} from "../../player/entertainment_camera";
-import type { LoopContext } from "../loop_context";
+} from "../../player/entertainment-camera";
+import type { LoopContext } from "../loop-context";
 
 /** SC-style bunk screen zoom — ease even while ES UI pauses the sim. */
 export function renderEntertainmentCameraFeel(

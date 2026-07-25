@@ -4,7 +4,7 @@ import {
   type DeviceInputProfileSettings,
   type DeviceProfileId,
   type FlightAnalogControlId,
-} from '../../../flight/input_settings';
+} from '../../../flight/input-settings';
 
 export interface BindingAxisPreview {
   root: HTMLElement;

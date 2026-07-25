@@ -2,16 +2,16 @@ import * as THREE from "three";
 import type {
   BaseCharacterEquipmentV1,
   BaseCharacterType,
-} from "../../player/equipment/base_character_equipment";
+} from "../../player/equipment/base-character-equipment";
 import type { PrefabDocument, PrefabEntity, PrefabTransform } from "../../world/prefabs/schema";
-import type { SidekickAvatarInstance } from "../characters/sidekick/assemble_avatar";
-import { createPropInstanceGroup } from "../prefabs/prefab_renderer";
+import type { SidekickAvatarInstance } from "../characters/sidekick/assemble-avatar";
+import { createPropInstanceGroup } from "../prefabs/prefab-renderer";
 import {
   collectEquipmentSockets,
   identityDrawnGripTransform,
   validateBackpackPrefab,
-} from "../../world/prefabs/item_runtime";
-import type { MountEditMode } from "./base_character_equipment_transform";
+} from "../../world/prefabs/item-runtime";
+import type { MountEditMode } from "./base-character-equipment-transform";
 
 export interface EquipmentPreviewContext {
   documentState: BaseCharacterEquipmentV1;

@@ -1,4 +1,4 @@
-import { buildTerrainTileBuffers } from '../build/terrain_buffers';
+import { buildTerrainTileBuffers } from '../build/terrain-buffers';
 import { activatePlanetDocument } from '../../../world/planets/runtime';
 import type { TileWorkerInMessage, TileWorkerOutMessage } from '../../../types';
 

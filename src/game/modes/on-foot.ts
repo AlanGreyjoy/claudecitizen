@@ -1,12 +1,12 @@
-import { updateCharacterState } from "../../player/character_controller";
+import { updateCharacterState } from "../../player/character-controller";
 import {
   createPlanetPhysics,
   planetPhysicsColliderRadiusMeters,
-} from "../../physics/planet_physics";
+} from "../../physics/planet-physics";
 import type { WalkModeInput } from "../types";
-import type { LoopContext } from "../loop_context";
-import type { WeaponCombat } from "../combat/weapon_combat";
-import type { PadInterest } from "../station/pad_interest";
+import type { LoopContext } from "../loop-context";
+import type { WeaponCombat } from "../combat/weapon-combat";
+import type { PadInterest } from "../station/pad-interest";
 import type { ShipSystems } from "../ship/systems";
 
 export interface OnFootMode {

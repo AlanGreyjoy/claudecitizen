@@ -2,11 +2,11 @@ import * as THREE from "three";
 import {
   BUILTIN_GEAR_HINGES,
   BUILTIN_RAMP_HINGE,
-} from "../main/scene/ship_model";
+} from "../main/scene/ship-model";
 import type { EditorEntity, EditorStore } from "../../editor/document";
 import type { PrefabComponent } from "../../world/prefabs/schema";
-import type { ShipPreviewState } from "./viewport_types";
-import { sanitizeNodeName } from "./viewport_transforms";
+import type { ShipPreviewState } from "./viewport-types";
+import { sanitizeNodeName } from "./viewport-transforms";
 
 export interface ViewportShipPreview {
   getState: () => ShipPreviewState;

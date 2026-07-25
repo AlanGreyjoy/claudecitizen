@@ -1,21 +1,21 @@
 import * as THREE from 'three';
 import type { Planet, VegetationSettings, Vec3 } from '../../types';
 import { cartesianFromLatLonAlt } from '../../world/coordinates';
-import { samplePlanetSurface } from '../../world/planet_surface';
+import { samplePlanetSurface } from '../../world/planet-surface';
 import {
   canPlaceWithGap,
   createPlacementGrid,
   registerPlacement,
-} from '../../render/vegetation/domain/placement_grid';
+} from '../../render/vegetation/domain/placement-grid';
 import { clamp01, hash01, lerp } from '../../render/vegetation/domain/hash';
-import { composeInstanceMatrix } from '../../render/vegetation/domain/instance_matrix';
+import { composeInstanceMatrix } from '../../render/vegetation/domain/instance-matrix';
 import type { StoredVegetationInstance } from '../../render/vegetation/domain/storage';
 import {
   disposeInstancedAssets,
   loadInstancedAssetCatalog,
   type InstancedAsset,
   type InstancedAssetCatalog,
-} from '../../render/vegetation/render/instanced_assets';
+} from '../../render/vegetation/render/instanced-assets';
 import { grassScaleCoverageMultiplier } from '../../render/vegetation/settings';
 
 /** Actual-scale diagnostic patch shared with planet_authoring.ts. */

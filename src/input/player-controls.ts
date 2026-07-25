@@ -2,7 +2,7 @@ import {
   GAME_SETTINGS_CHANGED_EVENT,
   loadGameSettings,
   type GameSettings,
-} from '../settings/game_settings';
+} from '../settings/game-settings';
 import type {
   FlightAimState,
   FlightInput,
@@ -16,14 +16,14 @@ import {
   DEFAULT_SHIP_CAMERA_ZOOM,
   normalizeWheelDelta,
   updateSmoothZoom,
-} from '../flight/camera_zoom';
-import { buildCharacterInput, buildFlightInput } from '../flight/control_mix';
+} from '../flight/camera-zoom';
+import { buildCharacterInput, buildFlightInput } from '../flight/control-mix';
 import {
   applyMouseDeltaToAim,
   createFlightAimState,
-} from '../flight/flight_aim';
-import { QUANTUM_ENGAGE_HOLD_SECONDS } from '../flight/quantum_travel';
-import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character_controller';
+} from '../flight/flight-aim';
+import { QUANTUM_ENGAGE_HOLD_SECONDS } from '../flight/quantum-travel';
+import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character-controller';
 import {
   getKeyboardBindingCodes,
   formatKeyboardBinding,
@@ -36,7 +36,7 @@ import {
   type DeviceProfileId,
   type FlightAnalogControlId,
   type KeyboardActionId,
-} from '../flight/input_settings';
+} from '../flight/input-settings';
 
 const EXIT_SEAT_HOLD_SECONDS = 0.5;
 const FLIGHT_MODE_TAP_THRESHOLD_SECONDS = 0.25;

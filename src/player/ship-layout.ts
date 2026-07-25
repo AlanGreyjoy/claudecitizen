@@ -1,4 +1,4 @@
-import { FLIGHT_CONFIG } from "../flight/flight_config";
+import { FLIGHT_CONFIG } from "../flight/flight-config";
 import type { LocalOffset } from "../types";
 import type { GameplayCollider } from "../physics/colliders";
 import type {
@@ -6,7 +6,7 @@ import type {
   CockpitStatKind,
   PrefabNodeOverride,
 } from "../world/prefabs/schema";
-import type { PrefabSoundSpec } from "../world/prefabs/sound_runtime";
+import type { PrefabSoundSpec } from "../world/prefabs/sound-runtime";
 
 /**
  * Ship gameplay layout: doors, seats, ramp interacts, and Rapier deck

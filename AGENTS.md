@@ -1,26 +1,79 @@
 # ClaudeCitizen — Agent Conventions
 
+## Two surfaces, nothing else
+
+This project ships **one authoring app and one server**: the **AsteronEngine**
+Electron editor and the Rust backend. There is no browser dev workflow, no
+second desktop shell, and no standalone admin app. The web game is a *build
+target* produced by **File → Build Web**, not a place features are developed.
+
+| Surface | Entry | Owns |
+|---------|-------|------|
+| AsteronEngine editor | `editor.html` → `src/editor-main.ts` | Projects hub, scenes, prefabs, planets, systems, base characters, menus, Server console, Build Web |
+| Game runtime | `index.html` → `src/game-main.ts` | Scene host + play loop; loaded by in-editor Play and by the shipped release |
+| Rust backend | `backend/` | Auth, catalog, persistence, authoritative cells |
+
 ## Key facts
 
-- **No backend unit tests.** Unit tests are not part of the normal implementation workflow.
-- **User owns interactive QA.** Agents may run non-interactive build and static validation commands such as `cargo check`, `cargo build`, `cargo clippy`, `npm run build`, `npm run typecheck`, and `npm run lint` when useful. Agents should not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. When skipping relevant validation, say what was not run. At the end of a multi-file feature or spike, run `npm run lint` and fix any **errors** (and trivial warnings in touched files when practical). For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
+- **No unit tests.** Unit tests are not part of the normal implementation workflow.
+- **User owns interactive QA.** Agents may run non-interactive build and static validation commands such as `cargo check`, `cargo build`, `cargo clippy`, `npm run build:editor:web`, `npm run build:web`, `npm run typecheck`, and `npm run lint` when useful. Agents should not run tests, browser QA, screenshot checks, or dev-server validation unless explicitly asked. When skipping relevant validation, say what was not run. At the end of a multi-file feature or spike, run `npm run lint` and fix any **errors** (and trivial warnings in touched files when practical). For explicit commit requests, run `npm run typecheck` and `npm run lint` first unless told not to.
 - **SQLx migrations.** Append migration SQL under `backend/migrations/` and run `npm run backend:migrate` only when explicitly applying schema changes. The Rust migration runner owns all schema history; do not introduce another ORM or migration system.
-- **Do not start dev servers.** The editor is a standalone Electron application; it does not use a Vite dev server. Do not run `npm run dev:web`, `npm run dev:server`, `npm run start:dev`, `vite`, `tsx watch`, or similar long-running local servers unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
+- **Do not start bare Vite or backend watchers.** Day-to-day editor HMR is `npm run editor:dev` (Electron owns Vite). Do not run `npm run dev:server`, standalone `vite`, `tsx watch`, or similar unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
 - **Rust server reloads.** `npm run dev:server` uses Watchexec to rebuild and gracefully restart on backend, Protobuf, Cargo, migration, or backend environment changes. `npm run start:server` is the one-shot runner. Install the watcher with `cargo install watchexec-cli --locked`.
 - **TypeScript, ESM** at root (`"type": "module"`). The backend is a Rust 2024 workspace.
-- Browser build = Rust/WASM build, `tsc --noEmit`, then Vite bundle. Agents may run it as non-interactive validation.
-- Editor launch: `npm run editor`. It builds the editor renderer and opens Electron without a local web server. Cold start shows the **AsteronEngine — Projects** hub; open/create a project before the editor workspace loads.
-- **GitHub Actions.** `.github/workflows/quality.yml` runs repository-safety, browser typecheck/lint/build, Rust formatting/clippy/build, and docs builds on pull requests and `main`. `.github/workflows/dependency-review.yml` rejects vulnerable dependency additions. Netlify remains responsible for browser deployment; do not add deploy workflows unless explicitly requested.
+- Editor build = Rust/WASM build, `tsc --noEmit`, then `vite build --mode editor`. `npm run build:web` produces the release target. Agents may run either as non-interactive validation.
+- Editor launch: `npm run editor:dev` for HMR / Fast Refresh; `npm run editor` for a production-like `dist-editor` build. Cold start shows the **AsteronEngine — Projects** hub; open/create a project before the editor workspace loads.
+- **GitHub Actions.** `.github/workflows/quality.yml` runs repository-safety, typecheck/lint, editor and web builds, Rust formatting/clippy/build, and docs builds on pull requests and `main`. `.github/workflows/dependency-review.yml` rejects vulnerable dependency additions. Do not add deploy workflows unless explicitly requested.
 
 ## Workspace structure
 
 | Path | Role | Module system | Framework |
 |------|------|--------------|-----------|
-| `src/` | Browser game (Vite + Three.js) | ESM | Vite |
-| `backend/` | Authoritative API + cell simulation | Rust 2024 | Axum, Rapier, SQLx, Redis, WebTransport |
+| `src/` | Editor + game runtime (Three.js) | ESM | Vite |
+| `editor-desktop/` | Electron shell, Projects hub, `cceditor:` protocol, backend proxy, Build Web | ESM | Electron |
+| `backend/` | Authoritative API + cell simulation (Cargo workspace root) | Rust 2024 | Axum, Rapier, SQLx, Redis, WebTransport |
 | `proto/` | Realtime wire contract | Protobuf | prost + browser codec |
-| `deploy/k8s/` | Horizontally scalable backend deployment | YAML | Kubernetes |
-| `editor/assets/` | Local editor asset library (gitignored) | — | — |
+
+Authoring assets live **inside the open AsteronEngine project** (`<project>/assets/`
+and `<project>/src/assets/`), not at the engine repo root.
+
+## Scenes own everything
+
+Scene documents (`src/world/scenes/data/*.scene.json`, schema v3) are GameObject
+trees. Components decide what a scene is — there is no `settings` block any
+more; v1/v2 documents migrate forward on read in `src/world/scenes/schema.ts`.
+
+| Component | Role |
+|-----------|------|
+| `game-manager` | System, planet, spawn mode |
+| `planet` | Planet document reference |
+| `player-start` | Spawn pose and mode |
+| `prefab-instance` | Places a reusable prefab |
+| `ui-screen` | Mounts title / login / character-create / loading UI |
+| `scene-link` | Scene transition target (`auto` + `delaySeconds` for timed hops) |
+| `instanced-scene` | Per-player content (habs, hangars) |
+
+`src/app/scene_host.ts` is the runtime: it loads a scene, mounts its UI screens
+or starts play from its GameObjects, and switches scenes **in-process**. Scene
+navigation must not reload the page.
+
+## Project settings and backend config
+
+`asteron.project.json` at the project root holds `name`, `backendUrl`,
+`defaultScene`, and `build.outDir`. **File → Project Settings…** edits it;
+`/__editor/project-settings` reads and writes it.
+
+- `src/net/runtime_config.ts` resolves the backend URL at startup — from project
+  settings in the editor, from `asteron.runtime.json` in a shipped release.
+  Never reintroduce a build-time `VITE_API_BASE_URL`.
+- **There is no API key.** Players authenticate with the existing cookie session
+  (`/auth/login` → `cc_at` / `cc_rt`); operators use `/admin/session`. Nothing
+  secret ships to the client.
+- Editor → backend requests go through `/__editor/backend/*`, proxied by the
+  Electron main process with `net.fetch`. This exists because the renderer's
+  `cceditor://app` origin fails the backend's single-origin CORS check and
+  cannot store the session cookies. Do not try to call the backend directly from
+  the editor renderer.
 
 ## Prefab & Animation Architecture
 
@@ -87,26 +140,37 @@ Flight is **not** Rapier. Deck walking may use Rapier; flying uses the custom in
 
 ## Editor (Electron desktop)
 
-The Electron editor (**AsteronEngine**) is the primary authoring workspace. Cold start opens the **Projects** window (New / Open / Recent); choosing a project closes the hub and opens the editor. **File → Open Project…** returns to Projects. Skip the hub with `--project-root=` / `CLAUDECITIZEN_EDITOR_PROJECT_ROOT`. The editor owns project file access through the private `cceditor:` protocol, launches scenes in a separate Play Mode window, and builds the browser release through **File → Build Web**. It assembles reusable prefabs from entities, GLB assets, primitives, and gameplay components; launchable scenes and their GameObject trees live in `src/world/scenes/data/*.scene.json`.
+The Electron editor (**AsteronEngine**) is the only authoring workspace. Cold start opens the **Projects** window (New / Open / Recent); choosing a project closes the hub and opens the editor. **File → Open Project…** returns to Projects. Skip the hub with `--project-root=` / `CLAUDECITIZEN_EDITOR_PROJECT_ROOT`. The editor owns project file access through the private `cceditor:` protocol, plays scenes in-window, and builds the release through **File → Build Web**.
 
 | Path | Role |
 |------|------|
-| `editor-desktop/` | Electron shell, Projects hub IPC, project repository, Play Mode |
+| `editor-desktop/main.mjs` | Electron shell: `cceditor:` protocol, `/__editor` API, backend proxy, menus, Build Web |
+| `editor-desktop/project_hub.mjs` | Recent projects, validation, new-project scaffolding |
+| `editor-desktop/repository.mjs` | Project-scoped document read/write, including project settings |
 | `src/editor/` | Editor business logic: document store, commands, serialization |
-| `src/editor/react/` | React shell + panels (Fast Refresh); entry `react/main.tsx`; Projects hub via `?boot=projects` |
+| `src/editor/react/` | React shell + panels (Fast Refresh); entry `react/main.tsx` |
 | `src/editor/document.ts` | `EditorEntity` model, `EditorStore`, selection, GLB overrides; `documentType: 'scene' \| 'prefab'` |
-| `src/editor/react/panels/HierarchyPanel.tsx` | Scene/prefab GameObject tree / outliner |
-| `src/editor/react/panels/InspectorPanel.tsx` | Entity properties & component editor chrome |
-| `src/editor/react/panels/ProjectPanel.tsx` | Asset browser |
+| `src/editor/play_in_editor.ts` | Play / Pause / Stop of the open document in the Game view |
+| `src/editor/create_prefab_from_selection.ts` | Extract a GameObject subtree into a prefab + instance |
+| `src/editor/react/panels/ProjectSettingsModal.tsx` | File → Project Settings… (`asteron.project.json`) |
+| `src/editor/panels/server_console.ts` | Server tab: live `/admin/*` operator console |
 | `src/editor/serialize.ts` | Convert editor state to/from `PrefabDocument` / `SceneDocument` |
 | `src/render/editor/viewport.ts` | Three.js editor viewport (imperative host) |
-| `src/world/scenes/` | Launchable scene documents (`gameObjects` + settings), runtime adapters, bundled scene loader |
-| `src/world/scenes/scene_runtime.ts` | Resolve GameManager / Planet / PlayerStart / prefab-instance for Play |
+| `src/world/scenes/` | Scene documents (GameObject trees), runtime resolution, bundled loader |
+| `src/app/scene_host.ts` | Runtime scene host: load, switch, pause, dispose |
+| `src/app/play-chrome.ts` | Mountable in-play HUD tree (`play-chrome.html`) |
 | `src/world/prefabs/schema.ts` | Canonical prefab JSON schema (+ scene components) |
-| `src/render/prefabs/prefab_renderer.ts` | Runtime prefab rendering |
-| `editor-desktop/` | Sandboxed Electron shell, project repository, Play Mode, and web build command |
 
-React owns editor chrome; `EditorStore` stays framework-agnostic. The default tab is **Scene** (3D viewport). Prefabs open via **File → Open Prefab**. Scene settings live under **File → Scene → Settings…**. WebGL/canvas tab editors (viewport, planet, system map, base characters, menu manager) mount via imperative hosts. Dense per-component inspector fields and particle forms still use DOM builders under `panels/`.
+React owns editor chrome and all panel/form UI; `EditorStore` stays framework-agnostic. Tabs: **Scene** (default), Material Manager, Base Characters, Planet Authoring, System Map, Menu Manager, **Server**. WebGL/canvas preview stages (viewport, planet terrain, system map, base-character stage, menu HUD) stay imperative behind React hosts. Component field editors live in `src/editor/react/panels/component_fields/`.
+
+### Play mode
+
+**F6** plays and stops, **F7** pauses. `startEditorPlay()` serializes the live
+`EditorStore` document (unsaved edits included) and hands it to a scene host
+mounted in `#editor-play-host`, a fixed overlay carrying a CSS `transform` so the
+HUD's `position: fixed` elements are contained by the Game region. Pause feeds
+`ctx.isPaused()` in `src/game/create_game_loop.ts`. There is no external Play
+Mode window — do not reintroduce one.
 
 ### GLB node overrides and deletions
 
@@ -200,8 +264,13 @@ When unsure whether probes catch a code change, bump. Stale veg tiles with wrong
 
 ## Protected assets security
 
-- `editor/assets/`, `public/assets/protected/`, `src/assets/protected/` are gitignored — **never stage or commit**.
-- `npm run build` unconditionally strips `dist/assets/protected/` and `dist/editor/assets/`. Prefab JSON only references asset paths, so prefabs are safe to commit.
+- Project authoring packs live under the open project's `assets/` (and optional
+  `src/assets/protected/`). Those trees are local to the project — **never stage
+  or commit** paid/protected packs. The engine repo also gitignores
+  `public/assets/protected/` and `src/assets/protected/` for the same reason.
+- `npm run build:web` strips `dist/assets/protected/` then copies only files
+  referenced by saved prefab JSON. Prefabs only store asset paths, so they are
+  safe to commit.
 - No secrets in client code — API keys, DB URLs, JWT secrets belong server-side only.
 
 ## Debugging GLB nodes & Colliders

@@ -7,43 +7,43 @@ import type {
   Vec3,
 } from '../../types';
 import { distance } from '../../math/vec3';
-import { createCharacterAvatar } from './scene/character_avatar';
+import { createCharacterAvatar } from './scene/character-avatar';
 import { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
 import { createPlanetTileManager } from '../planet_tiles';
 import { createPlanetVegetationManager, normalizeVegetationSettings } from '../vegetation';
 import { createSurfaceSpawnManager } from '../surface_spawns';
-import { applyRenderQualitySettings } from './domain/apply_render_quality';
+import { applyRenderQualitySettings } from './domain/apply-render-quality';
 import { DAY_LENGTH_SECONDS, SURFACE_MAX_PIXEL_RATIO } from './domain/constants';
 import type { SpikeRenderer, TimeOverride } from './domain/types';
 import { getStationFrame, type StationFrame } from '../../world/station';
 import {
   createPrefabStationGroup,
-} from '../prefabs/prefab_renderer';
+} from '../prefabs/prefab-renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
-import { buildAtmosphereMesh } from './scene/atmosphere_mesh';
-import { createComposerStack } from './scene/composer_stack';
-import { createShipRenderPool } from './scene/ship_render_pool';
-import { createRemotePresenceRenderer } from './scene/remote_presence';
-import { createStationNpcRenderer } from './scene/station_npcs';
-import { createStationModel } from './scene/station_model';
-import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene_lighting';
-import { createWebGlRenderer } from './scene/webgl_renderer';
-import { resolveRenderQuality } from './domain/render_quality';
+import { buildAtmosphereMesh } from './scene/atmosphere-mesh';
+import { createComposerStack } from './scene/composer-stack';
+import { createShipRenderPool } from './scene/ship-render-pool';
+import { createRemotePresenceRenderer } from './scene/remote-presence';
+import { createStationNpcRenderer } from './scene/station-npcs';
+import { createStationModel } from './scene/station-model';
+import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene-lighting';
+import { createWebGlRenderer } from './scene/webgl-renderer';
+import { resolveRenderQuality } from './domain/render-quality';
 import {
   resolveColorCorrectionSettings,
   saveColorCorrectionSettings,
-} from './domain/color_correction';
+} from './domain/color-correction';
 import { setFogSettings as applyFogSettings } from './update/environment';
-import { createQuantumBubble } from '../effects/quantum_bubble';
-import type { PlayerCharacterAppearanceV1 } from '../../player/character_creator/player_character_appearance';
+import { createQuantumBubble } from '../effects/quantum-bubble';
+import type { PlayerCharacterAppearanceV1 } from '../../player/character_creator/player-character-appearance';
 import {
   GAME_SETTINGS_CHANGED_EVENT,
   loadGameSettings,
   type CloudModeSetting,
   type GameSettings,
-} from '../../settings/game_settings';
-import { createMuzzleFlashRenderer } from '../effects/muzzle_flash';
-import { createHitDecalRenderer } from '../effects/hit_decals';
+} from '../../settings/game-settings';
+import { createMuzzleFlashRenderer } from '../effects/muzzle-flash';
+import { createHitDecalRenderer } from '../effects/hit-decals';
 import { createTracerRenderer } from '../effects/tracers';
 import {
   executeSpikeRenderFrame,
@@ -51,7 +51,7 @@ import {
   type SpikeRenderFrameState,
   QUANTUM_RENDER_LAYER,
   enableRenderLayer,
-} from './render_spike_frame';
+} from './render-spike-frame';
 
 // A full protected station can carry multiple gigabytes of decoded atlas data.
 // Distant stations already have System Map/nav markers, so load their detailed

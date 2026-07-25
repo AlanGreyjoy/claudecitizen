@@ -1,4 +1,4 @@
-import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player_character_appearance';
+import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
 import type { StationNpcRenderState } from '../types';
 import {
   stationDirToWorld,

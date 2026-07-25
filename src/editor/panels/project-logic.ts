@@ -1,5 +1,5 @@
 import {
-  EDITOR_ASSET_ROOT,
+  PROJECT_ASSET_ROOT,
   SOURCE_ASSET_ROOT,
   fetchAssetListing,
   type AssetEntry,
@@ -9,9 +9,9 @@ import {
 export const MODEL_EXTENSIONS = ['.glb', '.gltf'] as const;
 export const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.m4a'] as const;
 export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.ktx2', '.ktx'] as const;
-export const DEFAULT_EXPANDED_FOLDERS = ['', 'protected'] as const;
-export const PROJECT_ROOT_LABEL = 'assets';
-export const PROJECT_ASSET_ROOTS: readonly AssetRoot[] = [EDITOR_ASSET_ROOT, SOURCE_ASSET_ROOT];
+export const DEFAULT_EXPANDED_FOLDERS = [''] as const;
+export const PROJECT_ROOT_LABEL = 'Assets';
+export const PROJECT_ASSET_ROOTS: readonly AssetRoot[] = [PROJECT_ASSET_ROOT, SOURCE_ASSET_ROOT];
 
 export type ProjectAssetEntry = AssetEntry & { root: AssetRoot };
 
@@ -118,6 +118,42 @@ export function sortedFolderChildren(node: FolderNode): FolderNode[] {
 
 export function sortedFolderFiles(node: FolderNode): ProjectAssetEntry[] {
   return [...node.files].sort(
+    (a, b) => a.path.localeCompare(b.path) || a.root.localeCompare(b.root),
+  );
+}
+
+/** Breadcrumb segments for a selected folder path (`''` = Assets root). */
+export function folderBreadcrumbs(
+  folderPath: string,
+): ReadonlyArray<{ path: string; label: string }> {
+  const crumbs: Array<{ path: string; label: string }> = [
+    { path: '', label: PROJECT_ROOT_LABEL },
+  ];
+  const parts = folderPath.split('/').filter(Boolean);
+  let acc = '';
+  for (const part of parts) {
+    acc = acc ? `${acc}/${part}` : part;
+    crumbs.push({ path: acc, label: part });
+  }
+  return crumbs;
+}
+
+/** Files in `folderPath`, optionally including all nested folders. */
+export function collectFolderFiles(
+  tree: FolderNode,
+  folderPath: string,
+  includeSubfolders: boolean,
+): ProjectAssetEntry[] {
+  const folder = findFolder(tree, folderPath) ?? tree;
+  if (!includeSubfolders) return sortedFolderFiles(folder);
+
+  const files: ProjectAssetEntry[] = [];
+  const visit = (node: FolderNode): void => {
+    files.push(...node.files);
+    for (const child of sortedFolderChildren(node)) visit(child);
+  };
+  visit(folder);
+  return files.sort(
     (a, b) => a.path.localeCompare(b.path) || a.root.localeCompare(b.root),
   );
 }

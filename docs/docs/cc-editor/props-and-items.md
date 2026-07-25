@@ -38,7 +38,7 @@ On save, the root automatically receives `prop-frame` marking the placement orig
 - Keep the footprint sensible — players snap props to a grid in hangar build mode
 - Match **collider** bounds to the visible mesh for placement feedback
 - Props can include `interaction` components for inspect prompts
-- Register definitions in the [Admin App](/admin-app/prop-definitions) to appear in the player catalog
+- Register definitions in the [Server console](/admin-app/prop-definitions) to appear in the player catalog
 
 ### snapGridM and maxPerHangar
 
@@ -59,11 +59,11 @@ root (item-frame)
 
 ### itemType alignment
 
-Server catalog `itemType` values (`consumable`, `weapon`, `armor`, `clothing`, `material`, `misc`) are set in the Admin App, not the prefab. The prefab supplies the 3D representation when `prefabId` is set on the item definition.
+Server catalog `itemType` values (`consumable`, `weapon`, `armor`, `clothing`, `material`, `misc`) are set in the Server console, not the prefab. The prefab supplies the 3D representation when `prefabId` is set on the item definition.
 
 ### Icon-only items
 
-Items without a prefab can use `iconUrl` in the Admin App item definition — HUD renders the icon via `item_icon.ts`.
+Items without a prefab can use `iconUrl` in the Server console item definition — HUD renders the icon via `item_icon.ts`.
 
 ### Authoring tips
 
@@ -111,4 +111,4 @@ flowchart LR
   Disk --> Game
 ```
 
-Author geometry in the CC Editor, then create matching rows in the Admin App so players can receive or purchase the content.
+Author geometry in the CC Editor, then create matching rows in the Server console so players can receive or purchase the content.

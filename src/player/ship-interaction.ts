@@ -1,5 +1,5 @@
 import { add, cross, dot, length, normalize, scale, sub, tangentize, vec3 } from '../math/vec3';
-import { getShipLayout, getShipRestHeightMeters } from './ship_layout';
+import { getShipLayout, getShipRestHeightMeters } from './ship-layout';
 import type {
   CharacterState,
   FlightBody,

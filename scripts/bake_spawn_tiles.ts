@@ -12,12 +12,12 @@ import {
   TERRAIN_CACHE_VERSION,
   VEGETATION_CACHE_VERSION,
   terrainStorageKey,
-} from '../src/cache/cache_keys';
-import type { SpawnPackManifest, SpawnPackTerrainRecord } from '../src/cache/spawn_pack';
-import { buildTerrainTileBuffers } from '../src/render/planet_tiles/build/terrain_buffers';
-import { collectTilesNearPosition } from '../src/render/planet_tiles/domain/spawn_tiles';
+} from '../src/cache/cache-keys';
+import type { SpawnPackManifest, SpawnPackTerrainRecord } from '../src/cache/spawn-pack';
+import { buildTerrainTileBuffers } from '../src/render/planet_tiles/build/terrain-buffers';
+import { collectTilesNearPosition } from '../src/render/planet_tiles/domain/spawn-tiles';
 import { cartesianFromLatLonAlt } from '../src/world/coordinates';
-import { resolveLandingSite } from '../src/world/landing_sites';
+import { resolveLandingSite } from '../src/world/landing-sites';
 import { activatePlanetDocument } from '../src/world/planets/runtime';
 import { parsePlanetDocument } from '../src/world/planets/schema';
 import { warmRiverNetwork } from '../src/world/rivers';

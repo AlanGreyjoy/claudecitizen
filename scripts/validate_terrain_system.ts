@@ -3,9 +3,9 @@ import { performance } from 'node:perf_hooks';
 import * as THREE from 'three';
 import { normalize } from '../src/math/vec3';
 import { buildSurfaceWaterGeometry } from '../src/render/effects/lake_water/build/buffers';
-import { buildTerrainTileBuffers } from '../src/render/planet_tiles/build/terrain_buffers';
-import { createTileMeshCache } from '../src/render/planet_tiles/cache/mesh_cache';
-import { isValidTerrainTileBuffers } from '../src/render/planet_tiles/domain/buffer_validation';
+import { buildTerrainTileBuffers } from '../src/render/planet_tiles/build/terrain-buffers';
+import { createTileMeshCache } from '../src/render/planet_tiles/cache/mesh-cache';
+import { isValidTerrainTileBuffers } from '../src/render/planet_tiles/domain/buffer-validation';
 import {
   TERRAIN_SKIRT_VERTICES_PER_SEGMENT,
   TERRAIN_SKIRT_MIN_DEPTH_METERS,
@@ -17,18 +17,18 @@ import {
   makeTileInfo,
   parentTileInfo,
   tileKey,
-} from '../src/render/planet_tiles/domain/tile_info';
-import { createTerrainMaterial } from '../src/render/planet_tiles/render/terrain_material';
+} from '../src/render/planet_tiles/domain/tile-info';
+import { createTerrainMaterial } from '../src/render/planet_tiles/render/terrain-material';
 import type { CubeFace, TerrainTileBuffers, TileInfo, Vec3, WaterBody } from '../src/types';
-import { findSurfaceDestination } from '../src/world/biome_teleport';
+import { findSurfaceDestination } from '../src/world/biome-teleport';
 import { sampleSurfaceClimate } from '../src/world/climate';
-import { OCEAN_WATER_LEVEL_METERS } from '../src/world/coastal_profile';
+import { OCEAN_WATER_LEVEL_METERS } from '../src/world/coastal-profile';
 import { cartesianFromLatLonAlt } from '../src/world/coordinates';
 import {
   CUBE_FACES,
   directionFromCubeFace,
   faceUvFromDirection,
-} from '../src/world/cube_sphere';
+} from '../src/world/cube-sphere';
 import { sampleSurfaceHeightDetails } from '../src/world/elevation';
 import {
   CLAUDECITIZEN_PLANET,
@@ -40,9 +40,9 @@ import {
   renderableCellSampleSpacingMeters,
   renderableGridSampleSpacingMeters,
   sampleVisibleSurfaceFrame,
-} from '../src/world/renderable_surface';
+} from '../src/world/renderable-surface';
 import { getRiverNetworkDiagnostics } from '../src/world/rivers';
-import { terrainCellUsesNorthwestSoutheastDiagonal } from '../src/world/terrain_triangulation';
+import { terrainCellUsesNorthwestSoutheastDiagonal } from '../src/world/terrain-triangulation';
 
 interface EdgeContact {
   axis: 'u' | 'v';

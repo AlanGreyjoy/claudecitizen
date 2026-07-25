@@ -21,12 +21,12 @@ import {
 } from '../world/station';
 import type { GameBootstrap } from '../net/api';
 import { applyOwnedShipToInstance, ensurePlayerShipInstance } from '../world/ships';
-import { getShipRestHeightMeters } from './ship_layout';
-import { characterAtElevatorDestination, type StationCharacterState } from './station_walk';
-import { teleportStationPlayer, type StationPhysics } from '../physics/station_physics';
+import { getShipRestHeightMeters } from './ship-layout';
+import { characterAtElevatorDestination, type StationCharacterState } from './station-walk';
+import { teleportStationPlayer, type StationPhysics } from '../physics/station-physics';
 import type { Planet } from '../types';
-import { getShipInstance } from '../flight/ship_world';
-import { PLAYER_SHIP_INSTANCE_ID, getActiveShip, type WorldState } from './world_state';
+import { getShipInstance } from '../flight/ship-world';
+import { PLAYER_SHIP_INSTANCE_ID, getActiveShip, type WorldState } from './world-state';
 
 export const ELEVATOR_RIDE_SECONDS = 2.4;
 export const ELEVATOR_FADE_SECONDS = 0.45;

@@ -1,6 +1,6 @@
 import type { Planet, TileInfo, Vec3 } from '../../../types';
 import { distance, dot, normalize, scale } from '../../../math/vec3';
-import { parentTileInfo } from '../../planet_tiles/domain/tile_info';
+import { parentTileInfo } from '../../planet_tiles/domain/tile-info';
 import {
   getGrassDistanceMeters,
   getVegetationTileDistanceMeters,

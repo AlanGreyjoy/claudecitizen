@@ -1,7 +1,7 @@
 import type { Planet, TerrainTileBuffers } from '../types';
-import { isValidTerrainTileBuffers } from '../render/planet_tiles/domain/buffer_validation';
-import { terrainStorageKey } from './cache_keys';
-import { getCachedTile, putCachedTile } from './tile_cache_store';
+import { isValidTerrainTileBuffers } from '../render/planet_tiles/domain/buffer-validation';
+import { terrainStorageKey } from './cache-keys';
+import { getCachedTile, putCachedTile } from './tile-cache-store';
 
 export interface StoredTerrainTile {
   colors: Uint8Array;

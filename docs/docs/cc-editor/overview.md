@@ -62,7 +62,7 @@ flowchart LR
 
 | Path | Role |
 | --- | --- |
-| `editor-desktop/` | Sandboxed project access, Play Mode window, File → Build Web |
+| `editor-desktop/` | Sandboxed project access, backend proxy, File → Build Web |
 | `src/editor/` | Document store, panels, commands, serialization, local API client |
 | `src/render/editor/` | Three.js viewport, base-characters stage, thumbnails |
 | `src/world/scenes/` | Scene documents and runtime adapters |

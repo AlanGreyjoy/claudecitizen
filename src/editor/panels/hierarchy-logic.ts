@@ -4,9 +4,9 @@ import {
   el,
   type ContextMenuPanel,
 } from '../dom';
-import { entityBoundToAnyGlbNode, entityTargetsGlbNode } from '../glb_binding';
+import { entityBoundToAnyGlbNode, entityTargetsGlbNode } from '../glb-binding';
 import type { EditorEntity, EditorStore, GlbNodeRef } from '../document';
-import type { GlbNodeColliderTarget } from '../component_actions';
+import type { GlbNodeColliderTarget } from '../component-actions';
 import type { Vec3 } from '../../types';
 
 export const GLB_NODE_DND_TYPE = 'application/x-claudecitizen-glb-node';

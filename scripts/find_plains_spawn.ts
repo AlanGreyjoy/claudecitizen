@@ -6,11 +6,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cartesianFromLatLonAlt } from '../src/world/coordinates';
-import { samplePlanetSurface } from '../src/world/planet_surface';
+import { samplePlanetSurface } from '../src/world/planet-surface';
 import { activatePlanetDocument } from '../src/world/planets/runtime';
 import { parsePlanetDocument } from '../src/world/planets/schema';
 import { warmRiverNetwork } from '../src/world/rivers';
-import { sampleTerrainRegions } from '../src/world/terrain_regions';
+import { sampleTerrainRegions } from '../src/world/terrain-regions';
 
 const PLANET_ID = process.argv[2] ?? 'asteron';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

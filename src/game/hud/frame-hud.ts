@@ -3,38 +3,38 @@ import {
   MODE_IN_SHIP,
   MODE_IN_STATION,
 } from "../../player/modes";
-import { getShipLayout } from "../../player/ship_layout";
+import { getShipLayout } from "../../player/ship-layout";
 import {
   getBedEyeLocal,
   localOffsetToWorld,
-} from "../../player/ship_interaction";
-import { resolveAimForward, resolveSeatLookForward } from "../../flight/flight_aim";
+} from "../../player/ship-interaction";
+import { resolveAimForward, resolveSeatLookForward } from "../../flight/flight-aim";
 import {
   entertainmentSystemLabel,
   resolveEntertainmentGazeTarget,
-} from "../../player/entertainment_gaze";
+} from "../../player/entertainment-gaze";
 import {
   cockpitControlLabel,
   projectWorldPointToScreenOffset,
   resolveCockpitGazeTarget,
-} from "../../player/cockpit_gaze";
-import { resolveVisibleCockpitSpeedInstruments } from "../../player/cockpit_stats";
+} from "../../player/cockpit-gaze";
+import { resolveVisibleCockpitSpeedInstruments } from "../../player/cockpit-stats";
 import { getStationLayoutOverride } from "../../world/station";
 import {
   resolveStationWalkView,
   resolveWeaponShopGazeTarget,
   stationWalkAimOriginWorld,
   weaponShopLabel,
-} from "../../player/weapon_shop_gaze";
-import { outfittersLabel, resolveOutfittersGazeTarget } from "../../player/outfitters_gaze";
-import { foodShopLabel, resolveFoodShopGazeTarget } from "../../player/food_shop_gaze";
-import { projectDirectionToReticleOffset } from "../../render/effects/hud/flight_reticle";
-import { resolveBoostMaxSpeedMps } from "../../flight/flight_config";
-import { type getActiveShipBody, getActiveShipRig } from "../../player/world_state";
+} from "../../player/weapon-shop-gaze";
+import { outfittersLabel, resolveOutfittersGazeTarget } from "../../player/outfitters-gaze";
+import { foodShopLabel, resolveFoodShopGazeTarget } from "../../player/food-shop-gaze";
+import { projectDirectionToReticleOffset } from "../../render/effects/hud/flight-reticle";
+import { resolveBoostMaxSpeedMps } from "../../flight/flight-config";
+import { type getActiveShipBody, getActiveShipRig } from "../../player/world-state";
 import { cross, length, normalize } from "../../math/vec3";
 import type { HudUpdateParams } from "../../render/effects";
 import type { CameraState } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 type ShipBody = ReturnType<typeof getActiveShipBody>;
 

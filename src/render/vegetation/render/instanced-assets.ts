@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
-import type { VegetationAssetCatalog } from '../domain/asset_catalog';
+import type { VegetationAssetCatalog } from '../domain/asset-catalog';
 import {
   createGrassBillboardAssets,
   createGrassBillboardFromTexture,
-} from './grass_billboard';
+} from './grass-billboard';
 import { DEFAULT_GRASS_COLOR } from '../settings';
 import { applyWindToMaterial } from './wind';
-import { deduplicateObjectTextures } from '../../assets/texture_dedup';
+import { deduplicateObjectTextures } from '../../assets/texture-dedup';
 
 function isGrassImageUrl(url: string): boolean {
   return /\.(png|jpe?g|webp)(\?|$)/i.test(url);

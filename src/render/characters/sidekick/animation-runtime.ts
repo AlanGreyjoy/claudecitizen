@@ -6,7 +6,7 @@ import {
   findFirstSkinnedMesh,
   retargetUnityHumanoidAnimations,
   UNIVERSAL_ANIMATION_LIBRARY_URL,
-} from '../unity_humanoid_retarget';
+} from '../unity-humanoid-retarget';
 
 const LOOPING_CLIPS = new Set(['Idle_Loop', 'Jump_Loop', 'Sprint_Loop', 'Walk_Loop']);
 

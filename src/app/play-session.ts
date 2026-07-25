@@ -1,17 +1,17 @@
-import { createPlayerControls } from '../input/player_controls';
-import { createGameLoop } from '../game/create_game_loop';
+import { createPlayerControls } from '../input/player-controls';
+import { createGameLoop } from '../game/create-game-loop';
 import type { BuildAreaRuntime } from '../game/types';
-import type { LoadingScreenHandle } from './loading_screen';
+import type { LoadingScreenHandle } from './loading-screen';
 import {
   createPlayerVitalsSession,
   type PlayerVitalsSessionController,
-} from './player_vitals_session';
-import { restoreTitleScreen } from './title_screen';
-import { createSurfaceTeleportPanel } from '../render/effects/hud/biome_teleport_panel';
+} from './player-vitals-session';
+import { restoreTitleScreen } from './title-screen';
+import { createSurfaceTeleportPanel } from '../render/effects/hud/biome-teleport-panel';
 import { loadCurrentDefaultAnimationController } from '../player/animation';
-import { loadCurrentCharacterSettings } from '../player/character_settings';
+import { loadCurrentCharacterSettings } from '../player/character-settings';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
-import { warmPlanetSpawnCaches } from '../world/spawn_warm';
+import { warmPlanetSpawnCaches } from '../world/spawn-warm';
 import { normalizeVegetationSettings } from '../render/vegetation/settings';
 import { buildRoomForArea } from '../player/hangar_build/validation';
 import { applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
@@ -21,114 +21,35 @@ import {
   getStationSpawn,
   stationLocalToWorld,
 } from '../world/station';
-import { createStationPhysics, type StationPhysics } from '../physics/station_physics';
+import { createStationPhysics, type StationPhysics } from '../physics/station-physics';
 import { normalizeInventoryState } from '../player/inventory/types';
 import type { AuthSession, GameBootstrap } from '../net/api';
-import type { BuildTerminalController } from '../render/effects/hud/build_terminal';
-import type { HangarPropRenderer } from '../render/hangar/prop_instances';
-import type { BuildPropColliderRuntime } from '../player/hangar_build/prop_colliders';
-import { createUiIcon, UiIcons } from '../ui/icons';
-import { pickStationFloorPoint } from '../render/hangar/prop_instances';
-import { resolvePlaySessionBootstrap } from './play_session_bootstrap';
-import { loadPlayWorldContext } from './play_session_world';
-import { collectPlaySessionDom, requireElement } from './play_session_dom';
-import { createPlayBuildSystems } from './play_session_build';
-import { createPlayOverlayStack } from './play_session_overlays';
-import { AUTHORING_ENABLED } from '../build_mode';
-import { getDesktopEditorBridge } from '../platform/editor_desktop';
-
-function returnFromPlayMode(fallbackUrl: string): void {
-  const bridge = getDesktopEditorBridge();
-  if (bridge) {
-    void bridge.stopPlay().catch(() => undefined);
-    return;
-  }
-  window.location.href = fallbackUrl;
-}
-
-function mountEditorReturnButton(prefabId: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.title = 'Return to the editor with this prefab loaded (press Esc first to unlock the mouse)';
-  button.append(
-    createUiIcon(UiIcons.chevronLeft, { className: 'sc-ui-icon', size: 14, strokeWidth: 2 }),
-    document.createTextNode(` Back to Editor (${prefabId})`),
-  );
-  Object.assign(button.style, {
-    position: 'fixed',
-    top: '18px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: '250',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '9px 18px',
-    border: '1px solid rgba(255, 206, 111, 0.5)',
-    background: 'rgba(6, 12, 26, 0.88)',
-    color: 'var(--accent-2, #ffce6f)',
-    font: "600 13px/1 'Rajdhani', sans-serif",
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-  } satisfies Partial<CSSStyleDeclaration>);
-  button.addEventListener('click', () => {
-    returnFromPlayMode(`/?boot=editor&prefab=${encodeURIComponent(prefabId)}`);
-  });
-  document.body.appendChild(button);
-  return button;
-}
-
-function mountPlanetEditorReturnButton(planetId: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.title = 'Return to Planet Authoring with this planet loaded';
-  button.append(
-    createUiIcon(UiIcons.chevronLeft, { className: 'sc-ui-icon', size: 14, strokeWidth: 2 }),
-    document.createTextNode(` Back to Editor (${planetId})`),
-  );
-  Object.assign(button.style, {
-    position: 'fixed',
-    top: '18px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: '250',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '9px 18px',
-    border: '1px solid rgba(111, 206, 255, 0.5)',
-    background: 'rgba(6, 12, 26, 0.88)',
-    color: 'var(--accent, #8bd8ff)',
-    font: "600 13px/1 'Rajdhani', sans-serif",
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-  } satisfies Partial<CSSStyleDeclaration>);
-  button.addEventListener('click', () => {
-    returnFromPlayMode(
-      `/?boot=editor&tab=planet&planetId=${encodeURIComponent(planetId)}`,
-    );
-  });
-  document.body.appendChild(button);
-  return button;
-}
-
-function mountPlayEditorReturnButton(
-  world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
-): HTMLButtonElement | null {
-  if (!AUTHORING_ENABLED) return null;
-  const { params, stationPrefab } = world;
-  if (params.fromEditor && params.planetId) {
-    return mountPlanetEditorReturnButton(params.planetId);
-  }
-  if (stationPrefab && params.stationPrefabOverride) {
-    return mountEditorReturnButton(stationPrefab.id);
-  }
-  return null;
-}
+import type { BuildTerminalController } from '../render/effects/hud/build-terminal';
+import type { HangarPropRenderer } from '../render/hangar/prop-instances';
+import type { BuildPropColliderRuntime } from '../player/hangar_build/prop-colliders';
+import { pickStationFloorPoint } from '../render/hangar/prop-instances';
+import { resolvePlaySessionBootstrap } from './play-session-bootstrap';
+import { loadPlayWorldContext, type PlayWorldParams } from './play-session-world';
+import { collectPlaySessionDom, requireElement } from './play-session-dom';
+import { getPlayChromeRoot, mountPlayChrome } from './play-chrome';
+import { createPlayBuildSystems } from './play-session-build';
+import { createPlayOverlayStack } from './play-session-overlays';
 
 let started = false;
+/** Editor Play/Pause gate. Overlay pauses stay independent of this flag. */
+let externallyPaused = false;
+
+export function setPlaySessionPaused(paused: boolean): void {
+  externallyPaused = paused;
+}
+
+export function isPlaySessionPaused(): boolean {
+  return externallyPaused;
+}
+
+export function isPlaySessionRunning(): boolean {
+  return started;
+}
 
 interface PlaySessionCleanup {
   gameLoop: ReturnType<typeof createGameLoop>;
@@ -150,15 +71,15 @@ interface PlaySessionCleanup {
   physics: StationPhysics | null;
   resize: () => void;
   session: AuthSession | null;
-  editorReturnButton: HTMLButtonElement | null;
 }
 
 let activeCleanup: PlaySessionCleanup | null = null;
 
-export function stopPlaySession(): void {
+export function stopPlaySession(options: { restoreTitle?: boolean } = {}): void {
   const cleanup = activeCleanup;
   if (!cleanup) return;
   activeCleanup = null;
+  externallyPaused = false;
 
   cleanup.gameMenu.dispose();
   cleanup.avmsTerminal.dispose();
@@ -180,15 +101,20 @@ export function stopPlaySession(): void {
   cleanup.networkClient?.leave();
   cleanup.networkClient?.close();
   window.removeEventListener('resize', cleanup.resize);
-  cleanup.editorReturnButton?.remove();
   started = false;
-  restoreTitleScreen(cleanup.session);
+  if (options.restoreTitle ?? true) {
+    restoreTitleScreen(cleanup.session);
+    return;
+  }
+  getPlayChromeRoot()?.classList.add('is-hidden');
 }
 
 export interface StartPlaySessionOptions {
   requireAuth?: boolean;
   session?: AuthSession | null;
   bootstrap?: GameBootstrap;
+  /** Scene-resolved world config. Skips URL param resolution when provided. */
+  worldParams?: PlayWorldParams;
 }
 
 async function warmPlaySpawnSurface(
@@ -264,7 +190,8 @@ function createPlayGameLoop(options: {
     },
     onResetPeak: () => overlays.hud.resetPeak(),
     isPaused: () =>
-      overlays.gameMenu.isPaused()
+      externallyPaused
+      || overlays.gameMenu.isPaused()
       || overlays.avmsTerminal.isPaused()
       || overlays.entertainmentSystem.isPaused()
       || overlays.weaponShop.isPaused()
@@ -476,9 +403,8 @@ export async function startPlaySession(
   loading?.setProgress(0.15);
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
-  const world = await loadPlayWorldContext(loading);
-  const editorReturnButton = mountPlayEditorReturnButton(world);
-  const dom = collectPlaySessionDom();
+  const world = await loadPlayWorldContext(loading, options.worldParams);
+  const dom = collectPlaySessionDom(mountPlayChrome(document.body));
 
   const { renderer, rendererError } = await createPlayRenderer(dom, world, bootstrap);
   loading?.setProgress(0.45);
@@ -577,7 +503,6 @@ export async function startPlaySession(
     physics,
     resize,
     session,
-    editorReturnButton,
   };
 
   if (loading) {

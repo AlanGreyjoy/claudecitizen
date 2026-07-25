@@ -1,14 +1,19 @@
 ---
 sidebar_position: 1
 title: Overview
-description: What the Admin App is, what it manages, and how it fits into ClaudeCitizen.
+description: What the Server console is, what it manages, and how it fits into ClaudeCitizen.
 ---
 
-# Admin App overview
+# Server console overview
 
-The **Admin App** is a browser-based operator console for the ClaudeCitizen Rust backend. It lets you inspect registered players and manage the **game catalog** — ship, prop, item, weapon, and backpack definitions — plus global **game settings** such as starting ARC balance and starter loadouts.
+The **Server** tab in the AsteronEngine editor is the operator console for the
+ClaudeCitizen Rust backend. It lets you inspect registered players and manage the
+**game catalog** — ship, prop, item, weapon, backpack, and wearable definitions —
+plus global **game settings** such as starting ARC balance and starter loadouts.
 
-Unlike the [CC Editor](/cc-editor), which authors 3D prefab JSON for the client, the Admin App manages **persistent server data** stored in PostgreSQL.
+The rest of the editor authors **project files** (scenes, prefabs, planets). The
+Server tab is the one place that edits **persistent server data** stored in
+PostgreSQL, live against a deployed backend.
 
 ## What you can do
 
@@ -22,40 +27,47 @@ Unlike the [CC Editor](/cc-editor), which authors 3D prefab JSON for the client,
 
 ## Architecture
 
-The Admin App is a lightweight DOM UI — not React — loaded as a separate boot mode from the main game client.
+The console is a DOM UI mounted as an editor tab. Requests are forwarded by the
+Electron main process, which holds the `cc_admin` cookie — the renderer's
+`cceditor://app` origin cannot store it and would fail the backend's CORS check.
 
 ```mermaid
 flowchart LR
-  Browser["Browser · ?boot=admin"]
-  AdminUI["admin_screen.ts"]
-  AdminAPI["admin_api.ts"]
+  Tab["Editor · Server tab"]
+  Console["panels/server_console.ts"]
+  AdminAPI["net/admin_api.ts"]
+  Proxy["main process · /__editor/backend/*"]
   Rust["Axum /admin/*"]
   Catalog["SQLx catalog handlers"]
   DB[(PostgreSQL)]
 
-  Browser --> AdminUI
-  AdminUI --> AdminAPI
-  AdminAPI -->|"HTTP + cc_admin cookie"| Rust
+  Tab --> Console
+  Console --> AdminAPI
+  AdminAPI --> Proxy
+  Proxy -->|"HTTP + cc_admin cookie"| Rust
   Rust --> Catalog
   Catalog --> DB
 ```
 
 | Path | Role |
 | --- | --- |
-| `src/app/admin_screen.ts` | Admin UI (login, sidebar, tables, forms) |
+| `src/editor/panels/server_console.ts` | Console UI (login, sidebar, tables, forms) |
 | `src/net/admin_api.ts` | Typed fetch helpers for `/admin/*` endpoints |
+| `editor-desktop/main.mjs` | `/__editor/backend/*` proxy to the configured backend |
 | `backend/crates/server/src/admin.rs` | Admin session, users, catalog, and settings handlers |
 | `backend/crates/server/src/game.rs` | Player bootstrap, inventory/loadout, and build persistence |
 
 ## When you need it
 
-Use the Admin App when you are running the full online stack (`npm run dev:infra` + `npm run dev:server`) and want to:
+Use the Server console when you are running the full online stack
+(`npm run dev:infra` + a running backend) and want to:
 
 - Seed or tune ship/prop/item catalogs before players sign in
 - Adjust what new players receive on first bootstrap
 - Inspect account and ship ownership during development
 
-The single-player browser build does **not** require the Admin App. See [Getting started](./getting-started) to run it locally.
+Offline playtesting in the editor does **not** require it. See
+[Getting started](./getting-started) to open it.
 
 ## Related docs
 

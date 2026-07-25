@@ -1,8 +1,8 @@
-import { syncDynamicColliders } from "../../physics/station_physics";
+import { syncDynamicColliders } from "../../physics/station-physics";
 import { buildRoomForArea } from "../../player/hangar_build/validation";
-import { pickStationFloorPoint } from "../../render/hangar/prop_instances";
+import { pickStationFloorPoint } from "../../render/hangar/prop-instances";
 import type { BuildAreaRuntime } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export async function syncBuildPropsVisuals(
   ctx: LoopContext,

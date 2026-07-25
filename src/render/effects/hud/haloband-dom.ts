@@ -1,4 +1,4 @@
-import { createHaloBandDockIcon } from './haloband_icons';
+import { createHaloBandDockIcon } from './haloband-icons';
 import { createUiIcon, UiIcons } from '../../../ui/icons';
 
 export interface HaloBandElements {

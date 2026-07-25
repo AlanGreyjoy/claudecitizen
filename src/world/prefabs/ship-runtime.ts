@@ -21,7 +21,7 @@ import {
   type ShipRampInteract,
   type ShipSeatSpec,
   type ShipSpec,
-} from "../../player/ship_layout";
+} from "../../player/ship-layout";
 import type { PrefabComponent, PrefabDocument, PrefabEntity, PrefabNodeOverride } from "./schema";
 import type { LocalOffset, Vec3 } from "../../types";
 import {
@@ -30,8 +30,8 @@ import {
   preloadMeshColliders,
   validateMeshColliders,
 } from "../../physics/colliders";
-import { buildPrefabColliders } from "../../physics/prefab_colliders";
-import { buildPrefabSounds } from "./sound_runtime";
+import { buildPrefabColliders } from "../../physics/prefab-colliders";
+import { buildPrefabSounds } from "./sound-runtime";
 
 /**
  * Derives the ship gameplay layout (doors, seats, ramp anchors, hull url)

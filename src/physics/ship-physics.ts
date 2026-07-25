@@ -5,7 +5,7 @@ import {
   DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD,
   type GameplayCollider,
 } from "./colliders";
-import { castCameraOcclusion } from "./camera_occlusion";
+import { castCameraOcclusion } from "./camera-occlusion";
 import {
   addCollider,
   castRapierWorldRay,
@@ -14,7 +14,7 @@ import {
   removeStaticColliders,
   type RapierWorldHandle,
   type PhysicsRayHit,
-} from "./rapier_world";
+} from "./rapier-world";
 
 function shipRight(ship: FlightBody): Vec3 {
   return normalize(cross(ship.forward, ship.up));

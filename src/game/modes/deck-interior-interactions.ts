@@ -1,18 +1,18 @@
-import { getActiveShip } from "../../player/world_state";
-import { getShipLayout } from "../../player/ship_layout";
+import { getActiveShip } from "../../player/world-state";
+import { getShipLayout } from "../../player/ship-layout";
 import {
   isOnShipRampDeck,
   nearestDoor,
   nearRampPanel,
   resolveDoorInteractAim,
   type DeckCharacterState,
-} from "../../player/ship_deck";
-import { playShipRampToggleSfx } from "../../player/ship_articulation_sfx";
+} from "../../player/ship-deck";
+import { playShipRampToggleSfx } from "../../player/ship-articulation-sfx";
 import { playSfx } from "../../audio/sfx";
 import type { FrameActions } from "../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
-import { tryDeckSeatOrBed } from "./deck_seat_bed";
+import { tryDeckSeatOrBed } from "./deck-seat-bed";
 
 function tryDeckDoor(
   ctx: LoopContext,

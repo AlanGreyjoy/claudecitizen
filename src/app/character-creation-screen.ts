@@ -1,16 +1,16 @@
-import './character_creation_screen.css';
+import './character-creation-screen.css';
 import {
   buildPlayerSidekickDefinition,
   clonePlayerCharacterAppearance,
   DEFAULT_PLAYER_CHARACTER_APPEARANCE,
   type PlayerCharacterAppearanceV1,
-} from '../player/character_creator/player_character_appearance';
-import { loadSidekickCatalog } from '../player/character_creator/sidekick_catalog';
+} from '../player/character_creator/player-character-appearance';
+import { loadSidekickCatalog } from '../player/character_creator/sidekick-catalog';
 import { savePlayerCharacter } from '../net/api';
 import {
   createSidekickPreviewStage,
   type SidekickPreviewStage,
-} from '../render/characters/sidekick/preview_stage';
+} from '../render/characters/sidekick/preview-stage';
 
 interface StyleControl {
   key: 'headVariant' | 'hairVariant' | 'eyebrowVariant' | 'earVariant' | 'noseVariant' | 'facialHairVariant';

@@ -1,5 +1,5 @@
 import { vec3 } from '../math/vec3';
-import { flightOptionsFromSpec, integrateHoveringShip } from '../flight/flight_body';
+import { flightOptionsFromSpec, integrateHoveringShip } from '../flight/flight-body';
 import {
   GET_UP_FROM_BED_SECONDS,
   LIE_TRANSITION_SECONDS,
@@ -19,17 +19,17 @@ import {
   getDeckSpawnFloorHint,
   getDeckWorldPose,
   getLeavePilotStandPose,
-} from './ship_deck';
+} from './ship-deck';
 import {
   createTransitionPose,
   getBedAnchor,
   getBedSpec,
   getPilotSeatAnchor,
   worldToShipLocal,
-} from './ship_interaction';
+} from './ship-interaction';
 import type { FlightBody, GameMode, Planet, Pose } from '../types';
-import type { TransitionType, WorldState } from './world_state';
-import { getActiveShip, getActiveShipBody } from './world_state';
+import type { TransitionType, WorldState } from './world-state';
+import { getActiveShip, getActiveShipBody } from './world-state';
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));

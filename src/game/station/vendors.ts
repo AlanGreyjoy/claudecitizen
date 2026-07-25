@@ -11,7 +11,7 @@ import {
   screenWorldNormal,
   stationHotspotEyeWorld,
   type ScreenHotspotAnchor,
-} from "../../player/screen_hotspot";
+} from "../../player/screen-hotspot";
 import {
   resolveStationWalkView,
   resolveWeaponShopGazeTarget,
@@ -19,20 +19,20 @@ import {
   weaponShopLabel,
   weaponShopWorldPosition,
   type WeaponShopGazeHit,
-} from "../../player/weapon_shop_gaze";
+} from "../../player/weapon-shop-gaze";
 import {
   outfittersLabel,
   outfittersWorldPosition,
   resolveOutfittersGazeTarget,
   type OutfittersGazeHit,
-} from "../../player/outfitters_gaze";
+} from "../../player/outfitters-gaze";
 import {
   foodShopLabel,
   foodShopWorldPosition,
   resolveFoodShopGazeTarget,
   type FoodShopGazeHit,
-} from "../../player/food_shop_gaze";
-import type { LoopContext } from "../loop_context";
+} from "../../player/food-shop-gaze";
+import type { LoopContext } from "../loop-context";
 import type { FrameActions } from "../types";
 
 interface VendorLayout {

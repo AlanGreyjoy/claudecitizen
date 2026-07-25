@@ -1,7 +1,11 @@
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-export const EDITOR_ASSET_ROOTS = Object.freeze(['editor/assets', 'src/assets']);
+/** Asset roots are always resolved under the open project root. */
+export const PROJECT_ASSET_ROOTS = Object.freeze(['assets', 'src/assets']);
+
+/** Matches the client fallback in src/net/api.ts. */
+const DEFAULT_BACKEND_URL = 'http://localhost:3000';
 
 const LISTED_EXTENSIONS = new Set([
   '.glb',
@@ -112,10 +116,11 @@ export function createEditorRepository(rawProjectRoot) {
     resolve(projectRoot, 'src/player/equipment/data/base-characters.json');
   const characterSettingsPath = () =>
     resolve(projectRoot, 'src/player/data/character-settings.json');
+  const projectSettingsPath = () => resolve(projectRoot, 'asteron.project.json');
 
   function resolveAssetRoot(root) {
-    if (!EDITOR_ASSET_ROOTS.includes(root)) {
-      throw new EditorRepositoryError(`root must be one of: ${EDITOR_ASSET_ROOTS.join(', ')}`);
+    if (!PROJECT_ASSET_ROOTS.includes(root)) {
+      throw new EditorRepositoryError(`root must be one of: ${PROJECT_ASSET_ROOTS.join(', ')}`);
     }
     return resolve(projectRoot, root);
   }
@@ -223,6 +228,53 @@ export function createEditorRepository(rawProjectRoot) {
     return { saved: true, path };
   }
 
+  /**
+   * Project settings (`asteron.project.json`). `backendUrl` is the deployed
+   * Rust API this project talks to; Build Web stamps it into the release so one
+   * bundle can target any deployment. Players still authenticate normally, so
+   * no secret lives in this file.
+   */
+  function normalizeProjectSettings(value) {
+    const source = typeof value === 'object' && value !== null ? value : {};
+    const backendUrl =
+      typeof source.backendUrl === 'string' ? source.backendUrl.trim().replace(/\/$/, '') : '';
+    const build =
+      typeof source.build === 'object' && source.build !== null ? source.build : {};
+    return {
+      schemaVersion: 1,
+      name: typeof source.name === 'string' && source.name.trim()
+        ? source.name.trim()
+        : basename(projectRoot),
+      backendUrl: backendUrl || DEFAULT_BACKEND_URL,
+      defaultScene: requireSlugId(
+        typeof source.defaultScene === 'string' && source.defaultScene ? source.defaultScene : 'title',
+        'defaultScene',
+      ),
+      build: {
+        outDir: typeof build.outDir === 'string' && build.outDir.trim() ? build.outDir.trim() : 'dist',
+      },
+    };
+  }
+
+  async function getProjectSettings() {
+    let raw = {};
+    try {
+      raw = JSON.parse(await readFile(projectSettingsPath(), 'utf8'));
+    } catch {
+      // Projects created before project settings existed fall back to defaults.
+    }
+    return { document: normalizeProjectSettings(raw) };
+  }
+
+  async function saveProjectSettings(value) {
+    const document = normalizeProjectSettings(requireDocument(value));
+    if (!/^https?:\/\/[^\s]+$/.test(document.backendUrl)) {
+      throw new EditorRepositoryError('backendUrl must be an http(s) URL');
+    }
+    const path = await writeJson(projectRoot, projectSettingsPath(), document);
+    return { saved: true, path, document };
+  }
+
   async function listAnimationControllers() {
     const controllers = [];
     try {
@@ -317,6 +369,49 @@ export function createEditorRepository(rawProjectRoot) {
     return { saved: true, id, path };
   }
 
+  async function createAssetFolder(rootValue, parentPathValue, nameValue) {
+    const root = typeof rootValue === 'string' ? rootValue : 'assets';
+    if (!PROJECT_ASSET_ROOTS.includes(root)) {
+      throw new EditorRepositoryError(`root must be one of: ${PROJECT_ASSET_ROOTS.join(', ')}`);
+    }
+    const parentPath =
+      typeof parentPathValue === 'string'
+        ? parentPathValue
+            .trim()
+            .replace(/\\/g, '/')
+            .replace(/^\/+|\/+$/g, '')
+        : '';
+    if (parentPath.includes('\0') || parentPath.split('/').includes('..')) {
+      throw new EditorRepositoryError('invalid parent folder path');
+    }
+    const name = typeof nameValue === 'string' ? nameValue.trim() : '';
+    if (!name) {
+      throw new EditorRepositoryError('folder name is required');
+    }
+    if (name === '.' || name === '..' || /[\\/]/.test(name) || name.includes('\0')) {
+      throw new EditorRepositoryError('folder name cannot contain path separators');
+    }
+    if (name.startsWith('.')) {
+      throw new EditorRepositoryError('folder name cannot start with a dot');
+    }
+
+    const relativePath = parentPath ? `${parentPath}/${name}` : name;
+    const absolute = resolveAssetPath(root, relativePath);
+    try {
+      const existing = await stat(absolute);
+      if (existing.isDirectory()) {
+        throw new EditorRepositoryError(`Folder already exists: ${relativePath}`, 409);
+      }
+      throw new EditorRepositoryError(`A file already exists at ${relativePath}`, 409);
+    } catch (error) {
+      if (error instanceof EditorRepositoryError) throw error;
+      // Missing path — create it.
+    }
+
+    await mkdir(absolute, { recursive: true });
+    return { root, path: relativePath, kind: 'dir' };
+  }
+
   return Object.freeze({
     projectRoot,
     resolveAssetPath,
@@ -324,6 +419,7 @@ export function createEditorRepository(rawProjectRoot) {
       root,
       entries: await listAssetsRecursive(resolveAssetRoot(root)),
     }),
+    createAssetFolder,
     listPrefabs,
     getPrefab,
     savePrefab,
@@ -334,6 +430,8 @@ export function createEditorRepository(rawProjectRoot) {
     saveBaseCharacters,
     getCharacterSettings,
     saveCharacterSettings,
+    getProjectSettings,
+    saveProjectSettings,
     listAnimationControllers,
     getAnimationController,
     saveAnimationController,

@@ -1,5 +1,5 @@
 import type { LocalOffset } from "../types";
-import type { ShipSpec } from "./ship_layout";
+import type { ShipSpec } from "./ship-layout";
 
 /**
  * Cockpit flight camera feel: thrust FOV kick + smoothed boost shake.

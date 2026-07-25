@@ -6,7 +6,8 @@ description: Navigate and debug the ClaudeCitizen Electron scene and prefab edit
 # Prefab Editor
 
 Standalone Electron editor for scenes and station/ship/site/prop prefabs.
-Launch with `npm run editor`; no Vite development server is involved. Scene
+Launch with `npm run editor:dev` for HMR, or `npm run editor` for a
+production-like build. Scene
 documents live in `src/world/scenes/data/`, Play Mode runs in a separate
 Electron window, and File → Build Web creates the release bundle.
 
@@ -21,7 +22,7 @@ Electron window, and File → Build Web creates the release bundle.
 | Project | `src/editor/react/panels/ProjectPanel.tsx` | Asset browser |
 | Toolbar | `src/editor/react/panels/Toolbar.tsx` | New/Save/Load/Play/Build, gizmo modes |
 
-Canonical data flow: `document.ts` (store) → `serialize.ts` (prefab JSON) → `src/world/prefabs/schema.ts` (validators). React UI sits on top of `EditorStore`; dense component field editors still use `panels/inspector_component_fields_dom.ts`.
+Canonical data flow: `document.ts` (store) → `serialize.ts` (prefab JSON) → `src/world/prefabs/schema.ts` (validators). React UI sits on top of `EditorStore`; component field editors live in `react/panels/component_fields/`.
 
 ## Selection
 
@@ -46,7 +47,7 @@ Three entry points (all call `addComponentFromPalette` in `component_actions.ts`
 | **Hierarchy** | RMB entity → **Components** submenu |
 | **GLB node** | RMB GLB row in hierarchy **or** RMB viewport when a GLB node is sub-selected → **Add Component to Node** |
 
-Palette is filtered by prefab **kind** (`station` / `ship` / `site` / `prop`) and **singleton** types already in the document are disabled. Registry + defaults: `src/world/prefabs/component_registry.ts`. Field editors: `inspector_component_fields_dom.ts` (mounted from React inspector).
+Palette is filtered by prefab **kind** (`station` / `ship` / `site` / `prop`) and **singleton** types already in the document are disabled. Registry + defaults: `src/world/prefabs/component_registry.ts`. Field editors: `react/panels/component_fields/` (from React inspector).
 
 ### Where components land
 
@@ -125,15 +126,15 @@ See also `.cursor/skills/ship-flight/SKILL.md`.
 
 ```bash
 node scripts/inspect_glb.mjs path/to/model.glb
-# or editor/assets/... for local library assets
+# or <project>/assets/... for project library assets
 ```
 
 Dumps scene hierarchy, mesh bindings, and animation clip targets. Use this **before** wiring `animation`, `ship-door`, `ship-gear`, or `collider.node` fields.
 
 ## Play Mode & Validate
 
-- **Play** (`F6`): saves and launches the active scene/document in Electron's
-  separate Play Mode window. Press it again to stop.
+- **Play** (`F6`): runs the open scene/document — unsaved edits included — in the
+  in-window Game view. Press it again to stop; `F7` pauses and resumes.
 - **Ship kind**: viewport toolbar toggles gear/ramp/doors for in-editor articulation preview.
 - **Ship sandbox**: `?shipPrefab=<id>` (authoring build) — console helper:
   ```js

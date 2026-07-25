@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import type { Biome, LandingSiteHint, Planet } from '../../types';
-import { oceanWaterLevelMeters } from '../../world/coastal_profile';
+import { oceanWaterLevelMeters } from '../../world/coastal-profile';
 import { cartesianFromLatLonAlt } from '../../world/coordinates';
 import { sampleSurfaceHeight } from '../../world/elevation';
-import type { SurfaceDestination } from '../../world/biome_teleport';
-import { samplePlanetSurface } from '../../world/planet_surface';
+import type { SurfaceDestination } from '../../world/biome-teleport';
+import { samplePlanetSurface } from '../../world/planet-surface';
 import type { PlanetSurfacePalette } from '../../world/planets/schema';
 
 export interface PlanetPreviewMeshDiagnostics {

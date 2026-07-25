@@ -1,7 +1,7 @@
 import { dot, length, normalize, scale, sub } from "../math/vec3";
 import type { FlightBody, Vec3 } from "../types";
-import { localOffsetToWorld } from "./ship_interaction";
-import type { EntertainmentSystemSpec } from "./ship_layout";
+import { localOffsetToWorld } from "./ship-interaction";
+import type { EntertainmentSystemSpec } from "./ship-layout";
 
 /**
  * Gaze pick for bunk entertainment-system markers while in bed

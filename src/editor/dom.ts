@@ -284,3 +284,107 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
     }, 0);
   });
 }
+
+export type PromptDialogOptions = {
+  title?: string;
+  message: string;
+  defaultValue?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  placeholder?: string;
+};
+
+let activePromptDialog: { finish: (value: string | null) => void } | null = null;
+
+/** Electron blocks `window.prompt()` — use this in-editor text prompt instead. */
+export function showPromptDialog(options: PromptDialogOptions): Promise<string | null> {
+  if (activePromptDialog) activePromptDialog.finish(null);
+
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      const title = options.title ?? 'Input';
+      const confirmLabel = options.confirmLabel ?? 'OK';
+      const cancelLabel = options.cancelLabel ?? 'Cancel';
+      const defaultValue = options.defaultValue ?? '';
+
+      const host = document.getElementById('editor-root') ?? document.body;
+      const overlay = el('div', { className: 'ed-dialog-overlay' });
+      const dialog = el('div', {
+        className: 'ed-dialog',
+        attrs: {
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'ed-dialog-title',
+        },
+      });
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'ed-input ed-dialog-input';
+      input.value = defaultValue;
+      if (options.placeholder) input.placeholder = options.placeholder;
+
+      const cancelBtn = el('button', {
+        className: 'ed-btn ed-dialog-btn-cancel',
+        text: cancelLabel,
+        attrs: { type: 'button' },
+        on: { click: () => finish(null) },
+      });
+
+      const confirmBtn = el('button', {
+        className: 'ed-btn ed-dialog-btn-confirm',
+        text: confirmLabel,
+        attrs: { type: 'button' },
+        on: { click: () => finish(input.value) },
+      });
+
+      dialog.append(
+        el('h2', { className: 'ed-dialog-title', text: title, attrs: { id: 'ed-dialog-title' } }),
+        el('p', { className: 'ed-dialog-message', text: options.message }),
+        input,
+        el('div', { className: 'ed-dialog-actions' }, [cancelBtn, confirmBtn]),
+      );
+      overlay.append(dialog);
+      host.append(overlay);
+
+      const onKeyDown = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          finish(null);
+          return;
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          finish(input.value);
+        }
+      };
+
+      const onOverlayClick = (event: Event): void => {
+        if (event.target === overlay) finish(null);
+      };
+
+      overlay.addEventListener('click', onOverlayClick);
+      window.addEventListener('keydown', onKeyDown);
+      requestAnimationFrame(() => overlay.classList.add('is-visible'));
+
+      function cleanup(): void {
+        overlay.removeEventListener('click', onOverlayClick);
+        window.removeEventListener('keydown', onKeyDown);
+        overlay.classList.remove('is-visible');
+        window.setTimeout(() => overlay.remove(), 150);
+        activePromptDialog = null;
+      }
+
+      function finish(value: string | null): void {
+        if (!activePromptDialog) return;
+        activePromptDialog = null;
+        cleanup();
+        resolve(value === null ? null : value.trim() || null);
+      }
+
+      activePromptDialog = { finish };
+      input.focus();
+      input.select();
+    }, 0);
+  });
+}

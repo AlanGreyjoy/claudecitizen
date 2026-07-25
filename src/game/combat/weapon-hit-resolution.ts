@@ -3,21 +3,21 @@ import {
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
 } from "../../player/modes";
-import { getActiveShipBody } from "../../player/world_state";
+import { getActiveShipBody } from "../../player/world-state";
 import {
   resolveBallisticHit,
   type BallisticSegment,
   type WeaponGeometryHit,
-} from "../../player/weapon_ballistics";
+} from "../../player/weapon-ballistics";
 import {
   resolveStationWalkView,
   stationWalkAimOriginWorld,
-} from "../../player/weapon_shop_gaze";
-import { castStationWorldRay } from "../../physics/station_physics";
-import { castShipWorldRay } from "../../physics/ship_physics";
-import { castTerrainPath } from "../../world/planet_surface";
+} from "../../player/weapon-shop-gaze";
+import { castStationWorldRay } from "../../physics/station-physics";
+import { castShipWorldRay } from "../../physics/ship-physics";
+import { castTerrainPath } from "../../world/planet-surface";
 import type { Vec3 } from "../../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 export function fallbackWeaponPose(
   ctx: LoopContext,

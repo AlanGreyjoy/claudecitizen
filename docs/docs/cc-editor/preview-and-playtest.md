@@ -1,20 +1,25 @@
 ---
 sidebar_position: 13
 title: Preview and playtest
-description: Use universal Electron Play Mode for scenes, prefabs, and world documents.
+description: Play, pause, and stop the open document in the editor's Game view.
 ---
 
 # Preview and playtest
 
-The CC Editor has one universal **Play** button. It saves the active document,
-opens a separate Electron Play Mode window, and chooses the correct runtime
-adapter for the active scene, prefab, planet, system, or character test.
+The CC Editor plays the open document in-window, Unity-style. **Play** runs the
+active scene — or wraps the active prefab in a throwaway stage scene — in the
+Game view layered over the workspace.
 
-## Universal Play
+## Play, pause, stop
 
-Press **Play** or `F6` to start. Press it again, use **Play → Stop**, or close the
-Play Mode window to stop. Play always saves first, so the runtime reads the
-same project data a web build would package.
+| Action | Shortcut |
+| --- | --- |
+| Play / Stop | `F6` |
+| Pause / Resume | `F7` |
+
+Play reads the **live editor document**, unsaved edits included, so you can
+tweak a transform and press Play without saving first. Stop disposes the runtime
+and restores the editor viewport. There is no separate Play Mode window.
 
 ## Deep-link URLs
 
@@ -86,7 +91,7 @@ the editor UI but bundle scene documents so released scene links can resolve.
 
 ## Catalog integration
 
-Station and ship prefabs referenced by the [Admin App](/admin-app) catalog are the same JSON files you author here. After playtesting locally, create or update definitions so online players receive the content.
+Station and ship prefabs referenced by the [Server console](/admin-app) catalog are the same JSON files you author here. After playtesting locally, create or update definitions so online players receive the content.
 
 ## Related
 

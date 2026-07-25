@@ -9,11 +9,10 @@ import {
   type AuthSession,
 } from '../net/api';
 import { createUiIcon, UiIcons } from '../ui/icons';
+import { ensureTitleScreenMarkup } from '../ui/screens/mount';
 
 export interface TitleScreenOptions {
   onPlay: (session: AuthSession) => void;
-  /** Editor entry - only provided in dev builds; button stays hidden otherwise. */
-  onEditor?: () => void;
 }
 
 type SceneName = 'login' | 'register' | 'forgot' | 'reset' | 'signed-in';
@@ -27,7 +26,7 @@ let titleScreenController: TitleScreenController | null = null;
 
 export function restoreTitleScreen(session?: AuthSession | null): void {
   document.getElementById('app')?.classList.add('is-hidden');
-  document.getElementById('title-screen')?.classList.remove('is-hidden');
+  ensureTitleScreenMarkup().classList.remove('is-hidden');
   if (!titleScreenController) return;
   if (session) {
     titleScreenController.renderSignedIn(session);
@@ -123,27 +122,12 @@ function formValue(form: HTMLFormElement, name: string): string {
 }
 
 export function showTitleScreen(options: TitleScreenOptions): void {
-  const screen = requireElement<HTMLElement>('title-screen');
+  const screen = ensureTitleScreenMarkup();
   const actions = requireElement<HTMLElement>('title-actions');
-  const editorBtn = requireElement<HTMLButtonElement>('title-editor-btn');
-  const editorAccess = document.getElementById('title-editor-access');
   let currentScene: SceneName | null = null;
   let lastSession: AuthSession | null = null;
 
   screen.classList.remove('is-hidden');
-
-  if (options.onEditor) {
-    const onEditor = options.onEditor;
-    editorAccess?.classList.remove('is-hidden');
-    editorBtn.addEventListener(
-      'click',
-      () => {
-        screen.classList.add('is-hidden');
-        onEditor();
-      },
-      { once: true },
-    );
-  }
 
   function setStatus(message: string, isError = false): void {
     const status = actions.querySelector<HTMLElement>('[data-auth-status]');

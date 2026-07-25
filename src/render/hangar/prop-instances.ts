@@ -9,7 +9,7 @@ import {
   cloneObjectMaterials,
   createPropInstanceGroup,
   loadPrefabModel,
-} from '../prefabs/prefab_renderer';
+} from '../prefabs/prefab-renderer';
 
 export interface HangarPropRendererOptions {
   stationRoot: THREE.Object3D;

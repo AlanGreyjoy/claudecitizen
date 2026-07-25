@@ -2,24 +2,24 @@ import {
   MODE_IN_BED,
   MODE_IN_SHIP,
 } from "../../player/modes";
-import { getActiveShipBody } from "../../player/world_state";
-import { sampleRenderablePlanetSurface } from "../../world/planet_surface";
-import { atmosphere01FromAltitude } from "../../player/environment_status";
+import { getActiveShipBody } from "../../player/world-state";
+import { sampleRenderablePlanetSurface } from "../../world/planet-surface";
+import { atmosphere01FromAltitude } from "../../player/environment-status";
 import { updatePlayerVitals } from "../../player/vitals";
-import { annotateNpcHeadLookTowardPlayer } from "../../npc/player_gaze";
-import { STATION_SOUND_MODES } from "../audio/scene_sounds";
-import { buildFrameHud } from "./frame_hud";
-import { renderEntertainmentCameraFeel } from "./entertainment_camera_frame";
+import { annotateNpcHeadLookTowardPlayer } from "../../npc/player-gaze";
+import { STATION_SOUND_MODES } from "../audio/scene-sounds";
+import { buildFrameHud } from "./frame-hud";
+import { renderEntertainmentCameraFeel } from "./entertainment-camera-frame";
 import {
   buildRendererFrameArgs,
   isWeaponWalkMode,
-} from "./renderer_frame_args";
-import type { LoopContext } from "../loop_context";
+} from "./renderer-frame-args";
+import type { LoopContext } from "../loop-context";
 import type { CameraState } from "../types";
-import type { SceneSounds } from "../audio/scene_sounds";
-import type { Css3dScreens } from "../screens/css3d_screens";
-import type { BuildTool } from "../station/build_tool";
-import type { WeaponCombat } from "../combat/weapon_combat";
+import type { SceneSounds } from "../audio/scene-sounds";
+import type { Css3dScreens } from "../screens/css3d-screens";
+import type { BuildTool } from "../station/build-tool";
+import type { WeaponCombat } from "../combat/weapon-combat";
 import type { CameraOcclusion } from "../camera/occlusion";
 
 export interface RenderFrameInput {

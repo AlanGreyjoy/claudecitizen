@@ -54,7 +54,7 @@ Together they turn [Domain-Driven Design](./domain-design) and [Design Principle
 
 **Plugins:** `@eslint/js`, `typescript-eslint`, `eslint-plugin-import-x`, `eslint-plugin-sonarjs`.
 
-**Ignored paths:** `dist/`, `target/`, `docs/`, `vendor/`, `**/*.d.ts`, `vite.config.ts`, legacy `scripts/**/*.mjs`.
+**Ignored paths:** `dist/`, `target/`, `backend/target/`, `docs/`, `**/*.d.ts`, `vite.config.ts`, legacy `scripts/**/*.mjs`.
 
 Most project-specific rules are **warnings** (complexity, duplication) so existing code can evolve gradually. **Architectural boundaries are errors** — domain layers must not import Three.js or the DOM.
 
@@ -114,7 +114,7 @@ Render may **read** domain state; it must not pull in app orchestration.
 
 | Rule | Limit | Rationale |
 | --- | --- | --- |
-| `max-lines` | 900 (warn) | Bootstrap wires modules; it should not become a god file |
+| `max-lines` | 900 (error) | Bootstrap wires modules; it should not become a god file |
 | `sonarjs/cognitive-complexity` | 20 (warn) | Slightly higher than default — orchestration is inherently branchy |
 
 ### Rust backend

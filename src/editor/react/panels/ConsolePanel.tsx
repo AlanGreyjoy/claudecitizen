@@ -29,27 +29,46 @@ function formatArgs(args: unknown[]): string {
 }
 
 /**
- * Bottom-left Console tab: captures console.log/info/warn/error into a ring buffer.
+ * Bottom Console tab: captures console.log/info/warn/error into a ring buffer.
+ * Expands to the full bottom dock width when the Console tab is active.
+ *
+ * Updates are coalesced via rAF so a burst of console output (e.g. WebGL context
+ * warnings during HMR) cannot synchronously re-enter React and blow the update depth.
  */
 export function ConsolePanel(): ReactElement {
-  const [, bump] = useReducer((n: number) => n + 1, 0);
+  const [revision, bump] = useReducer((n: number) => n + 1, 0);
   const entriesRef = useRef<LogEntry[]>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
+  const rafRef = useRef<number | null>(null);
+  const capturingRef = useRef(false);
 
   useEffect(() => {
     const originals: Partial<Record<LogLevel, (...args: unknown[]) => void>> = {};
+    const scheduleBump = (): void => {
+      if (rafRef.current != null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        bump();
+      });
+    };
     const push = (level: LogLevel, args: unknown[]): void => {
-      const entry: LogEntry = {
-        id: nextId++,
-        level,
-        message: formatArgs(args),
-        timeMs: Date.now(),
-      };
-      const next = entriesRef.current.concat(entry);
-      entriesRef.current =
-        next.length > MAX_ENTRIES ? next.slice(next.length - MAX_ENTRIES) : next;
-      bump();
+      if (capturingRef.current) return;
+      capturingRef.current = true;
+      try {
+        const entry: LogEntry = {
+          id: nextId++,
+          level,
+          message: formatArgs(args),
+          timeMs: Date.now(),
+        };
+        const next = entriesRef.current.concat(entry);
+        entriesRef.current =
+          next.length > MAX_ENTRIES ? next.slice(next.length - MAX_ENTRIES) : next;
+        scheduleBump();
+      } finally {
+        capturingRef.current = false;
+      }
     };
 
     for (const level of LEVELS) {
@@ -62,6 +81,10 @@ export function ConsolePanel(): ReactElement {
     }
 
     return () => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       for (const level of LEVELS) {
         const original = originals[level];
         if (original) console[level] = original as typeof console.log;
@@ -73,7 +96,7 @@ export function ConsolePanel(): ReactElement {
     const list = listRef.current;
     if (!list || !stickToBottomRef.current) return;
     list.scrollTop = list.scrollHeight;
-  });
+  }, [revision]);
 
   const entries = entriesRef.current;
 

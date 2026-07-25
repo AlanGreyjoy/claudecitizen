@@ -1,7 +1,7 @@
 import { createWorldSession, type GameBootstrap } from './api';
-import type { WorldState } from '../player/world_state';
-import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/world_state';
-import { getShipInstance } from '../flight/ship_world';
+import type { WorldState } from '../player/world-state';
+import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/world-state';
+import { getShipInstance } from '../flight/ship-world';
 import { MODE_IN_SHIP } from '../player/modes';
 import type {
   CharacterRenderState,
@@ -9,8 +9,8 @@ import type {
   NetworkShipBody,
   Vec3,
 } from '../types';
-import { resolveSnapshotCharacterAppearance } from './remote_appearance';
-import { loadPredictionEngine, type PredictionEngine, type PredictionFrame } from './prediction_wasm';
+import { resolveSnapshotCharacterAppearance } from './remote-appearance';
+import { loadPredictionEngine, type PredictionEngine, type PredictionFrame } from './prediction-wasm';
 import {
   WORLD_PROTOCOL_VERSION,
   WORLD_SIMULATION_VERSION,
@@ -24,7 +24,7 @@ import {
   streamFrame,
   type SnapshotEntityMessage,
   type SnapshotMessage,
-} from './world_protocol';
+} from './world-protocol';
 
 export interface NetworkChatMessage {
   id: string;

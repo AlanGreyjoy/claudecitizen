@@ -1,13 +1,10 @@
-# Protected Assets
+# Legacy public protected assets
 
-This folder is for local-only assets that cannot be redistributed with the open-source repository.
+Prefer the open project's `assets/protected/` for editor-importable packs.
+AsteronEngine serves project assets at `/assets/...`.
 
-Legacy location for paid or license-restricted packs. New editor-importable assets should go under `editor/assets/protected/`.
-
-Current expected local ship path:
+This folder remains only for older checkout layouts. Example historical path:
 
 ```text
-editor/assets/protected/ships/Phobos_Starhopper_Basic.glb
+assets/protected/ships/Phobos_Starhopper_Basic.glb
 ```
-
-Production builds copy only assets referenced by saved prefab JSON.

@@ -26,7 +26,7 @@ Static combat and flight tuning for this ship type. **Ship** prefabs only.
 
 Place on the root entity next to [Ship frame](./ship-frame).
 
-Values can also be overridden by server-side ship definitions in the [Admin App](/admin-app/ship-definitions). Prefab stats serve as defaults when no catalog override exists.
+Values can also be overridden by server-side ship definitions in the [Server console](/admin-app/ship-definitions). Prefab stats serve as defaults when no catalog override exists.
 
 ## See also
 

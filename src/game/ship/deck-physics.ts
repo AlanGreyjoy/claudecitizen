@@ -2,10 +2,10 @@ import {
   DECK_FLOOR_OFFSET_METERS,
   getDeckSpawnFloorHint,
   getDefaultDeckSpawnLocal,
-} from "../../player/ship_deck";
-import { getShipLayout, usesColliderDeck } from "../../player/ship_layout";
-import { createShipPhysics, type ShipPhysics } from "../../physics/ship_physics";
-import type { LoopContext } from "../loop_context";
+} from "../../player/ship-deck";
+import { getShipLayout, usesColliderDeck } from "../../player/ship-layout";
+import { createShipPhysics, type ShipPhysics } from "../../physics/ship-physics";
+import type { LoopContext } from "../loop-context";
 
 export interface DeckPhysics {
   warmShipDeckPhysics: () => Promise<ShipPhysics | null>;

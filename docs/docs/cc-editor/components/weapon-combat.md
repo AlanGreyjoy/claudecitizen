@@ -52,4 +52,4 @@ This component owns presentation assets. Combat balance is configured in **Admin
 
 - [Muzzle flash](./muzzle-flash)
 - [Barrel end](./barrel-end)
-- Admin App [item definitions](/admin-app/item-definitions#weapon-combat-fields)
+- Server console [item definitions](/admin-app/item-definitions#weapon-combat-fields)

@@ -8,10 +8,10 @@ import type {
 } from '../../types';
 import { distance } from '../../math/vec3';
 import { MAX_LEVEL } from '../planet_tiles/domain/constants';
-import { collectTilesNearPosition } from '../planet_tiles/domain/spawn_tiles';
-import { hasSelectedTileAncestor } from '../planet_tiles/domain/tile_coverage';
-import { parentTileInfo } from '../planet_tiles/domain/tile_info';
-import { loadVegetationTile, saveVegetationTile } from './cache/tile_cache';
+import { collectTilesNearPosition } from '../planet_tiles/domain/spawn-tiles';
+import { hasSelectedTileAncestor } from '../planet_tiles/domain/tile-coverage';
+import { parentTileInfo } from '../planet_tiles/domain/tile-info';
+import { loadVegetationTile, saveVegetationTile } from './cache/tile-cache';
 import {
   configureGrassDistanceMeters,
   getGrassDistanceMeters,
@@ -27,8 +27,8 @@ import {
   VEGETATION_SELECTION_BUDGET,
 } from './domain/constants';
 import { tileKey } from './domain/hash';
-import { collectLandingGroveData } from './domain/landing_grove_data';
-import { collectTileVegetationData } from './domain/tile_data';
+import { collectLandingGroveData } from './domain/landing-grove-data';
+import { collectTileVegetationData } from './domain/tile-data';
 import type { StoredVegetationInstance, StoredVegetationTile } from './domain/storage';
 import {
   isVegetationVisibleAtAltitude,
@@ -39,18 +39,18 @@ import {
   disposeInstancedAssets,
   loadInstancedAssetCatalog,
   type InstancedAssetCatalog,
-} from './render/instanced_assets';
+} from './render/instanced-assets';
 import {
   createTreeLodAsset,
   disposeTreeLodAsset,
-} from './render/tree_lod';
+} from './render/tree-lod';
 import { updateVegetationWind } from './render/wind';
 import {
   createEmptyVegetationRenderGroup,
   createVegetationGroupFromStored,
   releaseVegetationGroup,
   type VegetationRenderGroup,
-} from './render/vegetation_group';
+} from './render/vegetation-group';
 import {
   DEFAULT_VEGETATION_SETTINGS,
   normalizeVegetationSettings,

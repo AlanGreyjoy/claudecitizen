@@ -6,18 +6,29 @@ main process.
 
 ## Launch
 
-Build the editor frontend and launch Electron:
+Production-like launch (full Vite build, then Electron):
 
 ```bash
 npm run editor
 ```
 
+Day-to-day authoring with Vite HMR / React Fast Refresh:
+
+```bash
+npm run editor:dev
+```
+
+`editor:dev` starts Electron with `--dev`, which spawns Vite and proxies
+`/__editor` plus project asset mounts through the main process. Use plain
+`editor` when you want to exercise the packaged `dist-editor` path.
+
 Cold start opens the **Projects** window first. Create a new project, open an
 existing AsteronEngine / ClaudeCitizen project folder, or reopen a recent
 project. The editor workspace opens only after a project is selected.
 
-No development server is required. Electron's private `cceditor:` protocol
-serves the editor, project assets, and the constrained document API.
+Packaged builds use Electron's private `cceditor:` protocol for the editor,
+project assets, and the constrained document API. Dev mode loads the renderer
+from Vite instead while keeping those APIs on the Electron bridge.
 
 ## Editor package
 
@@ -41,20 +52,25 @@ npm run editor:desktop:package
 
 The production shell serves `dist-editor/` through the private `cceditor:`
 protocol. The same protocol provides the constrained `/__editor` persistence
-API and serves project assets from `editor/assets`, `src/assets`, and
-`public/assets/protected`.
+API and serves project assets from the open project's `assets/` and
+`src/assets/` trees.
 
 ## Unity-style workflow
 
-- Scene documents live in `src/world/scenes/data/*.scene.json`.
+- Scene documents live in `src/world/scenes/data/*.scene.json` and are GameObject
+  trees. Components (`game-manager`, `planet`, `player-start`,
+  `prefab-instance`, `ui-screen`, `scene-link`, `instanced-scene`) decide what a
+  scene does.
 - Prefabs remain reusable entity trees under `src/world/prefabs/data/`.
-- **Play** / `F6` saves the active document and opens it in a separate Play
-  Mode window. Press it again to stop.
-- **File → Build Web** / `Ctrl+B` saves the active document and runs the
-  release web build into `dist/` (requires a full engine checkout with npm
-  scripts).
-- Scene runtime adapters currently cover title, loading, character creation,
-  main game, prefab/instance stages, and the Sidekick test stage.
+  Right-click a GameObject → **Create Prefab from Selection** to extract one.
+- **Play** / `F6` runs the open document — unsaved edits included — in the Game
+  view. `F7` pauses and resumes; `F6` again stops and restores the editor.
+- **File → Project Settings…** edits `asteron.project.json`: backend URL, boot
+  scene, and build output directory.
+- **File → Build Web** / `Ctrl+B` runs the release web build and writes
+  `asteron.runtime.json` beside it so the bundle knows which backend to call.
+- The **Server** tab is a live operator console over the backend's `/admin/*`
+  routes for players, catalog definitions, and game settings.
 
 ## Project root
 
@@ -79,3 +95,6 @@ hub.
 - The webview cannot provide arbitrary filesystem paths.
 - Editor document identifiers are validated before reads and writes.
 - Asset requests are constrained to explicit project-owned roots.
+- Backend calls are proxied through the main process at `/__editor/backend/*`
+  and are pinned to the configured `backendUrl`. Session cookies live in the
+  main-process jar, never in the renderer origin.

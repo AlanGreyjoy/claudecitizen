@@ -1,34 +1,34 @@
 import * as THREE from 'three';
-import { CHARACTER_GROUND_OFFSET_METERS } from '../../../player/character_controller';
+import { CHARACTER_GROUND_OFFSET_METERS } from '../../../player/character-controller';
 import {
   buildPlayerSidekickDefinition,
   type PlayerCharacterAppearanceV1,
-} from '../../../player/character_creator/player_character_appearance';
-import { loadSidekickCatalog } from '../../../player/character_creator/sidekick_catalog';
-import type { SidekickCatalog } from '../../../player/character_creator/sidekick_manifest';
-import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick_definition';
+} from '../../../player/character_creator/player-character-appearance';
+import { loadSidekickCatalog } from '../../../player/character_creator/sidekick-catalog';
+import type { SidekickCatalog } from '../../../player/character_creator/sidekick-manifest';
+import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick-definition';
 import type { InventoryState } from '../../../player/inventory/types';
 import {
   applyWearableLoadoutToDefinition,
   wearableLoadoutVisualKey,
-} from '../../../player/inventory/wearable_visuals';
+} from '../../../player/inventory/wearable-visuals';
 import type {
   CharacterRenderState,
   CharacterUpperBodyAim,
   Vec3,
 } from '../../../types';
-import type { CharacterAvatarInstance } from '../../main/scene/character_avatar_model';
-import { assembleSidekickCharacter } from './assemble_avatar';
+import type { CharacterAvatarInstance } from '../../main/scene/character-avatar-model';
+import { assembleSidekickCharacter } from './assemble-avatar';
 import {
   createSidekickAnimationRuntime,
   type SidekickAnimationRuntime,
-} from './animation_runtime';
-import { createEquipmentAttachmentController } from './equipment_attach';
-import { applyDefaultFrustumCulling } from '../../frustum_policy';
+} from './animation-runtime';
+import { createEquipmentAttachmentController } from './equipment-attach';
+import { applyDefaultFrustumCulling } from '../../frustum-policy';
 import {
   createSidekickHeadLookController,
   type SidekickHeadLookController,
-} from './head_look';
+} from './head-look';
 import {
   loadCurrentDefaultAnimationController,
   primaryStanceSources,

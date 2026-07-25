@@ -4,13 +4,13 @@ import {
   type FootstepActor,
   type FootstepSurface,
 } from "../../audio/footsteps";
-import { WALK_MOVE_THRESHOLD } from "../../player/character_locomotion";
-import { getCharacterSettings } from "../../player/character_settings";
+import { WALK_MOVE_THRESHOLD } from "../../player/character-locomotion";
+import { getCharacterSettings } from "../../player/character-settings";
 import { MODE_IN_STATION } from "../../player/modes";
 import { length } from "../../math/vec3";
 import type { NetworkRenderEntity, StationNpcRenderState, Vec3 } from "../../types";
-import type { LoopContext } from "../loop_context";
-import { scenePointFromStation } from "./scene_transforms";
+import type { LoopContext } from "../loop-context";
+import { scenePointFromStation } from "./scene-transforms";
 
 export function localFootstepActor(
   ctx: LoopContext,

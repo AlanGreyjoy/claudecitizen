@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
-import { setupUpdateObjectAnimations } from "../prefabs/object_animation";
+import { setupUpdateObjectAnimations } from "../prefabs/object-animation";
 
 export interface ViewportScene {
   canvas: HTMLCanvasElement;

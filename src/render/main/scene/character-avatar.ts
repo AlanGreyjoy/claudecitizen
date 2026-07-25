@@ -1,13 +1,13 @@
 import type * as THREE from 'three';
-import { createCharacterAvatarInstance } from './character_avatar_model';
+import { createCharacterAvatarInstance } from './character-avatar-model';
 import type { InventoryState } from '../../../player/inventory/types';
 import type {
   CharacterRenderState,
   CharacterUpperBodyAim,
   Vec3,
 } from '../../../types';
-import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player_character_appearance';
-import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment_attach';
+import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player-character-appearance';
+import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment-attach';
 
 interface CharacterAvatar {
   dispose: () => void;

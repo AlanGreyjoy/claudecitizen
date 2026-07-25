@@ -1,11 +1,11 @@
-import type { LoadingScreenHandle } from './loading_screen';
+import type { LoadingScreenHandle } from './loading-screen';
 import {
   fetchGameBootstrap,
   getSession,
   type AuthSession,
   type GameBootstrap,
 } from '../net/api';
-import type { StartPlaySessionOptions } from './play_session';
+import type { StartPlaySessionOptions } from './play-session';
 
 export interface PlaySessionBootstrap {
   session: AuthSession | null;

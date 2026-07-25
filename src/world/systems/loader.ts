@@ -1,5 +1,5 @@
 import { parseSystemDocument, type SystemDocument } from './schema';
-import { AUTHORING_ENABLED } from '../../build_mode';
+import { AUTHORING_ENABLED } from '../../build-mode';
 
 /**
  * System JSON files live in src/world/systems/data/<id>.system.json.

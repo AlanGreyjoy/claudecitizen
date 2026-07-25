@@ -28,9 +28,9 @@ root (item-frame)
 └── visual — small GLB or primitive
 ```
 
-Items without a prefab can use `iconUrl` in the Admin App instead — the HUD renders the icon without a 3D model.
+Items without a prefab can use `iconUrl` in the Server console instead — the HUD renders the icon without a 3D model.
 
 ## See also
 
 - [Props and items](../props-and-items)
-- Admin App [item definitions](/admin-app/item-definitions)
+- Server console [item definitions](/admin-app/item-definitions)

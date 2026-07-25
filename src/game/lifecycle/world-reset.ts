@@ -1,18 +1,18 @@
-import { createWorldState } from "../../player/world_state";
-import type { SurfaceDestination } from "../../world/biome_teleport";
+import { createWorldState } from "../../player/world-state";
+import type { SurfaceDestination } from "../../world/biome-teleport";
 import { sampleHangarRest } from "../../world/station";
-import { getShipRestHeightMeters } from "../../player/ship_layout";
-import { listShipInstances, removeShipInstance } from "../../flight/ship_world";
+import { getShipRestHeightMeters } from "../../player/ship-layout";
+import { listShipInstances, removeShipInstance } from "../../flight/ship-world";
 import { MODE_ON_FOOT } from "../../player/modes";
-import type { LoopContext } from "../loop_context";
-import type { DeckPhysics } from "../ship/deck_physics";
-import { teleportToSurface as runTeleportToSurface } from "./teleport_surface";
+import type { LoopContext } from "../loop-context";
+import type { DeckPhysics } from "../ship/deck-physics";
+import { teleportToSurface as runTeleportToSurface } from "./teleport-surface";
 import {
   returnToApartmentForVitalsFailure as runReturnToApartment,
   setVitalsSyncLocked as runSetVitalsSyncLocked,
   syncApartmentInstanceForVitalsRecovery as runSyncApartment,
-} from "./vitals_recovery";
-import { attachDevShortcuts } from "./dev_shortcuts";
+} from "./vitals-recovery";
+import { attachDevShortcuts } from "./dev-shortcuts";
 
 export interface WorldLifecycle {
   teleportToSurface: (destination: SurfaceDestination) => boolean;

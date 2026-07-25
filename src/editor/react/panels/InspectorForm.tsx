@@ -1,10 +1,20 @@
 import {
   useEffect,
   useRef,
+  useState,
   type DragEvent,
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { ASSET_DND_TYPE, ENTITY_DND_TYPE } from '../../api';
+import {
+  findEntityById,
+  formatInspectorNumber,
+  isAudioAssetUrl,
+  isImageAssetUrl,
+  parseDraggedEntityIds,
+} from '../../panels/inspector-logic';
+import type { EditorStore } from '../../document';
 import { UiIcons } from '../../../ui/icons';
 import { UiIcon } from '../UiIcon';
 
@@ -143,4 +153,296 @@ export function RemoveButton({
 
 export function EmptyNote({ children }: { children: ReactNode }): ReactElement {
   return <div className="ed-empty-note">{children}</div>;
+}
+
+export function SectionLabel({ children }: { children: ReactNode }): ReactElement {
+  return <div className="ed-section-label">{children}</div>;
+}
+
+export function Hint({ children }: { children: ReactNode }): ReactElement {
+  return <div className="ed-hint">{children}</div>;
+}
+
+export function EdButton({
+  children,
+  title,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode;
+  title?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      className="ed-btn"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function NumberField({
+  value,
+  onCommit,
+  step = 0.1,
+  className,
+}: {
+  value: number;
+  onCommit: (next: number) => void;
+  step?: number;
+  className?: string;
+}): ReactElement {
+  const ref = useRef<HTMLInputElement>(null);
+  const onCommitRef = useRef(onCommit);
+  onCommitRef.current = onCommit;
+  const display = formatInspectorNumber(value);
+
+  useEffect(() => {
+    const input = ref.current;
+    if (!input || document.activeElement === input) return;
+    if (input.value !== display) input.value = display;
+  }, [display]);
+
+  useEffect(() => {
+    const input = ref.current;
+    if (!input) return;
+    const onNativeChange = () => {
+      const next = Number(input.value);
+      if (Number.isFinite(next)) onCommitRef.current(next);
+    };
+    const onKeyDown = (event: KeyboardEvent) => event.stopPropagation();
+    input.addEventListener('change', onNativeChange);
+    input.addEventListener('keydown', onKeyDown);
+    return () => {
+      input.removeEventListener('change', onNativeChange);
+      input.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+
+  return (
+    <input
+      ref={ref}
+      className={className ?? 'ed-input'}
+      type="number"
+      step={String(step)}
+      defaultValue={display}
+    />
+  );
+}
+
+export function SelectField({
+  options,
+  value,
+  onCommit,
+  className,
+}: {
+  options: readonly string[];
+  value: string;
+  onCommit: (next: string) => void;
+  className?: string;
+}): ReactElement {
+  return (
+    <select
+      className={className ?? 'ed-select'}
+      value={value}
+      onChange={(event) => onCommit(event.currentTarget.value)}
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function useAssetDrop(accepts: (url: string) => boolean, onCommit: (url: string) => void) {
+  const [isDropTarget, setIsDropTarget] = useState(false);
+  const onDragOver = (event: DragEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    setIsDropTarget(true);
+  };
+  const onDragLeave = () => setIsDropTarget(false);
+  const onDrop = (event: DragEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    setIsDropTarget(false);
+    const url =
+      event.dataTransfer?.getData(ASSET_DND_TYPE) ||
+      event.dataTransfer?.getData('text/plain');
+    if (url?.startsWith('/') && accepts(url)) onCommit(url);
+  };
+  return { isDropTarget, onDragOver, onDragLeave, onDrop };
+}
+
+function TypedAssetUrlField({
+  label,
+  value,
+  onCommit,
+  accepts,
+}: {
+  label: string;
+  value: string | undefined;
+  onCommit: (next: string | undefined) => void;
+  accepts: (url: string) => boolean;
+}): ReactElement {
+  const drop = useAssetDrop(accepts, (url) => onCommit(url));
+  return (
+    <FieldRow label={label} wide>
+      <div className="ed-field-controls">
+        <TextField
+          value={value ?? ''}
+          onCommit={(next) => onCommit(next.trim() || undefined)}
+          className={drop.isDropTarget ? 'ed-input is-drop-target' : 'ed-input'}
+          onDragOver={drop.onDragOver}
+          onDragLeave={drop.onDragLeave}
+          onDrop={drop.onDrop}
+        />
+        <EdButton title="Remove assigned asset" onClick={() => onCommit(undefined)}>
+          Clear
+        </EdButton>
+      </div>
+    </FieldRow>
+  );
+}
+
+export function AssetUrlField(props: {
+  label: string;
+  value: string | undefined;
+  onCommit: (next: string | undefined) => void;
+}): ReactElement {
+  return <TypedAssetUrlField {...props} accepts={isAudioAssetUrl} />;
+}
+
+export function ImageAssetUrlField(props: {
+  label: string;
+  value: string | undefined;
+  onCommit: (next: string | undefined) => void;
+}): ReactElement {
+  return <TypedAssetUrlField {...props} accepts={isImageAssetUrl} />;
+}
+
+export function Vec3NumberRow({
+  label,
+  values,
+  onCommitAxis,
+}: {
+  label: string;
+  values: { x: number; y: number; z: number };
+  onCommitAxis: (axis: 'x' | 'y' | 'z', next: number) => void;
+}): ReactElement {
+  return (
+    <FieldRow label={label}>
+      {(['x', 'y', 'z'] as const).map((axis) => (
+        <NumberField
+          key={axis}
+          value={values[axis]}
+          onCommit={(next) => onCommitAxis(axis, next)}
+        />
+      ))}
+      <span />
+    </FieldRow>
+  );
+}
+
+export function EntityRefField({
+  store,
+  value,
+  onPick,
+}: {
+  store: EditorStore;
+  value: string | undefined;
+  onPick: (next: string | undefined) => void;
+}): ReactElement {
+  const [isDropTarget, setIsDropTarget] = useState(false);
+  const matched = value ? findEntityById(store.getState().roots, value) : null;
+  const display = matched?.name ?? value ?? '';
+  const title = value
+    ? matched
+      ? `${matched.name} (${value})`
+      : `Missing entity: ${value}`
+    : 'Drag an entity from the Hierarchy onto this field';
+
+  const onDragOver = (event: DragEvent<HTMLInputElement>) => {
+    if (!event.dataTransfer?.types.includes(ENTITY_DND_TYPE)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsDropTarget(true);
+  };
+
+  return (
+    <div className="ed-field-controls">
+      <input
+        className={`ed-input${value && !matched ? ' is-missing-ref' : ''}${isDropTarget ? ' is-drop-target' : ''}`}
+        type="text"
+        readOnly
+        value={display}
+        placeholder="Drop from Hierarchy"
+        title={title}
+        onDragOver={onDragOver}
+        onDragLeave={() => setIsDropTarget(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDropTarget(false);
+          const ids = parseDraggedEntityIds(
+            event.dataTransfer?.getData(ENTITY_DND_TYPE) ?? '',
+          );
+          const nextId = ids[0];
+          if (!nextId) return;
+          if (!findEntityById(store.getState().roots, nextId)) return;
+          onPick(nextId);
+        }}
+      />
+      <EdButton title="Clear entity reference" onClick={() => onPick(undefined)}>
+        Clear
+      </EdButton>
+    </div>
+  );
+}
+
+export function ModuleBlock({
+  title,
+  enabled,
+  onToggle,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  enabled?: boolean;
+  onToggle?: (next: boolean) => void;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <details className="ed-particle-module" open={enabled !== false && defaultOpen}>
+      <summary className="ed-particle-module-title">
+        {onToggle ? (
+          <input
+            type="checkbox"
+            checked={Boolean(enabled)}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              event.stopPropagation();
+              onToggle(event.currentTarget.checked);
+            }}
+          />
+        ) : null}
+        {onToggle ? ` ${title}` : title}
+      </summary>
+      <div className="ed-particle-module-body">{children}</div>
+    </details>
+  );
+}
+
+export function DoorNodeRow({
+  children,
+}: {
+  children: ReactNode;
+}): ReactElement {
+  return <div className="ed-door-node-row">{children}</div>;
 }

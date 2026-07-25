@@ -1,17 +1,17 @@
-import { getActiveShipBody } from "../../player/world_state";
-import { worldToShipLocal } from "../../player/ship_interaction";
+import { getActiveShipBody } from "../../player/world-state";
+import { worldToShipLocal } from "../../player/ship-interaction";
 import {
   getShipPlayerLocal,
   getShipPlayerWorldPosition,
   teleportShipPlayerLocal,
-} from "../../physics/ship_physics";
-import { sampleFootPlanetSurface } from "../../world/planet_surface";
+} from "../../physics/ship-physics";
+import { sampleFootPlanetSurface } from "../../world/planet-surface";
 import { radialUp, surfacePointFromPosition } from "../../world/coordinates";
-import { CHARACTER_GROUND_OFFSET_METERS } from "../../player/character_controller";
+import { CHARACTER_GROUND_OFFSET_METERS } from "../../player/character-controller";
 import { dot, sub } from "../../math/vec3";
-import type { DeckCharacterState } from "../../player/ship_deck";
+import type { DeckCharacterState } from "../../player/ship-deck";
 import type { Vec3 } from "../../types";
-import type { LoopContext } from "../loop_context";
+import type { LoopContext } from "../loop-context";
 
 /** Height above planet foot surface along radial up (meters). */
 export function planetFeetHeightAbove(

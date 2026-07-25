@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import type { SidekickCatalog } from '../../../player/character_creator/sidekick_manifest';
-import { resolveSidekickUrl } from '../../../player/character_creator/sidekick_manifest';
+import type { SidekickCatalog } from '../../../player/character_creator/sidekick-manifest';
+import { resolveSidekickUrl } from '../../../player/character_creator/sidekick-manifest';
 import {
   DEFAULT_SIDEKICK_MATERIAL_EFFECTS,
   type SidekickSerializedColorRow,
   type SidekickSerializedMaterialEffects,
-} from '../../../player/character_creator/sidekick_definition';
+} from '../../../player/character_creator/sidekick-definition';
 
 interface SidekickMaterialConfig {
   maps?: Record<string, string>;

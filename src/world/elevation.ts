@@ -1,12 +1,12 @@
 import {
   samplePreRiverHeightDetails,
   type SurfaceHeightSampleOptions,
-} from './base_elevation';
+} from './base-elevation';
 import { getActivePlanetConfig } from './planets/runtime';
 import { carveRiverElevationFromField, sampleRiverField } from './rivers';
 import type { Planet, Vec3 } from '../types';
 
-export type { SurfaceHeightSampleOptions } from './base_elevation';
+export type { SurfaceHeightSampleOptions } from './base-elevation';
 
 export interface SurfaceHeightDetails {
   heightMeters: number;

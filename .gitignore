@@ -6,6 +6,7 @@ dist/
 dist-editor/
 release/
 target/
+backend/target/
 public/wasm/cc_sim_core.wasm
 *.tsbuildinfo
 
@@ -48,15 +49,10 @@ public/cache/spawn/*.bin
 public/cache/spawn/*.json
 !public/cache/spawn/README.md
 
-# Proprietary/local-only game assets.
-# Keep paid or otherwise non-redistributable models, textures, and packs here.
-editor/assets/**
-!editor/assets/
-!editor/assets/README.md
-!editor/assets/free/
-!editor/assets/free/README.md
-!editor/assets/protected/
-!editor/assets/protected/README.md
+# Proprietary / project-local packs (never commit binaries).
+# When this checkout is opened as an AsteronEngine project, drop importable
+# GLBs under ./assets/ — that tree is project-scoped, not an engine library.
+/assets/
 public/assets/protected/**
 !public/assets/protected/
 !public/assets/protected/README.md
@@ -65,12 +61,7 @@ src/assets/protected/**
 !src/assets/protected/README.md
 !src/assets/protected/characters/synty_sidekick/README.md
 
-# Supabase (when added)
-.supabase/
-
-# Local Netlify folder
-.netlify
-
-# Docusaurus docs site
+# Docusaurus local build / Netlify CLI state (docs site only)
 docs/build/
 docs/.docusaurus/
+.netlify/
