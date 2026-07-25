@@ -418,6 +418,8 @@ function ToolIconButton({
 
 function UserMenu({
   building,
+  onNew,
+  onNewScene,
   onSave,
   onBuildWeb,
   onOpenProject,
@@ -426,6 +428,8 @@ function UserMenu({
   onExit,
 }: {
   building: boolean;
+  onNew: () => void;
+  onNewScene: () => void;
   onSave: () => void;
   onBuildWeb: () => void;
   onOpenProject: () => void;
@@ -467,6 +471,13 @@ function UserMenu({
       />
       {open ? (
         <div className="ed-menu-dropdown">
+          <button type="button" className="ed-menu-item" onClick={() => run(onNewScene)}>
+            <span className="ed-menu-item-label">New Scene…</span>
+          </button>
+          <button type="button" className="ed-menu-item" onClick={() => run(onNew)}>
+            <span className="ed-menu-item-label">New Prefab</span>
+          </button>
+          <div className="ed-menu-sep" />
           <button type="button" className="ed-menu-item" onClick={() => run(onSave)}>
             <span className="ed-menu-item-label">Save</span>
             <span className="ed-menu-item-shortcut">Ctrl+S</span>
@@ -825,6 +836,8 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
         <div className="ed-toolbar-right">
           <UserMenu
             building={actions.building}
+            onNew={actions.onNew}
+            onNewScene={actions.onNewScene}
             onSave={actions.onSave}
             onBuildWeb={actions.onBuildWeb}
             onOpenProject={actions.onOpenProject}

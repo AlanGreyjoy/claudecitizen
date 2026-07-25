@@ -1,4 +1,4 @@
-import { listBundledPrefabIds, loadPrefabDocument } from './loader';
+import { listBundledPrefabs } from './loader';
 
 export interface ShipPrefabOption {
   id: string;
@@ -11,13 +11,9 @@ let cachedShipPrefabOptions: ShipPrefabOption[] | null = null;
 export async function listShipPrefabOptions(): Promise<ShipPrefabOption[]> {
   if (cachedShipPrefabOptions) return cachedShipPrefabOptions;
 
-  const results: ShipPrefabOption[] = [];
-  for (const id of listBundledPrefabIds()) {
-    const doc = await loadPrefabDocument(id);
-    if (doc?.kind === 'ship') {
-      results.push({ id, label: doc.name.trim() || id });
-    }
-  }
+  const results = (await listBundledPrefabs())
+    .filter((doc) => doc.kind === 'ship')
+    .map((doc) => ({ id: doc.id, label: doc.name.trim() || doc.id }));
   cachedShipPrefabOptions = results.sort((left, right) => left.label.localeCompare(right.label));
   return cachedShipPrefabOptions;
 }

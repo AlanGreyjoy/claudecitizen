@@ -73,6 +73,11 @@ export interface GlbNodeRef {
   uuid: string;
   name: string;
   children: GlbNodeRef[];
+  /**
+   * Identity Group with exactly one child and no own mesh/light/camera.
+   * Hierarchy may hide these export/loader wrappers; the live graph keeps them.
+   */
+  passthrough?: boolean;
 }
 
 export interface SubSelection {
@@ -627,7 +632,13 @@ export function createEditorStore() {
         target.glbNodeHidden.push(nodeName);
         markDirty();
         if (clearSubSelection) {
+          // Clear the owning entity too. Del is handled by both the window
+          // keydown and the Electron Edit → Delete accelerator; if we only
+          // drop subSelection, the second call deletes the whole entity.
           subSelection = null;
+          selection = null;
+          selectedIds = new Set();
+          emitSelection();
           emit({ type: 'sub-selection', entityId, nodeUuid: null });
         }
         emit({ type: 'glb-visibility', entityId, nodeName });
@@ -1384,8 +1395,8 @@ export function createEditorStore() {
   }
 
   /**
-   * Empty scene shell. Callers that want the default Game Manager / Planet /
-   * Player Start GameObjects load `createEmptySceneEditorState()` instead.
+   * Empty scene shell. Callers that want a starting GameObject set load
+   * `createSceneEditorStateFromTemplate()` instead.
    */
   function newScene(): void {
     state = {
@@ -1484,6 +1495,10 @@ export function createEditorStore() {
     isDirty: () => dirty,
     markSaved: () => {
       dirty = false;
+    },
+    /** Restore a suspended dirty bit after `loadDocument` (prefab isolation). */
+    setDirty: (value: boolean) => {
+      dirty = value;
     },
     locate,
     setSelection,

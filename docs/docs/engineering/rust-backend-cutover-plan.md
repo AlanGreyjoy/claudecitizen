@@ -5,6 +5,14 @@ sidebar_position: 9
 
 # Rust Backend Cutover Implementation Plan
 
+:::note Historical record
+
+This cutover is **complete**. The plan is kept for rationale and acceptance
+criteria; it does not describe outstanding work. For the architecture as it
+stands today, see [Technology Stack](./stack).
+
+:::
+
 This plan executes the [Rust Backend Hard Cutover PRD](./rust-backend-cutover-prd.md). It is ordered so durable contracts are established before the old backend is removed. There is no dual-backend stage.
 
 ## 1. Freeze and inventory

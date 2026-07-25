@@ -835,8 +835,10 @@ export function InspectorPanel({
 
   return (
     <>
-      <div className="ed-panel-title">
-        <span>Inspector</span>
+      <div className="ed-scene-tabs ed-panel-tabs">
+        <button type="button" className="ed-scene-tab is-active" tabIndex={-1}>
+          Inspector
+        </button>
         <div className="ed-panel-title-actions">
           <button
             type="button"

@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld(
     createProject: (payload) => ipcRenderer.invoke('projects:create', payload),
     removeRecentProject: (projectRoot) =>
       ipcRenderer.invoke('projects:removeRecent', projectRoot),
+    renameProject: (projectRoot, name) =>
+      ipcRenderer.invoke('projects:rename', { projectRoot, name }),
+    deleteProject: (projectRoot) =>
+      ipcRenderer.invoke('projects:delete', projectRoot),
     showProjectInFolder: (projectRoot) =>
       ipcRenderer.invoke('projects:showInFolder', projectRoot),
     returnToProjects: () => ipcRenderer.invoke('projects:returnToHub'),

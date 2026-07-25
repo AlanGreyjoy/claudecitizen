@@ -131,6 +131,26 @@ export function addAssetEntity(store: EditorStore, url: string, position: Vec3):
   void maybeOfferShipPrefab(store, entity.id, url);
 }
 
+/**
+ * Places a prefab in the open document as a `prefab-instance` GameObject —
+ * the Project-panel-to-scene half of the Unity prefab workflow.
+ */
+export function addPrefabInstanceEntity(
+  store: EditorStore,
+  prefabId: string,
+  position: Vec3,
+  parentId: string | null = null,
+): string | null {
+  if (store.getState().documentType !== 'scene') {
+    showToast('Prefab instances can only be placed in a scene.', true);
+    return null;
+  }
+  const entity = createEmptyEntity(prefabId);
+  entity.components = [{ type: 'prefab-instance', prefabId }];
+  entity.position = position;
+  return store.addEntity(entity, parentId);
+}
+
 export function addBox(store: EditorStore): void {
   const entity = createEmptyEntity('Box');
   entity.primitive = { shape: 'box', size: { x: 2, y: 2, z: 2 }, color: '#4c5663' };

@@ -1,22 +1,44 @@
-import { useEffect, useMemo, useReducer, useRef, useState, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react';
 import type { EditorEvent, EditorStore } from '../document';
 
-/** Subscribe to EditorStore events and force a re-render when matching. */
+/**
+ * Subscribe to EditorStore events and re-render when one matches.
+ *
+ * Uses `useSyncExternalStore` so a store mutation emitted mid concurrent
+ * render forces a consistent synchronous re-render instead of tearing
+ * (panels read `store.getState()` directly during render). The snapshot is a
+ * per-hook version counter bumped only on matching events, so unrelated
+ * events never invalidate it.
+ */
 export function useEditorEvent(
   store: EditorStore,
   match: (event: EditorEvent) => boolean = () => true,
 ): number {
-  const [version, bump] = useReducer((n: number) => n + 1, 0);
   const matchRef = useRef(match);
   matchRef.current = match;
+  const versionRef = useRef(0);
 
-  useEffect(() => {
-    return store.subscribe((event) => {
-      if (matchRef.current(event)) bump();
-    });
-  }, [store]);
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      store.subscribe((event) => {
+        if (matchRef.current(event)) {
+          versionRef.current += 1;
+          onStoreChange();
+        }
+      }),
+    [store],
+  );
+  const getSnapshot = useCallback(() => versionRef.current, []);
 
-  return version;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /** Re-render on any store event (or a filtered subset). */

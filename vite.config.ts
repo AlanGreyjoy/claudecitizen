@@ -1,13 +1,17 @@
 import { copyFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
 const PROJECT_ASSET_ROOT = 'assets';
 const PROJECT_ASSET_URL_PREFIX = '/assets/';
+/** Asset roots searched for `*.prefab.json`. Mirrors PROJECT_ASSET_ROOTS in editor-desktop/repository.mjs. */
+const PREFAB_SEARCH_ROOTS = ['assets', 'src/assets'];
+/** Stable runtime URL for the configured Sidekick pack. */
+const SIDEKICK_VIRTUAL_URL_PREFIX = '/asteron/content/synty-sidekick/';
 const OPTIONAL_RUNTIME_ASSET_URLS = [
-  '/src/assets/protected/characters/synty_sidekick/manifest.json',
+  `${SIDEKICK_VIRTUAL_URL_PREFIX}manifest.json`,
   '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienArmor_01.glb',
   '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienChef_01.gltf',
   '/src/assets/protected/characters/SM_Chr_ScifiWorlds_AlienCombat_01.gltf',
@@ -59,6 +63,56 @@ function isInsidePath(child: string, parent: string): boolean {
   return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path));
 }
 
+function normalizeContentPackRelativePath(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!trimmed || trimmed.includes('\0')) return '';
+  if (/^[a-zA-Z]:/.test(trimmed) || trimmed.startsWith('/')) return '';
+  const segments = trimmed.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) return '';
+  return segments.join('/');
+}
+
+function readConfiguredSidekickPackRelative(projectRoot: string): string {
+  try {
+    const raw = JSON.parse(readFileSync(resolve(projectRoot, 'asteron.project.json'), 'utf8')) as {
+      contentPacks?: { syntySidekick?: unknown };
+    };
+    return normalizeContentPackRelativePath(raw.contentPacks?.syntySidekick);
+  } catch {
+    return '';
+  }
+}
+
+function resolveSidekickVirtualAsset(
+  projectRoot: string,
+  outDir: string,
+  pathname: string,
+): ResolvedAsset | null {
+  if (!pathname.startsWith(SIDEKICK_VIRTUAL_URL_PREFIX)) return null;
+  const packRelative = readConfiguredSidekickPackRelative(projectRoot);
+  if (!packRelative) return null;
+
+  const packSourceRoot = resolve(projectRoot, packRelative);
+  const packOutputRoot = resolve(projectRoot, outDir, SIDEKICK_VIRTUAL_URL_PREFIX.slice(1, -1));
+  if (!isInsidePath(packSourceRoot, projectRoot)) return null;
+
+  const suffix = pathname.slice(SIDEKICK_VIRTUAL_URL_PREFIX.length);
+  if (!suffix || suffix.includes('\0') || suffix.split('/').includes('..')) return null;
+
+  const sourcePath = resolve(packSourceRoot, suffix);
+  const outputPath = resolve(packOutputRoot, suffix);
+  if (!isInsidePath(sourcePath, packSourceRoot) || !isInsidePath(outputPath, packOutputRoot)) {
+    return null;
+  }
+  return {
+    sourcePath,
+    outputPath,
+    sourceRoot: packSourceRoot,
+    outputRoot: packOutputRoot,
+  };
+}
+
 function decodePathComponent(path: string): string | null {
   try {
     return decodeURIComponent(path);
@@ -77,6 +131,9 @@ function resolveAssetUrl(projectRoot: string, outDir: string, rawUrl: string): R
     return null;
   }
   if (!pathname) return null;
+
+  const sidekick = resolveSidekickVirtualAsset(projectRoot, outDir, pathname);
+  if (sidekick) return sidekick;
 
   for (const mount of BUILD_ASSET_MOUNTS) {
     if (!pathname.startsWith(mount.urlPrefix)) continue;
@@ -126,23 +183,39 @@ function collectPrefabAssetUrls(value: unknown, urls: Set<string>): void {
   }
 }
 
+/**
+ * Prefabs live in any folder under the project asset roots, so the release
+ * build has to walk those trees to learn which GLBs/textures/audio to copy.
+ */
 async function listPrefabAssetUrls(projectRoot: string): Promise<string[]> {
   const urls = new Set<string>();
-  const prefabDir = resolve(projectRoot, 'src/world/prefabs/data');
-  let names: string[] = [];
-  try {
-    names = await readdir(prefabDir);
-  } catch {
-    return [];
-  }
-
-  for (const name of names) {
-    if (!name.endsWith('.prefab.json')) continue;
-    const filePath = join(prefabDir, name);
-    try {
-      collectPrefabAssetUrls(JSON.parse(await readFile(filePath, 'utf8')), urls);
-    } catch (error) {
-      console.warn(`[claudecitizen-assets] Could not scan ${relative(projectRoot, filePath)}:`, error);
+  for (const root of PREFAB_SEARCH_ROOTS) {
+    const queue = [resolve(projectRoot, root)];
+    while (queue.length > 0) {
+      const dir = queue.shift()!;
+      let dirents;
+      try {
+        dirents = await readdir(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const dirent of dirents) {
+        if (dirent.name.startsWith('.')) continue;
+        const absolute = join(dir, dirent.name);
+        if (dirent.isDirectory()) {
+          queue.push(absolute);
+          continue;
+        }
+        if (!dirent.isFile() || !dirent.name.endsWith('.prefab.json')) continue;
+        try {
+          collectPrefabAssetUrls(JSON.parse(await readFile(absolute, 'utf8')), urls);
+        } catch (error) {
+          console.warn(
+            `[claudecitizen-assets] Could not scan ${relative(projectRoot, absolute)}:`,
+            error,
+          );
+        }
+      }
     }
   }
   return [...urls].sort();
@@ -153,13 +226,33 @@ async function listExistingOptionalAssets(
   outDir: string,
 ): Promise<ResolvedAsset[]> {
   const assets: ResolvedAsset[] = [];
+  const configuredSidekick = readConfiguredSidekickPackRelative(projectRoot);
   for (const url of OPTIONAL_RUNTIME_ASSET_URLS) {
+    const isSidekick = url.startsWith(SIDEKICK_VIRTUAL_URL_PREFIX);
+    if (isSidekick && !configuredSidekick) continue;
     const asset = resolveAssetUrl(projectRoot, outDir, url);
-    if (!asset) continue;
+    if (!asset) {
+      if (isSidekick && configuredSidekick) {
+        throw new Error(
+          `Configured Sidekick pack "${configuredSidekick}" could not resolve ${url}.`,
+        );
+      }
+      continue;
+    }
     try {
       const fileStat = await stat(asset.sourcePath);
       if (fileStat.isFile()) assets.push(asset);
-    } catch {
+      else if (isSidekick) {
+        throw new Error(
+          `Configured Sidekick pack path is not a file: ${relative(projectRoot, asset.sourcePath)}`,
+        );
+      }
+    } catch (error) {
+      if (isSidekick) {
+        throw error instanceof Error
+          ? error
+          : new Error(`Configured Sidekick pack missing: ${relative(projectRoot, asset.sourcePath)}`);
+      }
       // Optional protected runtime assets are allowed to be absent in public checkouts.
     }
   }
@@ -225,8 +318,12 @@ async function enqueueSidekickJsonDependencies(
   queue: ResolvedAsset[],
   missing: string[],
 ): Promise<void> {
-  const isSidekickManifest = asset.sourcePath.endsWith('/characters/synty_sidekick/manifest.json');
-  const isSidekickMaterialConfig = asset.sourcePath.endsWith('/characters/synty_sidekick/materials/base-material.json');
+  const isSidekickManifest = asset.outputPath.replace(/\\/g, '/').endsWith(
+    '/asteron/content/synty-sidekick/manifest.json',
+  );
+  const isSidekickMaterialConfig = asset.outputPath.replace(/\\/g, '/').endsWith(
+    '/asteron/content/synty-sidekick/materials/base-material.json',
+  );
   if (!isSidekickManifest && !isSidekickMaterialConfig)
     return;
 
@@ -350,6 +447,18 @@ function copyReferencedGameAssets(): Plugin {
       if (missing.length > 0) {
         const shown = missing.slice(0, 8).join(', ');
         const remaining = missing.length > 8 ? `, +${missing.length - 8} more` : '';
+        const configuredSidekick = readConfiguredSidekickPackRelative(root);
+        const sidekickMissing = configuredSidekick
+          ? missing.filter((entry) => {
+              const absolute = resolve(root, entry);
+              return isInsidePath(absolute, resolve(root, configuredSidekick));
+            })
+          : [];
+        if (sidekickMissing.length > 0) {
+          throw new Error(
+            `Configured Sidekick pack "${configuredSidekick}" is missing files: ${sidekickMissing.slice(0, 8).join(', ')}`,
+          );
+        }
         console.warn(`[claudecitizen-assets] missing local asset(s): ${shown}${remaining}`);
       }
     },
@@ -386,6 +495,7 @@ export default defineConfig({
         proxy: {
           '/__editor': editorBridgeTarget,
           '/assets': editorBridgeTarget,
+          '/asteron/content': editorBridgeTarget,
         },
       }
     : undefined,

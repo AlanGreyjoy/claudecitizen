@@ -66,8 +66,13 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://claudecitizen.netlify.app/',
-          label: 'Play',
+          to: '/editor',
+          label: 'AsteronEngine',
+          position: 'right',
+        },
+        {
+          to: '/play',
+          label: 'Controls',
           position: 'right',
         },
       ],
@@ -87,29 +92,29 @@ const config: Config = {
               to: '/quick-start',
             },
             {
-              label: 'Play',
+              label: 'Controls',
               to: '/play',
-            },
-            {
-              label: 'CC Editor',
-              to: '/cc-editor',
             },
             {
               label: 'Roadmap',
               to: '/roadmap',
             },
-            {
-              label: 'Engineering',
-              to: '/engineering',
-            },
           ],
         },
         {
-          title: 'Game',
+          title: 'Surfaces',
           items: [
             {
-              label: 'Live play test',
-              href: 'https://claudecitizen.netlify.app/',
+              label: 'AsteronEngine',
+              to: '/editor',
+            },
+            {
+              label: 'Server console',
+              to: '/server-console',
+            },
+            {
+              label: 'Engineering',
+              to: '/engineering',
             },
           ],
         },

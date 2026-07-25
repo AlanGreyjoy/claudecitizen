@@ -4,8 +4,13 @@ import {
   fetchAssetListing,
   type AssetEntry,
   type AssetRoot,
+  type FolderOrderMap,
 } from '../api';
 
+export type { FolderOrderMap } from '../api';
+
+/** Keep in sync with PREFAB_FILE_SUFFIX in editor-desktop/repository.mjs. */
+export const PREFAB_FILE_SUFFIX = '.prefab.json';
 export const MODEL_EXTENSIONS = ['.glb', '.gltf'] as const;
 export const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.m4a'] as const;
 export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.ktx2', '.ktx'] as const;
@@ -18,12 +23,14 @@ export type ProjectAssetEntry = AssetEntry & { root: AssetRoot };
 export interface FolderNode {
   name: string;
   path: string;
+  /** Asset roots that contain this relative folder path. */
+  roots: Set<AssetRoot>;
   children: Map<string, FolderNode>;
   files: ProjectAssetEntry[];
 }
 
 export function emptyFolderNode(): FolderNode {
-  return { name: '', path: '', children: new Map(), files: [] };
+  return { name: '', path: '', roots: new Set(), children: new Map(), files: [] };
 }
 
 export function isModelPath(path: string): boolean {
@@ -41,8 +48,48 @@ export function isImagePath(path: string): boolean {
   return IMAGE_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 
+export function isPrefabPath(path: string): boolean {
+  return path.toLowerCase().endsWith(PREFAB_FILE_SUFFIX);
+}
+
+/**
+ * Prefab id from a file path. `savePrefab` always names the file after the id,
+ * which is what lets a card open the right document without reading it.
+ */
+export function prefabIdFromPath(path: string): string {
+  return fileNameFromPath(path).slice(0, -PREFAB_FILE_SUFFIX.length);
+}
+
 export function isDraggableAssetPath(path: string): boolean {
-  return isModelPath(path) || isAudioPath(path) || isImagePath(path);
+  return isModelPath(path) || isAudioPath(path) || isImagePath(path) || isPrefabPath(path);
+}
+
+/** Which card treatment an entry gets in the asset grid. */
+export type AssetCardKind = 'empty' | 'model' | 'audio' | 'prefab' | 'other';
+
+export function assetCardKind(entry: ProjectAssetEntry): AssetCardKind {
+  if (entry.size === 0) return 'empty';
+  if (isModelPath(entry.path)) return 'model';
+  if (isAudioPath(entry.path)) return 'audio';
+  if (isPrefabPath(entry.path)) return 'prefab';
+  return 'other';
+}
+
+export function assetCardTitle(sourcePath: string, kind: AssetCardKind): string {
+  if (kind === 'empty') return `${sourcePath}\nFile is empty`;
+  if (kind === 'model') return `${sourcePath}\nDrag into the scene`;
+  if (kind === 'audio') return `${sourcePath}\nDrag into the scene or onto an audio field`;
+  if (kind === 'prefab') {
+    return `${sourcePath}\nDouble-click to open. Drag into the scene to place an instance.`;
+  }
+  return sourcePath;
+}
+
+/** Version key used to invalidate the cached model thumbnail for an entry. */
+export function assetVersionOf(entry: ProjectAssetEntry): string | undefined {
+  return entry.size !== undefined && entry.modifiedAtMs !== undefined
+    ? `${entry.size}:${Math.trunc(entry.modifiedAtMs)}`
+    : undefined;
 }
 
 export function canCreateItemPrefabFromPath(path: string): boolean {
@@ -51,7 +98,7 @@ export function canCreateItemPrefabFromPath(path: string): boolean {
 
 export function emptyNoteForFolder(folderPath: string): string {
   const fullPath = folderPath ? `${PROJECT_ROOT_LABEL}/${folderPath}` : PROJECT_ROOT_LABEL;
-  return `No GLB / GLTF / image / audio files in ${fullPath}.`;
+  return `Nothing in ${fullPath}. Drop assets here, or drag a GameObject from the Hierarchy to save a prefab.`;
 }
 
 export async function fetchProjectAssetEntries(): Promise<ProjectAssetEntry[]> {
@@ -66,7 +113,7 @@ export async function fetchProjectAssetEntries(): Promise<ProjectAssetEntry[]> {
 
 export function buildFolderTree(entries: ProjectAssetEntry[]): FolderNode {
   const root = emptyFolderNode();
-  const ensureDir = (path: string): FolderNode => {
+  const ensureDir = (path: string, assetRoot: AssetRoot): FolderNode => {
     if (path === '') return root;
     let node = root;
     let current = '';
@@ -74,19 +121,26 @@ export function buildFolderTree(entries: ProjectAssetEntry[]): FolderNode {
       current = current === '' ? segment : `${current}/${segment}`;
       let child = node.children.get(segment);
       if (!child) {
-        child = { name: segment, path: current, children: new Map(), files: [] };
+        child = {
+          name: segment,
+          path: current,
+          roots: new Set(),
+          children: new Map(),
+          files: [],
+        };
         node.children.set(segment, child);
       }
+      child.roots.add(assetRoot);
       node = child;
     }
     return node;
   };
   for (const entry of entries) {
     if (entry.kind === 'dir') {
-      ensureDir(entry.path);
+      ensureDir(entry.path, entry.root);
     } else {
       const slash = entry.path.lastIndexOf('/');
-      const dir = ensureDir(slash === -1 ? '' : entry.path.slice(0, slash));
+      const dir = ensureDir(slash === -1 ? '' : entry.path.slice(0, slash), entry.root);
       dir.files.push(entry);
     }
   }
@@ -112,8 +166,26 @@ export function expandAncestorsInto(expanded: Set<string>, folderPath: string): 
   }
 }
 
-export function sortedFolderChildren(node: FolderNode): FolderNode[] {
-  return [...node.children.values()].sort((a, b) => a.name.localeCompare(b.name));
+/**
+ * Children of `node`, ordered by `orderMap[node.path]` then alphabetical for
+ * any names not listed.
+ */
+export function sortedFolderChildren(
+  node: FolderNode,
+  orderMap: FolderOrderMap = {},
+): FolderNode[] {
+  const children = [...node.children.values()];
+  const ordered = orderMap[node.path];
+  if (!ordered || ordered.length === 0) {
+    return children.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const rank = new Map(ordered.map((name, index) => [name, index]));
+  return children.sort((a, b) => {
+    const aRank = rank.has(a.name) ? rank.get(a.name)! : Number.POSITIVE_INFINITY;
+    const bRank = rank.has(b.name) ? rank.get(b.name)! : Number.POSITIVE_INFINITY;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export function sortedFolderFiles(node: FolderNode): ProjectAssetEntry[] {
@@ -143,6 +215,7 @@ export function collectFolderFiles(
   tree: FolderNode,
   folderPath: string,
   includeSubfolders: boolean,
+  orderMap: FolderOrderMap = {},
 ): ProjectAssetEntry[] {
   const folder = findFolder(tree, folderPath) ?? tree;
   if (!includeSubfolders) return sortedFolderFiles(folder);
@@ -150,7 +223,7 @@ export function collectFolderFiles(
   const files: ProjectAssetEntry[] = [];
   const visit = (node: FolderNode): void => {
     files.push(...node.files);
-    for (const child of sortedFolderChildren(node)) visit(child);
+    for (const child of sortedFolderChildren(node, orderMap)) visit(child);
   };
   visit(folder);
   return files.sort(
@@ -158,6 +231,215 @@ export function collectFolderFiles(
   );
 }
 
+/**
+ * Immediate child folders of `folderPath`, ordered by the persisted sibling
+ * order map (then alphabetical). Used by the asset grid so folders appear
+ * alongside files like a file explorer.
+ */
+export function collectImmediateChildFolders(
+  tree: FolderNode,
+  folderPath: string,
+  orderMap: FolderOrderMap = {},
+): FolderNode[] {
+  const folder = findFolder(tree, folderPath) ?? tree;
+  return sortedFolderChildren(folder, orderMap);
+}
+
 export function fileNameFromPath(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
+}
+
+export function parentFolderOfPath(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+}
+
+export function joinFolderPath(folder: string, name: string): string {
+  return folder ? `${folder}/${name}` : name;
+}
+
+/** Names accepted by Project panel create/rename operations. */
+export function isValidAssetEntryName(name: string): boolean {
+  const trimmed = name.trim();
+  return (
+    trimmed.length > 0
+    && trimmed !== '.'
+    && trimmed !== '..'
+    && !trimmed.startsWith('.')
+    && !/[\\/\0]/.test(trimmed)
+  );
+}
+
+/** Rewrites a folder path, including descendants, after a folder rename. */
+export function remapFolderPath(path: string, fromPath: string, toPath: string): string {
+  if (path === fromPath) return toPath;
+  if (path.startsWith(`${fromPath}/`)) return `${toPath}${path.slice(fromPath.length)}`;
+  return path;
+}
+
+export function removeChildFromOrder(
+  order: FolderOrderMap,
+  parentPath: string,
+  name: string,
+): FolderOrderMap {
+  const list = order[parentPath];
+  if (!list) return order;
+  const nextNames = list.filter((entry) => entry !== name);
+  const next = { ...order };
+  if (nextNames.length === 0) delete next[parentPath];
+  else next[parentPath] = nextNames;
+  return next;
+}
+
+export function insertChildInOrder(
+  order: FolderOrderMap,
+  parentPath: string,
+  name: string,
+  index: number,
+): FolderOrderMap {
+  const existing = (order[parentPath] ?? []).filter((entry) => entry !== name);
+  const clamped = Math.max(0, Math.min(index, existing.length));
+  const nextNames = [...existing.slice(0, clamped), name, ...existing.slice(clamped)];
+  return { ...order, [parentPath]: nextNames };
+}
+
+export function setParentOrder(
+  order: FolderOrderMap,
+  parentPath: string,
+  names: string[],
+): FolderOrderMap {
+  const next = { ...order };
+  if (names.length === 0) delete next[parentPath];
+  else next[parentPath] = [...names];
+  return next;
+}
+
+/** Remap order keys when a folder path changes; does not touch parent name lists. */
+export function remapOrderKeys(
+  order: FolderOrderMap,
+  fromPath: string,
+  toPath: string,
+): FolderOrderMap {
+  if (fromPath === toPath) return order;
+  const next: FolderOrderMap = {};
+  for (const [parent, names] of Object.entries(order)) {
+    const newKey = remapFolderPath(parent, fromPath, toPath);
+    const prev = next[newKey];
+    next[newKey] = prev ? [...prev, ...names.filter((n) => !prev.includes(n))] : [...names];
+  }
+  return next;
+}
+
+/**
+ * Update order after a folder moves or renames. Removes the old name from the
+ * source parent, remaps descendant keys, then inserts the new name into the
+ * destination parent at `insertIndex` (default: end).
+ */
+export function applyFolderMoveToOrder(
+  order: FolderOrderMap,
+  fromPath: string,
+  toPath: string,
+  insertIndex?: number,
+): FolderOrderMap {
+  if (fromPath === toPath) return order;
+  const fromParent = parentFolderOfPath(fromPath);
+  const toParent = parentFolderOfPath(toPath);
+  const fromName = fileNameFromPath(fromPath);
+  const toName = fileNameFromPath(toPath);
+  const original = order[fromParent] ?? [];
+  const oldIndex = original.indexOf(fromName);
+
+  let next = removeChildFromOrder(order, fromParent, fromName);
+  next = remapOrderKeys(next, fromPath, toPath);
+
+  const index =
+    insertIndex
+    ?? (fromParent === toParent && oldIndex >= 0 ? oldIndex : (next[toParent]?.length ?? 0));
+  return insertChildInOrder(next, toParent, toName, index);
+}
+
+/**
+ * Sibling name list after dropping `draggedName` before/after `targetName`.
+ * `currentSiblings` is the visual order including the dragged folder.
+ */
+export function siblingOrderAfterDrop(
+  currentSiblings: readonly string[],
+  draggedName: string,
+  targetName: string,
+  zone: 'before' | 'after',
+): string[] {
+  const without = currentSiblings.filter((name) => name !== draggedName);
+  const targetIdx = without.indexOf(targetName);
+  if (targetIdx === -1) return [...without, draggedName];
+  const insertAt = zone === 'before' ? targetIdx : targetIdx + 1;
+  return [...without.slice(0, insertAt), draggedName, ...without.slice(insertAt)];
+}
+
+export type FolderDropZone = 'before' | 'into' | 'after';
+
+export function folderDropZoneFromOffset(
+  offsetY: number,
+  height: number,
+  isRoot: boolean,
+): FolderDropZone {
+  if (isRoot || height <= 0) return 'into';
+  const t = offsetY / height;
+  if (t < 1 / 3) return 'before';
+  if (t > 2 / 3) return 'after';
+  return 'into';
+}
+
+/** Payload carried when dragging a Project entry to another folder. */
+export interface AssetMoveDragPayload {
+  root: AssetRoot;
+  path: string;
+  /** Folder rows that span multiple asset roots set this. */
+  roots?: AssetRoot[];
+}
+
+export function moveRootsOf(payload: AssetMoveDragPayload): AssetRoot[] {
+  if (payload.roots && payload.roots.length > 0) return payload.roots;
+  return [payload.root];
+}
+
+export function parseAssetMovePayload(data: string): AssetMoveDragPayload | null {
+  if (!data) return null;
+  try {
+    const parsed = JSON.parse(data) as Partial<AssetMoveDragPayload>;
+    if (typeof parsed.path !== 'string' || !parsed.path) return null;
+    if (parsed.root !== PROJECT_ASSET_ROOT && parsed.root !== SOURCE_ASSET_ROOT) return null;
+    const roots = Array.isArray(parsed.roots)
+      ? parsed.roots.filter(
+          (root): root is AssetRoot =>
+            root === PROJECT_ASSET_ROOT || root === SOURCE_ASSET_ROOT,
+        )
+      : undefined;
+    return {
+      root: parsed.root,
+      path: parsed.path,
+      ...(roots && roots.length > 0 ? { roots } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether an entry may be nested into `folder`. Rejects no-op moves and
+ * dropping a folder inside itself.
+ */
+export function canMoveInto(payload: AssetMoveDragPayload, folder: string): boolean {
+  if (parentFolderOfPath(payload.path) === folder) return false;
+  return folder !== payload.path && !folder.startsWith(`${payload.path}/`);
+}
+
+/**
+ * Whether a folder may be dropped before/after `targetPath` (reparent to
+ * target's parent or reorder among siblings).
+ */
+export function canDropRelativeTo(payload: AssetMoveDragPayload, targetPath: string): boolean {
+  if (!targetPath) return false;
+  if (payload.path === targetPath) return false;
+  if (targetPath.startsWith(`${payload.path}/`)) return false;
+  return true;
 }

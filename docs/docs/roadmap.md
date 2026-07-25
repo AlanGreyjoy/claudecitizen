@@ -12,11 +12,12 @@ Living checklist — not a contract. Priorities shift with the vibe.
 | --- | --- | --- |
 | **I — Planet** | Procedural world, LOD terrain, biomes, water | Mostly done |
 | **II — Presence** | On-foot play, ship flight, surface ↔ orbit | Mostly done |
-| **III — Combat** | Third-person weapons, character controller for aim & fire | **Current — Phase 1** |
-| **IV — Universe** | More ships, sites, exploration depth | Planned |
-| **V — Online** | Backend, persistence, multiplayer | Future |
+| **III — Online** | Authoritative Rust backend, persistence, multiplayer | Mostly done |
+| **IV — Tooling** | AsteronEngine: projects, scenes, planets, systems, menus | Mostly done |
+| **V — Combat** | Third-person weapons, character controller for aim & fire | **Current** |
+| **VI — Universe** | More ships, sites, economy depth, exploration | Planned |
 
-## Phase 1 — Third-person combat _(current)_
+## Current — Third-person combat
 
 - [x] Third-person weapon system — equip, fire, reload, weapon swap
 - [x] Character controller — over-the-shoulder aim/look while armed
@@ -56,9 +57,21 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Procedural landing-site resolution on dry terrain
 - [x] Instanced vegetation — grass, trees, rocks
 - [x] Over-the-shoulder camera for on-foot and ship-deck traversal
+- [x] Friendly station NPCs — spawner/waypoint graphs and named service characters
 - [ ] Points of interest — outposts, wrecks, landmarks
-- [ ] Inventory, interaction, and mission hooks
+- [ ] Mission hooks and dialogue outcomes
 - [ ] EVA / zero-g outside the ship
+
+## Economy & items
+
+- [x] Inventory, personal loadout slots, and equip validation
+- [x] Server-backed catalog — ships, props, items, weapons, backpacks, wearables
+- [x] Station shops — weapons, food, drinks, consumables
+- [x] Ammunition stacks and reload consumption
+- [x] Crafting and resource gathering
+- [x] Hangar / apartment build mode with placeable props
+- [ ] Trading, cargo hauling, and price simulation
+- [ ] NPC-driven contracts
 
 ## Rendering & atmosphere
 
@@ -79,8 +92,21 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Headless orbit demo (`npm run demo`)
 - [x] Architecture notes for agents (`AGENTS.md`)
 - [x] Chat wired to the authoritative backend
-- [ ] In-game map and waypoint navigation
+- [x] In-game map and waypoint navigation (HaloBand System Map + quantum routes)
 - [ ] Deployable static build with CSP / HTTPS hygiene
+
+## AsteronEngine
+
+- [x] Standalone Electron editor with Projects hub and per-project settings
+- [x] Scene documents as GameObject trees (schema v3) with in-process scene switching
+- [x] Prefab authoring — components, colliders, GLB node overrides
+- [x] In-window Play mode (`F6` / `F7`) reading the live document
+- [x] **File → Build Web** release builds with runtime-resolved backend URL
+- [x] Planet Authoring, System Map, Menu Manager, Base Characters tabs
+- [x] Server console as an editor tab over `/admin/*`
+- [x] React shell with Fast Refresh
+- [ ] Multi-scene editing and prefab nesting depth polish
+- [ ] Undo coverage for every tab (currently strongest in the Scene tab)
 
 ## Online
 

@@ -159,6 +159,29 @@ export function ProjectSettingsModal({
             />
             <span className="ed-scene-settings-detail">Directory File → Build Web writes into.</span>
           </label>
+          <label className="ed-scene-settings-field">
+            <span className="ed-scene-settings-label">Synty Sidekick Folder</span>
+            <input
+              className="ed-input"
+              type="text"
+              value={draft.contentPacks?.syntySidekick ?? ''}
+              placeholder="assets/Synty/Sidekick"
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  contentPacks: {
+                    ...(draft.contentPacks ?? { syntySidekick: '' }),
+                    syntySidekick: event.target.value,
+                  },
+                })
+              }
+              onKeyDown={stopKeyPropagation}
+            />
+            <span className="ed-scene-settings-detail">
+              Project-relative folder with Sidekick <code>manifest.json</code>. Or use Tools →
+              Locate Synty Sidekick Pack…
+            </span>
+          </label>
         </div>
         <div className="ed-base-actions">
           <button type="button" className="ed-btn ed-btn-accent" onClick={() => void handleSave()}>

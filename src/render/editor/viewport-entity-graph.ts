@@ -3,7 +3,8 @@ import type { TransformControls } from "three/examples/jsm/controls/TransformCon
 import {
   loadPrefabModel,
   createPrimitiveMesh,
-  createPropInstanceGroup,
+  createPropInstanceGroupAsync,
+  applyPrefabMaterialOverrides,
 } from "../prefabs/prefab-renderer";
 import { setupUpdateObjectAnimations } from "../prefabs/object-animation";
 import {
@@ -17,8 +18,13 @@ import {
   type ViewportResourceTracker,
 } from "./viewport-component-helpers";
 import {
+  attachPrefabInstanceColliderHelpers,
+  attachRestHeightHelperForHull,
   attachTopLevelEntityComponents,
+  attachModelObjectAnimations,
+  clearEntityLevelComponentHelpers,
   finalizeLoadedEntityModel,
+  refreshEntityModelComponentHelpers,
   refreshNodeOverrideComponentHelpers,
 } from "./viewport-entity-model";
 import { createViewportNpcRoutes } from "./viewport-npc-routes";
@@ -36,6 +42,7 @@ export interface ViewportEntityGraph {
   track: ViewportResourceTracker;
   updateNpcRoutes: () => void;
   rebuildAll: () => void;
+  refreshEntity: (entityId: string) => void;
   applyEntityTransform: (entityId: string, entity: EditorEntity) => void;
   applyGlbOverrideToNode: (
     entityId: string,
@@ -59,6 +66,7 @@ export interface ViewportEntityGraphDeps {
   resetShipPreviewWarnings: () => void;
   registerParticleHandle: (entityId: string, handle: ParticleSystemHandle) => void;
   disposeParticleHandles: () => void;
+  disposeParticleHandlesForEntity: (entityId: string) => void;
 }
 
 function findLoadedEntityModel(group: THREE.Group): THREE.Object3D | null {
@@ -82,6 +90,7 @@ export function createViewportEntityGraph(
     resetShipPreviewWarnings,
     registerParticleHandle,
     disposeParticleHandles,
+    disposeParticleHandlesForEntity,
   } = deps;
 
   const objectsById = new Map<string, THREE.Group>();
@@ -170,6 +179,13 @@ export function createViewportEntityGraph(
     group.name = entity.name;
     group.userData.entityId = entity.id;
     group.visible = entity.visible;
+    const recenterAsHull = entity.components.some(
+      (component) =>
+        component.type === "ship-hull" || component.type === "ship-controller",
+    );
+    group.userData.editorAssetUrl = entity.asset?.url ?? null;
+    group.userData.editorHasPrimitive = Boolean(entity.primitive);
+    group.userData.editorRecenterAsHull = recenterAsHull;
     applyEntityTransformToObject(group, entity);
     objectsById.set(entity.id, group);
 
@@ -187,10 +203,6 @@ export function createViewportEntityGraph(
       const url = asset.url;
       // The game recenters the flyable hull on its bounding-box center
       // (ship_model.ts), so mirror that here or zones drift from the mesh.
-      const recenterAsHull = entity.components.some(
-        (component) =>
-          component.type === "ship-hull" || component.type === "ship-controller",
-      );
       pendingModelLoads += 1;
       void loadPrefabModel(url)
         .then((model) => {
@@ -254,9 +266,16 @@ export function createViewportEntityGraph(
       const prefabId = prefabInstance.prefabId;
       pendingModelLoads += 1;
       void loadPrefabDocument(prefabId)
-        .then((doc) => {
+        .then(async (doc) => {
           if (generation !== buildGeneration || !doc) return;
-          const instanceGroup = createPropInstanceGroup(doc);
+          const instanceGroup = await createPropInstanceGroupAsync(doc);
+          if (generation !== buildGeneration) return;
+          attachPrefabInstanceColliderHelpers({
+            instanceRoot: instanceGroup,
+            doc,
+            helpers: { buildComponentHelper },
+            sanitizeNodeName,
+          });
           instanceGroup.name = `prefab-instance:${prefabId}`;
           instanceGroup.userData.prefabInstanceId = prefabId;
           // Clear any previous instance preview children marked as such.
@@ -264,6 +283,8 @@ export function createViewportEntityGraph(
             if (child.userData.prefabInstanceId) group.remove(child);
           }
           group.add(instanceGroup);
+          selectionBoxes.forEach((box) => box.update());
+          syncSelectionHighlight();
         })
         .catch((error) => {
           console.warn(
@@ -317,11 +338,93 @@ export function createViewportEntityGraph(
     if (pendingModelLoads === 0) applyShipPreview({ quiet: false });
   }
 
+  /**
+   * In-place update for rename / visibility / component edits. Avoids reminting
+   * GLB UUIDs (which collapses hierarchy expand state and drops selection highlight).
+   * Falls back to rebuildAll when the visual identity of the entity changed.
+   */
+  function refreshEntity(entityId: string): void {
+    const entity = store.locate(entityId)?.entity;
+    const group = objectsById.get(entityId);
+    if (!entity || !group) {
+      rebuildAll();
+      return;
+    }
+
+    const nextAssetUrl = entity.asset?.url ?? null;
+    const nextHasPrimitive = Boolean(entity.primitive);
+    const nextRecenterAsHull = entity.components.some(
+      (component) =>
+        component.type === "ship-hull" || component.type === "ship-controller",
+    );
+    if (
+      group.userData.editorAssetUrl !== nextAssetUrl ||
+      group.userData.editorHasPrimitive !== nextHasPrimitive ||
+      group.userData.editorRecenterAsHull !== nextRecenterAsHull
+    ) {
+      rebuildAll();
+      return;
+    }
+
+    group.name = entity.name;
+    group.visible = entity.visible;
+    applyEntityTransformToObject(group, entity);
+
+    disposeParticleHandlesForEntity(entityId);
+    clearEntityLevelComponentHelpers(group);
+    clearRestHeightHelpers(group);
+
+    attachTopLevelEntityComponents({
+      entity,
+      group,
+      entityRoot,
+      helpers: { buildComponentHelper },
+      registerParticleHandle,
+      createParticleSystem,
+    });
+
+    const model = findLoadedEntityModel(group);
+    if (model) {
+      for (const material of applyPrefabMaterialOverrides(
+        model,
+        entity.materialOverrides,
+      )) {
+        track(material);
+      }
+      refreshEntityModelComponentHelpers({
+        entity,
+        model,
+        helpers: { buildComponentHelper },
+        sanitizeNodeName,
+      });
+      attachModelObjectAnimations({ entity, model, entityRoot });
+      if (nextRecenterAsHull) {
+        attachRestHeightHelperForHull({
+          entity,
+          group,
+          model,
+          helpers: {
+            buildComponentHelper,
+            makeRestHeightHelper,
+            clearRestHeightHelpers,
+            makeHelperMesh,
+          },
+        });
+      }
+    }
+
+    npcRoutes.build();
+    selectionBoxes.forEach((box) => box.update());
+    syncSelectionHighlight();
+    applyShipPreview({ quiet: true });
+  }
+
   return {
     objectsById,
     track,
     updateNpcRoutes: npcRoutes.update,
     rebuildAll,
+    refreshEntity,
     applyEntityTransform(entityId, entity) {
       const object = objectsById.get(entityId);
       if (!object) return;

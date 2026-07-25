@@ -82,6 +82,11 @@ export async function loadSidekickCatalog(): Promise<SidekickCatalog> {
   return catalogPromise;
 }
 
+/** Drop the cached catalog so a newly imported pack is picked up. */
+export function invalidateSidekickCatalog(): void {
+  catalogPromise = null;
+}
+
 export function getSpeciesById(catalog: SidekickCatalog, speciesId: number): SidekickManifestSpecies | null {
   return catalog.species.find((species) => species.id === speciesId) ?? null;
 }

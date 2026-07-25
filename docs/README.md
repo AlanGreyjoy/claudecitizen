@@ -1,6 +1,7 @@
 # ClaudeCitizen docs site
 
-Docusaurus documentation for [ClaudeCitizen](https://claudecitizen.netlify.app/). This is a **separate** static site from the game build.
+Docusaurus documentation for ClaudeCitizen. This is a **separate** static site
+from anything the game or the AsteronEngine editor builds.
 
 ## Local development
 
@@ -19,13 +20,14 @@ Open [http://localhost:3000](http://localhost:3000).
 npm run docs:build
 ```
 
-Output goes to `docs/build/`.
+Output goes to `docs/build/`. `onBrokenLinks` is set to `throw`, so a build
+failure is usually a stale cross-link — fix the link rather than relaxing the
+setting.
 
-## Netlify deployment (second site)
+## Netlify deployment
 
-Create a **new** Netlify site from the same Git repo. Do **not** reuse the game site's settings — the game uses root [`netlify.toml`](../netlify.toml) and publishes `dist/`.
-
-Configure the docs site in the Netlify UI:
+The docs site is its own Netlify site built from this subdirectory. Configure it
+in the Netlify UI:
 
 | Setting | Value |
 | --- | --- |
@@ -35,6 +37,13 @@ Configure the docs site in the Netlify UI:
 | Publish directory | `build` |
 | Node version | 22 (optional, in Site settings → Environment) |
 
-**Base directory must be `docs`** so Netlify reads [`docs/netlify.toml`](./netlify.toml) instead of the root game [`netlify.toml`](../netlify.toml). The build steps up to the repo root for `npm install` and `docs:build`, then publishes `docs/build`.
+**Base directory must be `docs`** so Netlify reads [`docs/netlify.toml`](./netlify.toml),
+which steps up to the repository root for `npm install` and `npm run docs:build`
+and then publishes `docs/build`.
 
-Netlify will assign a URL like `https://<random-name>.netlify.app`. Update `url` in [`docusaurus.config.ts`](./docusaurus.config.ts) once you know the final hostname.
+The game itself is **not** deployed from this repository. Browser releases come
+from **File → Build Web** in the AsteronEngine editor, which writes a release
+directory you deploy wherever you like — see [Quick start](./docs/quick-start.md).
+
+Update `url` in [`docusaurus.config.ts`](./docusaurus.config.ts) if the docs
+hostname changes.

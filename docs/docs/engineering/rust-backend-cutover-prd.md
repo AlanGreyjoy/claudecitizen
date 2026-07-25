@@ -5,10 +5,18 @@ sidebar_position: 8
 
 # Rust Backend Hard Cutover PRD
 
-**Status:** Approved for implementation  
+**Status:** Delivered — kept as a historical record  
 **Owner:** ClaudeCitizen engineering  
 **Cutover model:** One-way hard cutover; no dual-write, shadow, proxy, or fallback backend  
 **Last updated:** 2026-07-16
+
+:::note Historical record
+
+This cutover shipped. References below to a "legacy TypeScript API", a browser
+dev client, or a standalone admin application describe the **pre-cutover** system
+and no longer exist. See [Technology Stack](./stack) for the current architecture.
+
+:::
 
 ## 1. Summary
 

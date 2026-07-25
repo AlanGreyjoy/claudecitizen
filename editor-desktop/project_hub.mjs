@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 
 export const MAX_RECENT_PROJECTS = 20;
@@ -42,15 +42,20 @@ async function pathExists(candidate) {
   }
 }
 
+/**
+ * A project is a package.json plus the `assets/` library that holds its
+ * prefabs and models. Prefabs are no longer pinned to a fixed data directory,
+ * so `assets/` is what identifies the project.
+ */
 export async function isAsteronEngineProject(candidate) {
   if (!candidate) return false;
   try {
     const root = resolve(candidate);
-    const [packageStat, prefabStat] = await Promise.all([
+    const [packageStat, assetsStat] = await Promise.all([
       stat(join(root, 'package.json')),
-      stat(join(root, 'src/world/prefabs/data')),
+      stat(join(root, 'assets')),
     ]);
-    return packageStat.isFile() && prefabStat.isDirectory();
+    return packageStat.isFile() && assetsStat.isDirectory();
   } catch {
     return false;
   }
@@ -122,19 +127,62 @@ export function createProjectHub({ settingsPath }) {
     return { projects };
   }
 
+  /** Display name comes from `asteron.project.json`; folder basename is the fallback. */
+  async function readProjectDisplayName(projectRoot) {
+    try {
+      const raw = JSON.parse(
+        await readFile(join(projectRoot, 'asteron.project.json'), 'utf8'),
+      );
+      if (typeof raw.name === 'string' && raw.name.trim()) return raw.name.trim();
+    } catch {
+      // Projects created before project settings existed have no settings file.
+    }
+    return basename(projectRoot);
+  }
+
   async function rememberProject(projectRoot) {
     const root = resolve(projectRoot);
     const settings = await readSettings();
     const next = [
       {
         path: root,
-        name: basename(root),
+        name: await readProjectDisplayName(root),
         openedAt: Date.now(),
       },
       ...settings.recentProjects.filter((entry) => entry.path !== root),
     ].slice(0, MAX_RECENT_PROJECTS);
     await writeSettings({ recentProjects: next });
     return root;
+  }
+
+  /**
+   * Rename the project's display name. Writes `asteron.project.json` and the
+   * recent-projects entry; the folder on disk is intentionally untouched
+   * (path is the project's identity in recents and open flows).
+   */
+  async function renameProject(projectRoot, rawName) {
+    const root = resolve(projectRoot);
+    const name = sanitizeProjectName(rawName);
+    if (!(await isAsteronEngineProject(root))) {
+      throw new Error(`${root} is not an AsteronEngine project.`);
+    }
+    const settingsFile = join(root, 'asteron.project.json');
+    let document = {};
+    try {
+      const raw = JSON.parse(await readFile(settingsFile, 'utf8'));
+      if (raw && typeof raw === 'object') document = raw;
+    } catch {
+      // Older projects get a minimal settings file created on rename.
+    }
+    await writeJson(settingsFile, { schemaVersion: 1, ...document, name });
+
+    const settings = await readSettings();
+    await writeSettings({
+      recentProjects: settings.recentProjects.map((entry) =>
+        entry.path === root ? { ...entry, name } : entry,
+      ),
+    });
+    return listRecentProjects();
   }
 
   async function removeRecentProject(projectRoot) {
@@ -144,6 +192,19 @@ export function createProjectHub({ settingsPath }) {
       recentProjects: settings.recentProjects.filter((entry) => entry.path !== root),
     });
     return listRecentProjects();
+  }
+
+  /**
+   * Permanently delete an AsteronEngine project folder and drop it from
+   * recents. Caller must confirm with the user first — this is irreversible.
+   */
+  async function deleteProject(projectRoot) {
+    const root = resolve(projectRoot);
+    if (!(await isAsteronEngineProject(root))) {
+      throw new Error(`${root} is not an AsteronEngine project.`);
+    }
+    await rm(root, { recursive: true, force: false });
+    return removeRecentProject(root);
   }
 
   async function writeJson(filePath, document) {
@@ -183,7 +244,6 @@ export function createProjectHub({ settingsPath }) {
     }
 
     const dirs = [
-      'src/world/prefabs/data',
       'src/world/scenes/data',
       'src/world/planets/data',
       'src/world/systems/data',
@@ -191,6 +251,7 @@ export function createProjectHub({ settingsPath }) {
       'src/player/equipment/data',
       'src/player/data',
       'assets',
+      'assets/Prefabs',
     ];
     for (const relativeDir of dirs) {
       await mkdir(join(projectRoot, relativeDir), { recursive: true });
@@ -211,9 +272,10 @@ export function createProjectHub({ settingsPath }) {
       backendUrl: 'http://localhost:3000',
       defaultScene: 'title',
       build: { outDir: 'dist' },
+      contentPacks: { syntySidekick: '' },
     });
 
-    await writeJson(join(projectRoot, 'src/world/prefabs/data/untitled-prefab.prefab.json'), {
+    await writeJson(join(projectRoot, 'assets/Prefabs/untitled-prefab.prefab.json'), {
       id: 'untitled-prefab',
       name: 'Untitled Prefab',
       version: 1,
@@ -325,6 +387,9 @@ export function createProjectHub({ settingsPath }) {
         'them at `/assets/...` for the open project only. Organize folders',
         'however you like — use New Folder from the Project panel.',
         '',
+        'Prefabs (`*.prefab.json`) live here too and may sit in any folder.',
+        'Drag a GameObject from the Hierarchy onto a folder to save one.',
+        '',
       ].join('\n'),
     );
 
@@ -338,6 +403,8 @@ export function createProjectHub({ settingsPath }) {
     listRecentProjects,
     rememberProject,
     removeRecentProject,
+    renameProject,
+    deleteProject,
     createProject,
     isAsteronEngineProject,
   });

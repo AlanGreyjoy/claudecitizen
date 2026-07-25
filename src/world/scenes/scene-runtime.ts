@@ -111,7 +111,8 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
       });
     }
     const sceneLink = findComponent(entity, 'scene-link');
-    if (sceneLink) {
+    // An unset target is a placeholder the author has not filled in yet.
+    if (sceneLink?.sceneId) {
       sceneLinks.push({
         entityId: entity.id,
         sceneId: sceneLink.sceneId,

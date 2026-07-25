@@ -6,13 +6,17 @@ description: Browser, authoritative Rust backend, persistence, protocol, and dep
 
 # Technology Stack
 
-ClaudeCitizen has one browser client and one horizontally scalable Rust backend. Realtime gameplay is cell-authoritative; there is no alternate backend or legacy transport path.
+ClaudeCitizen ships **two surfaces**: the AsteronEngine Electron editor and one
+horizontally scalable Rust backend. The browser game is a build target of the
+first. Realtime gameplay is cell-authoritative; there is no alternate backend or
+legacy transport path.
 
 ## At a glance
 
 | Layer | Path | Technology |
 | --- | --- | --- |
-| Browser game | `src/` | TypeScript, Vite, Three.js |
+| Editor | `editor-desktop/`, `src/editor/` | Electron, React 19, Vite |
+| Game runtime | `src/` | TypeScript, Vite, Three.js |
 | Prediction | `backend/crates/sim-core/` | Shared Rust compiled to WebAssembly |
 | HTTP API | `backend/crates/server/` | Rust, Tokio, Axum |
 | Realtime | `backend/crates/server/` | WebTransport over QUIC, Protobuf |
@@ -46,9 +50,10 @@ flowchart LR
 
 The browser owns presentation, input capture, interpolation, and prediction. It does not decide authoritative outcomes.
 
-- `src/net/world_client.ts` creates a one-use session ticket and connects with WebTransport.
-- `src/net/world_protocol.ts` encodes and decodes the canonical messages in `proto/world.proto`.
-- `src/net/prediction_wasm.ts` loads `cc_sim_core.wasm`; no separate TypeScript prediction algorithm exists.
+- `src/net/world-client.ts` creates a one-use session ticket and connects with WebTransport.
+- `src/net/world-protocol.ts` encodes and decodes the canonical messages in `proto/world.proto`.
+- `src/net/prediction-wasm.ts` loads `cc_sim_core.wasm`; no separate TypeScript prediction algorithm exists.
+- `src/net/runtime-config.ts` resolves the backend URL at startup — from project settings in the editor, from `asteron.runtime.json` in a shipped release. There is no build-time `VITE_API_BASE_URL`.
 - Reliable streams carry joins, transitions, chat, and reconciliation. Datagrams carry time-sensitive intents and snapshots.
 
 ## Backend
@@ -76,7 +81,8 @@ npm run dev:infra       # PostgreSQL, Redis, Mailpit
 npm run backend:migrate # apply SQLx migrations
 npm run dev:server      # watch/rebuild/restart Rust HTTP + WebTransport backend
 npm run start:server    # one-shot Rust backend
-npm run editor          # build the editor renderer and launch AsteronEngine
+npm run editor:dev      # launch AsteronEngine with Vite HMR
+npm run editor          # build the editor renderer, then launch AsteronEngine
 ```
 
 Environment variables are documented in `backend/.env.example`. WebTransport uses a generated self-signed development identity unless certificate paths are configured; production supplies a trusted certificate on the host.
@@ -85,4 +91,9 @@ Environment variables are documented in `backend/.env.example`. WebTransport use
 
 `backend/Dockerfile` builds one server image. Run it on your host (for example Vultr) with Docker Compose alongside Postgres and Redis, or point the image at managed databases. Browser delivery remains separate from backend orchestration — ship the web build via **File → Build Web**.
 
-See [Rust Backend Cutover PRD](./rust-backend-cutover-prd) and [Cutover Implementation Plan](./rust-backend-cutover-plan) for requirements and acceptance criteria.
+## History
+
+The [Rust Backend Cutover PRD](./rust-backend-cutover-prd) and
+[Cutover Implementation Plan](./rust-backend-cutover-plan) record the completed
+migration to this architecture. They are kept as historical rationale, not as
+current work.

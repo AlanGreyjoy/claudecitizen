@@ -70,6 +70,7 @@ export function createEditorViewport(
     resetShipPreviewWarnings: shipPreview.resetMissingWarnings,
     registerParticleHandle: particles.register,
     disposeParticleHandles: particles.disposeAll,
+    disposeParticleHandlesForEntity: particles.disposeForEntity,
   });
 
   const glbQueries = createViewportGlbQueries(
@@ -110,15 +111,18 @@ export function createEditorViewport(
     getTranslateStep: snap.getTranslateStep,
     isPlayMode: () => playMode,
     onDropAsset: options.onDropAsset,
+    onDropPrefab: options.onDropPrefab,
   });
 
   const unsubscribe = store.subscribe((event) => {
-    if (
-      event.type === "structure" ||
-      event.type === "document" ||
-      event.type === "entity"
-    ) {
+    if (event.type === "structure" || event.type === "document") {
       graph.rebuildAll();
+      return;
+    }
+    if (event.type === "entity") {
+      // Component / rename / visibility edits — keep the live GLB graph so
+      // hierarchy expand keys and selection highlight survive.
+      graph.refreshEntity(event.entityId);
       return;
     }
     if (event.type === "glb-components") {

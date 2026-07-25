@@ -119,7 +119,7 @@ See also `.cursor/skills/ship-flight/SKILL.md`.
 - **Delete** a GLB part: RMB node in hierarchy → Delete → adds name to `glbNodeHidden` / prefab `hiddenNodes`.
 - **Mesh Transform** edits → `glbNodeTransforms` / prefab `nodeOverrides[].transform`.
 - Hierarchy shows a **badge** on nodes with override components; bound marker children nest under the node row.
-- **Hierarchy nesting** for child entities uses `glbAnchor` (persisted on the entity, set by **Add Empty Here** and marker components). Legacy prefabs may still use `Name (GlbNodeName)` — parsed via `glbAnchorFromEntityName()` in `glb_binding.ts`. Without a binding, the child is parented to the asset entity but renders as a sibling of the MODEL tree.
+- **Hierarchy nesting** for child entities uses `glbAnchor` (persisted on the entity, set by **Add Empty Here** and marker components). Legacy prefabs may still use `Name (GlbNodeName)` — parsed via `glbAnchorFromEntityName()` in `glb_binding.ts`. Without a binding, the child is parented to the asset entity but renders as a sibling of the GLB node tree.
 - **Copy Node Name** in GLB context menu — use exact string in animation/door/collider `node` / `nodes[].name` fields.
 
 ## Inspect a GLB File (CLI)

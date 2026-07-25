@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ClaudeCitizen — Dead Code Audit</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --panel-2: #232d3a;
+      --border: #2e3a4a;
+      --text: #e7eef7;
+      --muted: #8b9bb0;
+      --high: #ff6b6b;
+      --medium: #f0b429;
+      --low: #6ec6ff;
+      --clean: #3dd68c;
+      --accent: #7eb8ff;
+      --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1a2a40 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #1f1830 0%, transparent 50%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.35rem;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 1.75rem;
+    }
+    .meta code { color: var(--accent); }
+    .verdict {
+      background: linear-gradient(135deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.25rem;
+      margin-bottom: 1.75rem;
+    }
+    .verdict strong { color: var(--clean); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0 2rem;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+    }
+    .stat .n {
+      font-size: 1.6rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+    .stat .l { color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; }
+    .stat.high .n { color: var(--high); }
+    .stat.medium .n { color: var(--medium); }
+    .stat.low .n { color: var(--low); }
+    .stat.clean .n { color: var(--clean); }
+    h2 {
+      font-size: 1.15rem;
+      margin: 2rem 0 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 {
+      font-size: 0.98rem;
+      margin: 0 0 0.35rem;
+      font-family: var(--mono);
+      font-weight: 550;
+      color: var(--accent);
+      word-break: break-all;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+    }
+    .filters button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .filters button.active {
+      border-color: var(--accent);
+      background: #24344a;
+      color: var(--accent);
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 0.75rem;
+    }
+    .card[hidden] { display: none; }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.55rem;
+    }
+    .badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      padding: 0.18rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+    }
+    .badge.high { color: var(--high); background: #3a1c1c; border-color: #5c2a2a; }
+    .badge.medium { color: var(--medium); background: #3a3014; border-color: #5c4a1c; }
+    .badge.low { color: var(--low); background: #173040; border-color: #2a4a60; }
+    .badge.cat { color: var(--muted); background: var(--panel-2); border-color: var(--border); }
+    .badge.action { color: var(--clean); background: #143026; border-color: #1f4a38; }
+    p, li { color: #c9d4e3; font-size: 0.92rem; }
+    p { margin: 0.35rem 0; }
+    ul { margin: 0.4rem 0 0; padding-left: 1.15rem; }
+    code, .path {
+      font-family: var(--mono);
+      font-size: 0.84em;
+      background: #0c1016;
+      padding: 0.05em 0.35em;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 0.5rem 0 1rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .method {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    footer {
+      margin-top: 2.5rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Dead Code Audit</h1>
+    <p class="meta">
+      ClaudeCitizen / AsteronEngine &middot; generated <code>2026-07-25</code> &middot;
+      scope: <code>src/</code>, <code>editor-desktop/</code>, <code>scripts/</code>, <code>docs/</code>, entry HTML, <code>package.json</code>
+    </p>
+
+    <div class="verdict">
+      Migration leftovers mostly gone. <strong>2 orphan TypeScript modules</strong> safe to delete now.
+      Also: scaffold docs component, thin API convenience wrappers, one deprecated alias, and a few unscripted / stale-doc items.
+      <code>editor-desktop/</code>, Vite entrypoints, and live HTML surfaces are clean.
+    </div>
+
+    <div class="stats">
+      <div class="stat high"><div class="n">2</div><div class="l">orphan modules</div></div>
+      <div class="stat medium"><div class="n">13</div><div class="l">unused API wrappers</div></div>
+      <div class="stat low"><div class="n">8</div><div class="l">unscripted CLIs</div></div>
+      <div class="stat clean"><div class="n">0</div><div class="l">dead editor-desktop files</div></div>
+    </div>
+
+    <div class="filters" id="filters">
+      <button type="button" data-filter="all" class="active">All</button>
+      <button type="button" data-filter="high">High</button>
+      <button type="button" data-filter="medium">Medium</button>
+      <button type="button" data-filter="low">Low</button>
+      <button type="button" data-filter="docs">Docs drift</button>
+    </div>
+
+    <h2>Recommended deletes</h2>
+
+    <article class="card" data-conf="high" data-cat="orphan">
+      <div class="badges">
+        <span class="badge high">High</span>
+        <span class="badge cat">Orphan module</span>
+        <span class="badge action">Delete</span>
+      </div>
+      <h3>src/app/scene-launch.ts</h3>
+      <p>
+        Exports only <code>sceneLaunchSearch</code>. Zero importers across the repo.
+        Docstring targets the removed external Play Mode window (URL navigation).
+        In-process play uses <code>scene-host.ts</code> instead.
+      </p>
+      <p><strong>Evidence:</strong> import graph + <code>rg sceneLaunchSearch</code> → definition only. ~47 lines.</p>
+    </article>
+
+    <article class="card" data-conf="high" data-cat="orphan">
+      <div class="badges">
+        <span class="badge high">High</span>
+        <span class="badge cat">Orphan module</span>
+        <span class="badge action">Delete</span>
+      </div>
+      <h3>src/player/character_creator/sidekick-creator-store.ts</h3>
+      <p>
+        Full creator store (<code>createSidekickCreatorStore</code>, ~302 lines). Nothing imports it.
+        Live character-creation UI (<code>src/app/character-creation-screen.ts</code>) uses
+        <code>sidekick-catalog</code> / <code>player-character-appearance</code> / preview stage directly.
+      </p>
+      <p><strong>Evidence:</strong> Knip unused-files + import graph + symbol search.</p>
+    </article>
+
+    <article class="card" data-conf="high" data-cat="docs">
+      <div class="badges">
+        <span class="badge high">High</span>
+        <span class="badge cat">Docs scaffold</span>
+        <span class="badge action">Delete</span>
+      </div>
+      <h3>docs/src/components/HomepageFeatures/</h3>
+      <p>
+        Default Docusaurus feature grid (<code>index.tsx</code> + <code>styles.module.css</code>).
+        Docs use <code>routeBasePath: '/'</code> with no <code>src/pages/</code> homepage — component never mounted.
+        Deleting it also makes <code>clsx</code> unused in <code>docs/package.json</code>.
+      </p>
+    </article>
+
+    <h2>Unused exports / thin wrappers</h2>
+
+    <article class="card" data-conf="medium" data-cat="export">
+      <div class="badges">
+        <span class="badge medium">Medium</span>
+        <span class="badge cat">Unused exports</span>
+        <span class="badge action">Delete or un-export</span>
+      </div>
+      <h3>src/net/api.ts — area-specific hangar/apartment aliases</h3>
+      <p>
+        Call sites use generic <code>*Build*</code> helpers with an <code>area</code> argument
+        (<code>src/player/hangar_build/build-controller.ts</code>). These convenience wrappers have
+        <strong>zero external callers</strong>:
+      </p>
+      <ul>
+        <li><code>fetchHangarBuildState</code> / <code>fetchApartmentBuildState</code> (and unused <code>fetchBuildState</code>)</li>
+        <li><code>purchaseHangarProp</code> / <code>purchaseApartmentProp</code></li>
+        <li><code>createHangarPlacement</code> / <code>createApartmentPlacement</code></li>
+        <li><code>updateHangarPlacement</code> / <code>updateApartmentPlacement</code></li>
+        <li><code>deleteHangarPlacement</code> / <code>deleteApartmentPlacement</code></li>
+      </ul>
+      <p>Keep the generic <code>fetchBuildState</code>-family only if still planned; today even <code>fetchBuildState</code> itself is unused (controller loads state elsewhere).</p>
+    </article>
+
+    <article class="card" data-conf="medium" data-cat="export">
+      <div class="badges">
+        <span class="badge medium">Medium</span>
+        <span class="badge cat">Deprecated export</span>
+        <span class="badge action">Delete</span>
+      </div>
+      <h3>createDefaultSpawnLayer — src/world/planets/schema.ts</h3>
+      <p>
+        Marked <code>@deprecated</code> in favor of <code>createDefaultSpawnEntry</code>.
+        Editor already calls the new name. Alias has zero runtime callers (PRD text only).
+      </p>
+    </article>
+
+    <article class="card" data-conf="medium" data-cat="export">
+      <div class="badges">
+        <span class="badge medium">Medium</span>
+        <span class="badge cat">Deprecated export</span>
+        <span class="badge action">Delete</span>
+      </div>
+      <h3>FlightIntegrateOptions — src/flight/flight-body.ts</h3>
+      <p>
+        Deprecated type alias of <code>FlightStatsOptions</code>. Zero references outside its definition.
+      </p>
+    </article>
+
+    <article class="card" data-conf="medium" data-cat="export">
+      <div class="badges">
+        <span class="badge medium">Medium</span>
+        <span class="badge cat">Unused export</span>
+        <span class="badge action">Verify / delete</span>
+      </div>
+      <h3>isPlaySessionPaused — src/app/play-session.ts</h3>
+      <p>Exported getter; never called. Pause path goes through editor play host / loop context instead.</p>
+    </article>
+
+    <article class="card" data-conf="medium" data-cat="export">
+      <div class="badges">
+        <span class="badge medium">Medium</span>
+        <span class="badge cat">Unused export</span>
+        <span class="badge action">Verify</span>
+      </div>
+      <h3>disposeEditorSession — src/editor/react/main.tsx</h3>
+      <p>
+        Re-exported via <code>editor-session.ts</code> but never invoked.
+        Likely intended for Electron window teardown / HMR. Confirm before removing.
+      </p>
+    </article>
+
+    <h2>Scripts &amp; artifacts</h2>
+
+    <article class="card" data-conf="low" data-cat="script">
+      <div class="badges">
+        <span class="badge low">Low</span>
+        <span class="badge cat">Unscripted CLIs</span>
+        <span class="badge action">Keep or wire</span>
+      </div>
+      <h3>scripts/ — manual tooling (not in package.json)</h3>
+      <p>Useful one-shots; not dead by default. Unscripted today:</p>
+      <table>
+        <thead><tr><th>File</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>inspect_glb.mjs</code></td><td>Documented in AGENTS.md — keep</td></tr>
+          <tr><td><code>measure_desync.ts</code></td><td>Documented in AGENTS.md — keep</td></tr>
+          <tr><td><code>check_page.mjs</code></td><td>AGENTS mentions it; imports <code>playwright</code> which is <strong>not</strong> in root deps — likely broken</td></tr>
+          <tr><td><code>biome_map.ts</code> / <code>biome_stats.ts</code> / <code>height_stats.ts</code> / <code>count_tiles.ts</code> / <code>validate_tiles.ts</code> / <code>find_plains_spawn.ts</code></td><td>Terrain debug CLIs</td></tr>
+          <tr><td><code>bake_*_textures.py</code></td><td>Asset bake helpers; <code>bake_ship_textures.py</code> listed in AGENTS</td></tr>
+        </tbody>
+      </table>
+    </article>
+
+    <article class="card" data-conf="low" data-cat="script">
+      <div class="badges">
+        <span class="badge low">Low</span>
+        <span class="badge cat">Committed artifact</span>
+        <span class="badge action">Gitignore / delete from git</span>
+      </div>
+      <h3>scripts/biome_map.bmp (~778 KB)</h3>
+      <p>
+        Generated output of <code>biome_map.ts</code>, committed to git.
+        Prefer regenerate on demand; drop from the tree and ignore.
+      </p>
+    </article>
+
+    <h2>Docs drift (not runnable dead code)</h2>
+
+    <article class="card" data-conf="low" data-cat="docs">
+      <div class="badges">
+        <span class="badge low">Low</span>
+        <span class="badge cat">Docs drift</span>
+        <span class="badge action">Fix paths</span>
+      </div>
+      <h3>Stale paths in AGENTS.md / PRDs</h3>
+      <ul>
+        <li><code>AGENTS.md</code> still lists <code>src/editor/panels/server_console.ts</code> — live code is React <code>ServerConsolePanel</code>.</li>
+        <li>Key-files table still uses underscore names (<code>flight_body.ts</code>, <code>prefab_renderer.ts</code>); repo uses dashes.</li>
+        <li>PRDs / skills still cite <code>docs/docs/cc-editor/…</code> and <code>docs/docs/admin-app/…</code>. On-disk trees already renamed to <code>editor/</code> and <code>server-console/</code> (staged renames).</li>
+      </ul>
+    </article>
+
+    <h2>Verified clean</h2>
+    <div class="card" data-conf="clean" style="border-color:#1f4a38">
+      <ul>
+        <li><strong>HTML entrypoints:</strong> <code>index.html</code> → <code>game-main.ts</code>; <code>editor.html</code> → <code>editor-main.ts</code>; both in Vite rollup + Electron.</li>
+        <li><strong>HTML fragments:</strong> <code>play-chrome.html</code>, <code>title-screen.html</code>, <code>loading-screen.html</code> loaded via <code>?raw</code>.</li>
+        <li><strong>editor-desktop/:</strong> all shell files reachable (<code>main.mjs</code>, hub, repository, preload, before-build, dev_renderer).</li>
+        <li><strong>package.json scripts:</strong> every scripted file exists.</li>
+        <li><strong>Migration ghosts:</strong> no <code>VITE_API_BASE_URL</code>; no WebSocket fallback client; no standalone admin HTML app.</li>
+        <li><strong>Workers:</strong> <code>tile-worker</code>, <code>water-worker</code>, <code>spawn-worker</code> loaded via <code>new URL(..., import.meta.url)</code> — not orphans.</li>
+        <li><strong>Still-live deprecated:</strong> <code>PlanetSpawnLayer</code> alias and <code>footstepGaitFromAnimation</code> still have callers — do not delete yet.</li>
+      </ul>
+    </div>
+
+    <h2>Suggested cleanup order</h2>
+    <ol>
+      <li>Delete <code>scene-launch.ts</code> and <code>sidekick-creator-store.ts</code>.</li>
+      <li>Delete <code>docs/src/components/HomepageFeatures/</code>; remove <code>clsx</code> from docs deps if unused.</li>
+      <li>Strip unused hangar/apartment API aliases + <code>createDefaultSpawnLayer</code> + <code>FlightIntegrateOptions</code>.</li>
+      <li>Drop <code>scripts/biome_map.bmp</code> from git; fix or remove broken <code>check_page.mjs</code>.</li>
+      <li>Refresh AGENTS.md / PRD path strings in a docs-only pass.</li>
+    </ol>
+
+    <h2>Method</h2>
+    <div class="method">
+      <p>
+        Built a relative-import graph over <code>src/**/*.{ts,tsx}</code>, HTML entries, and editor-desktop modules.
+        Cross-checked with Knip (entry: <code>game-main</code>, <code>editor-main</code>, <code>editor/react/main</code>).
+        Symbol-level <code>rg</code> for deprecated exports and <code>net/api.ts</code> wrappers.
+        Manual review against editor-first migration rules (no external Play Mode, no admin app, no Vite-as-product).
+      </p>
+      <p>
+        <strong>Limits:</strong> Knip reports many false-positive “unused exports” (public module API / future hooks).
+        This report only lists items with zero external references or clear migration leftovers.
+        Rust <code>backend/</code> unused-item analysis not included.
+      </p>
+    </div>
+
+    <footer>
+      Artifact only — not wired into the build. Safe to delete after acting on findings.
+    </footer>
+  </main>
+  <script>
+    const buttons = document.querySelectorAll('#filters button');
+    const cards = document.querySelectorAll('.card[data-conf]');
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        buttons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.dataset.filter;
+        cards.forEach((card) => {
+          if (filter === 'all') {
+            card.hidden = false;
+            return;
+          }
+          if (filter === 'docs') {
+            card.hidden = card.dataset.cat !== 'docs';
+            return;
+          }
+          if (filter === 'clean') {
+            card.hidden = card.dataset.conf !== 'clean';
+            return;
+          }
+          card.hidden = card.dataset.conf !== filter;
+        });
+      });
+    });
+  </script>
+</body>
+</html>

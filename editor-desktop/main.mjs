@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stat, writeFile } from 'node:fs/promises';
 import {
@@ -18,6 +18,14 @@ import {
   isInsidePath,
 } from './repository.mjs';
 import { createProjectHub, isAsteronEngineProject } from './project_hub.mjs';
+import {
+  formatSidekickPackSummary,
+  getSidekickPackStatus,
+  resolveSidekickVirtualAsset,
+  SIDEKICK_VIRTUAL_URL_PREFIX,
+  toProjectRelativePackPath,
+  validateSidekickPack,
+} from './sidekick_pack.mjs';
 import { startDevRenderer } from './dev_renderer.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
@@ -161,12 +169,31 @@ async function handleEditorApi(repository, request, url) {
           await repository.createAssetFolder(body?.root, body?.parentPath, body?.name),
         );
       }
+      case 'POST /__editor/assets/move': {
+        const body = await parseJsonBody(request);
+        return jsonResponse(
+          200,
+          await repository.moveAssetEntry(body?.root, body?.fromPath, body?.toPath),
+        );
+      }
+      case 'POST /__editor/assets/delete': {
+        const body = await parseJsonBody(request);
+        return jsonResponse(200, await repository.deleteAssetEntry(body?.root, body?.path));
+      }
       case 'GET /__editor/prefabs':
         return jsonResponse(200, await repository.listPrefabs());
       case 'GET /__editor/prefab':
         return jsonResponse(200, await repository.getPrefab(url.searchParams.get('id')));
-      case 'POST /__editor/prefab':
-        return jsonResponse(200, await repository.savePrefab(await parseDocumentBody(request)));
+      case 'POST /__editor/prefab': {
+        const body = await parseJsonBody(request);
+        return jsonResponse(
+          200,
+          await repository.savePrefab(body?.document, {
+            root: body?.root,
+            folder: body?.folder,
+          }),
+        );
+      }
       case 'GET /__editor/scenes':
         return jsonResponse(200, await repository.listScenes());
       case 'GET /__editor/scene':
@@ -194,6 +221,13 @@ async function handleEditorApi(repository, request, url) {
           200,
           await repository.saveProjectSettings(await parseDocumentBody(request)),
         );
+      case 'GET /__editor/folder-order':
+        return jsonResponse(200, await repository.getFolderOrder());
+      case 'POST /__editor/folder-order':
+        return jsonResponse(
+          200,
+          await repository.saveFolderOrder(await parseDocumentBody(request)),
+        );
       case 'GET /__editor/animation-controllers':
         return jsonResponse(
           200,
@@ -218,6 +252,41 @@ async function handleEditorApi(repository, request, url) {
         return jsonResponse(200, await repository.getSystem(url.searchParams.get('id')));
       case 'POST /__editor/system':
         return jsonResponse(200, await repository.saveSystem(await parseDocumentBody(request)));
+      case 'GET /__editor/sidekick-pack': {
+        const { document: settings } = await repository.getProjectSettings();
+        return jsonResponse(
+          200,
+          await getSidekickPackStatus(
+            repository.projectRoot,
+            settings.contentPacks.syntySidekick,
+          ),
+        );
+      }
+      case 'POST /__editor/sidekick-pack/locate': {
+        const body = await parseJsonBody(request);
+        const folder = typeof body?.folder === 'string' ? body.folder.trim() : '';
+        if (!folder) throw new EditorRepositoryError('folder is required');
+        const relativePath = toProjectRelativePackPath(repository.projectRoot, folder);
+        const status = await validateSidekickPack(
+          resolve(repository.projectRoot, relativePath),
+          relativePath,
+        );
+        if (!status.ok) {
+          throw new EditorRepositoryError(
+            `Selected folder is not a valid Sidekick pack: ${status.errors.join(' ')}`,
+            400,
+          );
+        }
+        const { document: settings } = await repository.getProjectSettings();
+        const saved = await repository.saveProjectSettings({
+          ...settings,
+          contentPacks: {
+            ...settings.contentPacks,
+            syntySidekick: relativePath,
+          },
+        });
+        return jsonResponse(200, { document: saved.document, status });
+      }
       default:
         return jsonResponse(404, { error: `unknown editor API route: ${route}` });
     }
@@ -306,6 +375,22 @@ async function serveEditorRequest(getRepository, request) {
   }
   const repository = getRepository();
   if (repository) {
+    if (url.pathname.startsWith(SIDEKICK_VIRTUAL_URL_PREFIX)) {
+      try {
+        const { document: settings } = await repository.getProjectSettings();
+        const absolute = resolveSidekickVirtualAsset(
+          repository.projectRoot,
+          settings.contentPacks.syntySidekick,
+          url.pathname,
+        );
+        if (absolute) return serveFile(request, absolute);
+      } catch (error) {
+        const status = error instanceof EditorRepositoryError ? error.status : 500;
+        return jsonResponse(status, {
+          error: error instanceof Error ? error.message : 'Sidekick asset error',
+        });
+      }
+    }
     const projectAsset = resolveProjectAsset(repository, url.pathname);
     if (projectAsset) return serveFile(request, projectAsset);
   }
@@ -444,7 +529,14 @@ function installProjectsApplicationMenu({ getProjectsWindow, onOpenProject }) {
 }
 
 /** Full authoring menu — only while an editor workspace is open. */
-function installEditorApplicationMenu({ getWindow, getProjectRoot, returnToProjects }) {
+function installEditorApplicationMenu({
+  getWindow,
+  getProjectRoot,
+  returnToProjects,
+  onLocateSidekickPack,
+  onValidateSidekickPack,
+  onRevealSidekickPack,
+}) {
   const menu = Menu.buildFromTemplate([
     {
       label: 'File',
@@ -562,6 +654,23 @@ function installEditorApplicationMenu({ getWindow, getProjectRoot, returnToProje
         },
       ],
     },
+    {
+      label: 'Tools',
+      submenu: [
+        {
+          label: 'Locate Synty Sidekick Pack…',
+          click: () => void onLocateSidekickPack(),
+        },
+        {
+          label: 'Validate Sidekick Pack',
+          click: () => void onValidateSidekickPack(),
+        },
+        {
+          label: 'Reveal Sidekick Pack',
+          click: () => void onRevealSidekickPack(),
+        },
+      ],
+    },
     viewMenuTemplate(),
     {
       label: 'Help',
@@ -611,6 +720,120 @@ if (!hasSingleInstanceLock) {
     }
   };
 
+  const editorParentWindow = () =>
+    (mainWindow && !mainWindow.isDestroyed() && mainWindow) || null;
+
+  const showSidekickMessage = async (options) => {
+    const parent = editorParentWindow();
+    if (parent) await dialog.showMessageBox(parent, options);
+    else await dialog.showMessageBox(options);
+  };
+
+  const locateSidekickPackFromDialog = async () => {
+    if (!repository) {
+      await showSidekickMessage({
+        type: 'error',
+        title: 'No Project Open',
+        message: 'Open an AsteronEngine project before locating a Sidekick pack.',
+      });
+      return;
+    }
+    const parent = editorParentWindow();
+    const pickOptions = {
+      title: 'Locate Synty Sidekick Pack',
+      message: 'Select the Sidekick pack folder inside this project (contains manifest.json).',
+      defaultPath: repository.projectRoot,
+      properties: ['openDirectory'],
+    };
+    const result = parent
+      ? await dialog.showOpenDialog(parent, pickOptions)
+      : await dialog.showOpenDialog(pickOptions);
+    if (result.canceled || result.filePaths.length !== 1) return;
+
+    try {
+      const absoluteDir = resolve(result.filePaths[0]);
+      const relativePath = toProjectRelativePackPath(repository.projectRoot, absoluteDir);
+      const status = await validateSidekickPack(absoluteDir, relativePath);
+      if (!status.ok) {
+        await showSidekickMessage({
+          type: 'error',
+          title: 'Invalid Sidekick Pack',
+          message: formatSidekickPackSummary(status),
+          detail: absoluteDir,
+        });
+        return;
+      }
+      const { document: settings } = await repository.getProjectSettings();
+      await repository.saveProjectSettings({
+        ...settings,
+        contentPacks: {
+          ...settings.contentPacks,
+          syntySidekick: relativePath,
+        },
+      });
+      sendEditorCommand(() => mainWindow, 'sidekick-pack-changed');
+      await showSidekickMessage({
+        type: 'info',
+        title: 'Sidekick Pack Located',
+        message: formatSidekickPackSummary(status),
+        detail: `Saved to Project Settings:\ncontentPacks.syntySidekick = ${relativePath}`,
+      });
+    } catch (error) {
+      await showSidekickMessage({
+        type: 'error',
+        title: 'Locate Sidekick Failed',
+        message: error instanceof Error ? error.message : 'Locate failed.',
+      });
+    }
+  };
+
+  const validateSidekickPackDialog = async () => {
+    if (!repository) {
+      await showSidekickMessage({
+        type: 'error',
+        title: 'No Project Open',
+        message: 'Open an AsteronEngine project before validating the Sidekick pack.',
+      });
+      return;
+    }
+    const { document: settings } = await repository.getProjectSettings();
+    const status = await getSidekickPackStatus(
+      repository.projectRoot,
+      settings.contentPacks.syntySidekick,
+    );
+    await showSidekickMessage({
+      type: status.ok ? 'info' : status.configured ? 'warning' : 'error',
+      title: 'Sidekick Pack Status',
+      message: formatSidekickPackSummary(status),
+      detail: status.path,
+    });
+  };
+
+  const revealSidekickPack = async () => {
+    if (!repository) {
+      await showSidekickMessage({
+        type: 'error',
+        title: 'No Project Open',
+        message: 'Open an AsteronEngine project first.',
+      });
+      return;
+    }
+    const { document: settings } = await repository.getProjectSettings();
+    const status = await getSidekickPackStatus(
+      repository.projectRoot,
+      settings.contentPacks.syntySidekick,
+    );
+    if (!status.configured || !status.present) {
+      await showSidekickMessage({
+        type: 'warning',
+        title: 'Sidekick Pack Missing',
+        message: formatSidekickPackSummary(status),
+      });
+      return;
+    }
+    await shell.openPath(status.path);
+  };
+
   const showProjectsMenu = () => {
     installProjectsApplicationMenu({
       getProjectsWindow: () => projectsWindow,
@@ -623,6 +846,9 @@ if (!hasSingleInstanceLock) {
       getWindow: () => mainWindow,
       getProjectRoot: () => repository?.projectRoot ?? null,
       returnToProjects,
+      onLocateSidekickPack: locateSidekickPackFromDialog,
+      onValidateSidekickPack: validateSidekickPackDialog,
+      onRevealSidekickPack: revealSidekickPack,
     });
   };
 
@@ -737,7 +963,7 @@ if (!hasSingleInstanceLock) {
         type: 'error',
         title: 'Invalid AsteronEngine Project',
         message: 'The selected folder is not an AsteronEngine project.',
-        detail: 'Expected package.json and src/world/prefabs/data/.',
+        detail: 'Expected package.json and an assets/ folder.',
       };
       if (parent) await dialog.showMessageBox(parent, messageOptions);
       else await dialog.showMessageBox(messageOptions);
@@ -922,6 +1148,47 @@ if (!hasSingleInstanceLock) {
           throw new Error('Project path is required.');
         }
         return projectHub.removeRecentProject(projectRoot);
+      });
+      ipcMain.handle('projects:rename', (_event, payload) => {
+        const projectRoot = payload?.projectRoot;
+        if (typeof projectRoot !== 'string' || !projectRoot.trim()) {
+          throw new Error('Project path is required.');
+        }
+        return projectHub.renameProject(projectRoot, payload?.name);
+      });
+      ipcMain.handle('projects:delete', async (_event, projectRoot) => {
+        if (typeof projectRoot !== 'string' || !projectRoot.trim()) {
+          throw new Error('Project path is required.');
+        }
+        const root = resolve(projectRoot);
+        if (!(await isAsteronEngineProject(root))) {
+          throw new Error(`${root} is not an AsteronEngine project.`);
+        }
+        const recent = await projectHub.listRecentProjects();
+        const known = recent.projects.find((entry) => entry.path === root);
+        const label = known?.name || basename(root);
+        const parent =
+          (projectsWindow && !projectsWindow.isDestroyed() && projectsWindow)
+          || (mainWindow && !mainWindow.isDestroyed() && mainWindow)
+          || null;
+        const confirmOptions = {
+          type: 'warning',
+          title: 'Delete Project',
+          message: `Permanently delete “${label}”?`,
+          detail:
+            `This deletes the entire project folder and cannot be undone:\n${root}\n\n`
+            + 'Remove from Recent only forgets the entry; Delete erases the files.',
+          buttons: ['Cancel', 'Delete Permanently'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        };
+        const { response } = parent
+          ? await dialog.showMessageBox(parent, confirmOptions)
+          : await dialog.showMessageBox(confirmOptions);
+        if (response !== 1) return { canceled: true };
+        const result = await projectHub.deleteProject(root);
+        return { canceled: false, ...result };
       });
       ipcMain.handle('projects:showInFolder', async (_event, projectRoot) => {
         if (typeof projectRoot !== 'string' || !projectRoot.trim()) {

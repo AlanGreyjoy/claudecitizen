@@ -37,10 +37,10 @@ If terrain LOD logic and HUD font sizing live in the same file, every graphics t
 
 | Module | Single responsibility |
 | --- | --- |
-| `world/planet_surface.ts` | Height & normal sampling |
+| `world/planet-surface.ts` | Height & normal sampling |
 | `render/planet_tiles/` | Which tiles to build and draw |
-| `flight/flight_body.ts` | Ship rigid-body integration |
-| `player/ship_deck.ts` | Deck movement & capsule collision |
+| `flight/flight-body.ts` | Ship rigid-body integration |
+| `player/ship-deck.ts` | Deck movement & capsule collision |
 | `world/prefabs/schema.ts` | Validate prefab component shapes |
 | `editor/serialize.ts` | Editor state ↔ prefab JSON |
 
@@ -70,7 +70,7 @@ flowchart LR
 
 Before adding code, ask: *"If this requirement changes, is there exactly one folder I'd expect to edit?"* If the answer is "it depends," extract a function or move the logic.
 
-**Example:** Station door colliders toggle in `src/game/station/animations.ts` because animation state lives there — but the **rules** for binding colliders to animations live in `station_runtime.ts`. State orchestration ≠ layout rules.
+**Example:** Station door colliders toggle in `src/game/station/animations.ts` because animation state lives there — but the **rules** for binding colliders to animations live in `station-runtime.ts`. State orchestration ≠ layout rules.
 
 ---
 
@@ -85,9 +85,9 @@ DRY is not "never copy a line." It means don't maintain two competing truths —
 | Knowledge | Authoritative location |
 | --- | --- |
 | Prefab component fields | `world/prefabs/schema.ts` |
-| Foot height sampling | `world/planet_surface.ts` → `sampleFootPlanetSurface()` |
-| Renderable height sampling | `world/planet_surface.ts` → `sampleRenderablePlanetSurface()` |
-| Ship door open threshold | `colliders.ts` + `ship_rig.ts` (same `0.85` semantics) |
+| Foot height sampling | `world/planet-surface.ts` → `sampleFootPlanetSurface()` |
+| Renderable height sampling | `world/planet-surface.ts` → `sampleRenderablePlanetSurface()` |
+| Ship door open threshold | `colliders.ts` + `ship-rig.ts` (same `0.85` semantics) |
 | GLB node overrides | Persisted by **node name**, resolved in `serialize.ts` |
 
 ```mermaid

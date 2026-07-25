@@ -19,6 +19,10 @@ export interface PrefabListEntry {
   id: string;
   kind: PrefabKind;
   name: string;
+  /** Asset root the prefab file lives under. */
+  root?: AssetRoot;
+  /** Root-relative file path, forward slashes. */
+  path?: string;
 }
 
 export interface SceneListEntry {
@@ -33,6 +37,12 @@ export const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
 
 /** Drag-and-drop MIME type for Hierarchy panel entity rows. */
 export const ENTITY_DND_TYPE = 'application/x-claudecitizen-entity';
+
+/** Drag-and-drop MIME type for prefab cards; payload is the prefab id. */
+export const PREFAB_DND_TYPE = 'application/x-claudecitizen-prefab';
+
+/** Drag-and-drop MIME type for moving a Project entry; payload is JSON. */
+export const ASSET_MOVE_DND_TYPE = 'application/x-claudecitizen-asset-move';
 
 /** Project-local authoring library (`<project>/assets/…`). */
 export const PROJECT_ASSET_ROOT = 'assets' as const;
@@ -81,6 +91,42 @@ export async function createAssetFolder(
   return { path: payload.path };
 }
 
+export interface AssetMoveResult {
+  root: AssetRoot;
+  path: string;
+  kind: 'dir' | 'file';
+  /** How many authoring documents had asset urls rewritten to follow the move. */
+  updatedReferences: number;
+}
+
+/**
+ * Moves or renames a file or folder inside an asset root, rewriting asset urls
+ * in project documents so prefabs keep pointing at the model that moved.
+ */
+export async function moveAssetEntry(
+  root: AssetRoot,
+  fromPath: string,
+  toPath: string,
+): Promise<AssetMoveResult> {
+  return requestJson<AssetMoveResult>('/__editor/assets/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ root, fromPath, toPath }),
+  });
+}
+
+export async function deleteAssetEntry(
+  root: AssetRoot,
+  path: string,
+): Promise<{ path: string }> {
+  const payload = await requestJson<{ path: string }>('/__editor/assets/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ root, path }),
+  });
+  return { path: payload.path };
+}
+
 export async function fetchPrefabList(): Promise<PrefabListEntry[]> {
   const payload = await requestJson<{ prefabs: PrefabListEntry[] }>('/__editor/prefabs');
   return payload.prefabs;
@@ -93,11 +139,22 @@ export async function fetchPrefab(id: string): Promise<PrefabDocument> {
   return parsePrefabDocument(payload.document);
 }
 
-export async function savePrefab(doc: PrefabDocument): Promise<string> {
+/**
+ * Saves a prefab document. An existing prefab is written back over its current
+ * file wherever that is; a new one lands in `target` (or the default prefab
+ * folder when no target is given).
+ */
+export async function savePrefab(
+  doc: PrefabDocument,
+  target?: { root: AssetRoot; folder: string },
+): Promise<string> {
   const payload = await requestJson<{ path: string }>('/__editor/prefab', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ document: doc }),
+    body: JSON.stringify({
+      document: doc,
+      ...(target ? { root: target.root, folder: target.folder } : {}),
+    }),
   });
   return payload.path;
 }
@@ -108,6 +165,10 @@ export interface ProjectSettingsDocument {
   backendUrl: string;
   defaultScene: string;
   build: { outDir: string };
+  contentPacks: {
+    /** Project-relative folder containing Sidekick manifest.json + parts. Empty = unset. */
+    syntySidekick: string;
+  };
 }
 
 export async function fetchProjectSettings(): Promise<ProjectSettingsDocument> {
@@ -122,6 +183,35 @@ export async function saveProjectSettings(
 ): Promise<ProjectSettingsDocument> {
   const payload = await requestJson<{ document: ProjectSettingsDocument }>(
     '/__editor/project-settings',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document }),
+    },
+  );
+  return payload.document;
+}
+
+/** Parent-path → ordered child folder names for the Project tree. */
+export type FolderOrderMap = Record<string, string[]>;
+
+export interface FolderOrderDocument {
+  schemaVersion: 1;
+  order: FolderOrderMap;
+}
+
+export async function fetchFolderOrder(): Promise<FolderOrderDocument> {
+  const payload = await requestJson<{ document: FolderOrderDocument }>(
+    '/__editor/folder-order',
+  );
+  return payload.document;
+}
+
+export async function saveFolderOrder(
+  document: FolderOrderDocument,
+): Promise<FolderOrderDocument> {
+  const payload = await requestJson<{ document: FolderOrderDocument }>(
+    '/__editor/folder-order',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -273,6 +363,28 @@ export async function saveSystem(document: SystemDocument): Promise<string> {
     body: JSON.stringify({ document }),
   });
   return payload.path;
+}
+
+export interface SidekickPackStatus {
+  ok: boolean;
+  present: boolean;
+  configured: boolean;
+  path: string;
+  relativePath: string;
+  errors: string[];
+  warnings: string[];
+  speciesCount: number;
+  partsCount: number;
+  partsWithMesh: number;
+  missingMeshFiles: number;
+  hasManifest: boolean;
+  hasBaseModel: boolean;
+  hasMaterialConfig: boolean;
+  exportReportPresent: boolean;
+}
+
+export async function fetchSidekickPackStatus(): Promise<SidekickPackStatus> {
+  return requestJson<SidekickPackStatus>('/__editor/sidekick-pack');
 }
 
 /** Maps an asset-browser entry to the url the dev server serves it from. */

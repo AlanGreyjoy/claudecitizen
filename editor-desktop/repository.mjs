@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /** Asset roots are always resolved under the open project root. */
@@ -23,6 +23,12 @@ const LISTED_EXTENSIONS = new Set([
 const PREFAB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const PREFAB_KINDS = new Set(['station', 'ship', 'site', 'prop', 'item']);
 const MAX_LISTING_ENTRIES = 20_000;
+
+/** Prefabs are project assets: they live anywhere under an asset root. */
+export const PREFAB_FILE_SUFFIX = '.prefab.json';
+
+/** Where a prefab lands when the author did not pick a folder. */
+const DEFAULT_PREFAB_FOLDER = 'Prefabs';
 
 export class EditorRepositoryError extends Error {
   constructor(message, status = 400) {
@@ -50,6 +56,45 @@ function requireDocument(value) {
     throw new EditorRepositoryError('missing document');
   }
   return value;
+}
+
+/** Normalizes an asset-root-relative path and rejects traversal attempts. */
+function normalizeRelativePath(value, label = 'path') {
+  const path =
+    typeof value === 'string'
+      ? value
+          .trim()
+          .replace(/\\/g, '/')
+          .replace(/^\/+|\/+$/g, '')
+      : '';
+  if (path.includes('\0') || path.split('/').includes('..')) {
+    throw new EditorRepositoryError(`invalid ${label}`);
+  }
+  return path;
+}
+
+/**
+ * Project-relative content-pack folder (e.g. contentPacks.syntySidekick).
+ * Empty string = unset. Absolute paths and `..` are rejected.
+ */
+function normalizeContentPackPath(value, label) {
+  if (value == null) return '';
+  if (typeof value !== 'string') {
+    throw new EditorRepositoryError(`${label} must be a string`);
+  }
+  const trimmed = value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!trimmed) return '';
+  if (trimmed.includes('\0')) {
+    throw new EditorRepositoryError(`invalid ${label}`);
+  }
+  if (/^[a-zA-Z]:/.test(trimmed) || trimmed.startsWith('/')) {
+    throw new EditorRepositoryError(`${label} must be project-relative (not absolute)`);
+  }
+  const segments = trimmed.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new EditorRepositoryError(`invalid ${label}`);
+  }
+  return segments.join('/');
 }
 
 function requireSlugId(value, label = 'document.id') {
@@ -86,9 +131,12 @@ async function listAssetsRecursive(rootDir) {
         queue.push(absolute);
         continue;
       }
-      if (!dirent.isFile() || !LISTED_EXTENSIONS.has(extname(dirent.name).toLowerCase())) {
-        continue;
-      }
+      // `extname('a.prefab.json')` is '.json', so prefabs need their own test
+      // rather than an entry in LISTED_EXTENSIONS (which would list every JSON).
+      const isListed =
+        dirent.name.endsWith(PREFAB_FILE_SUFFIX)
+        || LISTED_EXTENSIONS.has(extname(dirent.name).toLowerCase());
+      if (!dirent.isFile() || !isListed) continue;
       let size = 0;
       let modifiedAtMs = 0;
       try {
@@ -107,7 +155,6 @@ async function listAssetsRecursive(rootDir) {
 
 export function createEditorRepository(rawProjectRoot) {
   const projectRoot = resolve(rawProjectRoot);
-  const prefabDataDir = () => resolve(projectRoot, 'src/world/prefabs/data');
   const sceneDataDir = () => resolve(projectRoot, 'src/world/scenes/data');
   const planetDataDir = () => resolve(projectRoot, 'src/world/planets/data');
   const systemDataDir = () => resolve(projectRoot, 'src/world/systems/data');
@@ -117,6 +164,7 @@ export function createEditorRepository(rawProjectRoot) {
   const characterSettingsPath = () =>
     resolve(projectRoot, 'src/player/data/character-settings.json');
   const projectSettingsPath = () => resolve(projectRoot, 'asteron.project.json');
+  const folderOrderPath = () => resolve(projectRoot, 'asteron.folder-order.json');
 
   function resolveAssetRoot(root) {
     if (!PROJECT_ASSET_ROOTS.includes(root)) {
@@ -134,32 +182,86 @@ export function createEditorRepository(rawProjectRoot) {
     return candidate;
   }
 
-  async function listPrefabs() {
-    const prefabs = [];
-    try {
-      const filenames = (await readdir(prefabDataDir())).filter((name) =>
-        name.endsWith('.prefab.json'),
-      );
-      for (const filename of filenames) {
-        const id = filename.replace('.prefab.json', '');
+  /**
+   * Prefab identity is the document `id`, not the file location — the same
+   * split Unity gets from `.meta` GUIDs. A prefab may live in any folder under
+   * an asset root, so every lookup goes through a scan that maps id to path.
+   * Moving a prefab file therefore breaks nothing.
+   */
+  async function scanPrefabFiles() {
+    const found = new Map();
+    const duplicates = [];
+    for (const root of PROJECT_ASSET_ROOTS) {
+      const rootDir = resolve(projectRoot, root);
+      const queue = [rootDir];
+      while (queue.length > 0) {
+        const dir = queue.shift();
+        let dirents;
         try {
-          const document = JSON.parse(await readFile(join(prefabDataDir(), filename), 'utf8'));
-          const kind =
-            typeof document.kind === 'string' && PREFAB_KINDS.has(document.kind)
-              ? document.kind
-              : 'station';
-          const name =
-            typeof document.name === 'string' && document.name.trim()
-              ? document.name.trim()
-              : id;
-          prefabs.push({ id, kind, name });
+          dirents = await readdir(dir, { withFileTypes: true });
         } catch {
-          prefabs.push({ id, kind: 'station', name: id });
+          continue;
+        }
+        for (const dirent of dirents) {
+          if (dirent.name.startsWith('.')) continue;
+          const absolute = join(dir, dirent.name);
+          if (dirent.isDirectory()) {
+            queue.push(absolute);
+            continue;
+          }
+          if (!dirent.isFile() || !dirent.name.endsWith(PREFAB_FILE_SUFFIX)) continue;
+
+          let document;
+          try {
+            document = JSON.parse(await readFile(absolute, 'utf8'));
+          } catch {
+            continue;
+          }
+          const id = typeof document?.id === 'string' ? document.id : '';
+          if (!PREFAB_ID_PATTERN.test(id)) continue;
+
+          const entry = {
+            id,
+            root,
+            path: relative(resolve(projectRoot, root), absolute).split(sep).join('/'),
+            absolute,
+            kind: PREFAB_KINDS.has(document.kind) ? document.kind : 'station',
+            name:
+              typeof document.name === 'string' && document.name.trim()
+                ? document.name.trim()
+                : id,
+          };
+          const existing = found.get(id);
+          if (existing) {
+            duplicates.push({ id, paths: [existing.path, entry.path] });
+            continue;
+          }
+          found.set(id, entry);
         }
       }
-    } catch {
-      // A new project may not have a prefab directory yet.
     }
+    return { found, duplicates };
+  }
+
+  async function findPrefabFile(id) {
+    const { found } = await scanPrefabFiles();
+    return found.get(id) ?? null;
+  }
+
+  async function listPrefabs() {
+    const { found, duplicates } = await scanPrefabFiles();
+    for (const duplicate of duplicates) {
+      console.warn(
+        `[editor] duplicate prefab id "${duplicate.id}" in ${duplicate.paths.join(' and ')}; using the first.`,
+      );
+    }
+    const prefabs = [...found.values()].map((entry) => ({
+      id: entry.id,
+      kind: entry.kind,
+      name: entry.name,
+      root: entry.root,
+      path: entry.path,
+    }));
     prefabs.sort(
       (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
     );
@@ -168,21 +270,34 @@ export function createEditorRepository(rawProjectRoot) {
 
   async function getPrefab(idValue) {
     const id = requireSlugId(idValue, 'prefab id');
-    const document = await readJson(
-      join(prefabDataDir(), `${id}.prefab.json`),
-      `prefab "${id}" not found`,
-    );
+    const entry = await findPrefabFile(id);
+    if (!entry) throw new EditorRepositoryError(`prefab "${id}" not found`, 404);
+    const document = await readJson(entry.absolute, `prefab "${id}" not found`);
     return { document };
   }
 
-  async function savePrefab(value) {
+  /**
+   * Writes back over the prefab's existing file when the id is already known,
+   * so saving never silently duplicates or relocates a prefab. A brand new
+   * prefab lands in `folder` (an asset-root-relative directory) or, absent
+   * that, in the default prefab folder.
+   */
+  async function savePrefab(value, options = {}) {
     const document = requireDocument(value);
     const id = requireSlugId(document.id);
-    const path = await writeJson(
-      projectRoot,
-      join(prefabDataDir(), `${id}.prefab.json`),
-      document,
-    );
+    const existing = await findPrefabFile(id);
+
+    let absolute;
+    if (existing) {
+      absolute = existing.absolute;
+    } else {
+      const root = typeof options.root === 'string' && options.root ? options.root : 'assets';
+      const folder = normalizeRelativePath(options.folder, 'prefab folder');
+      const fileName = `${id}${PREFAB_FILE_SUFFIX}`;
+      absolute = resolveAssetPath(root, folder ? `${folder}/${fileName}` : `${DEFAULT_PREFAB_FOLDER}/${fileName}`);
+    }
+
+    const path = await writeJson(projectRoot, absolute, document);
     return { saved: true, id, path };
   }
 
@@ -240,6 +355,23 @@ export function createEditorRepository(rawProjectRoot) {
       typeof source.backendUrl === 'string' ? source.backendUrl.trim().replace(/\/$/, '') : '';
     const build =
       typeof source.build === 'object' && source.build !== null ? source.build : {};
+    const contentPacks =
+      typeof source.contentPacks === 'object' && source.contentPacks !== null
+        ? source.contentPacks
+        : {};
+    const syntySidekick = normalizeContentPackPath(
+      contentPacks.syntySidekick,
+      'contentPacks.syntySidekick',
+    );
+    if (syntySidekick) {
+      const absolute = resolve(projectRoot, syntySidekick);
+      if (!isInsidePath(absolute, projectRoot)) {
+        throw new EditorRepositoryError(
+          'contentPacks.syntySidekick escapes the project root',
+          403,
+        );
+      }
+    }
     return {
       schemaVersion: 1,
       name: typeof source.name === 'string' && source.name.trim()
@@ -252,6 +384,9 @@ export function createEditorRepository(rawProjectRoot) {
       ),
       build: {
         outDir: typeof build.outDir === 'string' && build.outDir.trim() ? build.outDir.trim() : 'dist',
+      },
+      contentPacks: {
+        syntySidekick,
       },
     };
   }
@@ -272,6 +407,52 @@ export function createEditorRepository(rawProjectRoot) {
       throw new EditorRepositoryError('backendUrl must be an http(s) URL');
     }
     const path = await writeJson(projectRoot, projectSettingsPath(), document);
+    return { saved: true, path, document };
+  }
+
+  /**
+   * Project folder sibling order (`asteron.folder-order.json`). Keys are parent
+   * relative paths (`""` = Assets root); values are ordered child folder names.
+   */
+  function normalizeFolderOrder(value) {
+    const source = typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
+    const orderSource =
+      typeof source.order === 'object' && source.order !== null && !Array.isArray(source.order)
+        ? source.order
+        : {};
+    const order = {};
+    for (const [parentPath, names] of Object.entries(orderSource)) {
+      if (typeof parentPath !== 'string') continue;
+      if (parentPath.includes('\0') || parentPath.split('/').includes('..')) continue;
+      if (!Array.isArray(names)) continue;
+      const cleaned = [];
+      const seen = new Set();
+      for (const name of names) {
+        if (typeof name !== 'string') continue;
+        const trimmed = name.trim();
+        if (!trimmed || trimmed.startsWith('.') || /[\\/\0]/.test(trimmed)) continue;
+        if (seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        cleaned.push(trimmed);
+      }
+      if (cleaned.length > 0) order[parentPath] = cleaned;
+    }
+    return { schemaVersion: 1, order };
+  }
+
+  async function getFolderOrder() {
+    let raw = {};
+    try {
+      raw = JSON.parse(await readFile(folderOrderPath(), 'utf8'));
+    } catch {
+      // Projects without a saved order fall back to alphabetical.
+    }
+    return { document: normalizeFolderOrder(raw) };
+  }
+
+  async function saveFolderOrder(value) {
+    const document = normalizeFolderOrder(requireDocument(value));
+    const path = await writeJson(projectRoot, folderOrderPath(), document);
     return { saved: true, path, document };
   }
 
@@ -374,16 +555,7 @@ export function createEditorRepository(rawProjectRoot) {
     if (!PROJECT_ASSET_ROOTS.includes(root)) {
       throw new EditorRepositoryError(`root must be one of: ${PROJECT_ASSET_ROOTS.join(', ')}`);
     }
-    const parentPath =
-      typeof parentPathValue === 'string'
-        ? parentPathValue
-            .trim()
-            .replace(/\\/g, '/')
-            .replace(/^\/+|\/+$/g, '')
-        : '';
-    if (parentPath.includes('\0') || parentPath.split('/').includes('..')) {
-      throw new EditorRepositoryError('invalid parent folder path');
-    }
+    const parentPath = normalizeRelativePath(parentPathValue, 'parent folder path');
     const name = typeof nameValue === 'string' ? nameValue.trim() : '';
     if (!name) {
       throw new EditorRepositoryError('folder name is required');
@@ -412,6 +584,191 @@ export function createEditorRepository(rawProjectRoot) {
     return { root, path: relativePath, kind: 'dir' };
   }
 
+  /**
+   * Every project document that can hold an asset url. Prefabs and scenes store
+   * urls as plain strings, so moving a model has to rewrite them or the
+   * reference silently dangles — this is the bookkeeping Unity does with GUIDs.
+   */
+  function referenceDocumentDirs() {
+    return [
+      ...PROJECT_ASSET_ROOTS.map((root) => resolve(projectRoot, root)),
+      sceneDataDir(),
+      planetDataDir(),
+      systemDataDir(),
+      animationControllerDataDir(),
+      dirname(baseCharacterEquipmentPath()),
+    ];
+  }
+
+  async function listJsonFiles(rootDir) {
+    const files = [];
+    const queue = [rootDir];
+    while (queue.length > 0) {
+      const dir = queue.shift();
+      let dirents;
+      try {
+        dirents = await readdir(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const dirent of dirents) {
+        if (dirent.name.startsWith('.')) continue;
+        const absolute = join(dir, dirent.name);
+        if (dirent.isDirectory()) queue.push(absolute);
+        else if (dirent.isFile() && dirent.name.endsWith('.json')) files.push(absolute);
+      }
+    }
+    return files;
+  }
+
+  /** Rewrites every string that is `fromUrl` or sits under `fromUrl/`. */
+  function rewriteUrlsInPlace(value, fromUrl, toUrl) {
+    if (Array.isArray(value)) {
+      let changed = false;
+      for (let i = 0; i < value.length; i += 1) {
+        const item = value[i];
+        if (typeof item === 'string') {
+          const next = rewriteUrl(item, fromUrl, toUrl);
+          if (next !== item) {
+            value[i] = next;
+            changed = true;
+          }
+        } else if (rewriteUrlsInPlace(item, fromUrl, toUrl)) {
+          changed = true;
+        }
+      }
+      return changed;
+    }
+    if (!value || typeof value !== 'object') return false;
+
+    let changed = false;
+    for (const [key, item] of Object.entries(value)) {
+      if (typeof item === 'string') {
+        const next = rewriteUrl(item, fromUrl, toUrl);
+        if (next !== item) {
+          value[key] = next;
+          changed = true;
+        }
+      } else if (rewriteUrlsInPlace(item, fromUrl, toUrl)) {
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function rewriteUrl(value, fromUrl, toUrl) {
+    if (value === fromUrl) return toUrl;
+    if (value.startsWith(`${fromUrl}/`)) return `${toUrl}${value.slice(fromUrl.length)}`;
+    return value;
+  }
+
+  async function rewriteAssetReferences(fromUrl, toUrl) {
+    const seen = new Set();
+    let updated = 0;
+    for (const dir of referenceDocumentDirs()) {
+      for (const file of await listJsonFiles(dir)) {
+        if (seen.has(file)) continue;
+        seen.add(file);
+        let document;
+        let original;
+        try {
+          original = await readFile(file, 'utf8');
+          document = JSON.parse(original);
+        } catch {
+          continue;
+        }
+        if (!rewriteUrlsInPlace(document, fromUrl, toUrl)) continue;
+        await writeFile(file, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+        updated += 1;
+      }
+    }
+    return updated;
+  }
+
+  function assetUrlFor(root, relativePath) {
+    const encoded = relativePath.split('/').map(encodeURIComponent).join('/');
+    return `/${root}/${encoded}`;
+  }
+
+  /**
+   * Moves or renames a file or folder within one asset root. `toPath` is the
+   * full destination path, so this covers both drag-to-folder and rename.
+   */
+  async function moveAssetEntry(rootValue, fromPathValue, toPathValue) {
+    const root = typeof rootValue === 'string' ? rootValue : 'assets';
+    if (!PROJECT_ASSET_ROOTS.includes(root)) {
+      throw new EditorRepositoryError(`root must be one of: ${PROJECT_ASSET_ROOTS.join(', ')}`);
+    }
+    const fromPath = normalizeRelativePath(fromPathValue, 'source path');
+    const toPath = normalizeRelativePath(toPathValue, 'destination path');
+    if (!fromPath) throw new EditorRepositoryError('source path is required');
+    if (!toPath) throw new EditorRepositoryError('destination path is required');
+    if (fromPath === toPath) {
+      throw new EditorRepositoryError('source and destination are the same', 409);
+    }
+    if (toPath === fromPath || toPath.startsWith(`${fromPath}/`)) {
+      throw new EditorRepositoryError('cannot move a folder into itself', 409);
+    }
+
+    const fromAbsolute = resolveAssetPath(root, fromPath);
+    const toAbsolute = resolveAssetPath(root, toPath);
+
+    let fromStat;
+    try {
+      fromStat = await stat(fromAbsolute);
+    } catch {
+      throw new EditorRepositoryError(`${fromPath} not found`, 404);
+    }
+    try {
+      await stat(toAbsolute);
+      throw new EditorRepositoryError(`${toPath} already exists`, 409);
+    } catch (error) {
+      if (error instanceof EditorRepositoryError) throw error;
+      // Destination is free.
+    }
+
+    await mkdir(dirname(toAbsolute), { recursive: true });
+    await rename(fromAbsolute, toAbsolute);
+
+    const updatedReferences = await rewriteAssetReferences(
+      assetUrlFor(root, fromPath),
+      assetUrlFor(root, toPath),
+    );
+    return {
+      root,
+      path: toPath,
+      kind: fromStat.isDirectory() ? 'dir' : 'file',
+      updatedReferences,
+    };
+  }
+
+  async function deleteAssetEntry(rootValue, pathValue) {
+    const root = typeof rootValue === 'string' ? rootValue : 'assets';
+    if (!PROJECT_ASSET_ROOTS.includes(root)) {
+      throw new EditorRepositoryError(`root must be one of: ${PROJECT_ASSET_ROOTS.join(', ')}`);
+    }
+    const path = normalizeRelativePath(pathValue, 'path');
+    if (!path) throw new EditorRepositoryError('path is required');
+
+    const absolute = resolveAssetPath(root, path);
+    let info;
+    try {
+      info = await stat(absolute);
+    } catch {
+      throw new EditorRepositoryError(`${path} not found`, 404);
+    }
+    if (info.isDirectory()) {
+      const children = await readdir(absolute);
+      if (children.length > 0) {
+        throw new EditorRepositoryError(`${path} is not empty`, 409);
+      }
+      await rm(absolute, { recursive: false });
+    } else {
+      await rm(absolute, { force: true });
+    }
+    return { root, path };
+  }
+
   return Object.freeze({
     projectRoot,
     resolveAssetPath,
@@ -420,6 +777,8 @@ export function createEditorRepository(rawProjectRoot) {
       entries: await listAssetsRecursive(resolveAssetRoot(root)),
     }),
     createAssetFolder,
+    moveAssetEntry,
+    deleteAssetEntry,
     listPrefabs,
     getPrefab,
     savePrefab,
@@ -432,6 +791,8 @@ export function createEditorRepository(rawProjectRoot) {
     saveCharacterSettings,
     getProjectSettings,
     saveProjectSettings,
+    getFolderOrder,
+    saveFolderOrder,
     listAnimationControllers,
     getAnimationController,
     saveAnimationController,

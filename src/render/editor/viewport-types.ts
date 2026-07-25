@@ -15,6 +15,8 @@ export interface ShipPreviewState {
 export interface EditorViewportOptions {
   /** Called when an asset card is dropped onto the scene. */
   onDropAsset: (payload: string, position: Vec3) => void;
+  /** Called when a prefab card is dropped onto the scene. */
+  onDropPrefab: (prefabId: string, position: Vec3) => void;
 }
 
 export interface EditorViewport {

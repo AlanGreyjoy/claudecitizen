@@ -1,4 +1,4 @@
-import { listBundledPrefabIds, loadPrefabDocument } from './loader';
+import { listBundledPrefabs } from './loader';
 import { AUTHORING_ENABLED } from '../../build-mode';
 
 export interface ItemPrefabOption {
@@ -34,13 +34,9 @@ export async function listItemPrefabOptions(): Promise<ItemPrefabOption[]> {
 
   if (cachedItemPrefabOptions) return cachedItemPrefabOptions;
 
-  const results: ItemPrefabOption[] = [];
-  for (const id of listBundledPrefabIds()) {
-    const doc = await loadPrefabDocument(id);
-    if (doc?.kind === 'item') {
-      results.push({ id, label: doc.name.trim() || id });
-    }
-  }
+  const results = (await listBundledPrefabs())
+    .filter((doc) => doc.kind === 'item')
+    .map((doc) => ({ id: doc.id, label: doc.name.trim() || doc.id }));
   cachedItemPrefabOptions = results.sort((left, right) => left.label.localeCompare(right.label));
   return cachedItemPrefabOptions;
 }

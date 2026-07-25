@@ -9,7 +9,9 @@ alwaysApply: false
 Launch with `npm run editor:dev` for HMR (Electron spawns Vite) or
 `npm run editor` for a production-like `dist-editor` build. Do not start a
 standalone Vite process.
-Scenes live in `src/world/scenes/data/`, prefabs in `src/world/prefabs/data/`.
+Scenes live in `src/world/scenes/data/`; prefabs are `*.prefab.json` in any
+folder of the project asset library (default `assets/Prefabs/`) and are found by
+document `id`, not by path.
 Play (F6) runs the open document in the Game view in-window, Pause is F7, and
 File → Build Web writes the release plus `asteron.runtime.json`.
 

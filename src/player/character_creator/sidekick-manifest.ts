@@ -1,4 +1,5 @@
-export const SIDEKICK_ASSET_BASE = '/src/assets/protected/characters/synty_sidekick/';
+/** Stable runtime URL for the configured Sidekick pack (editor + Build Web). */
+export const SIDEKICK_ASSET_BASE = '/asteron/content/synty-sidekick/';
 
 export function resolveSidekickUrl(relativePath: string): string {
   const trimmed = relativePath.replace(/^\/+/, '');

@@ -86,7 +86,12 @@ function RecentProjectsList(props: {
   bridge: ClaudeCitizenEditorDesktopBridge | null;
   onOpen: (path: string) => void;
   onRemove: (path: string) => void;
+  onDelete: (path: string) => void;
+  onRename: (path: string, name: string) => Promise<boolean>;
 }): ReactElement {
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
   return (
     <section className="ae-projects-recent">
       <h2 className="ae-projects-section-title">Recent</h2>
@@ -96,19 +101,71 @@ function RecentProjectsList(props: {
         <ul className="ae-projects-list">
           {props.projects.map((project) => (
             <li key={project.path} className="ae-projects-item">
-              <button
-                type="button"
-                className="ae-projects-item-main"
-                disabled={props.busy}
-                onClick={() => props.onOpen(project.path)}
-              >
-                <span className="ae-projects-item-name">{project.name}</span>
-                <span className="ae-projects-item-path">{project.path}</span>
-                {project.openedAt ? (
-                  <span className="ae-projects-item-meta">{formatOpenedAt(project.openedAt)}</span>
-                ) : null}
-              </button>
+              {renamingPath === project.path ? (
+                <form
+                  className="ae-projects-item-main ae-projects-rename"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void props.onRename(project.path, renameValue).then((renamed) => {
+                      if (renamed) setRenamingPath(null);
+                    });
+                  }}
+                >
+                  <input
+                    value={renameValue}
+                    onChange={(event) => setRenameValue(event.target.value)}
+                    disabled={props.busy}
+                    autoFocus
+                    maxLength={64}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setRenamingPath(null);
+                    }}
+                  />
+                  <span className="ae-projects-item-path">{project.path}</span>
+                  <div className="ae-projects-create-actions">
+                    <button
+                      type="button"
+                      className="ae-projects-btn"
+                      disabled={props.busy}
+                      onClick={() => setRenamingPath(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="ae-projects-btn ae-projects-btn-primary"
+                      disabled={props.busy}
+                    >
+                      Rename
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  className="ae-projects-item-main"
+                  disabled={props.busy}
+                  onClick={() => props.onOpen(project.path)}
+                >
+                  <span className="ae-projects-item-name">{project.name}</span>
+                  <span className="ae-projects-item-path">{project.path}</span>
+                  {project.openedAt ? (
+                    <span className="ae-projects-item-meta">{formatOpenedAt(project.openedAt)}</span>
+                  ) : null}
+                </button>
+              )}
               <div className="ae-projects-item-side">
+                <button
+                  type="button"
+                  className="ae-projects-link"
+                  disabled={props.busy || renamingPath === project.path}
+                  onClick={() => {
+                    setRenamingPath(project.path);
+                    setRenameValue(project.name);
+                  }}
+                >
+                  Rename
+                </button>
                 <button
                   type="button"
                   className="ae-projects-link"
@@ -124,8 +181,18 @@ function RecentProjectsList(props: {
                   className="ae-projects-link"
                   disabled={props.busy}
                   onClick={() => props.onRemove(project.path)}
+                  title="Forget this project in Recent without deleting files"
                 >
                   Remove
+                </button>
+                <button
+                  type="button"
+                  className="ae-projects-link ae-projects-link-danger"
+                  disabled={props.busy}
+                  onClick={() => props.onDelete(project.path)}
+                  title="Permanently delete the project folder from disk"
+                >
+                  Delete
                 </button>
               </div>
             </li>
@@ -273,6 +340,24 @@ export function ProjectsApp(): ReactElement {
               const result = await bridge.removeRecentProject(path);
               setProjects(result.projects);
             });
+          }}
+          onDelete={(path) => {
+            void runBusy(async () => {
+              if (!bridge) return;
+              const result = await bridge.deleteProject(path);
+              if (result.canceled || !result.projects) return;
+              setProjects(result.projects);
+            });
+          }}
+          onRename={async (path, name) => {
+            let renamed = false;
+            await runBusy(async () => {
+              if (!bridge) return;
+              const result = await bridge.renameProject(path, name);
+              setProjects(result.projects);
+              renamed = true;
+            });
+            return renamed;
           }}
         />
       </div>

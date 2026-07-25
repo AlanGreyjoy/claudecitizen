@@ -20,6 +20,8 @@ export interface HierarchyPanelOptions {
     nodeUuid: string,
     targetParentId: string | null,
   ) => boolean;
+  /** A prefab file was written; refresh the prefab list and Project panel. */
+  onPrefabLibraryChanged?: () => void;
 }
 
 export interface DraggedGlbNode {
@@ -59,29 +61,36 @@ export function idsToReparent(draggedIds: string[], store: EditorStore): string[
   return store.isEntitySelected(primary) ? store.getSelectedIds() : draggedIds;
 }
 
-export function componentBadge(entity: EditorEntity): string | null {
-  if (entity.components.length === 0) return null;
-  if (entity.components.length === 1) return entity.components[0].type;
-  return `${entity.components.length} components`;
+/** Expand state keys by node name — Three.js UUIDs remint on every viewport rebuild. */
+export function glbExpandKey(entityId: string, nodeName: string): string {
+  return `${entityId}::${nodeName}`;
 }
 
-export function collectExpandUuids(
+export function collectExpandKeys(
+  entityId: string,
   tree: GlbNodeRef,
   targetUuid: string,
   path: string[] = [],
 ): string[] | null {
   if (tree.uuid === targetUuid) return path;
   for (const child of tree.children) {
-    const found = collectExpandUuids(child, targetUuid, [...path, tree.uuid]);
+    const found = collectExpandKeys(entityId, child, targetUuid, [
+      ...path,
+      glbExpandKey(entityId, tree.name),
+    ]);
     if (found) return found;
   }
   return null;
 }
 
-export function collectGlbNodeUuids(node: GlbNodeRef, out: Set<string>): void {
-  out.add(node.uuid);
+export function collectGlbExpandKeys(
+  entityId: string,
+  node: GlbNodeRef,
+  out: Set<string>,
+): void {
+  out.add(glbExpandKey(entityId, node.name));
   for (const child of node.children) {
-    collectGlbNodeUuids(child, out);
+    collectGlbExpandKeys(entityId, child, out);
   }
 }
 
@@ -167,19 +176,6 @@ export function getBoundEntitiesForNode(
   const parentEntity = store.locate(entityId)?.entity;
   if (!parentEntity) return [];
   return parentEntity.children.filter((child) => entityTargetsGlbNode(child, nodeName));
-}
-
-export function getNodeOverrideComponentBadge(
-  store: EditorStore,
-  entityId: string,
-  nodeName: string,
-): string | null {
-  const entity = store.locate(entityId)?.entity;
-  if (!entity) return null;
-  const override = entity.glbNodeTransforms.find((o) => o.nodeName === nodeName);
-  if (!override || override.components.length === 0) return null;
-  if (override.components.length === 1) return override.components[0].type;
-  return `${override.components.length} components`;
 }
 
 export function isEntityBoundToGlb(

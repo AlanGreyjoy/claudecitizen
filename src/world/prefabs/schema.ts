@@ -7,9 +7,10 @@ import type { StationFloorId } from "../station";
  * Prefab documents are the contract between the editor and the game: a tree
  * of entities with transforms, optional visual content (GLB asset url or a
  * simple primitive), and gameplay components (spawn points, elevators, walk
- * volumes, ...). Documents are plain JSON, tracked under
- * src/world/prefabs/data/<id>.prefab.json (metadata only — asset urls may
- * point at gitignored protected files).
+ * volumes, ...). Documents are plain JSON filed anywhere under the project's
+ * asset library as <folder>/<id>.prefab.json. The `id` — not the path — is the
+ * reference, so prefabs can be moved freely. Documents hold metadata only;
+ * asset urls may point at gitignored protected files.
  *
  * Coordinate convention: prefab space equals the render group's local space
  * (the same axes you see in the editor viewport). When a station prefab is

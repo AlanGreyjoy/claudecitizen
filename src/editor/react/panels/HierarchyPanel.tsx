@@ -11,7 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { ENTITY_DND_TYPE } from '../../api';
+import { ENTITY_DND_TYPE, PREFAB_DND_TYPE } from '../../api';
 import {
   addColliderShapeMenuEntries,
   addColliderToEntities,
@@ -28,13 +28,18 @@ import {
 import { createEmptyEntity, type EditorEntity, type EditorStore, type GlbNodeRef } from '../../document';
 import { showContextMenu, type ContextMenuEntry } from '../../dom';
 import { createPrefabFromSelection } from '../../create-prefab-from-selection';
-import { PREFAB_KINDS } from '../../../world/prefabs/schema';
+import { addPrefabInstanceEntity } from '../../session-helpers';
+import {
+  PREFAB_KINDS,
+  type PrefabComponentType,
+  type PrefabKind,
+} from '../../../world/prefabs/schema';
 import {
   collectEntitySubtreeIds,
-  collectExpandUuids,
-  collectGlbNodeUuids,
+  collectExpandKeys,
+  collectGlbExpandKeys,
+  glbExpandKey,
   collectUsedComponentTypes,
-  componentBadge,
   createMoveToPanel,
   entitySubtreeHasMatch,
   filterBaseName,
@@ -42,7 +47,6 @@ import {
   findGlbNodeByName,
   getAllGlbNodeNames,
   getBoundEntitiesForNode,
-  getNodeOverrideComponentBadge,
   GLB_NODE_DND_TYPE,
   glbNodeIsAncestorOrSelf,
   glbSelectionKey,
@@ -57,7 +61,6 @@ import {
   type HierarchyPanelOptions,
 } from '../../panels/hierarchy-logic';
 import { getComponentDef } from '../../../world/prefabs/component-registry';
-import type { PrefabComponentType } from '../../../world/prefabs/schema';
 import type { Vec3 } from '../../../types';
 import { UiIcons } from '../../../ui/icons';
 import { useEditorStore } from '../hooks';
@@ -82,7 +85,6 @@ export type HierarchyPanelProps = HierarchyPanelOptions & {
 
 type ExpandState = {
   collapsedEntities: Set<string>;
-  expandedGlbEntities: Set<string>;
   expandedGlbNodes: Set<string>;
 };
 
@@ -99,8 +101,7 @@ type TreeCtx = {
   beginRename: (entityId: string) => void;
   setRenaming: (entityId: string | null) => void;
   toggleEntityCollapsed: (entityId: string) => void;
-  toggleGlbEntityExpanded: (entityId: string) => void;
-  toggleGlbNodeExpanded: (entityId: string, nodeUuid: string) => void;
+  toggleGlbNodeExpanded: (entityId: string, nodeName: string, nodeUuid: string) => void;
   handleEntityClick: (event: MouseEvent, entityId: string) => void;
   handleGlbNodeClick: (event: MouseEvent, target: GlbNodeColliderTarget) => void;
   prepareGlbContextSelection: (target: GlbNodeColliderTarget) => GlbNodeColliderTarget[];
@@ -150,17 +151,66 @@ function GlbNodeRow({
   const isHidden = parentHidden || store.isGlbNodeHidden(entityId, node.name);
   if (isHidden) return null;
 
+  const bound = getBoundEntitiesForNode(store, entityId, node.name);
+  const filtering = hasActiveFilters(ctx.searchQuery, ctx.componentFilter);
+
+  // Hide identity single-child export/loader wrappers; keep live graph intact.
+  if (node.passthrough) {
+    return (
+      <>
+        {node.children
+          .filter(
+            (child) =>
+              !filtering ||
+              glbSubtreeHasMatch(
+                store,
+                entityId,
+                child,
+                ctx.searchQuery,
+                ctx.componentFilter,
+              ),
+          )
+          .map((child) => (
+            <GlbNodeRow
+              key={child.uuid}
+              ctx={ctx}
+              entityId={entityId}
+              node={child}
+              depth={depth}
+              parentHidden={isHidden}
+            />
+          ))}
+        {bound
+          .filter(
+            (boundEntity) =>
+              !filtering ||
+              entitySubtreeHasMatch(
+                store,
+                boundEntity,
+                ctx.searchQuery,
+                ctx.componentFilter,
+              ),
+          )
+          .map((boundEntity) => (
+            <EntityRow
+              key={boundEntity.id}
+              ctx={ctx}
+              entity={boundEntity}
+              depth={depth}
+            />
+          ))}
+      </>
+    );
+  }
+
   const sub = store.getSubSelection();
   const selected = sub?.entityId === entityId && sub.nodeUuid === node.uuid;
   const target = glbTarget(entityId, node);
   const inSelection = ctx.selectedGlbNodes.has(glbSelectionKey(entityId, node.uuid));
   ctx.visibleGlbNodes.push(target);
 
-  const bound = getBoundEntitiesForNode(store, entityId, node.name);
-  const nodeBadge = getNodeOverrideComponentBadge(store, entityId, node.name);
   const hasChildren = node.children.length > 0 || bound.length > 0;
-  const expanded = ctx.expand.expandedGlbNodes.has(node.uuid);
-  const filtering = hasActiveFilters(ctx.searchQuery, ctx.componentFilter);
+  const expanded = ctx.expand.expandedGlbNodes.has(glbExpandKey(entityId, node.name));
   const rowClass = `ed-tree-row ed-tree-row-glb${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}`;
 
   return (
@@ -196,7 +246,7 @@ function GlbNodeRow({
             title={expanded ? 'Collapse' : 'Expand'}
             onClick={(event) => {
               event.stopPropagation();
-              ctx.toggleGlbNodeExpanded(entityId, node.uuid);
+              ctx.toggleGlbNodeExpanded(entityId, node.name, node.uuid);
             }}
           >
             <Chevron expanded={expanded} />
@@ -207,7 +257,6 @@ function GlbNodeRow({
         <span className="ed-tree-name ed-tree-name-glb" title={node.name}>
           {node.name}
         </span>
-        {nodeBadge ? <span className="ed-tree-badge">{nodeBadge}</span> : null}
       </div>
       {hasChildren && expanded
         ? [
@@ -254,54 +303,6 @@ function GlbNodeRow({
               )),
           ]
         : null}
-    </>
-  );
-}
-
-function GlbSubtree({
-  ctx,
-  entity,
-  depth,
-}: {
-  ctx: TreeCtx;
-  entity: EditorEntity;
-  depth: number;
-}): ReactElement | null {
-  const tree = ctx.store.getGlbTree(entity.id);
-  if (!tree) return null;
-
-  const expanded = ctx.expand.expandedGlbEntities.has(entity.id);
-
-  const toggle = (): void => {
-    ctx.toggleGlbEntityExpanded(entity.id);
-  };
-
-  return (
-    <>
-      <div
-        className="ed-tree-row ed-tree-row-glb ed-tree-row-glb-asset"
-        style={{ paddingLeft: `${10 + depth * 14}px` }}
-        onClick={(event) => {
-          event.stopPropagation();
-          toggle();
-        }}
-      >
-        <button
-          type="button"
-          className={`ed-tree-chevron ed-tree-chevron-asset${expanded ? ' is-expanded' : ''}`}
-          title={expanded ? 'Collapse model' : 'Expand model'}
-          onClick={(event) => {
-            event.stopPropagation();
-            toggle();
-          }}
-        >
-          <Chevron expanded={expanded} />
-        </button>
-        <span className="ed-tree-label-muted">Model</span>
-      </div>
-      {expanded ? (
-        <GlbNodeRow ctx={ctx} entityId={entity.id} node={tree} depth={depth + 1} />
-      ) : null}
     </>
   );
 }
@@ -402,7 +403,6 @@ function EntityRow({
   const selected = selection === entity.id && !sub;
   const parentSelected =
     selection === entity.id && Boolean(sub) && sub?.entityId === entity.id;
-  const badge = componentBadge(entity);
   const isDropTarget = ctx.dropTargetId === entity.id;
 
   return (
@@ -431,9 +431,10 @@ function EntityRow({
         }}
         onDragOver={(event) => {
           const supportsEntity = event.dataTransfer?.types.includes(ENTITY_DND_TYPE);
+          const supportsPrefab = event.dataTransfer?.types.includes(PREFAB_DND_TYPE);
           const supportsGlbNode =
             event.dataTransfer?.types.includes(GLB_NODE_DND_TYPE) && ctx.canAcceptGlbDrop;
-          if (!supportsEntity && !supportsGlbNode) return;
+          if (!supportsEntity && !supportsPrefab && !supportsGlbNode) return;
           event.preventDefault();
           if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
           ctx.setDropTargetId(entity.id);
@@ -443,17 +444,6 @@ function EntityRow({
         }}
         onDrop={(event) => ctx.onEntityDrop(event, entity.id)}
       >
-        <button
-          type="button"
-          className="ed-eye"
-          title={entity.visible ? 'Hide' : 'Show'}
-          onClick={(event) => {
-            event.stopPropagation();
-            store.setVisible(entity.id, !entity.visible);
-          }}
-        >
-          {entity.visible ? '◉' : '◌'}
-        </button>
         {hasChildren ? (
           <button
             type="button"
@@ -471,12 +461,11 @@ function EntityRow({
           <span className="ed-tree-chevron-spacer" />
         )}
         <EntityRowName ctx={ctx} entity={entity} />
-        {badge ? <span className="ed-tree-badge">{badge}</span> : null}
       </div>
       {expanded ? (
         <>
-          {shouldShowEntityGlbSubtree(entity, glbTree, ctx, store) ? (
-            <GlbSubtree ctx={ctx} entity={entity} depth={depth + 1} />
+          {shouldShowEntityGlbSubtree(entity, glbTree, ctx, store) && glbTree ? (
+            <GlbNodeRow ctx={ctx} entityId={entity.id} node={glbTree} depth={depth + 1} />
           ) : null}
           {filterEntityRowChildren(entity.children, glbNodeNames, ctx, store).map((child) => (
             <EntityRow key={child.id} ctx={ctx} entity={child} depth={depth + 1} />
@@ -497,6 +486,7 @@ export function HierarchyPanel({
   getGlbNodeBounds,
   onDuplicateGlbNode,
   onExtractGlbNode,
+  onPrefabLibraryChanged,
 }: HierarchyPanelProps): ReactElement {
   useEditorStore(store, STORE_EVENTS);
 
@@ -507,7 +497,6 @@ export function HierarchyPanel({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [expand, setExpand] = useState<ExpandState>(() => ({
     collapsedEntities: new Set(),
-    expandedGlbEntities: new Set(),
     expandedGlbNodes: new Set(),
   }));
   const [selectedGlbNodes, setSelectedGlbNodes] = useState(
@@ -551,20 +540,18 @@ export function HierarchyPanel({
       setExpand((prev) => {
         const nextCollapsed = new Set(prev.collapsedEntities);
         nextCollapsed.delete(entityId);
-        const nextGlbEntities = new Set(prev.expandedGlbEntities);
-        nextGlbEntities.add(entityId);
         const nextGlbNodes = new Set(prev.expandedGlbNodes);
         const tree = store.getGlbTree(entityId);
         if (tree && nodeUuid) {
-          const path = collectExpandUuids(tree, nodeUuid);
+          const path = collectExpandKeys(entityId, tree, nodeUuid);
           if (path) {
-            for (const uuid of path) nextGlbNodes.add(uuid);
-            nextGlbNodes.add(nodeUuid);
+            for (const key of path) nextGlbNodes.add(key);
+            const nodeName = store.getGlbNodeName(entityId, nodeUuid);
+            if (nodeName) nextGlbNodes.add(glbExpandKey(entityId, nodeName));
           }
         }
         return {
           collapsedEntities: nextCollapsed,
-          expandedGlbEntities: nextGlbEntities,
           expandedGlbNodes: nextGlbNodes,
         };
       });
@@ -600,7 +587,6 @@ export function HierarchyPanel({
       if (!query && !filter) return;
       setExpand((prev) => {
         const nextCollapsed = new Set(prev.collapsedEntities);
-        const nextGlbEntities = new Set(prev.expandedGlbEntities);
         const nextGlbNodes = new Set(prev.expandedGlbNodes);
 
         const walkEntity = (entity: EditorEntity): void => {
@@ -613,17 +599,10 @@ export function HierarchyPanel({
           ) {
             nextCollapsed.delete(entity.id);
           }
-          if (
-            entity.asset &&
-            glbTree &&
-            glbSubtreeHasDescendantMatch(store, entity.id, glbTree, query, filter)
-          ) {
-            nextGlbEntities.add(entity.id);
-          }
           if (glbTree) {
             const expandGlb = (node: GlbNodeRef): void => {
               if (glbSubtreeHasDescendantMatch(store, entity.id, node, query, filter)) {
-                nextGlbNodes.add(node.uuid);
+                nextGlbNodes.add(glbExpandKey(entity.id, node.name));
               }
               for (const child of node.children) expandGlb(child);
             };
@@ -635,7 +614,6 @@ export function HierarchyPanel({
 
         return {
           collapsedEntities: nextCollapsed,
-          expandedGlbEntities: nextGlbEntities,
           expandedGlbNodes: nextGlbNodes,
         };
       });
@@ -783,6 +761,14 @@ export function HierarchyPanel({
     [autoExpandForFilters],
   );
 
+  const createPrefab = useCallback(
+    async (entityId: string, kind: PrefabKind): Promise<void> => {
+      const id = await createPrefabFromSelection(store, entityId, kind);
+      if (id) onPrefabLibraryChanged?.();
+    },
+    [onPrefabLibraryChanged, store],
+  );
+
   const entityMenuEntries = useCallback(
     (entity: EditorEntity): ContextMenuEntry[] => {
       const selectedIds = store.getSelectedIds();
@@ -859,7 +845,7 @@ export function HierarchyPanel({
           label: 'Create Prefab from Selection',
           children: PREFAB_KINDS.map((kind) => ({
             label: kind,
-            action: () => void createPrefabFromSelection(store, entity.id, kind),
+            action: () => void createPrefab(entity.id, kind),
           })),
         },
         { label: 'Filter', action: () => filterByItemName(entity.name) },
@@ -877,6 +863,7 @@ export function HierarchyPanel({
       addBoxTo,
       addEmptyTo,
       beginRename,
+      createPrefab,
       filterByItemName,
       spawnPositionForEntity,
       store,
@@ -959,20 +946,17 @@ export function HierarchyPanel({
 
   const expandAll = useCallback((): void => {
     const nextCollapsed = new Set<string>();
-    const nextGlbEntities = new Set<string>();
     const nextGlbNodes = new Set<string>();
     const walkEntity = (entity: EditorEntity): void => {
       const glbTree = store.getGlbTree(entity.id);
       if (entity.asset && glbTree) {
-        nextGlbEntities.add(entity.id);
-        collectGlbNodeUuids(glbTree, nextGlbNodes);
+        collectGlbExpandKeys(entity.id, glbTree, nextGlbNodes);
       }
       for (const child of entity.children) walkEntity(child);
     };
     for (const root of store.getState().roots) walkEntity(root);
     setExpand({
       collapsedEntities: nextCollapsed,
-      expandedGlbEntities: nextGlbEntities,
       expandedGlbNodes: nextGlbNodes,
     });
   }, [store]);
@@ -993,45 +977,36 @@ export function HierarchyPanel({
     for (const root of store.getState().roots) walkEntity(root);
     setExpand({
       collapsedEntities: nextCollapsed,
-      expandedGlbEntities: new Set(),
       expandedGlbNodes: new Set(),
     });
   }, [store]);
 
-  const toggleEntityCollapsed = useCallback((entityId: string): void => {
-    setExpand((prev) => {
-      const nextCollapsed = new Set(prev.collapsedEntities);
-      if (nextCollapsed.has(entityId)) nextCollapsed.delete(entityId);
-      else nextCollapsed.add(entityId);
-      return { ...prev, collapsedEntities: nextCollapsed };
-    });
-  }, []);
-
-  const toggleGlbEntityExpanded = useCallback(
+  const toggleEntityCollapsed = useCallback(
     (entityId: string): void => {
       setExpand((prev) => {
-        const next = new Set(prev.expandedGlbEntities);
-        if (next.has(entityId)) {
-          next.delete(entityId);
-          clearSubSelectionIfWithinEntity(entityId);
+        const nextCollapsed = new Set(prev.collapsedEntities);
+        if (nextCollapsed.has(entityId)) {
+          nextCollapsed.delete(entityId);
         } else {
-          next.add(entityId);
+          nextCollapsed.add(entityId);
+          clearSubSelectionIfWithinEntity(entityId);
         }
-        return { ...prev, expandedGlbEntities: next };
+        return { ...prev, collapsedEntities: nextCollapsed };
       });
     },
     [clearSubSelectionIfWithinEntity],
   );
 
   const toggleGlbNodeExpanded = useCallback(
-    (entityId: string, nodeUuid: string): void => {
+    (entityId: string, nodeName: string, nodeUuid: string): void => {
+      const key = glbExpandKey(entityId, nodeName);
       setExpand((prev) => {
         const next = new Set(prev.expandedGlbNodes);
-        if (next.has(nodeUuid)) {
-          next.delete(nodeUuid);
+        if (next.has(key)) {
+          next.delete(key);
           clearSubSelectionIfWithin(entityId, nodeUuid);
         } else {
-          next.add(nodeUuid);
+          next.add(key);
         }
         return { ...prev, expandedGlbNodes: next };
       });
@@ -1042,6 +1017,13 @@ export function HierarchyPanel({
   const onEntityDrop = useCallback(
     (event: DragEvent, parentId: string): void => {
       setDropTargetId(null);
+      const prefabId = event.dataTransfer?.getData(PREFAB_DND_TYPE) ?? '';
+      if (prefabId) {
+        event.preventDefault();
+        event.stopPropagation();
+        addPrefabInstanceEntity(store, prefabId, { x: 0, y: 0, z: 0 }, parentId);
+        return;
+      }
       const draggedGlbNode = parseDraggedGlbNode(
         event.dataTransfer?.getData(GLB_NODE_DND_TYPE) ?? '',
       );
@@ -1079,6 +1061,7 @@ export function HierarchyPanel({
     (event: DragEvent): void => {
       if (
         event.dataTransfer?.types.includes(ENTITY_DND_TYPE) ||
+        event.dataTransfer?.types.includes(PREFAB_DND_TYPE) ||
         (event.dataTransfer?.types.includes(GLB_NODE_DND_TYPE) && onExtractGlbNode)
       ) {
         event.preventDefault();
@@ -1090,6 +1073,12 @@ export function HierarchyPanel({
 
   const onTreeDrop = useCallback(
     (event: DragEvent): void => {
+      const prefabId = event.dataTransfer?.getData(PREFAB_DND_TYPE) ?? '';
+      if (prefabId) {
+        event.preventDefault();
+        addPrefabInstanceEntity(store, prefabId, { x: 0, y: 0, z: 0 }, null);
+        return;
+      }
       const draggedGlbNode = parseDraggedGlbNode(
         event.dataTransfer?.getData(GLB_NODE_DND_TYPE) ?? '',
       );
@@ -1266,7 +1255,6 @@ export function HierarchyPanel({
     beginRename,
     setRenaming,
     toggleEntityCollapsed,
-    toggleGlbEntityExpanded,
     toggleGlbNodeExpanded,
     handleEntityClick,
     handleGlbNodeClick,
@@ -1328,8 +1316,10 @@ export function HierarchyPanel({
 
   return (
     <>
-      <div className="ed-panel-title">
-        <span>Hierarchy</span>
+      <div className="ed-scene-tabs ed-panel-tabs">
+        <button type="button" className="ed-scene-tab is-active" tabIndex={-1}>
+          Hierarchy
+        </button>
         <div className="ed-panel-title-actions">
           <button
             type="button"

@@ -139,29 +139,3 @@ export function parseSceneDocument(raw: unknown): SceneDocument | null {
     gameObjects,
   };
 }
-
-export function createDefaultSceneDocument(
-  id = 'new-scene',
-  name = 'New Scene',
-): SceneDocument {
-  return {
-    schemaVersion: SCENE_SCHEMA_VERSION,
-    id,
-    name,
-    kind: 'main-game',
-    gameObjects: [
-      sceneObject('game-manager', 'Game Manager', [
-        {
-          type: 'game-manager',
-          systemId: 'default',
-          planetId: 'asteron',
-          spawn: 'station',
-        },
-      ]),
-      sceneObject('planet', 'Planet', [{ type: 'planet', planetId: 'asteron' }]),
-      sceneObject('player-start', 'Player Start', [
-        { type: 'player-start', spawn: 'station' },
-      ]),
-    ],
-  };
-}

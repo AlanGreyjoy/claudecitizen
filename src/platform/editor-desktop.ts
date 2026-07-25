@@ -28,7 +28,8 @@ export type DesktopNativeCommandType =
   | 'duplicate'
   | 'delete'
   | 'exit-to-title'
-  | 'new-project';
+  | 'new-project'
+  | 'sidekick-pack-changed';
 
 export interface DesktopNativeCommand {
   type: DesktopNativeCommandType;
@@ -58,6 +59,10 @@ export interface DesktopCreateProjectRequest {
   parentDir?: string;
 }
 
+export type DesktopDeleteProjectResult =
+  | ({ canceled?: false } & DesktopRecentProjectsResult)
+  | { canceled: true; projects?: undefined };
+
 export interface ClaudeCitizenEditorDesktopBridge {
   readonly isDesktopEditor: true;
   readonly platform: string;
@@ -70,6 +75,8 @@ export interface ClaudeCitizenEditorDesktopBridge {
   pickProjectDirectory: () => Promise<DesktopPickDirectoryResult>;
   createProject: (payload: DesktopCreateProjectRequest) => Promise<DesktopOpenProjectResult>;
   removeRecentProject: (projectRoot: string) => Promise<DesktopRecentProjectsResult>;
+  renameProject: (projectRoot: string, name: string) => Promise<DesktopRecentProjectsResult>;
+  deleteProject: (projectRoot: string) => Promise<DesktopDeleteProjectResult>;
   showProjectInFolder: (projectRoot: string) => Promise<{ ok: true }>;
   returnToProjects: () => Promise<{ ok: true }>;
 }

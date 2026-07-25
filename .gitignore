@@ -52,7 +52,12 @@ public/cache/spawn/*.json
 # Proprietary / project-local packs (never commit binaries).
 # When this checkout is opened as an AsteronEngine project, drop importable
 # GLBs under ./assets/ — that tree is project-scoped, not an engine library.
-/assets/
+# Prefab documents are the exception: they are metadata (asset paths only), so
+# they stay committed wherever the author files them.
+/assets/**
+!/assets/**/
+!/assets/**/*.prefab.json
+!/assets/README.md
 public/assets/protected/**
 !public/assets/protected/
 !public/assets/protected/README.md

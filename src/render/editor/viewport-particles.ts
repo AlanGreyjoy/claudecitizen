@@ -5,6 +5,7 @@ import type { ParticleSystemHandle } from "../particles";
 export interface ViewportParticles {
   preview: ParticlePreviewControls;
   register: (entityId: string, handle: ParticleSystemHandle) => void;
+  disposeForEntity: (entityId: string) => void;
   disposeAll: () => void;
   update: (dt: number, camera: THREE.Camera) => void;
 }
@@ -17,6 +18,13 @@ export function createViewportParticles(): ViewportParticles {
       for (const handle of handles) handle.dispose();
     }
     particleHandles.clear();
+  }
+
+  function disposeParticleHandlesForEntity(entityId: string): void {
+    const handles = particleHandles.get(entityId);
+    if (!handles) return;
+    for (const handle of handles) handle.dispose();
+    particleHandles.delete(entityId);
   }
 
   function registerParticleHandle(
@@ -47,6 +55,7 @@ export function createViewportParticles(): ViewportParticles {
   return {
     preview: particlePreview,
     register: registerParticleHandle,
+    disposeForEntity: disposeParticleHandlesForEntity,
     disposeAll: disposeParticleHandles,
     update(dt, camera) {
       for (const handles of particleHandles.values()) {

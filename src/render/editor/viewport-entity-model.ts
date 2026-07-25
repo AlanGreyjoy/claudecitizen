@@ -5,13 +5,19 @@ import {
 } from "../prefabs/prefab-renderer";
 import { bindObjectAnimationComponent } from "../prefabs/object-animation";
 import type { EditorEntity, EditorStore, GlbNodeRef } from "../../editor/document";
-import type { PrefabComponent } from "../../world/prefabs/schema";
+import type {
+  PrefabComponent,
+  PrefabDocument,
+  PrefabEntity,
+} from "../../world/prefabs/schema";
 import type { ParticleSystemHandle } from "../particles";
 import type { ViewportComponentHelpers } from "./viewport-component-helpers";
 
+type MeshColliderHost = { asset?: { url: string } | null };
+
 export function usesEntityAssetForMeshCollider(
   component: PrefabComponent,
-  entity: EditorEntity,
+  entity: MeshColliderHost,
 ): component is Extract<PrefabComponent, { type: "collider"; shape: "mesh" }> {
   return (
     component.type === "collider" &&
@@ -74,10 +80,9 @@ export function attachRestHeightHelperForHull(
 }
 
 export function attachModelComponentHelpers(
-  ctx: Pick<
-    EntityModelLoadContext,
-    "entity" | "model" | "helpers" | "sanitizeNodeName"
-  >,
+  ctx: Pick<EntityModelLoadContext, "entity" | "model" | "sanitizeNodeName"> & {
+    helpers: Pick<ViewportComponentHelpers, "buildComponentHelper">;
+  },
 ): void {
   const { entity, model, helpers, sanitizeNodeName } = ctx;
   for (const override of entity.glbNodeTransforms) {
@@ -242,8 +247,12 @@ export function attachTopLevelEntityComponents(args: {
     }
     if (component.type === "particle-system") {
       const helper = helpers.buildComponentHelper(component);
-      if (helper) group.add(helper);
+      if (helper) {
+        helper.userData.editorEntityComponentHelper = true;
+        group.add(helper);
+      }
       const handle = createParticleSystem(component);
+      handle.object3d.userData.editorEntityComponentHelper = true;
       group.add(handle.object3d);
       registerParticleHandle(entity.id, handle);
       hasVisual = true;
@@ -257,9 +266,132 @@ export function attachTopLevelEntityComponents(args: {
     }
     const helper = helpers.buildComponentHelper(component);
     if (helper) {
+      helper.userData.editorEntityComponentHelper = true;
       group.add(helper);
       hasVisual = true;
     }
   }
   return hasVisual;
+}
+
+/** Strip entity-level helpers previously stamped by `attachTopLevelEntityComponents`. */
+export function clearEntityLevelComponentHelpers(group: THREE.Group): void {
+  for (const child of [...group.children]) {
+    if (child.userData.editorEntityComponentHelper) {
+      group.remove(child);
+    }
+  }
+}
+
+/**
+ * Clear every node/model helper under a loaded GLB (entity-level mesh colliders
+ * and per-node override helpers), then re-attach from current entity data.
+ */
+export function refreshEntityModelComponentHelpers(args: {
+  entity: EditorEntity;
+  model: THREE.Object3D;
+  helpers: Pick<ViewportComponentHelpers, "buildComponentHelper">;
+  sanitizeNodeName: (name: string) => string;
+}): void {
+  const { entity, model, helpers, sanitizeNodeName } = args;
+  model.traverse((node) => {
+    clearNodeComponentHelpers(node);
+  });
+  attachModelComponentHelpers({ entity, model, helpers, sanitizeNodeName });
+}
+
+function findObjectByEntityId(
+  root: THREE.Object3D,
+  entityId: string,
+): THREE.Object3D | null {
+  let found: THREE.Object3D | null = null;
+  root.traverse((object) => {
+    if (found) return;
+    if (object.userData.entityId === entityId) found = object;
+  });
+  return found;
+}
+
+/** Prefer the loaded GLB / primitive mesh under a prefab-entity group. */
+function findPrefabEntityVisual(entityGroup: THREE.Object3D): THREE.Object3D | null {
+  for (const child of entityGroup.children) {
+    if (child.userData.entityId) continue;
+    if (child.userData.editorMeshColliderHelper) continue;
+    if (child.userData.editorNodeComponentHelper) continue;
+    if (child.userData.editorLightRangeHelper) continue;
+    let hasMesh = false;
+    child.traverse((object) => {
+      if ((object as THREE.Mesh).isMesh) hasMesh = true;
+    });
+    if (hasMesh) return child;
+  }
+  return null;
+}
+
+function addColliderHelper(
+  helpers: Pick<ViewportComponentHelpers, "buildComponentHelper">,
+  parent: THREE.Object3D,
+  component: PrefabComponent,
+  meshTarget?: THREE.Object3D,
+): void {
+  if (component.type !== "collider") return;
+  const helper = helpers.buildComponentHelper(component, meshTarget);
+  if (!helper) return;
+  helper.userData.editorNodeComponentHelper = true;
+  parent.add(helper);
+}
+
+function attachEntityColliderHelpers(
+  entity: PrefabEntity,
+  group: THREE.Object3D,
+  helpers: Pick<ViewportComponentHelpers, "buildComponentHelper">,
+  sanitizeNodeName: (name: string) => string,
+): void {
+  const model = entity.asset ? findPrefabEntityVisual(group) : null;
+
+  for (const override of entity.nodeOverrides ?? []) {
+    if (!model || (override.components?.length ?? 0) === 0) continue;
+    const targetNode = model.getObjectByName(sanitizeNodeName(override.node));
+    if (!targetNode) continue;
+    for (const component of override.components ?? []) {
+      addColliderHelper(
+        helpers,
+        targetNode,
+        component,
+        usesEntityAssetForMeshCollider(component, entity) ? targetNode : undefined,
+      );
+    }
+  }
+
+  for (const component of entity.components ?? []) {
+    if (component.type !== "collider") continue;
+    if (usesEntityAssetForMeshCollider(component, entity) && model) {
+      addColliderHelper(helpers, model, component, model);
+      continue;
+    }
+    addColliderHelper(helpers, group, component);
+  }
+}
+
+/**
+ * Prefab-instance previews use the game `buildEntity` path, which never draws
+ * collider wireframes. Attach the same editor helpers used for authored entities.
+ */
+export function attachPrefabInstanceColliderHelpers(args: {
+  instanceRoot: THREE.Object3D;
+  doc: PrefabDocument;
+  helpers: Pick<ViewportComponentHelpers, "buildComponentHelper">;
+  sanitizeNodeName: (name: string) => string;
+}): void {
+  const { instanceRoot, doc, helpers, sanitizeNodeName } = args;
+
+  const visit = (entity: PrefabEntity): void => {
+    const group = findObjectByEntityId(instanceRoot, entity.id);
+    if (group) {
+      attachEntityColliderHelpers(entity, group, helpers, sanitizeNodeName);
+    }
+    for (const child of entity.children ?? []) visit(child);
+  };
+
+  visit(doc.root);
 }

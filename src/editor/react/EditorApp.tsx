@@ -8,19 +8,20 @@ import {
 } from 'react';
 import {
   fetchPlanetList,
-  fetchPrefab,
   fetchPrefabList,
   fetchScene,
   fetchSceneList,
   savePrefab,
   saveScene,
+  type AssetRoot,
 } from '../api';
+import { createPrefabFromSelection } from '../create-prefab-from-selection';
 import { createEditorAudioPreviewController } from '../audio-preview';
 import { getDesktopEditorBridge } from '../../platform/editor-desktop';
 import { createEditorStore, type EditorStore } from '../document';
-import { showConfirmDialog, showToast } from '../dom';
+import { showToast } from '../dom';
 import {
-  createEmptySceneEditorState,
+  createSceneEditorStateFromTemplate,
   fromPrefabDocument,
   fromSceneDocument,
   toPrefabDocument,
@@ -31,21 +32,25 @@ import {
   addAssetEntity,
   addBox,
   addEmpty,
+  addPrefabInstanceEntity,
   isTypingTarget,
   itemNameFromUrl,
 } from '../session-helpers';
 import { parsePrefabDocument, slugifyPrefabName } from '../../world/prefabs/schema';
 import { parseSceneDocument, SCENE_ID_PATTERN } from '../../world/scenes/schema';
+import type { SceneTemplateId } from '../../world/scenes/templates';
 import { getModelThumbnail } from '../../render/editor/thumbnails';
 import type { EditorViewport } from '../../render/editor/viewport';
 import type { Vec3 } from '../../types';
 import { saveEditorHmrSnapshot, takeEditorHmrSnapshot } from './hmr-snapshot';
 import { useEditorStoreInstance } from './hooks';
 import { usePanelSplitters } from './PanelSplitters';
+import { usePrefabIsolation } from './use-prefab-isolation';
 import { HierarchyPanel } from './panels/HierarchyPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
 import { MaterialManagerPanel } from './panels/MaterialManagerPanel';
 import { ProjectPanel, type ProjectPanelHandle } from './panels/ProjectPanel';
+import { NewSceneModal } from './panels/NewSceneModal';
 import { ProjectSettingsModal } from './panels/ProjectSettingsModal';
 import { SceneSettingsModal } from './panels/SceneSettingsModal';
 import {
@@ -102,6 +107,7 @@ type NativeCommandHandlers = {
   duplicate: () => void;
   deleteSelection: () => void;
   exitToTitle: () => void;
+  reloadSidekickPack: () => void;
 };
 
 function dispatchNativeCommand(
@@ -128,6 +134,7 @@ function dispatchNativeCommand(
     delete: handlers.deleteSelection,
     'exit-to-title': handlers.exitToTitle,
     'new-project': () => {},
+    'sidekick-pack-changed': handlers.reloadSidekickPack,
   };
   actions[command.type]?.();
 }
@@ -151,6 +158,7 @@ export function EditorApp(): ReactElement {
   const [building, setBuilding] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
+  const [newSceneOpen, setNewSceneOpen] = useState(false);
 
   const toolbarRef = useRef<ToolbarHandle | null>(null);
   const projectRef = useRef<ProjectPanelHandle | null>(null);
@@ -185,6 +193,17 @@ export function EditorApp(): ReactElement {
   useEffect(() => {
     rootRef.current = document.getElementById('editor-root');
   }, []);
+
+  useEffect(() => {
+    const syncTitle = (): void => {
+      const name = store.getState().prefabName.trim() || 'Untitled';
+      document.title = `AsteronEngine - ${name}`;
+    };
+    syncTitle();
+    return store.subscribe((event) => {
+      if (event.type === 'document') syncTitle();
+    });
+  }, [store]);
 
   usePanelSplitters({
     rootRef,
@@ -328,16 +347,6 @@ export function EditorApp(): ReactElement {
     if (selectedIds.length > 0) store.deleteEntities(selectedIds);
   }, [store]);
 
-  const confirmDiscard = useCallback(async (message: string): Promise<boolean> => {
-    return showConfirmDialog({
-      title: 'Unsaved changes',
-      message,
-      confirmLabel: 'Discard',
-      cancelLabel: 'Keep editing',
-      destructive: true,
-    });
-  }, []);
-
   // Cached so a fetch that finishes before Toolbar mounts is not dropped.
   const prefabListCacheRef = useRef<Awaited<ReturnType<typeof fetchPrefabList>> | null>(null);
   const sceneListCacheRef = useRef<Awaited<ReturnType<typeof fetchSceneList>> | null>(null);
@@ -352,6 +361,15 @@ export function EditorApp(): ReactElement {
       // Dev API unavailable.
     }
   }, []);
+
+  /**
+   * Prefab files are project assets, and there is no filesystem watcher, so
+   * every write has to refresh both the Open Prefab list and the Project panel.
+   */
+  const refreshPrefabLibrary = useCallback(() => {
+    void refreshPrefabList();
+    void projectRef.current?.refresh();
+  }, [refreshPrefabList]);
 
   const refreshSceneList = useCallback(async () => {
     try {
@@ -409,34 +427,57 @@ export function EditorApp(): ReactElement {
       const path = await savePrefab(doc);
       store.markSaved();
       showToast(`Saved ${path}`);
-      void refreshPrefabList();
+      refreshPrefabLibrary();
       return id;
     } catch (error) {
       showToast(`Save failed: ${(error as Error).message}`, true);
       return null;
     }
-  }, [store, refreshPrefabList, refreshSceneList]);
+  }, [store, refreshPrefabLibrary, refreshSceneList]);
 
-  const loadById = useCallback(
-    async (id: string) => {
-      if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and load?'))) return;
-      audioPreview.stop();
-      try {
-        const doc = await fetchPrefab(id);
-        store.loadDocument(fromPrefabDocument(doc));
-        setTab('scene');
-        showToast(`Loaded prefab "${id}"`);
-      } catch (error) {
-        showToast(`Load failed: ${(error as Error).message}`, true);
+  const {
+    isolationRef,
+    isolationUi,
+    confirmDiscard,
+    confirmLeaveDocument,
+    clearIsolation,
+    requestExitIsolation,
+    loadPrefabById: loadById,
+    confirmBaseDiscardIfNeeded,
+    hasUnsavedWork,
+  } = usePrefabIsolation({
+    store,
+    audioPreview,
+    saveCurrent,
+    stopInEditorPlay,
+    playingRef,
+    setTab,
+  });
+
+  /**
+   * Hierarchy -> Project folder drop. Each dragged GameObject becomes a prefab
+   * in that folder and is replaced in the scene by a `prefab-instance`.
+   */
+  const createPrefabsInFolder = useCallback(
+    async (entityIds: string[], target: { root: AssetRoot; folder: string }) => {
+      const created: string[] = [];
+      for (const entityId of entityIds) {
+        const id = await createPrefabFromSelection(store, entityId, undefined, target);
+        if (id) created.push(id);
       }
+      // The panel refreshes its own listing after revealing the target folder.
+      if (created.length > 0) void refreshPrefabList();
+      return created;
     },
-    [store, audioPreview, confirmDiscard, setTab],
+    [store, refreshPrefabList],
   );
 
   const loadSceneById = useCallback(
     async (id: string) => {
-      if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and load?'))) return;
+      if (!(await confirmLeaveDocument())) return;
       audioPreview.stop();
+      if (playingRef.current) stopInEditorPlay();
+      clearIsolation();
       try {
         const doc = await fetchScene(id);
         store.loadDocument(fromSceneDocument(doc));
@@ -446,32 +487,78 @@ export function EditorApp(): ReactElement {
         showToast(`Load failed: ${(error as Error).message}`, true);
       }
     },
-    [store, audioPreview, confirmDiscard, setTab],
+    [
+      store,
+      audioPreview,
+      confirmLeaveDocument,
+      clearIsolation,
+      stopInEditorPlay,
+      setTab,
+    ],
   );
 
   const newDocument = useCallback(async () => {
-    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes?'))) return;
+    if (!(await confirmLeaveDocument({ discardMessage: 'Discard unsaved changes?' }))) {
+      return;
+    }
     audioPreview.stop();
+    if (playingRef.current) stopInEditorPlay();
+    clearIsolation();
     store.newDocument();
     setTab('scene');
-  }, [store, audioPreview, confirmDiscard, setTab]);
+  }, [
+    store,
+    audioPreview,
+    confirmLeaveDocument,
+    clearIsolation,
+    stopInEditorPlay,
+    setTab,
+  ]);
 
   const newSceneDocument = useCallback(async () => {
-    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes?'))) return;
-    audioPreview.stop();
-    store.loadDocument(createEmptySceneEditorState('', 'Untitled Scene'));
-    setTab('scene');
-  }, [store, audioPreview, confirmDiscard, setTab]);
+    if (
+      !(await confirmLeaveDocument({
+        discardMessage: 'Discard unsaved changes?',
+        deferBaseDiscard: true,
+      }))
+    ) {
+      return;
+    }
+    setNewSceneOpen(true);
+  }, [confirmLeaveDocument]);
+
+  const createSceneFromTemplate = useCallback(
+    async (templateId: SceneTemplateId, name: string) => {
+      if (!(await confirmBaseDiscardIfNeeded())) return;
+      setNewSceneOpen(false);
+      audioPreview.stop();
+      if (playingRef.current) stopInEditorPlay();
+      clearIsolation();
+      store.loadDocument(createSceneEditorStateFromTemplate(templateId, '', name));
+      setTab('scene');
+    },
+    [
+      store,
+      audioPreview,
+      clearIsolation,
+      stopInEditorPlay,
+      setTab,
+      confirmBaseDiscardIfNeeded,
+    ],
+  );
 
   const createItemPrefab = useCallback(
     async (url: string) => {
       if (
-        store.isDirty() &&
-        !(await confirmDiscard('Discard unsaved changes and create an item prefab?'))
+        !(await confirmLeaveDocument({
+          discardMessage: 'Discard unsaved changes and create an item prefab?',
+        }))
       ) {
         return;
       }
       audioPreview.stop();
+      if (playingRef.current) stopInEditorPlay();
+      clearIsolation();
       const name = itemNameFromUrl(url);
       store.newDocument();
       store.setDocumentMeta({ kind: 'item', prefabName: name, prefabId: slugifyPrefabName(name) });
@@ -479,7 +566,14 @@ export function EditorApp(): ReactElement {
       setTab('scene');
       showToast(`Created item prefab "${name}". Add sockets if this is a backpack, then save.`);
     },
-    [store, audioPreview, confirmDiscard, setTab],
+    [
+      store,
+      audioPreview,
+      confirmLeaveDocument,
+      clearIsolation,
+      stopInEditorPlay,
+      setTab,
+    ],
   );
 
   const saveActive = useCallback(async (): Promise<boolean> => {
@@ -567,7 +661,9 @@ export function EditorApp(): ReactElement {
 
   const exitToTitle = useCallback(async () => {
     const handles = tabHandlesRef.current;
-    if (store.isDirty() && !(await confirmDiscard('Discard unsaved changes and exit?'))) return;
+    if (hasUnsavedWork() && !(await confirmDiscard('Discard unsaved changes and exit?'))) {
+      return;
+    }
     if (
       handles.planetAuthoringEditor?.isDirty() &&
       !(await confirmDiscard('Discard unsaved planet changes and exit?'))
@@ -583,7 +679,7 @@ export function EditorApp(): ReactElement {
     audioPreview.stop();
     allowUnloadRef.current = true;
     window.location.href = '/';
-  }, [store, audioPreview, confirmDiscard]);
+  }, [audioPreview, confirmDiscard, hasUnsavedWork]);
 
   const onSave = useCallback(() => {
     void saveActive();
@@ -710,6 +806,9 @@ export function EditorApp(): ReactElement {
         duplicate: duplicateSelection,
         deleteSelection,
         exitToTitle: () => void exitToTitle(),
+        reloadSidekickPack: () => {
+          void tabHandlesRef.current.baseCharacterEditor?.reloadSidekickPack?.();
+        },
       });
     });
     return () => {
@@ -771,6 +870,43 @@ export function EditorApp(): ReactElement {
 
   // Keyboard shortcuts
   useEffect(() => {
+    const handleEscape = (): void => {
+      if (store.getSelectedIds().length > 0 || store.getSubSelection()) {
+        store.clearSelection();
+        return;
+      }
+      if (isolationRef.current.isActive()) {
+        void requestExitIsolation();
+        return;
+      }
+      store.clearSelection();
+    };
+
+    const handleModKey = (key: string, shiftKey: boolean): boolean => {
+      if (key === 's') {
+        onSave();
+        return true;
+      }
+      if (key === 'b') {
+        void buildWeb();
+        return true;
+      }
+      if (key === 'd') {
+        duplicateSelection();
+        return true;
+      }
+      if (key === 'z') {
+        if (shiftKey) store.redo();
+        else store.undo();
+        return true;
+      }
+      if (key === 'y') {
+        store.redo();
+        return true;
+      }
+      return false;
+    };
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (isTypingTarget(event.target)) return;
       if (viewportRef.current?.isFlying()) return;
@@ -786,23 +922,7 @@ export function EditorApp(): ReactElement {
 
       if (event.ctrlKey || event.metaKey) {
         const key = event.key.toLowerCase();
-        if (key === 's') {
-          event.preventDefault();
-          onSave();
-        } else if (key === 'b') {
-          event.preventDefault();
-          void buildWeb();
-        } else if (key === 'd') {
-          event.preventDefault();
-          duplicateSelection();
-        } else if (key === 'z') {
-          event.preventDefault();
-          if (event.shiftKey) store.redo();
-          else store.undo();
-        } else if (key === 'y') {
-          event.preventDefault();
-          store.redo();
-        }
+        if (handleModKey(key, event.shiftKey)) event.preventDefault();
         return;
       }
 
@@ -817,18 +937,30 @@ export function EditorApp(): ReactElement {
         case 'f':
           viewportRef.current?.focusSelection();
           break;
-        case 'delete':
         case 'backspace':
+          // Delete is owned by the Electron Edit menu accelerator so it is
+          // not handled here — both would fire and the second pass would
+          // delete the parent entity after a GLB-node hide clears subSelection.
+          event.preventDefault();
           deleteSelection();
           break;
         case 'escape':
-          store.clearSelection();
+          handleEscape();
           break;
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [store, onSave, buildWeb, togglePlay, duplicateSelection, deleteSelection, setGizmoMode]);
+  }, [
+    store,
+    onSave,
+    buildWeb,
+    togglePlay,
+    duplicateSelection,
+    deleteSelection,
+    setGizmoMode,
+    requestExitIsolation,
+  ]);
 
   // beforeunload + HMR snapshot
   useEffect(() => {
@@ -836,7 +968,7 @@ export function EditorApp(): ReactElement {
       const handles = tabHandlesRef.current;
       if (
         allowUnloadRef.current ||
-        (!store.isDirty() &&
+        (!hasUnsavedWork() &&
           !handles.baseCharacterEditor?.isDirty() &&
           !handles.planetAuthoringEditor?.isDirty() &&
           !handles.systemMapEditor?.isDirty())
@@ -876,7 +1008,7 @@ export function EditorApp(): ReactElement {
       window.removeEventListener('beforeunload', onBeforeUnload);
       saveSnapshot();
     };
-  }, [store]);
+  }, [store, hasUnsavedWork]);
 
   return (
     <>
@@ -904,6 +1036,7 @@ export function EditorApp(): ReactElement {
               }
               onDuplicateGlbNode={duplicateGlbNode}
               onExtractGlbNode={extractGlbNode}
+              onPrefabLibraryChanged={refreshPrefabLibrary}
             />
           </div>
         </div>
@@ -912,11 +1045,12 @@ export function EditorApp(): ReactElement {
           className="ed-splitter ed-splitter-col ed-hierarchy-splitter"
         />
 
-        <div className="ed-scene-shell">
+        <div className={`ed-scene-shell${isolationUi ? ' has-isolation' : ''}`}>
           <div className="ed-scene-tabs">
             {SCENE_EDITOR_TABS.map((entry) => {
               const label =
-                entry.id === 'scene' && store.getState().documentType === 'prefab'
+                entry.id === 'scene' &&
+                (store.getState().documentType === 'prefab' || isolationUi)
                   ? 'Prefab'
                   : entry.label;
               return (
@@ -931,6 +1065,26 @@ export function EditorApp(): ReactElement {
               );
             })}
           </div>
+          {isolationUi ? (
+            <div className="ed-prefab-isolation-bar" role="status">
+              <button
+                type="button"
+                className="ed-btn ed-prefab-isolation-back"
+                onClick={() => void requestExitIsolation()}
+                title="Return to scene (Esc)"
+              >
+                ← Scene
+              </button>
+              <span className="ed-prefab-isolation-crumb">
+                <span className="ed-prefab-isolation-scene">{isolationUi.sceneName}</span>
+                <span className="ed-prefab-isolation-sep" aria-hidden="true">
+                  ›
+                </span>
+                <span className="ed-prefab-isolation-prefab">{isolationUi.prefabName}</span>
+              </span>
+              <span className="ed-prefab-isolation-hint">Editing Prefab</span>
+            </div>
+          ) : null}
           <div className="ed-scene-body">
             <ViewportHost
               store={store}
@@ -939,6 +1093,9 @@ export function EditorApp(): ReactElement {
               onReady={setViewport}
               onDropAsset={(url: string, position: Vec3) =>
                 addAssetEntity(store, url, position)
+              }
+              onDropPrefab={(prefabId: string, position: Vec3) =>
+                addPrefabInstanceEntity(store, prefabId, position)
               }
             />
             <div
@@ -997,9 +1154,16 @@ export function EditorApp(): ReactElement {
             await tabHandlesRef.current.baseCharacterEditor?.loadAnimationFromAsset(url);
           }}
           onCreateItemPrefab={createItemPrefab}
+          onOpenPrefab={(prefabId) => void loadById(prefabId)}
+          onCreatePrefabsInFolder={createPrefabsInFolder}
         />
       </div>
 
+      <NewSceneModal
+        open={newSceneOpen}
+        onCancel={() => setNewSceneOpen(false)}
+        onCreate={createSceneFromTemplate}
+      />
       <SceneSettingsModal
         open={sceneSettingsOpen}
         store={store}

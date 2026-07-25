@@ -24,18 +24,19 @@ Re-run after every fresh GLB export from Unity (safe to re-run; injected
 images are reused by name).
 
 Usage:
-  python3 scripts/bake_blackmarket_textures.py
+  python3 scripts/bake_blackmarket_textures.py [path/to/BlackMarket.glb]
 """
 
 from __future__ import annotations
 
 import json
 import struct
+import sys
 from pathlib import Path
 
-GLB_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "src/assets/protected/props/space-stations/BlackMarketStation.glb"
+DEFAULT_GLB_PATH = Path(
+    "/home/alan/Documents/AsteronEngine/ClaudeEngine/ClaudeEngine"
+    "/assets/Synty/Stations/BlackMarket/BlackMarket.glb"
 )
 
 UNITY_DIR = Path(
@@ -241,13 +242,14 @@ def asteroid_mesh_indices(gltf: dict) -> list[int]:
 
 
 def main() -> None:
+    glb_path = Path(sys.argv[1]).expanduser().resolve() if len(sys.argv) > 1 else DEFAULT_GLB_PATH
     for path in (DIRT_TEX, ROCK_ALBEDO, ROCK_NORMAL):
         if not path.is_file():
             raise SystemExit(f"Unity texture not found: {path}")
-    if not GLB_PATH.is_file():
-        raise SystemExit(f"GLB not found: {GLB_PATH}")
+    if not glb_path.is_file():
+        raise SystemExit(f"GLB not found: {glb_path}")
 
-    raw = GLB_PATH.read_bytes()
+    raw = glb_path.read_bytes()
     magic, _version, _length = struct.unpack_from("<III", raw, 0)
     assert magic == 0x46546C67, "not a GLB file"
     json_len, json_type = struct.unpack_from("<II", raw, 12)
@@ -323,13 +325,14 @@ def main() -> None:
     align4(json_bytes, b" ")
     total = 12 + 8 + len(json_bytes) + 8 + len(binary)
 
-    with GLB_PATH.open("wb") as f:
+    with glb_path.open("wb") as f:
         f.write(struct.pack("<III", 0x46546C67, 2, total))
         f.write(struct.pack("<II", len(json_bytes), 0x4E4F534A))
         f.write(json_bytes)
         f.write(struct.pack("<II", len(binary), 0x004E4942))
         f.write(binary)
 
+    print(f"Wrote {glb_path}")
     print(f"Patched {PLATFORM_TRIPLANAR} ← {SOURCE_MATERIAL}")
     print(
         f"Patched {', '.join(ENV_MATERIALS)} ← Dirt_Tex.png + {ENV_NORMAL_IMAGE_NAME}"

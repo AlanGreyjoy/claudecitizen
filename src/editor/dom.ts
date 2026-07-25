@@ -285,6 +285,105 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
   });
 }
 
+export type SaveDiscardCancelResult = 'save' | 'discard' | 'cancel';
+
+/**
+ * Three-way confirm used when leaving a dirty prefab isolation layer.
+ * Escape / overlay click → cancel.
+ */
+export function showSaveDiscardCancelDialog(options: {
+  title?: string;
+  message: string;
+  saveLabel?: string;
+  discardLabel?: string;
+  cancelLabel?: string;
+}): Promise<SaveDiscardCancelResult> {
+  if (activeConfirmDialog) activeConfirmDialog.finish(false);
+
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      const title = options.title ?? 'Unsaved changes';
+      const saveLabel = options.saveLabel ?? 'Save';
+      const discardLabel = options.discardLabel ?? "Don't Save";
+      const cancelLabel = options.cancelLabel ?? 'Cancel';
+
+      const host = document.getElementById('editor-root') ?? document.body;
+      const overlay = el('div', { className: 'ed-dialog-overlay' });
+      const dialog = el('div', {
+        className: 'ed-dialog',
+        attrs: {
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'ed-dialog-title',
+        },
+      });
+
+      const cancelBtn = el('button', {
+        className: 'ed-btn ed-dialog-btn-cancel',
+        text: cancelLabel,
+        attrs: { type: 'button' },
+        on: { click: () => finish('cancel') },
+      });
+      const discardBtn = el('button', {
+        className: 'ed-btn ed-dialog-btn-cancel',
+        text: discardLabel,
+        attrs: { type: 'button' },
+        on: { click: () => finish('discard') },
+      });
+      const saveBtn = el('button', {
+        className: 'ed-btn ed-dialog-btn-confirm ed-btn-accent',
+        text: saveLabel,
+        attrs: { type: 'button' },
+        on: { click: () => finish('save') },
+      });
+
+      dialog.append(
+        el('h2', { className: 'ed-dialog-title', text: title, attrs: { id: 'ed-dialog-title' } }),
+        el('p', { className: 'ed-dialog-message', text: options.message }),
+        el('div', { className: 'ed-dialog-actions' }, [cancelBtn, discardBtn, saveBtn]),
+      );
+      overlay.append(dialog);
+      host.append(overlay);
+
+      const onKeyDown = (event: KeyboardEvent): void => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          finish('cancel');
+        }
+      };
+      const onOverlayClick = (event: Event): void => {
+        if (event.target === overlay) finish('cancel');
+      };
+
+      overlay.addEventListener('click', onOverlayClick);
+      window.addEventListener('keydown', onKeyDown);
+      requestAnimationFrame(() => overlay.classList.add('is-visible'));
+
+      function cleanup(): void {
+        overlay.removeEventListener('click', onOverlayClick);
+        window.removeEventListener('keydown', onKeyDown);
+        overlay.classList.remove('is-visible');
+        window.setTimeout(() => overlay.remove(), 150);
+        activeConfirmDialog = null;
+      }
+
+      function finish(result: SaveDiscardCancelResult): void {
+        if (!activeConfirmDialog) return;
+        activeConfirmDialog = null;
+        cleanup();
+        resolve(result);
+      }
+
+      // Compat with showConfirmDialog's singleton — Escape path uses finish(false)
+      // only when that API owns the dialog; here we map cancel via our finish.
+      activeConfirmDialog = {
+        finish: (confirmed) => finish(confirmed ? 'save' : 'cancel'),
+      };
+      cancelBtn.focus();
+    }, 0);
+  });
+}
+
 export type PromptDialogOptions = {
   title?: string;
   message: string;

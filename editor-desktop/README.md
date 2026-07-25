@@ -61,8 +61,11 @@ API and serves project assets from the open project's `assets/` and
   trees. Components (`game-manager`, `planet`, `player-start`,
   `prefab-instance`, `ui-screen`, `scene-link`, `instanced-scene`) decide what a
   scene does.
-- Prefabs remain reusable entity trees under `src/world/prefabs/data/`.
-  Right-click a GameObject → **Create Prefab from Selection** to extract one.
+- Prefabs are reusable entity trees saved as `*.prefab.json` in any folder under
+  the project's `assets/` library. Drag a GameObject from the Hierarchy onto a
+  Project folder — or right-click it → **Create Prefab from Selection** — to
+  extract one. Identity is the document `id`, not the path, so moving a prefab
+  file breaks no references.
 - **Play** / `F6` runs the open document — unsaved edits included — in the Game
   view. `F7` pauses and resumes; `F6` again stops and restores the editor.
 - **File → Project Settings…** edits `asteron.project.json`: backend URL, boot
@@ -83,7 +86,7 @@ electron editor-desktop --project-root=/path/to/project
 CLAUDECITIZEN_EDITOR_PROJECT_ROOT=/path/to/project npm run editor
 ```
 
-A valid project has `package.json` and `src/world/prefabs/data/`.
+A valid project has `package.json` and an `assets/` folder.
 
 Use **File → Open Project…** to leave the editor and return to the Projects
 hub.

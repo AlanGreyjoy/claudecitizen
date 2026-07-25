@@ -12,6 +12,7 @@ type ViewportHostProps = {
   playing?: boolean;
   onReady: (viewport: EditorViewport | null) => void;
   onDropAsset: (url: string, position: Vec3) => void;
+  onDropPrefab: (prefabId: string, position: Vec3) => void;
 };
 
 /**
@@ -25,11 +26,14 @@ export function ViewportHost({
   playing = false,
   onReady,
   onDropAsset,
+  onDropPrefab,
 }: ViewportHostProps): ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<EditorViewport | null>(null);
   const onDropRef = useRef(onDropAsset);
   onDropRef.current = onDropAsset;
+  const onDropPrefabRef = useRef(onDropPrefab);
+  onDropPrefabRef.current = onDropPrefab;
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
@@ -39,6 +43,9 @@ export function ViewportHost({
     const viewport = createEditorViewport(host, store, {
       onDropAsset(url, position) {
         onDropRef.current(url, position);
+      },
+      onDropPrefab(prefabId, position) {
+        onDropPrefabRef.current(prefabId, position);
       },
     });
     viewportRef.current = viewport;

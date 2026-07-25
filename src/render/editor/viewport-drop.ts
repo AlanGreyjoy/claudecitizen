@@ -9,7 +9,14 @@ export interface ViewportDropOptions {
   getTranslateStep: () => number;
   isPlayMode?: () => boolean;
   onDropAsset: (payload: string, position: Vec3) => void;
+  /** Prefab card dropped into the viewport; payload is the prefab id. */
+  onDropPrefab?: (prefabId: string, position: Vec3) => void;
 }
+
+// Mirrors ASSET_DND_TYPE / PREFAB_DND_TYPE in src/editor/api.ts. Kept as
+// literals so the render layer does not import editor modules.
+const ASSET_DND_TYPE = "application/x-claudecitizen-asset";
+const PREFAB_DND_TYPE = "application/x-claudecitizen-prefab";
 
 export interface ViewportDrop {
   dispose: () => void;
@@ -24,6 +31,7 @@ export function attachViewportDrop(options: ViewportDropOptions): ViewportDrop {
     getTranslateStep,
     isPlayMode,
     onDropAsset,
+    onDropPrefab,
   } = options;
 
   const raycaster = new THREE.Raycaster();
@@ -67,8 +75,16 @@ export function attachViewportDrop(options: ViewportDropOptions): ViewportDrop {
   function onDrop(event: DragEvent): void {
     container.classList.remove("ed-drop-active");
     if (isPlayMode?.()) return;
+
+    const prefabId = event.dataTransfer?.getData(PREFAB_DND_TYPE);
+    if (prefabId && onDropPrefab) {
+      event.preventDefault();
+      onDropPrefab(prefabId, dropPositionFromEvent(event));
+      return;
+    }
+
     const payload =
-      event.dataTransfer?.getData("application/x-claudecitizen-asset") ||
+      event.dataTransfer?.getData(ASSET_DND_TYPE) ||
       event.dataTransfer?.getData("text/plain");
     if (!payload) return;
     event.preventDefault();

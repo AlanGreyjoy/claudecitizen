@@ -25,6 +25,7 @@ flowchart TB
     World["world/<br/>planet, terrain, prefabs, coordinates"]
     Flight["flight/<br/>ship body, thrust, drag"]
     Player["player/<br/>character, deck, mode FSM"]
+    Npc["npc/<br/>definitions, populations, behavior"]
   end
 
   subgraph presentation ["Presentation"]
@@ -41,14 +42,18 @@ flowchart TB
   Math --> World
   World --> Flight
   World --> Player
+  World --> Npc
   Flight --> App
   Player --> App
+  Npc --> App
   Flight --> Game
   Player --> Game
+  Npc --> Game
   App --> Game
   World --> Render
   Player --> Render
   Flight --> Render
+  Npc --> Render
   Game --> Render
   App --> Render
 ```
@@ -58,19 +63,20 @@ flowchart TB
 | **World** | `src/world/` | Planet geometry, terrain sampling, lakes, prefab schema & runtime flattening |
 | **Flight** | `src/flight/` | Ship rigid-body dynamics, input mapping, radial gravity |
 | **Player** | `src/player/` | Character controller, boarding, deck collision, pilot-seat FSM |
+| **NPC** | `src/npc/` | Non-player definitions, weighted populations, behavior state — may read station data and character appearance, never mutates player state |
 | **Render** | `src/render/` | Meshes, materials, LOD tiles, atmosphere, post-FX — **read-only** toward domain |
-| **App** | `src/app/` | Session shell: bootstraps the play session, HUD, network, and vitals, then hands the frame loop to `game/` |
-| **Game** | `src/game/` | Play-loop runtime: `create_game_loop.ts` composes colocated feature modules (modes, combat, station, ship, hud, …); orchestrates, does not own rules |
+| **App** | `src/app/` | Session shell: scene host, play session, HUD, network, and vitals, then hands the frame loop to `game/` |
+| **Game** | `src/game/` | Play-loop runtime: `create-game-loop.ts` composes colocated feature modules (modes, combat, station, ship, hud, …); orchestrates, does not own rules |
 
 Supporting modules sit outside the core simulation boundary:
 
 | Module | Role |
 | --- | --- |
 | `math/` | Shared vector math — no game rules |
-| `physics/` | Rapier world for stations |
-| `editor/` | Dev-only prefab authoring (not shipped in prod) |
+| `physics/` | Rapier worlds for stations and ship decks |
+| `editor/` | AsteronEngine authoring logic and React panels — stripped from game releases |
 | `ui/` | DOM HUD panels |
-| `net/` | WebTransport, Protobuf codecs, interpolation, and WASM prediction |
+| `net/` | WebTransport, Protobuf codecs, interpolation, WASM prediction, runtime config |
 
 ## Dependency direction
 
@@ -102,8 +108,9 @@ See [Physical Guards](./physical-guards) for the full rule list. Summary:
 
 | From | May import | Must not import |
 | --- | --- | --- |
-| `world/`, `flight/`, `player/` | `math/`, each other (sparingly) | `three`, `render/`, DOM |
-| `render/` | `world/`, `player/`, `flight/` (read) | Mutating simulation state |
+| `world/`, `flight/`, `player/`, `npc/` | `math/`, each other (sparingly) | `three`, `render/`, DOM |
+| `npc/` | Player character-appearance data (read) | Ownership or mutation of player state |
+| `render/` | `world/`, `player/`, `flight/`, `npc/` (read) | Mutating simulation state |
 | `app/` | All contexts | Inline domain logic |
 | `editor/` | `world/prefabs`, `render/editor` | Game loop hot path |
 
@@ -131,7 +138,7 @@ sequenceDiagram
   participant Editor as editor/
   participant JSON as *.prefab.json
   participant Schema as world/prefabs/schema.ts
-  participant Runtime as ship_runtime / station_runtime
+  participant Runtime as ship-runtime / station-runtime
   participant Game as game/ loop + player/
 
   Editor->>JSON: serialize components

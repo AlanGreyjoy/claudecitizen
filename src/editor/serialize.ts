@@ -6,12 +6,11 @@ import {
   type PrefabEntity,
   type PrefabKind,
 } from '../world/prefabs/schema';
+import { SCENE_SCHEMA_VERSION, type SceneDocument } from '../world/scenes/schema';
 import {
-  createDefaultSceneDocument,
-  SCENE_SCHEMA_VERSION,
-  type SceneDocument,
-  type SceneKind,
-} from '../world/scenes/schema';
+  createSceneDocumentFromTemplate,
+  type SceneTemplateId,
+} from '../world/scenes/templates';
 import { createEmptyEntity, type EditorDocumentState, type EditorEntity } from './document';
 
 const DEG_TO_RAD = Math.PI / 180;
@@ -197,21 +196,21 @@ export function fromSceneDocument(doc: SceneDocument): EditorDocumentState {
 }
 
 /**
- * New scenes start with the GameObjects the runtime needs (Game Manager,
- * Planet, Player Start) so a fresh scene is immediately playable.
+ * Builds the editor state for a brand new scene. The template decides which
+ * GameObjects (if any) the scene starts with — see `world/scenes/templates`.
  */
-export function createEmptySceneEditorState(
+export function createSceneEditorStateFromTemplate(
+  templateId: SceneTemplateId,
   id = '',
   name = 'Untitled Scene',
-  sceneKind: SceneKind = 'main-game',
 ): EditorDocumentState {
-  const defaults = createDefaultSceneDocument(id || 'new-scene', name);
+  const document = createSceneDocumentFromTemplate(templateId, id || 'new-scene', name);
   return {
     documentType: 'scene',
     prefabId: id,
     prefabName: name,
     kind: 'site',
-    sceneKind,
-    roots: defaults.gameObjects.map(entityFromJson),
+    sceneKind: document.kind,
+    roots: document.gameObjects.map(entityFromJson),
   };
 }

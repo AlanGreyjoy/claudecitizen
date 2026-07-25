@@ -47,10 +47,69 @@ export function findGlbNodeByName(
   return entityGroup.getObjectByName(sanitizeNodeName(nodeName)) ?? null;
 }
 
+const TRANSFORM_EPS = 1e-5;
+
+function approxZero(value: number): boolean {
+  return Math.abs(value) < TRANSFORM_EPS;
+}
+
+function approxOne(value: number): boolean {
+  return Math.abs(value - 1) < TRANSFORM_EPS;
+}
+
+function hasIdentityLocalTransform(object: THREE.Object3D): boolean {
+  const { position, quaternion, scale } = object;
+  return (
+    approxZero(position.x) &&
+    approxZero(position.y) &&
+    approxZero(position.z) &&
+    approxZero(quaternion.x) &&
+    approxZero(quaternion.y) &&
+    approxZero(quaternion.z) &&
+    approxOne(quaternion.w) &&
+    approxOne(scale.x) &&
+    approxOne(scale.y) &&
+    approxOne(scale.z)
+  );
+}
+
+function hasOwnDrawableOrBone(object: THREE.Object3D): boolean {
+  const flagged = object as THREE.Object3D & {
+    isMesh?: boolean;
+    isSkinnedMesh?: boolean;
+    isInstancedMesh?: boolean;
+    isLine?: boolean;
+    isPoints?: boolean;
+    isSprite?: boolean;
+    isLight?: boolean;
+    isCamera?: boolean;
+    isBone?: boolean;
+  };
+  return Boolean(
+    flagged.isMesh ||
+      flagged.isSkinnedMesh ||
+      flagged.isInstancedMesh ||
+      flagged.isLine ||
+      flagged.isPoints ||
+      flagged.isSprite ||
+      flagged.isLight ||
+      flagged.isCamera ||
+      flagged.isBone,
+  );
+}
+
+/** Export/loader wrapper: identity Group, one child, nothing of its own. */
+export function isGlbPassthroughObject(object: THREE.Object3D): boolean {
+  if (object.children.length !== 1) return false;
+  if (hasOwnDrawableOrBone(object)) return false;
+  return hasIdentityLocalTransform(object);
+}
+
 export function buildGlbNodeRef(object: THREE.Object3D): GlbNodeRef {
   return {
     uuid: object.uuid,
     name: object.name || "(unnamed)",
+    passthrough: isGlbPassthroughObject(object),
     children: object.children.map((child) => buildGlbNodeRef(child)),
   };
 }
@@ -90,6 +149,23 @@ export function entityIdFromObject(object: THREE.Object3D): string | null {
   while (current) {
     const id = current.userData.entityId as string | undefined;
     if (id) return id;
+    current = current.parent;
+  }
+  return null;
+}
+
+/**
+ * Prefab-instance previews stamp nested document entity ids onto Three.js
+ * groups. Walk past those until we hit an id that belongs to the open scene.
+ */
+export function sceneEntityIdFromObject(
+  object: THREE.Object3D,
+  knownIds: ReadonlyMap<string, unknown>,
+): string | null {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    const id = current.userData.entityId as string | undefined;
+    if (id && knownIds.has(id)) return id;
     current = current.parent;
   }
   return null;

@@ -10,6 +10,11 @@ import { restoreTitleScreen } from './title-screen';
 import { createSurfaceTeleportPanel } from '../render/effects/hud/biome-teleport-panel';
 import { loadCurrentDefaultAnimationController } from '../player/animation';
 import { loadCurrentCharacterSettings } from '../player/character-settings';
+import {
+  clonePlayerCharacterAppearance,
+  DEFAULT_PLAYER_CHARACTER_APPEARANCE,
+  type PlayerCharacterAppearanceV1,
+} from '../player/character_creator/player-character-appearance';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { warmPlanetSpawnCaches } from '../world/spawn-warm';
 import { normalizeVegetationSettings } from '../render/vegetation/settings';
@@ -34,6 +39,24 @@ import { collectPlaySessionDom, requireElement } from './play-session-dom';
 import { getPlayChromeRoot, mountPlayChrome } from './play-chrome';
 import { createPlayBuildSystems } from './play-session-build';
 import { createPlayOverlayStack } from './play-session-overlays';
+
+/**
+ * Editor Play (and similar no-auth gameplay) should use the Base Characters
+ * Sidekick body — not the legacy UAL mannequin — unless a real appearance
+ * already came from bootstrap / character create.
+ */
+function resolvePlayCharacterAppearance(
+  bootstrap: GameBootstrap | null,
+  fromEditor: boolean,
+): PlayerCharacterAppearanceV1 | null {
+  if (bootstrap?.player.characterAppearance) {
+    return clonePlayerCharacterAppearance(bootstrap.player.characterAppearance);
+  }
+  if (fromEditor) {
+    return clonePlayerCharacterAppearance(DEFAULT_PLAYER_CHARACTER_APPEARANCE);
+  }
+  return null;
+}
 
 let started = false;
 /** Editor Play/Pause gate. Overlay pauses stay independent of this flag. */
@@ -212,13 +235,13 @@ function createPlayGameLoop(options: {
 async function createPlayRenderer(
   dom: ReturnType<typeof collectPlaySessionDom>,
   world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
-  bootstrap: GameBootstrap | null,
+  characterAppearance: PlayerCharacterAppearanceV1 | null,
 ): Promise<{ renderer: SpikeRenderer | null; rendererError: unknown }> {
   try {
     const renderer = createSpikeRenderer(dom.canvas, world.planet, world.seed, {
       stationPrefab: world.stationPrefab,
       additionalStations: world.additionalStations,
-      characterAppearance: bootstrap?.player.characterAppearance ?? null,
+      characterAppearance,
     });
     return { renderer, rendererError: null };
   } catch (error) {
@@ -405,8 +428,16 @@ export async function startPlaySession(
   document.getElementById('title-screen')?.classList.add('is-hidden');
   const world = await loadPlayWorldContext(loading, options.worldParams);
   const dom = collectPlaySessionDom(mountPlayChrome(document.body));
+  const characterAppearance = resolvePlayCharacterAppearance(
+    bootstrap,
+    world.params.fromEditor,
+  );
 
-  const { renderer, rendererError } = await createPlayRenderer(dom, world, bootstrap);
+  const { renderer, rendererError } = await createPlayRenderer(
+    dom,
+    world,
+    characterAppearance,
+  );
   loading?.setProgress(0.45);
   renderer?.setVegetationSettings(normalizeVegetationSettings(world.planetDocument.vegetation));
   renderer?.setSurfaceSpawnCatalog(world.planetDocument.spawning);
@@ -428,7 +459,7 @@ export async function startPlaySession(
     renderer,
     loopRef,
     vitalsSessionRef,
-    characterAppearance: bootstrap?.player.characterAppearance ?? null,
+    characterAppearance,
   });
 
   const buildSystems = initializePlayBuildPhase({

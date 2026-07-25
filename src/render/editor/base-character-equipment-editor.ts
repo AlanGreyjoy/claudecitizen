@@ -54,7 +54,7 @@ import { createPlayerControls } from '../../input/player-controls';
 import { resolveDeckCameraOrbit } from '../../flight/flight-aim';
 import { add, normalize, scale, vec3 } from '../../math/vec3';
 import type { CharacterState, JumpPhase, Vec3 } from '../../types';
-import { buildDefaultDefinition, findPreviewSpecies, loadSidekickCatalog } from '../../player/character_creator/sidekick-catalog';
+import { buildDefaultDefinition, findPreviewSpecies, invalidateSidekickCatalog, loadSidekickCatalog } from '../../player/character_creator/sidekick-catalog';
 import type { SidekickCharacterDefinitionV2 } from '../../player/character_creator/sidekick-definition';
 import {
   fetchAnimationController,
@@ -271,6 +271,8 @@ export interface BaseCharacterEquipmentEditor {
   save: () => Promise<void>;
   /** Load a Project / protected animation GLB into the Sidekick preview runtime. */
   loadAnimationFromAsset: (url: string) => Promise<void>;
+  /** Re-read Sidekick pack after Tools → Locate. */
+  reloadSidekickPack: () => Promise<void>;
   /** Left equipment chrome — dock into Scene hierarchy panel (full height). */
   getLeftPanel: () => HTMLElement;
   /** Right inspector chrome — dock into Scene inspector panel (full height). */
@@ -460,7 +462,15 @@ export function createBaseCharacterEquipmentEditor(
   );
   const stageStatus = document.createElement('div');
   stageStatus.className = 'ed-base-stage-status';
-  stage.append(canvas, playTestHud, stageStatus);
+  const packMissingBanner = document.createElement('div');
+  packMissingBanner.className = 'ed-base-pack-missing is-hidden';
+  packMissingBanner.setAttribute('role', 'status');
+  packMissingBanner.innerHTML =
+    '<strong>Synty Sidekick pack missing</strong>'
+    + '<span>Export from Unity (<code>ClaudeCitizen → Export Synty Sidekick…</code>), '
+    + 'then use <code>Tools → Locate Synty Sidekick Pack…</code> '
+    + 'or set the folder in Project Settings.</span>';
+  stage.append(canvas, playTestHud, stageStatus, packMissingBanner);
   stageHost.append(stage);
 
 const notifyUiChangeRef = { current: (): void => { onUiChange(); } };
@@ -779,6 +789,30 @@ const notifyUiChangeRef = { current: (): void => { onUiChange(); } };
     stageStatus.classList.toggle('is-error', error);
   };
 
+  const setPackMissing = (missing: boolean, detail?: string): void => {
+    packMissingBanner.classList.toggle('is-hidden', !missing);
+    if (missing) {
+      setStageStatus(
+        detail
+          ?? 'Sidekick pack missing or invalid. Use Tools → Locate Synty Sidekick Pack…',
+        true,
+      );
+    }
+  };
+
+  const disposeAvatarPreview = (): void => {
+    if (avatar) {
+      previewRoot.remove(avatar.root);
+      avatar.dispose();
+      avatar = null;
+    }
+    animation?.dispose();
+    animation = null;
+    controllerUpperBodyAim?.dispose();
+    controllerUpperBodyAim = null;
+    defaultDefinition = null;
+  };
+
   const markDirty = (): void => {
     dirty = true;
     notifyUiChange();
@@ -1045,26 +1079,37 @@ const notifyUiChangeRef = { current: (): void => { onUiChange(); } };
   const ensureAvatar = async (): Promise<void> => {
     if (avatar) return;
     setStageStatus('Loading default Synty character…');
-    const catalog = await loadSidekickCatalog();
-    const species = findPreviewSpecies(catalog);
-    if (!species) throw new Error('No playable Synty species is available.');
-    defaultDefinition = buildDefaultDefinition(catalog, species);
-    // Match playable defaults so mounts aren't authored against a different
-    // backAttach basis (empty def uses muscleValue 0 → bogus ~178° flip).
-    defaultDefinition.blendShapes.bodyTypeValue = -100;
-    defaultDefinition.blendShapes.bodySizeValue = 0;
-    defaultDefinition.blendShapes.muscleValue = -100;
-    avatar = await assembleSidekickCharacter(catalog, defaultDefinition);
-    previewRoot.add(avatar.root);
-    animation = await createSidekickAnimationRuntime(avatar.root).catch((error: unknown) => {
-      console.warn('Base character idle animation unavailable.', error);
-      return null;
-    });
-    controllerUpperBodyAim = createSidekickUpperBodyAimController(previewRoot, avatar.root);
-    animation?.setAnimation('Idle_Loop', 0);
-    controls.target.set(0, 0.95, 0);
-    camera.position.set(0, 1.05, 4.2);
-    controls.update();
+    try {
+      const catalog = await loadSidekickCatalog();
+      const species = findPreviewSpecies(catalog);
+      if (!species) throw new Error('No playable Synty species is available.');
+      defaultDefinition = buildDefaultDefinition(catalog, species);
+      // Match playable defaults so mounts aren't authored against a different
+      // backAttach basis (empty def uses muscleValue 0 → bogus ~178° flip).
+      defaultDefinition.blendShapes.bodyTypeValue = -100;
+      defaultDefinition.blendShapes.bodySizeValue = 0;
+      defaultDefinition.blendShapes.muscleValue = -100;
+      avatar = await assembleSidekickCharacter(catalog, defaultDefinition);
+      previewRoot.add(avatar.root);
+      animation = await createSidekickAnimationRuntime(avatar.root).catch((error: unknown) => {
+        console.warn('Base character idle animation unavailable.', error);
+        return null;
+      });
+      controllerUpperBodyAim = createSidekickUpperBodyAimController(previewRoot, avatar.root);
+      animation?.setAnimation('Idle_Loop', 0);
+      controls.target.set(0, 0.95, 0);
+      camera.position.set(0, 1.05, 4.2);
+      controls.update();
+      setPackMissing(false);
+      setStageStatus('Synty Sidekick character ready.');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Sidekick pack load failed.';
+      setPackMissing(
+        true,
+        `Sidekick pack missing or invalid (${detail}). Use Tools → Locate Synty Sidekick Pack…`,
+      );
+      throw error;
+    }
   };
 
   const refreshCatalog = async (): Promise<void> => {
@@ -1905,8 +1950,25 @@ const notifyUiChangeRef = { current: (): void => { onUiChange(); } };
       await loadController(selectedControllerId, { force: true });
       notifyUiChange();
     } catch (error) {
-      setStageStatus(error instanceof Error ? error.message : 'Base Character load failed.', true);
+      const message = error instanceof Error ? error.message : 'Base Character load failed.';
+      if (/sidekick|manifest/i.test(message)) {
+        setPackMissing(
+          true,
+          `Sidekick pack missing or invalid (${message}). Use Tools → Locate Synty Sidekick Pack…`,
+        );
+      } else {
+        setStageStatus(message, true);
+      }
     }
+  }
+
+  async function reloadSidekickPack(): Promise<void> {
+    invalidateSidekickCatalog();
+    disposeAvatarPreview();
+    readyPromise = null;
+    setPackMissing(false);
+    setStageStatus('Reloading Sidekick pack…');
+    await ensureReady();
   }
 
   async function persistSettings(savedPaths: string[]): Promise<void> {
@@ -1982,6 +2044,7 @@ const notifyUiChangeRef = { current: (): void => { onUiChange(); } };
     setGizmoMode,
     save,
     loadAnimationFromAsset,
+    reloadSidekickPack,
     getLeftPanel: () => leftHost,
     getRightPanel: () => rightHost,
     getUiApi: () => uiApi,

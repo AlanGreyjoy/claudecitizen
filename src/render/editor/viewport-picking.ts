@@ -5,9 +5,9 @@ import { buildGlbAuthoringMenu } from "../../editor/component-actions";
 import type { EditorStore } from "../../editor/document";
 import type { ViewportGlbQueries } from "./viewport-glb-queries";
 import {
-  entityIdFromObject,
   isEffectivelyVisible,
   pathFromEntityRoot,
+  sceneEntityIdFromObject,
 } from "./viewport-transforms";
 
 export interface ViewportPicking {
@@ -81,7 +81,7 @@ export function createViewportPicking(deps: ViewportPickingDeps): ViewportPickin
       if (!isEffectivelyVisible(hit.object)) continue;
       if (hit.object.userData.editorMeshColliderHelper) continue;
       if (hit.object.userData.editorLightRangeHelper) continue;
-      const entityId = entityIdFromObject(hit.object);
+      const entityId = sceneEntityIdFromObject(hit.object, objectsById);
       if (!entityId) continue;
       const root = objectsById.get(entityId);
       if (!root) continue;
