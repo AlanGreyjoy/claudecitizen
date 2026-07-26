@@ -355,7 +355,7 @@ function MaterialsSection({
   store: EditorStore;
   entity: EditorEntity;
 }): ReactElement {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [rows, setRows] = useState<MaterialRow[] | null>(null);
   const [error, setError] = useState(false);
   const generationRef = useRef(0);

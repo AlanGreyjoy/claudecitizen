@@ -48,8 +48,16 @@ export function ShipIssues({
         className={`ed-btn ed-ship-issues-summary${tone}`}
         aria-expanded={hasList ? open : undefined}
         onClick={() => {
-          if (hasList) setOpen((prev) => !prev);
-          else onRefresh();
+          if (!hasList) {
+            onRefresh();
+            return;
+          }
+          setOpen((prev) => {
+            const next = !prev;
+            // Opening the list re-checks so seat/door edits are not stale.
+            if (next) onRefresh();
+            return next;
+          });
         }}
         onContextMenu={(event) => {
           event.preventDefault();
@@ -59,8 +67,8 @@ export function ShipIssues({
           hasList
             ? open
               ? 'Hide issues (right-click to re-check)'
-              : 'Show issues (right-click to re-check)'
-            : 'Rebuild this ship\'s layout and re-check it'
+              : 'Show issues (opens with a fresh check)'
+            : "Rebuild this ship's layout and re-check it"
         }
       >
         {summary}

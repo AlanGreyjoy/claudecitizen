@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import type { PrefabComponent } from '../../../../world/prefabs/schema';
 import type { ComponentFieldContext, ComponentFieldsProps } from './context';
+import { ShipControllerSeats } from './ShipControllerSeats';
 import {
   AssetUrlField,
   EdButton,
@@ -472,9 +473,8 @@ function ShipControllerGearFields({
         }
       />
       <EmptyNote>
-        {gear.nodes.length} gear hinge(s), {(component.seats ?? []).length} seat(s). Add
-        doors/cubbies as Ship Door marker empties (Open/Close SFX in inspector). Legacy
-        controller.doors[] still bakes if present.
+        {gear.nodes.length} gear hinge(s). Add doors/cubbies as Ship Door marker empties
+        (Open/Close SFX in inspector). Legacy controller.doors[] still bakes if present.
       </EmptyNote>
     </>
   );
@@ -499,6 +499,7 @@ export function ShipControllerFields({
       <ShipControllerCameraFeelFields ctx={ctx} component={component} stats={stats} />
       <ShipControllerAudioFields ctx={ctx} component={component} stats={stats} />
       <ShipControllerRampFields ctx={ctx} component={component} ramp={ramp} />
+      <ShipControllerSeats ctx={ctx} component={component} />
       <ShipControllerGearFields ctx={ctx} component={component} gear={gear} />
     </>
   );

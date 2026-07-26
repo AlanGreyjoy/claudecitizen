@@ -9,12 +9,12 @@ import {
 } from 'react';
 import { fetchPrefabList, renamePrefab, type PrefabListEntry } from '../../api';
 import { showToast } from '../../dom';
-import type { EditorStore } from '../../document';
+import type { EditorEvent, EditorStore } from '../../document';
 import { toPrefabDocument } from '../../serialize';
 import { collectShipLayoutIssues } from '../../../player/ship-layout-issues';
 import { buildShipLayoutFromPrefab } from '../../../world/prefabs/ship-runtime';
 import { slugifyPrefabName } from '../../../world/prefabs/schema';
-import { useEditorStore } from '../hooks';
+import { useEditorEvent, useEditorStore } from '../hooks';
 import { ShipIssues } from './ship/ShipIssues';
 import {
   SHIP_TEST_ENVS,
@@ -42,6 +42,19 @@ const EMPTY_ISSUES: ShipIssueList = {
   error: null,
 };
 
+/** Layout rebuild loads GLB colliders — skip transform drag spam. */
+function isShipAuthoringEvent(event: EditorEvent): boolean {
+  return (
+    event.type === 'document' ||
+    event.type === 'entity' ||
+    event.type === 'structure' ||
+    event.type === 'glb-components' ||
+    event.type === 'glb-visibility'
+  );
+}
+
+const SHIP_ISSUE_REFRESH_DEBOUNCE_MS = 400;
+
 /**
  * Ship tab bar. The tab deliberately reuses the scene viewport, hierarchy, and
  * inspector for authoring — ship components already live in the prefab palette
@@ -53,7 +66,8 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
   { store, hidden, playing, onOpenShip, onNewShip, onSave, onTogglePlay },
   ref,
 ): ReactElement {
-  useEditorStore(store, ['document']);
+  useEditorStore(store, ['document', 'entity', 'structure']);
+  const authoringVersion = useEditorEvent(store, isShipAuthoringEvent);
   const docState = store.getState();
   const isShipDocument = docState.documentType === 'prefab' && docState.kind === 'ship';
   const openShipId = isShipDocument ? docState.prefabId : '';
@@ -160,12 +174,16 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
     setNameDraft(null);
   }, [openShipId]);
 
-  // Rebuilding the layout touches GLB colliders, so it follows the open ship
-  // rather than every keystroke. The summary button re-checks on demand.
+  // Seat/component edits emit `entity`, not `document`. Debounce so dropping a
+  // seat into ship-controller clears the stale "no ship-seat markers" warning
+  // without rebuilding on every transform drag (those events are filtered out).
   useEffect(() => {
     if (hidden) return;
-    void refreshIssues();
-  }, [hidden, openShipId, docState.kind, refreshIssues]);
+    const handle = window.setTimeout(() => {
+      void refreshIssues();
+    }, SHIP_ISSUE_REFRESH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [hidden, openShipId, docState.kind, authoringVersion, refreshIssues]);
 
   useImperativeHandle(
     ref,

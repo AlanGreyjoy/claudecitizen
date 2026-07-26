@@ -20,25 +20,79 @@ be baked into UV space and is a subtle weathering effect).
 
 Usage:
   python3 -m venv .venv && .venv/bin/pip install numpy pillow
-  .venv/bin/python scripts/bake_ship_textures.py
+  .venv/bin/python scripts/bake_ship_textures.py [path/to/Phobos_Starhopper_Basic.glb]
 
-Re-run after every fresh GLB export from Unity.
+Re-run after every fresh GLB export from Unity. Without a path argument, looks for
+the open project's Vattalus hull, then falls back to common local copies.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import struct
+import sys
 from io import BytesIO
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-GLB_PATH = Path(__file__).resolve().parent.parent / "src/assets/ships/Phobos_Starhopper_Basic.glb"
-UNITY_TRIMSHEET_DIR = Path(
-    "/home/alan/Documents/Dev/unity/MEOW/Assets/VattalusAssets/Common/Materials/Trimsheet/BaseTextures"
+_REPO = Path(__file__).resolve().parent.parent
+_TRIMSHEET_CANDIDATES = (
+    Path(
+        "/home/alan/Documents/Dev/unity/ClaudeCitizen/Assets/VattalusAssets/Common/Materials/Trimsheet/BaseTextures"
+    ),
+    Path(
+        "/home/alan/Documents/Dev/unity/MEOW/Assets/VattalusAssets/Common/Materials/Trimsheet/BaseTextures"
+    ),
 )
+
+
+def resolve_trimsheet_dir() -> Path:
+    for candidate in _TRIMSHEET_CANDIDATES:
+        if (candidate / "VA_Trimsheet_Albedo.png").is_file():
+            return candidate
+    raise FileNotFoundError(
+        "VA_Trimsheet_Albedo.png not found under Unity Vattalus Trimsheet/BaseTextures"
+    )
+
+
+def resolve_glb_path(arg: str | None) -> Path:
+    if arg:
+        path = Path(arg).expanduser().resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"GLB not found: {path}")
+        return path
+
+    candidates: list[Path] = []
+    project_root = os.environ.get("CLAUDECITIZEN_EDITOR_PROJECT_ROOT")
+    if project_root:
+        candidates.append(
+            Path(project_root) / "assets" / "Vattalus" / "Phobos_Starhopper_Basic.glb"
+        )
+    candidates.extend(
+        [
+            Path.home()
+            / "Documents"
+            / "AsteronEngine"
+            / "Asteron"
+            / "assets"
+            / "Vattalus"
+            / "Phobos_Starhopper_Basic.glb",
+            _REPO / "public" / "assets" / "protected" / "ships" / "Phobos_Starhopper_Basic.glb",
+            _REPO / "src" / "assets" / "ships" / "Phobos_Starhopper_Basic.glb",
+        ]
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise FileNotFoundError(
+        "Phobos_Starhopper_Basic.glb not found; pass an explicit path"
+    )
+
+
+UNITY_TRIMSHEET_DIR = resolve_trimsheet_dir()
 OUTPUT_SIZE = 2048
 
 # Tint colors from VA_Trimsheet_WhiteRed_*.mat (sRGB, as serialized by Unity).
@@ -112,13 +166,26 @@ def align4(data: bytearray, pad: bytes) -> None:
         data.extend(pad)
 
 
+def already_baked(gltf: dict) -> bool:
+    names = {img.get("name") for img in gltf.get("images", [])}
+    return all(
+        f"VA_Trimsheet_{key}_baked.png" in names
+        for key in ("baseColor", "orm", "normal", "emissive")
+    )
+
+
 def main() -> None:
-    raw = GLB_PATH.read_bytes()
+    glb_path = resolve_glb_path(sys.argv[1] if len(sys.argv) > 1 else None)
+    raw = glb_path.read_bytes()
     magic, _version, _length = struct.unpack_from("<III", raw, 0)
     assert magic == 0x46546C67, "not a GLB file"
     json_len, json_type = struct.unpack_from("<II", raw, 12)
     assert json_type == 0x4E4F534A
     gltf = json.loads(raw[20 : 20 + json_len])
+    if already_baked(gltf):
+        print(f"Already baked: {glb_path}")
+        return
+
     bin_offset = 20 + json_len
     bin_len, bin_type = struct.unpack_from("<II", raw, bin_offset)
     assert bin_type == 0x004E4942
@@ -174,7 +241,10 @@ def main() -> None:
     json_bytes = bytearray(json.dumps(gltf, separators=(",", ":")).encode("utf-8"))
     align4(json_bytes, b" ")
     total = 12 + 8 + len(json_bytes) + 8 + len(binary)
-    with GLB_PATH.open("wb") as f:
+    backup = glb_path.with_suffix(".glb.bak")
+    if not backup.exists():
+        backup.write_bytes(raw)
+    with glb_path.open("wb") as f:
         f.write(struct.pack("<III", 0x46546C67, 2, total))
         f.write(struct.pack("<II", len(json_bytes), 0x4E4F534A))
         f.write(json_bytes)
@@ -182,8 +252,9 @@ def main() -> None:
         f.write(binary)
 
     sizes = ", ".join(f"{k}={len(v) / 1e6:.1f}MB" for k, v in baked.items())
-    print(f"Patched {patched} materials in {GLB_PATH.name} ({sizes})")
+    print(f"Patched {patched} materials in {glb_path} ({sizes})")
     print(f"New file size: {total / 1e6:.1f}MB")
+    print(f"Backup: {backup}")
 
 
 if __name__ == "__main__":

@@ -945,6 +945,25 @@ body.ed-resize-row * {
   font: 500 11px/1.2 var(--ed-font);
 }
 
+/* Ship-controller.seats[]: hierarchy entity drops + co-pilot toggle. */
+.ed-ship-seats-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ed-ship-seats-item {
+  margin: 0 0 6px;
+  padding: 0 0 4px;
+  border-bottom: 1px solid var(--ed-line);
+}
+
+.ed-ship-seats-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
 /*
  * Ship tab bar. The Ship tab reuses the scene viewport, hierarchy, and
  * inspector for authoring, so this strip is the only chrome it adds: browse a
