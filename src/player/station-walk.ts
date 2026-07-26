@@ -10,12 +10,22 @@ import {
   shouldLockFacingToCamera,
 } from './character-locomotion';
 
+import {
+  ladderAlongFromCapsule,
+  ladderCapsuleLocal,
+  ladderFacing,
+  LADDER_CLIMB_ANIMATION,
+  stepLadderClimb,
+} from './ladder-climb';
+import { ladderTopExitPoint, type LadderExit, type LadderSpec } from '../world/ladders';
+
 import type { StationPhysics } from '../physics/station-physics';
 import {
   getStationPlayerPosition,
   isStationPlayerGrounded,
   moveStationPlayer,
   stepStationPhysics,
+  teleportStationPlayer,
 } from '../physics/station-physics';
 import {
   getStationFrame,
@@ -136,6 +146,73 @@ export function stationYawForDir(dir: StationDir2): number {
 
 export function initialStationCameraYaw(): number {
   return stationYawForDir(getStationSpawn().face);
+}
+
+export interface StationClimbResult {
+  state: StationCharacterState;
+  along: number;
+  exit: LadderExit;
+}
+
+/**
+ * Ladder climbing in a station. Gravity is off and the capsule is pulled onto
+ * the rail; the caller releases the player back to walking on a `top`/`bottom`
+ * exit. Motion still goes through the character controller, so a blocked climb
+ * simply stalls instead of pushing the player through geometry.
+ */
+export function updateCharacterClimbingInStation(
+  state: StationCharacterState,
+  frame: StationFrame,
+  ladder: LadderSpec,
+  input: CharacterInput,
+  dt: number,
+  physics: StationPhysics | null,
+): StationClimbResult {
+  if (!physics) {
+    return { state, along: 0, exit: 'none' };
+  }
+  const before = worldToStationLocal(frame, getStationPlayerPosition(physics, frame));
+  const step = stepLadderClimb({
+    ladder,
+    capsuleLocal: before,
+    basis: { right: frame.right, up: frame.up, forward: frame.forward },
+    input,
+    dt,
+  });
+
+  if (step.exit === 'top') {
+    const exitLocal = ladderCapsuleLocal(ladderTopExitPoint(ladder));
+    teleportStationPlayer(physics, frame, stationLocalToWorld(frame, exitLocal));
+  }
+  if (step.exit === 'none') {
+    moveStationPlayer(physics, frame, step.velocity, dt);
+  }
+  stepStationPhysics(physics);
+
+  const position = getStationPlayerPosition(physics, frame);
+  const local = worldToStationLocal(frame, position);
+  return {
+    along: step.exit === 'none' ? ladderAlongFromCapsule(ladder, local.up) : step.along,
+    exit: step.exit,
+    state: {
+      ...state,
+      animation: LADDER_CLIMB_ANIMATION,
+      upperBodyAnimation: undefined,
+      forward: ladderFacing(ladder, {
+        right: frame.right,
+        up: frame.up,
+        forward: frame.forward,
+      }),
+      grounded: true,
+      jumpPhase: 'grounded',
+      jumpPhaseTime: 0,
+      position,
+      stationLocal: { right: local.right, forward: local.forward },
+      stationVerticalVelocity: 0,
+      up: frame.up,
+      velocity: step.velocity,
+    },
+  };
 }
 
 export function updateCharacterInStation(

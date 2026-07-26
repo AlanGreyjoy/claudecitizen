@@ -10,6 +10,7 @@ import {
   vec3,
 } from "../math/vec3";
 import {
+  CHARACTER_GROUND_OFFSET_METERS,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
 } from "./character-controller";
@@ -26,7 +27,7 @@ import {
   sampleColliderGroundHeight,
   type ShipColliderRigState,
 } from "../physics/colliders";
-import type { ShipPhysics } from "../physics/ship-physics";
+import type { ShipLocalPose, ShipPhysics } from "../physics/ship-physics";
 import {
   getShipPlayerLocal,
   getShipPlayerWorldPosition,
@@ -34,7 +35,22 @@ import {
   moveShipPlayer,
   shipHasFloorBelow,
   stepShipPhysics,
+  teleportShipPlayerLocal,
 } from "../physics/ship-physics";
+import {
+  ladderTopExitPoint,
+  nearestLadderMount,
+  type LadderExit,
+  type LadderMount,
+  type LadderSpec,
+} from "../world/ladders";
+import {
+  ladderAlongFromCapsule,
+  ladderCapsuleLocal,
+  ladderFacing,
+  LADDER_CLIMB_ANIMATION,
+  stepLadderClimb,
+} from "./ladder-climb";
 import {
   getShipLayout,
   type ShipBedSpec,
@@ -579,6 +595,83 @@ export function bedInteractPrompt(bed: ShipBedSpec, interactLabel = "F"): string
   return `Press ${interactLabel} — lie down`;
 }
 
+/**
+ * Nearest authored ladder within reach of the capsule, or null. Measures in
+ * full ship-local 3D so stacked decks do not offer each other's ladders.
+ */
+export function nearestDeckLadder(local: ShipLocalPose): LadderMount | null {
+  return nearestLadderMount(getShipLayout().ladders, {
+    right: local.right,
+    up: local.up - CHARACTER_GROUND_OFFSET_METERS,
+    forward: local.forward,
+  });
+}
+
+export interface DeckClimbResult {
+  state: DeckCharacterState;
+  along: number;
+  exit: LadderExit;
+}
+
+/**
+ * Ladder climbing on a ship deck. Runs entirely in ship-local space, so the
+ * climb keeps working while the hull moves. Gravity is off and the capsule is
+ * pulled onto the rail; the caller releases on a `top`/`bottom` exit.
+ */
+export function updateCharacterClimbingOnDeck(
+  state: DeckCharacterState,
+  ship: FlightBody,
+  ladder: LadderSpec,
+  input: CharacterInput,
+  dt: number,
+  physics: ShipPhysics | null,
+): DeckClimbResult {
+  if (!physics) return { state, along: 0, exit: "none" };
+  const step = stepLadderClimb({
+    ladder,
+    capsuleLocal: getShipPlayerLocal(physics),
+    basis: { right: getShipRight(ship), up: ship.up, forward: ship.forward },
+    input,
+    dt,
+  });
+
+  if (step.exit === "top") {
+    teleportShipPlayerLocal(physics, ladderCapsuleLocal(ladderTopExitPoint(ladder)));
+  }
+  if (step.exit === "none") {
+    moveShipPlayer(physics, ship, step.velocity, dt);
+  }
+  stepShipPhysics(physics);
+
+  const local = getShipPlayerLocal(physics);
+  const deckLocal = { right: local.right, forward: local.forward };
+  return {
+    along: step.exit === "none" ? ladderAlongFromCapsule(ladder, local.up) : step.along,
+    exit: step.exit,
+    state: {
+      ...state,
+      animation: LADDER_CLIMB_ANIMATION,
+      upperBodyAnimation: undefined,
+      deckLocal,
+      deckZone: findCameraBoundAt(deckLocal)?.id ?? state.deckZone,
+      forward: ladderFacing(ladder, {
+        right: getShipRight(ship),
+        up: ship.up,
+        forward: ship.forward,
+      }),
+      grounded: true,
+      jumpPhase: "grounded",
+      jumpPhaseTime: 0,
+      position: getShipPlayerWorldPosition(physics, ship),
+      up: ship.up,
+      velocity: step.velocity,
+      // A climb is never a fall — keep the deck-exit watchdog quiet.
+      airborneOffDeckFrames: 0,
+      shipVerticalVelocity: 0,
+    },
+  };
+}
+
 export function nearRampPanel(deckLocal: DeckLocal): boolean {
   return getShipLayout().rampInteracts.some(
     (panel) =>
@@ -711,17 +804,27 @@ function updateCharacterOnDeckRapier(
     dt,
   );
 
-  const velocity = add(
-    scale(desiredDirection, intent.moveSpeedMetersPerSecond),
-    scale(ship.up, verticalVelocity),
+  const planar = scale(desiredDirection, intent.moveSpeedMetersPerSecond);
+  const move = moveShipPlayer(
+    physics,
+    ship,
+    add(planar, scale(ship.up, verticalVelocity)),
+    dt,
   );
-  moveShipPlayer(physics, ship, velocity, dt);
   stepShipPhysics(physics);
+
+  // Head hit the hull. Left alone the jump impulse keeps driving the capsule
+  // upward for its whole ~0.5s decay, and autostep works the crown inside the
+  // single-sided ceiling shell — where nothing but the vertical depenetrator
+  // can get it back out.
+  const verticalAfter =
+    move.ceilingHit && verticalVelocity > 0 ? 0 : verticalVelocity;
+  const velocity = add(planar, scale(ship.up, verticalAfter));
 
   const rapierGrounded = isShipPlayerGrounded(physics);
   const grounded =
     rapierGrounded ||
-    (Boolean(options?.exteriorPlanetGrounded) && verticalVelocity <= 0.15);
+    (Boolean(options?.exteriorPlanetGrounded) && verticalAfter <= 0.15);
   const localPose = getShipPlayerLocal(physics);
   const position = getShipPlayerWorldPosition(physics, ship);
   const deckLocal = { right: localPose.right, forward: localPose.forward };
@@ -739,7 +842,7 @@ function updateCharacterOnDeckRapier(
   );
   const flags = resolveDeckExitState(state, physics, grounded, options);
 
-  const airborne = isAirborneForAnimation(grounded, verticalVelocity, startedJump);
+  const airborne = isAirborneForAnimation(grounded, verticalAfter, startedJump);
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   const layers = animationLayersFromState({
     stanceId,
@@ -766,7 +869,7 @@ function updateCharacterOnDeckRapier(
       velocity,
       airborneOffDeckFrames: flags.airborneOffDeckFrames,
       deckExitGraceFrames: flags.deckExitGraceFrames,
-      shipVerticalVelocity: verticalVelocity,
+      shipVerticalVelocity: verticalAfter,
     },
   };
 }

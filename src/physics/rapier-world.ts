@@ -63,9 +63,9 @@ export function castRapierWorldRay(
   };
 }
 
-const PLAYER_CAPSULE_RADIUS = 0.42;
-const PLAYER_CAPSULE_HEIGHT = 1.75;
-const PLAYER_CAPSULE_HALF_HEIGHT = PLAYER_CAPSULE_HEIGHT / 2;
+export const PLAYER_CAPSULE_RADIUS = 0.42;
+export const PLAYER_CAPSULE_HEIGHT = 1.75;
+export const PLAYER_CAPSULE_HALF_HEIGHT = PLAYER_CAPSULE_HEIGHT / 2;
 
 /** Tallest ledge the walker steps over instead of colliding with. */
 const AUTOSTEP_MAX_HEIGHT_METERS = 0.5;

@@ -334,6 +334,23 @@ export type PrefabComponent =
       routeGroup?: string;
     }
   | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
+  /**
+   * Climbable ladder. The marker sits at the foot of the climb line — the spot
+   * the player stands on to mount. Local +Y is the climb axis, local +Z is the
+   * side they step off toward at the top. Works in station and ship prefabs.
+   */
+  | {
+      type: "ladder";
+      id: string;
+      /** Climb length above the marker, meters. */
+      height: number;
+      /** Mount / dismount reach from the climb line, meters. */
+      radius?: number;
+      /** Climb rate, meters per second. */
+      climbSpeed?: number;
+      /** Prompt noun (default "ladder"). */
+      label?: string;
+    }
   | { type: "hangar-pad"; hangarId: string; padIndex: number; floorId?: StationFloorId }
   | {
       type: "interaction";

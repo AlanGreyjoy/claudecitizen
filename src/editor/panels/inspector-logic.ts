@@ -141,6 +141,8 @@ export interface InspectorPanelOptions {
   ) => { min: Vec3; max: Vec3 } | null;
   /** Toggle ship-door / animation open preview in the viewport. */
   onToggleShipDoorPreview?: (doorId: string) => void;
+  /** Play the boarding ramp raise / lower in the viewport. */
+  onPlayShipRampPreview?: () => void;
 }
 
 export type TransformFieldKey = 'position' | 'rotation' | 'scale';

@@ -3,6 +3,7 @@ import type { PrefabComponent } from '../../../../world/prefabs/schema';
 import type { ComponentFieldContext, ComponentFieldsProps } from './context';
 import {
   AssetUrlField,
+  EdButton,
   EmptyNote,
   EntityRefField,
   GlbNodeRefField,
@@ -352,7 +353,7 @@ function ShipControllerRampFields({
   component: ShipControllerComponent;
   ramp: NonNullable<ShipControllerComponent['ramp']>;
 }): ReactElement {
-  const { update, store } = ctx;
+  const { update, store, options } = ctx;
   return (
     <>
       <SectionLabel>Ramp</SectionLabel>
@@ -392,6 +393,14 @@ function ShipControllerRampFields({
             })
           }
         />
+      </FieldRow>
+      <FieldRow label="Preview" wide>
+        <EdButton
+          title="Play the ramp raise / lower in the viewport at the in-game rate"
+          onClick={() => options.onPlayShipRampPreview?.()}
+        >
+          Play
+        </EdButton>
       </FieldRow>
       <FieldRow label="Out btn" wide>
         <EntityRefField

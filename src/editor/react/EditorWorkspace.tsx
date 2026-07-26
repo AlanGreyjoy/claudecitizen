@@ -252,6 +252,9 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
                 onToggleShipDoorPreview={(doorId) =>
                   toolbarRef.current?.toggleDoorPreview(doorId)
                 }
+                onPlayShipRampPreview={() =>
+                  toolbarRef.current?.playRampPreview()
+                }
               />
             ) : null}
           </div>

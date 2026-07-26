@@ -3,6 +3,7 @@ import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
 import { DEFAULT_SPAWN_SITE } from './landing-sites';
 import type { LandingSiteHint, Planet, Vec3 } from '../types';
 import type { GameplayCollider } from '../physics/colliders';
+import type { LadderSpec } from './ladders';
 import type { PrefabSoundSpec } from './prefabs/sound-runtime';
 import type {
   StationNpcPlacementSpec,
@@ -537,6 +538,8 @@ export interface StationLayoutOverride {
   colliders: GameplayCollider[];
   spawn: StationSpawnPose;
   elevatorMarkers: StationElevatorMarker[];
+  /** Climbable ladders in station-local meters. */
+  ladders: LadderSpec[];
   infoMarkers: StationInfoMarker[];
   avmsMarkers: StationAvmsMarker[];
   weaponShops: StationWeaponShopMarker[];

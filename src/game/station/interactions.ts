@@ -102,6 +102,8 @@ export function stationInteractionPrompt(
       return pressInteractPrompt("elevator to Lobby");
     case "prefab-elevator":
       return pressInteractPrompt(`elevator to ${interaction.marker.targetFloor}`);
+    case "ladder":
+      return pressInteractPrompt(interaction.ladder.label || "ladder");
     case "prefab-info":
       return prefabInfoPrompt(ctx, interaction);
   }
@@ -131,6 +133,7 @@ function networkInstanceForInteraction(
     case "terminal":
     case "avms-terminal":
     case "prefab-info":
+    case "ladder":
       return null;
   }
 }
@@ -270,6 +273,17 @@ export function handleStationInteraction(
 
   if (interaction.kind === "prefab-info") {
     handlePrefabInfoInteraction(actions, interaction, deps.animations);
+    return;
+  }
+
+  if (interaction.kind === "ladder") {
+    if (actions.interactPressed) {
+      ctx.world.ladderClimb = {
+        surface: "station",
+        ladderId: interaction.ladder.id,
+        along: interaction.along,
+      };
+    }
     return;
   }
 

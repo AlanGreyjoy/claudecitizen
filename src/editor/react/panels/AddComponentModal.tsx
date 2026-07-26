@@ -111,11 +111,15 @@ export function AddComponentModal({
     ),
   ];
   const activeTab = tabs.some((entry) => entry.id === tab) ? tab : 'favorites';
+  // Typing searches the whole palette. The dialog opens on Favorites, which is
+  // a fixed three-entry shortlist, so scoping the query to it made every search
+  // for anything else come back empty.
+  const searching = query.trim().length > 0;
   const results: FavoriteRow[] =
-    activeTab === 'favorites'
-      ? favoriteRows
-      : activeTab === 'all'
-        ? palette.map((def) => ({ def, label: def.label }))
+    searching || activeTab === 'all'
+      ? palette.map((def) => ({ def, label: def.label }))
+      : activeTab === 'favorites'
+        ? favoriteRows
         : palette
             .filter((def) => def.category === activeTab)
             .map((def) => ({ def, label: def.label }));

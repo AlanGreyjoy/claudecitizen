@@ -192,6 +192,13 @@ async function handleEditorApi(repository, request, url) {
           }),
         );
       }
+      case 'POST /__editor/prefab/rename': {
+        const body = await parseJsonBody(request);
+        return jsonResponse(
+          200,
+          await repository.renamePrefab(body?.fromId, body?.toId, body?.name),
+        );
+      }
       case 'GET /__editor/scenes':
         return jsonResponse(200, await repository.listScenes());
       case 'GET /__editor/scene':

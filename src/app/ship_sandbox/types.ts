@@ -18,6 +18,7 @@ import type { createLoopingSfxController } from '../../audio/sfx';
 import type { QuantumTravelState } from '../../flight/quantum-travel';
 import type { EntertainmentCameraState } from '../../player/entertainment-camera';
 import type { FlightCameraFeelResult, FlightCameraFeelState } from '../../player/flight-camera-feel';
+import type { LadderClimbState } from '../../world/ladders';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import type { EffectComposer } from 'postprocessing';
 import type { N8AOPostPass } from 'n8ao';
@@ -51,6 +52,8 @@ export interface ShipSandboxSession {
   shipPhysics: ShipPhysics | null;
   prompt: string;
   activeBedId: string | null;
+  /** Set while attached to a ladder; replaces deck locomotion for the frame. */
+  ladderClimb: LadderClimbState | null;
   transition: SandboxTransition | null;
   autoRestPending: boolean;
   controls: ReturnType<typeof createPlayerControls>;

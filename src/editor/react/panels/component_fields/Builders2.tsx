@@ -2,6 +2,11 @@ import type { ReactElement } from 'react';
 import type { PrefabComponent } from '../../../../world/prefabs/schema';
 import type { StationFloorId } from '../../../../world/station';
 import { collectAnimationIds, FLOOR_OPTIONS } from '../../../panels/inspector-logic';
+import {
+  LADDER_DEFAULT_CLIMB_SPEED,
+  LADDER_DEFAULT_LABEL,
+  LADDER_DEFAULT_RADIUS,
+} from '../../../../world/ladders';
 import type { ComponentFieldsProps } from './context';
 import {
   AssetUrlField,
@@ -44,6 +49,56 @@ export function ElevatorFields({
           }
         />
       </FieldRow>
+    </>
+  );
+}
+
+export function LadderFields({
+  ctx,
+  component,
+}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'ladder' }>>): ReactElement {
+  const { update } = ctx;
+  return (
+    <>
+      <FieldRow label="Id" wide>
+        <TextField value={component.id} onCommit={(id) => update({ ...component, id })} />
+      </FieldRow>
+      <FieldRow label="Height (m)" wide>
+        <NumberField
+          value={component.height}
+          step={0.1}
+          onCommit={(height) =>
+            update({ ...component, height: Math.max(0.5, height) })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Reach (m)" wide>
+        <NumberField
+          value={component.radius ?? LADDER_DEFAULT_RADIUS}
+          step={0.1}
+          onCommit={(radius) => update({ ...component, radius: Math.max(0.3, radius) })}
+        />
+      </FieldRow>
+      <FieldRow label="Climb m/s" wide>
+        <NumberField
+          value={component.climbSpeed ?? LADDER_DEFAULT_CLIMB_SPEED}
+          step={0.1}
+          onCommit={(climbSpeed) =>
+            update({ ...component, climbSpeed: Math.max(0.2, climbSpeed) })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Label" wide>
+        <TextField
+          value={component.label ?? LADDER_DEFAULT_LABEL}
+          onCommit={(label) => update({ ...component, label })}
+        />
+      </FieldRow>
+      <Hint>
+        Place at the foot of the ladder, where the player stands to mount. +Z
+        (blue axis) is the side they face away from while climbing and step off
+        toward at the top.
+      </Hint>
     </>
   );
 }

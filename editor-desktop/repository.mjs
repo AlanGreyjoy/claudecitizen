@@ -318,6 +318,85 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     return { saved: true, id, path };
   }
 
+  /**
+   * Rewrites `"prefabId": fromId` wherever it appears. Keyed on the field name
+   * rather than the raw string so a prefab whose id collides with some label or
+   * node name does not get its unrelated text mangled.
+   */
+  function rewritePrefabIdsInPlace(value, fromId, toId) {
+    if (!value || typeof value !== 'object') return false;
+    let changed = false;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (rewritePrefabIdsInPlace(item, fromId, toId)) changed = true;
+      }
+      return changed;
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (key === 'prefabId' && item === fromId) {
+        value[key] = toId;
+        changed = true;
+      } else if (rewritePrefabIdsInPlace(item, fromId, toId)) {
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  async function rewritePrefabIdReferences(fromId, toId, skipAbsolute) {
+    const seen = new Set([skipAbsolute]);
+    const rewritten = [];
+    for (const dir of referenceDocumentDirs()) {
+      for (const file of await listJsonFiles(dir)) {
+        if (seen.has(file)) continue;
+        seen.add(file);
+        let document;
+        try {
+          document = JSON.parse(await readFile(file, 'utf8'));
+        } catch {
+          continue;
+        }
+        if (!rewritePrefabIdsInPlace(document, fromId, toId)) continue;
+        rewritten.push(await writeJson(projectRoot, file, document));
+      }
+    }
+    return rewritten;
+  }
+
+  /**
+   * True rename: the document id, the file name, and every local `prefabId`
+   * reference move together. Identity is the id, so this is the one operation
+   * that can dangle a reference — anything holding the old id outside project
+   * JSON (Postgres `Ship.prefabId`, saved player state) is NOT rewritten and is
+   * reported back to the caller instead.
+   */
+  async function renamePrefab(fromIdValue, toIdValue, nameValue) {
+    const fromId = requireSlugId(fromIdValue, 'prefab id');
+    const toId = requireSlugId(toIdValue, 'new prefab id');
+    const name = typeof nameValue === 'string' ? nameValue.trim() : '';
+    if (!name) throw new EditorRepositoryError('prefab name is required');
+
+    const existing = await findPrefabFile(fromId);
+    if (!existing) throw new EditorRepositoryError(`prefab "${fromId}" not found`, 404);
+    if (toId !== fromId && (await findPrefabFile(toId))) {
+      throw new EditorRepositoryError(`prefab id "${toId}" is already taken`, 409);
+    }
+
+    const document = await readJson(existing.absolute, `prefab "${fromId}" not found`);
+    document.id = toId;
+    document.name = name;
+
+    const destination = join(dirname(existing.absolute), `${toId}${PREFAB_FILE_SUFFIX}`);
+    const path = await writeJson(projectRoot, destination, document);
+    if (destination !== existing.absolute) {
+      await rm(existing.absolute, { force: true });
+    }
+
+    const rewritten =
+      toId === fromId ? [] : await rewritePrefabIdReferences(fromId, toId, destination);
+    return { renamed: true, id: toId, path, rewritten };
+  }
+
   async function getBaseCharacters() {
     const document = await readJson(
       baseCharacterEquipmentPath(),
@@ -800,6 +879,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     listPrefabs,
     getPrefab,
     savePrefab,
+    renamePrefab,
     listScenes: () => listNamedDocuments(sceneDataDir(), '.scene.json', 'scenes'),
     getScene: (id) => getNamedDocument(sceneDataDir(), '.scene.json', 'scene', id),
     saveScene: (document) => saveNamedDocument(sceneDataDir(), '.scene.json', document),

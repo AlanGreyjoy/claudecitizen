@@ -1,7 +1,10 @@
 import {
+  updateCharacterClimbingInStation,
   updateCharacterInStation,
   type StationCharacterState,
 } from "../../player/station-walk";
+import { findLadderById } from "../../world/ladders";
+import { getStationLayoutOverride } from "../../world/station";
 import type { LoopContext } from "../loop-context";
 import type { WeaponCombat } from "../combat/weapon-combat";
 import type { PadInterest } from "../station/pad-interest";
@@ -41,6 +44,50 @@ function walkInStation(
     combat.currentAnimStance(),
     combat.currentWeaponPoseAiming(input.characterInput),
   );
+}
+
+/**
+ * Ladder climbing replaces station locomotion while attached. Returns false
+ * when the player is not on a ladder so the caller falls through to walking.
+ */
+function climbStationLadder(
+  ctx: LoopContext,
+  deps: InStationDeps,
+  input: WalkModeInput,
+): boolean {
+  const climb = ctx.world.ladderClimb;
+  if (!climb || climb.surface !== "station") return false;
+  const ladder = findLadderById(
+    getStationLayoutOverride()?.ladders ?? [],
+    climb.ladderId,
+  );
+  if (!ladder) {
+    ctx.world.ladderClimb = null;
+    return false;
+  }
+  // Jump lets go anywhere on the rail — the fall is the dismount.
+  if (input.actions.jumpPressed) {
+    ctx.world.ladderClimb = null;
+    return false;
+  }
+
+  const result = updateCharacterClimbingInStation(
+    ctx.world.character as StationCharacterState,
+    ctx.stationFrame,
+    ladder,
+    input.characterInput,
+    input.dt,
+    ctx.physics,
+  );
+  ctx.world.character = result.state;
+  if (result.exit === "none") {
+    climb.along = result.along;
+    ctx.world.prompt = `Forward / back to climb · ${deps.prompts.keyLabel("jump")} to let go`;
+    return true;
+  }
+  ctx.world.ladderClimb = null;
+  ctx.world.prompt = "";
+  return true;
 }
 
 function handleActiveBuildTool(
@@ -87,6 +134,8 @@ export function createInStationMode(
       handleActiveBuildTool(ctx, deps, activeRuntime, input);
       return;
     }
+
+    if (climbStationLadder(ctx, deps, input)) return;
 
     walkInStation(ctx, deps.combat, input);
 

@@ -226,9 +226,10 @@ export function createViewportShipPreview(
       lowerRadians: BUILTIN_RAMP_HINGE.lowerRadians,
       axis: BUILTIN_RAMP_HINGE.axis,
     };
+    const ramp01 = shipPreview.ramp01 ?? (shipPreview.rampDown ? 1 : 0);
     previewHinge(
       rampHinge.node,
-      rampHinge.lowerRadians * (shipPreview.rampDown ? 1 : 0),
+      rampHinge.lowerRadians * ramp01,
       rampHinge.axis ?? "x",
       undefined,
       quiet,

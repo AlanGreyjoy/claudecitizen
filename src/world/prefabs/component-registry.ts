@@ -238,6 +238,25 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Pair two markers with the same id on different floors to ride between them.",
   },
   {
+    type: "ladder",
+    label: "Ladder",
+    category: "gameplay",
+    // Only the station and ship runtimes bake ladders; scene-authored stations
+    // go through the same station builder, so the scene palette gets it too.
+    kinds: ["station", "ship"],
+    scenes: true,
+    marker: true,
+    createDefault: () => ({
+      type: "ladder",
+      id: "ladder-1",
+      height: 3,
+      radius: 1.2,
+      climbSpeed: 2.2,
+      label: "ladder",
+    }),
+    hint: "Place at the foot of the ladder where the player stands. +Z (blue) is the side they face away from and step off toward at the top; height is the climb above the marker.",
+  },
+  {
     type: "hangar-pad",
     label: "Hangar Pad",
     category: "gameplay",

@@ -2,11 +2,13 @@ import { getActiveShip } from "../../player/world-state";
 import { getShipLayout } from "../../player/ship-layout";
 import {
   isOnShipRampDeck,
+  nearestDeckLadder,
   nearestDoor,
   nearRampPanel,
   resolveDoorInteractAim,
   type DeckCharacterState,
 } from "../../player/ship-deck";
+import { getShipPlayerLocal } from "../../physics/ship-physics";
 import { playShipRampToggleSfx } from "../../player/ship-articulation-sfx";
 import { playSfx } from "../../audio/sfx";
 import type { FrameActions } from "../types";
@@ -66,6 +68,25 @@ function tryDeckRampPanel(
   return true;
 }
 
+function tryDeckLadder(
+  ctx: LoopContext,
+  prompts: Prompts,
+  actions: FrameActions,
+): boolean {
+  if (!ctx.shipPhysics) return false;
+  const mount = nearestDeckLadder(getShipPlayerLocal(ctx.shipPhysics));
+  if (!mount) return false;
+  ctx.world.prompt = prompts.pressInteractPrompt(mount.ladder.label || "ladder");
+  if (actions.interactPressed) {
+    ctx.world.ladderClimb = {
+      surface: "ship",
+      ladderId: mount.ladder.id,
+      along: mount.along,
+    };
+  }
+  return true;
+}
+
 /** Seat / bed / door / ramp prompts and F-key handlers while inside the hull. */
 export function handleDeckInteriorInteractions(
   ctx: LoopContext,
@@ -89,5 +110,6 @@ export function handleDeckInteriorInteractions(
   }
   if (tryDeckDoor(ctx, prompts, actions, deckLocal, characterPosition)) return;
   if (tryDeckRampPanel(ctx, prompts, actions, deckLocal)) return;
+  if (tryDeckLadder(ctx, prompts, actions)) return;
   ctx.world.prompt = "";
 }

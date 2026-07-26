@@ -260,6 +260,7 @@ export function buildShipSandboxSession(options: {
     shipPhysics: options.shipPhysics,
     prompt: '',
     activeBedId: null,
+    ladderClimb: null,
     transition: null,
     autoRestPending: options.layout.restHeightMeters === null,
     controls: createPlayerControls(overlays.canvas),

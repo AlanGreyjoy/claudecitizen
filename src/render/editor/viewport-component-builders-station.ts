@@ -25,6 +25,54 @@ export interface ViewportComponentBuilderDeps {
   ) => THREE.Object3D | null;
 }
 
+/** Rails + rungs up the authored climb height, with the +Z step-off side marked. */
+function buildLadderHelper(
+  component: Extract<PrefabComponent, { type: "ladder" }>,
+  makeHelperMesh: ViewportHelperMeshFactory,
+): THREE.Object3D | null {
+  const group = new THREE.Group();
+  const height = Math.max(0.5, component.height);
+  const color = 0x8ee88a;
+  const halfWidth = 0.24;
+  for (const side of [-halfWidth, halfWidth]) {
+    const rail = makeHelperMesh(
+      new THREE.CylinderGeometry(0.035, 0.035, height, 6),
+      color,
+      0.7,
+    );
+    rail.position.set(side, height / 2, 0);
+    group.add(rail);
+  }
+  // One rung every ~30cm keeps the helper readable without flooding the scene.
+  const rungCount = Math.max(1, Math.round(height / 0.3));
+  for (let i = 1; i <= rungCount; i += 1) {
+    const rung = makeHelperMesh(
+      new THREE.CylinderGeometry(0.028, 0.028, halfWidth * 2, 6),
+      color,
+      0.5,
+    );
+    rung.rotation.z = Math.PI / 2;
+    rung.position.y = (i / (rungCount + 1)) * height;
+    group.add(rung);
+  }
+  const reach = makeHelperMesh(
+    new THREE.SphereGeometry(component.radius ?? 1.2, 14, 10),
+    color,
+    0.16,
+    true,
+  );
+  group.add(reach);
+  // +Z arrow: the side the player mounts from and steps off toward at the top.
+  const stepOff = makeHelperMesh(
+    new THREE.ConeGeometry(0.16, 0.42, 10),
+    color,
+    0.75,
+  );
+  stepOff.rotation.x = Math.PI / 2;
+  stepOff.position.set(0, height, 0.55);
+  group.add(stepOff);
+  return group;
+}
 export function createViewportStationBuilders(deps: ViewportComponentBuilderDeps): {
   buildColliderHelper: (
     component: Extract<PrefabComponent, { type: "collider" }>,
@@ -400,6 +448,11 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
     "npc-waypoint": buildNpcWaypointHelper,
     "npc-placement": buildNpcPlacementHelper,
     "elevator": buildElevatorHelper,
+    "ladder": (component: PrefabComponent) =>
+      buildLadderHelper(
+        component as Extract<PrefabComponent, { type: "ladder" }>,
+        makeHelperMesh,
+      ),
     "hangar-pad": buildHangarPadHelper,
     "interaction": buildInteractionHelper,
     "station-frame": () => buildFrameAxesHelper(),

@@ -239,6 +239,43 @@ function parseElevatorComponent(
         };
 }
 
+function parseLadderComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const type = "ladder" as const;
+  return {
+          type,
+          id: parseString(value.id, `${path}.id`, 64),
+          height: Math.min(
+            60,
+            Math.max(0.5, parseFiniteNumber(value.height, `${path}.height`)),
+          ),
+          ...(value.radius === undefined
+            ? {}
+            : {
+                radius: Math.min(
+                  8,
+                  Math.max(0.3, parseFiniteNumber(value.radius, `${path}.radius`)),
+                ),
+              }),
+          ...(value.climbSpeed === undefined
+            ? {}
+            : {
+                climbSpeed: Math.min(
+                  12,
+                  Math.max(
+                    0.2,
+                    parseFiniteNumber(value.climbSpeed, `${path}.climbSpeed`),
+                  ),
+                ),
+              }),
+          ...(value.label === undefined
+            ? {}
+            : { label: parseString(value.label, `${path}.label`, 64) }),
+        };
+}
+
 function parseHangarPadComponent(
   value: Record<string, unknown>,
   path: string,
@@ -1443,6 +1480,7 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "npc-waypoint": parseNpcWaypointComponent,
   "npc-placement": parseNpcPlacementComponent,
   "elevator": parseElevatorComponent,
+  "ladder": parseLadderComponent,
   "hangar-pad": parseHangarPadComponent,
   "interaction": parseInteractionComponent,
   "animation": parseAnimationComponent,

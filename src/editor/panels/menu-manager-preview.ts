@@ -115,6 +115,7 @@ function createMockWorld(shipMode: boolean): WorldState {
     transition: null,
     assignedHangar: null,
     stationElevator: null,
+    ladderClimb: null,
     screenFade: 0,
     flightMode: 'traverse',
     quantum: createQuantumTravelState(),

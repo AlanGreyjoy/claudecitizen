@@ -7,11 +7,13 @@ import {
   useState,
   type ReactElement,
 } from 'react';
-import { fetchPrefabList, type PrefabListEntry } from '../../api';
+import { fetchPrefabList, renamePrefab, type PrefabListEntry } from '../../api';
+import { showToast } from '../../dom';
 import type { EditorStore } from '../../document';
 import { toPrefabDocument } from '../../serialize';
 import { collectShipLayoutIssues } from '../../../player/ship-layout-issues';
 import { buildShipLayoutFromPrefab } from '../../../world/prefabs/ship-runtime';
+import { slugifyPrefabName } from '../../../world/prefabs/schema';
 import { useEditorStore } from '../hooks';
 import { ShipIssues } from './ship/ShipIssues';
 import {
@@ -60,6 +62,10 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
   const [listError, setListError] = useState<string | null>(null);
   const [env, setEnv] = useState<ShipTestEnv>('pad');
   const [issueState, setIssueState] = useState<ShipIssueList>(EMPTY_ISSUES);
+  // Null means "show the stored name". Editing holds a draft so a rename fires
+  // once on commit rather than moving the file on every keystroke.
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
 
   const envRef = useRef(env);
   envRef.current = env;
@@ -74,6 +80,46 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
       setListError(error instanceof Error ? error.message : 'Ship list failed to load.');
     }
   }, []);
+
+  const commitName = useCallback(async () => {
+    const draft = nameDraft;
+    setNameDraft(null);
+    if (draft === null) return;
+    const state = store.getState();
+    if (state.documentType !== 'prefab' || state.kind !== 'ship') return;
+    const name = draft.trim();
+    if (!name || name === state.prefabName) return;
+
+    // Never saved: no file to move, and the id is still slugged at first save.
+    if (!state.prefabId) {
+      store.setPrefabMeta({ prefabName: name });
+      return;
+    }
+    const toId = slugifyPrefabName(name);
+    if (!toId) {
+      showToast('That name slugs to nothing — pick another.', true);
+      return;
+    }
+
+    setRenaming(true);
+    try {
+      const result = await renamePrefab(state.prefabId, toId, name);
+      store.setPrefabMeta({ prefabId: result.id, prefabName: name });
+      showToast(
+        result.rewritten.length > 0
+          ? `Renamed to ${result.path} — repointed ${result.rewritten.length} document(s).`
+          : `Renamed to ${result.path}.`,
+      );
+      void refreshList();
+    } catch (error) {
+      showToast(
+        `Rename failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        true,
+      );
+    } finally {
+      setRenaming(false);
+    }
+  }, [nameDraft, store, refreshList]);
 
   const refreshIssues = useCallback(async () => {
     const state = store.getState();
@@ -109,6 +155,11 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
     void refreshList();
   }, [hidden, refreshList]);
 
+  // A pending draft belongs to the ship it was typed against, not the next one.
+  useEffect(() => {
+    setNameDraft(null);
+  }, [openShipId]);
+
   // Rebuilding the layout touches GLB colliders, so it follows the open ship
   // rather than every keystroke. The summary button re-checks on demand.
   useEffect(() => {
@@ -135,6 +186,9 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
         <select
           className="ed-select ed-ship-select"
           value={ships.some((entry) => entry.id === openShipId) ? openShipId : ''}
+          // Saving a rename (or a brand new ship) changes this list, and the
+          // panel does not see save complete — re-read it as the menu opens.
+          onMouseDown={() => void refreshList()}
           onChange={(event) => {
             const id = event.target.value;
             if (id) void onOpenShip(id);
@@ -149,6 +203,25 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
             </option>
           ))}
         </select>
+        <input
+          type="text"
+          className="ed-input ed-ship-name"
+          value={nameDraft ?? (isShipDocument ? docState.prefabName : '')}
+          placeholder="Ship name"
+          disabled={!isShipDocument || renaming}
+          aria-label="Ship name"
+          title={
+            openShipId
+              ? `Renames the file to "${slugifyPrefabName(nameDraft ?? docState.prefabName) || 'untitled'}.prefab.json" and repoints project references. Ship rows already saved in the database keep id "${openShipId}".`
+              : 'Saved as the slug of this name.'
+          }
+          onChange={(event) => setNameDraft(event.target.value)}
+          onBlur={() => void commitName()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+            else if (event.key === 'Escape') setNameDraft(null);
+          }}
+        />
         <button type="button" className="ed-btn" onClick={() => void onNewShip()}>
           New Ship
         </button>

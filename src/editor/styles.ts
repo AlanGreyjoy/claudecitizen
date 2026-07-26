@@ -978,6 +978,11 @@ body.ed-resize-row * {
   max-width: 260px;
 }
 
+.ed-ship-name {
+  min-width: 140px;
+  max-width: 220px;
+}
+
 .ed-ship-envs {
   display: inline-flex;
   gap: 2px;
@@ -1003,12 +1008,23 @@ body.ed-resize-row * {
   align-items: center;
 }
 
+.ed-ship-issues-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .ed-ship-issues-summary.is-warn {
   color: var(--ed-warn, #e0a33c);
 }
 
 .ed-ship-issues-summary.is-error {
   color: var(--ed-danger, #d9534f);
+}
+
+.ed-ship-issues-chevron {
+  flex: 0 0 auto;
+  opacity: 0.85;
 }
 
 /* Issues hang below the bar so a long list never reflows the viewport. */

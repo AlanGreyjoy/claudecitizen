@@ -22,6 +22,12 @@ import {
   type ShipSeatSpec,
   type ShipSpec,
 } from "../../player/ship-layout";
+import {
+  LADDER_DEFAULT_CLIMB_SPEED,
+  LADDER_DEFAULT_LABEL,
+  LADDER_DEFAULT_RADIUS,
+  type LadderSpec,
+} from "../ladders";
 import type { PrefabComponent, PrefabDocument, PrefabEntity, PrefabNodeOverride } from "./schema";
 import type { LocalOffset, Vec3 } from "../../types";
 import {
@@ -65,6 +71,7 @@ interface CollectedShip {
   doors: ShipDoorSpec[];
   seats: ShipSeatSpec[];
   beds: ShipBedSpec[];
+  ladders: LadderSpec[];
   cockpitControls: CockpitControlSpec[];
   cockpitStats: CockpitStatSpec[];
   entertainmentSystems: EntertainmentSystemSpec[];
@@ -832,6 +839,53 @@ function collectBeds(
   }
 }
 
+/** Marker +Z as a unit ship-local 2D direction (x flips into ship right). */
+function sceneToShipDir2(rotation: Quat): { right: number; forward: number } {
+  const forward = rotateVec3ByQuat(vec3(0, 0, 1), rotation);
+  const right = -forward.x;
+  const fwd = forward.z;
+  const length = Math.hypot(right, fwd);
+  if (length < 1e-4) return { right: 0, forward: 1 };
+  return { right: right / length, forward: fwd / length };
+}
+
+/**
+ * Walks the entity tree for ladder markers (works with ship-controller hulls).
+ * Marker ladders replace any earlier entry with the same id.
+ */
+function collectLadders(
+  entity: PrefabEntity,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  for (const component of entity.components ?? []) {
+    if (component.type !== "ladder") continue;
+    const transform = transforms.get(entity.id);
+    const point = resolveEntityShipPoint(entity.id, transforms);
+    if (!point || !transform) {
+      console.warn(
+        `Ship ladder "${component.id}" entity "${entity.id}" has no transform.`,
+      );
+      continue;
+    }
+    const ladder: LadderSpec = {
+      id: component.id || entity.id,
+      label: component.label ?? LADDER_DEFAULT_LABEL,
+      base: point,
+      height: component.height,
+      outward: sceneToShipDir2(transform.rotation),
+      radius: component.radius ?? LADDER_DEFAULT_RADIUS,
+      climbSpeed: component.climbSpeed ?? LADDER_DEFAULT_CLIMB_SPEED,
+    };
+    const index = out.ladders.findIndex((entry) => entry.id === ladder.id);
+    if (index >= 0) out.ladders[index] = ladder;
+    else out.ladders.push(ladder);
+  }
+  for (const child of entity.children ?? []) {
+    collectLadders(child, transforms, out);
+  }
+}
+
 /** Walks the entity tree for cockpit-control markers (works with ship-controller hulls). */
 function collectCockpitControls(
   entity: PrefabEntity,
@@ -1040,6 +1094,7 @@ function createEmptyCollectedShip(): CollectedShip {
     doors: [],
     seats: [],
     beds: [],
+    ladders: [],
     cockpitControls: [],
     cockpitStats: [],
     entertainmentSystems: [],
@@ -1072,6 +1127,7 @@ function populateCollectedShipFromPrefab(
   collectEntertainmentSystems(doc.root, transforms, out);
   collectShipDoors(doc.root, transforms, out);
   collectBeds(doc.root, transforms, out);
+  collectLadders(doc.root, transforms, out);
 }
 
 function resolveTestSpawn(
@@ -1172,6 +1228,7 @@ async function finalizeShipLayout(
     doors: out.doors,
     seats: out.seats,
     beds: out.beds,
+    ladders: out.ladders,
     cockpitControls: out.cockpitControls,
     cockpitStats: out.cockpitStats,
     entertainmentSystems: out.entertainmentSystems,

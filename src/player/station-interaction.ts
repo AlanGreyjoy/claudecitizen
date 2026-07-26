@@ -19,6 +19,8 @@ import {
   type StationElevatorMarker,
   type StationFrame,
 } from '../world/station';
+import { nearestLadderMount, type LadderSpec } from '../world/ladders';
+import { CHARACTER_GROUND_OFFSET_METERS } from './character-controller';
 import type { GameBootstrap } from '../net/api';
 import { applyOwnedShipToInstance, ensurePlayerShipInstance } from '../world/ships';
 import { getShipRestHeightMeters } from './ship-layout';
@@ -46,6 +48,7 @@ export type StationInteraction =
   | { kind: 'hangar-bank' }
   | { kind: 'hangar-lift-up'; hangar: HangarSpec }
   | { kind: 'prefab-elevator'; marker: StationElevatorMarker }
+  | { kind: 'ladder'; ladder: LadderSpec; along: number }
   | {
       kind: 'prefab-info';
       prompt: string;
@@ -90,6 +93,15 @@ function resolvePrefabInteraction(
       ) <= marker.radius;
     if (near) return { kind: 'prefab-elevator', marker };
   }
+
+  // Ladders measure to the whole climb line, so the same marker offers a mount
+  // at the foot and at the upper deck.
+  const mount = nearestLadderMount(override.ladders, {
+    right: character.stationLocal.right,
+    up: localUp - CHARACTER_GROUND_OFFSET_METERS,
+    forward: character.stationLocal.forward,
+  });
+  if (mount) return { kind: 'ladder', ladder: mount.ladder, along: mount.along };
 
   for (const avms of override.avmsMarkers) {
     const near =

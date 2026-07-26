@@ -4,14 +4,17 @@ import {
   DECK_FLOOR_OFFSET_METERS,
   isOnShipRampDeck,
   nearestBed,
+  nearestDeckLadder,
   nearestDoor,
   nearestSeat,
   nearRampPanel,
   resolveDoorInteractAim,
   seatInteractPrompt,
+  updateCharacterClimbingOnDeck,
   updateCharacterOnDeck,
   type DeckCharacterState,
 } from '../../player/ship-deck';
+import { findLadderById } from '../../world/ladders';
 import { getShipLayout } from '../../player/ship-layout';
 import {
   getShipPlayerLocal,
@@ -176,6 +179,60 @@ function handleInteriorRampInteract(
   }
 }
 
+function handleLadderInteract(
+  session: ShipSandboxSession,
+  actions: SandboxWalkActions,
+): boolean {
+  if (!session.shipPhysics) return false;
+  const mount = nearestDeckLadder(getShipPlayerLocal(session.shipPhysics));
+  if (!mount) return false;
+  session.prompt = `Press F — climb ${mount.ladder.label || 'ladder'}`;
+  if (actions.interactPressed) {
+    session.ladderClimb = {
+      surface: 'ship',
+      ladderId: mount.ladder.id,
+      along: mount.along,
+    };
+  }
+  return true;
+}
+
+/**
+ * Ladder climbing replaces deck locomotion while attached. Returns false when
+ * not on a ladder so the caller falls through to walking.
+ */
+function updateLadderClimb(
+  session: ShipSandboxSession,
+  dt: number,
+  actions: SandboxWalkActions,
+): boolean {
+  const climb = session.ladderClimb;
+  if (!climb) return false;
+  const ladder = findLadderById(getShipLayout().ladders, climb.ladderId);
+  if (!ladder || actions.jumpPressed) {
+    session.ladderClimb = null;
+    return false;
+  }
+  const result = updateCharacterClimbingOnDeck(
+    session.character as DeckCharacterState,
+    session.ship,
+    ladder,
+    session.controls.sampleCharacterInput(),
+    dt,
+    session.shipPhysics,
+  );
+  session.character = result.state;
+  session.mode = 'deck';
+  if (result.exit === 'none') {
+    climb.along = result.along;
+    session.prompt = 'Forward / back to climb · Space to let go';
+    return true;
+  }
+  session.ladderClimb = null;
+  session.prompt = '';
+  return true;
+}
+
 function handleDeckInteractions(
   session: ShipSandboxSession,
   state: DeckCharacterState,
@@ -198,6 +255,8 @@ function handleDeckInteractions(
   if (handleBedInteract(session, deckLocal, doorAim, actions)) return;
   if (handleDoorInteract(session, deckLocal, doorAim, actions)) return;
   handleInteriorRampInteract(session, deckLocal, actions);
+  if (session.prompt) return;
+  handleLadderInteract(session, actions);
 }
 
 export function updateShipSandboxWalk(
@@ -214,6 +273,7 @@ export function updateShipSandboxWalk(
     rig,
     getShipLayout().doors.map((door) => door.id),
   );
+  if (updateLadderClimb(session, dt, actions)) return;
   const result = updateCharacterOnDeck(
     session.character as DeckCharacterState,
     session.ship,

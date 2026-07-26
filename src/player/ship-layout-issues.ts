@@ -63,6 +63,31 @@ function collectArticulationIssues(
   }
 }
 
+/**
+ * With nothing authored, deck spawn falls back to probing ship-local (0, 0) for
+ * the highest collider surface under ~2.25 m up. That only lands on the deck
+ * when the hull's origin sits at deck level; on a hull whose origin is up in the
+ * fuselage the highest hit is the roof, and the capsule spawns inside the
+ * ceiling plating with no way to fall out.
+ */
+function collectDeckSpawnIssues(
+  layout: ShipLayout,
+  issues: ShipLayoutIssue[],
+): void {
+  if (layout.colliders.length === 0) return;
+  const hasHint =
+    layout.testSpawn !== undefined ||
+    layout.deckSpawn !== undefined ||
+    layout.seats.some((seat) => seat.role === "pilot") ||
+    layout.cameraBounds.some((bound) => !bound.openToOutside);
+  if (hasHint) return;
+  issues.push({
+    severity: "blocker",
+    message:
+      'No deck spawn hint — add an empty named "Test Spawn" standing on the deck. Without one the walker spawns at the highest hull surface, which is the roof on any hull whose origin is not at deck level.',
+  });
+}
+
 /** Inspects a built layout. An empty list means the ship is ready to test. */
 export function collectShipLayoutIssues(
   layout: ShipLayout | null,
@@ -92,6 +117,7 @@ export function collectShipLayoutIssues(
         "No deck colliders — the interior is not walkable, so the deck loop cannot be tested.",
     });
   }
+  collectDeckSpawnIssues(layout, issues);
   collectSeatIssues(layout, issues);
   collectArticulationIssues(layout, issues);
   return issues;

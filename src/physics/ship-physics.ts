@@ -12,6 +12,9 @@ import {
   createPlayerCharacter,
   createRapierWorld,
   removeStaticColliders,
+  PLAYER_CAPSULE_HALF_HEIGHT,
+  PLAYER_CAPSULE_HEIGHT,
+  PLAYER_CAPSULE_RADIUS,
   type RapierWorldHandle,
   type PhysicsRayHit,
 } from "./rapier-world";
@@ -208,6 +211,42 @@ export function stepShipPhysics(physics: ShipPhysics): void {
   depenetrateShipPlayer(physics);
 }
 
+/** Capsule height sampled for the horizontal wall probes. */
+const DEPENETRATE_TORSO_UP_METERS = 0.95;
+/** Overlap below this is inside the controller's own skin — leave it alone. */
+const DEPENETRATE_SKIN_METERS = 0.02;
+
+/**
+ * Ceilings are the one surface the controller cannot recover from on its own:
+ * gravity drives the capsule *into* an overhead face rather than out of it, so
+ * a head that breaches a single-sided hull shell stays welded there. Probe from
+ * the capsule centre to its crown and return how far the crown is buried.
+ */
+function ceilingPenetrationDepth(physics: ShipPhysics, pos: Vec3): number {
+  // Grounded means the floor already resolved the pose; only a jump or a fall
+  // can leave the crown inside geometry.
+  if (isShipPlayerGrounded(physics)) return 0;
+  const origin = {
+    x: pos.x,
+    y: pos.y + PLAYER_CAPSULE_HALF_HEIGHT,
+    z: pos.z,
+  };
+  const span = PLAYER_CAPSULE_HEIGHT - PLAYER_CAPSULE_HALF_HEIGHT;
+  const hit = physics.world.castRay(
+    new RAPIER.Ray(origin, { x: 0, y: 1, z: 0 }),
+    span,
+    true,
+    undefined,
+    undefined,
+    physics.player.playerCollider,
+  );
+  if (!hit) return 0;
+  const depth = span - hit.timeOfImpact;
+  return depth > DEPENETRATE_SKIN_METERS
+    ? Math.min(depth + DEPENETRATE_SKIN_METERS, PLAYER_CAPSULE_RADIUS)
+    : 0;
+}
+
 /**
  * Push the kinematic capsule out of any static overlap. Rapier's character
  * controller prevents *new* penetration on the move, but once a thin hull
@@ -218,9 +257,13 @@ export function depenetrateShipPlayer(physics: ShipPhysics): void {
   const playerCollider = physics.player.playerCollider;
   const pos = body.translation();
   // Sample torso height — walls are vertical; floor recovery is gravity's job.
-  const origin = { x: pos.x, y: pos.y + 0.95, z: pos.z };
-  const radius = 0.42;
-  const skin = 0.02;
+  const origin = {
+    x: pos.x,
+    y: pos.y + DEPENETRATE_TORSO_UP_METERS,
+    z: pos.z,
+  };
+  const radius = PLAYER_CAPSULE_RADIUS;
+  const skin = DEPENETRATE_SKIN_METERS;
   const dirs: Array<{ x: number; z: number }> = [
     { x: 1, z: 0 },
     { x: -1, z: 0 },
@@ -249,7 +292,14 @@ export function depenetrateShipPlayer(physics: ShipPhysics): void {
     pushX -= dir.x * (depth + skin);
     pushZ -= dir.z * (depth + skin);
   }
-  if (Math.abs(pushX) < 1e-5 && Math.abs(pushZ) < 1e-5) return;
+  const pushY = -ceilingPenetrationDepth(physics, pos);
+  if (
+    Math.abs(pushX) < 1e-5 &&
+    Math.abs(pushZ) < 1e-5 &&
+    Math.abs(pushY) < 1e-5
+  ) {
+    return;
+  }
   // Cap so a bad frame can't yeet the player across the cabin.
   const len = Math.hypot(pushX, pushZ);
   const maxPush = radius;
@@ -257,19 +307,31 @@ export function depenetrateShipPlayer(physics: ShipPhysics): void {
   body.setTranslation(
     {
       x: pos.x + pushX * scale,
-      y: pos.y,
+      y: pos.y + pushY,
       z: pos.z + pushZ * scale,
     },
     true,
   );
 }
 
+export interface ShipMoveResult {
+  /**
+   * Upward motion was asked for and the hull ate it — the crown is against a
+   * ceiling. Callers integrating their own vertical velocity must zero it,
+   * otherwise the capsule grinds upward for the rest of the jump arc.
+   */
+  ceilingHit: boolean;
+}
+
+/** Applied rise below this share of the requested rise counts as blocked. */
+const CEILING_BLOCKED_FRACTION = 0.5;
+
 export function moveShipPlayer(
   physics: ShipPhysics,
   ship: FlightBody,
   velocity: Vec3,
   dt: number,
-): void {
+): ShipMoveResult {
   const right = shipRight(ship);
   const localVelocity = new RAPIER.Vector3(
     dot(velocity, right),
@@ -292,6 +354,10 @@ export function moveShipPlayer(
     y: pos.y + movement.y,
     z: pos.z + movement.z,
   });
+  return {
+    ceilingHit:
+      desired.y > 1e-4 && movement.y < desired.y * CEILING_BLOCKED_FRACTION,
+  };
 }
 
 export function isShipPlayerGrounded(physics: ShipPhysics): boolean {

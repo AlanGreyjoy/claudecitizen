@@ -6,9 +6,11 @@ import {
   isWithinShipPadHorizontal,
 } from "../../player/ship-interaction";
 import {
+  updateCharacterClimbingOnDeck,
   updateCharacterOnDeck,
   type DeckCharacterState,
 } from "../../player/ship-deck";
+import { findLadderById } from "../../world/ladders";
 import { syncShipArticulationColliders } from "../../physics/ship-physics";
 import { radialUp } from "../../world/coordinates";
 import type { WalkModeInput } from "../types";
@@ -69,6 +71,48 @@ function handleExteriorDeck(
   ctx.world.prompt = shipSystems.handleRampOutside(interactPressed) ?? "";
 }
 
+/**
+ * Ladder climbing replaces deck locomotion while attached. Returns false when
+ * the player is not on a ship ladder so the caller falls through to walking.
+ */
+function climbDeckLadder(
+  ctx: LoopContext,
+  prompts: Prompts,
+  input: WalkModeInput,
+): boolean {
+  const climb = ctx.world.ladderClimb;
+  if (!climb || climb.surface !== "ship") return false;
+  const ladder = findLadderById(getShipLayout().ladders, climb.ladderId);
+  if (!ladder) {
+    ctx.world.ladderClimb = null;
+    return false;
+  }
+  // Jump lets go anywhere on the rail — the fall is the dismount.
+  if (input.actions.jumpPressed) {
+    ctx.world.ladderClimb = null;
+    return false;
+  }
+
+  const result = updateCharacterClimbingOnDeck(
+    ctx.world.character as DeckCharacterState,
+    getActiveShip(ctx.world).body,
+    ladder,
+    input.characterInput,
+    input.dt,
+    usesColliderDeck() ? ctx.shipPhysics : null,
+  );
+  ctx.world.character = result.state;
+  ctx.world.shipExteriorWalk = false;
+  if (result.exit === "none") {
+    climb.along = result.along;
+    ctx.world.prompt = `Forward / back to climb · ${prompts.keyLabel("jump")} to let go`;
+    return true;
+  }
+  ctx.world.ladderClimb = null;
+  ctx.world.prompt = "";
+  return true;
+}
+
 /** Full deck-mode step: locomotion, exterior/interior routing, interactions. */
 export function updateDeckMode(
   ctx: LoopContext,
@@ -88,6 +132,7 @@ export function updateDeckMode(
     doors: doorBlends(instance.rig),
   };
   syncArticulation(ctx, colliderRig);
+  if (climbDeckLadder(ctx, deps.prompts, input)) return;
 
   const prior = ctx.world.character as DeckCharacterState;
   const { likelyExterior, exteriorPlanetGrounded } = classifyPriorDeckPose(

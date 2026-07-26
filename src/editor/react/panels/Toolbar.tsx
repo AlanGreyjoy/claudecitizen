@@ -15,6 +15,7 @@ import { PREFAB_KINDS, type PrefabKind } from '../../../world/prefabs/schema';
 import { UiIcons } from '../../../ui/icons';
 import { UiIcon } from '../UiIcon';
 import { useEditorStore } from '../hooks';
+import { RAMP_RATE_PER_SECOND } from '../../../player/ship-rig';
 import type { IconNode } from 'lucide';
 
 export type ToolbarGizmoMode = 'translate' | 'rotate' | 'scale';
@@ -24,6 +25,8 @@ export type BrowsePanelKind = 'prefab' | 'scene' | 'planet' | 'menu';
 export interface ShipPreviewToggles {
   gearDown: boolean;
   rampDown: boolean;
+  /** Continuous blend while the ramp preview plays; overrides `rampDown`. */
+  ramp01?: number;
   doorsOpen: Record<string, boolean>;
 }
 
@@ -65,6 +68,8 @@ export interface ToolbarHandle {
   setPlanetOptions: (entries: PlanetListEntry[]) => void;
   /** Toggle a ship-door / animation open preview by id. */
   toggleDoorPreview: (doorId: string) => void;
+  /** Animate the boarding ramp between raised and lowered in the viewport. */
+  playRampPreview: () => void;
   openBrowsePanel: (panel: BrowsePanelKind) => void;
 }
 
@@ -640,13 +645,20 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
     doorsOpen: {},
   });
   const shipPreviewRef = useRef(shipPreview);
-  shipPreviewRef.current = shipPreview;
+  const rampAnimRef = useRef<{ handle: number; target: number }>({
+    handle: 0,
+    target: 0,
+  });
+  // A running ramp animation owns the ref; letting a render clobber it would
+  // snap the ramp back mid-play.
+  if (rampAnimRef.current.handle === 0) shipPreviewRef.current = shipPreview;
 
   const emitShipPreview = useCallback(
     (next: ShipPreviewToggles) => {
       actions.onShipPreviewChange({
         gearDown: next.gearDown,
         rampDown: next.rampDown,
+        ...(next.ramp01 === undefined ? {} : { ramp01: next.ramp01 }),
         doorsOpen: { ...next.doorsOpen },
       });
     },
@@ -661,6 +673,7 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
         ...shipPreviewRef.current,
         doorsOpen: { ...shipPreviewRef.current.doorsOpen, [doorId]: !current },
       };
+      shipPreviewRef.current = next;
       setShipPreview(next);
       emitShipPreview(next);
     },
@@ -670,10 +683,65 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
   const patchShip = useCallback(
     (patch: Partial<ShipPreviewToggles>) => {
       const next = { ...shipPreviewRef.current, ...patch };
+      // Keep the ref in step: a running ramp animation blocks the render-time
+      // refresh, and its next tick reads this ref.
+      shipPreviewRef.current = next;
       setShipPreview(next);
       emitShipPreview(next);
     },
     [emitShipPreview],
+  );
+
+  /**
+   * Play the boarding ramp between raised and lowered at the same rate the game
+   * uses, so the authored `lowerRadians` can be judged in motion. Frames only
+   * push to the viewport — React state updates once, on arrival — so a ~4.7s
+   * animation does not re-render the toolbar 280 times.
+   */
+  const playRampPreview = useCallback(() => {
+    const anim = rampAnimRef.current;
+    if (anim.handle !== 0) window.cancelAnimationFrame(anim.handle);
+    const current = shipPreviewRef.current;
+    const from = current.ramp01 ?? (current.rampDown ? 1 : 0);
+    // Mid-play clicks reverse; otherwise head for the opposite of the resting
+    // state, so a fully lowered ramp raises again.
+    const target = anim.handle !== 0 ? (anim.target > 0.5 ? 0 : 1) : current.rampDown ? 0 : 1;
+    let value = from;
+    let lastMs = 0;
+    anim.target = target;
+
+    const tick = (nowMs: number): void => {
+      const dt = lastMs === 0 ? 0 : Math.min(0.1, (nowMs - lastMs) / 1000);
+      lastMs = nowMs;
+      const step = RAMP_RATE_PER_SECOND * dt;
+      value =
+        target > value ? Math.min(target, value + step) : Math.max(target, value - step);
+      if (Math.abs(value - target) < 1e-4) {
+        rampAnimRef.current.handle = 0;
+        const settled: ShipPreviewToggles = {
+          ...shipPreviewRef.current,
+          rampDown: target > 0.5,
+          ramp01: undefined,
+        };
+        shipPreviewRef.current = settled;
+        setShipPreview(settled);
+        emitShipPreview(settled);
+        return;
+      }
+      shipPreviewRef.current = { ...shipPreviewRef.current, ramp01: value };
+      emitShipPreview(shipPreviewRef.current);
+      rampAnimRef.current.handle = window.requestAnimationFrame(tick);
+    };
+    anim.handle = window.requestAnimationFrame(tick);
+  }, [emitShipPreview]);
+
+  useEffect(
+    () => () => {
+      if (rampAnimRef.current.handle !== 0) {
+        window.cancelAnimationFrame(rampAnimRef.current.handle);
+      }
+    },
+    [],
   );
 
   const animations = useMemo(() => collectAnimations(docState.roots), [docState.roots]);
@@ -688,9 +756,10 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
       setSceneOptions,
       setPlanetOptions,
       toggleDoorPreview,
+      playRampPreview,
       openBrowsePanel: setBrowsePanel,
     }),
-    [toggleDoorPreview],
+    [toggleDoorPreview, playRampPreview],
   );
 
   const setMode = (mode: ToolbarGizmoMode): void => {
@@ -783,8 +852,8 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
                   <button
                     type="button"
                     className={`ed-tool-chip${shipPreview.rampDown ? ' is-active' : ''}`}
-                    title="Preview boarding ramp"
-                    onClick={() => patchShip({ rampDown: !shipPreview.rampDown })}
+                    title="Play the boarding ramp raise / lower"
+                    onClick={playRampPreview}
                   >
                     Ramp
                   </button>

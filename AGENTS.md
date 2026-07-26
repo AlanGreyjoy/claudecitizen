@@ -96,8 +96,8 @@ navigation must not reload the page.
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
 - **Schema** (`src/world/prefabs/schema.ts`) defines every component type and its validator. Read this first when a component's fields are unclear.
-- **Ship runtime** (`src/world/prefabs/ship-runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
-- **Station runtime** (`src/world/prefabs/station-runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
+- **Ship runtime** (`src/world/prefabs/ship-runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, ladders, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component; ladders use the `ladder` component.
+- **Station runtime** (`src/world/prefabs/station-runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, ladders, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
 - **Game loop** (`src/game/create-game-loop.ts`) is a thin orchestrator that composes colocated feature modules under `src/game/`. Station animation blend values (`stationAnimationStates`) live in `src/game/station/animations.ts`; the F-key interaction dispatch lives in `src/game/modes/in-station.ts`.
 
 ### Rifle ADS locomotion blending
@@ -142,6 +142,35 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 2. Deck **F** → `entering-bed` → `in-bed` (always-on mouse head look; **no flight**).
 3. **Hold Y** → `leaving-bed` → deck at the bed's stand offset.
 4. Baked into `ShipLayout.beds` via `ship-runtime.ts` `collectBeds` (works with ship-controller hulls).
+
+#### Ladders (ladder component)
+
+Ladders work identically in stations and on ship decks — the same `ladder`
+component, the same climb math (`src/world/ladders.ts`, pure), the same
+per-surface step (`src/player/ladder-climb.ts`).
+
+1. Marker empty + `ladder` component at the **foot** of the climb line: the spot
+   the player stands on to mount. Local **+Y** is the climb axis; local **+Z**
+   is the side they face away from while climbing and step off toward at the
+   top. `height` is the climb above the marker.
+2. Mount reach measures to the whole climb line in 3D, so one marker serves both
+   the foot and the upper deck — no paired marker.
+3. **F** attaches. Forward / back climbs. Reaching the top releases the player a
+   step past the rail (`LADDER_TOP_STEP_OFF_METERS`); reaching the bottom, or
+   **jump** anywhere on the rail, drops back to walking.
+4. Climbing is a **sub-state of the walking modes**, not a `GameMode`:
+   `world.ladderClimb` is set while attached and `in-station.ts` /
+   `deck-locomotion.ts` route locomotion through the climb. The player is still
+   in-station / on-deck, so camera, HUD, footsteps, and combat gating are
+   unchanged. Motion still goes through the Rapier character controller, so a
+   blocked climb stalls instead of clipping through geometry.
+5. There is no authored climb clip yet — `LADDER_CLIMB_ANIMATION` holds an idle
+   pose. Add a `climb_loop` state and point that constant at it.
+
+The **Ship Sandbox** (`src/app/ship_sandbox/walk.ts`) is a *separate* walk loop
+with its own seat/bed/door/ramp/ladder handlers — it does not go through
+`src/game/modes/deck-locomotion.ts`. Any new deck interaction has to be wired in
+both places or it will silently not exist in Ship Test.
 
 ### Ship flight (SC-style IFCS)
 
@@ -341,6 +370,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `src/world/prefabs/schema.ts` | Component type definitions + validators |
 | `src/world/prefabs/ship-runtime.ts` | Ship prefab → ShipLayout + collider animation binding |
 | `src/world/prefabs/station-runtime.ts` | Station prefab → StationLayoutOverride + collider animation binding |
+| `src/world/ladders.ts` | Pure ladder specs + climb integrator (station and ship) |
+| `src/player/ladder-climb.ts` | Surface-agnostic climb step shared by station-walk and ship-deck |
 | `src/world/npc.ts` | Station NPC authoring specs + route validation |
 | `src/npc/catalog.ts` | Reusable friendly NPC definitions and population pools |
 | `src/npc/station-population.ts` | Deterministic cosmetic station population + waypoint movement |

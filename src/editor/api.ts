@@ -157,6 +157,32 @@ export async function savePrefab(doc: PrefabDocument, folder?: string): Promise<
   return payload.path;
 }
 
+export interface PrefabRenameResult {
+  /** The prefab's new id — also the new file's basename. */
+  id: string;
+  /** Project-relative path the prefab now lives at. */
+  path: string;
+  /** Project JSON files whose `prefabId` references were repointed. */
+  rewritten: string[];
+}
+
+/**
+ * Renames a saved prefab: document id, file name, and every `prefabId`
+ * reference in project JSON move together. References held outside project
+ * files — Postgres `Ship.prefabId`, saved player state — are not rewritten.
+ */
+export async function renamePrefab(
+  fromId: string,
+  toId: string,
+  name: string,
+): Promise<PrefabRenameResult> {
+  return requestJson<PrefabRenameResult>('/__editor/prefab/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromId, toId, name }),
+  });
+}
+
 export interface ProjectSettingsDocument {
   schemaVersion: 1;
   name: string;

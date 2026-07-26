@@ -15,6 +15,12 @@ import {
   type StationRoom,
   type StationSpawnPose,
 } from '../station';
+import {
+  LADDER_DEFAULT_CLIMB_SPEED,
+  LADDER_DEFAULT_LABEL,
+  LADDER_DEFAULT_RADIUS,
+  type LadderSpec,
+} from '../ladders';
 import type { PrefabComponent, PrefabDocument, PrefabEntity } from './schema';
 import type { Vec3 } from '../../types';
 import { buildPrefabColliders } from '../../physics/prefab-colliders';
@@ -75,6 +81,7 @@ interface FlattenedComponents {
     forward: number;
     face: StationDir2;
   }[];
+  ladders: LadderSpec[];
   hangarSeeds: {
     hangarId: string;
     padIndex: number;
@@ -257,6 +264,23 @@ function collectElevator(
     up: ctx.up,
     forward: ctx.forward,
     face: sceneToStationDir2(ctx.rotation),
+  });
+}
+
+function collectLadder(
+  component: Extract<PrefabComponent, { type: "ladder" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.ladders.push({
+    id: component.id,
+    label: component.label ?? LADDER_DEFAULT_LABEL,
+    base: { right: ctx.right, up: ctx.up, forward: ctx.forward },
+    height: component.height,
+    // Marker +Z is the step-off side; sceneToStationDir2 already flips x.
+    outward: sceneToStationDir2(ctx.rotation),
+    radius: component.radius ?? LADDER_DEFAULT_RADIUS,
+    climbSpeed: component.climbSpeed ?? LADDER_DEFAULT_CLIMB_SPEED,
   });
 }
 
@@ -477,6 +501,9 @@ function collectStationComponent(
     case 'elevator':
       collectElevator(component, ctx, out);
       break;
+    case 'ladder':
+      collectLadder(component, ctx, out);
+      break;
     case 'hangar-pad':
       collectHangarPad(component, ctx, out);
       break;
@@ -628,6 +655,7 @@ function createEmptyFlattened(): FlattenedComponents {
     rooms: [],
     spawnCandidates: [],
     elevatorSeeds: [],
+    ladders: [],
     hangarSeeds: [],
     infoSeeds: [],
     avmsSeeds: [],
@@ -818,6 +846,7 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     colliders,
     spawn: buildStationSpawn(out, doc.id),
     elevatorMarkers: buildElevatorMarkers(out),
+    ladders: out.ladders,
     infoMarkers: buildInfoMarkers(out),
     avmsMarkers: buildAvmsMarkers(out),
     weaponShops: buildWeaponShops(out),

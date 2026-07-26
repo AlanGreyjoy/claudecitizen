@@ -23,6 +23,7 @@ import {
   ElevatorFields,
   HangarPadFields,
   InteractionFields,
+  LadderFields,
   ObjectAnimationFields,
 } from './Builders2';
 import {
@@ -91,6 +92,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'npc-waypoint': field(NpcWaypointFields),
   'npc-placement': field(NpcPlacementFields),
   elevator: field(ElevatorFields),
+  ladder: field(LadderFields),
   'hangar-pad': field(HangarPadFields),
   interaction: field(InteractionFields),
   animation: field(AnimationFields),

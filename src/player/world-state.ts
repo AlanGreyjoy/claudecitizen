@@ -7,6 +7,7 @@ import type {
   Pose,
   ShipCameraView,
 } from '../types';
+import type { LadderClimbState } from '../world/ladders';
 import type { ShipInstance } from '../flight/ship-instance';
 import {
   clearShipWorld,
@@ -86,6 +87,12 @@ export interface WorldState {
   /** Hangar the ship was delivered to via the lobby terminal, if called. */
   assignedHangar: number | null;
   stationElevator: StationElevatorRide | null;
+  /**
+   * Set while the player is attached to a ladder. Climbing is a sub-state of
+   * the walking modes, not a mode of its own: the player is still in the
+   * station / on the ship deck, so camera, HUD, and combat gating stay put.
+   */
+  ladderClimb: LadderClimbState | null;
   /** 0..1 black overlay opacity used for elevator rides. */
   screenFade: number;
   /** Piloting sub-mode: traverse, combat, or nav (quantum). */
@@ -170,6 +177,7 @@ export function createWorldState(
     transition: null,
     assignedHangar: null,
     stationElevator: null,
+    ladderClimb: null,
     screenFade: 0,
     flightMode: 'traverse',
     quantum: createQuantumTravelState(),

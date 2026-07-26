@@ -24,8 +24,9 @@ export interface ShipRigState {
 }
 
 const GEAR_RATE_PER_SECOND = 1 / 2.333;
-/** Full raise/lower matches Phobos Ramp1.wav (~4.66s). */
-const RAMP_RATE_PER_SECOND = 1 / 4.661;
+/** Full raise/lower matches Phobos Ramp1.wav (~4.66s). Exported so the editor
+ * ramp preview plays at the same speed the game does. */
+export const RAMP_RATE_PER_SECOND = 1 / 4.661;
 const DOOR_RATE_PER_SECOND = 1.5;
 
 export interface ShipRigOptions {
