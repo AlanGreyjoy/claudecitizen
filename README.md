@@ -1,21 +1,23 @@
 # ClaudeCitizen
 
-![ClaudeCitizen banner](src/assets/images/banner-with-logo.png)
-
 ![ClaudeCitizen gameplay screenshot](docs/static/img/screenshot.png)
+
+![AsteronEngine editor screenshot](docs/static/img/editor-screenshot.png)
 
 [![Buy me a coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=alangreyjoy&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/alangreyjoy)
 
 > [!NOTE]
-> This is a passion project — if you'd like to show your support, every donation goes straight to feeding the **Claude Fable 5** beast that keeps this thing going.
+> Passion project. Vibe coded end to end. Staff Software Engineer / Solutions Architect, 17+ years — this is the sandbox, not a shipping product. Every donation feeds the **Claude Fable 5** beast that keeps this thing going.
 
-A space sandbox inspired by Star Citizen — procedural planets, ship flight, on-foot exploration, and seamless surface-to-orbit transitions. Content is authored in **AsteronEngine**, a Unity-style Electron editor built on TypeScript and Three.js, and shipped to the browser through **File → Build Web**. Online play uses one authoritative Rust backend with native Rapier, shared Rust/WASM prediction, Protobuf over WebTransport, PostgreSQL/SQLx, and Redis.
+**ClaudeCitizen** is an all-in-one space sim: Unity-style editor, game runtime, and authoritative multiplayer backend in one repo.
 
-The homeworld is **Asteron**: Earth-scale radius, deterministic terrain, lakes, vegetation, volumetric clouds, and a full atmospheric shell.
+Author planets, ships, stations, characters, menus, and scenes in **AsteronEngine** — an Electron editor on TypeScript + Three.js. Hit Play in the Game view. Ship a browser build with **File → Build Web**. Run online against one Rust backend (Rapier authority, shared WASM prediction, Protobuf over WebTransport, PostgreSQL/SQLx, Redis).
 
-This project is **100% vibe coded** — built iteratively with AI-assisted development rather than a formal spec. I'm a Staff Software Engineer and Solutions Architect with 17+ years of experience; this is a passion sandbox, not a production product.
+Star Citizen–style loop: procedural Earth-scale homeworld **Asteron**, ship flight, on-foot exploration, seamless surface-to-orbit. Scenes are GameObject trees; prefabs, components, and project settings drive everything — no separate web client or admin app.
 
-**Work in progress.** Phase 1 is third-person weapons and over-the-shoulder character-controller updates.
+The goal is simple: put a full space-sim toolkit in anyone's hands — so you can build your own universe without starting from a blank engine.
+
+**Work in progress.** Phase 1 focus: third-person weapons and over-the-shoulder character control.
 
 ## Quick start
 
@@ -24,65 +26,51 @@ npm install
 npm run editor:dev
 ```
 
-There are exactly two surfaces: the **AsteronEngine editor** and the **Rust
-backend**. Everything else — the shipped game included — is produced by the
-editor.
+Two surfaces only: **AsteronEngine** and the **Rust backend**. The shipped game is a build artifact of the editor.
 
-Cold start opens the **Projects** hub. Create or open a project, and the editor
-workspace loads that project's scenes, prefabs, planets, and assets.
+Cold start opens the **Projects** hub. Create or open a project → editor loads that project's scenes, prefabs, planets, and assets.
 
-## AsteronEngine editor
+## AsteronEngine
 
 ```bash
-# Launch with Vite HMR / React Fast Refresh (day-to-day)
+# Day-to-day: Vite HMR + React Fast Refresh
 npm run editor:dev
 
-# Production-like: build dist-editor, then launch Electron
+# Production-like Electron launch
 npm run editor
 
-# Create an unpacked editor under release/editor/
+# Unpacked editor under release/editor/
 npm run build:editor:desktop
 
-# Create the current platform's editor distributable
+# Platform distributable
 npm run editor:desktop:package
 ```
 
-Skip the Projects hub with `--project-root=/path/to/project` or
-`CLAUDECITIZEN_EDITOR_PROJECT_ROOT`.
+Skip the hub with `--project-root=/path/to/project` or `CLAUDECITIZEN_EDITOR_PROJECT_ROOT`.
 
-**Scenes own their content.** A scene document (`src/world/scenes/data/*.scene.json`)
-is a GameObject tree; components on those objects decide what the scene is:
+**Scenes own content.** A scene (`*.scene.json`) is a GameObject tree; components decide what it is:
 
-| Component | Role |
-|-----------|------|
-| `game-manager` | System, planet, and spawn mode |
-| `planet` | Planet document reference |
-| `player-start` | Spawn pose and mode |
-| `prefab-instance` | Places a reusable prefab |
-| `ui-screen` | Mounts title / login / character-create / loading UI |
-| `scene-link` | Transition target for menu flow |
-| `instanced-scene` | Marks per-player content such as habs and hangars |
+| Component         | Role                                          |
+| ----------------- | --------------------------------------------- |
+| `game-manager`    | System, planet, spawn mode                    |
+| `planet`          | Planet document reference                     |
+| `player-start`    | Spawn pose and mode                           |
+| `prefab-instance` | Places a reusable prefab                      |
+| `ui-screen`       | Title / login / character-create / loading UI |
+| `scene-link`      | Menu-flow transition target                   |
+| `instanced-scene` | Per-player content (habs, hangars)            |
 
-**Play / Pause / Stop** run the open document in the Game view, unsaved edits
-included — F6 plays and stops, F7 pauses. Right-click a GameObject and choose
-**Create Prefab from Selection** to extract it into a prefab and leave a
-`prefab-instance` behind.
+**F6** play/stop, **F7** pause — open document in the Game view, unsaved edits included. Right-click a GameObject → **Create Prefab from Selection**.
 
-The **Server** tab is the operator console for the deployed backend: player
-records, catalog definitions (ships, props, items, weapons, backpacks,
-wearables), and game settings, all live against PostgreSQL.
+**Server** tab talks live to the backend: players, catalog (ships, props, items, weapons, backpacks, wearables), game settings.
 
-## Shipping the game
+## Shipping
 
-**File → Build Web** writes the release into the project's build output
-directory and stamps `asteron.runtime.json` beside it with the backend URL and
-boot scene from **File → Project Settings…**. The same bundle can target any
-deployment by re-stamping that file. Players sign in with their own accounts, so
-no key is shipped to the client.
+**File → Build Web** writes the release into the project's build output and stamps `asteron.runtime.json` with backend URL + boot scene from **Project Settings**. Re-stamp that file to retarget deploys. Players sign in with accounts — no client API key.
 
 ## Documentation
 
-Full docs — editor guide, controls, roadmap, planet tech, deployment, and engineering notes:
+Full docs — editor guide, controls, roadmap, planet tech, deployment, engineering:
 
 - **Online:** [https://claudecitizen-docs.netlify.app/](https://claudecitizen-docs.netlify.app/)
 - **Local:** `npm run docs:dev` → [http://localhost:3000](http://localhost:3000)
