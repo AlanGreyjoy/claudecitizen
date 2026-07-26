@@ -6,6 +6,37 @@ export type ViewportResourceTracker = <T extends { dispose: () => void }>(
   resource: T,
 ) => T;
 
+/** Matches the collider bake's node matching (`physics/colliders.ts`). */
+function sanitizeNodeName(name: string): string {
+  return name.replace(/\s/g, "_");
+}
+
+function excludedColliderNodeNames(
+  component: Extract<PrefabComponent, { type: "collider"; shape: "mesh" }>,
+): ReadonlySet<string> {
+  const excluded = new Set<string>();
+  for (const node of component.excludeNodes ?? []) {
+    if (node === component.node) continue;
+    excluded.add(sanitizeNodeName(node));
+  }
+  return excluded;
+}
+
+/** Checks the mesh itself and its ancestors — excluded nodes are often leaves. */
+function meshUnderExcludedNode(
+  mesh: THREE.Object3D,
+  root: THREE.Object3D,
+  excluded: ReadonlySet<string>,
+): boolean {
+  if (excluded.size === 0) return false;
+  let node: THREE.Object3D | null = mesh;
+  while (node && node !== root) {
+    if (node.name && excluded.has(sanitizeNodeName(node.name))) return true;
+    node = node.parent;
+  }
+  return false;
+}
+
 export interface ViewportComponentHelpers {
   makeHelperMesh: (
     geometry: THREE.BufferGeometry,
@@ -154,6 +185,10 @@ export function createViewportComponentHelpers(
     const targetWorldInverse = target.matrixWorld.clone().invert();
     const group = new THREE.Group();
     group.userData.editorMeshColliderHelper = true;
+    // Mirrors the gameplay bake's carve-out (prefab-colliders `excludeNodes`).
+    // The preview is the only way to see what got baked, so it has to drop the
+    // same subtrees or it reports collision that does not exist.
+    const excluded = excludedColliderNodeNames(component);
 
     target.traverse((child) => {
       if (
@@ -162,6 +197,7 @@ export function createViewportComponentHelpers(
       ) {
         return;
       }
+      if (meshUnderExcludedNode(child, target, excluded)) return;
       const toTargetLocal = targetWorldInverse.clone().multiply(child.matrixWorld);
       const geometry = child.geometry.clone().applyMatrix4(toTargetLocal);
       const helper = makeHelperMesh(

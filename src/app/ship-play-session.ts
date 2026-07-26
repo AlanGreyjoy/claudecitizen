@@ -1,4 +1,4 @@
-import { mountPlayChrome } from './play-chrome';
+import { mountPlayChrome, unmountPlayChrome } from './play-chrome';
 import { loadCurrentDefaultAnimationController } from '../player/animation';
 import { loadCurrentCharacterSettings } from '../player/character-settings';
 import {
@@ -14,9 +14,19 @@ import type { ShipColliderRigState } from '../physics/colliders';
 import { createShipRigState, doorBlends } from '../player/ship-rig';
 import { createUiIcon, UiIcons } from '../ui/icons';
 import { playShipGearToggleSfx } from '../player/ship-articulation-sfx';
-import { loadShipSandboxPrefab } from './ship_sandbox/setup';
-import { createShipSandboxScene, resizeShipSandboxScene } from './ship_sandbox/scene';
-import { startShipSandboxLoop } from './ship_sandbox/frame';
+import { clearActiveShipPrefab } from '../world/ships';
+import type { PrefabDocument } from '../world/prefabs/schema';
+import {
+  applyShipSandboxDocument,
+  loadShipSandboxPrefab,
+  type ShipSandboxPrefabLoad,
+} from './ship_sandbox/setup';
+import {
+  createShipSandboxScene,
+  disposeShipSandboxScene,
+  resizeShipSandboxScene,
+} from './ship_sandbox/scene';
+import { startShipSandboxLoop, stopShipSandboxLoop } from './ship_sandbox/frame';
 import { PAD_RADIUS_METERS } from './ship_sandbox/types';
 import {
   buildShipSandboxSession,
@@ -24,7 +34,28 @@ import {
   createSandboxShipVisuals,
 } from './ship-play-session-helpers';
 
-function mountBanner(prefabId: string, hintText: string, isWarning: boolean): void {
+export interface ShipSandboxSessionHandle {
+  /** True when the prefab is walkable; false means hull-only preview. */
+  walkable: boolean;
+  /** One-line status for the caller's banner / bar. */
+  hint: string;
+  setPaused: (paused: boolean) => void;
+  isPaused: () => boolean;
+  stop: () => void;
+}
+
+export interface ShipSandboxSessionOptions {
+  prefabId: string;
+  /**
+   * In-memory ship document. The editor passes its unsaved document so Test
+   * flies what is on screen; omit to fetch the saved prefab by id.
+   */
+  document?: PrefabDocument | null;
+  /** Runs when the player picks Exit in the in-game menu. */
+  onExit?: () => void;
+}
+
+function mountBanner(prefabId: string, hintText: string, isWarning: boolean): () => void {
   const button = document.createElement('button');
   button.type = 'button';
   button.title =
@@ -72,6 +103,11 @@ function mountBanner(prefabId: string, hintText: string, isWarning: boolean): vo
     letterSpacing: '0.08em',
   } satisfies Partial<CSSStyleDeclaration>);
   document.body.appendChild(hint);
+
+  return () => {
+    button.remove();
+    hint.remove();
+  };
 }
 
 function hideFullGameHudChrome(): void {
@@ -126,32 +162,62 @@ async function createShipSandboxPhysics(
   }
 }
 
-let started = false;
+async function resolveSandboxPrefab(
+  options: ShipSandboxSessionOptions,
+): Promise<ShipSandboxPrefabLoad> {
+  if (options.document !== undefined) {
+    return applyShipSandboxDocument(options.document, options.prefabId);
+  }
+  return loadShipSandboxPrefab(options.prefabId);
+}
 
-export async function startShipPlaySession(prefabId: string): Promise<void> {
-  if (started) return;
-  started = true;
-
+/**
+ * Runs a ship on an isolated pad: walk the deck, work the ramp and doors, sit
+ * the pilot seat, take off, fly. Everything it creates is owned by the
+ * returned handle, so the editor can start and stop it repeatedly without
+ * leaking a WebGL context, a Rapier world, or the global ship layout override.
+ */
+export async function startShipSandboxSession(
+  options: ShipSandboxSessionOptions,
+): Promise<ShipSandboxSessionHandle> {
   await Promise.all([
     loadCurrentCharacterSettings(),
     loadCurrentDefaultAnimationController(),
   ]);
 
-  const { doc, prefabApplied, walkable, hint } = await loadShipSandboxPrefab(prefabId);
-  const editorReturnUrl = `/editor.html?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
+  const disposers: (() => void)[] = [];
+  const addDispose = (dispose: () => void): void => {
+    disposers.push(dispose);
+  };
+  const listeners = new AbortController();
 
-  document.getElementById('title-screen')?.classList.add('is-hidden');
-  mountPlayChrome(document.body).classList.remove('is-hidden');
-  mountBanner(prefabId, hint, !walkable);
+  const { doc, prefabApplied, walkable, hint } = await resolveSandboxPrefab(options);
+
+  // Editor Play hosts chrome in `#editor-play-host`; a body mount would leave
+  // that host as an opaque overlay swallowing clicks.
+  const chromeParent = document.getElementById('editor-play-host') ?? document.body;
+  mountPlayChrome(chromeParent).classList.remove('is-hidden');
   hideFullGameHudChrome();
 
-  const overlays = createSandboxHudOverlays(editorReturnUrl);
+  let stopped = false;
+  // The in-game Exit button is wired before `stop` exists, so it goes through
+  // this indirection rather than a half-built handle.
+  let stopSession: (() => void) | null = null;
+
+  const overlays = createSandboxHudOverlays({
+    onExit: () => {
+      if (options.onExit) options.onExit();
+      else stopSession?.();
+    },
+    addDispose,
+  });
   const sandboxScene = createShipSandboxScene(overlays.canvas);
   const visuals = createSandboxShipVisuals(
     sandboxScene,
     doc,
     prefabApplied,
     overlays.esScreen,
+    addDispose,
   );
 
   const rig = createShipRigState({ gearDown: true, rampDown: true });
@@ -166,10 +232,9 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     spawnRig,
     padRestHeight,
   );
-  window.addEventListener('pagehide', () => shipPhysics?.dispose(), { once: true });
 
   const session = buildShipSandboxSession({
-    prefabId,
+    prefabId: options.prefabId,
     walkable,
     doc,
     prefabApplied,
@@ -185,13 +250,72 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
     spawnRig,
   });
   session.controls.setMode('on-foot');
-  window.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyG') {
+
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.code !== 'KeyG') return;
       session.rig.gearDown = !session.rig.gearDown;
       playShipGearToggleSfx(getShipLayout().spec, session.rig.gearDown);
-    }
+    },
+    { signal: listeners.signal },
+  );
+  window.addEventListener('resize', () => resizeShipSandboxScene(sandboxScene), {
+    signal: listeners.signal,
   });
-  window.addEventListener('resize', () => resizeShipSandboxScene(sandboxScene));
   resizeShipSandboxScene(sandboxScene);
+
+  function stop(): void {
+    if (stopped) return;
+    stopped = true;
+    listeners.abort();
+    stopShipSandboxLoop(session);
+    session.controls.dispose();
+    shipPhysics?.dispose();
+    // Reverse order: visuals were built on top of the overlays they use.
+    for (let index = disposers.length - 1; index >= 0; index -= 1) disposers[index]();
+    disposeShipSandboxScene(sandboxScene);
+    unmountPlayChrome();
+    // The layout override is a module global; leaving it set would make the
+    // next ship — or a scene Play — fly this hull.
+    clearActiveShipPrefab();
+  }
+  stopSession = stop;
+  window.addEventListener('pagehide', stop, { once: true, signal: listeners.signal });
+
   startShipSandboxLoop(session);
+  return {
+    walkable,
+    hint,
+    setPaused: (paused) => {
+      session.externallyPaused = paused;
+      if (paused) {
+        session.boostSfx.stop();
+        session.thrustSfx.stop();
+      }
+    },
+    isPaused: () => session.externallyPaused,
+    stop,
+  };
+}
+
+let urlSessionStarted = false;
+
+/**
+ * `?shipPrefab=<id>` boot: the standalone page form of the sandbox. The editor
+ * uses `startShipSandboxSession` directly.
+ */
+export async function startShipPlaySession(prefabId: string): Promise<void> {
+  if (urlSessionStarted) return;
+  urlSessionStarted = true;
+
+  const editorReturnUrl = `/editor.html?boot=editor&prefab=${encodeURIComponent(prefabId)}`;
+  document.getElementById('title-screen')?.classList.add('is-hidden');
+  const session = await startShipSandboxSession({
+    prefabId,
+    onExit: () => {
+      window.location.href = editorReturnUrl;
+    },
+  });
+  mountBanner(prefabId, session.hint, !session.walkable);
 }

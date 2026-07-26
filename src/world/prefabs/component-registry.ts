@@ -8,9 +8,48 @@ import { createDefaultParticleSystemComponent } from "./schema";
 /**
  * Editor-facing metadata for every prefab component type: which prefab kinds
  * may use it, its default value when added, and the inspector hint. The
- * inspector's add-component autocomplete is driven entirely by this registry,
+ * inspector's add-component dialog is driven entirely by this registry,
  * so new component types only need an entry here (plus field editors).
  */
+export type ComponentCategory =
+  | 'structure'
+  | 'gameplay'
+  | 'npc'
+  | 'vendor'
+  | 'ship'
+  | 'animation'
+  | 'lighting'
+  | 'effects'
+  | 'item'
+  | 'scene';
+
+export const COMPONENT_CATEGORIES: ReadonlyArray<{
+  id: ComponentCategory;
+  label: string;
+}> = [
+  { id: 'structure', label: 'Structure' },
+  { id: 'gameplay', label: 'Gameplay' },
+  { id: 'npc', label: 'NPCs' },
+  { id: 'vendor', label: 'Vendors' },
+  { id: 'ship', label: 'Ship' },
+  { id: 'animation', label: 'Animation' },
+  { id: 'lighting', label: 'Lighting' },
+  { id: 'effects', label: 'Effects' },
+  { id: 'item', label: 'Item' },
+  { id: 'scene', label: 'Scene' },
+];
+
+/** Ordered shortcuts for the Add Component → Favorites tab. */
+export const COMPONENT_FAVORITES: ReadonlyArray<{
+  type: PrefabComponentType;
+  /** Short label shown on the Favorites tab; falls back to the registry label. */
+  label: string;
+}> = [
+  { type: 'collider', label: 'Collider' },
+  { type: 'point-light', label: 'Light' },
+  { type: 'particle-system', label: 'Particles' },
+];
+
 export interface ComponentDef {
   type: PrefabComponentType;
   /** Unique registry key when multiple palette entries share the same type. */
@@ -28,6 +67,8 @@ export interface ComponentDef {
    * positioned with the gizmo instead of attaching to the model itself.
    */
   marker?: boolean;
+  /** Add-component dialog tab. */
+  category: ComponentCategory;
   createDefault: () => PrefabComponent;
   hint?: string;
 }
@@ -40,6 +81,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "station-frame",
     label: "Station Frame",
+    category: "structure",
     kinds: ["station"],
     singleton: true,
     createDefault: () => ({ type: "station-frame" }),
@@ -48,6 +90,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "prop-frame",
     label: "Prop Frame",
+    category: "structure",
     kinds: PROP_KINDS,
     singleton: true,
     createDefault: () => ({ type: "prop-frame" }),
@@ -56,6 +99,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "item-frame",
     label: "Item Frame",
+    category: "structure",
     kinds: ITEM_KINDS,
     singleton: true,
     createDefault: () => ({ type: "item-frame" }),
@@ -64,6 +108,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "equipment-socket",
     label: "Equipment Socket",
+    category: "item",
     kinds: ITEM_KINDS,
     marker: true,
     createDefault: () => ({
@@ -76,6 +121,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "drawn-grip",
     label: "Drawn Grip",
+    category: "item",
     kinds: ITEM_KINDS,
     marker: true,
     singleton: true,
@@ -85,6 +131,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "muzzle-flash",
     label: "Muzzle Flash",
+    category: "item",
     kinds: ITEM_KINDS,
     marker: true,
     singleton: true,
@@ -94,6 +141,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "barrel-end",
     label: "Barrel End",
+    category: "item",
     kinds: ITEM_KINDS,
     marker: true,
     singleton: true,
@@ -103,6 +151,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "weapon-combat",
     label: "Weapon Combat",
+    category: "item",
     kinds: ITEM_KINDS,
     singleton: true,
     createDefault: () => ({
@@ -117,6 +166,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "spawn-point",
     label: "Spawn Point",
+    category: "gameplay",
     kinds: ["station", "site"],
     marker: true,
     createDefault: () => ({ type: "spawn-point", floorId: "lobby" }),
@@ -125,6 +175,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "npc-spawner",
     label: "NPC Spawner",
+    category: "npc",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -142,6 +193,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "npc-waypoint",
     label: "NPC Waypoint",
+    category: "npc",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -158,6 +210,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "npc-placement",
     label: "NPC Placement",
+    category: "npc",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -173,6 +226,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "elevator",
     label: "Elevator",
+    category: "gameplay",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -186,6 +240,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "hangar-pad",
     label: "Hangar Pad",
+    category: "gameplay",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -199,6 +254,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "interaction",
     label: "Interaction",
+    category: "gameplay",
     kinds: ALL_KINDS,
     marker: true,
     createDefault: () => ({
@@ -213,6 +269,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "animation",
     label: "Animation",
+    category: "animation",
     kinds: ALL_KINDS,
     marker: true,
     createDefault: () => ({
@@ -229,6 +286,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "object-animation",
     label: "Object Animation",
+    category: "animation",
     kinds: ALL_KINDS,
     marker: false,
     createDefault: () => ({
@@ -246,6 +304,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "avms-terminal",
     label: "AVMS Terminal",
+    category: "vendor",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -259,6 +318,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "weapon-shop",
     label: "Weapon Shop",
+    category: "vendor",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -276,6 +336,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "outfitters",
     label: "Outfitters",
+    category: "vendor",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -293,6 +354,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "food-shop",
     label: "Food Shop",
+    category: "vendor",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -310,6 +372,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "drinks-shop",
     label: "Drinks Shop",
+    category: "vendor",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -327,6 +390,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "canteen",
     label: "Canteen",
+    category: "vendor",
     kinds: ["station"],
     marker: true,
     createDefault: () => ({
@@ -344,6 +408,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "point-light",
     label: "Point Light",
+    category: "lighting",
     kinds: ALL_KINDS,
     marker: true,
     createDefault: () => ({
@@ -359,6 +424,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "area-light",
     label: "Area Light",
+    category: "lighting",
     kinds: ALL_KINDS,
     marker: true,
     createDefault: () => ({
@@ -373,6 +439,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "spot-light",
     label: "Spot Light",
+    category: "lighting",
     kinds: ALL_KINDS,
     marker: true,
     createDefault: () => ({
@@ -390,6 +457,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "sound",
     label: "Sound",
+    category: "effects",
     kinds: ["station", "ship"],
     marker: true,
     createDefault: () => ({
@@ -405,6 +473,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "particle-system",
     label: "Particle System",
+    category: "effects",
     kinds: ALL_KINDS,
     marker: true,
     createDefault: () => createDefaultParticleSystemComponent(),
@@ -413,6 +482,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "collider",
     label: "Collider",
+    category: "structure",
     kinds: ["station", "ship", "site", "prop", "item"],
     createDefault: () => ({
       type: "collider",
@@ -425,6 +495,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "ship-frame",
     label: "Ship Frame",
+    category: "structure",
     kinds: ["ship"],
     singleton: true,
     createDefault: () => ({ type: "ship-frame" }),
@@ -433,6 +504,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "ship-controller",
     label: "Ship Controller",
+    category: "structure",
     kinds: ["ship"],
     singleton: true,
     createDefault: () => ({
@@ -499,6 +571,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "ship-door",
     label: "Ship Door",
+    category: "ship",
     kinds: ["ship"],
     marker: true,
     createDefault: () => ({
@@ -518,6 +591,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "cockpit-control",
     label: "Cockpit Control",
+    category: "ship",
     kinds: ["ship"],
     marker: true,
     createDefault: () => ({
@@ -533,6 +607,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "cockpit-stat",
     label: "Cockpit Stat",
+    category: "ship",
     kinds: ["ship"],
     marker: true,
     createDefault: () => ({
@@ -547,6 +622,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "bed",
     label: "Bed",
+    category: "ship",
     kinds: ["ship"],
     marker: true,
     createDefault: () => ({
@@ -565,6 +641,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "entertainment-system",
     label: "Entertainment System",
+    category: "ship",
     kinds: ["ship"],
     marker: true,
     createDefault: () => ({
@@ -582,6 +659,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "game-manager",
     label: "Game Manager",
+    category: "scene",
     kinds: [],
     scenes: true,
     singleton: true,
@@ -596,6 +674,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "planet",
     label: "Planet",
+    category: "scene",
     kinds: [],
     scenes: true,
     createDefault: () => ({
@@ -607,6 +686,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "player-start",
     label: "Player Start",
+    category: "scene",
     kinds: [],
     scenes: true,
     marker: true,
@@ -619,6 +699,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "prefab-instance",
     label: "Prefab Instance",
+    category: "scene",
     kinds: [],
     scenes: true,
     createDefault: () => ({
@@ -631,6 +712,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "ui-screen",
     label: "UI Screen",
+    category: "scene",
     kinds: [],
     scenes: true,
     createDefault: () => ({
@@ -643,6 +725,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "scene-link",
     label: "Scene Link",
+    category: "scene",
     kinds: [],
     scenes: true,
     createDefault: () => ({
@@ -655,6 +738,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   {
     type: "instanced-scene",
     label: "Instanced Scene",
+    category: "scene",
     kinds: [],
     scenes: true,
     singleton: true,

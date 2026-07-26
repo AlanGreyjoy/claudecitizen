@@ -33,6 +33,7 @@ export type EditorAppDocumentsArgs = {
   confirmBaseDiscardIfNeeded: () => Promise<boolean>;
   refreshPrefabList: () => Promise<void>;
   saveCurrent: () => Promise<string | null>;
+  loadPrefabById: (id: string) => void | Promise<void>;
 };
 
 export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
@@ -50,6 +51,7 @@ export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
     confirmBaseDiscardIfNeeded,
     refreshPrefabList,
     saveCurrent,
+    loadPrefabById,
   } = args;
 
 const createPrefabsInFolder = useCallback(
@@ -169,11 +171,46 @@ const createItemPrefab = useCallback(
   ],
 );
 
+/**
+ * Opens a ship prefab without bouncing back to the Scene tab — the Ship tab
+ * shows the same viewport, so the document swap is all that has to happen.
+ */
+const openShipById = useCallback(
+  async (id: string) => {
+    await loadPrefabById(id);
+    if (store.getState().kind === 'ship') setTab('ship');
+  },
+  [loadPrefabById, setTab, store],
+);
+
+const newShipDocument = useCallback(async () => {
+  if (!(await confirmLeaveDocument({ discardMessage: 'Discard unsaved changes?' }))) {
+    return;
+  }
+  audioPreview.stop();
+  if (playingRef.current) stopInEditorPlay();
+  clearIsolation();
+  store.newDocument();
+  // `toPrefabDocument` seeds the ship-frame from the kind, so kind is enough.
+  store.setDocumentMeta({ kind: 'ship', prefabName: 'New Ship', prefabId: '' });
+  setTab('ship');
+  showToast('New ship — add a hull GLB with a ship-controller, then save.');
+}, [
+  store,
+  audioPreview,
+  confirmLeaveDocument,
+  clearIsolation,
+  playingRef,
+  stopInEditorPlay,
+  setTab,
+]);
+
 const saveActive = useCallback(async (): Promise<boolean> => {
   const current = tabRef.current;
   const handles = tabHandlesRef.current;
   if (current === 'server') return true;
-  const documentIsActive = current === 'scene' || current === 'material-manager';
+  const documentIsActive =
+    current === 'scene' || current === 'material-manager' || current === 'ship';
   if (!documentIsActive && store.isDirty() && !(await saveCurrent())) return false;
   if (current === 'system-map') return handles.systemMapEditor?.save() ?? false;
   if (current === 'planet-authoring') return handles.planetAuthoringEditor?.save() ?? false;
@@ -190,6 +227,8 @@ const saveActive = useCallback(async (): Promise<boolean> => {
     loadSceneById,
     newDocument,
     newSceneDocument,
+    newShipDocument,
+    openShipById,
     createSceneFromTemplate,
     createItemPrefab,
     saveActive,

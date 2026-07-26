@@ -19,7 +19,7 @@ import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { warmPlanetSpawnCaches } from '../world/spawn-warm';
 import { normalizeVegetationSettings } from '../render/vegetation/settings';
 import { buildRoomForArea } from '../player/hangar_build/validation';
-import { applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
+import { activateShipPrefab, applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
 import {
   getStationColliders,
   getStationFrame,
@@ -207,6 +207,19 @@ async function warmPlaySpawnSurface(
   });
 }
 
+/**
+ * Activates the hull the scene actually placed. A scene that places no ship
+ * still needs one loaded (mode transitions read a body), so the default hull
+ * remains the fallback rather than the only option.
+ */
+async function applyScenePlayShipPrefab(params: PlayWorldParams): Promise<void> {
+  if (!params.shipPrefabOverride) {
+    await applyDefaultShipPrefab();
+    return;
+  }
+  await activateShipPrefab(params.shipPrefabOverride);
+}
+
 function createPlayGameLoop(options: {
   world: Awaited<ReturnType<typeof loadPlayWorldContext>>;
   controls: ReturnType<typeof createPlayerControls>;
@@ -240,6 +253,8 @@ function createPlayGameLoop(options: {
     systemId: world.systemDocument?.id ?? world.params.systemId,
     activeStationInstanceId: world.primaryStation?.id ?? null,
     content: world.params.content,
+    shipPrefabId: world.params.shipPrefabOverride,
+    shipRampDownOnSpawn: world.params.shipTest,
     controls,
     renderer,
     rendererError,
@@ -477,7 +492,7 @@ export async function startPlaySession(
   const world = await loadPlayWorldContext(loading, options.worldParams);
   // Scenes that place no ship never load a hull. The player ship stays an
   // unrendered data stub so mode transitions keep a body to read.
-  if (world.params.content.ship) await applyDefaultShipPrefab();
+  if (world.params.content.ship) await applyScenePlayShipPrefab(world.params);
   // Editor Play hosts chrome in `#editor-play-host`. Remounting onto `document.body`
   // leaves that host as an empty black overlay (z-index 40) on top of the canvas.
   const playChromeParent =

@@ -5,10 +5,10 @@ import {
   AssetUrlField,
   EmptyNote,
   EntityRefField,
+  GlbNodeRefField,
   FieldRow,
   NumberField,
   SectionLabel,
-  TextField,
 } from '../InspectorForm';
 
 type ShipControllerComponent = Extract<PrefabComponent, { type: 'ship-controller' }>;
@@ -357,7 +357,8 @@ function ShipControllerRampFields({
     <>
       <SectionLabel>Ramp</SectionLabel>
       <FieldRow label="Hinge" wide>
-        <TextField
+        <GlbNodeRefField
+          store={store}
           value={ramp.hinge?.node ?? 'RampParent'}
           onCommit={(node) =>
             update({

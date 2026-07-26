@@ -138,9 +138,13 @@ useEffect(() => {
   const bootParams = new URLSearchParams(window.location.search);
   const prefabParam = bootParams.get('prefab');
   const sceneParam = bootParams.get('openScene');
+  const tabParam = bootParams.get('tab');
   if (prefabParam) {
-    setTab('scene');
-    void loadById(prefabParam);
+    // `?tab=ship` keeps a returning ship prefab in the Ship tab; the Scene tab
+    // shows the same viewport, so the only difference is which bar is up.
+    void Promise.resolve(loadById(prefabParam)).then(() => {
+      setTab(tabParam === 'ship' ? 'ship' : 'scene');
+    });
     return;
   }
   if (sceneParam) {
@@ -148,9 +152,10 @@ useEffect(() => {
     void loadSceneById(sceneParam);
     return;
   }
-  if (bootParams.get('tab') === 'planet') setTab('planet-authoring');
-  if (bootParams.get('tab') === 'system') setTab('system-map');
-  if (bootParams.get('tab') === 'menu') {
+  if (tabParam === 'ship') setTab('ship');
+  if (tabParam === 'planet') setTab('planet-authoring');
+  if (tabParam === 'system') setTab('system-map');
+  if (tabParam === 'menu') {
     setTab('menu-manager');
     const menuId = bootParams.get('menu');
     if (menuId) {

@@ -19,6 +19,7 @@ import { useEditorStoreInstance } from './hooks';
 import { usePanelSplitters } from './PanelSplitters';
 import { usePrefabIsolation } from './use-prefab-isolation';
 import type { ProjectPanelHandle } from './panels/ProjectPanel';
+import type { ShipEditor } from './panels/ShipPanel';
 import type { ToolbarHandle } from './panels/Toolbar';
 import type { TabEditorHandles } from './TabEditorHosts';
 import type { SceneEditorTab } from './types';
@@ -51,6 +52,7 @@ export function EditorApp(): ReactElement {
   const [newSceneOpen, setNewSceneOpen] = useState(false);
 
   const toolbarRef = useRef<ToolbarHandle | null>(null);
+  const shipEditorRef = useRef<ShipEditor | null>(null);
   const projectRef = useRef<ProjectPanelHandle | null>(null);
   const allowUnloadRef = useRef(false);
   const tabRef = useRef(tab);
@@ -108,6 +110,7 @@ export function EditorApp(): ReactElement {
   useEffect(() => {
     const root = document.getElementById('editor-root');
     if (!root) return;
+    root.classList.toggle('is-ship', tab === 'ship');
     root.classList.toggle('is-base-characters', tab === 'base-characters');
     root.classList.toggle('is-planet-authoring', tab === 'planet-authoring');
     root.classList.toggle('is-system-map', tab === 'system-map');
@@ -171,8 +174,14 @@ export function EditorApp(): ReactElement {
     if (current === 'system-map' && next !== current && !handles.systemMapEditor?.canLeave()) {
       return;
     }
-    if (playingRef.current && next !== 'scene' && next !== 'material-manager') {
-      stopInEditorPlay();
+    if (playingRef.current) {
+      // A ship playtest belongs to the Ship tab; scene Play survives the two
+      // tabs that keep showing the scene viewport.
+      const survivesTabChange =
+        current === 'ship'
+          ? next === 'ship'
+          : next === 'scene' || next === 'material-manager';
+      if (!survivesTabChange) stopInEditorPlay();
     }
     setTabState(next);
     if (next === 'base-characters') {
@@ -227,6 +236,8 @@ export function EditorApp(): ReactElement {
     loadSceneById,
     newDocument,
     newSceneDocument,
+    newShipDocument,
+    openShipById,
     createSceneFromTemplate,
     createItemPrefab,
     saveActive,
@@ -244,6 +255,7 @@ export function EditorApp(): ReactElement {
     confirmBaseDiscardIfNeeded,
     refreshPrefabList,
     saveCurrent,
+    loadPrefabById: loadById,
   });
 
   const {
@@ -271,6 +283,7 @@ export function EditorApp(): ReactElement {
     setTab,
     tabRef,
     tabHandlesRef,
+    shipEditorRef,
     viewportRef,
     toolbarRef,
     playSessionRef,
@@ -355,6 +368,7 @@ export function EditorApp(): ReactElement {
       playing={playing}
       isolationUi={isolationUi}
       toolbarRef={toolbarRef}
+      shipEditorRef={shipEditorRef}
       projectRef={projectRef}
       mainRef={mainRef}
       hierarchyPanelRef={hierarchyPanelRef}
@@ -372,6 +386,9 @@ export function EditorApp(): ReactElement {
       requestExitIsolation={requestExitIsolation}
       createItemPrefab={createItemPrefab}
       loadById={loadById}
+      openShipById={openShipById}
+      newShipDocument={newShipDocument}
+      togglePlay={() => void togglePlay()}
       createPrefabsInFolder={createPrefabsInFolder}
       newSceneOpen={newSceneOpen}
       setNewSceneOpen={setNewSceneOpen}

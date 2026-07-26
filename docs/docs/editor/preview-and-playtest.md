@@ -65,11 +65,31 @@ What comes from the prefab:
 
 Some UI flows (terminal/hangar-bank) may still use procedural hooks until full station cutover.
 
-## Ship sandbox
+## Ship tab
 
-Isolated test pad — no planet, orbital station, or free flight.
+The **Ship** tab is where ships are authored and flown. It reuses the scene
+viewport, hierarchy, and inspector — ship components (`ship-controller`,
+`ship-door`, `cockpit-control`, `bed`, `collider`) live in the normal prefab
+palette, and the toolbar's ship group still previews gear, ramp, and door
+articulation statically. What the tab adds is a bar with three things:
 
-Verify in the sandbox:
+- **Ship picker / New Ship / Save** — the ship prefabs in the open project.
+- **Validation summary** — builds the open ship's layout and lists what would
+  break the playtest: no hull GLB, no deck colliders, no pilot-role seat, doors
+  that animate with no collider bound. Click it to re-check after edits.
+- **Test** — starts the playtest in the selected environment.
+
+### Test environments
+
+| Env | What it boots | Use it for |
+| --- | --- | --- |
+| **Pad** | Isolated flat pad, no terrain or station | Deck colliders, doors, ramp, seats, flight feel — fastest loop |
+| **Planet** | The full stage scene on `asteron` | Landing clamp, gravity, walking off the ship onto the surface |
+
+Both spawn you **on foot beside the ship with the ramp already down**, so a
+single run covers the whole loop. `F6` starts and stops it; `F7` pauses.
+
+Verify in either environment:
 
 | Check | How |
 | --- | --- |
@@ -79,12 +99,18 @@ Verify in the sandbox:
 | Pilot seat | F at seat — cockpit camera from `eye` offset |
 | Leave the seat | Hold **Y** — works at any time, settling onto the pad when nearby |
 | Landing gear | **G** toggles gear |
-| Flight feel | Sit the pilot, then take off over the flat pad using the normal flight model |
+| Flight feel | Sit the pilot, then take off using the normal flight model |
+
+Stat edits (mass, thrust, torque) apply on the next **Test**, not live.
+
+`/?shipPrefab=<id>` still boots the same pad sandbox as a standalone page. It is
+a debugging fallback now, not the way in.
 
 ## Back to editor
 
-Play sandboxes show a **Back to Editor** banner. In Electron this closes Play
-Mode and returns focus to the unchanged editor window.
+The standalone `?shipPrefab=` page shows a **Back to Editor** banner. In-editor
+playtests stop in place with **Stop** / `Shift+F6` and leave the editor window
+untouched.
 
 ## Round-trip workflow
 

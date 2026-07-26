@@ -798,6 +798,18 @@ function parseSoundComponent(
         };
 }
 
+function parseColliderExcludeNodes(
+  value: unknown,
+  path: string,
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return undefined;
+  const names = value
+    .map((entry, index) => parseString(entry, `${path}.excludeNodes[${index}]`, 128))
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? [...new Set(names)] : undefined;
+}
+
 function parseColliderComponent(
   value: Record<string, unknown>,
   path: string,
@@ -823,6 +835,7 @@ function parseColliderComponent(
             convex: value.convex === undefined ? undefined : Boolean(value.convex),
             offset,
             node,
+            excludeNodes: parseColliderExcludeNodes(value.excludeNodes, path),
           };
         }
         return {

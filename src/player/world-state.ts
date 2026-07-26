@@ -127,11 +127,15 @@ export function createWorldState(
     planetId?: string;
     systemId?: string;
     activeStationInstanceId?: string | null;
+    /** Hull the player ship spawns as. Unset keeps the default ship. */
+    shipPrefabId?: string | null;
+    /** Ship playtest spawn: boardable hull instead of a sealed one. */
+    shipRampDownOnSpawn?: boolean;
     vitals?: PlayerSurvivalVitals;
   } = {},
 ): WorldState {
   clearShipWorld();
-  const prefabId = DEFAULT_SHIP_PREFAB_ID;
+  const prefabId = options.shipPrefabId ?? DEFAULT_SHIP_PREFAB_ID;
   const layout = getShipLayoutForPrefab(prefabId) ?? DEFAULT_SHIP_LAYOUT;
   const body = createSpawnShip(planet, seed);
   const planetId = options.planetId ?? 'asteron';
@@ -141,7 +145,7 @@ export function createWorldState(
     layout,
     body,
     instanceId: `planet:${planetId}`,
-    rig: { gearDown: true, rampDown: false },
+    rig: { gearDown: true, rampDown: options.shipRampDownOnSpawn ?? false },
   });
   registerShipInstance(instance);
 

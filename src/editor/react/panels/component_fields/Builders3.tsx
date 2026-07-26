@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { fitBoxColliderToBounds } from '../../../component-actions';
 import type { PrefabComponent } from '../../../../world/prefabs/schema';
+import { ColliderExcludeNodes } from './ColliderExcludeNodes';
 import type { ComponentFieldsProps } from './context';
 import {
   AssetUrlField,
@@ -413,6 +414,11 @@ export function ColliderFields({
             onChange={(checked) =>
               update({ ...component, convex: checked || undefined })
             }
+          />
+          <ColliderExcludeNodes
+            store={ctx.store}
+            nodes={component.excludeNodes ?? []}
+            onChange={(excludeNodes) => update({ ...component, excludeNodes })}
           />
         </>
       )}

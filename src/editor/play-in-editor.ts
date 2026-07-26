@@ -4,14 +4,22 @@ import type { PrefabComponent } from '../world/prefabs/schema';
 import type { SceneDocument } from '../world/scenes/schema';
 import { SCENE_SCHEMA_VERSION } from '../world/scenes/schema';
 import type { EditorStore } from './document';
+import { createEditorPlayHost } from './play-host';
 import { toSceneDocument } from './serialize';
-
-const PLAY_HOST_ID = 'editor-play-host';
 
 export interface EditorPlaySession {
   setPaused: (paused: boolean) => void;
   isPaused: () => boolean;
   stop: () => void;
+}
+
+export interface EditorPlayOptions {
+  /**
+   * Where a ship stage drops the player. `surface` parks the hull at the
+   * landing site and spawns the player on foot beside it — the ship playtest
+   * loop (walk up the ramp, sit, fly). Stations ignore this.
+   */
+  shipSpawn?: 'station' | 'surface';
 }
 
 /**
@@ -23,7 +31,7 @@ export interface EditorPlaySession {
  * and adding one used to make every station prefab Play boot the entire planet
  * stack it never referenced.
  */
-function prefabStageScene(store: EditorStore): SceneDocument {
+function prefabStageScene(store: EditorStore, options: EditorPlayOptions): SceneDocument {
   const state = store.getState();
   const prefabId = state.prefabId || 'untitled';
   const isShip = state.kind === 'ship';
@@ -31,11 +39,15 @@ function prefabStageScene(store: EditorStore): SceneDocument {
     { type: 'prefab-instance', prefabId, prefabKind: isShip ? 'ship' : 'station' },
   ];
   if (isShip) {
+    const spawn = options.shipSpawn ?? 'station';
+    // `player-start` is what `resolveScenePlayConfig` reads for the spawn mode;
+    // the game-manager spawn field alone leaves a surface stage in the station.
+    if (spawn === 'surface') components.unshift({ type: 'player-start', spawn });
     components.unshift({
       type: 'game-manager',
       systemId: 'default',
       planetId: 'asteron',
-      spawn: 'station',
+      spawn,
     });
   }
   return {
@@ -65,19 +77,18 @@ function prefabStageScene(store: EditorStore): SceneDocument {
  * The host carries a CSS transform so the HUD's fixed-position elements are
  * contained by the Game region instead of escaping to the whole window.
  */
-export function startEditorPlay(store: EditorStore): EditorPlaySession {
+export function startEditorPlay(
+  store: EditorStore,
+  options: EditorPlayOptions = {},
+): EditorPlaySession {
   const state = store.getState();
   const scene =
-    state.documentType === 'scene' ? toSceneDocument(state) : prefabStageScene(store);
+    state.documentType === 'scene'
+      ? toSceneDocument(state)
+      : prefabStageScene(store, options);
 
-  const host = document.createElement('div');
-  host.id = PLAY_HOST_ID;
-  document.body.append(host);
-
-  const chrome = mountPlayChrome(host);
-  chrome.classList.remove('is-hidden');
-
-  document.getElementById('editor-root')?.classList.add('is-playing');
+  const host = createEditorPlayHost();
+  mountPlayChrome(host.element).classList.remove('is-hidden');
 
   let sceneHost: SceneHostHandle | null = createSceneHost({
     initialScene: scene,
@@ -90,15 +101,14 @@ export function startEditorPlay(store: EditorStore): EditorPlaySession {
     setPaused(next) {
       paused = next;
       sceneHost?.setPaused(next);
-      host.classList.toggle('is-paused', next);
+      host.setPaused(next);
     },
     isPaused: () => paused,
     stop() {
       sceneHost?.dispose();
       sceneHost = null;
       unmountPlayChrome();
-      host.remove();
-      document.getElementById('editor-root')?.classList.remove('is-playing');
+      host.dispose();
     },
   };
 }

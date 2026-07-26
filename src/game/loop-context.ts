@@ -152,6 +152,8 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     planetId: resolved.planetId,
     systemId: resolved.systemId,
     activeStationInstanceId: resolved.activeStationInstanceId,
+    shipPrefabId: resolved.shipPrefabId,
+    shipRampDownOnSpawn: resolved.shipRampDownOnSpawn,
     vitals: resolved.vitalsSession?.getVitals() ?? resolved.bootstrap?.player.vitals,
   });
   if (resolved.bootstrap?.hangar.assignedHangar) {

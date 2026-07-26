@@ -8,9 +8,7 @@ import {
 } from 'react';
 import {
   addColliderToEntities,
-  addComponentFromPalette,
   collectComponentTypesOnEntities,
-  collectExistingComponentTypes,
   removeComponentTypeFromEntities,
   shouldHideShipHullCollider,
 } from '../../component-actions';
@@ -29,15 +27,12 @@ import {
   type InspectorPanelOptions,
   type TransformFieldKey,
 } from '../../panels/inspector-logic';
-import {
-  getComponentDef,
-  searchComponents,
-  type ComponentDef,
-} from '../../../world/prefabs/component-registry';
+import { getComponentDef } from '../../../world/prefabs/component-registry';
 import type { PrefabComponent } from '../../../world/prefabs/schema';
 import { UiIcons } from '../../../ui/icons';
 import { useEditorStore } from '../hooks';
 import { UiIcon } from '../UiIcon';
+import { AddComponentModal } from './AddComponentModal';
 import { ComponentFields } from './InspectorComponentFields';
 import {
   CheckboxRow,
@@ -443,120 +438,6 @@ function MaterialsSection({
   );
 }
 
-function AddComponentCombobox({
-  store,
-  entity,
-  options,
-}: {
-  store: EditorStore;
-  entity: EditorEntity;
-  options: InspectorPanelOptions;
-}): ReactElement {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const [highlighted, setHighlighted] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  let results: ComponentDef[] = open
-    ? searchComponents(
-        query,
-        store.getState().kind,
-        collectExistingComponentTypes(store),
-        { documentType: store.getState().documentType },
-      )
-    : [];
-  if (open && shouldHideShipHullCollider(store, entity)) {
-    results = results.filter((def) => def.type !== 'collider');
-  }
-  const safeHighlight = Math.min(highlighted, Math.max(0, results.length - 1));
-
-  const addComponent = (def: ComponentDef) => {
-    const sub = store.getSubSelection();
-    const nodeBounds =
-      sub && sub.entityId === entity.id && options.getGlbNodeBounds
-        ? () => options.getGlbNodeBounds!(entity.id, sub.nodeUuid)
-        : undefined;
-    addComponentFromPalette(
-      store,
-      entity.id,
-      def,
-      nodeBounds ? { getNodeBounds: nodeBounds } : undefined,
-    );
-    setQuery('');
-    setOpen(false);
-    inputRef.current?.blur();
-  };
-
-  return (
-    <div className="ed-combobox">
-      <input
-        ref={inputRef}
-        className="ed-input"
-        type="text"
-        placeholder="Add component…"
-        autoComplete="off"
-        value={query}
-        onFocus={() => {
-          setOpen(true);
-          setHighlighted(0);
-        }}
-        onBlur={() => setOpen(false)}
-        onChange={(event) => {
-          setQuery(event.currentTarget.value);
-          setHighlighted(0);
-          setOpen(true);
-        }}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            if (!open) {
-              setOpen(true);
-              setHighlighted(0);
-            } else if (results.length > 0) {
-              setHighlighted((prev) => (prev + 1) % results.length);
-            }
-          } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            if (results.length > 0) {
-              setHighlighted(
-                (prev) => (prev - 1 + results.length) % results.length,
-              );
-            }
-          } else if (event.key === 'Enter') {
-            event.preventDefault();
-            const def = results[safeHighlight];
-            if (open && def) addComponent(def);
-          } else if (event.key === 'Escape') {
-            event.preventDefault();
-            inputRef.current?.blur();
-          }
-        }}
-      />
-      <div
-        className={`ed-combobox-list${open ? ' is-open' : ''}`}
-        onMouseDown={(event) => event.preventDefault()}
-      >
-        {open && results.length === 0 && (
-          <div className="ed-combobox-empty">No matching components</div>
-        )}
-        {open &&
-          results.map((def, index) => (
-            <div
-              key={def.type}
-              className={`ed-combobox-item${index === safeHighlight ? ' is-highlighted' : ''}`}
-              onMouseDown={() => addComponent(def)}
-              onMouseEnter={() => setHighlighted(index)}
-            >
-              <span className="ed-combobox-item-label">{def.label}</span>
-              <span className="ed-combobox-item-type">{def.type}</span>
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-}
-
 function ComponentsSection({
   store,
   entity,
@@ -566,6 +447,7 @@ function ComponentsSection({
   entity: EditorEntity;
   options: InspectorPanelOptions;
 }): ReactElement {
+  const [addOpen, setAddOpen] = useState(false);
   const { isNodeContext, subNodeName, nodeOverrideComponents, listed } =
     listInspectorComponents(store, entity);
   const sub = store.getSubSelection();
@@ -573,6 +455,22 @@ function ComponentsSection({
   return (
     <div className="ed-section">
       <h3 className="ed-section-title">Components</h3>
+      <div className="ed-add-component">
+        <button
+          type="button"
+          className="ed-btn ed-btn-accent"
+          onClick={() => setAddOpen(true)}
+        >
+          Add Component
+        </button>
+      </div>
+      <AddComponentModal
+        open={addOpen}
+        store={store}
+        entity={entity}
+        options={options}
+        onClose={() => setAddOpen(false)}
+      />
       {!isNodeContext && shouldHideShipHullCollider(store, entity) && (
         <EmptyNote>
           Select a GLB node (RampParent, interior floors, doors…) to add walk
@@ -637,9 +535,6 @@ function ComponentsSection({
           </div>
         );
       })}
-      <div className="ed-add-component">
-        <AddComponentCombobox store={store} entity={entity} options={options} />
-      </div>
     </div>
   );
 }

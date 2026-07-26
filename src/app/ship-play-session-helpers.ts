@@ -3,6 +3,10 @@ import { createDeckCharacterState } from '../player/ship-deck';
 import { getShipLayout, getShipRestHeightMeters } from '../player/ship-layout';
 import { createShipModel } from '../render/main/scene/ship-model';
 import { createCharacterAvatar } from '../render/main/scene/character-avatar';
+import {
+  clonePlayerCharacterAppearance,
+  DEFAULT_PLAYER_CHARACTER_APPEARANCE,
+} from '../player/character_creator/player-character-appearance';
 import { attachPrefabParticleSystems } from '../render/particles';
 import { attachPrefabObjectAnimations } from '../render/prefabs/object-animation';
 import { vec3 } from '../math/vec3';
@@ -34,7 +38,14 @@ export function requireElement<T extends HTMLElement>(id: string): T {
   return element as T;
 }
 
-export function createSandboxHudOverlays(editorReturnUrl: string): {
+/** Collects teardown for everything a sandbox session creates. */
+export type SandboxDisposeCollector = (dispose: () => void) => void;
+
+export function createSandboxHudOverlays(options: {
+  /** Runs when the player picks Exit in the in-game menu. */
+  onExit: () => void;
+  addDispose: SandboxDisposeCollector;
+}): {
   canvas: HTMLCanvasElement;
   fpsEl: HTMLElement;
   interactPromptEl: HTMLElement;
@@ -76,11 +87,11 @@ export function createSandboxHudOverlays(editorReturnUrl: string): {
   const esScreen = createEntertainmentScreen({ panelEl: requireElement<HTMLElement>('es-bezel') });
   const onEsResize = () => esScreen.resize();
   window.addEventListener('resize', onEsResize);
-  window.addEventListener('pagehide', () => {
+  options.addDispose(() => {
     entertainmentSystem.dispose();
     window.removeEventListener('resize', onEsResize);
     esScreen.dispose();
-  }, { once: true });
+  });
 
   const gameMenuEl = requireElement<HTMLElement>('game-menu');
   const exitCopyEl = gameMenuEl.querySelector<HTMLElement>('.sc-game-menu-exit-copy');
@@ -111,13 +122,9 @@ export function createSandboxHudOverlays(editorReturnUrl: string): {
       sfxValueEl: requireElement<HTMLElement>('game-menu-sfx-value'),
       musicValueEl: requireElement<HTMLElement>('game-menu-music-value'),
     },
-    {
-      onExitGame: () => {
-        window.location.href = editorReturnUrl;
-      },
-    },
+    { onExitGame: options.onExit },
   );
-  window.addEventListener('pagehide', () => gameMenu.dispose(), { once: true });
+  options.addDispose(() => gameMenu.dispose());
 
   return {
     canvas,
@@ -137,6 +144,7 @@ export function createSandboxShipVisuals(
   doc: PrefabDocument | null,
   prefabApplied: boolean,
   esScreen: ReturnType<typeof createEntertainmentScreen>,
+  addDispose: SandboxDisposeCollector,
 ): {
   shipModel: ReturnType<typeof createShipModel>;
   avatar: ReturnType<typeof createCharacterAvatar>;
@@ -173,7 +181,15 @@ export function createSandboxShipVisuals(
     attachPrefabObjectAnimations(doc, shipModel.group);
   }
 
-  const avatar = createCharacterAvatar(sandboxScene.scene, 1);
+  // Without an appearance the avatar builds the legacy UAL mannequin, whose GLB
+  // is not part of a project — it load-errors and renders nothing, so the
+  // playtest looks like it spawned no character at all. Same default the
+  // no-auth editor Play path uses.
+  const avatar = createCharacterAvatar(
+    sandboxScene.scene,
+    1,
+    clonePlayerCharacterAppearance(DEFAULT_PLAYER_CHARACTER_APPEARANCE),
+  );
   const ship: FlightBody = {
     angularVelocity: vec3(0, 0, 0),
     forward: { ...SHIP_FORWARD },
@@ -182,13 +198,18 @@ export function createSandboxShipVisuals(
     up: { ...WORLD_UP },
     velocity: vec3(0, 0, 0),
   };
-  window.addEventListener('pagehide', () => {
+  addDispose(() => {
     soundScene.dispose();
     footsteps.dispose();
     boostSfx.stop();
     thrustSfx.stop();
     shipModel.group.userData.disposeParticleSystems?.();
-  }, { once: true });
+    shipModel.group.removeFromParent();
+    avatar.dispose();
+    if (window.__claudecitizenShipModel === shipModel) {
+      delete window.__claudecitizenShipModel;
+    }
+  });
 
   return {
     shipModel,
@@ -266,6 +287,9 @@ export function buildShipSandboxSession(options: {
     flightCameraFeelFrame: null,
     fpsEl: overlays.fpsEl,
     interactPromptEl: overlays.interactPromptEl,
+    running: false,
+    externallyPaused: false,
+    frameHandle: 0,
     lastMs: 0,
     fpsAccum: 0,
     fpsFrames: 0,

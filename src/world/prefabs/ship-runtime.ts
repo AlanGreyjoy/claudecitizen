@@ -985,6 +985,21 @@ function animationForNode(
   return undefined;
 }
 
+/**
+ * GLB nodes the rig moves and that therefore must not be welded into the hull
+ * bake: door leaves and the boarding ramp. Landing gear stays part of the hull
+ * — it is exterior, never gates a doorway, and pulling it out would drop leg
+ * collision from every existing ship.
+ */
+function articulatedNodeNames(doors: ShipDoorSpec[], spec: ShipSpec): string[] {
+  const names = new Set<string>();
+  for (const door of doors) {
+    for (const node of door.nodes) names.add(node.name);
+  }
+  if (spec.rampHinge) names.add(spec.rampHinge.name);
+  return [...names];
+}
+
 function bindColliderAnimations(
   colliders: GameplayCollider[],
   doors: ShipDoorSpec[],
@@ -1137,7 +1152,7 @@ async function finalizeShipLayout(
   const { pilotSeat, pilotEye, seatStand } = resolvePilotAnchors(out);
   const spec = mergeShipSpec(out.spec);
   const colliders = bindColliderAnimations(
-    await buildPrefabColliders(doc),
+    await buildPrefabColliders(doc, { articulatedNodes: articulatedNodeNames(out.doors, spec) }),
     out.doors,
     spec,
     doc.id,

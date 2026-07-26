@@ -47,6 +47,8 @@ import {
   expandAncestorsInto,
   fetchProjectAssetEntries,
   fileNameFromPath,
+  filterAssetEntriesByQuery,
+  filterFoldersByQuery,
   findFolder,
   folderBreadcrumbs,
   folderDropZoneFromOffset,
@@ -611,13 +613,17 @@ function ProjectFolderTree({
 function ProjectAssetToolbar({
   selectedFolder,
   folderScope,
+  searchQuery,
   onNavigate,
   onScopeChange,
+  onSearchChange,
 }: {
   selectedFolder: string;
   folderScope: FolderScope;
+  searchQuery: string;
   onNavigate: (path: string) => void;
   onScopeChange: (scope: FolderScope) => void;
+  onSearchChange: (query: string) => void;
 }): ReactElement {
   const crumbs = folderBreadcrumbs(selectedFolder);
   return (
@@ -652,6 +658,21 @@ function ProjectAssetToolbar({
         <option value="this-folder">This folder</option>
         <option value="all-subfolders">All subfolders</option>
       </select>
+      <input
+        type="search"
+        className="ed-input ed-asset-search"
+        value={searchQuery}
+        placeholder="Search assets"
+        aria-label="Search assets"
+        spellCheck={false}
+        onChange={(event) => onSearchChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && searchQuery) {
+            event.stopPropagation();
+            onSearchChange('');
+          }
+        }}
+      />
     </div>
   );
 }
@@ -660,6 +681,7 @@ function ProjectAssetGrid({
   gridRef,
   selectedFolder,
   folderScope,
+  searchQuery,
   folders,
   files,
   thumbByUrl,
@@ -669,6 +691,7 @@ function ProjectAssetGrid({
   dropTarget,
   onNavigate,
   onScopeChange,
+  onSearchChange,
   onContextMenu,
   onAssetContextMenu,
   onOpenPrefab,
@@ -684,6 +707,7 @@ function ProjectAssetGrid({
   gridRef: RefObject<HTMLDivElement | null>;
   selectedFolder: string;
   folderScope: FolderScope;
+  searchQuery: string;
   folders: FolderNode[];
   files: AssetEntry[];
   thumbByUrl: Record<string, string>;
@@ -693,6 +717,7 @@ function ProjectAssetGrid({
   dropTarget: FolderDropTarget | null;
   onNavigate: (path: string) => void;
   onScopeChange: (scope: FolderScope) => void;
+  onSearchChange: (query: string) => void;
   onContextMenu: (event: MouseEvent, folderPath: string) => void;
   onAssetContextMenu: (event: MouseEvent, entry: AssetEntry) => void;
   onOpenPrefab: (prefabId: string) => void;
@@ -719,12 +744,18 @@ function ProjectAssetGrid({
       <ProjectAssetToolbar
         selectedFolder={selectedFolder}
         folderScope={folderScope}
+        searchQuery={searchQuery}
         onNavigate={onNavigate}
         onScopeChange={onScopeChange}
+        onSearchChange={onSearchChange}
       />
       <div className="ed-asset-grid" ref={gridRef}>
         {isEmpty ? (
-          <div className="ed-empty-note">{emptyNoteForFolder(selectedFolder)}</div>
+          <div className="ed-empty-note">
+            {searchQuery.trim()
+              ? `No assets match "${searchQuery.trim()}".`
+              : emptyNoteForFolder(selectedFolder)}
+          </div>
         ) : (
           <>
             {folders.map((folder) => (
@@ -1279,6 +1310,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
     const [selectedFolder, setSelectedFolder] = useState('');
     const [expanded, setExpanded] = useState(() => new Set<string>(DEFAULT_EXPANDED_FOLDERS));
     const [folderScope, setFolderScope] = useState<FolderScope>('this-folder');
+    const [searchQuery, setSearchQuery] = useState('');
     const [bottomTab, setBottomTab] = useState<BottomLeftTab>('project');
     const [audioTick, bumpAudio] = useReducer((n: number) => n + 1, 0);
     const [orderMap, setOrderMap] = useState<FolderOrderMap>({});
@@ -1546,13 +1578,14 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       [deleteEntry, onOpenPrefab, renameEntry],
     );
 
-    const files = collectFolderFiles(
-      tree,
-      selectedFolder,
-      folderScope === 'all-subfolders',
-      orderMap,
+    const files = filterAssetEntriesByQuery(
+      collectFolderFiles(tree, selectedFolder, folderScope === 'all-subfolders', orderMap),
+      searchQuery,
     );
-    const folders = collectImmediateChildFolders(tree, selectedFolder, orderMap);
+    const folders = filterFoldersByQuery(
+      collectImmediateChildFolders(tree, selectedFolder, orderMap),
+      searchQuery,
+    );
 
     return (
       <div
@@ -1616,6 +1649,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
             gridRef={gridRef}
             selectedFolder={selectedFolder}
             folderScope={folderScope}
+            searchQuery={searchQuery}
             folders={folders}
             files={files}
             thumbByUrl={thumbByUrl}
@@ -1627,6 +1661,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
             dropTarget={dropTarget}
             onNavigate={onNavigateFolder}
             onScopeChange={setFolderScope}
+            onSearchChange={setSearchQuery}
             onContextMenu={onProjectContextMenu}
             onAssetContextMenu={onAssetContextMenu}
             onOpenPrefab={onOpenPrefab}

@@ -8,6 +8,7 @@ import type {
   PrefabComponent,
   PrefabDocument,
   PrefabEntity,
+  PrefabNodeOverride,
   PrefabTransform,
 } from "../world/prefabs/schema";
 
@@ -58,6 +59,16 @@ function offsetMatrix(offset: { x: number; y: number; z: number } | undefined): 
   );
 }
 
+/**
+ * GLB nodes something animates: ship door leaves and the boarding ramp, or a
+ * station's `animation` component nodes. A mesh collider bakes every child it
+ * can reach, so without this the closed door is part of the parent geometry
+ * forever — the doorway never opens no matter what the door's collider does.
+ */
+export interface PrefabColliderOptions {
+  articulatedNodes?: readonly string[];
+}
+
 function bakeCollider(
   component: Extract<PrefabComponent, { type: "collider" }>,
   entity: PrefabEntity,
@@ -65,6 +76,7 @@ function bakeCollider(
   id: string,
   defaultNode?: string,
   recenterHull = false,
+  excludeNodes?: readonly string[],
 ): GameplayCollider | null {
   const baseLocalToSpace = sceneMatrixToGameplayMatrix(
     baseSceneMatrix.clone().multiply(offsetMatrix(component.offset)),
@@ -92,6 +104,8 @@ function bakeCollider(
     return null;
   }
 
+  // Author-picked exclusions plus whatever the rig animates.
+  const excluded = [...new Set([...(component.excludeNodes ?? []), ...(excludeNodes ?? [])])];
   return {
     id,
     kind: "mesh",
@@ -99,6 +113,7 @@ function bakeCollider(
     convex: component.convex ?? false,
     node: component.node ?? defaultNode ?? entity.asset?.node,
     nodeOverrides: entity.nodeOverrides,
+    ...(excluded.length > 0 ? { excludeNodes: excluded } : {}),
     baseLocalToSpace,
     recenterHull,
   };
@@ -108,6 +123,7 @@ async function collectEntityColliders(
   entity: PrefabEntity,
   hullColliderSceneMatrix: THREE.Matrix4,
   out: GameplayCollider[],
+  articulatedNodes: readonly string[],
 ): Promise<void> {
   let colliderIndex = 0;
   const isShipHull =
@@ -122,6 +138,7 @@ async function collectEntityColliders(
       `${entity.id}:collider-${colliderIndex}`,
       undefined,
       isShipHull,
+      articulatedNodes,
     );
     colliderIndex += 1;
     if (collider) out.push(collider);
@@ -132,17 +149,22 @@ async function collectNodeOverrideColliders(
   entity: PrefabEntity,
   hullColliderSceneMatrix: THREE.Matrix4,
   out: GameplayCollider[],
+  articulatedNodes: readonly string[],
 ): Promise<void> {
-  if (!entity.asset?.url || !entity.nodeOverrides) return;
-  const nodesWithColliders = entity.nodeOverrides.filter(
+  if (!entity.asset?.url) return;
+  const nodesWithColliders = (entity.nodeOverrides ?? []).filter(
     (o) => o.components?.some((c) => c.type === "collider"),
   );
-  if (nodesWithColliders.length === 0) return;
+  const authoredNodes = new Set(nodesWithColliders.map((o) => o.node));
+  // An articulated node the author never gave a collider gets one baked from
+  // its own geometry, so a door blocks while closed and clears while open.
+  const generatedNodes = articulatedNodes.filter((node) => !authoredNodes.has(node));
+  if (nodesWithColliders.length === 0 && generatedNodes.length === 0) return;
 
   const isShipHull =
     entity.components?.some((component) => component.type === "ship-controller") ??
     false;
-  const nodeNames = nodesWithColliders.map((o) => o.node);
+  const nodeNames = [...authoredNodes, ...generatedNodes];
   const requestedNodeNames = entity.asset.node
     ? [...nodeNames, entity.asset.node]
     : nodeNames;
@@ -155,19 +177,75 @@ async function collectNodeOverrideColliders(
   const assetRootInverse = entity.asset.node
     ? matrices.get(entity.asset.node)?.clone().invert()
     : undefined;
+  const nodeSceneMatrixFor = (nodeWorldMatrix: THREE.Matrix4): THREE.Matrix4 => {
+    const nodeSceneMatrix = hullColliderSceneMatrix.clone();
+    if (assetRootInverse) nodeSceneMatrix.multiply(assetRootInverse);
+    return nodeSceneMatrix.multiply(nodeWorldMatrix);
+  };
+
+  bakeArticulatedNodeColliders({
+    entity,
+    generatedNodes,
+    matrices,
+    nodeSceneMatrixFor,
+    isShipHull,
+    out,
+  });
+  bakeAuthoredNodeColliders({
+    entity,
+    nodesWithColliders,
+    matrices,
+    nodeSceneMatrixFor,
+    isShipHull,
+    out,
+  });
+}
+
+interface NodeColliderBakeContext {
+  entity: PrefabEntity;
+  matrices: Map<string, THREE.Matrix4>;
+  nodeSceneMatrixFor: (nodeWorldMatrix: THREE.Matrix4) => THREE.Matrix4;
+  isShipHull: boolean;
+  out: GameplayCollider[];
+}
+
+function bakeArticulatedNodeColliders(
+  context: NodeColliderBakeContext & { generatedNodes: readonly string[] },
+): void {
+  const { entity, generatedNodes, matrices, nodeSceneMatrixFor, isShipHull, out } = context;
+  for (const node of generatedNodes) {
+    const nodeWorldMatrix = matrices.get(node);
+    // Silent: a prefab's other GLBs simply do not contain this node. A node
+    // that exists nowhere surfaces as the runtime's "no collider bound to
+    // node(s)" warning instead, which names the door rather than the asset.
+    if (!nodeWorldMatrix) continue;
+    const collider = bakeCollider(
+      { type: "collider", shape: "mesh" },
+      entity,
+      nodeSceneMatrixFor(nodeWorldMatrix),
+      `${entity.id}:${node}:collider-articulated`,
+      node,
+      isShipHull,
+    );
+    if (collider) out.push(collider);
+  }
+}
+
+function bakeAuthoredNodeColliders(
+  context: NodeColliderBakeContext & { nodesWithColliders: readonly PrefabNodeOverride[] },
+): void {
+  const { entity, nodesWithColliders, matrices, nodeSceneMatrixFor, isShipHull, out } = context;
   for (const override of nodesWithColliders) {
     const nodeWorldMatrix = matrices.get(override.node);
     if (!nodeWorldMatrix) {
       console.warn(
-        `Collider on GLB node "${override.node}" skipped — node not found in ${entity.asset.url}.`,
+        `Collider on GLB node "${override.node}" skipped — node not found in ${entity.asset?.url}.`,
       );
       continue;
     }
-    const nodeSceneMatrix = hullColliderSceneMatrix.clone();
-    if (assetRootInverse) nodeSceneMatrix.multiply(assetRootInverse);
-    nodeSceneMatrix.multiply(nodeWorldMatrix);
+    const nodeSceneMatrix = nodeSceneMatrixFor(nodeWorldMatrix);
     let nodeColliderIndex = 0;
-    for (const component of override.components!) {
+    for (const component of override.components ?? []) {
       if (component.type !== "collider") continue;
       const collider = bakeCollider(
         component,
@@ -187,6 +265,7 @@ async function collect(
   entity: PrefabEntity,
   parentSceneMatrix: THREE.Matrix4,
   out: GameplayCollider[],
+  articulatedNodes: readonly string[],
 ): Promise<void> {
   const entitySceneMatrix = parentSceneMatrix
     .clone()
@@ -198,16 +277,22 @@ async function collect(
   const hullColliderSceneMatrix = isShipHull
     ? shipHullColliderMatrix(parentSceneMatrix, entity.transform)
     : entitySceneMatrix;
-  await collectEntityColliders(entity, hullColliderSceneMatrix, out);
-  await collectNodeOverrideColliders(entity, hullColliderSceneMatrix, out);
+  // Only an entity with a GLB can own an articulated node. Names that belong
+  // to a different asset resolve to nothing and drop out on their own.
+  const articulated = entity.asset?.url ? articulatedNodes : [];
+  await collectEntityColliders(entity, hullColliderSceneMatrix, out, articulated);
+  await collectNodeOverrideColliders(entity, hullColliderSceneMatrix, out, articulated);
 
   for (const child of entity.children ?? []) {
-    await collect(child, entitySceneMatrix, out);
+    await collect(child, entitySceneMatrix, out, articulatedNodes);
   }
 }
 
-export async function buildPrefabColliders(doc: PrefabDocument): Promise<GameplayCollider[]> {
+export async function buildPrefabColliders(
+  doc: PrefabDocument,
+  options: PrefabColliderOptions = {},
+): Promise<GameplayCollider[]> {
   const colliders: GameplayCollider[] = [];
-  await collect(doc.root, new THREE.Matrix4(), colliders);
+  await collect(doc.root, new THREE.Matrix4(), colliders, options.articulatedNodes ?? []);
   return colliders;
 }

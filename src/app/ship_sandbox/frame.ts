@@ -182,7 +182,11 @@ function updateSandboxFps(session: ShipSandboxSession, dt: number, nowMs: number
 }
 
 export function runShipSandboxFrame(session: ShipSandboxSession, nowMs: number): void {
-  const paused = session.gameMenu.isPaused() || session.entertainmentSystem.isPaused();
+  if (!session.running) return;
+  const paused =
+    session.externallyPaused
+    || session.gameMenu.isPaused()
+    || session.entertainmentSystem.isPaused();
   const frameDt = Math.min((nowMs - session.lastMs) / 1000, 1 / 30);
   const dt = paused ? 0 : frameDt;
   session.lastMs = nowMs;
@@ -211,12 +215,20 @@ export function runShipSandboxFrame(session: ShipSandboxSession, nowMs: number):
 
   session.interactPromptEl.textContent = session.prompt;
   session.interactPromptEl.classList.toggle('is-visible', session.prompt.length > 0);
-  requestAnimationFrame((nextMs) => runShipSandboxFrame(session, nextMs));
+  session.frameHandle = requestAnimationFrame((nextMs) => runShipSandboxFrame(session, nextMs));
 }
 
 export function startShipSandboxLoop(session: ShipSandboxSession): void {
-  requestAnimationFrame((now) => {
+  session.running = true;
+  session.frameHandle = requestAnimationFrame((now) => {
     session.lastMs = now;
-    requestAnimationFrame((nextMs) => runShipSandboxFrame(session, nextMs));
+    session.frameHandle = requestAnimationFrame((nextMs) => runShipSandboxFrame(session, nextMs));
   });
+}
+
+/** Stops the loop without disposing the session's resources. */
+export function stopShipSandboxLoop(session: ShipSandboxSession): void {
+  session.running = false;
+  if (session.frameHandle !== 0) cancelAnimationFrame(session.frameHandle);
+  session.frameHandle = 0;
 }

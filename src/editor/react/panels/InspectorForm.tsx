@@ -14,6 +14,10 @@ import {
   isImageAssetUrl,
   parseDraggedEntityIds,
 } from '../../panels/inspector-logic';
+import {
+  GLB_NODE_DND_TYPE,
+  parseDraggedGlbNode,
+} from '../../panels/hierarchy-logic';
 import type { EditorStore } from '../../document';
 import { UiIcons } from '../../../ui/icons';
 import { UiIcon } from '../UiIcon';
@@ -402,6 +406,58 @@ export function EntityRefField({
         Clear
       </EdButton>
     </div>
+  );
+}
+
+/**
+ * GLB node name that also accepts a node dragged from the Hierarchy. Typing
+ * still works — node names are the binding contract with the GLB, and hunting
+ * one down by eye is how they get misspelled.
+ *
+ * `dropEffect` must be `move`: the hierarchy's GLB rows set
+ * `effectAllowed = 'move'`, and a mismatched effect makes the browser refuse
+ * the drop with no event at all.
+ */
+export function GlbNodeRefField({
+  store,
+  value,
+  onCommit,
+  placeholder,
+}: {
+  store: EditorStore;
+  value: string;
+  onCommit: (next: string) => void;
+  placeholder?: string;
+}): ReactElement {
+  const [isDropTarget, setIsDropTarget] = useState(false);
+
+  return (
+    <TextField
+      value={value}
+      onCommit={onCommit}
+      placeholder={placeholder ?? 'Drop a GLB node'}
+      title="Type a GLB node name, or drag one from the Hierarchy"
+      className={`ed-input${isDropTarget ? ' is-drop-target' : ''}`}
+      onDragOver={(event) => {
+        if (!event.dataTransfer?.types.includes(GLB_NODE_DND_TYPE)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        setIsDropTarget(true);
+      }}
+      onDragLeave={() => setIsDropTarget(false)}
+      onDrop={(event) => {
+        setIsDropTarget(false);
+        const dragged = parseDraggedGlbNode(
+          event.dataTransfer?.getData(GLB_NODE_DND_TYPE) ?? '',
+        );
+        if (!dragged) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const name = store.getGlbNodeName(dragged.entityId, dragged.nodeUuid);
+        if (name) onCommit(name);
+      }}
+    />
   );
 }
 

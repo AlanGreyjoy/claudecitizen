@@ -4,8 +4,10 @@ import type { EditorAudioPreviewController } from '../audio-preview';
 import type { EditorStore } from '../document';
 import { showToast } from '../dom';
 import { startEditorPlay, type EditorPlaySession } from '../play-in-editor';
+import { startShipTest } from '../ship-test';
 import { addBox, addEmpty } from '../session-helpers';
 import type { EditorViewport } from '../../render/editor/viewport';
+import type { ShipEditor } from './panels/ShipPanel';
 import type { ToolbarGizmoMode, ToolbarHandle } from './panels/Toolbar';
 import type { TabEditorHandles } from './TabEditorHosts';
 import type { SceneEditorTab } from './types';
@@ -25,6 +27,7 @@ export type EditorAppSessionArgs = {
   setTab: (next: SceneEditorTab) => void;
   tabRef: MutableRefObject<SceneEditorTab>;
   tabHandlesRef: MutableRefObject<TabEditorHandles>;
+  shipEditorRef: RefObject<ShipEditor | null>;
   viewportRef: MutableRefObject<EditorViewport | null>;
   toolbarRef: RefObject<ToolbarHandle | null>;
   playSessionRef: MutableRefObject<EditorPlaySession | null>;
@@ -57,6 +60,7 @@ export function useEditorAppSession(args: EditorAppSessionArgs) {
     setTab,
     tabRef,
     tabHandlesRef,
+    shipEditorRef,
     viewportRef,
     toolbarRef,
     playSessionRef,
@@ -94,6 +98,17 @@ const togglePlay = useCallback(async () => {
   }
   if (current === 'server') {
     showToast('Open a scene to play.', true);
+    return;
+  }
+  if (current === 'ship') {
+    if (store.getState().kind !== 'ship') {
+      showToast('Open a ship prefab to test it.', true);
+      return;
+    }
+    viewportRef.current?.setPlayMode(true);
+    playSessionRef.current = startShipTest(store, shipEditorRef.current?.getTestEnv() ?? 'pad');
+    setPaused(false);
+    setPlaying(true);
     return;
   }
   if (current !== 'scene') setTabState('scene');

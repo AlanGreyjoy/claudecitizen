@@ -97,9 +97,32 @@ export function createShipSandboxScene(canvas: HTMLCanvasElement): ShipSandboxSc
   return { renderer, scene, camera, cameraTarget, composer, n8aoPass };
 }
 
+/**
+ * Releases the GPU resources this stage owns. In-editor the sandbox starts and
+ * stops repeatedly, so a leaked composer/renderer costs a WebGL context per
+ * playtest and the browser hard-caps how many exist at once.
+ */
+export function disposeShipSandboxScene(sandbox: ShipSandboxScene): void {
+  sandbox.composer.dispose();
+  sandbox.scene.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry?.dispose();
+    const material = mesh.material;
+    if (Array.isArray(material)) for (const entry of material) entry.dispose();
+    else material?.dispose();
+  });
+  sandbox.scene.clear();
+  sandbox.renderer.dispose();
+}
+
 export function resizeShipSandboxScene(scene: ShipSandboxScene): void {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  // In-editor the canvas fills `#editor-play-host`, which is inset below the
+  // toolbar — sizing to the window instead stretches the render and cuts the
+  // bottom off. Fall back to the window only before layout has run.
+  const canvas = scene.renderer.domElement;
+  const width = canvas.clientWidth || window.innerWidth;
+  const height = canvas.clientHeight || window.innerHeight;
   scene.renderer.setSize(width, height, false);
   scene.camera.aspect = width / height;
   scene.camera.updateProjectionMatrix();

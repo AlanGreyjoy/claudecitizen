@@ -56,6 +56,13 @@ export interface MeshGameplayCollider extends ColliderBase {
   assetUrl: string;
   convex: boolean;
   nodeOverrides?: PrefabNodeOverride[];
+  /**
+   * GLB nodes to leave out of this bake, with their whole subtree. Articulated
+   * parts (doors, ramp) get their own collider that moves with the rig; baking
+   * them into the parent hull too would leave a permanent copy of the closed
+   * door welded into the doorway.
+   */
+  excludeNodes?: readonly string[];
   /** Match ship_model.ts bbox recenter so colliders align with ship-local gameplay coords. */
   recenterHull?: boolean;
 }
@@ -303,6 +310,7 @@ function meshCacheKey(
   convex: boolean,
   overrides: readonly PrefabNodeOverride[] | undefined,
   recenterHull: boolean,
+  excludeNodes: readonly string[] | undefined,
 ): string {
   return JSON.stringify({
     url,
@@ -310,6 +318,7 @@ function meshCacheKey(
     convex,
     overrides: overrides ?? [],
     recenterHull,
+    excludeNodes: excludeNodes ?? [],
   });
 }
 
@@ -379,37 +388,41 @@ function loadPreparedScene(
 }
 
 /**
- * Descendant GLB nodes that already have their own mesh colliders (doors,
- * ramp, cockpit pieces). Parent hull bakes must skip them — otherwise the
- * closed ramp stays embedded in the hull and becomes a ghost barrier when the
- * open-pose ramp collider is enabled.
+ * Descendant GLB nodes this bake must skip, subtree included: nodes that carry
+ * their own collider (doors, ramp, cockpit pieces) plus any node the caller
+ * declared articulated. Otherwise the closed door/ramp stays welded into the
+ * hull and becomes a ghost barrier the moving collider can never open.
  */
-function siblingColliderNodeNames(
-  collider: MeshGameplayCollider,
-): ReadonlySet<string> {
+function excludedNodeNames(collider: MeshGameplayCollider): ReadonlySet<string> {
   const excluded = new Set<string>();
+  const add = (node: string): void => {
+    if (node === collider.node) return;
+    excluded.add(sanitizeNodeName(node));
+  };
   for (const override of collider.nodeOverrides ?? []) {
-    if (override.node === collider.node) continue;
     if (!override.components?.some((component) => component.type === "collider")) {
       continue;
     }
-    excluded.add(sanitizeNodeName(override.node));
+    add(override.node);
   }
+  for (const node of collider.excludeNodes ?? []) add(node);
   return excluded;
 }
 
-function meshOwnedByExcludedAncestor(
+/**
+ * Checks the mesh itself as well as its ancestors — an excluded node is often
+ * a leaf mesh, not a group, and an ancestor-only walk silently kept those.
+ */
+function meshOwnedByExcludedNode(
   mesh: THREE.Object3D,
   root: THREE.Object3D,
   excluded: ReadonlySet<string>,
 ): boolean {
   if (excluded.size === 0) return false;
-  let ancestor: THREE.Object3D | null = mesh.parent;
-  while (ancestor && ancestor !== root) {
-    if (ancestor.name && excluded.has(sanitizeNodeName(ancestor.name))) {
-      return true;
-    }
-    ancestor = ancestor.parent;
+  let node: THREE.Object3D | null = mesh;
+  while (node && node !== root) {
+    if (node.name && excluded.has(sanitizeNodeName(node.name))) return true;
+    node = node.parent;
   }
   return false;
 }
@@ -421,6 +434,7 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
     collider.convex,
     collider.nodeOverrides,
     collider.recenterHull ?? false,
+    collider.excludeNodes,
   );
   let pending = meshAssetCache.get(key);
   if (!pending) {
@@ -452,11 +466,11 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
             ? root.parent.matrixWorld.clone()
             : new THREE.Matrix4();
         const restNodeWorld = root.matrixWorld.clone();
-        const excludedNodes = siblingColliderNodeNames(collider);
+        const excludedNodes = excludedNodeNames(collider);
         const vertices: number[] = [];
         root.traverse((object) => {
           if (!(object instanceof THREE.Mesh)) return;
-          if (meshOwnedByExcludedAncestor(object, root, excludedNodes)) return;
+          if (meshOwnedByExcludedNode(object, root, excludedNodes)) return;
           const toAssetLocal = assetLocalFromWorld.clone().multiply(object.matrixWorld);
           appendMeshPositions(object, toAssetLocal, vertices);
         });
@@ -536,6 +550,7 @@ function getMeshAsset(collider: MeshGameplayCollider): MeshColliderAsset | null 
     collider.convex,
     collider.nodeOverrides,
     collider.recenterHull ?? false,
+    collider.excludeNodes,
   );
   if (meshAssetReady.has(key)) return meshAssetReady.get(key) ?? null;
   if (!meshAssetCache.has(key)) {

@@ -19,6 +19,7 @@ import { ProjectPanel, type ProjectPanelHandle } from './panels/ProjectPanel';
 import { NewSceneModal } from './panels/NewSceneModal';
 import { ProjectSettingsModal } from './panels/ProjectSettingsModal';
 import { SceneSettingsModal } from './panels/SceneSettingsModal';
+import { ShipPanel, type ShipEditor } from './panels/ShipPanel';
 import { Toolbar, type ToolbarHandle } from './panels/Toolbar';
 import { TabEditorHosts, type TabEditorHandles } from './TabEditorHosts';
 import { SCENE_EDITOR_TABS, type SceneEditorTab } from './types';
@@ -35,6 +36,7 @@ export type EditorWorkspaceProps = {
   playing: boolean;
   isolationUi: ReturnType<typeof usePrefabIsolation>['isolationUi'];
   toolbarRef: RefObject<ToolbarHandle | null>;
+  shipEditorRef: RefObject<ShipEditor | null>;
   projectRef: RefObject<ProjectPanelHandle | null>;
   mainRef: RefObject<HTMLDivElement | null>;
   hierarchyPanelRef: RefObject<HTMLDivElement | null>;
@@ -52,6 +54,9 @@ export type EditorWorkspaceProps = {
   requestExitIsolation: () => void | Promise<void>;
   createItemPrefab: (url: string) => void | Promise<void>;
   loadById: (id: string) => void | Promise<void>;
+  openShipById: (id: string) => void | Promise<void>;
+  newShipDocument: () => void | Promise<void>;
+  togglePlay: () => void;
   createPrefabsInFolder: (entityIds: string[], folder: string) => Promise<string[]>;
   newSceneOpen: boolean;
   setNewSceneOpen: (open: boolean) => void;
@@ -73,6 +78,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
     playing,
     isolationUi,
     toolbarRef,
+    shipEditorRef,
     projectRef,
     mainRef,
     hierarchyPanelRef,
@@ -90,6 +96,9 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
     requestExitIsolation,
     createItemPrefab,
     loadById,
+    openShipById,
+    newShipDocument,
+    togglePlay,
     createPrefabsInFolder,
     newSceneOpen,
     setNewSceneOpen,
@@ -179,11 +188,24 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
               <span className="ed-prefab-isolation-hint">Editing Prefab</span>
             </div>
           ) : null}
+          <ShipPanel
+            ref={shipEditorRef}
+            store={store}
+            hidden={tab !== 'ship'}
+            playing={playing}
+            onOpenShip={openShipById}
+            onNewShip={newShipDocument}
+            onSave={toolbarActions.onSave}
+            onTogglePlay={togglePlay}
+          />
           <div className="ed-scene-body">
             <ViewportHost
               store={store}
-              hidden={tab !== 'scene'}
-              playing={playing && (tab === 'scene' || tab === 'material-manager')}
+              hidden={tab !== 'scene' && tab !== 'ship'}
+              playing={
+                playing
+                && (tab === 'scene' || tab === 'material-manager' || tab === 'ship')
+              }
               onReady={setViewport}
               onDropAsset={(url: string, position: Vec3) =>
                 addAssetEntity(store, url, position)

@@ -78,6 +78,12 @@ export interface ShipSandboxSession {
   flightCameraFeelFrame: FlightCameraFeelResult | null;
   fpsEl: HTMLElement;
   interactPromptEl: HTMLElement;
+  /** False once the session is stopped; the frame loop exits instead of re-arming. */
+  running: boolean;
+  /** Editor Pause. ORed with the in-game menu / entertainment pauses. */
+  externallyPaused: boolean;
+  /** Pending rAF handle so a stop mid-frame cancels the next one. */
+  frameHandle: number;
   lastMs: number;
   fpsAccum: number;
   fpsFrames: number;

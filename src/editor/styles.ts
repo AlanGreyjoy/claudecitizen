@@ -769,16 +769,18 @@ body.ed-resize-row * {
   min-height: 0;
 }
 
+/*
+ * Column: tab strip, then any number of auto-height context bars (prefab
+ * isolation, Ship), then the body taking the rest. Flex rather than fixed grid
+ * rows — a template that enumerates its children silently mis-sizes the body
+ * the moment a new bar is added.
+ */
 .ed-scene-shell {
-  display: grid;
-  grid-template-rows: 30px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: var(--ed-viewport);
-}
-
-.ed-scene-shell.has-isolation {
-  grid-template-rows: 30px auto minmax(0, 1fr);
 }
 
 .ed-prefab-isolation-bar {
@@ -834,6 +836,7 @@ body.ed-resize-row * {
 }
 
 .ed-scene-tabs {
+  flex: 0 0 30px;
   display: flex;
   align-items: stretch;
   gap: 2px;
@@ -886,6 +889,7 @@ body.ed-resize-row * {
 
 .ed-scene-body {
   position: relative;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
 }
@@ -899,6 +903,134 @@ body.ed-resize-row * {
 .ed-scene-body > .ed-server-console-host {
   position: absolute;
   inset: 0;
+}
+
+/* Mesh collider carve-out list: drop GLB nodes to keep them out of the bake. */
+.ed-collider-exclude-drop {
+  margin: 2px 0 4px;
+  padding: 7px 8px;
+  border: 1px dashed var(--ed-line);
+  border-radius: 3px;
+  color: var(--ed-muted);
+  font: 500 11px/1.2 var(--ed-font);
+  text-align: center;
+}
+
+.ed-collider-exclude-drop.is-drop-target {
+  border-color: var(--ed-text-strong);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ed-text);
+}
+
+.ed-collider-exclude-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ed-collider-exclude-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.ed-collider-exclude-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ed-text);
+  font: 500 11px/1.2 var(--ed-font);
+}
+
+/*
+ * Ship tab bar. The Ship tab reuses the scene viewport, hierarchy, and
+ * inspector for authoring, so this strip is the only chrome it adds: browse a
+ * ship, see what is wrong with it, and fly it.
+ */
+.ed-ship-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--ed-line);
+  background: var(--ed-chrome);
+  color: var(--ed-text);
+  font: 600 11px/1.2 var(--ed-font);
+}
+
+.ed-ship-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ed-ship-test {
+  margin-left: auto;
+}
+
+.ed-ship-select {
+  min-width: 160px;
+  max-width: 260px;
+}
+
+.ed-ship-envs {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.ed-ship-env.is-active {
+  background: color-mix(in srgb, var(--ed-accent, #5b8def) 32%, var(--ed-chrome));
+  color: var(--ed-text);
+}
+
+.ed-ship-stop {
+  background: color-mix(in srgb, var(--ed-danger, #d9534f) 30%, var(--ed-chrome));
+}
+
+.ed-ship-hint {
+  color: var(--ed-muted);
+  font-weight: 500;
+}
+
+.ed-ship-issues {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ed-ship-issues-summary.is-warn {
+  color: var(--ed-warn, #e0a33c);
+}
+
+.ed-ship-issues-summary.is-error {
+  color: var(--ed-danger, #d9534f);
+}
+
+/* Issues hang below the bar so a long list never reflows the viewport. */
+.ed-ship-issue-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  max-width: 520px;
+  margin: 0;
+  padding: 6px 8px 6px 22px;
+  border: 1px solid var(--ed-line);
+  border-radius: 3px;
+  background: var(--ed-surface);
+  color: var(--ed-muted);
+  font: 500 11px/1.5 var(--ed-font);
+  list-style: disc;
+  pointer-events: none;
+}
+
+.ed-ship-issue.is-blocker {
+  color: var(--ed-danger, #d9534f);
 }
 
 /* System Map / Menu Manager / Server hide Project + Console + asset browser. */
@@ -2315,68 +2447,127 @@ body.ed-resize-row * {
 .ed-add-component {
   display: flex;
   gap: 6px;
-  margin-top: 4px;
+  margin-bottom: 8px;
 }
 
-.ed-combobox {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
-.ed-combobox .ed-input {
+.ed-add-component .ed-btn {
   width: 100%;
 }
 
-.ed-combobox-list {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 60;
-  max-height: 240px;
-  overflow: auto;
-  border: 1px solid var(--ed-line);
-  background: var(--ed-popover);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.ed-combobox-list.is-open {
-  display: block;
-}
-
-.ed-combobox-item {
+.ed-dialog.ed-add-component-modal {
+  width: min(520px, 100%);
+  max-height: min(80vh, 680px);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 20px 16px;
+}
+
+.ed-add-component-search {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.ed-add-component-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ed-add-component-tab {
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--ed-line-soft);
+  border-radius: 2px;
+  background: var(--ed-surface);
+  color: var(--ed-muted);
+  cursor: pointer;
+  font: 600 11px/1.2 var(--ed-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ed-add-component-tab:hover {
+  color: var(--ed-text);
+  background: var(--ed-raised);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.ed-add-component-tab.is-active {
+  color: var(--ed-text-strong);
+  border-color: var(--ed-focus);
+  background: rgba(77, 132, 192, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(77, 132, 192, 0.35);
+}
+
+.ed-add-component-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  padding: 2px;
+}
+
+.ed-add-component-empty {
+  padding: 16px 10px;
+  color: var(--ed-muted);
+  font: 500 12px/1.4 var(--ed-font);
+  text-align: center;
+}
+
+.ed-add-component-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--ed-line-soft);
+  border-radius: 2px;
+  background: var(--ed-surface);
+  color: var(--ed-text);
+  font: 13px/1.35 var(--ed-font);
+}
+
+.ed-add-component-item:hover,
+.ed-add-component-item.is-highlighted {
+  background: var(--ed-raised);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.ed-add-component-item.is-highlighted {
+  border-color: var(--ed-focus);
+  background: rgba(77, 132, 192, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(77, 132, 192, 0.45);
+}
+
+.ed-add-component-item-head {
+  display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 10px;
-  cursor: pointer;
 }
 
-.ed-combobox-item.is-highlighted {
-  background: var(--ed-focus);
-}
-
-.ed-combobox-item-label {
-  font: 600 12px/1.2 var(--ed-font);
-  color: var(--ed-text);
-}
-
-.ed-combobox-item.is-highlighted .ed-combobox-item-label {
+.ed-add-component-item-label {
   color: var(--ed-text-strong);
+  font: 600 13px/1.25 var(--ed-font);
 }
 
-.ed-combobox-item-type {
-  font: 500 10px/1 var(--ed-mono);
+.ed-add-component-item-type {
+  flex-shrink: 0;
   color: var(--ed-muted);
+  font: 500 11px/1.2 var(--ed-font-mono, var(--ed-font));
 }
 
-.ed-combobox-empty {
-  padding: 8px 10px;
-  font: 500 11px/1.3 var(--ed-font);
+.ed-add-component-item-hint {
   color: var(--ed-muted);
+  font: 500 12px/1.4 var(--ed-font);
 }
 
 .ed-door-node-row {
@@ -2652,6 +2843,19 @@ body.ed-resize-row * {
   max-width: 160px;
   padding: 2px 6px;
   font: 500 10px/1.2 var(--ed-font);
+}
+
+.ed-asset-search {
+  flex: 0 1 auto;
+  width: 160px;
+  min-width: 90px;
+  padding: 2px 6px;
+  font: 500 10px/1.2 var(--ed-font);
+}
+
+.ed-asset-search::-webkit-search-cancel-button {
+  cursor: pointer;
+  filter: invert(0.7);
 }
 
 .ed-asset-grid {

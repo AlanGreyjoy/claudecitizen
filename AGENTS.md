@@ -126,13 +126,13 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 #### Station prefab doors (animation component)
 
 1. **Visual**: `src/game/station/animations.ts` `updateStationAnimations` lerps `stationAnimationStates[id].value` toward `target`, then calls `renderer.getStationRoot().userData.updateAnimations(blends)`. The renderer (`src/render/prefabs/prefab-renderer.ts` `setupUpdateAnimations`) looks up GLB nodes by name and translates/rotates them.
-2. **Collider**: station colliders are baked as **static Rapier bodies** in `play-session.ts` `createStationPhysics` → `syncStaticColliders`. They do NOT move with the animation unless bound via `collider.animation` (set in `station-runtime.ts` `bindStationColliderAnimations`). When bound, `src/game/station/animations.ts` toggles their `setEnabled` state in `updateStationAnimations` based on the open blend.
+2. **Collider**: station colliders are baked as **static Rapier bodies** in `play-session.ts` `createStationPhysics` → `syncStaticColliders`. They do NOT move with the animation unless bound via `collider.animation` (set in `station-runtime.ts` `bindStationColliderAnimations`). Nodes named by an `animation` component are excluded from parent mesh bakes and auto-given their own collider — same `articulatedNodes` mechanism as ship doors (`stationAnimatedNodeNames`). When bound, `src/game/station/animations.ts` toggles their `setEnabled` state in `updateStationAnimations` based on the open blend.
 3. **F-key toggle**: an `interaction` component with `interactionType: "animation"` + `targetAnimationId` produces a `prefab-info` interaction (`station-interaction.ts`). `src/game/modes/in-station.ts` handles it at the `interaction.kind === 'prefab-info'` branch using `actions.wasKeyPressed(keyCode)` — NOT `actions.interactPressed`. See gotcha below.
 
 #### Ship prefab doors (ship-door component)
 
 1. **Visual**: ship model articulation follows door blends from `ship-rig.ts`.
-2. **Collider**: collider-deck ships use **Rapier** (`ship-physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip child nodes that have their own colliders so the closed door is not embedded as a ghost barrier. Near a parked ship, a ship-local pad plane shares that Rapier world so exterior hull collision and ramp walk are continuous (`shipHasFloorBelow`); freefall off the pad hands back to planet/station.
+2. **Collider**: collider-deck ships use **Rapier** (`ship-physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip **articulated** child nodes, subtree included — every node named by a `ship-door` or the ramp hinge, plus any node carrying its own collider — so the closed door is not embedded as a ghost barrier. `ship-runtime.ts` `articulatedNodeNames` supplies that list to `buildPrefabColliders(doc, { articulatedNodes })`, and any articulated node with no authored collider gets one baked from its own geometry (`<entity>:<node>:collider-articulated`) so it still blocks while closed. Authors can carve out anything else by dragging GLB nodes into the mesh collider's **Exclude from bake** list (`collider.excludeNodes`); it unions with the automatic set. Landing gear is deliberately **not** articulated-excluded: it is exterior, gates no doorway, and pulling it out would drop leg collision from existing ships. Near a parked ship, a ship-local pad plane shares that Rapier world so exterior hull collision and ramp walk are continuous (`shipHasFloorBelow`); freefall off the pad hands back to planet/station.
 3. **F-key toggle**: `ship-play-session.ts` / `src/game/modes/on-ship-deck.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
 4. **Collider pass-through**: door trimeshes disable when `open01 >= 0.85` (same threshold as stations).
 
@@ -152,7 +152,8 @@ Flight is **not** Rapier. Deck walking may use Rapier; flying uses the custom in
 - **Gravity (Star Wars–style):** once airborne, gravity does **not** pull the ship down. Altitude is thruster-only (Space/C). Landing uses ground/hangar clamp. **No auto-level** — roll/pitch attitude sticks until the pilot corrects (preview levels on pad exit).
 - **Mouse dual-reticle**: persistent aim pip + nose pip; IFCS PD-tracks aim (`flight-aim.ts`). Hold **F** = cockpit free-look (camera only); while free-looking, gaze + **LMB** activates `cockpit-control` markers (gear/ramp). **Alt+C** = coupled ↔ decoupled.
 - **Main play**: `src/game/modes/in-ship.ts` (`MODE_IN_SHIP`) → `integrateFlightBody` + dual reticle HUD (`src/game/hud/frame-hud.ts`).
-- **Preview Ship** (`?shipPrefab=` / `ship-play-session.ts`): sit pilot → takeoff/flight over the flat pad (same flight model). Hold **Y** exits the seat anytime (settles onto the pad when nearby).
+- **Ship tab playtest** (`src/editor/ship-test.ts`): **Pad** runs `startShipSandboxSession` (flat pad, no terrain); **Planet** runs `startEditorPlay(store, { shipSpawn: 'surface' })`. Both spawn on foot beside the hull with the ramp down and return the same `EditorPlaySession`, so F6/F7/Stop drive them identically. `?shipPrefab=` still boots the pad sandbox as a standalone page.
+- **Which hull spawns**: a scene's placed `prefab-instance{prefabKind:'ship'}` flows `scene-runtime.ts` → `PlayWorldParams.shipPrefabOverride` → `activateShipPrefab` → `createWorldState({ shipPrefabId })`. Break any link in that chain and every Play silently flies `DEFAULT_SHIP_PREFAB_ID` (the Starhopper) instead of the authored ship.
 - **Tuning workflow**: read `.cursor/skills/ship-flight/SKILL.md` (and `.cursor/rules/ship-flight.mdc`). Symptom → fix tables live there.
 
 ## Editor (Electron desktop)
@@ -181,7 +182,7 @@ The Electron editor (**AsteronEngine**) is the only authoring workspace. Cold st
 | `src/world/prefabs/schema.ts` | Canonical prefab JSON schema (+ scene components) |
 | `tools/asteron-mcp/` | Stdio MCP server (Cursor) → live editor agent API |
 
-React owns editor chrome and all panel/form UI; `EditorStore` stays framework-agnostic. Tabs: **Scene** (default), Material Manager, Base Characters, Planet Authoring, System Map, Menu Manager, **Server**. WebGL/canvas preview stages (viewport, planet terrain, system map, base-character stage, menu HUD) stay imperative behind React hosts. Component field editors live in `src/editor/react/panels/component_fields/`.
+React owns editor chrome and all panel/form UI; `EditorStore` stays framework-agnostic. Tabs: **Scene** (default), Material Manager, **Ship**, Base Characters, Planet Authoring, System Map, Menu Manager, **Server**. Ship is the one tab that shares Scene's viewport/hierarchy/inspector instead of replacing them — it only adds a bar (browse, validate, Test), so it is wired through `EditorWorkspace`, not `TabEditorHosts`. WebGL/canvas preview stages (viewport, planet terrain, system map, base-character stage, menu HUD) stay imperative behind React hosts. Component field editors live in `src/editor/react/panels/component_fields/`.
 
 **Live project/scene context for agents:** use the **AsteronEngine MCP** (`asteron-engine` in `.cursor/mcp.json`). It reads `~/.asteron/agent.json` written by a running editor and exposes session, open document, hierarchy, selection, play state, disk catalogs, and safe play/save/select/open commands. See `editor-desktop/README.md` (“AsteronEngine MCP”).
 
@@ -366,7 +367,9 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `src/game/create-game-loop.ts` | Thin play-loop orchestrator; wires feature modules + owns `frame()`/start/stop |
 | `src/game/modes/` | Per-mode frame logic (on-foot, in-ship, in-bed, ship-deck, station, elevator, transitions) |
 | `src/game/station/animations.ts` | `stationAnimationStates` blend + door-collider enable toggle |
-| `src/app/ship-play-session.ts` | Ship sandbox: deck walk + pilot flight preview |
+| `src/app/ship-play-session.ts` | `startShipSandboxSession` (disposable pad sandbox) + `?shipPrefab=` page wrapper |
+| `src/editor/ship-test.ts` | Ship tab playtest launcher (pad vs planet) |
+| `src/player/ship-layout-issues.ts` | Pure ship authoring checks rendered by the Ship tab |
 | `src/render/effects/hud/flight-reticle.ts` | Dual-reticle aim + nose pips |
 | `src/player/flight-camera-feel.ts` | Thrust FOV + boost shake (ship-controller stats) |
 | `src/player/cockpit-gaze.ts` | Cockpit look-at pick + gear/ramp activate |

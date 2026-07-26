@@ -59,6 +59,10 @@ export interface GameLoopOptions {
   activeStationInstanceId?: string | null;
   /** Subsystems the active scene declared. Omitted means "boot everything". */
   content?: ScenePlayContent;
+  /** Ship prefab the player ship spawns as. Omitted uses the default hull. */
+  shipPrefabId?: string | null;
+  /** Ship playtest: spawn the hull boardable so the ramp is already walkable. */
+  shipRampDownOnSpawn?: boolean;
   controls: PlayerControls;
   renderer: SpikeRenderer | null;
   rendererError: unknown;

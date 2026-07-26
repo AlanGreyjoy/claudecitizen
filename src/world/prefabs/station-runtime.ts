@@ -563,6 +563,21 @@ function collect(
  * stays enabled (see `station_physics.ts` `setDoorColliderEnabled` no-op), so the
  * player can't walk through. That case is warned about once per animation.
  */
+/**
+ * GLB nodes an `animation` component moves. Kept out of parent mesh bakes and
+ * given their own collider when the author did not author one, so a station
+ * door stops being welded into the wall it sits in.
+ */
+function stationAnimatedNodeNames(
+  animations: FlattenedComponents["animationSpecs"],
+): string[] {
+  const names = new Set<string>();
+  for (const anim of animations) {
+    for (const node of anim.nodes) names.add(node.name);
+  }
+  return [...names];
+}
+
 function bindStationColliderAnimations(
   colliders: GameplayCollider[],
   animations: FlattenedComponents["animationSpecs"],
@@ -787,7 +802,9 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     console.warn(`Prefab "${doc.id}" NPC authoring: ${issue}`);
   }
   const colliders = bindStationColliderAnimations(
-    await buildPrefabColliders(doc),
+    await buildPrefabColliders(doc, {
+      articulatedNodes: stationAnimatedNodeNames(out.animationSpecs),
+    }),
     out.animationSpecs,
     doc.id,
   );

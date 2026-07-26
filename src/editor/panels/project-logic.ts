@@ -221,6 +221,35 @@ export function collectImmediateChildFolders(
   return sortedFolderChildren(folder, orderMap);
 }
 
+/** Case-insensitive, whitespace-tolerant asset search terms. */
+export function assetSearchTerms(query: string): string[] {
+  return query.toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+export function filterAssetEntriesByQuery(
+  files: readonly AssetEntry[],
+  query: string,
+): AssetEntry[] {
+  const terms = assetSearchTerms(query);
+  if (terms.length === 0) return [...files];
+  return files.filter((entry) => {
+    const haystack = entry.path.toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+}
+
+export function filterFoldersByQuery(
+  folders: readonly FolderNode[],
+  query: string,
+): FolderNode[] {
+  const terms = assetSearchTerms(query);
+  if (terms.length === 0) return [...folders];
+  return folders.filter((folder) => {
+    const haystack = folder.name.toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+}
+
 export function fileNameFromPath(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1);
 }

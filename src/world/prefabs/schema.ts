@@ -564,6 +564,14 @@ export type PrefabComponent =
       offset?: Vec3;
       /** Optional GLB node to extract and/or follow for ship rig motion. */
       node?: string;
+      /**
+       * GLB nodes to leave out of this bake, subtree included. A mesh collider
+       * swallows every child it can reach, which is usually what you want —
+       * this is the carve-out for parts that must not be solid, or that carry
+       * their own moving collider. Door and ramp nodes are excluded
+       * automatically and need no entry here.
+       */
+      excludeNodes?: string[];
     }
   // --- ship components -------------------------------------------------------
   | { type: "ship-frame" }

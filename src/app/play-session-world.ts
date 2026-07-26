@@ -43,6 +43,17 @@ export interface PlayWorldParams {
   fromEditor: boolean;
   stationPrefabOverride: string | null;
   /**
+   * Ship prefab the scene placed, when it placed one. Without this the session
+   * falls back to `DEFAULT_SHIP_PREFAB_ID`, which is why playing a ship prefab
+   * used to hand you the Starhopper instead of the hull you had open.
+   */
+  shipPrefabOverride: string | null;
+  /**
+   * Editor ship playtest: the stage exists only to fly this hull, so the ship
+   * spawns boardable (ramp down) instead of sealed like a story spawn.
+   */
+  shipTest: boolean;
+  /**
    * Scene being played, when there is one. Its GameObjects are the station the
    * player walks on (`buildSceneStationDocument`), which is why the document
    * travels with the params instead of just its resolved ids.
@@ -64,6 +75,8 @@ export function readPlayWorldParams(): PlayWorldParams {
     spawnSurface: playParams.get('spawn') === 'surface',
     fromEditor: playParams.get('from') === 'editor',
     stationPrefabOverride: AUTHORING_ENABLED ? playParams.get('stationPrefab') : null,
+    shipPrefabOverride: AUTHORING_ENABLED ? playParams.get('shipPrefab') : null,
+    shipTest: false,
     scene: null,
     content: { ...ALL_CONTENT },
   };
@@ -81,6 +94,8 @@ export function playWorldParamsFromScene(
     spawnSurface: config.spawn === 'surface',
     fromEditor: false,
     stationPrefabOverride: config.stationPrefabId,
+    shipPrefabOverride: config.shipPrefabId,
+    shipTest: scene.kind === 'prefab-stage' && config.shipPrefabId !== null,
     scene,
     content: config.content,
     ...overrides,
@@ -110,6 +125,8 @@ export async function readPlayWorldParamsFromScene(): Promise<PlayWorldParams> {
       stationPrefabOverride:
         config.stationPrefabId
         ?? base.stationPrefabOverride,
+      shipPrefabOverride: config.shipPrefabId ?? base.shipPrefabOverride,
+      shipTest: scene.kind === 'prefab-stage' && config.shipPrefabId !== null,
       scene,
       content: config.content,
     };
