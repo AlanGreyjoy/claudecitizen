@@ -3,13 +3,15 @@ import type {
   Planet,
   RenderStats,
   SpikeRenderWorld,
+  PlanetSpawnCatalog,
   SsaoSettings,
+  SurfaceSpawnMeshCollision,
   Vec3,
 } from '../../types';
 import { distance } from '../../math/vec3';
 import { createCharacterAvatar } from './scene/character-avatar';
 import { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
-import { createPlanetTileManager } from '../planet_tiles';
+import { createPlanetTileManager, PLANET_RENDER_SCALE } from '../planet_tiles';
 import { createPlanetVegetationManager, normalizeVegetationSettings } from '../vegetation';
 import { createSurfaceSpawnManager } from '../surface_spawns';
 import { applyRenderQualitySettings } from './domain/apply-render-quality';
@@ -47,6 +49,7 @@ import { createHitDecalRenderer } from '../effects/hit-decals';
 import { createTracerRenderer } from '../effects/tracers';
 import {
   executeSpikeRenderFrame,
+  type PlanetRenderStack,
   type SpikeRenderFrameDeps,
   type SpikeRenderFrameState,
   QUANTUM_RENDER_LAYER,
@@ -58,6 +61,37 @@ import {
 // prefab only once the player is close enough for the mesh to matter.
 const SECONDARY_STATION_LOAD_DISTANCE_METERS = 75_000;
 
+// Interior scenes have no surface-spawn manager, so the debug/query surface of
+// the renderer answers with empties instead of forcing every caller to branch.
+const EMPTY_SPAWN_MESH_COLLISIONS = new Map<string, SurfaceSpawnMeshCollision>();
+
+function emptySurfaceSpawnCatalog(): PlanetSpawnCatalog {
+  return { samplesPerTile: 0, density: 0, entries: [] };
+}
+
+function emptySurfaceSpawnDebugStats(): ReturnType<SpikeRenderer['getSurfaceSpawnDebugStats']> {
+  return {
+    layerCount: 0,
+    enabledLayers: 0,
+    entryCount: 0,
+    uniqueAssets: 0,
+    batchMeshes: 0,
+    estimatedDrawCalls: 0,
+    cachedTiles: 0,
+    readyTiles: 0,
+    pendingTiles: 0,
+    totalInstances: 0,
+    loadedAssets: 0,
+    failedAssets: 0,
+    meshCounts: [],
+    rootVisible: false,
+    rootInScene: false,
+    sampleRenderPos: null,
+    rootPos: { x: 0, y: 0, z: 0 },
+    rootScale: 0,
+  };
+}
+
 export interface SpikeRendererOptions {
   /** Dev preview: render this prefab as the orbital station instead of the procedural model. */
   stationPrefab?: PrefabDocument | null;
@@ -67,6 +101,39 @@ export interface SpikeRendererOptions {
    */
   additionalStations?: Array<{ prefab: PrefabDocument; frame: StationFrame }> | null;
   characterAppearance?: PlayerCharacterAppearanceV1 | null;
+  /**
+   * `interior` skips the whole planet stack — terrain, vegetation, surface
+   * spawns, water, clouds, atmosphere, and quantum travel — for scenes whose
+   * GameObjects never reference a planet. Defaults to `planet`.
+   */
+  environment?: 'planet' | 'interior';
+}
+
+/**
+ * Builds the planet half of the renderer: terrain streaming, vegetation,
+ * surface spawns, water, clouds, the atmosphere shell, and quantum travel.
+ * Scenes with no planet skip this entirely, which is what keeps their terrain
+ * and surface-spawn workers from starting.
+ */
+function createPlanetRenderStack(
+  scene: THREE.Scene,
+  planet: Planet,
+  seed: number,
+  renderScale: number,
+): PlanetRenderStack {
+  const atmosphereMesh = buildAtmosphereMesh(planet, renderScale);
+  scene.add(atmosphereMesh);
+  const quantumBubble = createQuantumBubble(scene, renderScale);
+  quantumBubble.enableRenderLayer(QUANTUM_RENDER_LAYER);
+  return {
+    tileManager: createPlanetTileManager(scene, planet, seed),
+    vegetationManager: createPlanetVegetationManager(scene, planet, seed, renderScale),
+    surfaceSpawnManager: createSurfaceSpawnManager(scene, planet, seed, renderScale),
+    cloudShell: createCloudShell(scene, planet, seed, renderScale),
+    surfaceWaterManager: createPlanetSurfaceWaterManager(scene, planet, seed, renderScale),
+    atmosphereMesh,
+    quantumBubble,
+  };
 }
 
 export function createSpikeRenderer(
@@ -75,6 +142,7 @@ export function createSpikeRenderer(
   seed: number,
   options?: SpikeRendererOptions,
 ): SpikeRenderer {
+  const planetEnabled = (options?.environment ?? 'planet') === 'planet';
   applyRenderQualitySettings();
   const renderQuality = resolveRenderQuality();
 
@@ -102,42 +170,30 @@ export function createSpikeRenderer(
   enableRenderLayer(lighting.sun, QUANTUM_RENDER_LAYER);
   enableRenderLayer(lighting.moonLight, QUANTUM_RENDER_LAYER);
 
-  const tileManager = createPlanetTileManager(scene, planet, seed);
-  const muzzleFlashRenderer = createMuzzleFlashRenderer(scene, tileManager.renderScale);
-  const hitDecalRenderer = createHitDecalRenderer(scene, tileManager.renderScale);
-  const tracerRenderer = createTracerRenderer(scene, tileManager.renderScale);
-  const surfaceWaterManager = createPlanetSurfaceWaterManager(
-    scene,
-    planet,
-    seed,
-    tileManager.renderScale,
-  );
-  const vegetationManager = createPlanetVegetationManager(
-    scene,
-    planet,
-    seed,
-    tileManager.renderScale,
-  );
-  const surfaceSpawnManager = createSurfaceSpawnManager(
-    scene,
-    planet,
-    seed,
-    tileManager.renderScale,
-  );
-  const cloudShell = createCloudShell(scene, planet, seed, tileManager.renderScale);
+  const renderScale = PLANET_RENDER_SCALE;
+  const muzzleFlashRenderer = createMuzzleFlashRenderer(scene, renderScale);
+  const hitDecalRenderer = createHitDecalRenderer(scene, renderScale);
+  const tracerRenderer = createTracerRenderer(scene, renderScale);
+
+  const planetStack = planetEnabled
+    ? createPlanetRenderStack(scene, planet, seed, renderScale)
+    : null;
+  const tileManager = planetStack?.tileManager ?? null;
+  const vegetationManager = planetStack?.vegetationManager ?? null;
+  const surfaceSpawnManager = planetStack?.surfaceSpawnManager ?? null;
 
   // Cloud path is player-selectable (Video settings): cheap planet-anchored
   // 2D shell by default, Takram volumetric composite on demand. Live-switches.
   // Grass render distance is the same: live apply, no reload.
   const initialGameSettings = loadGameSettings();
   let cloudMode: CloudModeSetting = initialGameSettings.cloudMode;
-  vegetationManager.setGrassRenderDistanceMeters(
+  vegetationManager?.setGrassRenderDistanceMeters(
     initialGameSettings.grassRenderDistanceMeters,
   );
   const handleGameSettingsChanged = (event: Event) => {
     const next = (event as CustomEvent<GameSettings>).detail ?? loadGameSettings();
     cloudMode = next.cloudMode;
-    vegetationManager.setGrassRenderDistanceMeters(next.grassRenderDistanceMeters);
+    vegetationManager?.setGrassRenderDistanceMeters(next.grassRenderDistanceMeters);
   };
   window.addEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
 
@@ -147,23 +203,20 @@ export function createSpikeRenderer(
     camera,
     planet,
     lighting.sun,
-    tileManager.renderScale,
+    renderScale,
   );
   composerStack.colorCorrectionEffect.setSettings(resolveColorCorrectionSettings());
 
-  const atmosphereMesh = buildAtmosphereMesh(planet, tileManager.renderScale);
-  scene.add(atmosphereMesh);
-
-  const shipRenderPool = createShipRenderPool(scene, tileManager.renderScale);
+  const shipRenderPool = createShipRenderPool(scene, renderScale);
   window.__claudecitizenShipModel = shipRenderPool as unknown as typeof window.__claudecitizenShipModel;
 
   const stationFrame = getStationFrame(planet);
   const stationMesh = options?.stationPrefab
-    ? createPrefabStationGroup(options.stationPrefab, tileManager.renderScale, {
+    ? createPrefabStationGroup(options.stationPrefab, renderScale, {
         localLightShadowMapSize: renderQuality.localLightShadowMapSize,
         localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
       })
-    : createStationModel(tileManager.renderScale);
+    : createStationModel(renderScale);
   scene.add(stationMesh);
 
   const additionalStationMeshes = (options?.additionalStations ?? []).map((entry) => ({
@@ -180,7 +233,7 @@ export function createSpikeRenderer(
       return null;
     }
 
-    entry.mesh = createPrefabStationGroup(entry.prefab, tileManager.renderScale, {
+    entry.mesh = createPrefabStationGroup(entry.prefab, renderScale, {
       localLightShadowMapSize: renderQuality.localLightShadowMapSize,
       localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
     });
@@ -190,13 +243,11 @@ export function createSpikeRenderer(
 
   const avatar = createCharacterAvatar(
     scene,
-    tileManager.renderScale,
+    renderScale,
     options?.characterAppearance ?? null,
   );
-  const remotePresence = createRemotePresenceRenderer(scene, tileManager.renderScale);
-  const stationNpcs = createStationNpcRenderer(scene, tileManager.renderScale);
-  const quantumBubble = createQuantumBubble(scene, tileManager.renderScale);
-  quantumBubble.enableRenderLayer(QUANTUM_RENDER_LAYER);
+  const remotePresence = createRemotePresenceRenderer(scene, renderScale);
+  const stationNpcs = createStationNpcRenderer(scene, renderScale);
 
   const renderFrameState: SpikeRenderFrameState = {
     lastTime: 0,
@@ -268,17 +319,13 @@ export function createSpikeRenderer(
     planet,
     seed,
     getCloudMode: () => cloudMode,
-    tileManager,
-    vegetationManager,
-    surfaceSpawnManager,
-    cloudShell,
-    surfaceWaterManager,
+    planetStack,
+    renderScale,
     composerStack,
     shipRenderPool,
     avatar,
     remotePresence,
     stationNpcs,
-    quantumBubble,
     muzzleFlashRenderer,
     hitDecalRenderer,
     tracerRenderer,
@@ -290,7 +337,6 @@ export function createSpikeRenderer(
     stationFrame,
     stationMesh,
     additionalStationMeshes,
-    atmosphereMesh,
     defaultFog,
     quantumLightingRoots,
     resolveSunTimeSeconds,
@@ -311,7 +357,7 @@ export function createSpikeRenderer(
     }
     if (settings.aoRadius !== undefined) {
       composerStack.ssaoBaseRadius = settings.aoRadius;
-      n8aoPass.configuration.aoRadius = settings.aoRadius * tileManager.renderScale;
+      n8aoPass.configuration.aoRadius = settings.aoRadius * renderScale;
     }
     if (settings.distanceFalloff !== undefined) {
       n8aoPass.configuration.distanceFalloff = settings.distanceFalloff;
@@ -323,33 +369,34 @@ export function createSpikeRenderer(
     render,
     resize,
     setVegetationSettings(nextSettings) {
-      vegetationManager.setSettings(normalizeVegetationSettings(nextSettings));
+      vegetationManager?.setSettings(normalizeVegetationSettings(nextSettings));
     },
     setVegetationLayers(layers) {
-      vegetationManager.setLayerVisible(layers);
+      vegetationManager?.setLayerVisible(layers);
     },
     setSurfaceSpawnCatalog(catalog) {
-      surfaceSpawnManager.setCatalog(catalog);
+      surfaceSpawnManager?.setCatalog(catalog);
     },
     setSurfaceSpawnLayers(layers) {
-      surfaceSpawnManager.setLayers(layers);
+      surfaceSpawnManager?.setLayers(layers);
     },
     getNearbySurfaceSpawns(focus, radiusMeters) {
-      return surfaceSpawnManager.getNearbyInstances(focus, radiusMeters);
+      return surfaceSpawnManager?.getNearbyInstances(focus, radiusMeters) ?? [];
     },
     getSurfaceSpawnLayers() {
-      return surfaceSpawnManager.getLayers();
+      return surfaceSpawnManager?.getLayers() ?? [];
     },
     getSurfaceSpawnCatalog() {
-      return surfaceSpawnManager.getCatalog();
+      return surfaceSpawnManager?.getCatalog() ?? emptySurfaceSpawnCatalog();
     },
     getSurfaceSpawnMeshCollisions() {
-      return surfaceSpawnManager.getMeshCollisions();
+      return surfaceSpawnManager?.getMeshCollisions() ?? EMPTY_SPAWN_MESH_COLLISIONS;
     },
     getSurfaceSpawnDebugStats() {
-      return surfaceSpawnManager.getDebugStats();
+      return surfaceSpawnManager?.getDebugStats() ?? emptySurfaceSpawnDebugStats();
     },
     async warmSpawnCorridor(focus, options) {
+      if (!tileManager || !vegetationManager) return;
       const radiusMeters = options?.radiusMeters ?? 700;
       const timeoutMs = options?.timeoutMs ?? 8_000;
       const onProgress = options?.onProgress;
@@ -400,6 +447,19 @@ export function createSpikeRenderer(
           : new THREE.Color(color);
       }
     },
+    setBloomSettings(settings) {
+      const bloom = composerStack.bloomEffect;
+      if (settings.intensity !== undefined) bloom.intensity = settings.intensity;
+      if (settings.luminanceThreshold !== undefined) {
+        bloom.luminanceMaterial.threshold = settings.luminanceThreshold;
+      }
+      if (settings.luminanceSmoothing !== undefined) {
+        bloom.luminanceMaterial.smoothing = settings.luminanceSmoothing;
+      }
+    },
+    setExposure(exposure) {
+      renderer.toneMappingExposure = exposure;
+    },
     setTimeOverride(mode) {
       timeOverride = mode;
     },
@@ -417,9 +477,9 @@ export function createSpikeRenderer(
         weaponMarkerForward.set(0, 0, 1).applyQuaternion(weaponMarkerQuaternion).normalize();
         return {
           position: {
-            x: weaponMarkerPosition.x / tileManager.renderScale + renderFrameState.lastFocusPosition.x,
-            y: weaponMarkerPosition.y / tileManager.renderScale + renderFrameState.lastFocusPosition.y,
-            z: weaponMarkerPosition.z / tileManager.renderScale + renderFrameState.lastFocusPosition.z,
+            x: weaponMarkerPosition.x / renderScale + renderFrameState.lastFocusPosition.x,
+            y: weaponMarkerPosition.y / renderScale + renderFrameState.lastFocusPosition.y,
+            z: weaponMarkerPosition.z / renderScale + renderFrameState.lastFocusPosition.z,
           },
           forward: {
             x: weaponMarkerForward.x,
@@ -447,19 +507,19 @@ export function createSpikeRenderer(
     },
     dispose() {
       window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
-      cloudShell.dispose();
-      surfaceWaterManager.dispose();
-      vegetationManager.dispose();
-      surfaceSpawnManager.dispose();
+      planetStack?.cloudShell.dispose();
+      planetStack?.surfaceWaterManager.dispose();
+      planetStack?.vegetationManager.dispose();
+      planetStack?.surfaceSpawnManager.dispose();
+      planetStack?.quantumBubble.dispose();
+      planetStack?.tileManager.dispose();
       remotePresence.dispose();
       stationNpcs.dispose();
-      quantumBubble.dispose();
       avatar.dispose();
       muzzleFlashRenderer.dispose();
       hitDecalRenderer.dispose();
       tracerRenderer.dispose();
       shipRenderPool.dispose();
-      tileManager.dispose();
       composerStack.dispose();
       renderer.dispose();
     },
@@ -473,7 +533,7 @@ export function createSpikeRenderer(
       return camera;
     },
     getRenderScale() {
-      return tileManager.renderScale;
+      return renderScale;
     },
   };
 }

@@ -171,6 +171,7 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
         ? {
             activeClipName: ctx.state.animation.activeClipName,
             clipNames: ctx.state.animation.clipNames,
+            clipPacks: ctx.state.animation.clipPacks,
             playing: ctx.state.animation.playing !== false,
             timeScale: ctx.state.animation.timeScale,
             sourceLabel: ctx.state.animation.sourceLabel,
@@ -361,11 +362,33 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
     saveController: async () => {
       if (!ctx.state.controllerState) return;
       try {
-        const parsed = parseAnimationController(ctx.state.controllerState);
+        const draft = structuredClone(ctx.state.controllerState);
+        const blobSources = draft.sources.filter(
+          (source) => source.url.startsWith('blob:') || source.url.startsWith('data:'),
+        );
+        if (blobSources.length > 0) {
+          throw new Error(
+            'Controller has clips from a local file picker (blob URL). Load those GLBs from Project → assets/…, reassign, then Save Ctrl.',
+          );
+        }
+        const knownSourceIds = new Set(draft.sources.map((source) => source.id));
+        const orphanStates = draft.states.filter(
+          (state) =>
+            state.clipName
+            && state.sourceId === UAL_ANIMATION_SOURCE_ID
+            && !knownSourceIds.has(UAL_ANIMATION_SOURCE_ID),
+        );
+        if (orphanStates.length > 0) {
+          throw new Error(
+            `${orphanStates.length} stance binding(s) still use legacy source "ual" with no project URL. Re-pick those clips from a loaded project pack, then Save Ctrl.`,
+          );
+        }
+        const parsed = parseAnimationController(draft);
         const path = await saveAnimationController(parsed);
         ctx.state.controllerState = structuredClone(parsed);
         ctx.state.controllerDirty = false;
         ctx.state.controllerList = await fetchAnimationControllerList();
+        if (parsed.id === 'default') ctx.setDefaultAnimationController(parsed);
         ctx.setStageStatus(`Saved ${path}`);
         ctx.notifyUiChange();
       } catch (error) {
@@ -475,7 +498,7 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
         ctx.state.animation.setPlaying(true);
         ctx.state.animation.update(0);
         ctx.setStageStatus(
-          `Loaded ${file.name} · ${ctx.state.animation.clipNames.length} clip(s) retargeted to Sidekick.`,
+          `Previewing ${file.name} · ${ctx.state.animation.clipNames.length} clip(s). For Save Ctrl, put the GLB under project assets/ and load via Project → Anims.`,
         );
       } catch (error) {
         ctx.setStageStatus(

@@ -42,9 +42,23 @@ through ESM imports, and is **not** a project asset root.
 
 ## Scenes own everything
 
-Scene documents (`src/world/scenes/data/*.scene.json`, schema v3) are GameObject
-trees. Components decide what a scene is — there is no `settings` block any
-more; v1/v2 documents migrate forward on read in `src/world/scenes/schema.ts`.
+Scene documents (`*.scene.json`, schema v3) are GameObject trees. Components
+decide what a scene is — there is no `settings` block any more; v1/v2 documents
+migrate forward on read in `src/world/scenes/schema.ts`.
+
+**Two scene locations, one relative path.** `src/world/scenes/loader.ts` resolves
+an id in this order:
+
+1. When authoring (`AUTHORING_ENABLED`), `GET /__editor/scene?id=` — the Electron
+   repository reads the **open project** at `<project>/src/world/scenes/data/<id>.scene.json`
+   (`editor-desktop/repository.mjs` `sceneDataDir()`).
+2. Otherwise the bundled fallback: a recursive `import.meta.glob` over **this
+   checkout's** `src/world/scenes/data/*.scene.json`, which holds only the
+   engine-owned menu flow (`title`, `login`, `character-creation`, `loading`,
+   `main-game`).
+
+So the engine's own scene data is a shipped default, not where project content
+belongs. Authoring a scene in the editor writes into the project root.
 
 | Component | Role |
 |-----------|------|
@@ -56,7 +70,7 @@ more; v1/v2 documents migrate forward on read in `src/world/scenes/schema.ts`.
 | `scene-link` | Scene transition target (`auto` + `delaySeconds` for timed hops) |
 | `instanced-scene` | Per-player content (habs, hangars) |
 
-`src/app/scene_host.ts` is the runtime: it loads a scene, mounts its UI screens
+`src/app/scene-host.ts` is the runtime: it loads a scene, mounts its UI screens
 or starts play from its GameObjects, and switches scenes **in-process**. Scene
 navigation must not reload the page.
 
@@ -66,7 +80,7 @@ navigation must not reload the page.
 `defaultScene`, and `build.outDir`. **File → Project Settings…** edits it;
 `/__editor/project-settings` reads and writes it.
 
-- `src/net/runtime_config.ts` resolves the backend URL at startup — from project
+- `src/net/runtime-config.ts` resolves the backend URL at startup — from project
   settings in the editor, from `asteron.runtime.json` in a shipped release.
   Never reintroduce a build-time `VITE_API_BASE_URL`.
 - **There is no API key.** Players authenticate with the existing cookie session
@@ -82,16 +96,16 @@ navigation must not reload the page.
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
 - **Schema** (`src/world/prefabs/schema.ts`) defines every component type and its validator. Read this first when a component's fields are unclear.
-- **Ship runtime** (`src/world/prefabs/ship_runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
-- **Station runtime** (`src/world/prefabs/station_runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
-- **Game loop** (`src/game/create_game_loop.ts`) is a thin orchestrator that composes colocated feature modules under `src/game/`. Station animation blend values (`stationAnimationStates`) live in `src/game/station/animations.ts`; the F-key interaction dispatch lives in `src/game/modes/in_station.ts`.
+- **Ship runtime** (`src/world/prefabs/ship-runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component.
+- **Station runtime** (`src/world/prefabs/station-runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
+- **Game loop** (`src/game/create-game-loop.ts`) is a thin orchestrator that composes colocated feature modules under `src/game/`. Station animation blend values (`stationAnimationStates`) live in `src/game/station/animations.ts`; the F-key interaction dispatch lives in `src/game/modes/in-station.ts`.
 
 ### Rifle ADS locomotion blending
 
-- `src/player/character_locomotion.ts` owns effective on-foot aim and facing for planet, station, and ship-deck walkers. While effective ADS is active, the whole character turns toward the camera-forward aim direction; otherwise it faces movement. Do not make equipped rifle/pistol stances camera-locked when RMB is not held.
-- `src/player/animation/resolve_locomotion.ts` owns the base/upper clip decision. Rifle ADS while idle uses full-body `idle_aiming`; rifle ADS while walking/running uses the current rifle gait as the lower-body base plus `idle_aiming` as the upper-body override.
+- `src/player/character-locomotion.ts` owns effective on-foot aim and facing for planet, station, and ship-deck walkers. While effective ADS is active, the whole character turns toward the camera-forward aim direction; otherwise it faces movement. Do not make equipped rifle/pistol stances camera-locked when RMB is not held.
+- `src/player/animation/resolve-locomotion.ts` owns the base/upper clip decision. Rifle ADS while idle uses full-body `idle_aiming`; rifle ADS while walking/running uses the current rifle gait as the lower-body base plus `idle_aiming` as the upper-body override.
 - Sprint takes precedence over ADS. Moving with the sprint gait suppresses the aim pose, camera-facing lock, and aim camera zoom until the character stops sprinting. Sprint always uses its normal full-body locomotion clip; the drawn-weapon crosshair remains available for hip fire.
-- `src/render/characters/sidekick/animation_runtime.ts` splits the clips at `spine_01`. Do not play full-body gait and ADS actions over the same spine/arm tracks, and do not turn ADS into a generic additive delta; both approaches double-drive the upper skeleton and distort the weapon pose.
+- `src/render/characters/sidekick/animation-runtime.ts` splits the clips at `spine_01`. Do not play full-body gait and ADS actions over the same spine/arm tracks, and do not turn ADS into a generic additive delta; both approaches double-drive the upper skeleton and distort the weapon pose.
 - The rifle gait GLBs contain materially different root/pelvis rotations. A masked upper clip still inherits those parents, which previously made moving ADS point away from the authored aim direction. `applyUpperParentCompensation` keeps the live gait parents for the legs but cancels their orientation at `spine_01` against the authored ADS parent space.
 - Parent compensation is fade-weighted and must be restored before every `AnimationMixer.update()`. Three.js may skip writing an unchanged track, so applying correction repeatedly without restore accumulates rotation drift.
 - Switching between full and lower-body variants of the same gait must preserve `AnimationAction.time`; otherwise pressing or releasing RMB visibly restarts the foot cycle.
@@ -100,8 +114,8 @@ navigation must not reload the page.
 ### Friendly station NPCs
 
 - Ambient populations use `npc-spawner` markers connected to an undirected graph of `npc-waypoint` markers. Named/service characters use `npc-placement`.
-- `station_runtime.ts` flattens those components into station-local NPC specs. `src/world/npc.ts` validates duplicate/missing ids, cross-floor links, missing route groups, and disconnected graphs.
-- `src/npc/station_population.ts` currently runs a deterministic, cosmetic, non-colliding local population. `src/render/main/scene/station_npcs.ts` renders it through the existing character avatar pipeline with distance activation.
+- `station-runtime.ts` flattens those components into station-local NPC specs. `src/world/npc.ts` validates duplicate/missing ids, cross-floor links, missing route groups, and disconnected graphs.
+- `src/npc/station-population.ts` currently runs a deterministic, cosmetic, non-colliding local population. `src/render/main/scene/station-npcs.ts` renders it through the existing character avatar pipeline with distance activation.
 - NPC definitions and weighted populations live in `src/npc/catalog.ts`; station prefabs reference ids instead of embedding appearance data.
 - Local NPCs must remain non-authoritative. Before adding dialogue outcomes, persistence, inventory, combat, or player collision, promote NPCs to real backend cell entities and snapshot them with an explicit entity kind; do not model them as fake players.
 
@@ -111,15 +125,15 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 
 #### Station prefab doors (animation component)
 
-1. **Visual**: `src/game/station/animations.ts` `updateStationAnimations` lerps `stationAnimationStates[id].value` toward `target`, then calls `renderer.getStationRoot().userData.updateAnimations(blends)`. The renderer (`src/render/prefabs/prefab_renderer.ts` `setupUpdateAnimations`) looks up GLB nodes by name and translates/rotates them.
-2. **Collider**: station colliders are baked as **static Rapier bodies** in `play_session.ts` `createStationPhysics` → `syncStaticColliders`. They do NOT move with the animation unless bound via `collider.animation` (set in `station_runtime.ts` `bindStationColliderAnimations`). When bound, `src/game/station/animations.ts` toggles their `setEnabled` state in `updateStationAnimations` based on the open blend.
-3. **F-key toggle**: an `interaction` component with `interactionType: "animation"` + `targetAnimationId` produces a `prefab-info` interaction (`station_interaction.ts`). `src/game/modes/in_station.ts` handles it at the `interaction.kind === 'prefab-info'` branch using `actions.wasKeyPressed(keyCode)` — NOT `actions.interactPressed`. See gotcha below.
+1. **Visual**: `src/game/station/animations.ts` `updateStationAnimations` lerps `stationAnimationStates[id].value` toward `target`, then calls `renderer.getStationRoot().userData.updateAnimations(blends)`. The renderer (`src/render/prefabs/prefab-renderer.ts` `setupUpdateAnimations`) looks up GLB nodes by name and translates/rotates them.
+2. **Collider**: station colliders are baked as **static Rapier bodies** in `play-session.ts` `createStationPhysics` → `syncStaticColliders`. They do NOT move with the animation unless bound via `collider.animation` (set in `station-runtime.ts` `bindStationColliderAnimations`). When bound, `src/game/station/animations.ts` toggles their `setEnabled` state in `updateStationAnimations` based on the open blend.
+3. **F-key toggle**: an `interaction` component with `interactionType: "animation"` + `targetAnimationId` produces a `prefab-info` interaction (`station-interaction.ts`). `src/game/modes/in-station.ts` handles it at the `interaction.kind === 'prefab-info'` branch using `actions.wasKeyPressed(keyCode)` — NOT `actions.interactPressed`. See gotcha below.
 
 #### Ship prefab doors (ship-door component)
 
-1. **Visual**: ship model articulation follows door blends from `ship_rig.ts`.
-2. **Collider**: collider-deck ships use **Rapier** (`ship_physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip child nodes that have their own colliders so the closed door is not embedded as a ghost barrier. Near a parked ship, a ship-local pad plane shares that Rapier world so exterior hull collision and ramp walk are continuous (`shipHasFloorBelow`); freefall off the pad hands back to planet/station.
-3. **F-key toggle**: `ship_play_session.ts` / `src/game/modes/on_ship_deck.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
+1. **Visual**: ship model articulation follows door blends from `ship-rig.ts`.
+2. **Collider**: collider-deck ships use **Rapier** (`ship-physics.ts`). Door trimeshes bake at rest and are **disabled** when `open01 >= 0.85` (same threshold as stations). Ramp meshes bake **two** Rapier bodies (closed door + open walk) and swap with `ramp01`; parent hull bakes skip child nodes that have their own colliders so the closed door is not embedded as a ghost barrier. Near a parked ship, a ship-local pad plane shares that Rapier world so exterior hull collision and ramp walk are continuous (`shipHasFloorBelow`); freefall off the pad hands back to planet/station.
+3. **F-key toggle**: `ship-play-session.ts` / `src/game/modes/on-ship-deck.ts` deck-mode branches use `actions.interactPressed` (a captured boolean) to flip `doorRig.isOpen`.
 4. **Collider pass-through**: door trimeshes disable when `open01 >= 0.85` (same threshold as stations).
 
 #### Ship bunks (bed component)
@@ -127,18 +141,18 @@ This is the most common source of "door doesn't work" bugs. Trace these paths:
 1. Marker empty + `bed` component (radial or raycast trigger, like doors).
 2. Deck **F** → `entering-bed` → `in-bed` (always-on mouse head look; **no flight**).
 3. **Hold Y** → `leaving-bed` → deck at the bed's stand offset.
-4. Baked into `ShipLayout.beds` via `ship_runtime.ts` `collectBeds` (works with ship-controller hulls).
+4. Baked into `ShipLayout.beds` via `ship-runtime.ts` `collectBeds` (works with ship-controller hulls).
 
 ### Ship flight (SC-style IFCS)
 
 Flight is **not** Rapier. Deck walking may use Rapier; flying uses the custom integrator in `src/flight/`.
 
-- **Per-ship feel** is authored on `ship-controller` stats: `massKg`, `maxSpeedMps`, `maxAngularRateRadps`, thrust (N), torque (N·m). Baked into `ShipSpec` via `ship_runtime.ts`. Accel ≈ thrust/mass; turn ≈ torque/(mass × `INERTIA_FACTOR`).
-- **Global feel** (mouse aim gain, IFCS damping, coupled bleed, drag) lives in `src/flight/flight_config.ts` — only change when *all* ships feel wrong.
+- **Per-ship feel** is authored on `ship-controller` stats: `massKg`, `maxSpeedMps`, `maxAngularRateRadps`, thrust (N), torque (N·m). Baked into `ShipSpec` via `ship-runtime.ts`. Accel ≈ thrust/mass; turn ≈ torque/(mass × `INERTIA_FACTOR`).
+- **Global feel** (mouse aim gain, IFCS damping, coupled bleed, drag) lives in `src/flight/flight-config.ts` — only change when *all* ships feel wrong.
 - **Gravity (Star Wars–style):** once airborne, gravity does **not** pull the ship down. Altitude is thruster-only (Space/C). Landing uses ground/hangar clamp. **No auto-level** — roll/pitch attitude sticks until the pilot corrects (preview levels on pad exit).
-- **Mouse dual-reticle**: persistent aim pip + nose pip; IFCS PD-tracks aim (`flight_aim.ts`). Hold **F** = cockpit free-look (camera only); while free-looking, gaze + **LMB** activates `cockpit-control` markers (gear/ramp). **Alt+C** = coupled ↔ decoupled.
-- **Main play**: `src/game/modes/in_ship.ts` (`MODE_IN_SHIP`) → `integrateFlightBody` + dual reticle HUD (`src/game/hud/frame_hud.ts`).
-- **Preview Ship** (`?shipPrefab=` / `ship_play_session.ts`): sit pilot → takeoff/flight over the flat pad (same flight model). Hold **Y** exits the seat anytime (settles onto the pad when nearby).
+- **Mouse dual-reticle**: persistent aim pip + nose pip; IFCS PD-tracks aim (`flight-aim.ts`). Hold **F** = cockpit free-look (camera only); while free-looking, gaze + **LMB** activates `cockpit-control` markers (gear/ramp). **Alt+C** = coupled ↔ decoupled.
+- **Main play**: `src/game/modes/in-ship.ts` (`MODE_IN_SHIP`) → `integrateFlightBody` + dual reticle HUD (`src/game/hud/frame-hud.ts`).
+- **Preview Ship** (`?shipPrefab=` / `ship-play-session.ts`): sit pilot → takeoff/flight over the flat pad (same flight model). Hold **Y** exits the seat anytime (settles onto the pad when nearby).
 - **Tuning workflow**: read `.cursor/skills/ship-flight/SKILL.md` (and `.cursor/rules/ship-flight.mdc`). Symptom → fix tables live there.
 
 ## Editor (Electron desktop)
@@ -155,14 +169,14 @@ The Electron editor (**AsteronEngine**) is the only authoring workspace. Cold st
 | `src/editor/agent-bridge.ts` | Live EditorStore snapshot/commands for the agent IPC bridge |
 | `src/editor/react/` | React shell + panels (Fast Refresh); entry `react/main.tsx` |
 | `src/editor/document.ts` | `EditorEntity` model, `EditorStore`, selection, GLB overrides; `documentType: 'scene' \| 'prefab'` |
-| `src/editor/play_in_editor.ts` | Play / Pause / Stop of the open document in the Game view |
-| `src/editor/create_prefab_from_selection.ts` | Extract a GameObject subtree into a prefab + instance |
+| `src/editor/play-in-editor.ts` | Play / Pause / Stop of the open document in the Game view |
+| `src/editor/create-prefab-from-selection.ts` | Extract a GameObject subtree into a prefab + instance |
 | `src/editor/react/panels/ProjectSettingsModal.tsx` | File → Project Settings… (`asteron.project.json`) |
-| `src/editor/panels/server_console.ts` | Server tab: live `/admin/*` operator console |
+| `src/editor/react/panels/server/ServerConsolePanel.tsx` | Server tab: live `/admin/*` operator console |
 | `src/editor/serialize.ts` | Convert editor state to/from `PrefabDocument` / `SceneDocument` |
 | `src/render/editor/viewport.ts` | Three.js editor viewport (imperative host) |
 | `src/world/scenes/` | Scene documents (GameObject trees), runtime resolution, bundled loader |
-| `src/app/scene_host.ts` | Runtime scene host: load, switch, pause, dispose |
+| `src/app/scene-host.ts` | Runtime scene host: load, switch, pause, dispose |
 | `src/app/play-chrome.ts` | Mountable in-play HUD tree (`play-chrome.html`) |
 | `src/world/prefabs/schema.ts` | Canonical prefab JSON schema (+ scene components) |
 | `tools/asteron-mcp/` | Stdio MCP server (Cursor) → live editor agent API |
@@ -176,8 +190,10 @@ React owns editor chrome and all panel/form UI; `EditorStore` stays framework-ag
 **F6** plays and stops, **F7** pauses. `startEditorPlay()` serializes the live
 `EditorStore` document (unsaved edits included) and hands it to a scene host
 mounted in `#editor-play-host`, a fixed overlay carrying a CSS `transform` so the
-HUD's `position: fixed` elements are contained by the Game region. Pause feeds
-`ctx.isPaused()` in `src/game/create_game_loop.ts`. There is no external Play
+HUD's `position: fixed` elements are contained by the Game region. The host must
+stack above `#editor-root` (`z-index: 260` vs shell `250`) or Play paints under
+the opaque editor chrome and looks like a blank blue screen. Pause feeds
+`ctx.isPaused()` in `src/game/create-game-loop.ts`. There is no external Play
 Mode window — do not reintroduce one.
 
 ### GLB node overrides and deletions
@@ -186,7 +202,7 @@ Editor-side transform overrides (`glbNodeTransforms`) and deleted nodes (`glbNod
 
 - Node names are assumed unique within a model. If two nodes share a name, overrides/deletions apply to the first match.
 - Hierarchy selections use UUIDs for the current session, but resolve to names before persisting.
-- To add a new GLB-node-level operation: resolve the selected UUID→name via `store.getGlbNodeName()`, mutate the entity in `document.ts`, round-trip it through `serialize.ts`, and apply it in both `src/render/editor/viewport.ts` and `src/render/prefabs/prefab_renderer.ts`.
+- To add a new GLB-node-level operation: resolve the selected UUID→name via `store.getGlbNodeName()`, mutate the entity in `document.ts`, round-trip it through `serialize.ts`, and apply it in both `src/render/editor/viewport.ts` and `src/render/prefabs/prefab-renderer.ts`.
 
 ## Backend dev setup
 
@@ -228,34 +244,34 @@ math/  ←  world/  ←  flight/, player/
                     ↑
                   render/  (reads domain; never owns simulation rules)
                     ↑
-                  app/bootstrap.ts   (wires everything; minimal logic)
+                  src/app/scene-host.ts  (wires everything; minimal logic)
 ```
 
 **Import rules:**
 - `world/`, `flight/`, `player/`, `npc/` must not import `three`, `render/`, or DOM APIs
 - `npc/` may reuse player character-appearance data, but must not own or mutate player state
 - `render/` may read from `world/`/`player/`/`npc/` but must not mutate simulation state
-- `app/bootstrap.ts` orchestrates only — no domain logic inline
+- `src/app/scene-host.ts` orchestrates only — no domain logic inline
 
 ## Terrain mesh vs foot placement (critical)
 
 The visible terrain mesh and on-foot physics **must sample the same LOD grid**. If they diverge, the character floats or sinks.
 
-- Mesh grid vertices use `sampleAnalyticPlanetSurface()` with the band-limited spacing from `renderableGridSampleSpacingMeters()`. Foot placement uses **`sampleFootPlanetSurface()`** (`world/planet_surface.ts`) at the level from **`getFootSurfaceSampleLevel()`** (`world/foot_surface_level.ts`); both paths must resolve the same per-LOD grid heights.
-- Each frame, the tile manager sets that level from `finestSelectedTileLevel` (`render/planet_tiles/domain/tile_coverage.ts`). Character update runs *before* render, so foot sampling uses the **previous frame's** level (one-frame lag is OK).
+- Mesh grid vertices use `sampleAnalyticPlanetSurface()` with the band-limited spacing from `renderableGridSampleSpacingMeters()`. Foot placement uses **`sampleFootPlanetSurface()`** (`world/planet-surface.ts`) at the level from **`getFootSurfaceSampleLevel()`** (`world/foot-surface-level.ts`); both paths must resolve the same per-LOD grid heights.
+- Each frame, the tile manager sets that level from `finestSelectedTileLevel` (`render/planet_tiles/domain/tile-coverage.ts`). Character update runs *before* render, so foot sampling uses the **previous frame's** level (one-frame lag is OK).
 - Below ~2 km altitude, `shouldSplitTile` forces L17 detail only for **nearby facing tiles** (`GROUND_DETAIL_RADIUS_METERS` in `render/planet_tiles/domain/lod.ts`). The 450 m radius keeps max-detail tile pressure close to the former L16/900 m budget while halving on-foot triangle span.
-- Every vertex in a tile uses the tile level's uniform band limit. Do not give inherited even/even vertices coarser octave cutoffs: isolated coarse samples surrounded by fine samples become pyramid spikes or inverted holes. Same-LOD neighbors remain bit-identical; `render/seam_stitching.ts` handles active mixed-LOD boundaries.
-- Terrain tiles append radially inset, two-sided skirt walls on all four edges while the main material remains `FrontSide`. `render/seam_stitching.ts` snaps the finer side of active mixed-LOD contacts onto the coarse rendered surface and collapses that edge's skirt; the base skirts remain the fallback for culled or temporarily uncovered neighbors. Changing the stored skirt layout requires updating `TERRAIN_TILE_VERTEX_COUNT` and bumping `TERRAIN_CACHE_VERSION`.
-- The terrain fallback chain must reach L0, and the six synchronously built L0 roots must remain pinned in `mesh_cache.ts`. This is the no-hole coverage guarantee when disk/worker tiles are cold, delayed, or over budget.
-- `world/base_elevation.ts` owns the terrain recipe through lake carving. `world/rivers.ts` builds one cached, spatially indexed downhill drainage graph from that pre-river surface; vertex sampling only queries the graph. Preserve its acyclic confluences and non-increasing water levels—do not put route solving back in the per-vertex hot path.
+- Every vertex in a tile uses the tile level's uniform band limit. Do not give inherited even/even vertices coarser octave cutoffs: isolated coarse samples surrounded by fine samples become pyramid spikes or inverted holes. Same-LOD neighbors remain bit-identical; `render/planet_tiles/render/seam-stitching.ts` handles active mixed-LOD boundaries.
+- Terrain tiles append radially inset, two-sided skirt walls on all four edges while the main material remains `FrontSide`. `render/planet_tiles/render/seam-stitching.ts` snaps the finer side of active mixed-LOD contacts onto the coarse rendered surface and collapses that edge's skirt; the base skirts remain the fallback for culled or temporarily uncovered neighbors. Changing the stored skirt layout requires updating `TERRAIN_TILE_VERTEX_COUNT` and bumping `TERRAIN_CACHE_VERSION`.
+- The terrain fallback chain must reach L0, and the six synchronously built L0 roots must remain pinned in `mesh-cache.ts`. This is the no-hole coverage guarantee when disk/worker tiles are cold, delayed, or over budget.
+- `world/base-elevation.ts` owns the terrain recipe through lake carving. `world/rivers.ts` builds one cached, spatially indexed downhill drainage graph from that pre-river surface; vertex sampling only queries the graph. Preserve its acyclic confluences and non-increasing water levels—do not put route solving back in the per-vertex hot path.
 - **Do not vary `TILE_SEGMENTS` / `RENDER_SURFACE_SEGMENTS` per quality preset.** The low-poly triangle layout, foot sampler, lake mesh, and disk cache assume a fixed count. Validate cached tiles with `isValidTerrainTileBuffers()`.
-- Terrain tiles are non-indexed, flat-shaded triangles with baked per-face palette colors. `terrain_triangulation.ts` owns the alternating diagonal rule shared by mesh generation and foot sampling; do not reintroduce smooth normals or photographic terrain splat textures without an explicit art-direction change.
-- **Do not bypass** the per-frame tile build budget in `mesh_cache.ts` — unbounded sync builds freeze at 0 FPS.
+- Terrain tiles are non-indexed, flat-shaded triangles with baked per-face palette colors. `terrain-triangulation.ts` owns the alternating diagonal rule shared by mesh generation and foot sampling; do not reintroduce smooth normals or photographic terrain splat textures without an explicit art-direction change.
+- **Do not bypass** the per-frame tile build budget in `mesh-cache.ts` — unbounded sync builds freeze at 0 FPS.
 - **Debugging:** `npm run terrain:validate` checks horizon coverage, cold-cache/root fallback, packed mesh/foot height and normal agreement, uniform per-LOD sampling, same- and mixed-LOD seams across cube faces, two-sided skirt coverage, routed-water invariants, and finest triangle span. `scripts/measure_desync.ts` compares analytic/mesh heights. `?quality=balanced|performance|high` toggles render presets.
 
 ## Terrain & vegetation disk cache invalidation
 
-IndexedDB keys live in `src/cache/cache_keys.ts` (`TERRAIN_CACHE_VERSION`, `VEGETATION_CACHE_VERSION`, `planetCacheId()`, `hashVegetationSettings()`). Cursor rule: `.cursor/rules/terrain-cache.mdc`.
+IndexedDB keys live in `src/cache/cache-keys.ts` (`TERRAIN_CACHE_VERSION`, `VEGETATION_CACHE_VERSION`, `planetCacheId()`, `hashVegetationSettings()`). Cursor rule: `.cursor/rules/terrain-cache.mdc`.
 
 **Planet Authoring / `*.planet.json` — no manual version bump.** Height, regions, hydrology, seed, radius, amplitude → `terrainFingerprint()`; palette → `paletteHash()`; vegetation density/gap/scale/assetUrls → settings hash. New keys miss cache automatically.
 
@@ -299,64 +315,65 @@ In the play/sandbox console (dev only):
 window.__claudecitizenShipModel.listNodeNames();   // ship hull node names
 ```
 
-The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetObject.getObjectByName(name)` then falls back to `rootGroup.getObjectByName(name)`. If a node isn't found it logs a warning and marks the binding incomplete; check the browser console for "could not find node" messages.
+The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetObject.getObjectByName(name)` then falls back to `rootGroup.getObjectByName(name)`. If a node isn't found it logs a warning and marks the binding incomplete; check the browser console for "could not find node" messages.
 
 ### Colliders
-- **Station**: Rapier physics. `src/physics/station_physics.ts` owns the world; `src/physics/rapier_world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
-- **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship_physics.ts` mirrors the station API; `ship_deck.ts` drives locomotion on hull/ramp/pad colliders. Doors/ramp toggle via `setEnabled` from articulation blends. Near a parked ship, on-foot enters that same world (pad + hull) and walks the open ramp continuously; leaving is freefall with no floor underfoot (off the pad) → planet/station at current feet. **Area gating**: `tryEnterShipPadInterest` only hands locomotion to the ship world when the player shares the ship's walkable area — in a station the ship must rest on a hangar pad (`sampleHangarRest`) in the player's current `stationRoomId`, and on-foot outdoors never targets a hangar-parked ship. The raw ship-local proximity box (`isNearParkedShipPad`, ±36 m) reaches through station walls/floors; do not call it ungated.
-- **Ship flight**: custom IFCS in `flight_body.ts` / `flight_aim.ts` — **do not** put flight simulation in Rapier. Rapier is for on-foot deck/station contact only.
+- **Station**: Rapier physics. `src/physics/station-physics.ts` owns the world; `src/physics/rapier-world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
+- **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship-physics.ts` mirrors the station API; `ship-deck.ts` drives locomotion on hull/ramp/pad colliders. Doors/ramp toggle via `setEnabled` from articulation blends. Near a parked ship, on-foot enters that same world (pad + hull) and walks the open ramp continuously; leaving is freefall with no floor underfoot (off the pad) → planet/station at current feet. **Area gating**: `tryEnterShipPadInterest` only hands locomotion to the ship world when the player shares the ship's walkable area — in a station the ship must rest on a hangar pad (`sampleHangarRest`) in the player's current `stationRoomId`, and on-foot outdoors never targets a hangar-parked ship. The raw ship-local proximity box (`isNearParkedShipPad`, ±36 m) reaches through station walls/floors; do not call it ungated.
+- **Ship flight**: custom IFCS in `flight-body.ts` / `flight-aim.ts` — **do not** put flight simulation in Rapier. Rapier is for on-foot deck/station contact only.
 
 ## Common gotchas
 
-- **F-key does nothing for station animation doors**: `consumeActions()` (`src/input/player_controls.ts`) returns `wasKeyPressed` as a closure. It must snapshot `justPressed` before `justPressed.clear()` runs, otherwise the closure always reads an empty set. `interactPressed` is a captured boolean and is safe; only `wasKeyPressed` had this bug.
+- **F6 Play is a solid blue/dark screen but footsteps work**: `#editor-play-host` is a sibling of `#editor-root`. The editor shell (`sc-ui.css`) is fixed at `z-index: 250` with an opaque background; if the play host stacks below that, the canvas paints but stays invisible under the shell (`--ed-viewport` / `#141a21` shows through). Keep `#editor-play-host` above the shell (`z-index: 260` in `src/editor/styles.ts`). Also mount play chrome into `#editor-play-host`, not `document.body` — a body-mounted chrome leaves the host as an empty overlay that eats clicks. Symptom looks like a render/GPU failure; it is stacking.
+- **F-key does nothing for station animation doors**: `consumeActions()` (`src/input/player-controls.ts`) returns `wasKeyPressed` as a closure. It must snapshot `justPressed` before `justPressed.clear()` runs, otherwise the closure always reads an empty set. `interactPressed` is a captured boolean and is safe; only `wasKeyPressed` had this bug.
 - **"Open on spawn" works but F doesn't**: the animation init path (`stationAnimationStates` seeded from `defaultOpen`) runs without any key input, so it masks a broken key-press path. If `defaultOpen` works but F doesn't, suspect the `wasKeyPressed` closure or the `prefab-info` interaction branch.
 - **Door animates visually but player can't walk through**: the collider isn't bound to the animation (check `collider.animation` is set) or the Rapier collider isn't being toggled (check `setDoorColliderEnabled` is called in `updateStationAnimations`).
-- **Door animation with no bound collider**: `ship_runtime.ts` `bindColliderAnimations` and `station_runtime.ts` `bindStationColliderAnimations` log a warning **per door/animation** that has zero colliders bound to its node(s) — the door will animate but its collider stays enabled (player can't walk through). A collider with no matching node is a normal static floor/hull collider and is intentionally **not** warned about (that was a prior false-positive flood). Check the console for "has no collider bound".
-- **Ship pitch bounces after mouse aim**: IFCS overshoot — raise `AIM_IFCS_DAMPING` in `flight_config.ts` or lower per-ship pitch torque / `maxAngularRateRadps`. See ship-flight skill.
+- **Door animation with no bound collider**: `ship-runtime.ts` `bindColliderAnimations` and `station-runtime.ts` `bindStationColliderAnimations` log a warning **per door/animation** that has zero colliders bound to its node(s) — the door will animate but its collider stays enabled (player can't walk through). A collider with no matching node is a normal static floor/hull collider and is intentionally **not** warned about (that was a prior false-positive flood). Check the console for "has no collider bound".
+- **Ship pitch bounces after mouse aim**: IFCS overshoot — raise `AIM_IFCS_DAMPING` in `flight-config.ts` or lower per-ship pitch torque / `maxAngularRateRadps`. See ship-flight skill.
 - **One ship too twitchy / sluggish**: tune that prefab's `ship-controller` mass/thrust/torque — do not edit `FLIGHT_CONFIG` unless every hull is wrong.
-- **Preview pilot won't exit**: Hold Y should always leave the seat (same as main play). If the hold doesn't fire, check `exitSeat` binding / `updateExitSeatHold` in `player_controls.ts`.
+- **Preview pilot won't exit**: Hold Y should always leave the seat (same as main play). If the hold doesn't fire, check `exitSeat` binding / `updateExitSeatHold` in `player-controls.ts`.
 
 ## Key files
 
 | File | Role |
 | --- | --- |
 | `src/world/prefabs/schema.ts` | Component type definitions + validators |
-| `src/world/prefabs/ship_runtime.ts` | Ship prefab → ShipLayout + collider animation binding |
-| `src/world/prefabs/station_runtime.ts` | Station prefab → StationLayoutOverride + collider animation binding |
+| `src/world/prefabs/ship-runtime.ts` | Ship prefab → ShipLayout + collider animation binding |
+| `src/world/prefabs/station-runtime.ts` | Station prefab → StationLayoutOverride + collider animation binding |
 | `src/world/npc.ts` | Station NPC authoring specs + route validation |
 | `src/npc/catalog.ts` | Reusable friendly NPC definitions and population pools |
-| `src/npc/station_population.ts` | Deterministic cosmetic station population + waypoint movement |
-| `src/render/main/scene/station_npcs.ts` | Station NPC avatar lifecycle, animation, and distance activation |
-| `src/physics/prefab_colliders.ts` | Bakes `collider` components into `GameplayCollider` objects |
-| `src/physics/ship_physics.ts` | Ship-local Rapier world for collider-deck walking (doors/ramp/pad enable toggles) |
+| `src/npc/station-population.ts` | Deterministic cosmetic station population + waypoint movement |
+| `src/render/main/scene/station-npcs.ts` | Station NPC avatar lifecycle, animation, and distance activation |
+| `src/physics/prefab-colliders.ts` | Bakes `collider` components into `GameplayCollider` objects |
+| `src/physics/ship-physics.ts` | Ship-local Rapier world for collider-deck walking (doors/ramp/pad enable toggles) |
 | `src/physics/colliders.ts` | GameplayCollider types, mesh BVH bake/ground sample, legacy custom capsule push |
-| `src/physics/station_physics.ts` | Rapier world + static/dynamic collider sync; door-collider enable/disable |
-| `src/physics/rapier_world.ts` | Rapier body/collider creation from GameplayColliders |
-| `src/player/ship_layout.ts` | `ShipSpec` + defaults (mass, thrust, torque) |
-| `src/player/ship_rig.ts` | Ship articulation state (gear/ramp/doors) |
-| `src/player/ship_deck.ts` | Ship deck walking + collider step resolution |
-| `src/player/character_settings.ts` | Editor-tunable walk/sprint/jump speeds; persisted in `src/player/data/character-settings.json` via the Electron `/__editor/character-settings` endpoint (Base Characters → Char Settings) |
+| `src/physics/station-physics.ts` | Rapier world + static/dynamic collider sync; door-collider enable/disable |
+| `src/physics/rapier-world.ts` | Rapier body/collider creation from GameplayColliders |
+| `src/player/ship-layout.ts` | `ShipSpec` + defaults (mass, thrust, torque) |
+| `src/player/ship-rig.ts` | Ship articulation state (gear/ramp/doors) |
+| `src/player/ship-deck.ts` | Ship deck walking + collider step resolution |
+| `src/player/character-settings.ts` | Editor-tunable walk/sprint/jump speeds; persisted in `src/player/data/character-settings.json` via the Electron `/__editor/character-settings` endpoint (Base Characters → Char Settings) |
 | `src/player/animation/data/*.controller.json` | Engine-owned animation controllers (stance → clip bindings). Base Characters → Controllers reads/writes these via `/__editor/animation-controllers`. Clip GLBs live in the open project under `assets/animations/` |
-| `src/player/character_locomotion.ts` | Shared on-foot locomotion policy for all walkers (planet/station/deck): walk input intent, effective ADS (sprint suppresses aim), facing resolution (active aim faces camera), clip selection, jump animation phases |
-| `src/player/animation/resolve_locomotion.ts` | Selects full-body locomotion and optional rifle ADS upper-body layers |
-| `src/render/characters/sidekick/animation_runtime.ts` | Retargeted clip playback, lower/upper masks, crossfades, and ADS parent-space compensation |
-| `src/player/station_walk.ts` | Station walking (Rapier character controller) |
-| `src/player/station_interaction.ts` | Resolves nearby station interactions from markers |
-| `src/flight/flight_config.ts` | Global IFCS / drag / damping / mouse aim knobs |
-| `src/flight/flight_aim.ts` | Aim state, mouse → aim, PD IFCS torque demand |
-| `src/flight/flight_body.ts` | Mass/thrust/torque integrate (planet + sandbox flat) |
-| `src/input/player_controls.ts` | Keyboard/gamepad input; aim persistence; Alt+C coupled; `wasKeyPressed` |
-| `src/game/create_game_loop.ts` | Thin play-loop orchestrator; wires feature modules + owns `frame()`/start/stop |
+| `src/player/character-locomotion.ts` | Shared on-foot locomotion policy for all walkers (planet/station/deck): walk input intent, effective ADS (sprint suppresses aim), facing resolution (active aim faces camera), clip selection, jump animation phases |
+| `src/player/animation/resolve-locomotion.ts` | Selects full-body locomotion and optional rifle ADS upper-body layers |
+| `src/render/characters/sidekick/animation-runtime.ts` | Retargeted clip playback, lower/upper masks, crossfades, and ADS parent-space compensation |
+| `src/player/station-walk.ts` | Station walking (Rapier character controller) |
+| `src/player/station-interaction.ts` | Resolves nearby station interactions from markers |
+| `src/flight/flight-config.ts` | Global IFCS / drag / damping / mouse aim knobs |
+| `src/flight/flight-aim.ts` | Aim state, mouse → aim, PD IFCS torque demand |
+| `src/flight/flight-body.ts` | Mass/thrust/torque integrate (planet + sandbox flat) |
+| `src/input/player-controls.ts` | Keyboard/gamepad input; aim persistence; Alt+C coupled; `wasKeyPressed` |
+| `src/game/create-game-loop.ts` | Thin play-loop orchestrator; wires feature modules + owns `frame()`/start/stop |
 | `src/game/modes/` | Per-mode frame logic (on-foot, in-ship, in-bed, ship-deck, station, elevator, transitions) |
 | `src/game/station/animations.ts` | `stationAnimationStates` blend + door-collider enable toggle |
-| `src/app/ship_play_session.ts` | Ship sandbox: deck walk + pilot flight preview |
-| `src/render/effects/hud/flight_reticle.ts` | Dual-reticle aim + nose pips |
-| `src/player/flight_camera_feel.ts` | Thrust FOV + boost shake (ship-controller stats) |
-| `src/player/cockpit_gaze.ts` | Cockpit look-at pick + gear/ramp activate |
-| `src/player/cockpit_stats.ts` | Cockpit-stat instrument visibility / screen projection |
-| `src/render/effects/hud/cockpit_gaze_hud.ts` | Screen-space cockpit control labels |
-| `src/render/effects/hud/cockpit_speed_hud.ts` | Speed number + bar (boost-aware) |
-| `src/render/prefabs/prefab_renderer.ts` | Binds animation components to GLB nodes; `updateAnimations` / `updateParticles` callbacks |
+| `src/app/ship-play-session.ts` | Ship sandbox: deck walk + pilot flight preview |
+| `src/render/effects/hud/flight-reticle.ts` | Dual-reticle aim + nose pips |
+| `src/player/flight-camera-feel.ts` | Thrust FOV + boost shake (ship-controller stats) |
+| `src/player/cockpit-gaze.ts` | Cockpit look-at pick + gear/ramp activate |
+| `src/player/cockpit-stats.ts` | Cockpit-stat instrument visibility / screen projection |
+| `src/render/effects/hud/cockpit-gaze-hud.ts` | Screen-space cockpit control labels |
+| `src/render/effects/hud/cockpit-speed-hud.ts` | Speed number + bar (boost-aware) |
+| `src/render/prefabs/prefab-renderer.ts` | Binds animation components to GLB nodes; `updateAnimations` / `updateParticles` callbacks |
 | `src/render/particles/` | Unity-style `particle-system` runtime (billboards, modules, plane collision only) |
 | `scripts/inspect_glb.mjs` | CLI GLB node hierarchy dump |
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/IFCS symptoms) |
@@ -380,19 +397,5 @@ The renderer's `bindAnimationComponent` (`prefab_renderer.ts`) searches `targetO
 - Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/`, `.cursor/skills/prd/` — read when editing those domains (PRD packs when creating `prds/` handoffs).
 - Export **factories + pure functions** from domain modules (not classes). Three.js objects never appear in `world/` or `flight/`.
 - Prefab JSON lives in the project asset library as `<folder>/<id>.prefab.json` and is committed (metadata only) — `.gitignore` re-includes `*.prefab.json` under the otherwise-ignored `/assets/` tree. The game bundles them via a recursive `import.meta.glob`.
-
-Respond terse like smart caveman. All technical substance stay. Only fluff die.
-
-Rules:
-- Drop: articles (a/an/the), filler (just/really/basically), pleasantries, hedging
-- Fragments OK. Short synonyms. Technical terms exact. Code unchanged.
-- Pattern: [thing] [action] [reason]. [next step].
-- Not: "Sure! I'd be happy to help you with that."
-- Yes: "Bug in auth middleware. Fix:"
-
-Switch level: /caveman lite|full|ultra|wenyan
-Stop: "stop caveman" or "normal mode"
-
-Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
-
-Boundaries: code/commits/PRs written normal.
+- **Filenames:** `*.ts` is kebab-case, `*.tsx` is PascalCase (except Vite's `main.tsx`) — enforced by `eslint-plugin-check-file`. Directories were not migrated and several remain snake_case (`src/render/planet_tiles/`, `src/world/surface_spawns/`, `src/app/ship_sandbox/`, `src/render/effects/lake_water/`), as do `scripts/` files, which are exempt.
+- Response style (caveman mode) is configured per-tool in `.cursor/rules/caveman.mdc`, `.clinerules/caveman.md`, and `.windsurf/rules/caveman.md` — not here. This file is architecture only.

@@ -204,6 +204,30 @@ export function animationLayersFromState(
   });
 }
 
+/** Upward speed that reads as a real jump rather than a step-up nudge. */
+const RISE_ANIMATION_SPEED = 0.15;
+/**
+ * Downward speed before losing ground counts as a fall. Vertical velocity only
+ * accumulates while ungrounded (~9.81 m/s²), so this is a ~0.15 s coyote window:
+ * stairs, sills, and terrain dips unground the controller for a few frames and
+ * must not swap the walker to the falling clip.
+ */
+const FALL_ANIMATION_SPEED = 1.5;
+
+/**
+ * Animation-only airborne test for Rapier-controlled walkers. Physics keeps
+ * falling during the coyote window; only the clip choice is held back.
+ */
+export function isAirborneForAnimation(
+  grounded: boolean,
+  verticalVelocity: number,
+  startedJump: boolean,
+): boolean {
+  if (startedJump) return true;
+  if (verticalVelocity > RISE_ANIMATION_SPEED) return true;
+  return !grounded && verticalVelocity < -FALL_ANIMATION_SPEED;
+}
+
 export interface JumpAnimationPhaseState {
   jumpPhase: JumpPhase;
   jumpPhaseTime: number;

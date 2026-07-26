@@ -86,6 +86,14 @@ export interface SpikeRenderer {
   setSsaoSettings: (settings: Partial<SsaoSettings>) => void;
   setSsaoIntensity: (intensity: number) => void;
   setSsaoColor: (color: string | null) => void;
+  /** Live bloom tuning. `intensity: 0` disables the glow entirely. */
+  setBloomSettings: (settings: {
+    intensity?: number;
+    luminanceThreshold?: number;
+    luminanceSmoothing?: number;
+  }) => void;
+  /** Live AgX exposure (renderer.toneMappingExposure). */
+  setExposure: (exposure: number) => void;
   setTimeOverride: (mode: TimeOverride) => void;
   setEquippedInventory: (
     inventory: InventoryState | null,

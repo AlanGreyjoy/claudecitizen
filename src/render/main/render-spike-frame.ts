@@ -61,6 +61,39 @@ const IDLE_VEGETATION_STATS = {
   totalEvictions: 0,
 };
 
+const IDLE_TERRAIN_STATS = {
+  ...IDLE_VEGETATION_STATS,
+  pendingTiles: 0,
+  queuedThisFrame: 0,
+};
+
+/**
+ * Stand-in surface sample for scenes with no planet. Lighting, fog, and the
+ * skybox gate all key off altitude, so reporting a point well above the
+ * atmosphere gives an interior scene space lighting without sampling terrain.
+ */
+function interiorSurfaceSample(planet: Planet): PlanetSurfaceSample {
+  return {
+    altitudeMeters: planet.atmosphereHeightMeters * 3,
+    biome: 'rock',
+    fertility: 0,
+    grassDensity: 0,
+    heightMeters: 0,
+    lakeDepth: 0,
+    lakeStrength: 0,
+    lakeWaterLevelMeters: null,
+    moisture: 0,
+    mountainRegion: 0,
+    normalizedHeight: 0,
+    riverWaterLevelMeters: null,
+    surfaceRadiusMeters: planet.radiusMeters,
+    temperature: 0,
+    treeDensity: 0,
+    waterBody: null,
+    waterLevelMeters: null,
+  };
+}
+
 function smoothstep01(value: number, edge0: number, edge1: number): number {
   const t = clamp01((value - edge0) / Math.max(edge1 - edge0, 0.000001));
   return t * t * (3 - 2 * t);
@@ -126,12 +159,30 @@ export function renderQuantumIsolation(
   }
 }
 
+type TileFrameState = ReturnType<ReturnType<typeof createPlanetTileManager>['update']>;
+
+/**
+ * The planet-only half of the renderer. Scenes that never reference a planet
+ * (a station interior, a prefab stage) run with this set to `null`, which is
+ * what keeps their terrain, vegetation, and surface-spawn workers from ever
+ * starting.
+ */
+export interface PlanetRenderStack {
+  tileManager: ReturnType<typeof createPlanetTileManager>;
+  vegetationManager: ReturnType<typeof createPlanetVegetationManager>;
+  surfaceSpawnManager: ReturnType<typeof createSurfaceSpawnManager>;
+  cloudShell: ReturnType<typeof createCloudShell>;
+  surfaceWaterManager: ReturnType<typeof createPlanetSurfaceWaterManager>;
+  atmosphereMesh: THREE.Mesh;
+  quantumBubble: ReturnType<typeof createQuantumBubble>;
+}
+
 export interface SpikeRenderFrameState {
   lastTime: number;
   quantumPreloadKey: string | null;
   quantumPreloadPosition: Vec3 | null;
   quantumPreloadSurface: PlanetSurfaceSample | null;
-  quantumPreloadTileState: ReturnType<ReturnType<typeof createPlanetTileManager>['update']> | null;
+  quantumPreloadTileState: TileFrameState | null;
   lastVegetationApproachPrefetchSeconds: number;
   lastQuantumPreloadUpdateSeconds: number;
   wasQuantumTraveling: boolean;
@@ -142,17 +193,14 @@ export interface SpikeRenderFrameDeps {
   planet: Planet;
   seed: number;
   getCloudMode: () => CloudModeSetting;
-  tileManager: ReturnType<typeof createPlanetTileManager>;
-  vegetationManager: ReturnType<typeof createPlanetVegetationManager>;
-  surfaceSpawnManager: ReturnType<typeof createSurfaceSpawnManager>;
-  cloudShell: ReturnType<typeof createCloudShell>;
-  surfaceWaterManager: ReturnType<typeof createPlanetSurfaceWaterManager>;
+  /** Null for scenes that declared no planet. */
+  planetStack: PlanetRenderStack | null;
+  renderScale: number;
   composerStack: ReturnType<typeof createComposerStack>;
   shipRenderPool: ReturnType<typeof createShipRenderPool>;
   avatar: ReturnType<typeof createCharacterAvatar>;
   remotePresence: ReturnType<typeof createRemotePresenceRenderer>;
   stationNpcs: ReturnType<typeof createStationNpcRenderer>;
-  quantumBubble: ReturnType<typeof createQuantumBubble>;
   muzzleFlashRenderer: ReturnType<typeof createMuzzleFlashRenderer>;
   hitDecalRenderer: ReturnType<typeof createHitDecalRenderer>;
   tracerRenderer: ReturnType<typeof createTracerRenderer>;
@@ -168,7 +216,6 @@ export interface SpikeRenderFrameDeps {
     frame: StationFrame;
     mesh: THREE.Group | null;
   }>;
-  atmosphereMesh: THREE.Mesh;
   defaultFog: THREE.Fog;
   quantumLightingRoots: readonly THREE.Object3D[];
   resolveSunTimeSeconds: (nowSeconds: number, up: Vec3) => number;
@@ -229,7 +276,7 @@ function syncQuantumPreload(
   quantumTraveling: boolean,
   quantumState: ReturnType<typeof createQuantumTravelState>,
 ): void {
-  if (!quantumTraveling || !quantumState.route) return;
+  if (!deps.planetStack || !quantumTraveling || !quantumState.route) return;
   const preloadKey = quantumState.destinationId ?? 'quantum-destination';
   if (preloadKey === state.quantumPreloadKey) return;
   const radius = deps.planet.radiusMeters + quantumState.route.endAlt;
@@ -263,10 +310,14 @@ function updateLightingAndCamera(
   state: SpikeRenderFrameState,
 ): LightingFrame {
   const { focusBody, dt, nowSeconds, quantumTraveling } = focus;
-  const surface =
-    quantumTraveling && state.quantumPreloadSurface
-      ? state.quantumPreloadSurface
-      : sampleRenderablePlanetSurface(deps.planet, deps.seed, focusBody.position);
+  let surface: PlanetSurfaceSample;
+  if (!deps.planetStack) {
+    surface = interiorSurfaceSample(deps.planet);
+  } else if (quantumTraveling && state.quantumPreloadSurface) {
+    surface = state.quantumPreloadSurface;
+  } else {
+    surface = sampleRenderablePlanetSurface(deps.planet, deps.seed, focusBody.position);
+  }
   deps.syncSurfacePixelRatio(surface.altitudeMeters);
   const up = radialUp(focusBody.position);
   const shipUp = normalize(world.ship.up ?? radialUp(world.ship.position));
@@ -279,7 +330,7 @@ function updateLightingAndCamera(
     surface.altitudeMeters,
     deps.planet.atmosphereHeightMeters,
   );
-  const renderScale = deps.tileManager.renderScale;
+  const renderScale = deps.renderScale;
   const sunState = updateSunSystem(
     deps.resolveSunTimeSeconds(nowSeconds, up),
     focusBody.position,
@@ -312,7 +363,7 @@ function updateLightingAndCamera(
 }
 
 function updateTerrainStreaming(
-  deps: SpikeRenderFrameDeps,
+  planetStack: PlanetRenderStack,
   focus: RenderFocus,
   lighting: LightingFrame,
   state: SpikeRenderFrameState,
@@ -320,7 +371,7 @@ function updateTerrainStreaming(
 ) {
   const { focusBody, nowSeconds, quantumTraveling } = focus;
   const focusVelocity = world.ship.velocity;
-  let tileState: ReturnType<typeof deps.tileManager.update>;
+  let tileState: TileFrameState;
   if (quantumTraveling && state.quantumPreloadPosition && state.quantumPreloadSurface) {
     if (!state.wasQuantumTraveling) {
       state.quantumPreloadTileState = null;
@@ -330,7 +381,7 @@ function updateTerrainStreaming(
       !state.quantumPreloadTileState ||
       nowSeconds - state.lastQuantumPreloadUpdateSeconds >= 1 / 12
     ) {
-      state.quantumPreloadTileState = deps.tileManager.update(
+      state.quantumPreloadTileState = planetStack.tileManager.update(
         state.quantumPreloadPosition,
         state.quantumPreloadSurface,
         { view: null, velocity: null },
@@ -339,7 +390,7 @@ function updateTerrainStreaming(
     }
     tileState = state.quantumPreloadTileState;
   } else {
-    tileState = deps.tileManager.update(focusBody.position, lighting.surface, {
+    tileState = planetStack.tileManager.update(focusBody.position, lighting.surface, {
       view: null,
       velocity: focusVelocity,
     });
@@ -349,6 +400,7 @@ function updateTerrainStreaming(
 
 function maybePrefetchVegetation(
   deps: SpikeRenderFrameDeps,
+  planetStack: PlanetRenderStack,
   focus: RenderFocus,
   lighting: LightingFrame,
   state: SpikeRenderFrameState,
@@ -372,7 +424,7 @@ function maybePrefetchVegetation(
   if (!vegPlan || vegPlan.maxLevel < 14) return;
   state.lastVegetationApproachPrefetchSeconds = nowSeconds;
   for (const vegFocus of vegPlan.focuses) {
-    deps.vegetationManager.prefetchAround(vegFocus, Math.min(vegPlan.radiusMeters, 800), {
+    planetStack.vegetationManager.prefetchAround(vegFocus, Math.min(vegPlan.radiusMeters, 800), {
       maxStarts: 4,
       minLevel: Math.max(14, vegPlan.minLevel),
       maxLevel: Math.min(16, vegPlan.maxLevel),
@@ -386,32 +438,40 @@ function updateWorldStreaming(
   lighting: LightingFrame,
   state: SpikeRenderFrameState,
   world: SpikeRenderWorld,
-) {
+): { tileState: TileFrameState | null; vegetationStats: typeof IDLE_VEGETATION_STATS } {
+  const planetStack = deps.planetStack;
+  if (!planetStack) return { tileState: null, vegetationStats: IDLE_VEGETATION_STATS };
   const { focusBody, nowSeconds, quantumTraveling } = focus;
-  const { tileState, focusVelocity } = updateTerrainStreaming(deps, focus, lighting, state, world);
-  deps.tileManager.setVisible(!quantumTraveling);
-  deps.surfaceWaterManager.setVisible(!quantumTraveling);
-  deps.cloudShell.setVisible(!quantumTraveling && deps.getCloudMode() === 'shell');
-  deps.vegetationManager.setVisible(!quantumTraveling);
-  deps.surfaceSpawnManager.setVisible(!quantumTraveling);
+  const { tileState, focusVelocity } = updateTerrainStreaming(
+    planetStack,
+    focus,
+    lighting,
+    state,
+    world,
+  );
+  planetStack.tileManager.setVisible(!quantumTraveling);
+  planetStack.surfaceWaterManager.setVisible(!quantumTraveling);
+  planetStack.cloudShell.setVisible(!quantumTraveling && deps.getCloudMode() === 'shell');
+  planetStack.vegetationManager.setVisible(!quantumTraveling);
+  planetStack.surfaceSpawnManager.setVisible(!quantumTraveling);
   const vegetationStats = quantumTraveling
     ? IDLE_VEGETATION_STATS
-    : deps.vegetationManager.update(
+    : planetStack.vegetationManager.update(
         focusBody.position,
         tileState.selectedTiles,
         lighting.surface.altitudeMeters,
         nowSeconds,
       );
   if (!quantumTraveling) {
-    deps.surfaceSpawnManager.update(
+    planetStack.surfaceSpawnManager.update(
       focusBody.position,
       tileState.selectedTiles,
       lighting.surface.altitudeMeters,
     );
-    maybePrefetchVegetation(deps, focus, lighting, state, focusVelocity);
+    maybePrefetchVegetation(deps, planetStack, focus, lighting, state, focusVelocity);
   }
   if (!quantumTraveling && deps.getCloudMode() === 'shell') {
-    deps.cloudShell.update(
+    planetStack.cloudShell.update(
       focusBody.position,
       nowSeconds,
       lighting.spaceFactor,
@@ -472,24 +532,27 @@ function updateShipsAndStations(
     lighting.renderScale,
   );
   const activeShipGroup = deps.shipRenderPool.getActiveGroup();
-  deps.quantumBubble.attachToShip(activeShipGroup);
-  if (quantumTraveling) {
-    enableRenderLayer(activeShipGroup, QUANTUM_RENDER_LAYER);
+  const quantumBubble = deps.planetStack?.quantumBubble ?? null;
+  if (quantumBubble) {
+    quantumBubble.attachToShip(activeShipGroup);
+    if (quantumTraveling) {
+      enableRenderLayer(activeShipGroup, QUANTUM_RENDER_LAYER);
+    }
+    const highlightedId = resolveQuantumHighlightId(deps, world, focus);
+    const markers = quantumTraveling
+      ? []
+      : listNavDestinationMarkers(deps.planet, deps.seed).map((marker) => ({
+          ...marker,
+          highlighted: marker.id === highlightedId,
+        }));
+    quantumBubble.update({
+      quantum: focus.quantumState,
+      flightMode: world.flightMode ?? 'traverse',
+      focusPosition: focusBody.position,
+      markers,
+      timeSeconds: nowSeconds,
+    });
   }
-  const highlightedId = resolveQuantumHighlightId(deps, world, focus);
-  const markers = quantumTraveling
-    ? []
-    : listNavDestinationMarkers(deps.planet, deps.seed).map((marker) => ({
-        ...marker,
-        highlighted: marker.id === highlightedId,
-      }));
-  deps.quantumBubble.update({
-    quantum: focus.quantumState,
-    flightMode: world.flightMode ?? 'traverse',
-    focusPosition: focusBody.position,
-    markers,
-    timeSeconds: nowSeconds,
-  });
   if (!quantumTraveling) {
     updateShipPlacement(
       deps.stationMesh,
@@ -528,7 +591,7 @@ function updateNormalPlayPresentation(
   focus: RenderFocus,
   lighting: LightingFrame,
   world: SpikeRenderWorld,
-  tileState: ReturnType<ReturnType<typeof createPlanetTileManager>['update']>,
+  tileState: TileFrameState | null,
 ): THREE.Color {
   const { focusBody, dt, nowSeconds, quantumBusy, quantumTraveling } = focus;
   const { character = null } = world;
@@ -537,7 +600,7 @@ function updateNormalPlayPresentation(
   const { backgroundColor } = updateEnvironment({
     scene: deps.scene,
     defaultFog: deps.defaultFog,
-    atmosphereMesh: deps.atmosphereMesh,
+    atmosphereMesh: deps.planetStack?.atmosphereMesh ?? null,
     lighting: deps.lighting,
     composerStack: deps.composerStack,
     planet: deps.planet,
@@ -566,13 +629,15 @@ function updateNormalPlayPresentation(
   );
   deps.remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
   deps.stationNpcs.update(world.stationNpcs ?? [], focusBody.position, nowSeconds);
-  deps.surfaceWaterManager.update(
-    focusBody.position,
-    tileState.selectedTiles,
-    lighting.sunState.sunDir,
-    dt,
-    backgroundColor,
-  );
+  if (deps.planetStack && tileState) {
+    deps.planetStack.surfaceWaterManager.update(
+      focusBody.position,
+      tileState.selectedTiles,
+      lighting.sunState.sunDir,
+      dt,
+      backgroundColor,
+    );
+  }
   updateSpeedBlur(deps.composerStack.speedBlurEffect, world);
   return backgroundColor;
 }
@@ -625,12 +690,13 @@ function presentRenderOutput(
   activeShipGroup: THREE.Group,
 ): void {
   const { dt, quantumTraveling, quantumState } = focus;
-  if (quantumTraveling) {
+  const quantumBubble = deps.planetStack?.quantumBubble ?? null;
+  if (quantumTraveling && quantumBubble) {
     renderQuantumIsolation(
       deps.renderer,
       deps.scene,
       deps.camera,
-      deps.quantumBubble.getRenderRoot(),
+      quantumBubble.getRenderRoot(),
       activeShipGroup,
       deps.quantumLightingRoots,
     );
@@ -661,7 +727,7 @@ export function executeSpikeRenderFrame(
   presentRenderOutput(deps, focus, activeShipGroup);
   const renderStats: RenderStats = {
     surfaceCache: getRenderableSurfaceCacheStats(),
-    terrain: tileState.stats,
+    terrain: tileState?.stats ?? IDLE_TERRAIN_STATS,
     vegetation: vegetationStats,
   };
   window.__claudecitizenRenderStats = renderStats;

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { PlanetListEntry, PrefabListEntry } from '../../../api';
+import type { PlanetListEntry, PrefabListEntry, SceneListEntry } from '../../../api';
 import {
   DEFAULT_STATION_ALTITUDE_METERS,
   SYSTEM_ID_PATTERN,
@@ -22,6 +22,7 @@ export type SystemMapFormProps = {
   selection: SystemMapSelection;
   planetList: PlanetListEntry[];
   stationPrefabs: PrefabListEntry[];
+  sceneList: SceneListEntry[];
   onSelect: (selection: SystemMapSelection) => void;
   onMarkDirty: () => void;
   onMarkDirtyAndRebuild: () => void;
@@ -33,6 +34,7 @@ export function SystemMapForm({
   selection,
   planetList,
   stationPrefabs,
+  sceneList,
   onSelect,
   onMarkDirty,
   onMarkDirtyAndRebuild,
@@ -105,6 +107,7 @@ export function SystemMapForm({
           doc={doc}
           stationId={selection.id}
           stationPrefabs={stationPrefabs}
+          sceneList={sceneList}
           onMarkDirty={onMarkDirty}
           onMarkDirtyAndRebuild={onMarkDirtyAndRebuild}
           onSelectionIdChange={onSelectionIdChange}
@@ -185,10 +188,26 @@ function SelectedPlanetForm({
   );
 }
 
+/** Options for one of the two station sources, keeping unknown ids visible. */
+function sourceOptions(
+  entries: Array<{ id: string; name: string }>,
+  currentId: string | undefined,
+): Array<{ value: string; label: string }> {
+  const options = entries.map((entry) => ({
+    value: entry.id,
+    label: `${entry.name} (${entry.id})`,
+  }));
+  if (currentId && !options.some((option) => option.value === currentId)) {
+    options.unshift({ value: currentId, label: `${currentId} (missing)` });
+  }
+  return options;
+}
+
 function SelectedStationForm({
   doc,
   stationId,
   stationPrefabs,
+  sceneList,
   onMarkDirty,
   onMarkDirtyAndRebuild,
   onSelectionIdChange,
@@ -196,6 +215,7 @@ function SelectedStationForm({
   doc: SystemDocument;
   stationId: string;
   stationPrefabs: PrefabListEntry[];
+  sceneList: SceneListEntry[];
   onMarkDirty: () => void;
   onMarkDirtyAndRebuild: () => void;
   onSelectionIdChange: (id: string) => void;
@@ -203,16 +223,10 @@ function SelectedStationForm({
   const station = doc.stations.find((entry) => entry.id === stationId);
   if (!station) return null;
 
-  const prefabOptions = stationPrefabs.map((entry) => ({
-    value: entry.id,
-    label: `${entry.name} (${entry.id})`,
-  }));
-  if (!prefabOptions.some((option) => option.value === station.stationPrefabId)) {
-    prefabOptions.unshift({
-      value: station.stationPrefabId,
-      label: `${station.stationPrefabId} (missing)`,
-    });
-  }
+  // A station is authored either as a prefab or as a scene, never both.
+  const usesScene = Boolean(station.sceneId);
+  const prefabOptions = sourceOptions(stationPrefabs, station.stationPrefabId);
+  const sceneOptions = sourceOptions(sceneList, station.sceneId);
 
   const parentOptions = [
     { value: SYSTEM_STAR_PARENT_ID, label: 'Star' },
@@ -245,14 +259,48 @@ function SelectedStationForm({
         }}
       />
       <SystemSelectField
-        label="Station prefab"
-        value={station.stationPrefabId}
-        options={prefabOptions}
+        label="Source"
+        value={usesScene ? 'scene' : 'prefab'}
+        options={[
+          { value: 'prefab', label: 'Station prefab' },
+          { value: 'scene', label: 'Scene' },
+        ]}
         onChange={(value) => {
-          station.stationPrefabId = value;
-          onMarkDirty();
+          if (value === 'scene') {
+            const next = station.sceneId ?? sceneList[0]?.id;
+            if (!next) return;
+            delete station.stationPrefabId;
+            station.sceneId = next;
+          } else {
+            const next = station.stationPrefabId ?? stationPrefabs[0]?.id;
+            if (!next) return;
+            delete station.sceneId;
+            station.stationPrefabId = next;
+          }
+          onMarkDirtyAndRebuild();
         }}
       />
+      {usesScene ? (
+        <SystemSelectField
+          label="Scene"
+          value={station.sceneId ?? ''}
+          options={sceneOptions}
+          onChange={(value) => {
+            station.sceneId = value;
+            onMarkDirty();
+          }}
+        />
+      ) : (
+        <SystemSelectField
+          label="Station prefab"
+          value={station.stationPrefabId ?? ''}
+          options={prefabOptions}
+          onChange={(value) => {
+            station.stationPrefabId = value;
+            onMarkDirty();
+          }}
+        />
+      )}
       <SystemSelectField
         label="Parent body"
         value={station.parentBodyId}

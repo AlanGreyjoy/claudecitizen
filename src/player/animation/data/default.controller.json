@@ -69,42 +69,26 @@
       "label": "jump_down",
       "yawOffsetDegrees": 0
     },
-
     {
-      "id": "hg-pistol-idle",
-      "url": "/assets/animations/HandgunLocomotions/pistol_idle.glb",
-      "label": "pistol_idle",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-walk",
-      "url": "/assets/animations/HandgunLocomotions/pistol_walk.glb",
-      "label": "pistol_walk",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-run",
-      "url": "/assets/animations/HandgunLocomotions/pistol_run.glb",
-      "label": "pistol_run",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-jump",
-      "url": "/assets/animations/HandgunLocomotions/pistol_jump.glb",
-      "label": "pistol_jump",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "hg-pistol-jump-2",
-      "url": "/assets/animations/HandgunLocomotions/pistol_jump_2.glb",
-      "label": "pistol_jump_2",
+      "id": "ual1-standard",
+      "url": "/assets/animations/universal-animation-library-1/UAL1_Standard.glb",
+      "label": "UAL1_Standard",
       "yawOffsetDegrees": 0
     }
   ],
   "stances": [
-    { "id": "unarmed", "label": "Unarmed" },
-    { "id": "rifle", "label": "Rifle" },
-    { "id": "pistol", "label": "Pistol" }
+    {
+      "id": "unarmed",
+      "label": "Unarmed"
+    },
+    {
+      "id": "rifle",
+      "label": "Rifle"
+    },
+    {
+      "id": "pistol",
+      "label": "Pistol"
+    }
   ],
   "states": [
     {
@@ -113,7 +97,7 @@
       "locomotion": "idle",
       "stanceId": "unarmed",
       "clipName": "Idle_Loop",
-      "sourceId": "ual"
+      "sourceId": "ual1-standard"
     },
     {
       "id": "unarmed-walk",
@@ -121,7 +105,7 @@
       "locomotion": "walk",
       "stanceId": "unarmed",
       "clipName": "Walk_Loop",
-      "sourceId": "ual"
+      "sourceId": "ual1-standard"
     },
     {
       "id": "unarmed-run",
@@ -129,7 +113,7 @@
       "locomotion": "run",
       "stanceId": "unarmed",
       "clipName": "Walk_Loop",
-      "sourceId": "ual"
+      "sourceId": "ual1-standard"
     },
     {
       "id": "unarmed-sprint",
@@ -137,7 +121,7 @@
       "locomotion": "sprint",
       "stanceId": "unarmed",
       "clipName": "Sprint_Loop",
-      "sourceId": "ual"
+      "sourceId": "ual1-standard"
     },
     {
       "id": "unarmed-jump-start",
@@ -145,7 +129,7 @@
       "locomotion": "jump_start",
       "stanceId": "unarmed",
       "clipName": "Jump_Start",
-      "sourceId": "ual"
+      "sourceId": "ual1-standard"
     },
     {
       "id": "unarmed-jump-loop",
@@ -153,7 +137,7 @@
       "locomotion": "jump_loop",
       "stanceId": "unarmed",
       "clipName": "Jump_Loop",
-      "sourceId": "ual"
+      "sourceId": "ual1-standard"
     },
     {
       "id": "unarmed-jump-land",
@@ -161,7 +145,7 @@
       "locomotion": "jump_land",
       "stanceId": "unarmed",
       "clipName": "Jump_Land",
-      "sourceId": "ual"
+      "sourceId": "ual1-standard"
     },
     {
       "id": "rifle-idle",
@@ -256,56 +240,56 @@
       "label": "Pistol Idle",
       "locomotion": "idle",
       "stanceId": "pistol",
-      "clipName": "pistol_idle",
-      "sourceId": "hg-pistol-idle"
+      "clipName": "",
+      "sourceId": "ual1-standard"
     },
     {
       "id": "pistol-walk",
       "label": "Pistol Walk",
       "locomotion": "walk",
       "stanceId": "pistol",
-      "clipName": "pistol_walk",
-      "sourceId": "hg-pistol-walk"
+      "clipName": "",
+      "sourceId": "ual1-standard"
     },
     {
       "id": "pistol-run",
       "label": "Pistol Run",
       "locomotion": "run",
       "stanceId": "pistol",
-      "clipName": "pistol_run",
-      "sourceId": "hg-pistol-run"
+      "clipName": "",
+      "sourceId": "ual1-standard"
     },
     {
       "id": "pistol-sprint",
       "label": "Pistol Sprint",
       "locomotion": "sprint",
       "stanceId": "pistol",
-      "clipName": "pistol_run",
-      "sourceId": "hg-pistol-run"
+      "clipName": "",
+      "sourceId": "ual1-standard"
     },
     {
       "id": "pistol-jump-start",
       "label": "Pistol Jump Start",
       "locomotion": "jump_start",
       "stanceId": "pistol",
-      "clipName": "pistol_jump",
-      "sourceId": "hg-pistol-jump"
+      "clipName": "",
+      "sourceId": "ual1-standard"
     },
     {
       "id": "pistol-jump-loop",
       "label": "Pistol Jump Loop",
       "locomotion": "jump_loop",
       "stanceId": "pistol",
-      "clipName": "pistol_jump_2",
-      "sourceId": "hg-pistol-jump-2"
+      "clipName": "",
+      "sourceId": "ual1-standard"
     },
     {
       "id": "pistol-jump-land",
       "label": "Pistol Jump Land",
       "locomotion": "jump_land",
       "stanceId": "pistol",
-      "clipName": "pistol_jump",
-      "sourceId": "hg-pistol-jump"
+      "clipName": "",
+      "sourceId": "ual1-standard"
     }
   ]
 }

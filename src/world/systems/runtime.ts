@@ -72,18 +72,30 @@ export function resolveStationAltitudeMeters(station: SystemStationEntry): numbe
 
 /**
  * Pick the primary interactable station for this session.
- * Prefers an entry whose prefab matches `preferredPrefabId`, else the first.
+ * Prefers the entry the session already asked for — by prefab id, or by the
+ * scene being played — else the first.
  */
 export function pickPrimarySystemStation(
   stations: SystemStationEntry[],
-  preferredPrefabId: string | null,
+  preferred: { prefabId?: string | null; sceneId?: string | null } = {},
 ): SystemStationEntry | null {
   if (stations.length === 0) return null;
-  if (preferredPrefabId) {
-    const match = stations.find((station) => station.stationPrefabId === preferredPrefabId);
+  if (preferred.sceneId) {
+    const match = stations.find((station) => station.sceneId === preferred.sceneId);
+    if (match) return match;
+  }
+  if (preferred.prefabId) {
+    const match = stations.find(
+      (station) => station.stationPrefabId === preferred.prefabId,
+    );
     if (match) return match;
   }
   return stations[0] ?? null;
+}
+
+/** Human-readable geometry source of a station entry (for logs and UI). */
+export function stationEntrySourceId(station: SystemStationEntry): string {
+  return station.sceneId ? `scene:${station.sceneId}` : station.stationPrefabId ?? 'unknown';
 }
 
 export function isStarParent(parentBodyId: string): boolean {

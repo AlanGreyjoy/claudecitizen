@@ -15,7 +15,7 @@ import {
 } from '../../editor/api';
 import type { SidekickAnimationRuntime } from '../characters/sidekick/animation-runtime';
 import type { CharacterPreviewPose } from './base-character-equipment-ui';
-import { BUILTIN_UAL_CLIPS, LOCOMOTION_LABELS, labelFromUrl, slugFromUrl } from './base-character-equipment-utils';
+import { LOCOMOTION_LABELS, labelFromUrl, slugFromUrl } from './base-character-equipment-utils';
 
 export interface ControllerClipContext {
   getControllerState: () => AnimationControllerV1 | null;
@@ -212,10 +212,26 @@ export function assignClipToState(ctx: ControllerClipContext, stateId: string, c
   const state = controllerState.states.find((entry) => entry.id === stateId);
   if (!state) return;
   state.clipName = clipName;
-  if (clipName) {
-    state.sourceId = BUILTIN_UAL_CLIPS.has(clipName)
-      ? UAL_ANIMATION_SOURCE_ID
-      : ctx.getLastLoadedSourceId();
+  if (!clipName) {
+    ctx.markControllerDirty();
+    return;
+  }
+
+  // Prefer the pack URL this clip was loaded from so multi-clip GLBs (UAL, etc.)
+  // persist a real project path — never the legacy virtual `ual` id.
+  const packUrl = ctx.getAnimation()?.getClipSourceUrl(clipName) ?? null;
+  if (packUrl && !packUrl.startsWith('blob:') && !packUrl.startsWith('data:')) {
+    state.sourceId = ensureSourceForUrl(ctx, packUrl);
+  } else if (packUrl?.startsWith('blob:') || packUrl?.startsWith('data:')) {
+    ctx.setStageStatus(
+      `Clip "${clipName}" came from a local file picker. Load it from the Project panel (assets/…) so Save Ctrl can store a project URL.`,
+      true,
+    );
+    state.sourceId = ctx.getLastLoadedSourceId();
+  } else {
+    const lastId = ctx.getLastLoadedSourceId();
+    const lastSource = controllerState.sources.find((entry) => entry.id === lastId);
+    state.sourceId = lastSource?.id ?? lastId;
   }
   ctx.markControllerDirty();
 }

@@ -23,7 +23,13 @@ function isWeaponWalkMode(mode: string): boolean {
   );
 }
 
-function buildShipRenderList() {
+/**
+ * Scenes that place no ship keep an unrendered player-ship stub so mode
+ * transitions still have a body to read. Returning an empty list here is what
+ * stops the render pool from fetching a hull GLB for it.
+ */
+function buildShipRenderList(shipsEnabled: boolean) {
+  if (!shipsEnabled) return [];
   return listShipInstances().map((instance) => ({
     id: instance.id,
     prefabId: instance.prefabId,
@@ -85,7 +91,7 @@ export function buildRendererFrameArgs(
       prompt: ctx.world.prompt,
       ship: activeShip,
       activeShipId: ctx.world.activeShipId,
-      ships: buildShipRenderList(),
+      ships: buildShipRenderList(ctx.content.ship),
       shipRig: {
         gear01: activeRig.gear01,
         ramp01: activeRig.ramp01,

@@ -10,7 +10,9 @@ import {
   getSystemStationEntriesForPlanetDocument,
   pickPrimarySystemStation,
   resolveStationAltitudeMeters,
+  stationEntrySourceId,
 } from '../world/systems/runtime';
+import { loadStationEntryDocument } from '../world/systems/station-source';
 import { hydrateSpawnPackFromUrl } from '../cache/spawn-pack';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station-runtime';
@@ -25,10 +27,14 @@ import type { Planet } from '../types';
 import type { PlanetDocument } from '../world/planets/schema';
 import type { PrefabDocument } from '../world/prefabs/schema';
 import type { SceneDocument } from '../world/scenes/schema';
-import { resolveScenePlayConfig } from '../world/scenes/scene-runtime';
+import { resolveScenePlayConfig, type ScenePlayContent } from '../world/scenes/scene-runtime';
+import { buildSceneStationDocument } from '../world/scenes/scene-station';
 import { AUTHORING_ENABLED } from '../build-mode';
 
 const DEFAULT_STATION_PREFAB_ID = 'demo-station';
+
+/** URL-driven play predates scene content declarations, so it boots everything. */
+const ALL_CONTENT: ScenePlayContent = { planet: true, ship: true, station: true };
 
 export interface PlayWorldParams {
   planetId: string;
@@ -36,6 +42,18 @@ export interface PlayWorldParams {
   spawnSurface: boolean;
   fromEditor: boolean;
   stationPrefabOverride: string | null;
+  /**
+   * Scene being played, when there is one. Its GameObjects are the station the
+   * player walks on (`buildSceneStationDocument`), which is why the document
+   * travels with the params instead of just its resolved ids.
+   */
+  scene: SceneDocument | null;
+  /**
+   * Subsystems the scene asked for. A planet document is still resolved when
+   * `content.planet` is false — station frames and gravity need one — but the
+   * terrain, vegetation, surface-spawn, and space environment stacks stay off.
+   */
+  content: ScenePlayContent;
 }
 
 export function readPlayWorldParams(): PlayWorldParams {
@@ -46,6 +64,8 @@ export function readPlayWorldParams(): PlayWorldParams {
     spawnSurface: playParams.get('spawn') === 'surface',
     fromEditor: playParams.get('from') === 'editor',
     stationPrefabOverride: AUTHORING_ENABLED ? playParams.get('stationPrefab') : null,
+    scene: null,
+    content: { ...ALL_CONTENT },
   };
 }
 
@@ -56,11 +76,13 @@ export function playWorldParamsFromScene(
 ): PlayWorldParams {
   const config = resolveScenePlayConfig(scene);
   return {
-    planetId: config.planetId || DEFAULT_PLANET_ID,
-    systemId: config.systemId || DEFAULT_SYSTEM_ID,
+    planetId: config.planetId ?? DEFAULT_PLANET_ID,
+    systemId: config.systemId ?? DEFAULT_SYSTEM_ID,
     spawnSurface: config.spawn === 'surface',
     fromEditor: false,
     stationPrefabOverride: config.stationPrefabId,
+    scene,
+    content: config.content,
     ...overrides,
   };
 }
@@ -81,35 +103,47 @@ export async function readPlayWorldParamsFromScene(): Promise<PlayWorldParams> {
     if (!scene || (scene.gameObjects?.length ?? 0) === 0) return base;
     const config = resolveScenePlayConfig(scene);
     return {
-      planetId: config.planetId || base.planetId,
-      systemId: config.systemId || base.systemId,
+      planetId: config.planetId ?? base.planetId,
+      systemId: config.systemId ?? base.systemId,
       spawnSurface: config.spawn === 'surface',
       fromEditor: base.fromEditor,
       stationPrefabOverride:
         config.stationPrefabId
         ?? base.stationPrefabOverride,
+      scene,
+      content: config.content,
     };
   } catch {
     return base;
   }
 }
 
-async function resolveStationPrefab(preferredId?: string | null): Promise<PrefabDocument | null> {
-  const id = preferredId ?? DEFAULT_STATION_PREFAB_ID;
+/**
+ * Makes a station document authoritative for gameplay: its colliders, spawn
+ * point and markers replace the procedural station's. Scene-authored and
+ * prefab-authored stations are the same document shape, so they share this.
+ */
+async function applyStationLayout(
+  doc: PrefabDocument,
+  label: string,
+): Promise<PrefabDocument | null> {
+  const layout = await buildStationLayoutFromPrefab(doc);
+  if (!layout) {
+    console.warn(`Station ${label} is not walkable; using the procedural station.`);
+    return null;
+  }
+  setStationLayoutOverride(layout);
+  console.info(`Station active: ${label}.`);
+  return doc;
+}
 
+async function resolveStationPrefab(id: string): Promise<PrefabDocument | null> {
   const doc = await loadPrefabDocument(id);
   if (!doc) {
     console.warn(`Station prefab "${id}" not found; using the procedural station.`);
     return null;
   }
-  const layout = await buildStationLayoutFromPrefab(doc);
-  if (!layout) {
-    console.warn(`Station prefab "${id}" is not walkable; using the procedural station.`);
-    return null;
-  }
-  setStationLayoutOverride(layout);
-  console.info(`Station prefab active: "${id}".`);
-  return doc;
+  return applyStationLayout(doc, `prefab "${id}"`);
 }
 
 export interface PlayWorldContext {
@@ -127,15 +161,16 @@ async function loadAdditionalStations(
   systemStations: ReturnType<typeof getSystemStationEntriesForPlanetDocument>,
   primaryStation: ReturnType<typeof pickPrimarySystemStation>,
   planet: Planet,
+  playedSceneId: string | null,
 ): Promise<Array<{ prefab: PrefabDocument; frame: StationFrame }>> {
   const additionalStations: Array<{ prefab: PrefabDocument; frame: StationFrame }> = [];
   for (const entry of systemStations) {
     if (primaryStation && entry.id === primaryStation.id) continue;
-    const prefab = await loadPrefabDocument(entry.stationPrefabId);
-    if (!prefab) {
-      console.warn(`Secondary station prefab "${entry.stationPrefabId}" missing; skipping.`);
-      continue;
-    }
+    // The scene being played is already the station around the player; drawing
+    // it a second time as an orbital body would double it.
+    if (playedSceneId && entry.sceneId === playedSceneId) continue;
+    const prefab = await loadStationEntryDocument(entry);
+    if (!prefab) continue;
     const hint = orbitHintFromSystemOffset(
       entry.offsetMeters,
       resolveStationAltitudeMeters(entry),
@@ -151,6 +186,91 @@ async function loadAdditionalStations(
     );
   }
   return additionalStations;
+}
+
+/**
+ * Resolves the system a scene sits in and the station instance it orbits.
+ *
+ * A scene that never named a planet is not placed in a system at all: skipping
+ * the lookup also skips the secondary station prefabs, which are large
+ * authoring packs an interior scene has no use for.
+ */
+async function activatePlayWorldSystem(
+  params: PlayWorldParams,
+  planetDocumentId: string,
+): Promise<{
+  systemDocument: Awaited<ReturnType<typeof loadSystemDocument>>;
+  systemStations: ReturnType<typeof getSystemStationEntriesForPlanetDocument>;
+  primaryStation: ReturnType<typeof pickPrimarySystemStation>;
+}> {
+  const systemDocument = !params.content.planet
+    ? null
+    : (await loadSystemDocument(params.systemId))
+      ?? (params.systemId !== DEFAULT_SYSTEM_ID
+        ? await loadSystemDocument(DEFAULT_SYSTEM_ID)
+        : null);
+  if (systemDocument) {
+    activateSystemDocument(systemDocument);
+    console.info(`System active: "${systemDocument.id}" (${systemDocument.name}).`);
+  } else if (params.content.planet) {
+    console.warn(
+      `System "${params.systemId}" not found; station placement falls back to the default orbital frame.`,
+    );
+  }
+
+  const systemStations = systemDocument
+    ? getSystemStationEntriesForPlanetDocument(systemDocument, planetDocumentId)
+    : [];
+  const primaryStation = pickPrimarySystemStation(systemStations, {
+    prefabId: params.stationPrefabOverride,
+    sceneId: params.scene?.id ?? null,
+  });
+  if (primaryStation) {
+    setStationOrbitHint(
+      orbitHintFromSystemOffset(
+        primaryStation.offsetMeters,
+        resolveStationAltitudeMeters(primaryStation),
+      ),
+    );
+    console.info(
+      `Primary station instance "${primaryStation.id}" (${stationEntrySourceId(primaryStation)}) from system map.`,
+    );
+  } else {
+    setStationOrbitHint(null);
+  }
+  return { systemDocument, systemStations, primaryStation };
+}
+
+/**
+ * The station the player walks on this session.
+ *
+ * The scene they launched wins: its own GameObjects — inline geometry,
+ * colliders, spawn point, placed prefabs — are compiled into a station
+ * document. Only a scene that authors no station of its own falls back to the
+ * system map's primary station, and then to the demo station (and that last
+ * fallback only for scenes that expect a world around them).
+ */
+async function resolvePlayStation(
+  params: PlayWorldParams,
+  primaryStation: ReturnType<typeof pickPrimarySystemStation>,
+): Promise<PrefabDocument | null> {
+  const sceneStation = params.scene
+    ? await buildSceneStationDocument(params.scene)
+    : null;
+  if (sceneStation) {
+    return applyStationLayout(sceneStation, `scene "${sceneStation.id}"`);
+  }
+  if (primaryStation?.sceneId && !params.stationPrefabOverride) {
+    const document = await loadStationEntryDocument(primaryStation);
+    if (document) {
+      return applyStationLayout(document, `scene "${primaryStation.sceneId}"`);
+    }
+  }
+  const stationPrefabId =
+    params.stationPrefabOverride
+    ?? primaryStation?.stationPrefabId
+    ?? (params.content.planet ? DEFAULT_STATION_PREFAB_ID : null);
+  return stationPrefabId ? resolveStationPrefab(stationPrefabId) : null;
 }
 
 export async function loadPlayWorldContext(
@@ -175,49 +295,24 @@ export async function loadPlayWorldContext(
   }
   loading?.setProgress(0.22);
 
-  const systemDocument =
-    (await loadSystemDocument(params.systemId))
-    ?? (params.systemId !== DEFAULT_SYSTEM_ID
-      ? await loadSystemDocument(DEFAULT_SYSTEM_ID)
-      : null);
-  if (systemDocument) {
-    activateSystemDocument(systemDocument);
-    console.info(`System active: "${systemDocument.id}" (${systemDocument.name}).`);
-  } else {
-    console.warn(
-      `System "${params.systemId}" not found; station placement falls back to the default orbital frame.`,
-    );
-    setStationOrbitHint(null);
-  }
-
-  const systemStations = systemDocument
-    ? getSystemStationEntriesForPlanetDocument(systemDocument, planetDocument.id)
-    : [];
-  const primaryStation = pickPrimarySystemStation(systemStations, params.stationPrefabOverride);
-  if (primaryStation) {
-    setStationOrbitHint(
-      orbitHintFromSystemOffset(
-        primaryStation.offsetMeters,
-        resolveStationAltitudeMeters(primaryStation),
-      ),
-    );
-    console.info(
-      `Primary station instance "${primaryStation.id}" (${primaryStation.stationPrefabId}) from system map.`,
-    );
-  } else {
-    setStationOrbitHint(null);
-  }
-
-  const stationPrefab = await resolveStationPrefab(
-    params.stationPrefabOverride
-    ?? primaryStation?.stationPrefabId
-    ?? DEFAULT_STATION_PREFAB_ID,
+  const { systemDocument, systemStations, primaryStation } = await activatePlayWorldSystem(
+    params,
+    planetDocument.id,
   );
 
-  const additionalStations = await loadAdditionalStations(systemStations, primaryStation, planet);
+  const stationPrefab = await resolvePlayStation(params, primaryStation);
+
+  const additionalStations = await loadAdditionalStations(
+    systemStations,
+    primaryStation,
+    planet,
+    params.scene?.id ?? null,
+  );
 
   console.info(
-    `Planet active: "${planetDocument.id}" seed=${seed}${params.spawnSurface ? ' (surface spawn)' : ''}.`,
+    params.content.planet
+      ? `Planet active: "${planetDocument.id}" seed=${seed}${params.spawnSurface ? ' (surface spawn)' : ''}.`
+      : `Interior scene: planet "${planetDocument.id}" supplies frame math only (no terrain streaming).`,
   );
 
   return {

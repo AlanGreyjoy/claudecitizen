@@ -63,6 +63,11 @@ function SettingsPanel({ api }: BaseCharactersSidebarProps): ReactElement {
 function AnimationTab({ api }: BaseCharactersSidebarProps): ReactElement {
   const snap = api.getSnapshot();
   const animation = snap.animation;
+  const clipPacks =
+    animation?.clipPacks
+    ?? (animation?.clipNames.length
+      ? [{ label: 'Loaded', clipNames: animation.clipNames }]
+      : []);
 
   return (
     <div className="ed-base-anim-panel">
@@ -75,10 +80,14 @@ function AnimationTab({ api }: BaseCharactersSidebarProps): ReactElement {
           value={animation?.activeClipName ?? ''}
           onChange={(event) => api.setAnimationClip(event.currentTarget.value)}
         >
-          {(animation?.clipNames ?? []).map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
+          {clipPacks.map((pack) => (
+            <optgroup key={pack.label} label={pack.label}>
+              {pack.clipNames.map((name) => (
+                <option key={`${pack.label}:${name}`} value={name}>
+                  {name}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </label>
@@ -241,23 +250,22 @@ function ControllerPanel({ api }: BaseCharactersSidebarProps): ReactElement {
             (entry) => entry.stanceId === snap.selectedStanceId && entry.locomotion === locomotion,
           );
           if (!state) return null;
-          const clipOptions = [
-            { value: '', label: '(unassigned)' },
-            ...(snap.animation?.clipNames ?? []).map((name) => ({ value: name, label: name })),
-          ];
-          if (state.clipName && !clipOptions.some((option) => option.value === state.clipName)) {
-            clipOptions.push({
-              value: state.clipName,
-              label: `${state.clipName} (not loaded)`,
-            });
-          }
+          const clipPacks =
+            snap.animation?.clipPacks
+            ?? (snap.animation?.clipNames.length
+              ? [{ label: 'Loaded', clipNames: snap.animation.clipNames }]
+              : []);
+          const listed = new Set(clipPacks.flatMap((pack) => pack.clipNames));
           return (
             <ControllerStateRow
               key={state.id}
               api={api}
               locomotion={locomotion}
               state={state}
-              clipOptions={clipOptions}
+              clipPacks={clipPacks}
+              orphanClipName={
+                state.clipName && !listed.has(state.clipName) ? state.clipName : null
+              }
             />
           );
         })}
@@ -274,12 +282,14 @@ function ControllerStateRow({
   api,
   locomotion,
   state,
-  clipOptions,
+  clipPacks,
+  orphanClipName,
 }: {
   api: BaseCharacterEditorUiApi;
   locomotion: AnimationLocomotionKind;
   state: { id: string; clipName: string; sourceId: string; stanceId: string; locomotion: AnimationLocomotionKind };
-  clipOptions: Array<{ value: string; label: string }>;
+  clipPacks: Array<{ label: string; clipNames: string[] }>;
+  orphanClipName: string | null;
 }): ReactElement {
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault();
@@ -304,11 +314,21 @@ function ControllerStateRow({
         value={state.clipName}
         onChange={(event) => api.assignClipToState(state.id, event.currentTarget.value)}
       >
-        {clipOptions.map((option) => (
-          <option key={option.value || 'empty'} value={option.value}>
-            {option.label}
-          </option>
+        <option value="">(unassigned)</option>
+        {clipPacks.map((pack) => (
+          <optgroup key={pack.label} label={pack.label}>
+            {pack.clipNames.map((name) => (
+              <option key={`${pack.label}:${name}`} value={name}>
+                {name}
+              </option>
+            ))}
+          </optgroup>
         ))}
+        {orphanClipName ? (
+          <optgroup label="Not loaded">
+            <option value={orphanClipName}>{`${orphanClipName} (not loaded)`}</option>
+          </optgroup>
+        ) : null}
       </select>
       <code className="ed-base-source-badge">{state.sourceId}</code>
     </div>

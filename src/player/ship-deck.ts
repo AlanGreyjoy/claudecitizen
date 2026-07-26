@@ -16,6 +16,7 @@ import {
 import {
   advanceJumpAnimationPhase,
   animationLayersFromState,
+  isAirborneForAnimation,
   resolveWalkAiming,
   resolveWalkFacing,
   resolveWalkInputIntent,
@@ -738,7 +739,7 @@ function updateCharacterOnDeckRapier(
   );
   const flags = resolveDeckExitState(state, physics, grounded, options);
 
-  const airborne = startedJump || !grounded || verticalVelocity > 0.15;
+  const airborne = isAirborneForAnimation(grounded, verticalVelocity, startedJump);
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   const layers = animationLayersFromState({
     stanceId,

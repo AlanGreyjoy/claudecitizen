@@ -55,8 +55,14 @@ export interface SystemPlanetEntry {
 export interface SystemStationEntry {
   /** Unique instance id within the system. */
   id: string;
-  /** Prefab id under `src/world/prefabs/data/` (e.g. `demo-station`). */
-  stationPrefabId: string;
+  /**
+   * Station geometry source. Exactly one is set: a station prefab document, or
+   * a scene whose GameObjects author the station (compiled to the same shape by
+   * `buildSceneStationDocument`).
+   */
+  stationPrefabId?: string;
+  /** Scene id whose GameObjects author this station. */
+  sceneId?: string;
   name: string;
   /** `"star"` or a `SystemPlanetEntry.id`. */
   parentBodyId: string;
@@ -110,10 +116,15 @@ function parseStationEntry(raw: unknown): SystemStationEntry | null {
   const id = typeof src.id === 'string' ? src.id.trim() : '';
   const stationPrefabId =
     typeof src.stationPrefabId === 'string' ? src.stationPrefabId.trim() : '';
+  const sceneId = typeof src.sceneId === 'string' ? src.sceneId.trim() : '';
   const parentBodyId =
     typeof src.parentBodyId === 'string' ? src.parentBodyId.trim() : '';
   const name = typeof src.name === 'string' ? src.name.trim() : '';
-  if (!SYSTEM_ID_PATTERN.test(id) || !SYSTEM_ID_PATTERN.test(stationPrefabId)) return null;
+  if (!SYSTEM_ID_PATTERN.test(id)) return null;
+  // A station names exactly one geometry source.
+  if (Boolean(stationPrefabId) === Boolean(sceneId)) return null;
+  if (stationPrefabId && !SYSTEM_ID_PATTERN.test(stationPrefabId)) return null;
+  if (sceneId && !SYSTEM_ID_PATTERN.test(sceneId)) return null;
   if (!name) return null;
   if (parentBodyId !== SYSTEM_STAR_PARENT_ID && !SYSTEM_ID_PATTERN.test(parentBodyId)) {
     return null;
@@ -123,7 +134,8 @@ function parseStationEntry(raw: unknown): SystemStationEntry | null {
   const altitudeMeters = readOptionalAltitude(src.altitudeMeters);
   return {
     id,
-    stationPrefabId,
+    ...(stationPrefabId ? { stationPrefabId } : {}),
+    ...(sceneId ? { sceneId } : {}),
     name,
     parentBodyId,
     offsetMeters,

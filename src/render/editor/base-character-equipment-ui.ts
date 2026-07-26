@@ -30,6 +30,8 @@ export type CatalogDefinition = WeaponDefinition | BackpackDefinition;
 export interface BaseCharacterAnimationSnapshot {
   activeClipName: string;
   clipNames: string[];
+  /** Loaded packs with their clip names — Controllers select groups by these. */
+  clipPacks: Array<{ label: string; clipNames: string[] }>;
   playing: boolean;
   timeScale: number;
   sourceLabel: string;

@@ -193,11 +193,15 @@ const EDITOR_CSS = `
  * Game view (Play mode). The transform makes this element the containing block
  * for the HUD's position: fixed descendants, so in-play chrome stays inside the
  * Game region instead of covering the editor toolbar.
+ *
+ * The host is a sibling of #editor-root, which is fixed at z-index 250 with an
+ * opaque background (sc-ui.css). Anything below that stacks behind the editor
+ * shell and is painted over, so Play must outrank it to be visible at all.
  */
 #editor-play-host {
   position: fixed;
   inset: 37px 0 0 0;
-  z-index: 40;
+  z-index: 260;
   overflow: hidden;
   background: var(--ed-viewport);
   transform: translateZ(0);

@@ -8,8 +8,7 @@ alwaysApply: true
 Before architectural or cross-cutting changes, read the project's agent docs:
 
 1. `AGENTS.md` (primary)
-2. `claude.md` at repo root, if present
-3. `agents.md` at repo root, if present
+2. `CLAUDE.md` at repo root
 
 Use those docs for bounded-context ownership, import boundaries, terrain/foot
 sync, security, and performance pitfalls. Do not restate them here — read the
@@ -34,7 +33,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 ### Client — TypeScript + Three.js
 
-- **Main thread is sacred.** Heavy work belongs in Web Workers (`planet_tile_worker.js`), async loads, or spread across frames — never unbounded sync loops on the hot path.
+- **Main thread is sacred.** Heavy work belongs in Web Workers (`src/render/planet_tiles/worker/tile-worker.ts`), async loads, or spread across frames — never unbounded sync loops on the hot path.
 - **Respect existing budgets.** Per-frame tile/vegetation build caps, LOD selection, and quality presets (`?quality=performance|balanced|high`) exist because unbounded work freezes the game at 0 FPS.
 - **UI stays out of the render loop.** UI updates on state/events; avoid new object/array allocations every frame in shared paths.
 - **Three.js discipline.** Reuse geometries/materials; instancing where possible; frustum/distance culling; minimize scene graph churn and `dispose()` leaks.
@@ -61,7 +60,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`)
 - Friendly station NPCs / waypoint routes / population definitions → `src/npc/` plus AGENTS.md "Friendly station NPCs"
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
-- Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache_keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
+- Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache-keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / scene / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (Electron desktop)"
 - Ship flight / mass / thrust / IFCS / dual-reticle / Preview Ship flight → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, and AGENTS.md "Ship flight"
@@ -70,7 +69,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 ## Key reminders
 
-- Domain logic lives in `world/`, `flight/`, `player/`, `npc/` — not in `render/` or `app.js`
+- Domain logic lives in `world/`, `flight/`, `player/`, `npc/` — not in `render/`, `game/`, or `app/`
 - Terrain mesh and foot placement must share the uniform per-LOD band-limited grid; preserve `renderableGridSampleSpacingMeters()` ownership, mixed-LOD edge stitching, two-sided fallback skirts, pinned L0 fallback coverage, and the cached downhill river graph
 - Never commit or relocate `protected/` assets
 - No unit tests in this project

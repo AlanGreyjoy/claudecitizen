@@ -33,6 +33,7 @@ import type { PersonalInventoryController } from "../render/effects/hud/personal
 import type { PlayerVitalsSessionController } from "../app/player-vitals-session";
 import type { HudUpdateParams } from "../render/effects";
 import type { PrefabDocument } from "../world/prefabs/schema";
+import type { ScenePlayContent } from "../world/scenes/scene-runtime";
 import type {
   InventoryState,
   LoadoutState,
@@ -76,6 +77,8 @@ export interface LoopContext {
   readonly planetId: string;
   readonly systemId: string;
   readonly activeStationInstanceId: string | null;
+  /** Subsystems the active scene declared; gates ship rendering and deck warmup. */
+  readonly content: ScenePlayContent;
   readonly controls: PlayerControls;
   readonly renderer: SpikeRenderer | null;
   readonly network: WorldClient | null;
@@ -164,6 +167,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     planetId: resolved.planetId,
     systemId: resolved.systemId,
     activeStationInstanceId: resolved.activeStationInstanceId,
+    content: resolved.content,
     controls: resolved.controls,
     renderer: resolved.renderer,
     network: resolved.network,

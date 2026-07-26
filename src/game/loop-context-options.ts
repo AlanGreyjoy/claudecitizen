@@ -9,6 +9,7 @@ export type ResolvedLoopContextOptions = Required<
     | "planetId"
     | "systemId"
     | "activeStationInstanceId"
+    | "content"
     | "controls"
     | "renderer"
     | "network"
@@ -58,6 +59,7 @@ function resolveSpawnOptions(options: GameLoopOptions) {
     planetId: options.planetId ?? "asteron",
     systemId: options.systemId ?? "default",
     activeStationInstanceId: options.activeStationInstanceId ?? null,
+    content: options.content ?? { planet: true, ship: true, station: true },
   };
 }
 

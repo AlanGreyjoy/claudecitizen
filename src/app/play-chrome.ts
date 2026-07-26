@@ -15,9 +15,15 @@ let mountedRoot: HTMLElement | null = null;
 
 export function mountPlayChrome(container: HTMLElement): HTMLElement {
   const existing = document.getElementById(PLAY_CHROME_ROOT_ID);
+  // Editor Play uses `#editor-play-host` as the Game region. Never steal `#app`
+  // onto `document.body` while that host exists — body mount leaves the host as
+  // an empty black overlay that eats clicks (no pointer lock, no visible frame).
+  const playHost = document.getElementById('editor-play-host');
+  const target = playHost ?? container;
   if (existing) {
     mountedRoot = existing;
-    if (existing.parentElement !== container) container.append(existing);
+    if (existing.parentElement !== target) target.append(existing);
+    existing.classList.remove('is-hidden');
     return existing;
   }
 
@@ -25,7 +31,7 @@ export function mountPlayChrome(container: HTMLElement): HTMLElement {
   root.id = PLAY_CHROME_ROOT_ID;
   root.className = 'is-hidden';
   root.innerHTML = playChromeMarkup;
-  container.append(root);
+  target.append(root);
   mountPlayChromeIcons(root);
   mountedRoot = root;
   return root;

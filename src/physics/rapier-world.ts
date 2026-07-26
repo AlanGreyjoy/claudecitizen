@@ -67,6 +67,13 @@ const PLAYER_CAPSULE_RADIUS = 0.42;
 const PLAYER_CAPSULE_HEIGHT = 1.75;
 const PLAYER_CAPSULE_HALF_HEIGHT = PLAYER_CAPSULE_HEIGHT / 2;
 
+/** Tallest ledge the walker steps over instead of colliding with. */
+const AUTOSTEP_MAX_HEIGHT_METERS = 0.5;
+/** Minimum landable tread depth; below this the step is treated as a wall. */
+const AUTOSTEP_MIN_WIDTH_METERS = 0.2;
+/** Downward reach that keeps the walker stuck to ground over crests/dips. */
+const SNAP_TO_GROUND_METERS = 0.3;
+
 export function createRapierWorld(): RAPIER.World {
   return new RAPIER.World(new RAPIER.Vector3(0, -9.81, 0));
 }
@@ -93,10 +100,18 @@ export function createPlayerCharacter(
   const characterController = world.createCharacterController(0.05);
   characterController.setUp({ x: 0, y: 1, z: 0 });
   characterController.setSlideEnabled(true);
-  characterController.setMaxSlopeClimbAngle((50 * Math.PI) / 180);
-  characterController.setMinSlopeSlideAngle((60 * Math.PI) / 180);
-  characterController.disableAutostep();
-  characterController.disableSnapToGround();
+  characterController.setMaxSlopeClimbAngle((55 * Math.PI) / 180);
+  characterController.setMinSlopeSlideAngle((65 * Math.PI) / 180);
+  // Stair risers, deck lips, and door sills are authored well under half a
+  // metre; without autostep the capsule catches on every one of them.
+  characterController.enableAutostep(
+    AUTOSTEP_MAX_HEIGHT_METERS,
+    AUTOSTEP_MIN_WIDTH_METERS,
+    true,
+  );
+  // Keeps the controller grounded over crests and small dips. Without it
+  // `computedGrounded()` flickers false and the walker plays a fall.
+  characterController.enableSnapToGround(SNAP_TO_GROUND_METERS);
 
   return {
     world,

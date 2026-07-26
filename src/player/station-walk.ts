@@ -3,6 +3,7 @@ import { CHARACTER_GROUND_OFFSET_METERS } from './character-controller';
 import {
   advanceJumpAnimationPhase,
   animationLayersFromState,
+  isAirborneForAnimation,
   resolveWalkAiming,
   resolveWalkFacing,
   resolveWalkInputIntent,
@@ -104,11 +105,15 @@ export function createStationCharacterAt(
 export function createStationSpawnCharacter(planet: Planet): StationCharacterState {
   const frame = getStationFrame(planet);
   const spawn = getStationSpawn();
+  // The spawn's own height wins over the room's floor: prefab and scene
+  // markers carry an authored `up`, and station physics already places the
+  // body from it, so dropping it here put the walker on a different deck.
   return createStationCharacterAt(
     frame,
     spawn.roomId,
     { right: spawn.right, forward: spawn.forward },
     spawn.face,
+    spawn.up,
   );
 }
 
@@ -173,7 +178,7 @@ export function updateCharacterInStation(
   stepStationPhysics(physics);
 
   const groundedAfter = isStationPlayerGrounded(physics);
-  const airborne = startedJump || !groundedAfter || verticalVelocity > 0.15;
+  const airborne = isAirborneForAnimation(groundedAfter, verticalVelocity, startedJump);
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   const position = getStationPlayerPosition(physics, frame);
   const local = worldToStationLocal(frame, position);

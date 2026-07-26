@@ -24,8 +24,11 @@ and restores the editor viewport. There is no separate Play Mode window.
 
 Play mounts into `#editor-play-host`, a fixed overlay over the Game region, so the
 HUD's `position: fixed` elements stay contained inside that region instead of
-escaping across the whole workspace. Pause feeds the game loop's `isPaused()`
-check rather than tearing the session down.
+escaping across the whole workspace. The host is a sibling of `#editor-root` and
+must outrank it in `z-index` (currently `260` vs the shell's `250`); otherwise
+Play runs under the opaque editor chrome and looks like a blank blue screen while
+audio still works. Pause feeds the game loop's `isPaused()` check rather than
+tearing the session down.
 
 ## Deep-link URLs
 

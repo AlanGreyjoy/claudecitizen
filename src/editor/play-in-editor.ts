@@ -1,5 +1,6 @@
 import { createSceneHost, type SceneHostHandle } from '../app/scene-host';
 import { mountPlayChrome, unmountPlayChrome } from '../app/play-chrome';
+import type { PrefabComponent } from '../world/prefabs/schema';
 import type { SceneDocument } from '../world/scenes/schema';
 import { SCENE_SCHEMA_VERSION } from '../world/scenes/schema';
 import type { EditorStore } from './document';
@@ -16,10 +17,27 @@ export interface EditorPlaySession {
 /**
  * Wraps the open prefab in a throwaway scene so prefabs are playable without
  * authoring a scene for each one.
+ *
+ * The stage declares the smallest world the prefab needs. A ship gets a
+ * `game-manager` because it has to fly somewhere; a station interior does not,
+ * and adding one used to make every station prefab Play boot the entire planet
+ * stack it never referenced.
  */
 function prefabStageScene(store: EditorStore): SceneDocument {
   const state = store.getState();
   const prefabId = state.prefabId || 'untitled';
+  const isShip = state.kind === 'ship';
+  const components: PrefabComponent[] = [
+    { type: 'prefab-instance', prefabId, prefabKind: isShip ? 'ship' : 'station' },
+  ];
+  if (isShip) {
+    components.unshift({
+      type: 'game-manager',
+      systemId: 'default',
+      planetId: 'asteron',
+      spawn: 'station',
+    });
+  }
   return {
     schemaVersion: SCENE_SCHEMA_VERSION,
     id: `${prefabId}-stage`,
@@ -27,26 +45,14 @@ function prefabStageScene(store: EditorStore): SceneDocument {
     kind: 'prefab-stage',
     gameObjects: [
       {
-        id: 'game-manager',
-        name: 'Game Manager',
+        id: 'prefab-stage-root',
+        name: state.prefabName || prefabId,
         transform: {
           position: { x: 0, y: 0, z: 0 },
           rotation: { x: 0, y: 0, z: 0, w: 1 },
           scale: { x: 1, y: 1, z: 1 },
         },
-        components: [
-          {
-            type: 'game-manager',
-            systemId: 'default',
-            planetId: 'asteron',
-            spawn: 'station',
-          },
-          {
-            type: 'prefab-instance',
-            prefabId,
-            prefabKind: state.kind === 'ship' ? 'ship' : 'station',
-          },
-        ],
+        components,
       },
     ],
   };

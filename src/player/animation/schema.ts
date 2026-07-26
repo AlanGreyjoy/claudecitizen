@@ -192,20 +192,17 @@ export function resolveControllerState(
 }
 
 /**
- * Armed pack sources to preload (rifle + pistol). Includes every authored
- * source so walk/run/aim clips are available even if coarse states lag.
+ * Project animation sources to preload for gameplay. Includes every source
+ * referenced by an assigned stance state (unarmed / rifle / pistol / …).
+ * Missing files warn and skip — they must not block spawn.
  */
 export function primaryStanceSources(
   controller: AnimationControllerV1,
 ): AnimationControllerSourceV1[] {
   const needed = new Set<string>();
-  for (const source of controller.sources) {
-    if (source.id === UAL_ANIMATION_SOURCE_ID) continue;
-    needed.add(source.id);
-  }
   for (const state of controller.states) {
-    if (state.stanceId !== 'rifle' && state.stanceId !== 'pistol') continue;
-    if (!state.clipName || state.sourceId === UAL_ANIMATION_SOURCE_ID) continue;
+    if (!state.clipName || !state.sourceId) continue;
+    if (state.sourceId === UAL_ANIMATION_SOURCE_ID) continue;
     needed.add(state.sourceId);
   }
   return controller.sources.filter((source) => needed.has(source.id));

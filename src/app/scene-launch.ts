@@ -22,8 +22,8 @@ export function sceneLaunchSearch(document: SceneDocument): string {
     case 'main-game': {
       const config = resolveScenePlayConfig(document);
       params.set('boot', 'play');
-      params.set('systemId', config.systemId);
-      params.set('planetId', config.planetId);
+      if (config.systemId) params.set('systemId', config.systemId);
+      if (config.planetId) params.set('planetId', config.planetId);
       if (config.spawn === 'surface') params.set('spawn', 'surface');
       if (config.stationPrefabId) {
         params.set('stationPrefab', config.stationPrefabId);

@@ -16,6 +16,7 @@ import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world-client";
 import type { StationPhysics } from "../physics/station-physics";
 import type { PrefabDocument } from "../world/prefabs/schema";
+import type { ScenePlayContent } from "../world/scenes/scene-runtime";
 import type { SurfaceDestination } from "../world/biome-teleport";
 import type {
   InventoryState,
@@ -56,6 +57,8 @@ export interface GameLoopOptions {
   planetId?: string;
   systemId?: string;
   activeStationInstanceId?: string | null;
+  /** Subsystems the active scene declared. Omitted means "boot everything". */
+  content?: ScenePlayContent;
   controls: PlayerControls;
   renderer: SpikeRenderer | null;
   rendererError: unknown;

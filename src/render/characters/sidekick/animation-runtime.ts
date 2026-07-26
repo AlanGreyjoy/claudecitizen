@@ -18,13 +18,23 @@ interface AnimationLibraryAsset {
   scene: THREE.Object3D;
 }
 
+export interface SidekickAnimationClipPack {
+  /** Display label for the loaded GLB / library (e.g. `ProRifle/idle`, `UAL1_Standard`). */
+  label: string;
+  clipNames: string[];
+}
+
 export interface SidekickAnimationRuntime {
   clipNames: string[];
+  /** Clips grouped by the pack/file they were loaded from (load order). */
+  clipPacks: SidekickAnimationClipPack[];
   activeClipName: string;
   activeUpperClipName: string | null;
   playing: boolean;
   timeScale: number;
   sourceLabel: string;
+  /** Project (or absolute) URL the named clip was loaded from, if any. */
+  getClipSourceUrl: (clipName: string) => string | null;
   dispose: () => void;
   loadDefaultLibrary: () => Promise<void>;
   loadAnimationSource: (
@@ -183,10 +193,55 @@ export async function createSidekickAnimationRuntime(
   let timeScale = 1;
   let sourceLabel = 'none';
   let clipNames: string[] = [];
+  let clipPacks: SidekickAnimationClipPack[] = [];
+  /** clip name → pack label for the load that currently owns that clip. */
+  const clipPackByName = new Map<string, string>();
+  /** clip name → source URL used to load it (blob: for file picker). */
+  const clipSourceUrlByName = new Map<string, string>();
+  const packLoadOrder: string[] = [];
   const pendingFadeStops: Array<{
     action: THREE.AnimationAction;
     remainingSeconds: number;
   }> = [];
+
+  const rebuildClipIndex = (): void => {
+    clipNames = [...sourceClips.keys()].sort((a, b) => a.localeCompare(b));
+    const byPack = new Map<string, string[]>();
+    for (const name of clipNames) {
+      const pack = clipPackByName.get(name) ?? 'Loaded';
+      const list = byPack.get(pack);
+      if (list) list.push(name);
+      else byPack.set(pack, [name]);
+    }
+    const ordered = packLoadOrder.filter((pack) => byPack.has(pack));
+    for (const pack of byPack.keys()) {
+      if (!ordered.includes(pack)) ordered.push(pack);
+    }
+    clipPacks = ordered.map((label) => ({
+      label,
+      clipNames: byPack.get(label) ?? [],
+    }));
+  };
+
+  const rememberPack = (packLabel: string): void => {
+    if (!packLoadOrder.includes(packLabel)) packLoadOrder.push(packLabel);
+  };
+
+  const packLabelForUrl = (url: string, explicit?: string): string => {
+    if (explicit && !/\.(glb|gltf)$/i.test(explicit)) return explicit;
+    try {
+      const path = decodeURIComponent((url.split(/[?#]/)[0] ?? url));
+      const parts = path.split('/').filter(Boolean);
+      const file = (parts.at(-1) ?? path).replace(/\.(glb|gltf)$/i, '');
+      const folder = parts.at(-2);
+      if (folder && folder !== 'assets' && folder !== 'animations') {
+        return `${folder}/${file}`;
+      }
+      return file || explicit || url;
+    } catch {
+      return explicit || url;
+    }
+  };
 
   const ensureLayerClip = (
     name: string,
@@ -355,18 +410,27 @@ export async function createSidekickAnimationRuntime(
     activeUpperName = null;
     upperParentCompensation.setCorrection(null, null);
     clipNames = [];
+    clipPacks = [];
+    clipPackByName.clear();
+    clipSourceUrlByName.clear();
+    packLoadOrder.length = 0;
   };
 
   const registerClips = (
     clips: THREE.AnimationClip[],
     replaceAll: boolean,
+    packLabel: string,
+    sourceUrl: string,
   ): void => {
     if (replaceAll) clearActions();
+    rememberPack(packLabel);
     for (const clip of clips) {
       if (sourceClips.has(clip.name)) clearActionKeysForClip(clip.name);
       sourceClips.set(clip.name, clip);
+      clipPackByName.set(clip.name, packLabel);
+      clipSourceUrlByName.set(clip.name, sourceUrl);
     }
-    clipNames = [...sourceClips.keys()].sort((a, b) => a.localeCompare(b));
+    rebuildClipIndex();
   };
 
   const setAnimation = (name: string, fadeSeconds = 0.16): void => {
@@ -407,7 +471,12 @@ export async function createSidekickAnimationRuntime(
    */
   const loadDefaultLibrary = async (): Promise<void> => {
     const library = await loadAnimationLibrary();
-    registerClips(retargetFromAsset(library), true);
+    registerClips(
+      retargetFromAsset(library),
+      true,
+      'UAL locomotion',
+      UNIVERSAL_ANIMATION_LIBRARY_URL,
+    );
     sourceLabel = 'UAL locomotion';
     const preferred = sourceClips.has('Idle_Loop') ? 'Idle_Loop' : clipNames[0] ?? '';
     if (preferred) setAnimation(preferred, 0);
@@ -426,8 +495,9 @@ export async function createSidekickAnimationRuntime(
     if (label && clips.length === 1 && clips[0] && clips[0].name !== label) {
       clips[0].name = label;
     }
-    registerClips(clips, false);
-    const fileLabel = label ?? url.split(/[/?#]/).filter(Boolean).at(-1) ?? url;
+    const packLabel = packLabelForUrl(url, label);
+    registerClips(clips, false, packLabel, url);
+    const fileLabel = packLabel;
     sourceLabel = sourceLabel === 'none' || sourceLabel === 'UAL locomotion'
       ? fileLabel
       : `${sourceLabel} + ${fileLabel}`;
@@ -445,6 +515,9 @@ export async function createSidekickAnimationRuntime(
     get clipNames() {
       return clipNames;
     },
+    get clipPacks() {
+      return clipPacks;
+    },
     get activeClipName() {
       return activeBaseName;
     },
@@ -459,6 +532,9 @@ export async function createSidekickAnimationRuntime(
     },
     get sourceLabel() {
       return sourceLabel;
+    },
+    getClipSourceUrl(clipName: string) {
+      return clipSourceUrlByName.get(clipName) ?? null;
     },
     loadDefaultLibrary,
     loadAnimationSource,

@@ -83,7 +83,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
   const renderDeps = { occlusion, sceneSounds, screens, combat, buildTool };
   const simDeps = { combat, shipSystems, animations, buildTool, modes };
 
-  void deckPhysics.warmShipDeckPhysics();
+  if (ctx.content.ship) void deckPhysics.warmShipDeckPhysics();
   animations.updateStationAnimations(0);
   ctx.controls.setOrbitFacing(
     ctx.world.cameraOrbit.yawRadians,

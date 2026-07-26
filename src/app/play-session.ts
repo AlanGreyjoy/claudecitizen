@@ -59,6 +59,12 @@ function resolvePlayCharacterAppearance(
 }
 
 let started = false;
+/**
+ * Bumped by every stop. `startPlaySession` captures it up front and compares
+ * before it publishes the session, so a stop that lands mid-load is not lost:
+ * the load finishes, then tears itself down instead of leaking a live loop.
+ */
+let startGeneration = 0;
 /** Editor Play/Pause gate. Overlay pauses stay independent of this flag. */
 let externallyPaused = false;
 
@@ -98,12 +104,12 @@ interface PlaySessionCleanup {
 
 let activeCleanup: PlaySessionCleanup | null = null;
 
-export function stopPlaySession(options: { restoreTitle?: boolean } = {}): void {
-  const cleanup = activeCleanup;
-  if (!cleanup) return;
-  activeCleanup = null;
-  externallyPaused = false;
-
+/**
+ * Releases one session's resources. Takes the cleanup record rather than
+ * reading `activeCleanup` so an abandoned start can dispose what it built
+ * without touching a session that began after it.
+ */
+function disposePlaySession(cleanup: PlaySessionCleanup): void {
   cleanup.gameMenu.dispose();
   cleanup.avmsTerminal.dispose();
   cleanup.entertainmentSystem.dispose();
@@ -124,9 +130,49 @@ export function stopPlaySession(options: { restoreTitle?: boolean } = {}): void 
   cleanup.networkClient?.leave();
   cleanup.networkClient?.close();
   window.removeEventListener('resize', cleanup.resize);
+}
+
+/** Keeps the drawing buffer on the window, and returns the listener to release. */
+function bindPlayResize(renderer: SpikeRenderer | null): () => void {
+  const resize = (): void => {
+    renderer?.resize(window.innerWidth, window.innerHeight);
+  };
+  window.addEventListener('resize', resize);
+  resize();
+  return resize;
+}
+
+/**
+ * Makes a finished session the active one, or discards it when a stop landed
+ * while it was still loading. Returns false when the caller must abandon the
+ * start: a later Play may already own the session.
+ */
+function publishPlaySession(
+  cleanup: PlaySessionCleanup,
+  generation: number,
+  loading?: LoadingScreenHandle,
+): boolean {
+  if (generation !== startGeneration) {
+    disposePlaySession(cleanup);
+    loading?.hide();
+    return false;
+  }
+  activeCleanup = cleanup;
+  return true;
+}
+
+export function stopPlaySession(options: { restoreTitle?: boolean } = {}): void {
+  const cleanup = activeCleanup;
+  // Clear the flags even when no session published itself yet: a stop that
+  // lands mid-load has nothing to dispose, and leaving `started` set would make
+  // the next Play a no-op.
+  activeCleanup = null;
+  externallyPaused = false;
   started = false;
+  startGeneration += 1;
+  if (cleanup) disposePlaySession(cleanup);
   if (options.restoreTitle ?? true) {
-    restoreTitleScreen(cleanup.session);
+    restoreTitleScreen(cleanup?.session ?? null);
     return;
   }
   getPlayChromeRoot()?.classList.add('is-hidden');
@@ -193,6 +239,7 @@ function createPlayGameLoop(options: {
     planetId: world.planetDocument.id,
     systemId: world.systemDocument?.id ?? world.params.systemId,
     activeStationInstanceId: world.primaryStation?.id ?? null,
+    content: world.params.content,
     controls,
     renderer,
     rendererError,
@@ -242,6 +289,7 @@ async function createPlayRenderer(
       stationPrefab: world.stationPrefab,
       additionalStations: world.additionalStations,
       characterAppearance,
+      environment: world.params.content.planet ? 'planet' : 'interior',
     });
     return { renderer, rendererError: null };
   } catch (error) {
@@ -404,7 +452,7 @@ async function finalizePlaySessionStart(options: {
       onStatus: (text) => overlays.hud.appendChatMessage('SYS', text),
     }).setVisible(true);
   }
-  if (!bootstrap) return;
+  if (!bootstrap || !world.params.content.ship) return;
   await syncBootstrapShips(
     bootstrap.ships,
     bootstrap.player.id,
@@ -420,14 +468,23 @@ export async function startPlaySession(
 
   const { session, bootstrap } = await resolvePlaySessionBootstrap(loading, options);
   started = true;
+  const generation = startGeneration;
 
   await Promise.all([loadCurrentCharacterSettings(), loadCurrentDefaultAnimationController()]);
-  await applyDefaultShipPrefab();
   loading?.setProgress(0.15);
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
   const world = await loadPlayWorldContext(loading, options.worldParams);
-  const dom = collectPlaySessionDom(mountPlayChrome(document.body));
+  // Scenes that place no ship never load a hull. The player ship stays an
+  // unrendered data stub so mode transitions keep a body to read.
+  if (world.params.content.ship) await applyDefaultShipPrefab();
+  // Editor Play hosts chrome in `#editor-play-host`. Remounting onto `document.body`
+  // leaves that host as an empty black overlay (z-index 40) on top of the canvas.
+  const playChromeParent =
+    document.getElementById('editor-play-host') ?? document.body;
+  const chrome = mountPlayChrome(playChromeParent);
+  chrome.classList.remove('is-hidden');
+  const dom = collectPlaySessionDom(chrome);
   const characterAppearance = resolvePlayCharacterAppearance(
     bootstrap,
     world.params.fromEditor,
@@ -507,14 +564,10 @@ export async function startPlaySession(
     onSurfaceTeleport: (destination) => gameLoop.teleportToSurface(destination),
   });
 
-  function resize(): void {
-    renderer?.resize(window.innerWidth, window.innerHeight);
-  }
-  window.addEventListener('resize', resize);
-  resize();
+  const resize = bindPlayResize(renderer);
   gameLoop.start();
 
-  activeCleanup = {
+  const cleanup: PlaySessionCleanup = {
     gameLoop,
     controls,
     renderer,
@@ -535,6 +588,8 @@ export async function startPlaySession(
     resize,
     session,
   };
+
+  if (!publishPlaySession(cleanup, generation, loading)) return;
 
   if (loading) {
     await loading.complete();

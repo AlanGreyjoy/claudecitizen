@@ -293,7 +293,7 @@ export function createSidekickGameplayAvatar(
         avatar = null;
         return;
       }
-      // Preload rifle + pistol idle sources authored on the animation controller.
+      // Preload every assigned controller source (unarmed + armed packs).
       const controller = await loadCurrentDefaultAnimationController();
       const epoch = ++controllerSyncEpoch;
       await preloadControllerSources(controller, epoch);

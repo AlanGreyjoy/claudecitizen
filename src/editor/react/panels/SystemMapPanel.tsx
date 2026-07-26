@@ -11,11 +11,13 @@ import { createPortal } from 'react-dom';
 import {
   fetchPlanetList,
   fetchPrefabList,
+  fetchSceneList,
   fetchSystem,
   fetchSystemList,
   saveSystem,
   type PlanetListEntry,
   type PrefabListEntry,
+  type SceneListEntry,
   type SystemListEntry,
 } from '../../api';
 import { activateSystemDocument } from '../../../world/systems/runtime';
@@ -90,6 +92,7 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
     const [formVersion, setFormVersion] = useState(0);
     const [planetList, setPlanetList] = useState<PlanetListEntry[]>([]);
     const [stationPrefabs, setStationPrefabs] = useState<PrefabListEntry[]>([]);
+    const [sceneList, setSceneList] = useState<SceneListEntry[]>([]);
 
     const documentRef = useRef(documentState);
     const savedSnapshotRef = useRef(savedSnapshot);
@@ -140,13 +143,15 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
     );
 
     const refreshLists = useCallback(async () => {
-      const [planets, prefabs, systems] = await Promise.all([
+      const [planets, prefabs, scenes, systems] = await Promise.all([
         fetchPlanetList().catch(() => [] as PlanetListEntry[]),
         fetchPrefabList().catch(() => [] as PrefabListEntry[]),
+        fetchSceneList().catch(() => [] as SceneListEntry[]),
         fetchSystemList().catch(() => [] as SystemListEntry[]),
       ]);
       setPlanetList(planets);
       setStationPrefabs(prefabs.filter((entry) => entry.kind === 'station'));
+      setSceneList(scenes);
       systemListRef.current = systems;
     }, []);
 
@@ -433,6 +438,7 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
                     selection={selection}
                     planetList={planetList}
                     stationPrefabs={stationPrefabs}
+                    sceneList={sceneList}
                     onSelect={setSelectionState}
                     onMarkDirty={markDirty}
                     onMarkDirtyAndRebuild={markDirtyAndRebuild}

@@ -1,16 +1,34 @@
 import type {
   PrefabComponent,
-  PrefabDocument,
   PrefabEntity,
   SceneInstanceScope,
   SceneUiScreen,
 } from '../prefabs/schema';
-import { loadPrefabDocument } from '../prefabs/loader';
 import type { SceneDocument } from './schema';
+import { sceneHasStationContent } from './scene-station';
+
+/**
+ * What a scene's GameObjects actually ask the runtime to boot.
+ *
+ * Play used to start the same monolithic world for every gameplay scene, so an
+ * interior scene still paid for planet streaming and a default player ship it
+ * never referenced. These flags let `play-session` boot only the subsystems the
+ * author placed in the scene.
+ */
+export interface ScenePlayContent {
+  /** Scene names a planet (`game-manager` / `planet`) or spawns on the surface. */
+  planet: boolean;
+  /** Scene places a ship prefab instance. */
+  ship: boolean;
+  /** Scene authors a station: inline geometry/markers or a placed prefab. */
+  station: boolean;
+}
 
 export interface ScenePlayConfig {
-  systemId: string;
-  planetId: string;
+  /** Null when the scene never authored a `game-manager`. */
+  systemId: string | null;
+  /** Null when the scene authored neither `game-manager` nor `planet`. */
+  planetId: string | null;
   spawn: 'station' | 'surface';
   /** First authoritative station prefab instance in the scene, if any. */
   stationPrefabId: string | null;
@@ -34,6 +52,8 @@ export interface ScenePlayConfig {
   }>;
   /** Set when the scene is per-player instanced content (hab, hangar). */
   instanceScope: SceneInstanceScope | null;
+  /** Subsystems the scene's GameObjects actually reference. */
+  content: ScenePlayContent;
 }
 
 function walkEntities(
@@ -60,12 +80,15 @@ function findComponent<T extends PrefabComponent['type']>(
 
 /** Resolve Unity-style scene GameObject components into play config. */
 export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
-  let systemId = 'default';
-  let planetId = 'asteron';
+  let systemId: string | null = null;
+  let planetId: string | null = null;
   let spawn: ScenePlayConfig['spawn'] = 'station';
   let stationPrefabId: string | null = null;
   let shipPrefabId: string | null = null;
   let instanceScope: SceneInstanceScope | null = null;
+  // Naming a planet or spawning on the surface is what makes a scene need the
+  // terrain stack; placing a station in orbit on its own does not.
+  let requiresPlanet = false;
   const prefabInstances: ScenePlayConfig['prefabInstances'] = [];
   const uiScreens: ScenePlayConfig['uiScreens'] = [];
   const sceneLinks: ScenePlayConfig['sceneLinks'] = [];
@@ -76,14 +99,17 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
       systemId = gameManager.systemId;
       planetId = gameManager.planetId;
       spawn = gameManager.spawn;
+      requiresPlanet = true;
     }
     const planet = findComponent(entity, 'planet');
     if (planet) {
       planetId = planet.planetId;
+      requiresPlanet = true;
     }
     const playerStart = findComponent(entity, 'player-start');
     if (playerStart) {
       spawn = playerStart.spawn;
+      if (playerStart.spawn === 'surface') requiresPlanet = true;
     }
     const instance = findComponent(entity, 'prefab-instance');
     if (instance) {
@@ -134,44 +160,12 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
     uiScreens,
     sceneLinks,
     instanceScope,
+    content: {
+      planet: requiresPlanet,
+      ship: shipPrefabId !== null,
+      // A scene can author its station inline (GLB GameObjects, colliders,
+      // spawn point) instead of placing a station prefab.
+      station: stationPrefabId !== null || sceneHasStationContent(scene),
+    },
   };
-}
-
-/**
- * Load the first station prefab instance referenced by the scene (authoritative
- * walkable station for Phase 4 — one station per scene).
- */
-export async function loadSceneStationPrefab(
-  scene: SceneDocument,
-): Promise<PrefabDocument | null> {
-  const config = resolveScenePlayConfig(scene);
-  if (!config.stationPrefabId) return null;
-  return loadPrefabDocument(config.stationPrefabId);
-}
-
-/**
- * Resolve all prefab-instance documents in the scene (for render / Phase 5).
- */
-export async function loadScenePrefabInstances(
-  scene: SceneDocument,
-): Promise<Array<{ entityId: string; prefab: PrefabDocument; transform: PrefabEntity['transform'] }>> {
-  const config = resolveScenePlayConfig(scene);
-  const out: Array<{
-    entityId: string;
-    prefab: PrefabDocument;
-    transform: PrefabEntity['transform'];
-  }> = [];
-  for (const entry of config.prefabInstances) {
-    const prefab = await loadPrefabDocument(entry.prefabId);
-    if (!prefab) {
-      console.warn(`Scene prefab-instance "${entry.prefabId}" not found; skipping.`);
-      continue;
-    }
-    out.push({
-      entityId: entry.entityId,
-      prefab,
-      transform: entry.transform,
-    });
-  }
-  return out;
 }

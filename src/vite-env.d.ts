@@ -16,6 +16,12 @@ declare global {
       setSsaoSettings: (settings: Partial<import('./types').SsaoSettings>) => void;
       setSsaoIntensity: (intensity: number) => void;
       setSsaoColor: (color: string | null) => void;
+      setBloom: (settings: {
+        intensity?: number;
+        luminanceThreshold?: number;
+        luminanceSmoothing?: number;
+      }) => void;
+      setExposure: (exposure: number) => void;
       getSurfaceSpawnDebug?: () => {
         layerCount: number;
         layers: Array<{

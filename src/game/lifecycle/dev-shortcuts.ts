@@ -45,6 +45,12 @@ export function attachDevShortcuts(
     setSsaoIntensity: (intensity: number) =>
       ctx.renderer?.setSsaoSettings({ intensity }),
     setSsaoColor: (color: string | null) => ctx.renderer?.setSsaoColor(color),
+    setBloom: (settings: {
+      intensity?: number;
+      luminanceThreshold?: number;
+      luminanceSmoothing?: number;
+    }) => ctx.renderer?.setBloomSettings(settings),
+    setExposure: (exposure: number) => ctx.renderer?.setExposure(exposure),
     getSurfaceSpawnDebug: () => getSurfaceSpawnDebug(ctx),
     teleportToSurface,
   };

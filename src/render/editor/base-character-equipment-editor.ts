@@ -335,7 +335,7 @@ export function createBaseCharacterEquipmentEditor(
     notifyUiChange();
   };
 
-  const { uiApi, syncClosureToUiState, syncUiStateToClosure } = createBaseCharacterUiBindings(closure, {
+  const { uiApi, syncClosureToUiState } = createBaseCharacterUiBindings(closure, {
     gizmo, hasUnsavedChanges, markDirty, markControllerDirty, markSettingsDirty,
     markBackpackPrefabDirty, markWeaponPrefabDirty, save, loadDocument,
     setPreviewPose: (pose) => setPreviewPosePreview(avatarCtx, pose, (next) => { closure.previewPose = next; }),

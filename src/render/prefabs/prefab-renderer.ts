@@ -540,6 +540,50 @@ interface BuiltEntity {
   ready: Promise<void>;
 }
 
+/**
+ * Rescales lights that came embedded in a GLB (`KHR_lights_punctual`).
+ *
+ * A prefab model is parented to a group scaled to render units, but three
+ * applies that scale to a light's transform only — `distance` stays in the
+ * authoring unit, so a 40m lamp keeps a 40 render-unit reach (20km of world)
+ * and never falls off, lighting the whole station at full intensity. Authored
+ * `point-light` / `spot-light` components already get this compensation in
+ * `createPrefabLightObject`; GLB lights reach the scene without passing
+ * through it.
+ *
+ * Directional lights are dropped outright: they carry no position or falloff,
+ * so an exporter's sun stacks on top of the scene's own sun and moon.
+ */
+function scaleModelLights(root: THREE.Object3D, lightScale: number): void {
+  if (lightScale >= 1) return;
+  const directionals: THREE.Object3D[] = [];
+  root.traverse((object) => {
+    if (object instanceof THREE.DirectionalLight) {
+      directionals.push(object);
+      return;
+    }
+    if (
+      !(object instanceof THREE.PointLight)
+      && !(object instanceof THREE.SpotLight)
+    ) {
+      return;
+    }
+    const decay = object.decay ?? 2;
+    const intensityScale = Math.max(
+      Math.pow(lightScale, decay),
+      lightScale * SCALED_POINT_LIGHT_INTENSITY_MULTIPLIER,
+    );
+    object.distance *= lightScale;
+    object.intensity *= intensityScale;
+  });
+  for (const light of directionals) light.removeFromParent();
+  if (directionals.length > 0) {
+    console.info(
+      `Dropped ${directionals.length} directional light(s) baked into the prefab model; the scene owns sun and moon.`,
+    );
+  }
+}
+
 function attachLoadedAsset(
   group: THREE.Group,
   model: THREE.Object3D,
@@ -562,6 +606,7 @@ function attachLoadedAsset(
   applyPrefabMaterialOverrides(model, entity.materialOverrides);
   applyNodeOverrides(model, entity.nodeOverrides);
   applyHiddenNodes(model, entity.hiddenNodes);
+  scaleModelLights(model, options.lightScale);
   group.add(model);
 
   const bindAllDescendantAnimations = (curr: PrefabEntity) => {
