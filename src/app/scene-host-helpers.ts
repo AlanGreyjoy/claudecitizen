@@ -23,10 +23,20 @@ export async function mountSceneUiScreens(options: {
   setLoading: (handle: LoadingScreenHandle | null) => void;
   loadScene: (sceneId: string, session?: AuthSession | null) => Promise<void>;
   startGameplay: (scene: SceneDocument, session: AuthSession | null) => Promise<void>;
+  /**
+   * Gameplay scene a deep link asked for before sign-in. Signing in returns
+   * there instead of following this scene's authored link, so the URL the
+   * player opened is the one they end up in.
+   */
+  resumeSceneId?: string | null;
+  onResumeConsumed?: () => void;
 }): Promise<void> {
   const next = resolveScenePlayConfig(options.scene).sceneLinks.find((link) => !link.auto);
   const advance = (): void => {
-    if (next) void options.loadScene(next.sceneId);
+    const target = options.resumeSceneId ?? next?.sceneId;
+    if (!target) return;
+    if (options.resumeSceneId) options.onResumeConsumed?.();
+    void options.loadScene(target);
   };
 
   for (const screen of options.screens) {
@@ -38,8 +48,13 @@ export async function mountSceneUiScreens(options: {
     if (screen === 'title' || screen === 'login') {
       showTitleScreen({
         onPlay: (session) => {
-          if (next) void options.loadScene(next.sceneId, session);
-          else void options.startGameplay(options.scene, session);
+          const target = options.resumeSceneId ?? next?.sceneId;
+          if (target) {
+            if (options.resumeSceneId) options.onResumeConsumed?.();
+            void options.loadScene(target, session);
+            return;
+          }
+          void options.startGameplay(options.scene, session);
         },
       });
       continue;

@@ -45,6 +45,8 @@ export interface SceneHostHandle {
 }
 
 const GAMEPLAY_KINDS = new Set(['main-game', 'instance', 'prefab-stage']);
+/** Scene that owns the sign-in surface. Engine-owned, present in every project. */
+const LOGIN_SCENE_ID = 'login';
 
 export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
   let activeScene: SceneDocument | null = null;
@@ -52,6 +54,8 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
   let disposed = false;
   let pendingTransition = 0;
   let loading: LoadingScreenHandle | null = null;
+  /** Gameplay scene a deep link asked for before the player had a session. */
+  let resumeSceneId: string | null = null;
 
   function clearPendingTransition(): void {
     if (!pendingTransition) return;
@@ -107,6 +111,17 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
 
     if (GAMEPLAY_KINDS.has(scene.kind)) {
       const resolved = session ?? (options.requireAuth ? await getSession() : null);
+      if (options.requireAuth && !resolved) {
+        // A deep link (`?boot=scene&sceneId=…`) can land on a gameplay scene
+        // before the player has signed in. Starting play anyway throws "Login
+        // required." out of an unawaited promise and strands the loading screen
+        // on "Checking credentials...", so route through login and come back.
+        resumeSceneId = scene.id;
+        loading?.hide();
+        loading = null;
+        await loadScene(LOGIN_SCENE_ID);
+        return;
+      }
       await startGameplay(scene, resolved);
       scheduleAutoLinks(scene);
       return;
@@ -119,12 +134,21 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
       setLoading: (handle) => { loading = handle; },
       loadScene,
       startGameplay,
+      resumeSceneId,
+      onResumeConsumed: () => { resumeSceneId = null; },
     });
     scheduleAutoLinks(scene);
   }
 
-  if (options.initialScene) void enterScene(options.initialScene);
-  else if (options.initialSceneId) void loadScene(options.initialSceneId);
+  // Reported rather than swallowed: an unhandled rejection here leaves the
+  // loading screen up forever with no indication of what failed.
+  function reportBootFailure(error: unknown): void {
+    console.error('AsteronEngine scene host failed to start.', error);
+    loading?.setStatus('Could not start this scene. Check the console.');
+  }
+
+  if (options.initialScene) void enterScene(options.initialScene).catch(reportBootFailure);
+  else if (options.initialSceneId) void loadScene(options.initialSceneId).catch(reportBootFailure);
   else console.error('Scene host needs initialScene or initialSceneId.');
 
   return {
