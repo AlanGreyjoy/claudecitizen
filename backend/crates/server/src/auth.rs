@@ -202,7 +202,10 @@ pub async fn register(
     .bind(&user_id)
     .bind(&username)
     .bind(&display_name)
-    .bind(format!("apartment:{user_id}"))
+    // Keyed by player id, not user id: `/game/bootstrap` reports
+    // `apartment:{player_id}` and `authorize_instance` checks the same, so a
+    // user-keyed value here is an apartment the player can never transition to.
+    .bind(format!("apartment:{player_id}"))
     .execute(&mut *transaction)
     .await?;
     transaction.commit().await?;
@@ -566,11 +569,11 @@ async fn create_discord_user(state: &AppState, discord: DiscordUserResponse) -> 
            ("id", "userId", "handle", "displayName", "currentInstanceId", "currentRoomId", "createdAt", "updatedAt")
            VALUES ($1, $2, $3, $4, $5, 'hab-room', NOW(), NOW())"#,
     )
-    .bind(player_id)
+    .bind(&player_id)
     .bind(&user_id)
     .bind(&username)
     .bind(&display_name)
-    .bind(format!("apartment:{user_id}"))
+    .bind(format!("apartment:{player_id}"))
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
