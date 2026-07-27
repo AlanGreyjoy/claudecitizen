@@ -646,6 +646,82 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     return { saved: true, id, path };
   }
 
+  /**
+   * True when a JSON tree holds `sceneId` / `startingSceneId` equal to `id`.
+   * Keyed on field names so a scene id that collides with a label is not a hit.
+   */
+  function documentReferencesSceneId(value, id) {
+    if (!value || typeof value !== 'object') return false;
+    if (Array.isArray(value)) {
+      return value.some((item) => documentReferencesSceneId(item, id));
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if ((key === 'sceneId' || key === 'startingSceneId') && item === id) return true;
+      if (documentReferencesSceneId(item, id)) return true;
+    }
+    return false;
+  }
+
+  async function collectSceneReferences(id) {
+    const skip = join(sceneDataDir(), `${id}.scene.json`);
+    const references = [];
+    const seen = new Set([skip]);
+    for (const dir of referenceDocumentDirs()) {
+      for (const file of await listJsonFiles(dir)) {
+        if (seen.has(file)) continue;
+        seen.add(file);
+        let document;
+        try {
+          document = JSON.parse(await readFile(file, 'utf8'));
+        } catch {
+          continue;
+        }
+        if (!documentReferencesSceneId(document, id)) continue;
+        references.push(relative(projectRoot, file).split(sep).join('/'));
+      }
+    }
+    references.sort();
+    return references;
+  }
+
+  async function listSceneReferences(idValue) {
+    const id = requireSlugId(idValue, 'scene id');
+    const absolute = join(sceneDataDir(), `${id}.scene.json`);
+    try {
+      await stat(absolute);
+    } catch {
+      throw new EditorRepositoryError(`scene "${id}" not found`, 404);
+    }
+    return { id, references: await collectSceneReferences(id) };
+  }
+
+  /**
+   * Removes `<sceneDataDir>/<id>.scene.json`. Blocks when the id is the project
+   * `defaultScene` — change Project Settings first. Inbound sceneId /
+   * startingSceneId refs are reported but not rewritten.
+   */
+  async function deleteScene(idValue) {
+    const id = requireSlugId(idValue, 'scene id');
+    const absolute = join(sceneDataDir(), `${id}.scene.json`);
+    try {
+      await stat(absolute);
+    } catch {
+      throw new EditorRepositoryError(`scene "${id}" not found`, 404);
+    }
+
+    const { document: settings } = await getProjectSettings();
+    if (settings.defaultScene === id) {
+      throw new EditorRepositoryError(
+        `cannot delete "${id}": it is the project default scene. Change Project Settings first.`,
+        400,
+      );
+    }
+
+    const references = await collectSceneReferences(id);
+    await rm(absolute, { force: true });
+    return { deleted: true, id, references };
+  }
+
   async function createAssetFolder(rootValue, parentPathValue, nameValue) {
     const root = typeof rootValue === 'string' ? rootValue : 'assets';
     if (!PROJECT_ASSET_ROOTS.includes(root)) {
@@ -883,6 +959,8 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     listScenes: () => listNamedDocuments(sceneDataDir(), '.scene.json', 'scenes'),
     getScene: (id) => getNamedDocument(sceneDataDir(), '.scene.json', 'scene', id),
     saveScene: (document) => saveNamedDocument(sceneDataDir(), '.scene.json', document),
+    listSceneReferences,
+    deleteScene,
     getBaseCharacters,
     saveBaseCharacters,
     getCharacterSettings,

@@ -234,6 +234,8 @@ export function EditorApp(): ReactElement {
   const {
     createPrefabsInFolder,
     loadSceneById,
+    deleteSceneById,
+    deleteCurrentScene,
     newDocument,
     newSceneDocument,
     newShipDocument,
@@ -254,6 +256,7 @@ export function EditorApp(): ReactElement {
     clearIsolation,
     confirmBaseDiscardIfNeeded,
     refreshPrefabList,
+    refreshSceneList,
     saveCurrent,
     loadPrefabById: loadById,
   });
@@ -294,6 +297,8 @@ export function EditorApp(): ReactElement {
     newSceneDocument,
     loadById,
     loadSceneById,
+    deleteSceneById,
+    deleteCurrentScene,
     duplicateSelection,
     deleteSelection,
     confirmDiscard,
@@ -322,6 +327,7 @@ export function EditorApp(): ReactElement {
     newDocument,
     onSave,
     openSceneSettings,
+    deleteCurrentScene,
     openProjectSettings,
     duplicateSelection,
     deleteSelection,

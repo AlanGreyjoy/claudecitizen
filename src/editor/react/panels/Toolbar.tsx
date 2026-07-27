@@ -50,8 +50,10 @@ export interface ToolbarActions {
   onSave: () => void;
   onLoad: (id: string) => void;
   onLoadScene: (id: string) => void;
+  onDeleteScene: (id: string) => void;
   onLoadPlanet: (id: string) => void;
   onOpenSceneSettings: () => void;
+  onDeleteCurrentScene: () => void;
   onOpenProjectSettings: () => void;
   onOpenMenu: (id: string) => void;
   onDuplicate: () => void;
@@ -338,10 +340,12 @@ function OpenPrefabPanel({
 function OpenScenePanel({
   scenes,
   onSelect,
+  onDelete,
   autoFocus,
 }: {
   scenes: SceneListEntry[];
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
   autoFocus: boolean;
 }): ReactElement {
   const [searchQuery, setSearchQuery] = useState('');
@@ -368,18 +372,30 @@ function OpenScenePanel({
           <div className="ed-open-empty">No scenes found</div>
         ) : (
           visible.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className="ed-open-item"
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelect(entry.id);
-              }}
-            >
-              <span className="ed-open-item-name">{entry.name}</span>
-              <span className="ed-open-item-id">{entry.id}</span>
-            </button>
+            <div key={entry.id} className="ed-open-row">
+              <button
+                type="button"
+                className="ed-open-item"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(entry.id);
+                }}
+              >
+                <span className="ed-open-item-name">{entry.name}</span>
+                <span className="ed-open-item-id">{entry.id}</span>
+              </button>
+              <button
+                type="button"
+                className="ed-open-item-delete"
+                title={`Delete ${entry.name}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete(entry.id);
+                }}
+              >
+                Delete
+              </button>
+            </div>
           ))
         )}
       </div>
@@ -519,22 +535,26 @@ function ToolIconButton({
 
 function UserMenu({
   building,
+  canDeleteScene,
   onNew,
   onNewScene,
   onSave,
   onBuildWeb,
   onOpenProject,
   onOpenSceneSettings,
+  onDeleteCurrentScene,
   onOpenProjectSettings,
   onExit,
 }: {
   building: boolean;
+  canDeleteScene: boolean;
   onNew: () => void;
   onNewScene: () => void;
   onSave: () => void;
   onBuildWeb: () => void;
   onOpenProject: () => void;
   onOpenSceneSettings: () => void;
+  onDeleteCurrentScene: () => void;
   onOpenProjectSettings: () => void;
   onExit: () => void;
 }): ReactElement {
@@ -598,6 +618,16 @@ function UserMenu({
           <button type="button" className="ed-menu-item" onClick={() => run(onOpenSceneSettings)}>
             <span className="ed-menu-item-label">Scene Settings…</span>
           </button>
+          <button
+            type="button"
+            className="ed-menu-item"
+            disabled={!canDeleteScene}
+            onClick={() => {
+              if (canDeleteScene) run(onDeleteCurrentScene);
+            }}
+          >
+            <span className="ed-menu-item-label">Delete Scene…</span>
+          </button>
           <button type="button" className="ed-menu-item" onClick={() => run(onOpenProjectSettings)}>
             <span className="ed-menu-item-label">Project Settings…</span>
           </button>
@@ -622,6 +652,7 @@ function BrowseOverlay({
   onClose,
   onLoadPrefab,
   onLoadScene,
+  onDeleteScene,
   onLoadPlanet,
   onOpenMenu,
 }: {
@@ -632,6 +663,7 @@ function BrowseOverlay({
   onClose: () => void;
   onLoadPrefab: (id: string) => void;
   onLoadScene: (id: string) => void;
+  onDeleteScene: (id: string) => void;
   onLoadPlanet: (id: string) => void;
   onOpenMenu: (id: string) => void;
 }): ReactElement {
@@ -686,6 +718,9 @@ function BrowseOverlay({
             onSelect={(id) => {
               onLoadScene(id);
               onClose();
+            }}
+            onDelete={(id) => {
+              onDeleteScene(id);
             }}
           />
         ) : null}
@@ -1047,12 +1082,14 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
         <div className="ed-toolbar-right">
           <UserMenu
             building={actions.building}
+            canDeleteScene={docState.documentType === 'scene'}
             onNew={actions.onNew}
             onNewScene={actions.onNewScene}
             onSave={actions.onSave}
             onBuildWeb={actions.onBuildWeb}
             onOpenProject={actions.onOpenProject}
             onOpenSceneSettings={actions.onOpenSceneSettings}
+            onDeleteCurrentScene={actions.onDeleteCurrentScene}
             onOpenProjectSettings={actions.onOpenProjectSettings}
             onExit={actions.onExit}
           />
@@ -1068,6 +1105,7 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
           onClose={() => setBrowsePanel(null)}
           onLoadPrefab={actions.onLoad}
           onLoadScene={actions.onLoadScene}
+          onDeleteScene={actions.onDeleteScene}
           onLoadPlanet={actions.onLoadPlanet}
           onOpenMenu={actions.onOpenMenu}
         />

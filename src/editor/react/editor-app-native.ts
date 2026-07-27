@@ -42,6 +42,7 @@ export type NativeCommandHandlers = {
   save: () => void;
   openBrowse: (panel: BrowsePanelKind) => void;
   openSceneSettings: () => void;
+  deleteScene: () => void;
   openProjectSettings: () => void;
   undo: () => void;
   redo: () => void;
@@ -68,6 +69,7 @@ export function dispatchNativeCommand(
     'open-planet': () => handlers.openBrowse('planet'),
     'open-menu': () => handlers.openBrowse('menu'),
     'open-scene-settings': handlers.openSceneSettings,
+    'delete-scene': handlers.deleteScene,
     'open-project-settings': handlers.openProjectSettings,
     undo: handlers.undo,
     redo: handlers.redo,

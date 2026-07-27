@@ -33,6 +33,7 @@ export type EditorAppEffectsArgs = {
   newDocument: () => void | Promise<void>;
   onSave: () => void;
   openSceneSettings: () => void;
+  deleteCurrentScene: () => void | Promise<void>;
   openProjectSettings: () => void;
   duplicateSelection: () => void;
   deleteSelection: () => void;
@@ -67,6 +68,7 @@ export function useEditorAppEffects(args: EditorAppEffectsArgs): void {
     newDocument,
     onSave,
     openSceneSettings,
+    deleteCurrentScene,
     openProjectSettings,
     duplicateSelection,
     deleteSelection,
@@ -102,6 +104,7 @@ useEffect(() => {
       save: onSave,
       openBrowse: (panel) => toolbarRef.current?.openBrowsePanel(panel),
       openSceneSettings,
+      deleteScene: () => void deleteCurrentScene(),
       openProjectSettings: openProjectSettings,
       undo: () => store.undo(),
       redo: () => store.redo(),
@@ -126,6 +129,7 @@ useEffect(() => {
   newDocument,
   onSave,
   openSceneSettings,
+  deleteCurrentScene,
   openProjectSettings,
   store,
   duplicateSelection,

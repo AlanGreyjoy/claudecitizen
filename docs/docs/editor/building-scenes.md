@@ -19,17 +19,22 @@ There is no separate settings screen for scene contents.
 
 | Goal | Add this |
 | --- | --- |
-| Pick the system, planet, and spawn mode | `game-manager` |
+| Pick the system, planet, spawn mode, character-create scene, and starting hab | `game-manager` |
 | Reference a planet document | `planet` |
 | Set where the player appears | `player-start` |
 | Place a station, ship, or prop you authored | `prefab-instance` |
 | Show title / login / character-create / loading UI | `ui-screen` |
-| Hand off to another scene | `scene-link` (set `auto` + `delaySeconds` for a timed hop) |
-| Give each player their own copy (habs, hangars) | `instanced-scene` |
+| Hand off to another scene | `scene-link`, or Title `game-manager` Character Create + Starting Hab |
+| Give each player their own copy (habs, hangars) | `instanced-scene` (`scope: "player"` for private habs) |
+| Exit a private hab into a station scene | `scene-exit` |
 
-A title screen is often just an empty with a `ui-screen` and a `scene-link`. A
-playable scene usually needs a `game-manager`, a `planet`, a `player-start`, and
-one or more `prefab-instance` GameObjects.
+A Title scene with `game-manager` owns the shipped entry chain: auth on Title →
+Character Create Scene (when needed) → Starting Hab (for example
+`blackmarkethab`). Private habs are `kind: "instance"` with `instanced-scene`
+`scope: "player"`, a `spawn-point`, and a `scene-exit` toward the shared station
+scene. Older projects can still use `ui-screen` + `scene-link`. A playable scene
+usually needs a `game-manager`, a `planet`, a `player-start`, and one or more
+`prefab-instance` GameObjects.
 
 Field-level reference: [Scene components](./scene-components).
 

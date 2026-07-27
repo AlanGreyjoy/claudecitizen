@@ -1,4 +1,9 @@
-import { resolveScenePlayConfig } from '../world/scenes/scene-runtime';
+import {
+  resolveMenuAdvanceSceneId,
+  resolveSceneEntryFlow,
+  resolveScenePlayConfig,
+  type SceneEntryFlow,
+} from '../world/scenes/scene-runtime';
 import type { SceneDocument } from '../world/scenes/schema';
 import type { SceneUiScreen } from '../world/prefabs/schema';
 import {
@@ -16,6 +21,57 @@ import {
 } from './play-session';
 import { playWorldParamsFromScene } from './play-session-world';
 
+/**
+ * Menu kinds often omit an explicit `ui-screen` when GameManager already owns
+ * the handoff. Infer the surface from `scene.kind` so Title still shows Play.
+ */
+export function impliedUiScreensForScene(scene: SceneDocument): SceneUiScreen[] {
+  const authored = resolveScenePlayConfig(scene).uiScreens.map((entry) => entry.screen);
+  if (authored.length > 0) return authored;
+  if (scene.kind === 'title') return ['title'];
+  if (scene.kind === 'loading') return ['loading'];
+  if (scene.kind === 'character-creator') return ['character-create'];
+  return [];
+}
+
+/** Title Game Manager world knobs applied when the hab scene lacks its own. */
+export function playOverridesFromEntryFlow(
+  entryFlow: SceneEntryFlow | null,
+): Parameters<typeof playWorldParamsFromScene>[1] {
+  if (!entryFlow) return {};
+  return {
+    ...(entryFlow.planetId ? { planetId: entryFlow.planetId } : {}),
+    ...(entryFlow.systemId ? { systemId: entryFlow.systemId } : {}),
+    spawnSurface: entryFlow.spawn === 'surface',
+  };
+}
+
+/**
+ * After Title auth: character-create scene when needed, else starting hab,
+ * else scene-link / resume deep-link.
+ */
+export async function resolvePostAuthSceneId(options: {
+  scene: SceneDocument;
+  entryFlow: SceneEntryFlow | null;
+  resumeSceneId?: string | null;
+}): Promise<string | null> {
+  if (options.resumeSceneId) return options.resumeSceneId;
+  const flow = options.entryFlow ?? resolveSceneEntryFlow(options.scene);
+  if (flow?.characterCreateSceneId || flow?.startingSceneId) {
+    try {
+      const bootstrap = await fetchGameBootstrap();
+      if (!bootstrap.player.characterAppearance && flow.characterCreateSceneId) {
+        return flow.characterCreateSceneId;
+      }
+      if (flow.startingSceneId) return flow.startingSceneId;
+    } catch (error) {
+      console.warn('AsteronEngine could not load citizen record for entry flow.', error);
+      if (flow.startingSceneId) return flow.startingSceneId;
+    }
+  }
+  return resolveMenuAdvanceSceneId(options.scene);
+}
+
 export async function mountSceneUiScreens(options: {
   screens: SceneUiScreen[];
   scene: SceneDocument;
@@ -23,6 +79,8 @@ export async function mountSceneUiScreens(options: {
   setLoading: (handle: LoadingScreenHandle | null) => void;
   loadScene: (sceneId: string, session?: AuthSession | null) => Promise<void>;
   startGameplay: (scene: SceneDocument, session: AuthSession | null) => Promise<void>;
+  entryFlow: SceneEntryFlow | null;
+  getEntryFlow: () => SceneEntryFlow | null;
   /**
    * Gameplay scene a deep link asked for before sign-in. Signing in returns
    * there instead of following this scene's authored link, so the URL the
@@ -31,9 +89,12 @@ export async function mountSceneUiScreens(options: {
   resumeSceneId?: string | null;
   onResumeConsumed?: () => void;
 }): Promise<void> {
-  const next = resolveScenePlayConfig(options.scene).sceneLinks.find((link) => !link.auto);
-  const advance = (): void => {
-    const target = options.resumeSceneId ?? next?.sceneId;
+  const advanceFromCreate = (): void => {
+    const flow = options.getEntryFlow();
+    const target =
+      options.resumeSceneId
+      ?? flow?.startingSceneId
+      ?? resolveMenuAdvanceSceneId(options.scene);
     if (!target) return;
     if (options.resumeSceneId) options.onResumeConsumed?.();
     void options.loadScene(target);
@@ -48,20 +109,35 @@ export async function mountSceneUiScreens(options: {
     if (screen === 'title' || screen === 'login') {
       showTitleScreen({
         onPlay: (session) => {
-          const target = options.resumeSceneId ?? next?.sceneId;
-          if (target) {
-            if (options.resumeSceneId) options.onResumeConsumed?.();
-            void options.loadScene(target, session);
-            return;
-          }
-          void options.startGameplay(options.scene, session);
+          void (async () => {
+            if (options.resumeSceneId) {
+              const target = options.resumeSceneId;
+              options.onResumeConsumed?.();
+              await options.loadScene(target, session);
+              return;
+            }
+            options.setLoading(showLoadingScreen());
+            try {
+              const target = await resolvePostAuthSceneId({
+                scene: options.scene,
+                entryFlow: options.getEntryFlow() ?? options.entryFlow,
+              });
+              if (target) {
+                await options.loadScene(target, session);
+                return;
+              }
+              await options.startGameplay(options.scene, session);
+            } finally {
+              options.setLoading(null);
+            }
+          })();
         },
       });
       continue;
     }
     if (screen === 'character-create') {
       const appearance = await showCharacterCreationScreen();
-      if (appearance) advance();
+      if (appearance) advanceFromCreate();
       continue;
     }
     // `menu` screens are authored documents previewed by the Menu Manager;
@@ -69,26 +145,36 @@ export async function mountSceneUiScreens(options: {
   }
 }
 
+export type SceneBootstrapResult =
+  | { status: 'ready'; bootstrap: GameBootstrap | null }
+  | { status: 'redirect-character-create' }
+  | { status: 'cancelled' };
+
 /**
- * A signed-in player without a saved appearance has to build one before the
- * world loads. This is the only hard gate in the scene flow; everything else
- * is authored with `scene-link`.
+ * Signed-in players need a citizen record. When Game Manager names a create
+ * scene and appearance is missing, redirect there instead of the inline UI.
  */
 export async function resolveSceneBootstrap(
   requireAuth: boolean,
   session: AuthSession | null,
   screen: LoadingScreenHandle,
-): Promise<GameBootstrap | null> {
-  if (!requireAuth || !session) return null;
+  entryFlow: SceneEntryFlow | null,
+): Promise<SceneBootstrapResult> {
+  if (!requireAuth || !session) return { status: 'ready', bootstrap: null };
   screen.setStatus('Loading citizen record...');
   const bootstrap = await fetchGameBootstrap();
-  if (bootstrap.player.characterAppearance) return bootstrap;
+  if (bootstrap.player.characterAppearance) {
+    return { status: 'ready', bootstrap };
+  }
+  if (entryFlow?.characterCreateSceneId) {
+    return { status: 'redirect-character-create' };
+  }
 
   screen.hide();
   const appearance = await showCharacterCreationScreen();
-  if (!appearance) return null;
+  if (!appearance) return { status: 'cancelled' };
   bootstrap.player.characterAppearance = appearance;
-  return bootstrap;
+  return { status: 'ready', bootstrap };
 }
 
 export async function startSceneGameplay(options: {
@@ -96,19 +182,27 @@ export async function startSceneGameplay(options: {
   session: AuthSession | null;
   requireAuth: boolean;
   fromEditor: boolean;
+  entryFlow: SceneEntryFlow | null;
   getLoading: () => LoadingScreenHandle | null;
   setLoading: (handle: LoadingScreenHandle | null) => void;
+  onRedirectCharacterCreate: (session: AuthSession) => void;
+  onRequestScene: (sceneId: string) => void;
 }): Promise<void> {
   if (isPlaySessionRunning()) stopPlaySession({ restoreTitle: false });
   let screen = options.getLoading() ?? showLoadingScreen();
   options.setLoading(screen);
   try {
-    const bootstrap = await resolveSceneBootstrap(
+    const result = await resolveSceneBootstrap(
       options.requireAuth,
       options.session,
       screen,
+      options.entryFlow,
     );
-    if (options.requireAuth && options.session && !bootstrap) {
+    if (result.status === 'redirect-character-create') {
+      if (options.session) options.onRedirectCharacterCreate(options.session);
+      return;
+    }
+    if (result.status === 'cancelled') {
       // Character creation was cancelled; hand control back to the entry scene.
       options.setLoading(null);
       showTitleScreen({
@@ -116,6 +210,7 @@ export async function startSceneGameplay(options: {
       });
       return;
     }
+    const bootstrap = result.bootstrap;
     if (bootstrap && !screen.isVisible()) {
       screen = showLoadingScreen();
       options.setLoading(screen);
@@ -126,7 +221,9 @@ export async function startSceneGameplay(options: {
       ...(bootstrap ? { bootstrap } : {}),
       worldParams: playWorldParamsFromScene(options.scene, {
         fromEditor: options.fromEditor,
+        ...playOverridesFromEntryFlow(options.entryFlow),
       }),
+      onRequestScene: options.onRequestScene,
     });
   } finally {
     options.setLoading(null);

@@ -97,7 +97,7 @@ Export **factories and pure functions** from domain modules, not classes.
 
 ### Data model: scenes and prefabs are documents, not code
 
-- A **scene** (`*.scene.json`, schema v3) is a GameObject tree. Components — `game-manager`, `planet`, `player-start`, `prefab-instance`, `ui-screen`, `scene-link`, `instanced-scene` — decide what the scene *is*. There is no `settings` block; v1/v2 docs migrate forward on read in `src/world/scenes/schema.ts`.
+- A **scene** (`*.scene.json`, schema v3) is a GameObject tree. Components — `game-manager`, `planet`, `player-start`, `prefab-instance`, `ui-screen`, `scene-link`, `instanced-scene`, `scene-exit` — decide what the scene *is*. There is no `settings` block; v1/v2 docs migrate forward on read in `src/world/scenes/schema.ts`.
 - Scenes resolve from **two** locations at the same relative path: when authoring, `src/world/scenes/loader.ts` fetches `/__editor/scene?id=` and the Electron repository reads the open project's `<project>/src/world/scenes/data/`; otherwise it falls back to this checkout's bundled `src/world/scenes/data/`, which holds only the engine-owned menu flow (title, login, character-creation, loading, main-game).
 - `src/app/scene-host.ts` loads, switches, pauses, and disposes scenes **in-process**. Scene navigation must never reload the page.
 - A **prefab** (`*.prefab.json`) is identified by its document `id`, never its path — moving the file is safe; `editor-desktop/repository.mjs` maps id → path by scanning asset roots. `src/world/prefabs/schema.ts` is the canonical component list; read it first when a component's fields are unclear.

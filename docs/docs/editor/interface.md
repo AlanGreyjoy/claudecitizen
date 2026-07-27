@@ -154,7 +154,7 @@ one place that edits **persistent server data** in PostgreSQL.
 
 | Item | Shortcut |
 | --- | --- |
-| New Scene / Open Scene… | — |
+| New Scene / Open Scene… / Delete Scene… | — |
 | New Prefab / Open Prefab… | — |
 | Open Planets… / Open Menus… | — |
 | Scene Settings… | — |

@@ -373,6 +373,26 @@ export type PrefabComponent =
     }
   | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
   /**
+   * In-play portal: F loads another scene (e.g. private hab → shared station).
+   * Not a menu `scene-link` — this is a walkable marker during Play.
+   */
+  | {
+      type: "scene-exit";
+      /** Target scene document id. */
+      sceneId: string;
+      /** HUD prompt when in range. */
+      prompt?: string;
+      /** Interact radius in meters. */
+      radius?: number;
+      /**
+       * Network cell before the scene swap. Default `station:public` (leave
+       * private apartment). Empty string skips the Transition.
+       */
+      networkInstanceId?: string;
+      /** Room id sent with the network Transition (default `lobby`). */
+      arrivalRoomId?: string;
+    }
+  /**
    * Climbable ladder. The marker sits at the foot of the climb line — the spot
    * the player stands on to mount. Local +Y is the climb axis, local +Z is the
    * side they step off toward at the top. Works in station and ship prefabs.
@@ -1011,6 +1031,16 @@ export type PrefabComponent =
       systemId: string;
       planetId: string;
       spawn: "station" | "surface";
+      /**
+       * Character-creator scene for players with no saved appearance.
+       * Empty means unset — fall back to the inline create gate.
+       */
+      characterCreateSceneId?: string;
+      /**
+       * Scene to load after auth (+ optional character create), e.g. a hab
+       * `instance`. Empty means unset — fall back to an authored `scene-link`.
+       */
+      startingSceneId?: string;
     }
   /** Planet document reference for the open scene. */
   | {

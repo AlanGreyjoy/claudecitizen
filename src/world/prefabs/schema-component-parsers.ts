@@ -306,6 +306,37 @@ function parseElevatorComponent(
         };
 }
 
+function parseSceneExitComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const networkRaw =
+    value.networkInstanceId === undefined
+      ? "station:public"
+      : parseString(value.networkInstanceId, `${path}.networkInstanceId`, 128).trim();
+  const arrivalRaw =
+    value.arrivalRoomId === undefined
+      ? undefined
+      : parseString(value.arrivalRoomId, `${path}.arrivalRoomId`, 64).trim();
+  return {
+    type: "scene-exit",
+    sceneId: parseString(value.sceneId ?? "", `${path}.sceneId`, 64).trim(),
+    ...(value.prompt === undefined
+      ? {}
+      : { prompt: parseString(value.prompt, `${path}.prompt`, 128) }),
+    ...(value.radius === undefined
+      ? {}
+      : {
+          radius: Math.min(
+            20,
+            Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
+          ),
+        }),
+    ...(networkRaw ? { networkInstanceId: networkRaw } : { networkInstanceId: "" }),
+    ...(arrivalRaw ? { arrivalRoomId: arrivalRaw } : {}),
+  };
+}
+
 function parseLadderComponent(
   value: Record<string, unknown>,
   path: string,
@@ -1519,11 +1550,23 @@ function parseGameManagerComponent(
   value: Record<string, unknown>,
   path: string,
 ): PrefabComponent {
+  const characterCreateSceneId = parseString(
+    value.characterCreateSceneId ?? "",
+    `${path}.characterCreateSceneId`,
+    64,
+  ).trim();
+  const startingSceneId = parseString(
+    value.startingSceneId ?? "",
+    `${path}.startingSceneId`,
+    64,
+  ).trim();
   return {
     type: "game-manager",
     systemId: parseString(value.systemId ?? "default", `${path}.systemId`, 64),
     planetId: parseString(value.planetId ?? "asteron", `${path}.planetId`, 64),
     spawn: value.spawn === "surface" ? "surface" : "station",
+    ...(characterCreateSceneId ? { characterCreateSceneId } : {}),
+    ...(startingSceneId ? { startingSceneId } : {}),
   };
 }
 
@@ -1632,6 +1675,7 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "npc-waypoint": parseNpcWaypointComponent,
   "npc-placement": parseNpcPlacementComponent,
   "elevator": parseElevatorComponent,
+  "scene-exit": parseSceneExitComponent,
   "ladder": parseLadderComponent,
   "hangar-pad": parseHangarPadComponent,
   "interaction": parseInteractionComponent,

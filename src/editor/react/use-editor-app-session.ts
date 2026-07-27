@@ -38,6 +38,8 @@ export type EditorAppSessionArgs = {
   newSceneDocument: () => void | Promise<void>;
   loadById: (id: string) => void | Promise<void>;
   loadSceneById: (id: string) => void | Promise<void>;
+  deleteSceneById: (id: string) => void | Promise<void>;
+  deleteCurrentScene: () => void | Promise<void>;
   duplicateSelection: () => void;
   deleteSelection: () => void;
   confirmDiscard: (message: string) => Promise<boolean>;
@@ -71,6 +73,8 @@ export function useEditorAppSession(args: EditorAppSessionArgs) {
     newSceneDocument,
     loadById,
     loadSceneById,
+    deleteSceneById,
+    deleteCurrentScene,
     duplicateSelection,
     deleteSelection,
     confirmDiscard,
@@ -220,11 +224,15 @@ const toolbarActions = useMemo(
     onSave,
     onLoad: (id: string) => void loadById(id),
     onLoadScene: (id: string) => void loadSceneById(id),
+    onDeleteScene: (id: string) => void deleteSceneById(id),
     onLoadPlanet: (id: string) => {
       setTab('planet-authoring');
       void tabHandlesRef.current.planetAuthoringEditor?.loadPlanet(id);
     },
     onOpenSceneSettings: openSceneSettings,
+    onDeleteCurrentScene: () => {
+      void deleteCurrentScene();
+    },
     onOpenProjectSettings: openProjectSettings,
     onOpenMenu: (id: string) => {
       setTab('menu-manager');
@@ -255,6 +263,8 @@ const toolbarActions = useMemo(
     openProjectSettings,
     loadById,
     loadSceneById,
+    deleteSceneById,
+    deleteCurrentScene,
     setTab,
     duplicateSelection,
     deleteSelection,

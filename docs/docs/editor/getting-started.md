@@ -57,6 +57,7 @@ Return to the hub later with **File → Open Project…**.
 | --- | --- |
 | **New Scene / New Prefab** | File menu |
 | **Open Scene… / Open Prefab… / Open Planets… / Open Menus…** | File menu |
+| **Delete Scene…** | File menu or Open Scene browse — removes `<id>.scene.json` from the project (blocked if it is the project default scene) |
 | **Scene Settings…** | File → Scene Settings… — per-scene startup options |
 | **Project Settings…** | File → Project Settings… — edits `asteron.project.json` (name, backend URL, default scene, build output) |
 | **Show Project Folder** | File menu — reveal the project root in your OS file manager |
@@ -77,7 +78,7 @@ private, project-scoped HTTP API on the `cceditor:` protocol:
 | --- | --- |
 | `GET /__editor/assets` | List project assets (and `POST /__editor/assets/folder` to add a folder) |
 | `GET/POST /__editor/prefab`, `GET /__editor/prefabs` | Load and save prefab documents |
-| `GET/POST /__editor/scene`, `GET /__editor/scenes` | Load and save scene documents |
+| `GET/POST /__editor/scene`, `GET /__editor/scenes`, `POST /__editor/scene/delete` | Load, save, and delete scene documents |
 | `GET/POST /__editor/planet`, `GET /__editor/planets` | Planet documents |
 | `GET/POST /__editor/system`, `GET /__editor/systems` | System Map documents |
 | `GET/POST /__editor/base-characters` | Base character definitions |

@@ -245,6 +245,24 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Pair two markers with the same id on different floors to ride between them.",
   },
   {
+    type: "scene-exit",
+    label: "Scene Exit",
+    category: "gameplay",
+    kinds: ["station", "site"],
+    scenes: true,
+    marker: true,
+    createDefault: () => ({
+      type: "scene-exit",
+      sceneId: "",
+      prompt: "Press F — exit to station",
+      radius: 2.5,
+      networkInstanceId: "station:public",
+      arrivalRoomId: "lobby",
+    }),
+    hint:
+      "In-play portal: press F to load another scene (e.g. private hab → Black Market station).",
+  },
+  {
     type: "ladder",
     label: "Ladder",
     category: "gameplay",
@@ -742,7 +760,8 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       planetId: "asteron",
       spawn: "station",
     }),
-    hint: "Scene gameplay config: which system/planet to load and default spawn mode.",
+    hint:
+      "Scene gameplay config: system, planet, spawn mode, character-create scene, and starting hab after Title Play.",
   },
   {
     type: "planet",

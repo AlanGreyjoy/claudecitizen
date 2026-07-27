@@ -270,6 +270,28 @@ export async function saveScene(document: SceneDocument): Promise<string> {
   return payload.path;
 }
 
+export interface SceneDeleteResult {
+  deleted: true;
+  id: string;
+  /** Project-relative paths that still mention this scene id. */
+  references: string[];
+}
+
+export async function fetchSceneReferences(id: string): Promise<string[]> {
+  const payload = await requestJson<{ references: string[] }>(
+    `/__editor/scene/references?id=${encodeURIComponent(id)}`,
+  );
+  return payload.references;
+}
+
+export async function deleteScene(id: string): Promise<SceneDeleteResult> {
+  return requestJson<SceneDeleteResult>('/__editor/scene/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+}
+
 export async function fetchBaseCharacterEquipment(): Promise<BaseCharacterEquipmentV1> {
   const payload = await requestJson<{ document: unknown }>('/__editor/base-characters');
   return parseBaseCharacterEquipment(payload.document);

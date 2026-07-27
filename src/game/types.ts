@@ -85,6 +85,11 @@ export interface GameLoopOptions {
   onInventoryUpdate?: (inventory: InventoryState) => void;
   onWeaponCombatEvents?: (events: readonly WeaponCombatRuntimeEvent[]) => void;
   vitalsSession?: PlayerVitalsSessionController | null;
+  /**
+   * Mid-play portal: load another scene document (stops this session via
+   * startSceneGameplay on the host).
+   */
+  onRequestScene?: (sceneId: string) => void;
 }
 
 export type WeaponCombatRuntimeEvent =

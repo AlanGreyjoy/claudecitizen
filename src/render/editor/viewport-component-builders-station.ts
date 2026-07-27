@@ -518,6 +518,7 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
     "npc-waypoint": buildNpcWaypointHelper,
     "npc-placement": buildNpcPlacementHelper,
     "elevator": buildElevatorHelper,
+    "scene-exit": buildElevatorHelper,
     "ladder": (component: PrefabComponent) =>
       buildLadderHelper(
         component as Extract<PrefabComponent, { type: "ladder" }>,

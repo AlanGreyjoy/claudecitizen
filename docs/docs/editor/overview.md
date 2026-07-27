@@ -52,17 +52,20 @@ documents migrate forward automatically on read.
 
 | Component | Role |
 | --- | --- |
-| `game-manager` | System, planet, and spawn mode |
+| `game-manager` | System, planet, spawn mode; Title entry hops (character create + starting hab) |
 | `planet` | Planet document reference |
 | `player-start` | Spawn pose and mode |
 | `prefab-instance` | Places a reusable prefab |
 | `ui-screen` | Mounts title / login / character-create / loading UI |
-| `scene-link` | Scene transition target (`auto` + `delaySeconds` for timed hops) |
-| `instanced-scene` | Per-player content (habs, hangars) |
+| `scene-link` | Menu scene transition (`auto` + `delaySeconds` for timed hops) |
+| `instanced-scene` | Per-player or shared instance content (habs, hangars) |
+| `scene-exit` | In-play F portal that loads another scene (hab → station) |
 
 At runtime, `src/app/scene-host.ts` loads a scene, mounts its UI screens or starts
 play from its GameObjects, and switches scenes **in-process** — never by reloading
-the page.
+the page. Title with a configured Game Manager runs auth → character create (when
+needed) → starting hab. Private habs use `scene-exit` to enter a shared station
+scene.
 
 ## Prefab kinds at a glance
 
@@ -139,7 +142,7 @@ editor writes document data; it does not own gameplay logic.
 - [Projects and settings](./projects-and-settings) — hub, `asteron.project.json`, backend proxy
 - [Interface](./interface) — panels, toolbar, tabs, shortcuts
 - [Building scenes](./building-scenes) — entities, transforms, GLB editing
-- [Scene components](./scene-components) — game-manager, ui-screen, scene-link, …
+- [Scene components](./scene-components) — game-manager, ui-screen, scene-link, scene-exit, …
 - [Components](./components) — gameplay component system
 - [Station authoring](./station-authoring)
 - [Ship authoring](./ship-authoring)

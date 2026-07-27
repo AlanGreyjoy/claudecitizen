@@ -102,6 +102,7 @@ export interface LoopContext {
     events: readonly WeaponCombatRuntimeEvent[],
   ) => void;
   readonly vitalsSession: PlayerVitalsSessionController | null;
+  readonly onRequestScene: ((sceneId: string) => void) | null;
 
   // ---- immutable runtime handles ----
   readonly flightCameraFeelState: ReturnType<typeof createFlightCameraFeelState>;
@@ -191,6 +192,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     onInventoryUpdate: resolved.onInventoryUpdate,
     onWeaponCombatEvents: resolved.onWeaponCombatEvents,
     vitalsSession: resolved.vitalsSession,
+    onRequestScene: resolved.onRequestScene ?? null,
 
     flightCameraFeelState: createFlightCameraFeelState(),
     esCameraState: createEntertainmentCameraState(),

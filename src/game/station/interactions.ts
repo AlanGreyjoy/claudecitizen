@@ -49,6 +49,7 @@ export function isVitalsLockedApartmentExit(
 ): boolean {
   if (!ctx.world.vitalsSyncLocked) return false;
   if (interaction.kind === "hab-lift-down") return true;
+  if (interaction.kind === "scene-exit") return true;
   if (interaction.kind === "prefab-elevator") {
     return interaction.marker.targetFloor !== "hab";
   }
@@ -103,6 +104,10 @@ export function stationInteractionPrompt(
       return pressInteractPrompt("elevator to Lobby");
     case "prefab-elevator":
       return pressInteractPrompt(`elevator to ${interaction.marker.targetFloor}`);
+    case "scene-exit":
+      return interaction.marker.prompt.includes("Press ")
+        ? interaction.marker.prompt
+        : pressInteractPrompt(interaction.marker.prompt.replace(/^Press F\s*[—-]\s*/i, "") || "exit");
     case "ladder":
       return pressInteractPrompt(interaction.ladder.label || "ladder");
     case "prefab-info":
@@ -143,6 +148,7 @@ function networkInstanceForInteraction(
     case "prefab-info":
     case "door":
     case "ladder":
+    case "scene-exit":
       return null;
   }
 }
@@ -240,6 +246,90 @@ function handlePrefabInfoInteraction(
   if (interaction.interactSoundUrl) playSfx(interaction.interactSoundUrl);
 }
 
+function handleDoorInteraction(
+  ctx: LoopContext,
+  actions: FrameActions,
+  interaction: Extract<StationInteraction, { kind: "door" }>,
+  animations: StationAnimations,
+): void {
+  if (!actions.interactPressed) return;
+  const animState = ctx.stationAnimationStates[interaction.door.id];
+  const opening = !(animState && animState.target === 1);
+  animations.toggleStationAnimation(interaction.door.id);
+  const sfx = opening
+    ? interaction.door.openSoundUrl
+    : interaction.door.closeSoundUrl;
+  if (sfx) playSfx(sfx);
+}
+
+function handleSceneExitInteraction(
+  ctx: LoopContext,
+  actions: FrameActions,
+  interaction: Extract<StationInteraction, { kind: "scene-exit" }>,
+): void {
+  if (!actions.interactPressed) return;
+  const { marker } = interaction;
+  if (marker.networkInstanceId) {
+    ctx.network?.transition(marker.networkInstanceId, marker.arrivalRoomId);
+  }
+  ctx.onRequestScene?.(marker.sceneId);
+}
+
+function activateStationInteraction(
+  ctx: LoopContext,
+  actions: FrameActions,
+  interaction: StationInteraction,
+  deps: {
+    buildTool: BuildTool;
+    animations: StationAnimations;
+  },
+): void {
+  if (interaction.kind === "terminal" || interaction.kind === "avms-terminal") {
+    if (actions.interactPressed) openAvmsTerminal(ctx, deps.buildTool);
+    return;
+  }
+  if (interaction.kind === "hangar-bank") {
+    if (actions.interactPressed) {
+      const hangarIndex = ctx.world.assignedHangar ?? 1;
+      const destination = elevatorDestinationFor(interaction, hangarIndex);
+      if (destination) {
+        beginElevatorRide(ctx.world, destination);
+        announceElevatorTransition(ctx, interaction, destination);
+      }
+    }
+    return;
+  }
+  if (interaction.kind === "prefab-info") {
+    handlePrefabInfoInteraction(actions, interaction, deps.animations);
+    return;
+  }
+  if (interaction.kind === "door") {
+    handleDoorInteraction(ctx, actions, interaction, deps.animations);
+    return;
+  }
+  if (interaction.kind === "ladder") {
+    if (actions.interactPressed) {
+      ctx.world.ladderClimb = {
+        surface: "station",
+        ladderId: interaction.ladder.id,
+        along: interaction.along,
+      };
+    }
+    return;
+  }
+  if (interaction.kind === "scene-exit") {
+    handleSceneExitInteraction(ctx, actions, interaction);
+    return;
+  }
+  if (actions.interactPressed) {
+    const destination = elevatorDestinationFor(interaction);
+    if (destination) {
+      beginElevatorRide(ctx.world, destination);
+      announceElevatorTransition(ctx, interaction, destination);
+    }
+  }
+}
+
 /** Resolve nearby station markers, prompts, elevators, AVMS, and prefab F-key toggles. */
 export function handleStationInteraction(
   ctx: LoopContext,
@@ -270,58 +360,5 @@ export function handleStationInteraction(
   );
   if (!interaction) return;
   if (isVitalsLockedApartmentExit(ctx, interaction)) return;
-
-  if (interaction.kind === "terminal" || interaction.kind === "avms-terminal") {
-    if (actions.interactPressed) openAvmsTerminal(ctx, deps.buildTool);
-    return;
-  }
-
-  if (interaction.kind === "hangar-bank") {
-    if (actions.interactPressed) {
-      const hangarIndex = ctx.world.assignedHangar ?? 1;
-      const destination = elevatorDestinationFor(interaction, hangarIndex);
-      if (destination) {
-        beginElevatorRide(ctx.world, destination);
-        announceElevatorTransition(ctx, interaction, destination);
-      }
-    }
-    return;
-  }
-
-  if (interaction.kind === "prefab-info") {
-    handlePrefabInfoInteraction(actions, interaction, deps.animations);
-    return;
-  }
-
-  if (interaction.kind === "door") {
-    if (actions.interactPressed) {
-      const animState = ctx.stationAnimationStates[interaction.door.id];
-      const opening = !(animState && animState.target === 1);
-      deps.animations.toggleStationAnimation(interaction.door.id);
-      const sfx = opening
-        ? interaction.door.openSoundUrl
-        : interaction.door.closeSoundUrl;
-      if (sfx) playSfx(sfx);
-    }
-    return;
-  }
-
-  if (interaction.kind === "ladder") {
-    if (actions.interactPressed) {
-      ctx.world.ladderClimb = {
-        surface: "station",
-        ladderId: interaction.ladder.id,
-        along: interaction.along,
-      };
-    }
-    return;
-  }
-
-  if (actions.interactPressed) {
-    const destination = elevatorDestinationFor(interaction);
-    if (destination) {
-      beginElevatorRide(ctx.world, destination);
-      announceElevatorTransition(ctx, interaction, destination);
-    }
-  }
+  activateStationInteraction(ctx, actions, interaction, deps);
 }

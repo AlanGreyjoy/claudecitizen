@@ -62,13 +62,14 @@ belongs. Authoring a scene in the editor writes into the project root.
 
 | Component | Role |
 |-----------|------|
-| `game-manager` | System, planet, spawn mode |
+| `game-manager` | System, planet, spawn mode; Title character-create + starting hab |
 | `planet` | Planet document reference |
 | `player-start` | Spawn pose and mode |
 | `prefab-instance` | Places a reusable prefab |
 | `ui-screen` | Mounts title / login / character-create / loading UI |
-| `scene-link` | Scene transition target (`auto` + `delaySeconds` for timed hops) |
-| `instanced-scene` | Per-player content (habs, hangars) |
+| `scene-link` | Menu scene transition (`auto` + `delaySeconds` for timed hops) |
+| `instanced-scene` | Per-player or shared instance content (habs, hangars) |
+| `scene-exit` | In-play F portal that loads another scene (hab → station) |
 
 `src/app/scene-host.ts` is the runtime: it loads a scene, mounts its UI screens
 or starts play from its GameObjects, and switches scenes **in-process**. Scene

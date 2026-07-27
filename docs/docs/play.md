@@ -87,9 +87,15 @@ Add a query parameter to tune render quality:
 
 ## Scenes and deep links
 
-A shipped release boots the scene named in `asteron.runtime.json` and follows the
-`ui-screen` and `scene-link` GameObjects from there — scene changes happen
-**in-process**, never by reloading the page.
+A shipped release boots the scene named in `asteron.runtime.json` (usually
+**Title**). Title's `game-manager` owns the entry chain when configured:
+
+1. Login / register on the Title UI
+2. Character Create scene when the player has no appearance
+3. Starting Hab (private `instance` scene)
+
+From the hab, a **Scene Exit** marker loads the shared station scene in-process.
+Older projects may still chain `ui-screen` + `scene-link` instead.
 
 Authoring and playtest happen in AsteronEngine (**F6** / Ship tab **Test** /
 Planet **Test Play**). There is no browser URL playtest workflow for day-to-day

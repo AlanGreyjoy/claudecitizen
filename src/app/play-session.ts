@@ -184,6 +184,8 @@ export interface StartPlaySessionOptions {
   bootstrap?: GameBootstrap;
   /** Scene-resolved world config. Skips URL param resolution when provided. */
   worldParams?: PlayWorldParams;
+  /** Mid-play portal callback (scene-exit markers). */
+  onRequestScene?: (sceneId: string) => void;
 }
 
 async function warmPlaySpawnSurface(
@@ -231,6 +233,7 @@ function createPlayGameLoop(options: {
   buildAreas: Partial<Record<string, BuildAreaRuntime>>;
   physics: StationPhysics | null;
   vitalsSession: PlayerVitalsSessionController;
+  onRequestScene?: (sceneId: string) => void;
 }) {
   const {
     world,
@@ -243,6 +246,7 @@ function createPlayGameLoop(options: {
     buildAreas,
     physics,
     vitalsSession,
+    onRequestScene,
   } = options;
 
   return createGameLoop({
@@ -291,6 +295,7 @@ function createPlayGameLoop(options: {
       overlays.personalInventory.refresh();
     },
     vitalsSession,
+    onRequestScene,
   });
 }
 
@@ -564,6 +569,7 @@ export async function startPlaySession(
     buildAreas,
     physics,
     vitalsSession,
+    onRequestScene: options.onRequestScene,
   });
 
   loopRef.loop = gameLoop;

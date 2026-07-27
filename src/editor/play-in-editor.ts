@@ -92,7 +92,9 @@ export function startEditorPlay(
 
   let sceneHost: SceneHostHandle | null = createSceneHost({
     initialScene: scene,
-    requireAuth: false,
+    // Title entry flow needs a real session so auth → character create → hab
+    // matches the shipped game. Prefab stages and direct gameplay stay offline.
+    requireAuth: scene.kind === 'title',
     fromEditor: true,
   });
   let paused = false;

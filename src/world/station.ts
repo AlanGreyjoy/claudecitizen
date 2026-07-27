@@ -494,6 +494,19 @@ export interface StationInfoMarker {
   interactSoundUrl?: string;
 }
 
+/** In-play portal that loads another scene document. */
+export interface StationSceneExitMarker {
+  sceneId: string;
+  prompt: string;
+  right: number;
+  up: number;
+  forward: number;
+  radius: number;
+  /** Empty skips network Transition before the scene swap. */
+  networkInstanceId: string;
+  arrivalRoomId: string;
+}
+
 export type StationDoorTrigger = "radial" | "raycast";
 
 /** Self-contained station door baked from a `door` component. */
@@ -606,6 +619,8 @@ export interface StationLayoutOverride {
   /** Climbable ladders in station-local meters. */
   ladders: LadderSpec[];
   infoMarkers: StationInfoMarker[];
+  /** F-key portals that load another scene (hab → station). */
+  sceneExitMarkers: StationSceneExitMarker[];
   /** Self-contained F-key doors from `door` components. */
   doors: StationDoorSpec[];
   avmsMarkers: StationAvmsMarker[];

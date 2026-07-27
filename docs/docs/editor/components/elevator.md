@@ -29,7 +29,18 @@ Pairs two markers with the same `id` on different floors. **Station** prefabs on
 
 Floor ids group spawn logic, elevator routing, and interaction filtering in the station runtime.
 
+## Hab vs station (same layout vs split scenes)
+
+| Approach | Use |
+| --- | --- |
+| **Elevator** | Hab and lobby live in the **same** station prefab/scene |
+| **Scene Exit** | Hab is a **separate** `instance` scene from the station |
+
+Do not expect an elevator in a private hab scene to load `blackmarket` — that is
+what [Scene Exit](./scene-exit) is for.
+
 ## See also
 
 - [Station authoring](../station-authoring)
+- [Scene Exit](./scene-exit)
 - [Spawn point](./spawn-point)

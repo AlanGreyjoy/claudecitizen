@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import type { PrefabComponent } from '../../../../world/prefabs/schema';
 import type { StationFloorId } from '../../../../world/station';
 import { collectAnimationIds, FLOOR_OPTIONS } from '../../../panels/inspector-logic';
@@ -7,6 +7,7 @@ import {
   LADDER_DEFAULT_LABEL,
   LADDER_DEFAULT_RADIUS,
 } from '../../../../world/ladders';
+import { fetchSceneList, type SceneListEntry } from '../../../api';
 import type { ComponentFieldsProps } from './context';
 import {
   AssetUrlField,
@@ -46,6 +47,83 @@ export function ElevatorFields({
           value={component.targetFloor}
           onCommit={(targetFloor) =>
             update({ ...component, targetFloor: targetFloor as StationFloorId })
+          }
+        />
+      </FieldRow>
+    </>
+  );
+}
+
+export function SceneExitFields({
+  ctx,
+  component,
+}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'scene-exit' }>>): ReactElement {
+  const { update } = ctx;
+  const [scenes, setScenes] = useState<SceneListEntry[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSceneList()
+      .then((list) => {
+        if (!cancelled) setScenes(list);
+      })
+      .catch(() => {
+        if (!cancelled) setScenes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sceneId = component.sceneId ?? '';
+  const sceneEntries = [...scenes];
+  if (sceneId && !sceneEntries.some((entry) => entry.id === sceneId)) {
+    sceneEntries.unshift({ id: sceneId, name: sceneId });
+  }
+
+  return (
+    <>
+      <FieldRow label="Target Scene" wide>
+        <select
+          className="ed-select"
+          value={sceneId}
+          onChange={(event) =>
+            update({ ...component, sceneId: event.currentTarget.value.trim() })
+          }
+        >
+          <option value="">(pick a scene)</option>
+          {sceneEntries.map(({ id, name }) => (
+            <option key={id} value={id}>
+              {name} ({id})
+            </option>
+          ))}
+        </select>
+      </FieldRow>
+      <FieldRow label="Prompt" wide>
+        <TextField
+          value={component.prompt ?? 'Press F — exit to station'}
+          onCommit={(prompt) => update({ ...component, prompt })}
+        />
+      </FieldRow>
+      <FieldRow label="Radius" wide>
+        <NumberField
+          value={component.radius ?? 2.5}
+          onCommit={(radius) => update({ ...component, radius })}
+        />
+      </FieldRow>
+      <FieldRow label="Network Instance" wide>
+        <TextField
+          value={component.networkInstanceId ?? 'station:public'}
+          onCommit={(networkInstanceId) =>
+            update({ ...component, networkInstanceId: networkInstanceId.trim() })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Arrival Room" wide>
+        <TextField
+          value={component.arrivalRoomId ?? 'lobby'}
+          onCommit={(arrivalRoomId) =>
+            update({ ...component, arrivalRoomId: arrivalRoomId.trim() || 'lobby' })
           }
         />
       </FieldRow>

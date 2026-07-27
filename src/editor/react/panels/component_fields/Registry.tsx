@@ -25,6 +25,7 @@ import {
   InteractionFields,
   LadderFields,
   ObjectAnimationFields,
+  SceneExitFields,
 } from './Builders2';
 import {
   AreaLightFields,
@@ -95,6 +96,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'npc-waypoint': field(NpcWaypointFields),
   'npc-placement': field(NpcPlacementFields),
   elevator: field(ElevatorFields),
+  'scene-exit': field(SceneExitFields),
   ladder: field(LadderFields),
   'hangar-pad': field(HangarPadFields),
   interaction: field(InteractionFields),

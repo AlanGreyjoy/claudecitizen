@@ -42,6 +42,21 @@ One or more per station. Entity position sets spawn location; **+Z forward** set
 
 Place two markers with the **same `id`** on different floors. Each marker's `floorId` is where it sits; `targetFloor` is where it delivers the player. Press **F** in play to ride.
 
+Elevators stay **inside one station layout**. If the hab and the station are
+**separate scenes** (private `instance` hab + shared station), use
+[Scene Exit](./components/scene-exit) instead.
+
+### scene-exit
+
+In-play portal that **loads another scene**. Typical private-hab setup:
+
+1. Hab scene: Scene Settings → **Instance**
+2. Add `instanced-scene` with `scope: "player"`
+3. Place `spawn-point` and a **Scene Exit** toward the station scene id
+4. Play → **F** at the exit → boots the station scene
+
+See [Scene Exit](./components/scene-exit).
+
 ### hangar-pad
 
 Ship parking spot inside a hangar. Set `hangarId`, `padIndex`, and `floorId: "hangar"`. Place at pad surface height — parked ships rest at their prefab-authored gear height above the pad.
@@ -96,10 +111,23 @@ Lights are visual only in the editor; they serialize and render in play.
 2. Greybox or kitbash GLB modules into rooms
 3. Add colliders on all walkable/blocking geometry
 4. Place spawn-point at the intended player entry
-5. Wire elevators between floors
+5. Wire elevators between floors **or** add `scene-exit` when the hab is a separate instance scene
 6. Add hangar-pad markers in ship bays
 7. Place AVMS terminals near hangar access
 8. Save and press **Play**
+
+### Private hab + shared station (split scenes)
+
+When the residential deck is its own scene (for example `blackmarkethab`) and the
+concourse is another (`blackmarket`):
+
+| Scene | Scene Settings kind | Key components |
+| --- | --- | --- |
+| Hab | `instance` | `instanced-scene` `scope: "player"`, `spawn-point`, `scene-exit` → station id |
+| Station | `instance` (shared) or `main-game` | Station layout / prefab; omit player-scoped `instanced-scene` so players share a cell |
+
+Title Game Manager **Starting Hab** points at the hab scene; the hab's Scene Exit
+points back at the station.
 
 ## Preview
 

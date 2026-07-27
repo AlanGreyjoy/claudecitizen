@@ -6,6 +6,7 @@ import {
   type StationElevatorMarker,
   type StationFloorId,
   type StationInfoMarker,
+  type StationSceneExitMarker,
   type StationAvmsMarker,
   type StationWeaponShopMarker,
   type StationOutfittersMarker,
@@ -104,6 +105,16 @@ interface FlattenedComponents {
     keyLabel?: string;
     proximitySoundUrl?: string;
     interactSoundUrl?: string;
+  }[];
+  sceneExitSeeds: {
+    sceneId: string;
+    prompt: string;
+    radius: number;
+    right: number;
+    up: number;
+    forward: number;
+    networkInstanceId: string;
+    arrivalRoomId: string;
   }[];
   avmsSeeds: {
     id: string;
@@ -328,6 +339,31 @@ function collectInteraction(
   });
 }
 
+function collectSceneExit(
+  component: Extract<PrefabComponent, { type: "scene-exit" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  const sceneId = component.sceneId.trim();
+  if (!sceneId) {
+    console.warn('scene-exit marker has empty sceneId; ignoring.');
+    return;
+  }
+  out.sceneExitSeeds.push({
+    sceneId,
+    prompt: component.prompt?.trim() || 'Press F — exit to station',
+    radius: component.radius ?? 2.5,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    networkInstanceId:
+      component.networkInstanceId === undefined
+        ? 'station:public'
+        : component.networkInstanceId.trim(),
+    arrivalRoomId: component.arrivalRoomId?.trim() || 'lobby',
+  });
+}
+
 function collectAvmsTerminal(
   component: Extract<PrefabComponent, { type: "avms-terminal" }>,
   ctx: CollectStationContext,
@@ -540,6 +576,9 @@ function collectStationComponent(
     case 'elevator':
       collectElevator(component, ctx, out);
       break;
+    case 'scene-exit':
+      collectSceneExit(component, ctx, out);
+      break;
     case 'ladder':
       collectLadder(component, ctx, out);
       break;
@@ -730,6 +769,7 @@ function createEmptyFlattened(): FlattenedComponents {
     ladders: [],
     hangarSeeds: [],
     infoSeeds: [],
+    sceneExitSeeds: [],
     avmsSeeds: [],
     weaponShopSeeds: [],
     outfittersSeeds: [],
@@ -799,6 +839,19 @@ function buildInfoMarkers(out: FlattenedComponents): StationInfoMarker[] {
     interactionType: seed.interactionType,
     targetAnimationId: seed.targetAnimationId,
     keyLabel: seed.keyLabel,
+  }));
+}
+
+function buildSceneExitMarkers(out: FlattenedComponents): StationSceneExitMarker[] {
+  return out.sceneExitSeeds.map((seed) => ({
+    sceneId: seed.sceneId,
+    prompt: seed.prompt,
+    right: seed.right,
+    up: seed.up,
+    forward: seed.forward,
+    radius: seed.radius,
+    networkInstanceId: seed.networkInstanceId,
+    arrivalRoomId: seed.arrivalRoomId,
   }));
 }
 
@@ -922,6 +975,7 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     elevatorMarkers: buildElevatorMarkers(out),
     ladders: out.ladders,
     infoMarkers: buildInfoMarkers(out),
+    sceneExitMarkers: buildSceneExitMarkers(out),
     doors: out.doors,
     avmsMarkers: buildAvmsMarkers(out),
     weaponShops: buildWeaponShops(out),

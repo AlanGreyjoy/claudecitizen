@@ -25,6 +25,7 @@ import {
   type StationDoorSpec,
   type StationElevatorMarker,
   type StationFrame,
+  type StationSceneExitMarker,
 } from '../world/station';
 import { nearestLadderMount, type LadderSpec } from '../world/ladders';
 import type { GameBootstrap } from '../net/api';
@@ -59,6 +60,7 @@ export type StationInteraction =
   | { kind: 'hangar-bank' }
   | { kind: 'hangar-lift-up'; hangar: HangarSpec }
   | { kind: 'prefab-elevator'; marker: StationElevatorMarker }
+  | { kind: 'scene-exit'; marker: StationSceneExitMarker }
   | { kind: 'ladder'; ladder: LadderSpec; along: number }
   | {
       kind: 'prefab-info';
@@ -178,6 +180,16 @@ function resolvePrefabInteraction(
         character.stationLocal.forward - marker.forward,
       ) <= marker.radius;
     if (near) return { kind: 'prefab-elevator', marker };
+  }
+
+  for (const marker of override.sceneExitMarkers) {
+    const near =
+      Math.hypot(
+        character.stationLocal.right - marker.right,
+        localUp - marker.up,
+        character.stationLocal.forward - marker.forward,
+      ) <= marker.radius;
+    if (near) return { kind: 'scene-exit', marker };
   }
 
   // Ladders measure to the whole climb line, so the same marker offers a mount

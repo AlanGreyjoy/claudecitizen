@@ -52,13 +52,13 @@ These components only appear on scene documents, and they decide what the scene
 
 | Component | Summary |
 | --- | --- |
-| [game-manager](../scene-components#game-manager) | System, planet, and spawn mode for the scene |
+| [game-manager](../scene-components#game-manager) | System, planet, spawn mode; Title character-create + starting hab |
 | [planet](../scene-components#planet) | Planet document reference |
 | [player-start](../scene-components#player-start) | Spawn pose and mode |
 | [prefab-instance](../scene-components#prefab-instance) | Places a reusable prefab in the scene |
 | [ui-screen](../scene-components#ui-screen) | Mounts title / login / character-create / loading UI |
-| [scene-link](../scene-components#scene-link) | Scene transition target (`auto` + `delaySeconds` for timed hops) |
-| [instanced-scene](../scene-components#instanced-scene) | Per-player content such as habs and hangars |
+| [scene-link](../scene-components#scene-link) | Menu scene transition (`auto` + `delaySeconds` for timed hops) |
+| [instanced-scene](../scene-components#instanced-scene) | Per-player or shared instance content (habs, hangars) |
 
 ### Station
 
@@ -67,6 +67,7 @@ These components only appear on scene documents, and they decide what the scene
 | [Station frame](./station-frame) | Orbital placement origin (auto on save) |
 | [Spawn point](./spawn-point) | Player spawn location and facing |
 | [Elevator](./elevator) | Floor-to-floor travel between paired markers |
+| [Scene Exit](./scene-exit) | In-play portal that loads another scene (hab → station) |
 | [Ladder](./ladder) | Climbable rail — foot marker, +Y up, +Z step-off |
 | [Hangar pad](./hangar-pad) | Ship parking spot inside a hangar |
 | [AVMS terminal](./avms-terminal) | Opens the vehicle management UI |

@@ -25,6 +25,7 @@ const KIND_BY_COMPONENT_TYPE: Readonly<Record<string, PrefabKind>> = {
   'item-frame': 'item',
   'prop-frame': 'prop',
   elevator: 'station',
+  'scene-exit': 'station',
   'hangar-pad': 'station',
   'ship-door': 'ship',
   door: 'station',

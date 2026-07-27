@@ -30,6 +30,16 @@ export interface ScenePlayConfig {
   /** Null when the scene authored neither `game-manager` nor `planet`. */
   planetId: string | null;
   spawn: 'station' | 'surface';
+  /**
+   * Character-creator scene when the signed-in player has no appearance.
+   * Null when unset — callers may use the inline create gate.
+   */
+  characterCreateSceneId: string | null;
+  /**
+   * Hab / gameplay scene `game-manager` sends the player to after a menu
+   * surface (Title Play). Null when unset — callers fall back to `scene-link`.
+   */
+  startingSceneId: string | null;
   /** First authoritative station prefab instance in the scene, if any. */
   stationPrefabId: string | null;
   /** First ship prefab instance in the scene, if any. */
@@ -78,94 +88,165 @@ function findComponent<T extends PrefabComponent['type']>(
   return null;
 }
 
+interface ScenePlayAccum {
+  systemId: string | null;
+  planetId: string | null;
+  spawn: ScenePlayConfig['spawn'];
+  characterCreateSceneId: string | null;
+  startingSceneId: string | null;
+  stationPrefabId: string | null;
+  shipPrefabId: string | null;
+  instanceScope: SceneInstanceScope | null;
+  requiresPlanet: boolean;
+  prefabInstances: ScenePlayConfig['prefabInstances'];
+  uiScreens: ScenePlayConfig['uiScreens'];
+  sceneLinks: ScenePlayConfig['sceneLinks'];
+}
+
+function collectGameManagerFields(
+  entity: PrefabEntity,
+  out: ScenePlayAccum,
+): void {
+  const gameManager = findComponent(entity, 'game-manager');
+  if (!gameManager) return;
+  out.systemId = gameManager.systemId;
+  out.planetId = gameManager.planetId;
+  out.spawn = gameManager.spawn;
+  if (gameManager.characterCreateSceneId) {
+    out.characterCreateSceneId = gameManager.characterCreateSceneId;
+  }
+  if (gameManager.startingSceneId) out.startingSceneId = gameManager.startingSceneId;
+  out.requiresPlanet = true;
+}
+
+function collectPrefabInstanceFields(
+  entity: PrefabEntity,
+  out: ScenePlayAccum,
+): void {
+  const instance = findComponent(entity, 'prefab-instance');
+  if (!instance) return;
+  out.prefabInstances.push({
+    entityId: entity.id,
+    prefabId: instance.prefabId,
+    prefabKind: instance.prefabKind,
+    transform: entity.transform,
+  });
+  if (
+    !out.stationPrefabId
+    && (instance.prefabKind === 'station' || instance.prefabKind === undefined)
+  ) {
+    out.stationPrefabId = instance.prefabId;
+  }
+  if (!out.shipPrefabId && instance.prefabKind === 'ship') {
+    out.shipPrefabId = instance.prefabId;
+  }
+}
+
+function collectScenePlayEntity(entity: PrefabEntity, out: ScenePlayAccum): void {
+  collectGameManagerFields(entity, out);
+  const planet = findComponent(entity, 'planet');
+  if (planet) {
+    out.planetId = planet.planetId;
+    out.requiresPlanet = true;
+  }
+  const playerStart = findComponent(entity, 'player-start');
+  if (playerStart) {
+    out.spawn = playerStart.spawn;
+    if (playerStart.spawn === 'surface') out.requiresPlanet = true;
+  }
+  collectPrefabInstanceFields(entity, out);
+  const uiScreen = findComponent(entity, 'ui-screen');
+  if (uiScreen) {
+    out.uiScreens.push({
+      screen: uiScreen.screen,
+      ...(uiScreen.menuId ? { menuId: uiScreen.menuId } : {}),
+    });
+  }
+  const sceneLink = findComponent(entity, 'scene-link');
+  // An unset target is a placeholder the author has not filled in yet.
+  if (sceneLink?.sceneId) {
+    out.sceneLinks.push({
+      entityId: entity.id,
+      sceneId: sceneLink.sceneId,
+      auto: sceneLink.auto === true,
+      delaySeconds: sceneLink.delaySeconds ?? 0,
+    });
+  }
+  const instanced = findComponent(entity, 'instanced-scene');
+  if (instanced) out.instanceScope = instanced.scope;
+}
+
 /** Resolve Unity-style scene GameObject components into play config. */
 export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
-  let systemId: string | null = null;
-  let planetId: string | null = null;
-  let spawn: ScenePlayConfig['spawn'] = 'station';
-  let stationPrefabId: string | null = null;
-  let shipPrefabId: string | null = null;
-  let instanceScope: SceneInstanceScope | null = null;
-  // Naming a planet or spawning on the surface is what makes a scene need the
-  // terrain stack; placing a station in orbit on its own does not.
-  let requiresPlanet = false;
-  const prefabInstances: ScenePlayConfig['prefabInstances'] = [];
-  const uiScreens: ScenePlayConfig['uiScreens'] = [];
-  const sceneLinks: ScenePlayConfig['sceneLinks'] = [];
+  const out: ScenePlayAccum = {
+    systemId: null,
+    planetId: null,
+    spawn: 'station',
+    characterCreateSceneId: null,
+    startingSceneId: null,
+    stationPrefabId: null,
+    shipPrefabId: null,
+    instanceScope: null,
+    // Naming a planet or spawning on the surface is what makes a scene need the
+    // terrain stack; placing a station in orbit on its own does not.
+    requiresPlanet: false,
+    prefabInstances: [],
+    uiScreens: [],
+    sceneLinks: [],
+  };
 
-  walkEntities(scene.gameObjects ?? [], (entity) => {
-    const gameManager = findComponent(entity, 'game-manager');
-    if (gameManager) {
-      systemId = gameManager.systemId;
-      planetId = gameManager.planetId;
-      spawn = gameManager.spawn;
-      requiresPlanet = true;
-    }
-    const planet = findComponent(entity, 'planet');
-    if (planet) {
-      planetId = planet.planetId;
-      requiresPlanet = true;
-    }
-    const playerStart = findComponent(entity, 'player-start');
-    if (playerStart) {
-      spawn = playerStart.spawn;
-      if (playerStart.spawn === 'surface') requiresPlanet = true;
-    }
-    const instance = findComponent(entity, 'prefab-instance');
-    if (instance) {
-      prefabInstances.push({
-        entityId: entity.id,
-        prefabId: instance.prefabId,
-        prefabKind: instance.prefabKind,
-        transform: entity.transform,
-      });
-      if (
-        !stationPrefabId
-        && (instance.prefabKind === 'station' || instance.prefabKind === undefined)
-      ) {
-        stationPrefabId = instance.prefabId;
-      }
-      if (!shipPrefabId && instance.prefabKind === 'ship') {
-        shipPrefabId = instance.prefabId;
-      }
-    }
-    const uiScreen = findComponent(entity, 'ui-screen');
-    if (uiScreen) {
-      uiScreens.push({
-        screen: uiScreen.screen,
-        ...(uiScreen.menuId ? { menuId: uiScreen.menuId } : {}),
-      });
-    }
-    const sceneLink = findComponent(entity, 'scene-link');
-    // An unset target is a placeholder the author has not filled in yet.
-    if (sceneLink?.sceneId) {
-      sceneLinks.push({
-        entityId: entity.id,
-        sceneId: sceneLink.sceneId,
-        auto: sceneLink.auto === true,
-        delaySeconds: sceneLink.delaySeconds ?? 0,
-      });
-    }
-    const instanced = findComponent(entity, 'instanced-scene');
-    if (instanced) instanceScope = instanced.scope;
-  });
+  walkEntities(scene.gameObjects ?? [], (entity) => collectScenePlayEntity(entity, out));
 
   return {
-    systemId,
-    planetId,
-    spawn,
-    stationPrefabId,
-    shipPrefabId,
-    prefabInstances,
-    uiScreens,
-    sceneLinks,
-    instanceScope,
+    systemId: out.systemId,
+    planetId: out.planetId,
+    spawn: out.spawn,
+    characterCreateSceneId: out.characterCreateSceneId,
+    startingSceneId: out.startingSceneId,
+    stationPrefabId: out.stationPrefabId,
+    shipPrefabId: out.shipPrefabId,
+    prefabInstances: out.prefabInstances,
+    uiScreens: out.uiScreens,
+    sceneLinks: out.sceneLinks,
+    instanceScope: out.instanceScope,
     content: {
-      planet: requiresPlanet,
-      ship: shipPrefabId !== null,
+      planet: out.requiresPlanet,
+      ship: out.shipPrefabId !== null,
       // A scene can author its station inline (GLB GameObjects, colliders,
       // spawn point) instead of placing a station prefab.
-      station: stationPrefabId !== null || sceneHasStationContent(scene),
+      station: out.stationPrefabId !== null || sceneHasStationContent(scene),
     },
   };
+}
+
+/** Entry hop targets + world knobs carried from Title's `game-manager`. */
+export interface SceneEntryFlow {
+  characterCreateSceneId: string | null;
+  startingSceneId: string | null;
+  systemId: string | null;
+  planetId: string | null;
+  spawn: 'station' | 'surface';
+}
+
+/** Snapshot Game Manager entry fields when the scene authors any of them. */
+export function resolveSceneEntryFlow(scene: SceneDocument): SceneEntryFlow | null {
+  const config = resolveScenePlayConfig(scene);
+  if (!config.characterCreateSceneId && !config.startingSceneId) return null;
+  return {
+    characterCreateSceneId: config.characterCreateSceneId,
+    startingSceneId: config.startingSceneId,
+    systemId: config.systemId,
+    planetId: config.planetId,
+    spawn: config.spawn,
+  };
+}
+
+/**
+ * Next scene after a menu surface. `game-manager.startingSceneId` wins so Title
+ * can pick a starting hab without also authoring a `scene-link`.
+ */
+export function resolveMenuAdvanceSceneId(scene: SceneDocument): string | null {
+  const config = resolveScenePlayConfig(scene);
+  if (config.startingSceneId) return config.startingSceneId;
+  return config.sceneLinks.find((link) => !link.auto)?.sceneId ?? null;
 }

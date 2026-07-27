@@ -203,8 +203,17 @@ async function handleEditorApi(repository, request, url) {
         return jsonResponse(200, await repository.listScenes());
       case 'GET /__editor/scene':
         return jsonResponse(200, await repository.getScene(url.searchParams.get('id')));
+      case 'GET /__editor/scene/references':
+        return jsonResponse(
+          200,
+          await repository.listSceneReferences(url.searchParams.get('id')),
+        );
       case 'POST /__editor/scene':
         return jsonResponse(200, await repository.saveScene(await parseDocumentBody(request)));
+      case 'POST /__editor/scene/delete': {
+        const body = await parseJsonBody(request);
+        return jsonResponse(200, await repository.deleteScene(body?.id));
+      }
       case 'GET /__editor/base-characters':
         return jsonResponse(200, await repository.getBaseCharacters());
       case 'POST /__editor/base-characters':
@@ -557,6 +566,10 @@ function installEditorApplicationMenu({
         {
           label: 'Scene Settings…',
           click: () => sendEditorCommand(getWindow, 'open-scene-settings'),
+        },
+        {
+          label: 'Delete Scene…',
+          click: () => sendEditorCommand(getWindow, 'delete-scene'),
         },
         {
           label: 'Project Settings…',

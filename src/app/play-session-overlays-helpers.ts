@@ -9,6 +9,7 @@ import { createPersonalInventory } from '../render/effects/hud/personal-inventor
 import { collectHaloBandElements } from '../render/effects/hud/haloband-dom';
 import { createWorldClient, type WorldClient } from '../net/world-client';
 import type { SceneDocument } from '../world/scenes/schema';
+import { resolveScenePlayConfig } from '../world/scenes/scene-runtime';
 import type { GameBootstrap } from '../net/api';
 import {
   createCheckoutSession,
@@ -83,17 +84,18 @@ export function createPlayHud(
 }
 
 /**
- * A scene of kind `instance` is a shared place: everyone who loads it belongs in
- * the same authoritative cell.
+ * Shared `instance` scenes force a common cell (`scene:<id>`). Player/party
+ * scoped habs stay on bootstrap's private `apartment:<playerId>` — the Join
+ * ticket already carries that, and Transition is what moves cells.
  *
- * The server takes the cell from the session ticket — the player's stored
- * `currentInstanceId`, which starts life as their private `apartment:<id>` — and
- * only a Transition moves it. The Join the client sends on connect is ignored.
- * So without this the two players standing in the same scene sit in two private
- * cells and never see each other.
+ * Scope comes from `instanced-scene`. Missing scope on `kind: "instance"` keeps
+ * the historical shared behavior so older shared interiors still meet.
  */
 export function sharedInstanceIdForScene(scene: SceneDocument | null): string | null {
-  return scene?.kind === 'instance' ? `scene:${scene.id}` : null;
+  if (!scene || scene.kind !== 'instance') return null;
+  const scope = resolveScenePlayConfig(scene).instanceScope;
+  if (scope === 'player' || scope === 'party') return null;
+  return `scene:${scene.id}`;
 }
 
 export async function connectPlayNetwork(

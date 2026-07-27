@@ -38,6 +38,7 @@ export type ResolvedLoopContextOptions = Required<
     | "isPaused"
     | "onInventoryUpdate"
     | "onWeaponCombatEvents"
+    | "onRequestScene"
   >;
 
 function resolveIdentityOptions(options: GameLoopOptions) {
@@ -52,6 +53,7 @@ function resolveIdentityOptions(options: GameLoopOptions) {
     isPaused: options.isPaused,
     onInventoryUpdate: options.onInventoryUpdate,
     onWeaponCombatEvents: options.onWeaponCombatEvents,
+    onRequestScene: options.onRequestScene,
   };
 }
 
