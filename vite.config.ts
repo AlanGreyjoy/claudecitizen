@@ -222,6 +222,44 @@ async function listPrefabAssetUrls(projectRoot: string): Promise<string[]> {
   return [...urls].sort();
 }
 
+/**
+ * Animation clip GLBs are referenced by animation-controller documents, never by
+ * a prefab, so the prefab scan cannot see them. Without this the release ships
+ * an avatar with zero clips and every character stands in T-pose.
+ *
+ * Read from the Vite root, which is the staged engine+project overlay during a
+ * project build — so a project-authored controller wins over the bundled one,
+ * exactly as it does at runtime.
+ */
+const ANIMATION_CONTROLLER_DIRECTORY = 'src/player/animation/data';
+
+async function listAnimationControllerAssetUrls(root: string): Promise<string[]> {
+  const directory = resolve(root, ANIMATION_CONTROLLER_DIRECTORY);
+  let dirents;
+  try {
+    dirents = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const urls = new Set<string>();
+  for (const dirent of dirents) {
+    if (!dirent.isFile() || !dirent.name.endsWith('.controller.json')) continue;
+    const absolute = join(directory, dirent.name);
+    let parsed: { sources?: { url?: unknown }[] };
+    try {
+      parsed = JSON.parse(await readFile(absolute, 'utf8')) as typeof parsed;
+    } catch (error) {
+      console.warn(`[claudecitizen-assets] Could not scan ${relative(root, absolute)}:`, error);
+      continue;
+    }
+    for (const source of parsed.sources ?? []) {
+      if (typeof source?.url === 'string' && source.url.startsWith('/')) urls.add(source.url);
+    }
+  }
+  return [...urls].sort();
+}
+
 async function listExistingOptionalAssets(
   projectRoot: string,
   outDir: string,
@@ -411,8 +449,12 @@ function copyReferencedGameAssets(): Plugin {
       // should be re-added only when a prefab actually references one.
       await rm(resolve(root, outDir, 'assets/protected'), { recursive: true, force: true });
 
+      const animationUrls = await listAnimationControllerAssetUrls(root);
+      const unresolvedAnimationUrls = animationUrls.filter(
+        (url) => resolveAssetUrl(root, outDir, url) === null,
+      );
       const queue = [
-        ...(await listPrefabAssetUrls(root))
+        ...[...(await listPrefabAssetUrls(root)), ...animationUrls]
           .map((url) => resolveAssetUrl(root, outDir, url))
           .filter((asset): asset is ResolvedAsset => asset !== null),
         ...(await listExistingOptionalAssets(root, outDir)),
@@ -444,6 +486,14 @@ function copyReferencedGameAssets(): Plugin {
 
       if (copied.size > 0) {
         console.log(`[claudecitizen-assets] copied ${copied.size} referenced asset file(s).`);
+      }
+      if (unresolvedAnimationUrls.length > 0) {
+        // Clips the controller points at but the project does not have. The
+        // release still boots; those states just fall back to whatever loaded.
+        console.warn(
+          `[claudecitizen-assets] ${unresolvedAnimationUrls.length} animation clip(s) not in the ` +
+            `project asset library: ${unresolvedAnimationUrls.slice(0, 8).join(', ')}`,
+        );
       }
       if (missing.length > 0) {
         const shown = missing.slice(0, 8).join(', ');
