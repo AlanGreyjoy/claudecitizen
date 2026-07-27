@@ -182,9 +182,19 @@ const NETLIFY_HEADERS = `# Emitted by scripts/build_project_web.mjs — do not e
 /asteron.runtime.json
   Cache-Control: no-store
 
-# Vite content-hashes these filenames, so they are safe to pin forever.
+# /assets holds two different things: Vite's content-hashed output, which could
+# be pinned forever, and project content copied at its authored path, whose URL
+# is stable while the bytes are not. A splat is the only pattern Netlify honours
+# here — an /assets/:file placeholder rule was tried and silently lost to this
+# one — so the weaker policy has to cover both.
+#
+# It must be the weaker one. These headers are applied to 404s as well, so
+# pinning this prefix pins misses: an asset requested before it shipped is
+# cached as "not found" for a year, and no reload recovers it. That is what kept
+# the launch build in T-pose after the clips were already live. Revalidation is
+# cheap by comparison — hashed filenames turn every recheck into a 304.
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=300, must-revalidate
 
 # Entry document: always revalidate so a new build is picked up immediately.
 /index.html
