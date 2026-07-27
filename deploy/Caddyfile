@@ -1,0 +1,21 @@
+# TLS termination for the Rust API.
+#
+# Certificates are issued by certbot on the host and synced into /certs by
+# deploy/sync-certs.sh — Caddy's own ACME is not used, because the WebTransport
+# listener needs the same certificate files and cannot read Caddy's 0600
+# private key.
+{$API_DOMAIN} {
+	tls /certs/fullchain.pem /certs/privkey.pem
+
+	# The browser sends session cookies cross-site; the backend sets the CORS
+	# headers itself against CLIENT_ORIGIN, so Caddy must not add its own or
+	# the response ends up with two Access-Control-Allow-Origin values and the
+	# browser rejects every call.
+	reverse_proxy backend:3000
+
+	encode gzip
+	log {
+		output stdout
+		format console
+	}
+}

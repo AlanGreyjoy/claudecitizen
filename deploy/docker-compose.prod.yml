@@ -1,0 +1,84 @@
+# Production overlay for a single-box deployment.
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+#
+# Everything here either hardens a development default or supplies a value that
+# only exists on the server. Read deploy/README.md before the first run.
+services:
+  backend:
+    environment:
+      APP_ENV: production
+      # Exact origin the browser sends. The backend allows ONE origin, so this
+      # must match the Netlify site the players actually load — including
+      # scheme, and excluding any trailing slash.
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:?set CLIENT_ORIGIN in deploy/.env}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL in deploy/.env}
+      # Must be re-stated: the base file hardcodes the development password.
+      DATABASE_URL: postgresql://claude:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/claude_citizen
+      # The game is served from a different origin than the API, so session
+      # cookies are cross-site. SameSite=Lax would silently drop them on every
+      # API call and every player would look logged out.
+      COOKIE_SAME_SITE: none
+      COOKIE_SECURE: "true"
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in deploy/.env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in deploy/.env}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:?set ADMIN_SESSION_SECRET in deploy/.env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@claude-citizen.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in deploy/.env}
+      PAYMENTS_ENCRYPTION_KEY: ${PAYMENTS_ENCRYPTION_KEY:?set PAYMENTS_ENCRYPTION_KEY in deploy/.env}
+      RUN_MIGRATIONS: "true"
+      # Public H3 endpoint the client dials for the world simulation. UDP, and
+      # a different port than the API — it is not proxied by Caddy.
+      WEBTRANSPORT_PUBLIC_URL: ${WEBTRANSPORT_PUBLIC_URL:?set WEBTRANSPORT_PUBLIC_URL in deploy/.env}
+      # With real certs the client validates normally and the server sends no
+      # certificate hash. Without them the server self-signs, and browsers only
+      # honour a hashed cert for 14 days.
+      WEBTRANSPORT_CERT_PATH: /certs/fullchain.pem
+      WEBTRANSPORT_KEY_PATH: /certs/privkey.pem
+    volumes:
+      - ${CERT_DIR:-/opt/asteron/certs}:/certs:ro
+    # !override replaces the base list instead of appending to it. Compose
+    # concatenates sequences across files, so a plain `ports:` here would
+    # publish 3000 twice and fail with "address already in use".
+    ports: !override
+      # HTTP is reached only through Caddy, so bind it to loopback. UDP 4433 is
+      # the one port that must be open to the internet besides 80/443.
+      - "127.0.0.1:3000:3000/tcp"
+      - "0.0.0.0:4433:4433/udp"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CERT_DIR:-/opt/asteron/certs}:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in deploy/.env}
+
+  # Development defaults publish these on 0.0.0.0. On a public box that exposes
+  # Postgres with the checked-in dev password to the whole internet.
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    ports: !override
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports: !override
+      - "127.0.0.1:6379:6379"
+
+  # Reachable from the backend by service name; nothing outside the compose
+  # network needs it, and publishing 1025 collides with a host MTA.
+  mailpit:
+    ports: !reset []
+
+volumes:
+  caddy_data:
+  caddy_config:

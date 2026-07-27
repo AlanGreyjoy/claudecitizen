@@ -60,6 +60,18 @@ alongside Postgres and Redis, or point it at managed databases.
 3. Deploy the output directory to any static host.
 4. Re-stamp `asteron.runtime.json` to retarget backends without rebuilding.
 
+Build Web runs `scripts/build_project_web.mjs` from the engine checkout, not
+`npm run build:web` from the project. The engine owns `index.html`, the Vite
+config, and every bundling glob, so the script stages the two trees together
+before running Vite. The same script is available directly:
+
+```bash
+npm run build:project-web -- --project /path/to/project
+```
+
+A worked example of a real deployment — TLS, WebTransport certificates, CORS,
+cookies — is in [POC launch](./poc-launch).
+
 Editor → backend traffic during authoring uses `/__editor/backend/*` (Electron
 proxy). Shipped browsers talk to `CLIENT_ORIGIN`-allowed APIs directly with
 cookie sessions.

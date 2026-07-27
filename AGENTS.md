@@ -92,6 +92,27 @@ navigation must not reload the page.
   cannot store the session cookies. Do not try to call the backend directly from
   the editor renderer.
 
+### Building a project release
+
+**File → Build Web runs `scripts/build_project_web.mjs` from the engine
+checkout, not `npm run build:web` from the project.** The engine owns
+`index.html`, `vite.config.ts`, and every `import.meta.glob` that bundles
+scenes, planets, systems, and prefabs — and those globs resolve against the
+engine, not the open project. A project supplies only `assets/` and a few
+`src/**` documents, so neither root can build alone.
+
+The script hardlinks the engine into `.asteron-build/stage`, overlays the
+project's `src/**` on top (removing each file first, so a shared inode is never
+edited in place), hardlinks the project's `assets/` in, and runs Vite there.
+Project documents win on id collisions; engine-only scenes (`login`,
+`character-creation`, `loading`) survive because the shipped game needs both.
+
+`editor.html` is only a rollup input when `mode === 'editor'`. Public releases
+must not ship the authoring surface.
+
+Deployment specifics — TLS, WebTransport certificates, CORS, cookies — are in
+`deploy/README.md` and `docs/docs/engineering/poc-launch.md`.
+
 ## Prefab & Animation Architecture
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
@@ -458,6 +479,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 
 | Script | Purpose |
 |--------|---------|
+| `scripts/build_project_web.mjs` | Build a shippable web release for an external project (`npm run build:project-web -- --project <dir>`) |
 | `scripts/inspect_glb.mjs` | List node names/bindings in a GLB (for `ship-door` bindings) |
 | `scripts/measure_desync.ts` | Compare analytic vs mesh height at a landing site |
 | `scripts/validate_terrain_system.ts` | Validate terrain LOD, seams, mesh/foot fidelity, and routed hydrology |
