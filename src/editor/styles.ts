@@ -1164,6 +1164,276 @@ body.ed-resize-row * {
   min-height: 0;
 }
 
+/* ── Deploy dialogs (Deploy → Front End… / Backend…) ────────────────────── */
+
+/* Wider than the 420px default: these carry a settings form and a live log. */
+.ed-dialog.ed-deploy-dialog {
+  width: min(760px, 96vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ed-deploy-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+/* Four equal columns; each field declares how many it takes, so a port sits
+   beside its host instead of claiming a row of its own. */
+.ed-deploy-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 14px;
+  align-items: start;
+}
+
+.ed-deploy-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+/* No global border-box in this sheet, so a 100% width would otherwise add
+   padding + border on top of the track and overflow every grid cell. */
+.ed-deploy-field .ed-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.ed-deploy-field-label {
+  color: var(--ed-muted);
+  font: 700 10px/1.2 var(--ed-font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ed-deploy-field-detail {
+  color: var(--ed-muted);
+  font: 500 10px/1.4 var(--ed-font);
+}
+
+.ed-deploy-span-1 { grid-column: span 1; }
+.ed-deploy-span-2 { grid-column: span 2; }
+.ed-deploy-span-3 { grid-column: span 3; }
+.ed-deploy-span-4 { grid-column: span 4; }
+
+/* Halve the grid before inputs get too narrow to read a path in. */
+@media (max-width: 640px) {
+  .ed-deploy-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ed-deploy-span-3,
+  .ed-deploy-span-4 {
+    grid-column: span 2;
+  }
+}
+
+.ed-btn.ed-btn-small {
+  padding: 3px 9px;
+  font-size: 11px;
+  align-self: flex-start;
+}
+
+/* Local HEAD vs the branch the box pulls. The warning state is the one that
+   matters, so it gets the accent — not the clean state. */
+.ed-deploy-preflight {
+  padding: 9px 11px;
+  border: 1px solid var(--ed-line);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+}
+
+.ed-deploy-preflight.is-warning {
+  border-color: #b8860b;
+  background: rgba(184, 134, 11, 0.12);
+}
+
+.ed-deploy-preflight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ed-deploy-preflight code {
+  font-family: var(--ed-mono, monospace);
+  opacity: 0.9;
+}
+
+.ed-deploy-warnings {
+  margin: 7px 0 0;
+  padding-left: 18px;
+  color: #f0c674;
+}
+
+.ed-deploy-warnings li + li {
+  margin-top: 3px;
+}
+
+.ed-deploy-section-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--ed-line);
+}
+
+.ed-deploy-section-tab {
+  padding: 5px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ed-text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ed-deploy-section-tab:hover {
+  color: var(--ed-text);
+}
+
+.ed-deploy-section-tab.is-active {
+  color: var(--ed-text);
+  border-bottom-color: var(--ed-accent, #6ea8fe);
+}
+
+.ed-deploy-summary {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 14px;
+  font-size: 12px;
+}
+
+.ed-deploy-summary dt {
+  color: var(--ed-text-dim);
+  font-size: 11px;
+}
+
+.ed-deploy-summary dd {
+  margin: 2px 0 0;
+  word-break: break-all;
+}
+
+.ed-deploy-summary dd.is-warning {
+  color: #f0c674;
+}
+
+.ed-deploy-hint {
+  margin: 0;
+  color: var(--ed-text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ed-deploy-hint code {
+  font-family: var(--ed-mono, monospace);
+}
+
+.ed-deploy-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ed-deploy-step-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ed-deploy-step-label {
+  flex: 1 1 auto;
+}
+
+.ed-deploy-step-command {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 5px;
+  font-family: var(--ed-mono, monospace);
+  font-size: 11px;
+  resize: vertical;
+}
+
+.ed-deploy-progress {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.ed-deploy-progress-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ed-text-dim);
+}
+
+.ed-deploy-progress-marker {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ed-line);
+  flex: 0 0 auto;
+}
+
+.ed-deploy-progress-item.is-done,
+.ed-deploy-progress-item.is-active {
+  color: var(--ed-text);
+}
+
+.ed-deploy-progress-item.is-done .ed-deploy-progress-marker {
+  background: #5faf5f;
+}
+
+.ed-deploy-progress-item.is-active .ed-deploy-progress-marker {
+  background: #d8a44a;
+  animation: ed-deploy-pulse 1.1s ease-in-out infinite;
+}
+
+.ed-deploy-progress-item.is-failed {
+  color: #ef6f6f;
+}
+
+.ed-deploy-progress-item.is-failed .ed-deploy-progress-marker {
+  background: #ef6f6f;
+}
+
+@keyframes ed-deploy-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* Idle it should not dominate a short section; it grows as output streams in. */
+.ed-deploy-log {
+  margin: 0;
+  padding: 9px 11px;
+  min-height: 96px;
+  max-height: 34vh;
+  overflow: auto;
+  border: 1px solid var(--ed-line);
+  background: #0e1013;
+  color: #cfd6dd;
+  font-family: var(--ed-mono, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Left-only tab editors: keep hierarchy chrome, drop empty inspector column. */
 #editor-root.is-planet-authoring .ed-main,
 #editor-root.is-system-map .ed-main,

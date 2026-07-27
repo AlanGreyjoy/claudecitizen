@@ -35,6 +35,8 @@ export type EditorAppEffectsArgs = {
   openSceneSettings: () => void;
   deleteCurrentScene: () => void | Promise<void>;
   openProjectSettings: () => void;
+  openDeployFrontend: () => void;
+  openDeployBackend: () => void;
   duplicateSelection: () => void;
   deleteSelection: () => void;
   exitToTitle: () => void | Promise<void>;
@@ -70,6 +72,8 @@ export function useEditorAppEffects(args: EditorAppEffectsArgs): void {
     openSceneSettings,
     deleteCurrentScene,
     openProjectSettings,
+    openDeployFrontend,
+    openDeployBackend,
     duplicateSelection,
     deleteSelection,
     exitToTitle,
@@ -106,6 +110,8 @@ useEffect(() => {
       openSceneSettings,
       deleteScene: () => void deleteCurrentScene(),
       openProjectSettings: openProjectSettings,
+      openDeployFrontend,
+      openDeployBackend,
       undo: () => store.undo(),
       redo: () => store.redo(),
       duplicate: duplicateSelection,
@@ -131,6 +137,8 @@ useEffect(() => {
   openSceneSettings,
   deleteCurrentScene,
   openProjectSettings,
+  openDeployFrontend,
+  openDeployBackend,
   store,
   duplicateSelection,
   deleteSelection,

@@ -28,6 +28,7 @@ import {
 } from './sidekick_pack.mjs';
 import { startDevRenderer } from './dev_renderer.mjs';
 import { createAgentServer, createRendererAgentTransport } from './agent_server.mjs';
+import { createDeployManager } from './deploy.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
 const EDITOR_HOST = 'app';
@@ -673,6 +674,19 @@ function installEditorApplicationMenu({
       ],
     },
     {
+      label: 'Deploy',
+      submenu: [
+        {
+          label: 'Front End…',
+          click: () => sendEditorCommand(getWindow, 'deploy-frontend'),
+        },
+        {
+          label: 'Backend…',
+          click: () => sendEditorCommand(getWindow, 'deploy-backend'),
+        },
+      ],
+    },
+    {
       label: 'Tools',
       submenu: [
         {
@@ -1107,6 +1121,15 @@ if (!hasSingleInstanceLock) {
     return result;
   };
 
+  // SSH and the local release build both need Node, so deployment lives here and
+  // streams progress to the Deploy tab over `editor:deploy-state`.
+  const deployManager = createDeployManager({
+    getRepository: () => repository,
+    repositoryRoot,
+    npmCommand,
+    onEvent: (event) => sendState(mainWindow, 'editor:deploy-state', event),
+  });
+
   app.on('second-instance', () => {
     const focus =
       (mainWindow && !mainWindow.isDestroyed() && mainWindow)
@@ -1249,6 +1272,25 @@ if (!hasSingleInstanceLock) {
         }
         return buildWeb();
       });
+
+      /** Deploy IPC. Every channel is editor-window only — these reach a live server. */
+      const deployChannels = {
+        'deploy:get-config': () => deployManager.getConfig(),
+        'deploy:save-config': (payload) => deployManager.saveConfig(payload),
+        'deploy:preflight': () => deployManager.preflight(),
+        'deploy:test-connection': () => deployManager.testConnection(),
+        'deploy:backend': () => deployManager.deployBackend(),
+        'deploy:client': () => deployManager.deployClient(),
+        'deploy:cancel': () => deployManager.cancel(),
+      };
+      for (const [channel, handler] of Object.entries(deployChannels)) {
+        ipcMain.handle(channel, (event, payload) => {
+          if (event.sender !== mainWindow?.webContents) {
+            throw new Error('Only the editor window may deploy.');
+          }
+          return handler(payload);
+        });
+      }
 
       agentServer = createAgentServer({
         getRepository: () => repository,

@@ -18,6 +18,9 @@ import { takeEditorHmrSnapshot } from './hmr-snapshot';
 import { useEditorStoreInstance } from './hooks';
 import { usePanelSplitters } from './PanelSplitters';
 import { usePrefabIsolation } from './use-prefab-isolation';
+import type { DeployTarget } from '../../platform/editor-desktop';
+import { DeployBackendModal } from './panels/deploy/DeployBackendModal';
+import { DeployFrontendModal } from './panels/deploy/DeployFrontendModal';
 import type { ProjectPanelHandle } from './panels/ProjectPanel';
 import type { ShipEditor } from './panels/ShipPanel';
 import type { ToolbarHandle } from './panels/Toolbar';
@@ -50,6 +53,8 @@ export function EditorApp(): ReactElement {
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [newSceneOpen, setNewSceneOpen] = useState(false);
+  /** Deploy → Front End… / Backend…. Self-contained modals; no store plumbing needed. */
+  const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
 
   const toolbarRef = useRef<ToolbarHandle | null>(null);
   const shipEditorRef = useRef<ShipEditor | null>(null);
@@ -329,6 +334,8 @@ export function EditorApp(): ReactElement {
     openSceneSettings,
     deleteCurrentScene,
     openProjectSettings,
+    openDeployFrontend: () => setDeployTarget('client'),
+    openDeployBackend: () => setDeployTarget('backend'),
     duplicateSelection,
     deleteSelection,
     exitToTitle,
@@ -389,6 +396,7 @@ export function EditorApp(): ReactElement {
   }, [store, togglePlay, stopInEditorPlay, onSave, loadSceneById, loadById]);
 
   return (
+    <>
     <EditorWorkspace
       store={store}
       audioPreview={audioPreview}
@@ -429,5 +437,14 @@ export function EditorApp(): ReactElement {
       projectSettingsOpen={projectSettingsOpen}
       setProjectSettingsOpen={setProjectSettingsOpen}
     />
+    <DeployBackendModal
+      open={deployTarget === 'backend'}
+      onClose={() => setDeployTarget(null)}
+    />
+    <DeployFrontendModal
+      open={deployTarget === 'client'}
+      onClose={() => setDeployTarget(null)}
+    />
+    </>
   );
 }

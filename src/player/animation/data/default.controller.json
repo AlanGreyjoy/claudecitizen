@@ -4,69 +4,15 @@
   "label": "Default Character",
   "sources": [
     {
-      "id": "r8-idle",
-      "url": "/assets/animations/ProRifle/idle.glb",
-      "label": "idle",
+      "id": "r8-locomotion",
+      "url": "/assets/animations/ProRifle/locomotion.glb",
+      "label": "ProRifle",
       "yawOffsetDegrees": 0
     },
     {
-      "id": "r8-idle-aiming",
-      "url": "/assets/animations/ProRifle/idle_aiming.glb",
-      "label": "idle_aiming",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-idle-crouching",
-      "url": "/assets/animations/ProRifle/idle_crouching.glb",
-      "label": "idle_crouching",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-idle-crouching-aiming",
-      "url": "/assets/animations/ProRifle/idle_crouching_aiming.glb",
-      "label": "idle_crouching_aiming",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-walk-crouching-forward",
-      "url": "/assets/animations/ProRifle/walk_crouching_forward.glb",
-      "label": "walk_crouching_forward",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-walk-forward",
-      "url": "/assets/animations/ProRifle/walk_forward.glb",
-      "label": "walk_forward",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-run-forward",
-      "url": "/assets/animations/ProRifle/run_forward.glb",
-      "label": "run_forward",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-sprint-forward",
-      "url": "/assets/animations/ProRifle/sprint_forward.glb",
-      "label": "sprint_forward",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-jump-up",
-      "url": "/assets/animations/ProRifle/jump_up.glb",
-      "label": "jump_up",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-jump-loop",
-      "url": "/assets/animations/ProRifle/jump_loop.glb",
-      "label": "jump_loop",
-      "yawOffsetDegrees": 0
-    },
-    {
-      "id": "r8-jump-down",
-      "url": "/assets/animations/ProRifle/jump_down.glb",
-      "label": "jump_down",
+      "id": "hg-locomotion",
+      "url": "/assets/animations/HandgunLocomotions/locomotion.glb",
+      "label": "HandgunLocomotions",
       "yawOffsetDegrees": 0
     },
     {
@@ -153,7 +99,7 @@
       "locomotion": "idle",
       "stanceId": "rifle",
       "clipName": "idle",
-      "sourceId": "r8-idle"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-idle-aiming",
@@ -161,7 +107,7 @@
       "locomotion": "idle_aiming",
       "stanceId": "rifle",
       "clipName": "idle_aiming",
-      "sourceId": "r8-idle-aiming"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-idle-crouching",
@@ -169,7 +115,7 @@
       "locomotion": "idle_crouching",
       "stanceId": "rifle",
       "clipName": "idle_crouching",
-      "sourceId": "r8-idle-crouching"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-idle-crouching-aiming",
@@ -177,7 +123,7 @@
       "locomotion": "idle_crouching_aiming",
       "stanceId": "rifle",
       "clipName": "idle_crouching_aiming",
-      "sourceId": "r8-idle-crouching-aiming"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-walk-crouching",
@@ -185,7 +131,7 @@
       "locomotion": "walk_crouching",
       "stanceId": "rifle",
       "clipName": "walk_crouching_forward",
-      "sourceId": "r8-walk-crouching-forward"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-walk",
@@ -193,7 +139,7 @@
       "locomotion": "walk",
       "stanceId": "rifle",
       "clipName": "walk_forward",
-      "sourceId": "r8-walk-forward"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-run",
@@ -201,7 +147,7 @@
       "locomotion": "run",
       "stanceId": "rifle",
       "clipName": "run_forward",
-      "sourceId": "r8-run-forward"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-sprint",
@@ -209,7 +155,7 @@
       "locomotion": "sprint",
       "stanceId": "rifle",
       "clipName": "sprint_forward",
-      "sourceId": "r8-sprint-forward"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-jump-start",
@@ -217,7 +163,7 @@
       "locomotion": "jump_start",
       "stanceId": "rifle",
       "clipName": "jump_up",
-      "sourceId": "r8-jump-up"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-jump-loop",
@@ -225,7 +171,7 @@
       "locomotion": "jump_loop",
       "stanceId": "rifle",
       "clipName": "jump_loop",
-      "sourceId": "r8-jump-loop"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "rifle-jump-land",
@@ -233,7 +179,7 @@
       "locomotion": "jump_land",
       "stanceId": "rifle",
       "clipName": "jump_down",
-      "sourceId": "r8-jump-down"
+      "sourceId": "r8-locomotion"
     },
     {
       "id": "pistol-idle",
@@ -241,7 +187,7 @@
       "locomotion": "idle",
       "stanceId": "pistol",
       "clipName": "",
-      "sourceId": "ual1-standard"
+      "sourceId": "hg-locomotion"
     },
     {
       "id": "pistol-walk",
@@ -249,7 +195,7 @@
       "locomotion": "walk",
       "stanceId": "pistol",
       "clipName": "",
-      "sourceId": "ual1-standard"
+      "sourceId": "hg-locomotion"
     },
     {
       "id": "pistol-run",
@@ -257,7 +203,7 @@
       "locomotion": "run",
       "stanceId": "pistol",
       "clipName": "",
-      "sourceId": "ual1-standard"
+      "sourceId": "hg-locomotion"
     },
     {
       "id": "pistol-sprint",
@@ -265,7 +211,7 @@
       "locomotion": "sprint",
       "stanceId": "pistol",
       "clipName": "",
-      "sourceId": "ual1-standard"
+      "sourceId": "hg-locomotion"
     },
     {
       "id": "pistol-jump-start",
@@ -273,7 +219,7 @@
       "locomotion": "jump_start",
       "stanceId": "pistol",
       "clipName": "",
-      "sourceId": "ual1-standard"
+      "sourceId": "hg-locomotion"
     },
     {
       "id": "pistol-jump-loop",
@@ -281,7 +227,7 @@
       "locomotion": "jump_loop",
       "stanceId": "pistol",
       "clipName": "",
-      "sourceId": "ual1-standard"
+      "sourceId": "hg-locomotion"
     },
     {
       "id": "pistol-jump-land",
@@ -289,7 +235,7 @@
       "locomotion": "jump_land",
       "stanceId": "pistol",
       "clipName": "",
-      "sourceId": "ual1-standard"
+      "sourceId": "hg-locomotion"
     }
   ]
 }

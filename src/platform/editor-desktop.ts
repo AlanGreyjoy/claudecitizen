@@ -14,6 +14,8 @@ export type DesktopNativeCommandType =
   | 'pause-play'
   | 'stop-play'
   | 'build-web'
+  | 'deploy-frontend'
+  | 'deploy-backend'
   | 'new-scene'
   | 'new-prefab'
   | 'save'
@@ -73,6 +75,74 @@ export interface DesktopCreateProjectRequest {
   parentDir?: string;
 }
 
+/** One remote command in the deploy pipeline. `command` may use `{{token}}` templates. */
+export interface DeployStep {
+  id: string;
+  label: string;
+  command: string;
+  enabled: boolean;
+}
+
+/**
+ * Deploy settings as the renderer sees them. The password is never sent back
+ * out of the main process — `hasPassword` reports only whether one is stored.
+ */
+export interface DeployConfig {
+  schemaVersion: 1;
+  host: string;
+  port: number;
+  username: string;
+  privateKeyPath: string;
+  remotePath: string;
+  gitRemote: string;
+  branch: string;
+  composeFiles: string[];
+  envFile: string;
+  healthUrl: string;
+  netlifySite: string;
+  steps: DeployStep[];
+  hasPassword: boolean;
+}
+
+/** Config as sent to the main process. An absent `password` leaves the stored one intact. */
+export type DeployConfigInput = Omit<DeployConfig, 'hasPassword'> & { password?: string };
+
+export interface DeployConfigResult {
+  config: DeployConfig;
+  defaultSteps: DeployStep[];
+}
+
+/** Local checkout versus the branch the box pulls. Populated before a backend deploy. */
+export interface DeployPreflight {
+  head: string;
+  headSubject: string;
+  remoteHead: string;
+  branch: string;
+  remote: string;
+  dirtyFiles: number;
+  warnings: string[];
+}
+
+export interface DeployConnectionResult {
+  ok: boolean;
+  detail: string;
+  remotePathIsRepo: boolean;
+}
+
+export interface DeployResult {
+  ok: boolean;
+  message: string;
+  failedStep?: number;
+}
+
+export type DeployTarget = 'backend' | 'client';
+
+export type DeployState =
+  | { phase: 'started'; target: DeployTarget; steps: string[]; message: string }
+  | { phase: 'step'; stepIndex: number; label: string }
+  | { phase: 'log'; line: string }
+  | { phase: 'success' | 'error'; target: DeployTarget; ok: boolean; message: string; failedStep?: number };
+
 export type DesktopDeleteProjectResult =
   | ({ canceled?: false } & DesktopRecentProjectsResult)
   | { canceled: true; projects?: undefined };
@@ -82,6 +152,14 @@ export interface ClaudeCitizenEditorDesktopBridge {
   readonly platform: string;
   buildWeb: () => Promise<DesktopBuildResult>;
   onBuildState: (callback: (state: DesktopBuildState) => void) => () => void;
+  getDeployConfig: () => Promise<DeployConfigResult>;
+  saveDeployConfig: (config: DeployConfigInput) => Promise<{ saved: true; config: DeployConfig; path: string }>;
+  deployPreflight: () => Promise<DeployPreflight>;
+  testDeployConnection: () => Promise<DeployConnectionResult>;
+  deployBackend: () => Promise<DeployResult>;
+  deployClient: () => Promise<DeployResult>;
+  cancelDeploy: () => Promise<{ canceled: boolean }>;
+  onDeployState: (callback: (state: DeployState) => void) => () => void;
   onNativeCommand: (callback: (command: DesktopNativeCommand) => void) => () => void;
   onAgentRequest: (callback: (request: DesktopAgentRequest) => void) => () => void;
   replyAgentRequest: (payload: DesktopAgentResponse) => void;

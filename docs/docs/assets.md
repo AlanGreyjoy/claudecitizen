@@ -51,6 +51,26 @@ In the editor Project panel, open `protected/animations`, then use a model card'
 
 Unity's Mecanim animator controller does not export to GLTF/GLB as a usable browser state machine. The game keeps the state machine in TypeScript (`Idle_Loop`, `Walk_Loop`, `Sprint_Loop`, jump phases) and retargets baked humanoid clips onto the Unity-style skeleton at load time. Export additional Unity animation clips as baked FBX/GLB clips, then add them to the character avatar catalog or map them onto the existing state names.
 
+### Stance locomotion packs
+
+Default rifle and pistol locomotion ship as **one multi-clip GLB per stance**, not one HTTP request per clip:
+
+| Pack URL | Role |
+| --- | --- |
+| `/assets/animations/ProRifle/locomotion.glb` | Rifle idle / aim / walk / run / sprint / jump |
+| `/assets/animations/HandgunLocomotions/locomotion.glb` | Pistol locomotion (when clip names are assigned) |
+| `/assets/animations/universal-animation-library-1/UAL1_Standard.glb` | Unarmed (already a multi-clip library) |
+
+The animation controller (`sources[]` + `states[].clipName`) already supports this UAL-style layout. After dropping Unity single-clip exports into a folder, merge them:
+
+```bash
+npm run pack:anims -- --in <project>/assets/animations/ProRifle --out <project>/assets/animations/ProRifle/locomotion.glb
+# or pack both default stance folders:
+npm run pack:anims -- --project <projectRoot>
+```
+
+Single-clip inputs are renamed to the file stem (`idle.glb` → clip `idle`) so controller `clipName`s stay stable. **File → Build Web** still copies every `sources[].url` from `*.controller.json`; a missing pack means T-pose for that stance (same as any missing clip GLB).
+
 ### Rifle ADS locomotion
 
 Rifle aim uses two animation layers only while the character is walking or running:

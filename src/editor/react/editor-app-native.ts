@@ -37,6 +37,8 @@ export type NativeCommandHandlers = {
   togglePause: () => void;
   stopPlay: () => void;
   buildWeb: () => void;
+  openDeployFrontend: () => void;
+  openDeployBackend: () => void;
   newScene: () => void;
   newPrefab: () => void;
   save: () => void;
@@ -61,6 +63,8 @@ export function dispatchNativeCommand(
     'pause-play': handlers.togglePause,
     'stop-play': handlers.stopPlay,
     'build-web': handlers.buildWeb,
+    'deploy-frontend': handlers.openDeployFrontend,
+    'deploy-backend': handlers.openDeployBackend,
     'new-scene': handlers.newScene,
     'new-prefab': handlers.newPrefab,
     save: handlers.save,

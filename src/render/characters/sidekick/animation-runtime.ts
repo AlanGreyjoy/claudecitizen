@@ -88,6 +88,26 @@ function loadGltf(url: string): Promise<AnimationLibraryAsset> {
   });
 }
 
+function preferredClipName(
+  label: string | undefined,
+  known: ReadonlyMap<string, THREE.AnimationClip>,
+  clipNames: readonly string[],
+): string {
+  if (label && known.has(label)) return label;
+  return clipNames[0] ?? '';
+}
+
+/** Force a single exported clip to match the controller / source label. */
+function renameSoleClipToLabel(clips: THREE.AnimationClip[], label: string | undefined): void {
+  if (!label || clips.length !== 1 || !clips[0] || clips[0].name === label) return;
+  clips[0].name = label;
+}
+
+function appendLoadedSourceLabel(current: string, fileLabel: string): string {
+  if (current === 'none' || current === 'UAL locomotion') return fileLabel;
+  return `${current} + ${fileLabel}`;
+}
+
 function isLoopingClip(name: string): boolean {
   if (LOOPING_CLIPS.has(name) || name.includes('_Loop') || /_loop$/i.test(name)) return true;
   if (/^death[_-]/i.test(name) || /headshot/i.test(name)) return false;
@@ -204,6 +224,10 @@ export async function createSidekickAnimationRuntime(
   const clipPackByName = new Map<string, string>();
   /** clip name → source URL used to load it (blob: for file picker). */
   const clipSourceUrlByName = new Map<string, string>();
+  /** URLs already fetched into this runtime (skip re-network). */
+  const loadedSourceUrls = new Set<string>();
+  /** In-flight loads keyed by URL so concurrent callers share one fetch. */
+  const sourceLoadInFlight = new Map<string, Promise<void>>();
   const packLoadOrder: string[] = [];
   const pendingFadeStops: Array<{
     action: THREE.AnimationAction;
@@ -419,6 +443,8 @@ export async function createSidekickAnimationRuntime(
     clipPacks = [];
     clipPackByName.clear();
     clipSourceUrlByName.clear();
+    loadedSourceUrls.clear();
+    sourceLoadInFlight.clear();
     packLoadOrder.length = 0;
   };
 
@@ -494,25 +520,40 @@ export async function createSidekickAnimationRuntime(
     yawOffsetDegrees = 0,
     options?: { activate?: boolean },
   ): Promise<void> => {
-    const asset = await loadGltf(url);
-    const clips = applyRootYawOffset(retargetFromAsset(asset), yawOffsetDegrees);
-    // Controller clipName / source.label is the gameplay key — force match when
-    // a pack GLB ships a single clip under a mismatched or empty name.
-    if (label && clips.length === 1 && clips[0] && clips[0].name !== label) {
-      clips[0].name = label;
+    const activate = options?.activate !== false;
+    const activatePreferred = (): void => {
+      if (!activate) return;
+      const preferred = preferredClipName(label, sourceClips, clipNames);
+      if (preferred) setAnimation(preferred, 0);
+    };
+
+    if (loadedSourceUrls.has(url)) {
+      activatePreferred();
+      return;
     }
-    const packLabel = packLabelForUrl(url, label);
-    registerClips(clips, false, packLabel, url);
-    const fileLabel = packLabel;
-    sourceLabel = sourceLabel === 'none' || sourceLabel === 'UAL locomotion'
-      ? fileLabel
-      : `${sourceLabel} + ${fileLabel}`;
-    if (options?.activate === false) return;
-    const preferred = (label && sourceClips.has(label) ? label : null)
-      ?? asset.animations[0]?.name
-      ?? clipNames[0]
-      ?? '';
-    if (preferred) setAnimation(preferred, 0);
+    const existing = sourceLoadInFlight.get(url);
+    if (existing) {
+      await existing;
+      activatePreferred();
+      return;
+    }
+
+    const loading = (async () => {
+      const asset = await loadGltf(url);
+      const clips = applyRootYawOffset(retargetFromAsset(asset), yawOffsetDegrees);
+      renameSoleClipToLabel(clips, label);
+      const packLabel = packLabelForUrl(url, label);
+      registerClips(clips, false, packLabel, url);
+      loadedSourceUrls.add(url);
+      sourceLabel = appendLoadedSourceLabel(sourceLabel, packLabel);
+    })();
+    sourceLoadInFlight.set(url, loading);
+    try {
+      await loading;
+    } finally {
+      sourceLoadInFlight.delete(url);
+    }
+    activatePreferred();
   };
 
   // Empty mixer is valid: clip GLBs come from the open project / controller

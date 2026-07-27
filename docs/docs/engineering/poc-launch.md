@@ -150,13 +150,16 @@ neither the API nor the transport is at fault.
 Animation clips are referenced by the **animation controller document**
 (`src/player/animation/data/default.controller.json` → `sources[].url`), not by
 any prefab. The release build's asset copier walks `*.prefab.json` to decide what
-to ship, so it never saw them and `/assets/animations/ProRifle/idle.glb` returned
-404 in production. The Sidekick avatar assembled fine — it just had no clips, and
-an animated skeleton with nothing playing is a T-pose.
+to ship, so it never saw them and `/assets/animations/ProRifle/locomotion.glb`
+(or the older per-clip URLs) returned 404 in production. The Sidekick avatar
+assembled fine — it just had no clips, and an animated skeleton with nothing
+playing is a T-pose.
 
 The build now also scans `src/player/animation/data/*.controller.json` and ships
 every `sources[].url` it finds, warning for each one the project's asset library
-does not have. All 12 sources in the current controller resolve.
+does not have. Stance locomotion is packed as multi-clip GLBs (`ProRifle/locomotion.glb`,
+`HandgunLocomotions/locomotion.glb`, plus UAL); build those with
+`npm run pack:anims -- --project <projectRoot>` before shipping.
 
 One separate path is still dead, and it is not what caused the T-pose:
 `UNIVERSAL_ANIMATION_LIBRARY_URL` in `unity-humanoid-retarget.ts` hardcodes

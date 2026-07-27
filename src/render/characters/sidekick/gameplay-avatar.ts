@@ -162,8 +162,11 @@ export function createSidekickGameplayAvatar(
     if (!animation) return;
     animationController = controller;
     const sources = primaryStanceSources(controller);
+    const loadedUrls = new Set<string>();
     for (const source of sources) {
       if (disposed || epoch !== controllerSyncEpoch || !animation) break;
+      if (loadedUrls.has(source.url)) continue;
+      loadedUrls.add(source.url);
       try {
         await animation.loadAnimationSource(
           source.url,

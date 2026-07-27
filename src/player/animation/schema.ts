@@ -218,8 +218,10 @@ export function locomotionStateSlug(locomotion: AnimationLocomotionKind): string
  * but the GLBs it points at come from the open project's `assets/` library,
  * which the dev server and the build both mount at `/assets/`.
  */
-const PRO_RIFLE_ROOT = '/assets/animations/ProRifle';
-const HANDGUN_LOCOMOTION_ROOT = '/assets/animations/HandgunLocomotions';
+const PRO_RIFLE_PACK_URL = '/assets/animations/ProRifle/locomotion.glb';
+const HANDGUN_LOCOMOTION_PACK_URL = '/assets/animations/HandgunLocomotions/locomotion.glb';
+const RIFLE_LOCOMOTION_SOURCE_ID = 'r8-locomotion';
+const HANDGUN_LOCOMOTION_SOURCE_ID = 'hg-locomotion';
 const RIFLE_IDLE_CLIP = 'idle';
 const RIFLE_AIM_IDLE_CLIP = 'idle_aiming';
 const RIFLE_CROUCH_IDLE_CLIP = 'idle_crouching';
@@ -236,40 +238,6 @@ const PISTOL_RUN_CLIP = 'pistol_run';
 const PISTOL_JUMP_CLIP = 'pistol_jump';
 const PISTOL_JUMP_LOOP_CLIP = 'pistol_jump_2';
 
-function packSourceId(prefix: string, clipStem: string): string {
-  return `${prefix}-${clipStem.replaceAll('_', '-')}`;
-}
-
-const RIFLE_CLIP_STEMS = [
-  RIFLE_IDLE_CLIP,
-  RIFLE_AIM_IDLE_CLIP,
-  RIFLE_CROUCH_IDLE_CLIP,
-  RIFLE_CROUCH_AIM_IDLE_CLIP,
-  RIFLE_CROUCH_WALK_CLIP,
-  RIFLE_WALK_CLIP,
-  RIFLE_RUN_CLIP,
-  RIFLE_SPRINT_CLIP,
-  RIFLE_JUMP_START_CLIP,
-  RIFLE_JUMP_LOOP_CLIP,
-  RIFLE_JUMP_LAND_CLIP,
-];
-
-const PISTOL_CLIP_STEMS = [
-  PISTOL_IDLE_CLIP,
-  PISTOL_WALK_CLIP,
-  PISTOL_RUN_CLIP,
-  PISTOL_JUMP_CLIP,
-  PISTOL_JUMP_LOOP_CLIP,
-];
-
-// Pro Rifle idle/aim authors ~55° root yaw when Body Orientation remaps.
-// Temporarily 0 while testing Unity import "Based Upon = Original" + re-export.
-// Restore -54 on idle / idle_aiming if facing is still wrong after that.
-const RIFLE_YAW_BY_CLIP: Record<string, number> = {
-  // [RIFLE_IDLE_CLIP]: -54,
-  // [RIFLE_AIM_IDLE_CLIP]: -54,
-};
-
 function buildDefaultStances(): AnimationControllerStanceV1[] {
   return [
     { id: 'unarmed', label: 'Unarmed' },
@@ -278,20 +246,21 @@ function buildDefaultStances(): AnimationControllerStanceV1[] {
   ];
 }
 
+/** One multi-clip pack per weapon stance (UAL-style). Pack with `npm run pack:anims`. */
 function buildDefaultSources(): AnimationControllerSourceV1[] {
   return [
-    ...RIFLE_CLIP_STEMS.map((clipStem) => ({
-      id: packSourceId('r8', clipStem),
-      url: `${PRO_RIFLE_ROOT}/${clipStem}.glb`,
-      label: clipStem,
-      yawOffsetDegrees: RIFLE_YAW_BY_CLIP[clipStem] ?? 0,
-    })),
-    ...PISTOL_CLIP_STEMS.map((clipStem) => ({
-      id: packSourceId('hg', clipStem),
-      url: `${HANDGUN_LOCOMOTION_ROOT}/${clipStem}.glb`,
-      label: clipStem,
+    {
+      id: RIFLE_LOCOMOTION_SOURCE_ID,
+      url: PRO_RIFLE_PACK_URL,
+      label: 'ProRifle',
       yawOffsetDegrees: 0,
-    })),
+    },
+    {
+      id: HANDGUN_LOCOMOTION_SOURCE_ID,
+      url: HANDGUN_LOCOMOTION_PACK_URL,
+      label: 'HandgunLocomotions',
+      yawOffsetDegrees: 0,
+    },
   ];
 }
 
@@ -364,7 +333,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'idle',
       stanceId: 'rifle',
       clipName: RIFLE_IDLE_CLIP,
-      sourceId: packSourceId('r8', RIFLE_IDLE_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-idle-aiming',
@@ -372,7 +341,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'idle_aiming',
       stanceId: 'rifle',
       clipName: RIFLE_AIM_IDLE_CLIP,
-      sourceId: packSourceId('r8', RIFLE_AIM_IDLE_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-idle-crouching',
@@ -380,7 +349,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'idle_crouching',
       stanceId: 'rifle',
       clipName: RIFLE_CROUCH_IDLE_CLIP,
-      sourceId: packSourceId('r8', RIFLE_CROUCH_IDLE_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-idle-crouching-aiming',
@@ -388,7 +357,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'idle_crouching_aiming',
       stanceId: 'rifle',
       clipName: RIFLE_CROUCH_AIM_IDLE_CLIP,
-      sourceId: packSourceId('r8', RIFLE_CROUCH_AIM_IDLE_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-walk-crouching',
@@ -396,7 +365,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'walk_crouching',
       stanceId: 'rifle',
       clipName: RIFLE_CROUCH_WALK_CLIP,
-      sourceId: packSourceId('r8', RIFLE_CROUCH_WALK_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-walk',
@@ -404,7 +373,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'walk',
       stanceId: 'rifle',
       clipName: RIFLE_WALK_CLIP,
-      sourceId: packSourceId('r8', RIFLE_WALK_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-run',
@@ -412,7 +381,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'run',
       stanceId: 'rifle',
       clipName: RIFLE_RUN_CLIP,
-      sourceId: packSourceId('r8', RIFLE_RUN_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-sprint',
@@ -420,7 +389,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'sprint',
       stanceId: 'rifle',
       clipName: RIFLE_SPRINT_CLIP,
-      sourceId: packSourceId('r8', RIFLE_SPRINT_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-jump-start',
@@ -428,7 +397,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'jump_start',
       stanceId: 'rifle',
       clipName: RIFLE_JUMP_START_CLIP,
-      sourceId: packSourceId('r8', RIFLE_JUMP_START_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-jump-loop',
@@ -436,7 +405,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'jump_loop',
       stanceId: 'rifle',
       clipName: RIFLE_JUMP_LOOP_CLIP,
-      sourceId: packSourceId('r8', RIFLE_JUMP_LOOP_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'rifle-jump-land',
@@ -444,7 +413,7 @@ function buildRifleStates(): AnimationControllerStateV1[] {
       locomotion: 'jump_land',
       stanceId: 'rifle',
       clipName: RIFLE_JUMP_LAND_CLIP,
-      sourceId: packSourceId('r8', RIFLE_JUMP_LAND_CLIP),
+      sourceId: RIFLE_LOCOMOTION_SOURCE_ID,
     },
   ];
 }
@@ -457,7 +426,7 @@ function buildPistolStates(): AnimationControllerStateV1[] {
       locomotion: 'idle',
       stanceId: 'pistol',
       clipName: PISTOL_IDLE_CLIP,
-      sourceId: packSourceId('hg', PISTOL_IDLE_CLIP),
+      sourceId: HANDGUN_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'pistol-walk',
@@ -465,7 +434,7 @@ function buildPistolStates(): AnimationControllerStateV1[] {
       locomotion: 'walk',
       stanceId: 'pistol',
       clipName: PISTOL_WALK_CLIP,
-      sourceId: packSourceId('hg', PISTOL_WALK_CLIP),
+      sourceId: HANDGUN_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'pistol-run',
@@ -473,7 +442,7 @@ function buildPistolStates(): AnimationControllerStateV1[] {
       locomotion: 'run',
       stanceId: 'pistol',
       clipName: PISTOL_RUN_CLIP,
-      sourceId: packSourceId('hg', PISTOL_RUN_CLIP),
+      sourceId: HANDGUN_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'pistol-sprint',
@@ -481,7 +450,7 @@ function buildPistolStates(): AnimationControllerStateV1[] {
       locomotion: 'sprint',
       stanceId: 'pistol',
       clipName: PISTOL_RUN_CLIP,
-      sourceId: packSourceId('hg', PISTOL_RUN_CLIP),
+      sourceId: HANDGUN_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'pistol-jump-start',
@@ -489,7 +458,7 @@ function buildPistolStates(): AnimationControllerStateV1[] {
       locomotion: 'jump_start',
       stanceId: 'pistol',
       clipName: PISTOL_JUMP_CLIP,
-      sourceId: packSourceId('hg', PISTOL_JUMP_CLIP),
+      sourceId: HANDGUN_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'pistol-jump-loop',
@@ -497,7 +466,7 @@ function buildPistolStates(): AnimationControllerStateV1[] {
       locomotion: 'jump_loop',
       stanceId: 'pistol',
       clipName: PISTOL_JUMP_LOOP_CLIP,
-      sourceId: packSourceId('hg', PISTOL_JUMP_LOOP_CLIP),
+      sourceId: HANDGUN_LOCOMOTION_SOURCE_ID,
     },
     {
       id: 'pistol-jump-land',
@@ -505,7 +474,7 @@ function buildPistolStates(): AnimationControllerStateV1[] {
       locomotion: 'jump_land',
       stanceId: 'pistol',
       clipName: PISTOL_JUMP_CLIP,
-      sourceId: packSourceId('hg', PISTOL_JUMP_CLIP),
+      sourceId: HANDGUN_LOCOMOTION_SOURCE_ID,
     },
   ];
 }

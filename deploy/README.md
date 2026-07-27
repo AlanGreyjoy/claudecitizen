@@ -43,6 +43,43 @@ npx netlify deploy --dir dist --site asteron-play --prod --no-build
 `--no-build` matters: without it the CLI finds `docs/netlify.toml` and tries to
 build the documentation site instead of uploading the release.
 
+## Deploying from the editor
+
+The **Deploy** menu drives both halves so you do not have to run any of the above
+by hand. It is the same pipeline, not a second one — the default steps are
+transcribed from this document and every one of them is editable.
+
+| Menu item | What it runs |
+|-----------|--------------|
+| Deploy → Backend… | Opens SSH, runs the step list on the box, then GETs the health URL |
+| Deploy → Front End… | `build:project-web` locally, then `netlify deploy --prod --no-build` |
+
+Each opens its own dialog holding only the settings that half needs, a live log,
+and its own Deploy button. The backend dialog also has **Test connection**, which
+runs `uname` and `docker version` and checks the remote path is a git checkout.
+
+Settings, **including the password**, live in `~/.asteron/deploy.json` at mode
+0600 — per machine, never in the project and never in this repo. The password is
+held in the Electron main process; the renderer only ever learns whether one is
+set. Leave the password field blank to keep the stored one, or set a private key
+path to use key auth instead.
+
+Under the backend dialog's Pipeline tab, step commands expand `{{remotePath}}`,
+`{{branch}}`, `{{gitRemote}}`, `{{envFile}}` and `{{compose}}` (the full
+`docker compose -f … --env-file …` prefix) from the fields above them, so
+changing the branch does not mean rewriting every command. Steps run in order
+over one SSH session and stop at the first non-zero exit.
+
+**The banner at the top of the backend dialog is the part that matters.** The box
+builds the backend from source and gets that source with `git pull`, so a deploy
+ships whatever is on `origin/<branch>` — never your working tree. The dialog
+compares local HEAD against the remote branch and warns about uncommitted or
+unpushed work before you click. A clean banner means the commit you are looking
+at is the commit that will ship.
+
+Cancel closes the SSH session; it does not stop a `docker compose build` already
+running on the box.
+
 ---
 
 ## 1. Server: DNS and certificates
@@ -179,7 +216,7 @@ dies with `address already in use`. `!override` replaces the base list;
 |---------|-------|
 | Every API call fails CORS | `CLIENT_ORIGIN` does not byte-match the browser's origin, or has a trailing slash |
 | Login appears to succeed, next request is anonymous | `COOKIE_SAME_SITE` is not `none`, or `COOKIE_SECURE` is not `true` |
-| Every character stands in T-pose | Animation clip GLBs are missing from the release. Load the game and check the network panel for a 404 on `/assets/animations/…`. The clips are referenced by the animation controller, not by any prefab, so the release build copies them from `src/player/animation/data/*.controller.json`; the build warns for each source the project's asset library does not have. |
+| Every character stands in T-pose | Animation clip GLBs are missing from the release. Load the game and check the network panel for a 404 on `/assets/animations/…`. Stance packs are `ProRifle/locomotion.glb` / `HandgunLocomotions/locomotion.glb` (build with `npm run pack:anims -- --project <root>`). The clips are referenced by the animation controller, not by any prefab, so the release build copies them from `src/player/animation/data/*.controller.json`; the build warns for each source the project's asset library does not have. |
 | Game loads, players never see each other | Three distinct causes: the two players are in different authoritative cells (see below); UDP 4433 is blocked; or the WebTransport listener fell back to self-signed because it could not read `/certs/privkey.pem` |
 | `WebTransport` connect fails after ~14 days | Running on a self-signed certificate; browsers cap hashed certs at 14 days |
 | Requests blocked as mixed content | `backendUrl` in the release is `http://` |
