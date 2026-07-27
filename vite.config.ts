@@ -17,7 +17,9 @@ const SIDEKICK_VIRTUAL_URL_PREFIX = '/asteron/content/synty-sidekick/';
  */
 const OPTIONAL_RUNTIME_ASSET_URLS = [
   `${SIDEKICK_VIRTUAL_URL_PREFIX}manifest.json`,
+  // Both layouts the engine tries at runtime (UNIVERSAL_ANIMATION_LIBRARY_URLS).
   '/assets/protected/animations/universal-animation-library/UAL1_Standard.glb',
+  '/assets/animations/universal-animation-library-1/UAL1_Standard.glb',
   '/assets/protected/characters/SM_Chr_ScifiWorlds_AlienArmor_01.glb',
   '/assets/protected/characters/SM_Chr_ScifiWorlds_AlienChef_01.gltf',
   '/assets/protected/characters/SM_Chr_ScifiWorlds_AlienCombat_01.gltf',

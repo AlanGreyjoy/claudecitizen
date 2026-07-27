@@ -11,7 +11,7 @@ import type {
 import {
   findFirstSkinnedMesh,
   retargetUnityHumanoidAnimations,
-  UNIVERSAL_ANIMATION_LIBRARY_URL,
+  UNIVERSAL_ANIMATION_LIBRARY_URLS,
 } from '../../characters/unity-humanoid-retarget';
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player-character-appearance';
 import { createSidekickGameplayAvatar } from '../../characters/sidekick/gameplay-avatar';
@@ -20,7 +20,7 @@ import { applyDefaultFrustumCulling } from '../../frustum-policy';
 import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment-attach';
 import type { InventoryState } from '../../../player/inventory/types';
 
-const UAL_AVATAR_URL = UNIVERSAL_ANIMATION_LIBRARY_URL;
+const UAL_AVATAR_URL = UNIVERSAL_ANIMATION_LIBRARY_URLS;
 const PROTECTED_CHARACTER_URL_PREFIX = '/assets/protected/characters/';
 const DEFAULT_CHARACTER_AVATAR_ID = 'ual-mannequin';
 const FALLBACK_CHARACTER_AVATAR_ID = 'ual-mannequin';
@@ -37,11 +37,14 @@ const LOOPING_CLIPS = new Set([
 type CharacterAvatarRig = 'three-gltf' | 'unity-humanoid';
 type AvatarAnimationBinding = 'scene' | 'skinned-mesh';
 
+/** One URL, or candidates tried in order — see UNIVERSAL_ANIMATION_LIBRARY_URLS. */
+type AvatarAssetUrl = string | readonly string[];
+
 interface CharacterAvatarSpec {
-  animationUrl?: string;
+  animationUrl?: AvatarAssetUrl;
   id: string;
   label: string;
-  modelUrl: string;
+  modelUrl: AvatarAssetUrl;
   rig: CharacterAvatarRig;
   visibleBodyMeshNames?: string[];
 }
@@ -148,11 +151,26 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function loadGltf(url: string): Promise<GLTF> {
+function loadGltfUrl(url: string): Promise<GLTF> {
   return new Promise((resolve, reject) => {
     const loader = new GLTFLoader();
     loader.load(url, resolve, undefined, reject);
   });
+}
+
+/** Licensed packs land under different folder names per project, so a spec may
+ *  carry several candidate URLs. First one that loads wins. */
+async function loadGltf(url: AvatarAssetUrl): Promise<GLTF> {
+  const candidates = typeof url === 'string' ? [url] : url;
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      return await loadGltfUrl(candidate);
+    } catch (error: unknown) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error('No avatar asset URL was provided.');
 }
 
 function requestedAvatarId(): string | null {

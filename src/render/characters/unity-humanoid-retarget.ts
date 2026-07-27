@@ -4,10 +4,21 @@ import { retargetClip } from 'three/examples/jsm/utils/SkeletonUtils.js';
 /**
  * Retarget skeleton and default mannequin. Licensed pack content, so it is
  * project-supplied under the open project's asset library rather than bundled
- * with the engine.
+ * with the engine — which means the engine cannot assume one layout. Projects
+ * created from the hub use the first path; the pack is just as often imported
+ * under its own vendor folder name, as the second.
+ *
+ * Both are tried in order. This is not cosmetic: the mannequin is the avatar
+ * every remote player falls back to when their appearance has not arrived yet,
+ * so a 404 here renders other players invisible rather than generic.
  */
-export const UNIVERSAL_ANIMATION_LIBRARY_URL =
-  '/assets/protected/animations/universal-animation-library/UAL1_Standard.glb';
+export const UNIVERSAL_ANIMATION_LIBRARY_URLS: readonly string[] = [
+  '/assets/protected/animations/universal-animation-library/UAL1_Standard.glb',
+  '/assets/animations/universal-animation-library-1/UAL1_Standard.glb',
+];
+
+/** Documented pack location. Prefer the list above when loading. */
+export const UNIVERSAL_ANIMATION_LIBRARY_URL = UNIVERSAL_ANIMATION_LIBRARY_URLS[0]!;
 
 export const UNITY_HUMANOID_TO_UAL_BONES: Record<string, string> = {
   Hips: 'pelvis',

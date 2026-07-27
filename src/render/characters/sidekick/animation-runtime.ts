@@ -6,6 +6,7 @@ import {
   findFirstSkinnedMesh,
   retargetUnityHumanoidAnimations,
   UNIVERSAL_ANIMATION_LIBRARY_URL,
+  UNIVERSAL_ANIMATION_LIBRARY_URLS,
 } from '../unity-humanoid-retarget';
 import { createUpperParentCompensation } from './upper-parent-compensation';
 
@@ -55,14 +56,19 @@ const gltfLoader = new GLTFLoader();
 
 function loadAnimationLibrary(): Promise<AnimationLibraryAsset> {
   if (!animationLibraryPromise) {
-    const loading = new Promise<AnimationLibraryAsset>((resolve, reject) => {
-      gltfLoader.load(
-        UNIVERSAL_ANIMATION_LIBRARY_URL,
-        (gltf) => resolve({ scene: gltf.scene, animations: gltf.animations }),
-        undefined,
-        reject,
-      );
-    }).catch((error: unknown) => {
+    // Projects place the licensed pack under different folder names, so every
+    // candidate is tried before this is treated as a missing pack.
+    const loading = (async () => {
+      let lastError: unknown = null;
+      for (const url of UNIVERSAL_ANIMATION_LIBRARY_URLS) {
+        try {
+          return await loadGltf(url);
+        } catch (error: unknown) {
+          lastError = error;
+        }
+      }
+      throw lastError ?? new Error('No animation library URL was provided.');
+    })().catch((error: unknown) => {
       animationLibraryPromise = null;
       throw error;
     });
