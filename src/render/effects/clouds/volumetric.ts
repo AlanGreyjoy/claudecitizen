@@ -18,10 +18,21 @@ import { BlendFunction, type NormalPass } from 'postprocessing';
 import { resolveRenderQuality } from '../../main/domain/render-quality';
 
 const GROUND_ALBEDO = new THREE.Color(0x56704b);
+// One sibling asset resolves the directory the rest are loaded from. Strip the
+// filename rather than a literal one: a release build content-hashes it to
+// transmittance-<hash>.exr, so matching on the exact name left the whole file
+// URL in place and every sibling was requested as <file>.exr/scattering.exr.
+//
+// KNOWN GAP: this makes the directory correct, but a release still 404s on the
+// siblings. Only transmittance.exr is imported, so Vite emits only that one —
+// scattering, irradiance, and higher_order_scattering never reach the bundle.
+// Fixing that needs them emitted unhashed at a stable path (an assetFileNames
+// rule for .exr, or moving the set to public/), which is a build decision, not
+// a URL one. Atmosphere LUTs stay absent in shipped builds until then.
 const PRECOMPUTED_TEXTURES_URL = new URL(
   '../../../assets/atmosphere/transmittance.exr',
   import.meta.url,
-).href.replace(/transmittance\.exr$/, '');
+).href.replace(/[^/]*$/, '');
 const MIN_VOLUMETRIC_ALTITUDE_METERS = 0;
 
 interface CloudDebugState {
