@@ -139,6 +139,55 @@ the login scene's authored link to `character-creation` → `main-game`. Players
 missing an appearance are still gated — `resolveSceneBootstrap` shows the
 character creator inline before the world loads.
 
+## What the launch broke, and why the checks missed it
+
+Everything in the verification table above passed, and the deployment was still
+unplayable in two ways. Both failures are invisible to a health check because
+neither the API nor the transport is at fault.
+
+### Every character stood in T-pose
+
+Animation clips are referenced by the **animation controller document**
+(`src/player/animation/data/default.controller.json` → `sources[].url`), not by
+any prefab. The release build's asset copier walks `*.prefab.json` to decide what
+to ship, so it never saw them and `/assets/animations/ProRifle/idle.glb` returned
+404 in production. The Sidekick avatar assembled fine — it just had no clips, and
+an animated skeleton with nothing playing is a T-pose.
+
+The build now also scans `src/player/animation/data/*.controller.json` and ships
+every `sources[].url` it finds, warning for each one the project's asset library
+does not have. All 12 sources in the current controller resolve.
+
+One separate path is still dead, and it is not what caused the T-pose:
+`UNIVERSAL_ANIMATION_LIBRARY_URL` in `unity-humanoid-retarget.ts` hardcodes
+`/assets/protected/animations/universal-animation-library/UAL1_Standard.glb`,
+while the project keeps that pack at
+`assets/animations/universal-animation-library-1/`. Gameplay never needs it —
+retargeting reads the clip GLB and the Sidekick rig directly — but the default
+mannequin used for NPC fallbacks does. Move the file to the documented path to
+restore it.
+
+### Players could not see each other
+
+Not the ports, and not the certificate. Presence is broadcast per **cell**, and
+the cell comes from the session ticket — the player's stored
+`currentInstanceId`. The `Join` the client sends on connect is *ignored* by the
+server; only a `Transition` moves a player between cells.
+
+Registration puts every new account in `apartment:<id>`, a private instance.
+Nothing in the BlackMarket scene ever transitioned out of it, so both players
+were connected, healthy, publishing presence — into two separate cells.
+
+Scene kind `instance` now means what it says: the play session transitions into
+`scene:<scene id>` immediately after connecting, so everyone who loads that scene
+shares one cell. `main-game` scenes are unchanged; their elevators still
+transition to `station:public`.
+
+Registration also keyed that starting apartment by **user** id while
+`/game/bootstrap` reported — and `authorize_instance` checked — the **player**
+id, so the apartment a player started in was one they could never transition back
+to. Fixed in `auth.rs`; migration `0019` re-keys existing rows.
+
 ## Known gaps
 
 - **Cold load is 195 MB**, dominated by a 97 MB uncompressed `BlackMarket.glb`

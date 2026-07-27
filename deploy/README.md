@@ -179,6 +179,33 @@ dies with `address already in use`. `!override` replaces the base list;
 |---------|-------|
 | Every API call fails CORS | `CLIENT_ORIGIN` does not byte-match the browser's origin, or has a trailing slash |
 | Login appears to succeed, next request is anonymous | `COOKIE_SAME_SITE` is not `none`, or `COOKIE_SECURE` is not `true` |
-| Game loads, players never see each other | UDP 4433 blocked, or the WebTransport listener fell back to self-signed because it could not read `/certs/privkey.pem` |
+| Every character stands in T-pose | Animation clip GLBs are missing from the release. Load the game and check the network panel for a 404 on `/assets/animations/…`. The clips are referenced by the animation controller, not by any prefab, so the release build copies them from `src/player/animation/data/*.controller.json`; the build warns for each source the project's asset library does not have. |
+| Game loads, players never see each other | Three distinct causes: the two players are in different authoritative cells (see below); UDP 4433 is blocked; or the WebTransport listener fell back to self-signed because it could not read `/certs/privkey.pem` |
 | `WebTransport` connect fails after ~14 days | Running on a self-signed certificate; browsers cap hashed certs at 14 days |
 | Requests blocked as mixed content | `backendUrl` in the release is `http://` |
+
+## Which instance a player lands in
+
+Presence is broadcast per **cell**, and the cell comes from the session ticket —
+the player's stored `currentInstanceId` — not from the scene they loaded. The
+`Join` the client sends on connect is ignored by the server; only a `Transition`
+moves a player between cells.
+
+New accounts start in `apartment:<player id>`, which is private. So two players
+loading the same scene are in two different cells and see nothing of each other,
+with a healthy connection and open ports throughout.
+
+A scene of kind **`instance`** is a shared place: the play session transitions
+into `scene:<scene id>` right after connecting, so everyone who loads that scene
+shares one cell. `main-game` scenes keep the station flow, where the elevator
+interactions transition to `station:public`.
+
+Check who is where:
+
+```bash
+docker compose ... exec postgres \
+  psql -U claude -d claude_citizen \
+  -c 'SELECT "handle", "currentInstanceId", "currentRoomId" FROM "Player";'
+```
+
+Two rows with different `currentInstanceId` values is the whole bug.
