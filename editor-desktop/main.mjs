@@ -1000,8 +1000,12 @@ if (!hasSingleInstanceLock) {
     });
 
     const result = await new Promise((resolveResult) => {
-      const child = spawn(npmCommand, ['run', 'build:web'], {
-        cwd: projectRoot,
+      // Runs in the engine checkout, not the project: the project owns content
+      // but the engine owns index.html, the Vite config, and every bundling
+      // glob. build_project_web.mjs stages the two together and writes the
+      // release into the project's configured build.outDir.
+      const child = spawn(npmCommand, ['run', 'build:project-web', '--', '--project', projectRoot], {
+        cwd: repositoryRoot,
         env: { ...process.env, CI: '1' },
         stdio: ['ignore', 'pipe', 'pipe'],
       });

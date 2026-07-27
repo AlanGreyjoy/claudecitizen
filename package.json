@@ -14,6 +14,7 @@
     "build:editor:desktop": "npm run build:editor:web && electron-builder --projectDir editor-desktop --dir",
     "build:wasm": "node scripts/build_wasm.mjs",
     "build:web": "npm run build:wasm && tsc --noEmit && vite build",
+    "build:project-web": "node scripts/build_project_web.mjs",
     "build:server": "cargo build --locked --release --manifest-path backend/Cargo.toml -p cc-server",
     "dev:infra": "docker compose up -d postgres redis mailpit",
     "dev:server": "watchexec --restart --stop-timeout 20s --no-vcs-ignore --watch backend --watch proto --watch rust-toolchain.toml -- cargo run --locked --manifest-path backend/Cargo.toml -p cc-server",

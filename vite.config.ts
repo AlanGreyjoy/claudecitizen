@@ -471,17 +471,22 @@ const editorBridgeTarget = editorBridgePort
   ? `http://127.0.0.1:${editorBridgePort}`
   : null;
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), copyReferencedGameAssets()],
   build: {
     rollupOptions: {
       // `index.html` is the shipped game; `editor.html` is the AsteronEngine
-      // renderer that Electron loads. Both ship in the editor bundle so
-      // in-editor Play can open the game entry from the same origin.
-      input: {
-        index: resolve(process.cwd(), 'index.html'),
-        editor: resolve(process.cwd(), 'editor.html'),
-      },
+      // renderer that Electron loads. The editor bundle ships both so in-editor
+      // Play can open the game entry from the same origin. A public release
+      // ships only the game — the editor chunk is dead weight there, and a
+      // public build has no business serving an authoring surface at all.
+      input:
+        mode === 'editor'
+          ? {
+              index: resolve(process.cwd(), 'index.html'),
+              editor: resolve(process.cwd(), 'editor.html'),
+            }
+          : { index: resolve(process.cwd(), 'index.html') },
     },
   },
   // Electron `--dev` starts Vite and proxies editor APIs + project asset mounts
@@ -508,4 +513,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
   },
-});
+}));
