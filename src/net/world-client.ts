@@ -239,6 +239,7 @@ function buildPresenceShipRig(world: WorldState) {
   return {
     gear01: rig.gear01,
     ramp01: rig.ramp01,
+    canopy01: rig.canopy01,
     doors: Object.fromEntries(
       Object.entries(rig.doors).map(([id, door]) => [id, door.open01]),
     ),

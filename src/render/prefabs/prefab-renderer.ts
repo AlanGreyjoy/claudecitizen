@@ -59,7 +59,7 @@ interface BoundAnimation {
 }
 
 type AnimationPrefabComponent = PrefabComponent & {
-  type: "animation";
+  type: "animation" | "door";
   _bindAttempts?: number;
 };
 
@@ -611,7 +611,7 @@ function attachLoadedAsset(
 
   const bindAllDescendantAnimations = (curr: PrefabEntity) => {
     for (const component of curr.components ?? []) {
-      if (component.type === 'animation') {
+      if (component.type === 'animation' || component.type === 'door') {
         bindAnimationComponent(options.rootGroup, model, component);
       }
       if (
@@ -662,7 +662,7 @@ function bindStaticEntityAnimations(
   options: BuildEntityOptions,
 ): void {
   for (const component of entity.components ?? []) {
-    if (component.type === 'animation') {
+    if (component.type === 'animation' || component.type === 'door') {
       bindAnimationComponent(options.rootGroup, group, component);
     }
     if (component.type === 'object-animation') {

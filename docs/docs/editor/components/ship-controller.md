@@ -21,8 +21,9 @@ One **ship-controller** singleton on the hull GLB entity replaces the older scat
 - **gear.deploySoundUrl / retractSoundUrl** — optional landing-gear SFX
 - **ramp** — hinge + outside/deck interact entity ids
 - **ramp.openSoundUrl / closeSoundUrl** — optional cargo-ramp SFX
+- **canopy** — cockpit canopy hinge + optional SFX; exterior entry only, see [Canopy](#canopy)
 - **doors[]** — legacy GLB node motion + interact entity id (prefer Ship Door markers)
-- **seats[]** — role, entity id, eye/stand offsets
+- **seats[]** — which entities are seats, and their order; settings live on each marker's [Ship seat](./ship-seat) component
 - **cameraBounds[]** — interior camera clamp volumes
 - **deckSpawnEntityId** — optional spawn marker
 - **entry** — `interior` (default) or `exterior`; see [Entry mode](#entry-mode)
@@ -63,34 +64,11 @@ Place transform-only child entities for interact spots (`ramp-button-outside`, `
 
 ### Seats
 
-A seat is an empty registered in `seats[]`. The empty is the seated character's **root**, and the avatar renders its model with the feet on that origin — so the marker belongs **on the deck under the chair, not on the cushion**.
+`seats[]` decides **which** entities are seats and in what order — the first pilot-role seat drives flight anchors. The per-seat settings live on each marker's own **[Ship seat](./ship-seat)** component, so you edit them where the gizmo is instead of hunting back through the hull's inspector.
 
-| Field | Meaning |
-| --- | --- |
-| Marker position | Character root — floor level under the seat |
-| `role` | `pilot` flies; `copilot` / `turret` / `passenger` are seated only |
-| `eye` | Offset from the marker to the cockpit camera (scene axes; default `0, 0.87, 0.25`) |
-| `stand` | Get-up spot beside the chair (scene XZ; default `0, −1.55`) |
-| `interactRadius` | Reach for the "take the seat" prompt (default 1.45) |
+Dropping an empty into the seat list adds a Ship Seat component to it automatically if it does not have one. Adding the component by hand also works: an unlisted `ship-seat` is adopted at bake and appended after the listed seats.
 
-:::caution Tune first-person with `eye`, not the marker
-
-Raising the marker to make the cockpit view feel right lifts the **whole body** with it — the character ends up floating above the chair and the sitting animation reads as sitting on top of the seat. The marker only sets where the body goes. Put it on the floor, then raise `eye.y` until the view sits where you want it.
-
-:::
-
-### Seat gizmos
-
-The referenced empty carries no component of its own, so the viewport draws its gizmo from the controller reference — it appears the moment you drop the empty into the seat list, and disappears when you remove it.
-
-| Part | Meaning |
-| --- | --- |
-| Flat disc + ring at the marker | Character root; keep this on the deck |
-| Sphere at the top of the stem | The `eye` point — where the cockpit camera lands |
-| Stem | The `eye` offset you are authoring |
-| Flat ring off to the side | `stand` — get-up spot |
-
-Colour follows the role: **pilot** green, **copilot** blue, **turret** orange, **passenger** grey. Drag the empty with the gizmo and the whole seat marker follows.
+Prefabs authored before the component existed still parse — the inline `role` / `eye` / `stand` / `interactRadius` fields on each `seats[]` entry remain as a fallback, and are overridden field-by-field by the component when one is present.
 
 ## Entry mode
 
@@ -104,6 +82,22 @@ Colour follows the role: **pilot** green, **copilot** blue, **turret** orange, *
 Use `exterior` for open-frame hulls — hovercraft, buggies, single-seat fighters — anything the player never walks around inside. It changes what the Ship tab validates: the "no deck colliders" and "no deck spawn hint" blockers disappear, and a **pilot-role seat becomes required** instead (there is no deck to fall back to).
 
 `exterior` skips deck Rapier entirely, so ramp and door colliders are never consulted for locomotion. Gear, ramp, and door *animation* still play.
+
+## Canopy
+
+An optional flip-up cockpit canopy, driven from the pilot seat. The section only appears in the inspector when **Entry** is `exterior`, and the bake drops the canopy on `interior` hulls.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `enabled` | boolean | The inspector checkbox. Unchecking removes the whole `canopy` block |
+| `hinge.node` | string | GLB node to rotate — drag it from the Hierarchy onto the field |
+| `hinge.openRadians` | number | Fully-open angle, clamped to ±10 rad |
+| `hinge.axis` | `x`\|`y`\|`z`? | Rotation axis, default `x` |
+| `openSoundUrl` / `closeSoundUrl` | audio asset? | One-shot SFX on toggle |
+
+Authoring: tick **Enabled**, drag the canopy node onto **Hinge**, set **Open °**, then press **Play** in the Canopy row (or the **Canopy** toolbar chip) to swing it in the viewport at the in-game rate. Clicking mid-swing reverses it.
+
+In game the pilot toggles it while seated with the **Toggle Canopy** key (default **N**, rebindable in Controls), or by gaze-clicking a **[Cockpit control](./cockpit-control)** marker whose action is `canopy`. The canopy is animation only — it gets no collider, since exterior-entry hulls have no walkable deck to block. The open blend replicates to other players.
 
 ## Walking
 

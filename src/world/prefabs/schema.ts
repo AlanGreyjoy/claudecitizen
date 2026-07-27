@@ -108,11 +108,12 @@ export type ShipEntryMode = "interior" | "exterior";
 export const SHIP_ENTRY_MODES: ShipEntryMode[] = ["interior", "exterior"];
 
 /** Actions for cockpit look-at controls (Hold F free-look + click). */
-export type CockpitControlAction = "landing-gear" | "cargo-ramp";
+export type CockpitControlAction = "landing-gear" | "cargo-ramp" | "canopy";
 
 export const COCKPIT_CONTROL_ACTIONS: CockpitControlAction[] = [
   "landing-gear",
   "cargo-ramp",
+  "canopy",
 ];
 
 /** Readout kinds for cockpit-stat instruments (always-on while piloting). */
@@ -412,6 +413,44 @@ export type PrefabComponent =
       duration?: number;
     }
   /**
+   * Station F-key door (self-contained, like ship-door). Empty marker is the
+   * interact target; binds GLB nodes + deltas. Prefer over animation+interaction
+   * pairs for new station doors.
+   */
+  | {
+      type: "door";
+      /** Unique within the prefab. */
+      id: string;
+      /** Display name for prompts ("Press F — open {label}"). */
+      label: string;
+      motion: "slide" | "hinge";
+      /** Node-local axis the motion happens on. */
+      axis: "x" | "y" | "z";
+      /** GLB node names + signed open delta (slide: meters, hinge: radians). */
+      nodes: {
+        name: string;
+        delta: number;
+        /** Unique ancestor when duplicate bone/node names exist. */
+        under?: string;
+      }[];
+      /**
+       * How F-key interact is detected (default radial).
+       * radial = stand inside the sphere; raycast = aim camera at the marker within radius.
+       */
+      trigger?: "radial" | "raycast";
+      /** Interact distance from the entity (radial stand reach / raycast max range; default 1.6). */
+      radius?: number;
+      /** Raycast-only: max perpendicular miss from the camera ray to the marker (default 0.35). */
+      aimRadius?: number;
+      defaultOpen?: boolean;
+      /** Seconds to fully open/close (default 1). */
+      duration?: number;
+      /** One-shot SFX when the door opens (asset browser drag). */
+      openSoundUrl?: string;
+      /** One-shot SFX when the door closes. */
+      closeSoundUrl?: string;
+    }
+  /**
    * Continuous cosmetic motion (spin / hover). Empty `nodes` animates the
    * host entity visual root; otherwise named GLB nodes are driven.
    * Visual only — does not move colliders.
@@ -622,7 +661,7 @@ export type PrefabComponent =
        * GLB nodes to leave out of this bake, subtree included. A mesh collider
        * swallows every child it can reach, which is usually what you want —
        * this is the carve-out for parts that must not be solid, or that carry
-       * their own moving collider. Door and ramp nodes are excluded
+       * their own moving collider. Door, ramp, and canopy nodes are excluded
        * automatically and need no entry here.
        */
       excludeNodes?: string[];
@@ -631,8 +670,8 @@ export type PrefabComponent =
   | { type: "ship-frame" }
   /**
    * Singleton ship wiring on the hull entity: stats, articulation, doors,
-   * seats, ramp interacts, camera bounds, and deck spawn. Child empties are
-   * referenced by entity id for gizmo placement.
+   * seats, ramp interacts, canopy, camera bounds, and deck spawn. Child
+   * empties are referenced by entity id for gizmo placement.
    */
   | {
       type: "ship-controller";
@@ -717,6 +756,19 @@ export type PrefabComponent =
         /** SFX when ramp raises (rampDown → false). */
         closeSoundUrl?: string;
       };
+      /**
+       * Cockpit canopy hinge. Exterior-entry ships only — the bake drops it
+       * for `interior` hulls. `enabled` is the authoring checkbox; an
+       * un-enabled block bakes to nothing.
+       */
+      canopy?: {
+        enabled?: boolean;
+        hinge: { node: string; openRadians: number; axis?: "x" | "y" | "z" };
+        /** SFX when the canopy opens (canopyOpen → true). */
+        openSoundUrl?: string;
+        /** SFX when the canopy closes (canopyOpen → false). */
+        closeSoundUrl?: string;
+      };
       doors?: {
         id: string;
         label: string;
@@ -735,11 +787,22 @@ export type PrefabComponent =
         openSoundUrl?: string;
         closeSoundUrl?: string;
       }[];
+      /**
+       * Which entities are seats, and their order — the first pilot-role seat
+       * drives flight anchors. Per-seat settings live on the entity's own
+       * `ship-seat` component; the inline fields below are the legacy
+       * fallback for prefabs authored before that component existed and are
+       * overridden by the component when present.
+       */
       seats?: {
-        role?: ShipSeatRole;
         entityId: string;
+        /** @deprecated Author on the entity's `ship-seat` component. */
+        role?: ShipSeatRole;
+        /** @deprecated Author on the entity's `ship-seat` component. */
         eye?: Vec3;
+        /** @deprecated Author on the entity's `ship-seat` component. */
         stand?: PrefabVec2;
+        /** @deprecated Author on the entity's `ship-seat` component. */
         interactRadius?: number;
       }[];
       deckSpawnEntityId?: string;
@@ -827,6 +890,27 @@ export type PrefabComponent =
       /** Eye offset from the seat in scene axes (default {0, 0.87, 0.25}). */
       eye?: Vec3;
       /** Stand-up spot offset from the seat in scene XZ (default {0, -1.55}). */
+      stand?: PrefabVec2;
+      /** Interact distance around the chair (default 1.45). */
+      interactRadius?: number;
+    }
+  /**
+   * Seat settings on the seat marker itself. The entity's own position is the
+   * seated character's **root** — the avatar renders with its feet there, so
+   * the marker belongs at deck level under the chair, not on the cushion.
+   * `eye` is what tunes the first-person view.
+   *
+   * `ship-controller.seats[]` lists which entities are seats (and their order);
+   * this component supplies the per-seat settings and wins over the matching
+   * legacy fields in that list.
+   */
+  | {
+      type: "ship-seat";
+      /** pilot = flight controls; others are seated-only. */
+      role?: ShipSeatRole;
+      /** Eye offset from the marker in scene axes (default {0, 0.87, 0.25}). */
+      eye?: Vec3;
+      /** Stand-up spot offset from the marker in scene XZ (default {0, -1.55}). */
       stand?: PrefabVec2;
       /** Interact distance around the chair (default 1.45). */
       interactRadius?: number;

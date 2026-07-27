@@ -23,6 +23,7 @@ export function createViewportShipPreview(
   let shipPreview: ShipPreviewState = {
     gearDown: true,
     rampDown: false,
+    canopyOpen: false,
     doorsOpen: {},
   };
   const articulationBase = new WeakMap<
@@ -176,7 +177,11 @@ export function createViewportShipPreview(
     const visit = (entities: EditorEntity[]): void => {
       for (const entity of entities) {
         for (const component of entity.components) {
-          if (component.type === "ship-door" || component.type === "animation") {
+          if (
+            component.type === "ship-door" ||
+            component.type === "door" ||
+            component.type === "animation"
+          ) {
             byId.set(component.id, {
               id: component.id,
               motion: component.motion,
@@ -236,6 +241,20 @@ export function createViewportShipPreview(
     );
   }
 
+  function applyShipCanopyPreview(quiet: boolean): void {
+    if (store.getState().kind !== "ship") return;
+    const canopy = findShipController()?.canopy;
+    if (!canopy?.enabled || !canopy.hinge?.node) return;
+    const canopy01 = shipPreview.canopy01 ?? (shipPreview.canopyOpen ? 1 : 0);
+    previewHinge(
+      canopy.hinge.node,
+      canopy.hinge.openRadians * canopy01,
+      canopy.hinge.axis ?? "x",
+      undefined,
+      quiet,
+    );
+  }
+
   function applyDoorAnimationPreview(quiet: boolean): void {
     for (const anim of collectAnimations()) {
       const open = shipPreview.doorsOpen[anim.id] ?? anim.defaultOpen ?? false;
@@ -265,6 +284,7 @@ export function createViewportShipPreview(
   function applyShipPreview(options?: { quiet?: boolean }): void {
     const quiet = options?.quiet ?? false;
     applyShipGearRampPreview(quiet);
+    applyShipCanopyPreview(quiet);
     applyDoorAnimationPreview(quiet);
   }
 

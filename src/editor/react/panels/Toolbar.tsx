@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type RefObject,
 } from 'react';
 import type { PlanetListEntry, PrefabListEntry, SceneListEntry } from '../../api';
 import type { EditorEntity, EditorStore } from '../../document';
@@ -15,7 +16,10 @@ import { PREFAB_KINDS, type PrefabKind } from '../../../world/prefabs/schema';
 import { UiIcons } from '../../../ui/icons';
 import { UiIcon } from '../UiIcon';
 import { useEditorStore } from '../hooks';
-import { RAMP_RATE_PER_SECOND } from '../../../player/ship-rig';
+import {
+  CANOPY_RATE_PER_SECOND,
+  RAMP_RATE_PER_SECOND,
+} from '../../../player/ship-rig';
 import type { IconNode } from 'lucide';
 
 export type ToolbarGizmoMode = 'translate' | 'rotate' | 'scale';
@@ -25,8 +29,11 @@ export type BrowsePanelKind = 'prefab' | 'scene' | 'planet' | 'menu';
 export interface ShipPreviewToggles {
   gearDown: boolean;
   rampDown: boolean;
+  canopyOpen: boolean;
   /** Continuous blend while the ramp preview plays; overrides `rampDown`. */
   ramp01?: number;
+  /** Continuous blend while the canopy preview plays; overrides `canopyOpen`. */
+  canopy01?: number;
   doorsOpen: Record<string, boolean>;
 }
 
@@ -34,6 +41,7 @@ export interface ToolbarActions {
   onGizmoMode: (mode: ToolbarGizmoMode) => void;
   onGizmoSpace: (space: 'local' | 'world') => void;
   onSnapChange: (enabled: boolean, translateStep: number, rotateStepDegrees: number) => void;
+  onEnvironmentLightsChange: (enabled: boolean) => void;
   onFocusSelection: () => void;
   onAddBox: () => void;
   onAddEmpty: () => void;
@@ -54,7 +62,7 @@ export interface ToolbarActions {
   onBuildWeb: () => void;
   onOpenProject: () => void;
   onExit: () => void;
-  /** Ship kind: editor-viewport articulation preview (gear / ramp / doors). */
+  /** Ship kind: editor-viewport articulation preview (gear / ramp / canopy / doors). */
   onShipPreviewChange: (state: ShipPreviewToggles) => void;
   playing: boolean;
   paused: boolean;
@@ -70,6 +78,8 @@ export interface ToolbarHandle {
   toggleDoorPreview: (doorId: string) => void;
   /** Animate the boarding ramp between raised and lowered in the viewport. */
   playRampPreview: () => void;
+  /** Animate the cockpit canopy between closed and open in the viewport. */
+  playCanopyPreview: () => void;
   openBrowsePanel: (panel: BrowsePanelKind) => void;
 }
 
@@ -100,7 +110,10 @@ function collectAnimations(roots: EditorEntity[]): AnimPreview[] {
   const visit = (entities: EditorEntity[]): void => {
     for (const entity of entities) {
       for (const component of entity.components) {
-        if (component.type === 'ship-door' && !list.some((entry) => entry.id === component.id)) {
+        if (
+          (component.type === 'ship-door' || component.type === 'door') &&
+          !list.some((entry) => entry.id === component.id)
+        ) {
           list.push({
             id: component.id,
             label: component.label || component.id,
@@ -122,6 +135,89 @@ function collectAnimations(roots: EditorEntity[]): AnimPreview[] {
   };
   visit(roots);
   return list;
+}
+
+/** Canopy chip only shows once a ship-controller actually enables one. */
+function hasEnabledCanopy(roots: EditorEntity[]): boolean {
+  for (const entity of roots) {
+    for (const component of entity.components) {
+      if (component.type === 'ship-controller' && component.canopy?.enabled) {
+        return true;
+      }
+    }
+    if (hasEnabledCanopy(entity.children)) return true;
+  }
+  return false;
+}
+
+/** Viewport articulation chips: gear / ramp / canopy on ships, plus every door. */
+function ShipPreviewChips({
+  isShip,
+  hasCanopy,
+  animations,
+  shipPreview,
+  onToggleGear,
+  onPlayRamp,
+  onPlayCanopy,
+  onToggleDoor,
+}: {
+  isShip: boolean;
+  hasCanopy: boolean;
+  animations: AnimPreview[];
+  shipPreview: ShipPreviewToggles;
+  onToggleGear: () => void;
+  onPlayRamp: () => void;
+  onPlayCanopy: () => void;
+  onToggleDoor: (doorId: string) => void;
+}): ReactElement {
+  return (
+    <div className="ed-toolbar-group">
+      {isShip ? (
+        <>
+          <button
+            type="button"
+            className={`ed-tool-chip${shipPreview.gearDown ? ' is-active' : ''}`}
+            title="Preview landing gear"
+            onClick={onToggleGear}
+          >
+            Gear
+          </button>
+          <button
+            type="button"
+            className={`ed-tool-chip${shipPreview.rampDown ? ' is-active' : ''}`}
+            title="Play the boarding ramp raise / lower"
+            onClick={onPlayRamp}
+          >
+            Ramp
+          </button>
+          {hasCanopy ? (
+            <button
+              type="button"
+              className={`ed-tool-chip${shipPreview.canopyOpen ? ' is-active' : ''}`}
+              title="Play the cockpit canopy open / close"
+              onClick={onPlayCanopy}
+            >
+              Canopy
+            </button>
+          ) : null}
+        </>
+      ) : null}
+      {animations.map((anim) => {
+        const isOpen = shipPreview.doorsOpen[anim.id] ?? anim.defaultOpen;
+        return (
+          <button
+            key={anim.id}
+            type="button"
+            className={`ed-tool-chip${isOpen ? ' is-active' : ''}`}
+            title={`Preview "${anim.id}" open / closed`}
+            onClick={() => onToggleDoor(anim.id)}
+          >
+            {anim.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function OpenSearchField({
@@ -633,6 +729,7 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
   const [gizmoMode, setGizmoModeState] = useState<ToolbarGizmoMode>('translate');
   const [gizmoSpace, setGizmoSpace] = useState<'local' | 'world'>('world');
   const [snapEnabled, setSnapEnabled] = useState(true);
+  const [environmentLights, setEnvironmentLights] = useState(true);
   const [snapTranslate] = useState('0.25');
   const [snapRotate] = useState('15');
   const [prefabOptions, setPrefabOptions] = useState<PrefabListEntry[]>([]);
@@ -642,6 +739,7 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
   const [shipPreview, setShipPreview] = useState<ShipPreviewToggles>({
     gearDown: true,
     rampDown: false,
+    canopyOpen: false,
     doorsOpen: {},
   });
   const shipPreviewRef = useRef(shipPreview);
@@ -649,16 +747,24 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
     handle: 0,
     target: 0,
   });
-  // A running ramp animation owns the ref; letting a render clobber it would
-  // snap the ramp back mid-play.
-  if (rampAnimRef.current.handle === 0) shipPreviewRef.current = shipPreview;
+  const canopyAnimRef = useRef<{ handle: number; target: number }>({
+    handle: 0,
+    target: 0,
+  });
+  // A running hinge animation owns the ref; letting a render clobber it would
+  // snap the part back mid-play.
+  if (rampAnimRef.current.handle === 0 && canopyAnimRef.current.handle === 0) {
+    shipPreviewRef.current = shipPreview;
+  }
 
   const emitShipPreview = useCallback(
     (next: ShipPreviewToggles) => {
       actions.onShipPreviewChange({
         gearDown: next.gearDown,
         rampDown: next.rampDown,
+        canopyOpen: next.canopyOpen,
         ...(next.ramp01 === undefined ? {} : { ramp01: next.ramp01 }),
+        ...(next.canopy01 === undefined ? {} : { canopy01: next.canopy01 }),
         doorsOpen: { ...next.doorsOpen },
       });
     },
@@ -693,58 +799,100 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
   );
 
   /**
-   * Play the boarding ramp between raised and lowered at the same rate the game
-   * uses, so the authored `lowerRadians` can be judged in motion. Frames only
-   * push to the viewport — React state updates once, on arrival — so a ~4.7s
-   * animation does not re-render the toolbar 280 times.
+   * Play an articulated part between its two rest poses at the same rate the
+   * game uses, so the authored angle can be judged in motion. Frames only push
+   * to the viewport — React state updates once, on arrival — so a multi-second
+   * animation does not re-render the toolbar hundreds of times.
    */
-  const playRampPreview = useCallback(() => {
-    const anim = rampAnimRef.current;
-    if (anim.handle !== 0) window.cancelAnimationFrame(anim.handle);
-    const current = shipPreviewRef.current;
-    const from = current.ramp01 ?? (current.rampDown ? 1 : 0);
-    // Mid-play clicks reverse; otherwise head for the opposite of the resting
-    // state, so a fully lowered ramp raises again.
-    const target = anim.handle !== 0 ? (anim.target > 0.5 ? 0 : 1) : current.rampDown ? 0 : 1;
-    let value = from;
-    let lastMs = 0;
-    anim.target = target;
+  const playHingePreview = useCallback(
+    (spec: {
+      animRef: RefObject<{ handle: number; target: number }>;
+      ratePerSecond: number;
+      /** Live blend, or undefined when the part is resting. */
+      blendOf: (state: ShipPreviewToggles) => number | undefined;
+      /** Resting pose: true = the "1" end of the blend. */
+      restingOpen: (state: ShipPreviewToggles) => boolean;
+      /** Apply a mid-animation blend value. */
+      withBlend: (state: ShipPreviewToggles, value: number) => ShipPreviewToggles;
+      /** Apply the settled resting pose and clear the blend. */
+      withResting: (state: ShipPreviewToggles, open: boolean) => ShipPreviewToggles;
+    }) => {
+      const anim = spec.animRef.current;
+      const wasRunning = anim.handle !== 0;
+      if (wasRunning) window.cancelAnimationFrame(anim.handle);
+      const current = shipPreviewRef.current;
+      // Mid-play clicks reverse; otherwise head for the opposite of the resting
+      // state, so a fully lowered ramp raises again.
+      const target = wasRunning
+        ? anim.target > 0.5
+          ? 0
+          : 1
+        : spec.restingOpen(current)
+          ? 0
+          : 1;
+      let value = spec.blendOf(current) ?? (spec.restingOpen(current) ? 1 : 0);
+      let lastMs = 0;
+      anim.target = target;
 
-    const tick = (nowMs: number): void => {
-      const dt = lastMs === 0 ? 0 : Math.min(0.1, (nowMs - lastMs) / 1000);
-      lastMs = nowMs;
-      const step = RAMP_RATE_PER_SECOND * dt;
-      value =
-        target > value ? Math.min(target, value + step) : Math.max(target, value - step);
-      if (Math.abs(value - target) < 1e-4) {
-        rampAnimRef.current.handle = 0;
-        const settled: ShipPreviewToggles = {
-          ...shipPreviewRef.current,
-          rampDown: target > 0.5,
-          ramp01: undefined,
-        };
-        shipPreviewRef.current = settled;
-        setShipPreview(settled);
-        emitShipPreview(settled);
-        return;
-      }
-      shipPreviewRef.current = { ...shipPreviewRef.current, ramp01: value };
-      emitShipPreview(shipPreviewRef.current);
-      rampAnimRef.current.handle = window.requestAnimationFrame(tick);
-    };
-    anim.handle = window.requestAnimationFrame(tick);
-  }, [emitShipPreview]);
+      const tick = (nowMs: number): void => {
+        const dt = lastMs === 0 ? 0 : Math.min(0.1, (nowMs - lastMs) / 1000);
+        lastMs = nowMs;
+        const step = spec.ratePerSecond * dt;
+        value =
+          target > value ? Math.min(target, value + step) : Math.max(target, value - step);
+        if (Math.abs(value - target) < 1e-4) {
+          spec.animRef.current.handle = 0;
+          const settled = spec.withResting(shipPreviewRef.current, target > 0.5);
+          shipPreviewRef.current = settled;
+          setShipPreview(settled);
+          emitShipPreview(settled);
+          return;
+        }
+        shipPreviewRef.current = spec.withBlend(shipPreviewRef.current, value);
+        emitShipPreview(shipPreviewRef.current);
+        spec.animRef.current.handle = window.requestAnimationFrame(tick);
+      };
+      anim.handle = window.requestAnimationFrame(tick);
+    },
+    [emitShipPreview],
+  );
+
+  const playRampPreview = useCallback(() => {
+    playHingePreview({
+      animRef: rampAnimRef,
+      ratePerSecond: RAMP_RATE_PER_SECOND,
+      blendOf: (state) => state.ramp01,
+      restingOpen: (state) => state.rampDown,
+      withBlend: (state, ramp01) => ({ ...state, ramp01 }),
+      withResting: (state, open) => ({ ...state, rampDown: open, ramp01: undefined }),
+    });
+  }, [playHingePreview]);
+
+  const playCanopyPreview = useCallback(() => {
+    playHingePreview({
+      animRef: canopyAnimRef,
+      ratePerSecond: CANOPY_RATE_PER_SECOND,
+      blendOf: (state) => state.canopy01,
+      restingOpen: (state) => state.canopyOpen,
+      withBlend: (state, canopy01) => ({ ...state, canopy01 }),
+      withResting: (state, open) => ({ ...state, canopyOpen: open, canopy01: undefined }),
+    });
+  }, [playHingePreview]);
 
   useEffect(
     () => () => {
       if (rampAnimRef.current.handle !== 0) {
         window.cancelAnimationFrame(rampAnimRef.current.handle);
       }
+      if (canopyAnimRef.current.handle !== 0) {
+        window.cancelAnimationFrame(canopyAnimRef.current.handle);
+      }
     },
     [],
   );
 
   const animations = useMemo(() => collectAnimations(docState.roots), [docState.roots]);
+  const hasCanopy = useMemo(() => hasEnabledCanopy(docState.roots), [docState.roots]);
   const isShip = docState.kind === 'ship';
   const showShipGroup = isShip || animations.length > 0;
 
@@ -757,9 +905,10 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
       setPlanetOptions,
       toggleDoorPreview,
       playRampPreview,
+      playCanopyPreview,
       openBrowsePanel: setBrowsePanel,
     }),
-    [toggleDoorPreview, playRampPreview],
+    [toggleDoorPreview, playRampPreview, playCanopyPreview],
   );
 
   const setMode = (mode: ToolbarGizmoMode): void => {
@@ -777,6 +926,12 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
     const next = !snapEnabled;
     setSnapEnabled(next);
     actions.onSnapChange(next, Number(snapTranslate) || 0.25, Number(snapRotate) || 15);
+  };
+
+  const toggleEnvironmentLights = (): void => {
+    const next = !environmentLights;
+    setEnvironmentLights(next);
+    actions.onEnvironmentLightsChange(next);
   };
 
   return (
@@ -814,6 +969,19 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
 
           <div className="ed-toolbar-group">
             <ToolIconButton
+              icon={environmentLights ? UiIcons.sun : UiIcons.sunDim}
+              title={
+                environmentLights
+                  ? 'Environment lights on (click to show local lights only)'
+                  : 'Environment lights off — local lights only (click to restore)'
+              }
+              active={environmentLights}
+              onClick={toggleEnvironmentLights}
+            />
+          </div>
+
+          <div className="ed-toolbar-group">
+            <ToolIconButton
               icon={UiIcons.plus}
               title="Add box"
               onClick={() => actions.onAddBox()}
@@ -838,42 +1006,16 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
           </div>
 
           {showShipGroup ? (
-            <div className="ed-toolbar-group">
-              {isShip ? (
-                <>
-                  <button
-                    type="button"
-                    className={`ed-tool-chip${shipPreview.gearDown ? ' is-active' : ''}`}
-                    title="Preview landing gear"
-                    onClick={() => patchShip({ gearDown: !shipPreview.gearDown })}
-                  >
-                    Gear
-                  </button>
-                  <button
-                    type="button"
-                    className={`ed-tool-chip${shipPreview.rampDown ? ' is-active' : ''}`}
-                    title="Play the boarding ramp raise / lower"
-                    onClick={playRampPreview}
-                  >
-                    Ramp
-                  </button>
-                </>
-              ) : null}
-              {animations.map((anim) => {
-                const isOpen = shipPreview.doorsOpen[anim.id] ?? anim.defaultOpen;
-                return (
-                  <button
-                    key={anim.id}
-                    type="button"
-                    className={`ed-tool-chip${isOpen ? ' is-active' : ''}`}
-                    title={`Preview "${anim.id}" open / closed`}
-                    onClick={() => toggleDoorPreview(anim.id)}
-                  >
-                    {anim.label}
-                  </button>
-                );
-              })}
-            </div>
+            <ShipPreviewChips
+              isShip={isShip}
+              hasCanopy={hasCanopy}
+              animations={animations}
+              shipPreview={shipPreview}
+              onToggleGear={() => patchShip({ gearDown: !shipPreview.gearDown })}
+              onPlayRamp={playRampPreview}
+              onPlayCanopy={playCanopyPreview}
+              onToggleDoor={toggleDoorPreview}
+            />
           ) : null}
         </div>
 

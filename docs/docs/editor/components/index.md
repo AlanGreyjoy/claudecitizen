@@ -114,6 +114,7 @@ adding any of that.
 | [Ship frame](./ship-frame) | Flight body anchor (auto on save) |
 | [Ship controller](./ship-controller) | Singleton hull wiring — stats, gear, ramp, doors, seats |
 | [Ship door](./ship-door) | F-key articulated door / cubby (radial or raycast) |
+| [Ship seat](./ship-seat) | Seat marker — role, eye, stand, reach (marker = character root, not the cushion) |
 | [Ship entry](./ship-entry) | Ground-level board circle for exterior-entry hulls (no deck walk) |
 | [Bed](./bed) | F-key bunk — lie down, head look, Hold Y to get up (no flight) |
 | [Entertainment System](./entertainment-system) | Bunk mini-TV — gaze + F opens Docs / YouTube launcher |
@@ -135,7 +136,7 @@ add-component palette. Author new ships with `ship-controller`.
 | [Ship hull](./ship-hull), [Ship stats](./ship-stats) | `ship-controller` stats |
 | [Ship gear](./ship-gear) | `ship-controller` gear nodes |
 | [Ship ramp](./ship-ramp), [Ramp interact](./ramp-interact) | `ship-controller` ramp |
-| [Pilot seat](./pilot-seat) | `ship-controller` seats |
+| [Pilot seat](./pilot-seat) | [Ship seat](./ship-seat) on the marker + `ship-controller` seat list |
 
 ## Collider placement paths
 

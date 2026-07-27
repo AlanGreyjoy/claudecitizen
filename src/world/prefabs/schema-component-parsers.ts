@@ -1101,133 +1101,196 @@ function parseShipHullComponent(
         };
 }
 
+function parseDoorNodes(
+  value: Record<string, unknown>,
+  path: string,
+): {
+  name: string;
+  delta: number;
+  under?: string;
+}[] {
+  if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
+    fail(`${path}.nodes`, "expected non-empty array of {name, delta}");
+  }
+  if (value.nodes.length > 8) fail(`${path}.nodes`, "too many door nodes (max 8)");
+  return value.nodes.map((node, index) => {
+    if (!isRecord(node)) fail(`${path}.nodes[${index}]`, "expected {name, delta}");
+    const under =
+      node.under === undefined
+        ? undefined
+        : parseString(node.under, `${path}.nodes[${index}].under`, 128);
+    return {
+      name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
+      delta: Math.min(
+        20,
+        Math.max(-20, parseFiniteNumber(node.delta, `${path}.nodes[${index}].delta`)),
+      ),
+      ...(under ? { under } : {}),
+    };
+  });
+}
+
+function parseDoorMotionAxis(
+  value: Record<string, unknown>,
+  path: string,
+): { motion: "slide" | "hinge"; axis: "x" | "y" | "z" } {
+  const motion = value.motion;
+  if (motion !== "slide" && motion !== "hinge") {
+    fail(`${path}.motion`, 'expected "slide" or "hinge"');
+  }
+  const axis = value.axis;
+  if (axis !== "x" && axis !== "y" && axis !== "z") {
+    fail(`${path}.axis`, 'expected "x", "y", or "z"');
+  }
+  return { motion, axis };
+}
+
+function parseOptionalDoorReach(
+  value: Record<string, unknown>,
+  path: string,
+): {
+  trigger: "radial" | "raycast" | undefined;
+  radius: number | undefined;
+  aimRadius: number | undefined;
+} {
+  return {
+    trigger: parseShipDoorTrigger(value.trigger, `${path}.trigger`),
+    radius:
+      value.radius === undefined
+        ? undefined
+        : Math.min(
+            20,
+            Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
+          ),
+    aimRadius:
+      value.aimRadius === undefined
+        ? undefined
+        : Math.min(
+            5,
+            Math.max(0.05, parseFiniteNumber(value.aimRadius, `${path}.aimRadius`)),
+          ),
+  };
+}
+
+function parseOptionalDoorSounds(
+  value: Record<string, unknown>,
+  path: string,
+): { openSoundUrl?: string; closeSoundUrl?: string } {
+  return {
+    ...(value.openSoundUrl === undefined
+      ? {}
+      : {
+          openSoundUrl: parseAssetUrl(value.openSoundUrl, `${path}.openSoundUrl`),
+        }),
+    ...(value.closeSoundUrl === undefined
+      ? {}
+      : {
+          closeSoundUrl: parseAssetUrl(
+            value.closeSoundUrl,
+            `${path}.closeSoundUrl`,
+          ),
+        }),
+  };
+}
+
 function parseShipDoorComponent(
   value: Record<string, unknown>,
   path: string,
 ): PrefabComponent {
-  const type = "ship-door" as const;
-  if (!Array.isArray(value.nodes) || value.nodes.length === 0) {
-          fail(`${path}.nodes`, "expected non-empty array of {name, delta}");
-        }
-        if (value.nodes.length > 8)
-          fail(`${path}.nodes`, "too many door nodes (max 8)");
-        const motion = value.motion;
-        if (motion !== "slide" && motion !== "hinge") {
-          fail(`${path}.motion`, 'expected "slide" or "hinge"');
-        }
-        const axis = value.axis;
-        if (axis !== "x" && axis !== "y" && axis !== "z") {
-          fail(`${path}.axis`, 'expected "x", "y", or "z"');
-        }
-        return {
-          type,
-          id: parseString(value.id, `${path}.id`, 64),
-          label: parseString(value.label, `${path}.label`, 64),
-          motion,
-          axis,
-          nodes: value.nodes.map((node, index) => {
-            if (!isRecord(node))
-              fail(`${path}.nodes[${index}]`, "expected {name, delta}");
-            const under =
-              node.under === undefined
-                ? undefined
-                : parseString(node.under, `${path}.nodes[${index}].under`, 128);
-            return {
-              name: parseString(node.name, `${path}.nodes[${index}].name`, 128),
-              delta: Math.min(
-                20,
-                Math.max(
-                  -20,
-                  parseFiniteNumber(node.delta, `${path}.nodes[${index}].delta`),
-                ),
-              ),
-              ...(under ? { under } : {}),
-            };
-          }),
-          trigger: parseShipDoorTrigger(value.trigger, `${path}.trigger`),
-          radius:
-            value.radius === undefined
-              ? undefined
-              : Math.min(
-                  20,
-                  Math.max(
-                    0.5,
-                    parseFiniteNumber(value.radius, `${path}.radius`),
-                  ),
-                ),
-          aimRadius:
-            value.aimRadius === undefined
-              ? undefined
-              : Math.min(
-                  5,
-                  Math.max(
-                    0.05,
-                    parseFiniteNumber(value.aimRadius, `${path}.aimRadius`),
-                  ),
-                ),
-          defaultOpen:
-            value.defaultOpen === undefined
-              ? undefined
-              : Boolean(value.defaultOpen),
-          ...(value.openSoundUrl === undefined
-            ? {}
-            : {
-                openSoundUrl: parseAssetUrl(
-                  value.openSoundUrl,
-                  `${path}.openSoundUrl`,
-                ),
-              }),
-          ...(value.closeSoundUrl === undefined
-            ? {}
-            : {
-                closeSoundUrl: parseAssetUrl(
-                  value.closeSoundUrl,
-                  `${path}.closeSoundUrl`,
-                ),
-              }),
-        };
+  const { motion, axis } = parseDoorMotionAxis(value, path);
+  const reach = parseOptionalDoorReach(value, path);
+  return {
+    type: "ship-door",
+    id: parseString(value.id, `${path}.id`, 64),
+    label: parseString(value.label, `${path}.label`, 64),
+    motion,
+    axis,
+    nodes: parseDoorNodes(value, path),
+    trigger: reach.trigger,
+    radius: reach.radius,
+    aimRadius: reach.aimRadius,
+    defaultOpen:
+      value.defaultOpen === undefined ? undefined : Boolean(value.defaultOpen),
+    ...parseOptionalDoorSounds(value, path),
+  };
+}
+
+function parseDoorComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const { motion, axis } = parseDoorMotionAxis(value, path);
+  const reach = parseOptionalDoorReach(value, path);
+  return {
+    type: "door",
+    id: parseString(value.id, `${path}.id`, 64),
+    label: parseString(value.label, `${path}.label`, 64),
+    motion,
+    axis,
+    nodes: parseDoorNodes(value, path),
+    trigger: reach.trigger,
+    radius: reach.radius,
+    aimRadius: reach.aimRadius,
+    defaultOpen:
+      value.defaultOpen === undefined ? undefined : Boolean(value.defaultOpen),
+    duration:
+      value.duration === undefined
+        ? undefined
+        : Math.min(
+            30,
+            Math.max(0.05, parseFiniteNumber(value.duration, `${path}.duration`)),
+          ),
+    ...parseOptionalDoorSounds(value, path),
+  };
+}
+
+/** Shared by `pilot-seat` (legacy) and `ship-seat` — identical field set. */
+function parseSeatSettings(
+  value: Record<string, unknown>,
+  path: string,
+): {
+  role: ShipSeatRole | undefined;
+  eye: ReturnType<typeof parseVec3> | undefined;
+  stand: ReturnType<typeof parseVec2> | undefined;
+  interactRadius: number | undefined;
+} {
+  const roleRaw = value.role;
+  const role =
+    roleRaw === undefined
+      ? undefined
+      : SHIP_SEAT_ROLES.includes(roleRaw as ShipSeatRole)
+        ? (roleRaw as ShipSeatRole)
+        : fail(`${path}.role`, `expected one of: ${SHIP_SEAT_ROLES.join(", ")}`);
+  return {
+    role,
+    eye: value.eye === undefined ? undefined : parseVec3(value.eye, `${path}.eye`),
+    stand:
+      value.stand === undefined ? undefined : parseVec2(value.stand, `${path}.stand`),
+    interactRadius:
+      value.interactRadius === undefined
+        ? undefined
+        : Math.min(
+            10,
+            Math.max(
+              0.5,
+              parseFiniteNumber(value.interactRadius, `${path}.interactRadius`),
+            ),
+          ),
+  };
 }
 
 function parsePilotSeatComponent(
   value: Record<string, unknown>,
   path: string,
 ): PrefabComponent {
-  const type = "pilot-seat" as const;
-  const roleRaw = value.role;
-        const role =
-          roleRaw === undefined
-            ? undefined
-            : SHIP_SEAT_ROLES.includes(roleRaw as ShipSeatRole)
-              ? (roleRaw as ShipSeatRole)
-              : fail(
-                  `${path}.role`,
-                  `expected one of: ${SHIP_SEAT_ROLES.join(", ")}`,
-                );
-        return {
-          type,
-          role,
-          eye:
-            value.eye === undefined
-              ? undefined
-              : parseVec3(value.eye, `${path}.eye`),
-          stand:
-            value.stand === undefined
-              ? undefined
-              : parseVec2(value.stand, `${path}.stand`),
-          interactRadius:
-            value.interactRadius === undefined
-              ? undefined
-              : Math.min(
-                  10,
-                  Math.max(
-                    0.5,
-                    parseFiniteNumber(
-                      value.interactRadius,
-                      `${path}.interactRadius`,
-                    ),
-                  ),
-                ),
-        };
+  return { type: "pilot-seat" as const, ...parseSeatSettings(value, path) };
+}
+
+function parseShipSeatComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  return { type: "ship-seat" as const, ...parseSeatSettings(value, path) };
 }
 
 function parseBedComponent(
@@ -1325,7 +1388,8 @@ function parseCockpitControlComponent(
   const actionRaw = value.action;
         if (
           actionRaw !== "landing-gear" &&
-          actionRaw !== "cargo-ramp"
+          actionRaw !== "cargo-ramp" &&
+          actionRaw !== "canopy"
         ) {
           fail(
             `${path}.action`,
@@ -1592,7 +1656,9 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "ship-ramp": parseShipRampComponent,
   "ship-hull": parseShipHullComponent,
   "ship-door": parseShipDoorComponent,
+  "door": parseDoorComponent,
   "pilot-seat": parsePilotSeatComponent,
+  "ship-seat": parseShipSeatComponent,
   "bed": parseBedComponent,
   "ramp-interact": parseRampInteractComponent,
   "ship-entry": parseShipEntryComponent,

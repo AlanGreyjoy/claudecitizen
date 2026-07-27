@@ -70,6 +70,7 @@ function updateSandboxScene(session: ShipSandboxSession, dt: number, nowMs: numb
   session.shipModel.setArticulation({
     gear01: session.rig.gear01,
     ramp01: session.rig.ramp01,
+    canopy01: session.rig.canopy01,
     doors: doorBlends(session.rig),
   });
   updateShipPlacement(session.shipModel.group, session.ship, vec3(0, 0, 0), 1);

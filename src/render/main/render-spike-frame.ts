@@ -522,7 +522,7 @@ function updateShipsAndStations(
         id: 'legacy',
         prefabId: getShipLayout().hullUrl ? 'active' : 'phobos-starhopper',
         body: world.ship,
-        rig: world.shipRig ?? { gear01: 1, ramp01: 0, doors: {} },
+        rig: world.shipRig ?? { gear01: 1, ramp01: 0, canopy01: 0, doors: {} },
       },
     ];
   deps.shipRenderPool.sync(

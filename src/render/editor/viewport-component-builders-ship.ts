@@ -1,5 +1,17 @@
 import * as THREE from "three";
-import type { PrefabComponent } from "../../world/prefabs/schema";
+import type {
+  CockpitControlAction,
+  PrefabComponent,
+  ShipSeatRole,
+} from "../../world/prefabs/schema";
+
+/** Seat gizmo tint per role, so a multi-seat cockpit reads at a glance. */
+const SHIP_SEAT_ROLE_COLORS: Record<ShipSeatRole, number> = {
+  pilot: 0x7dffa8,
+  copilot: 0x5ec8ff,
+  turret: 0xff9d5c,
+  passenger: 0xc9d4e8,
+};
 
 export interface ViewportHelperMeshFactory {
   (
@@ -73,55 +85,6 @@ function buildShipDoorHelper(
   group.add(sphere, panel);
   return group;
 }
-function buildPilotSeatHelper(
-  component: Extract<PrefabComponent, { type: "pilot-seat" }>,
-): THREE.Object3D | null {
-  const group = new THREE.Group();
-  const role = component.role ?? "passenger";
-  const seatColor =
-  role === "pilot"
-  ? 0x7dffa8
-  : role === "copilot"
-  ? 0x7db8ff
-  : role === "turret"
-  ? 0xff9d5c
-  : 0x9aa3b8;
-  const seat = makeHelperMesh(
-  new THREE.BoxGeometry(0.6, 0.12, 0.6),
-  seatColor,
-  0.6,
-  );
-  const back = makeHelperMesh(
-  new THREE.BoxGeometry(0.6, 0.8, 0.12),
-  seatColor,
-  0.45,
-  );
-  back.position.set(0, 0.45, -0.3);
-  const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
-  const eyeDot = makeHelperMesh(
-  new THREE.SphereGeometry(0.08, 10, 8),
-  0xffffff,
-  0.85,
-  );
-  eyeDot.position.set(eye.x, eye.y, eye.z);
-  const stand = component.stand ?? { x: 0, z: -1.55 };
-  const standDot = makeHelperMesh(
-  new THREE.SphereGeometry(0.1, 10, 8),
-  0xffce6f,
-  0.7,
-  );
-  standDot.position.set(stand.x, 0.05, stand.z);
-  const radius = component.interactRadius ?? 1.45;
-  const reach = makeHelperMesh(
-  new THREE.SphereGeometry(radius, 16, 12),
-  seatColor,
-  0.12,
-  true,
-  );
-  reach.position.set(stand.x, 0.5, stand.z);
-  group.add(seat, back, eyeDot, standDot, reach);
-  return group;
-}
 function buildBedHelper(
   component: Extract<PrefabComponent, { type: "bed" }>,
 ): THREE.Object3D | null {
@@ -180,6 +143,65 @@ function buildRampInteractHelper(
   true,
   );
 }
+/**
+ * Seat marker gizmo, drawn from the component so it updates live while you
+ * edit Eye. The entity position is the seated character's **root** (the avatar
+ * renders with its feet there), so the flat disc marks the marker itself and
+ * the sphere marks the eye — raising the marker moves the body, raising Eye
+ * moves only the view.
+ */
+function buildShipSeatHelper(
+  component: Extract<PrefabComponent, { type: "ship-seat" } | { type: "pilot-seat" }>,
+): THREE.Object3D | null {
+  const color = SHIP_SEAT_ROLE_COLORS[component.role ?? "passenger"];
+  const group = new THREE.Group();
+  const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
+
+  const foot = makeHelperMesh(new THREE.CircleGeometry(0.26, 24), color, 0.3);
+  foot.rotation.x = -Math.PI / 2;
+  const footRing = makeHelperMesh(
+  new THREE.TorusGeometry(0.26, 0.015, 6, 24),
+  color,
+  0.85,
+  );
+  footRing.rotation.x = Math.PI / 2;
+
+  const eyeBall = makeHelperMesh(new THREE.SphereGeometry(0.16, 20, 14), color, 0.45);
+  eyeBall.position.set(eye.x, eye.y, eye.z);
+  const eyeWire = makeHelperMesh(
+  new THREE.SphereGeometry(0.165, 14, 10),
+  color,
+  0.5,
+  true,
+  );
+  eyeWire.position.copy(eyeBall.position);
+
+  const stemLength = Math.max(0.05, Math.hypot(eye.x, eye.y, eye.z));
+  const stem = makeHelperMesh(
+  new THREE.CylinderGeometry(0.012, 0.012, stemLength, 6),
+  color,
+  0.45,
+  );
+  stem.position.set(eye.x / 2, eye.y / 2, eye.z / 2);
+  stem.lookAt(new THREE.Vector3(eye.x, eye.y, eye.z));
+  stem.rotateX(Math.PI / 2);
+
+  group.add(foot, footRing, stem, eyeBall, eyeWire);
+
+  const stand = component.stand;
+  if (stand) {
+  const standRing = makeHelperMesh(
+  new THREE.CircleGeometry(0.3, 20),
+  color,
+  0.22,
+  true,
+  );
+  standRing.rotation.x = -Math.PI / 2;
+  standRing.position.set(stand.x, 0.01, stand.z);
+  group.add(standRing);
+  }
+  return group;
+}
 function buildShipEntryHelper(
   component: Extract<PrefabComponent, { type: "ship-entry" }>,
 ): THREE.Object3D | null {
@@ -203,12 +225,17 @@ function buildShipEntryHelper(
   group.add(disc, core);
   return group;
 }
+const COCKPIT_CONTROL_HELPER_COLORS: Record<CockpitControlAction, number> = {
+  "landing-gear": 0x7dffa8,
+  "cargo-ramp": 0xffce6f,
+  canopy: 0x9db6ff,
+};
+
 function buildCockpitControlHelper(
   component: Extract<PrefabComponent, { type: "cockpit-control" }>,
 ): THREE.Object3D | null {
   const group = new THREE.Group();
-  const color =
-  component.action === "landing-gear" ? 0x7dffa8 : 0xffce6f;
+  const color = COCKPIT_CONTROL_HELPER_COLORS[component.action];
   const radius = component.gazeRadius ?? 0.2;
   const sphere = makeHelperMesh(
   new THREE.SphereGeometry(radius, 12, 10),
@@ -349,7 +376,8 @@ function buildNullHelper(): THREE.Object3D | null {
 return {
     "ship-hull": buildShipHullHelper,
     "ship-door": buildShipDoorHelper,
-    "pilot-seat": buildPilotSeatHelper,
+    "pilot-seat": buildShipSeatHelper,
+    "ship-seat": buildShipSeatHelper,
     "bed": buildBedHelper,
     "ramp-interact": buildRampInteractHelper,
     "ship-entry": buildShipEntryHelper,

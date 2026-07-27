@@ -41,20 +41,31 @@ type ShipControllerSeat = NonNullable<
   Extract<PrefabComponent, { type: "ship-controller" }>["seats"]
 >[number];
 
-/** Walks the document for `ship-controller.seats[]` entity-id references. */
-function collectShipSeatRefs(
+/**
+ * Walks the document for `ship-controller.seats[]` entity-id references that
+ * carry only legacy inline settings. An entity with its own `ship-seat` (or
+ * legacy `pilot-seat`) component already draws through the normal per-component
+ * helper pass, so listing it here would stack two gizmos on one marker.
+ */
+function collectLegacyShipSeatRefs(
   entities: readonly EditorEntity[],
   out = new Map<string, ShipControllerSeat>(),
+  withOwnComponent = new Set<string>(),
 ): Map<string, ShipControllerSeat> {
   for (const entity of entities) {
     for (const component of entity.components) {
+      if (component.type === "ship-seat" || component.type === "pilot-seat") {
+        withOwnComponent.add(entity.id);
+        continue;
+      }
       if (component.type !== "ship-controller") continue;
       for (const seat of component.seats ?? []) {
         if (seat.entityId) out.set(seat.entityId, seat);
       }
     }
-    collectShipSeatRefs(entity.children, out);
+    collectLegacyShipSeatRefs(entity.children, out, withOwnComponent);
   }
+  for (const entityId of withOwnComponent) out.delete(entityId);
   return out;
 }
 
@@ -198,19 +209,18 @@ export function createViewportEntityGraph(
     makeHelperMesh,
     makeRestHeightHelper,
     clearRestHeightHelpers,
-    makeShipSeatHelper,
     clearShipSeatHelpers,
     buildComponentHelper,
   } = createViewportComponentHelpers(track);
 
   /**
-   * Seats live in `ship-controller.seats[]` as entity-id references, so the
-   * referenced empties carry no component and nothing draws at them. This
-   * resolves the references document-wide and stamps a gizmo on each target,
-   * independent of the per-component helper pass.
+   * Fallback gizmos for prefabs authored before `ship-seat` existed, where the
+   * settings still live inline on `ship-controller.seats[]` and the referenced
+   * empty carries no component of its own — nothing would draw at it. Seats
+   * with their own component go through the normal per-component pass instead.
    */
   function syncShipSeatHelpers(): void {
-    const seatsByEntityId = collectShipSeatRefs(store.getState().roots);
+    const seatsByEntityId = collectLegacyShipSeatRefs(store.getState().roots);
     const previous = seatHelperDisposables;
     const bucket: Disposable[] = [];
     seatHelperDisposables = bucket;
@@ -221,13 +231,18 @@ export function createViewportEntityGraph(
         clearShipSeatHelpers(group);
         const seat = seatsByEntityId.get(entityId);
         if (!seat) continue;
-        group.add(
-          makeShipSeatHelper({
-            role: seat.role ?? "passenger",
-            eye: seat.eye,
-            stand: seat.stand,
-          }),
-        );
+        // Synthesise the component these legacy fields would have been, so the
+        // gizmo is built by exactly one code path.
+        const helper = buildComponentHelper({
+          type: "ship-seat",
+          role: seat.role,
+          eye: seat.eye,
+          stand: seat.stand,
+          interactRadius: seat.interactRadius,
+        });
+        if (!helper) continue;
+        helper.userData.editorShipSeatHelper = true;
+        group.add(helper);
       }
     } finally {
       trackTarget = previousTarget;

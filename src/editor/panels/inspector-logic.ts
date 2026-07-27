@@ -108,7 +108,8 @@ export function listInspectorComponents(
       const targetsNode =
         (component.type === 'object-animation' ||
           component.type === 'animation' ||
-          component.type === 'ship-door') &&
+          component.type === 'ship-door' ||
+          component.type === 'door') &&
         (component.nodes ?? []).some((node) => node.name === subNodeName);
       if (targetsNode) {
         listed.push({ component, source: 'entity', index });
@@ -149,6 +150,8 @@ export interface InspectorPanelOptions {
   onToggleShipDoorPreview?: (doorId: string) => void;
   /** Play the boarding ramp raise / lower in the viewport. */
   onPlayShipRampPreview?: () => void;
+  /** Play the cockpit canopy open / close in the viewport. */
+  onPlayShipCanopyPreview?: () => void;
 }
 
 export type TransformFieldKey = 'position' | 'rotation' | 'scale';

@@ -5,6 +5,7 @@ import { configureShipMaterial } from '../../materials/ship-material';
 import {
   DEFAULT_STARHOPPER_GEAR_HINGES,
   DEFAULT_STARHOPPER_RAMP_HINGE,
+  type ShipCanopyHingeSpec,
   type ShipGearHingeSpec,
   type ShipRampHingeSpec,
 } from '../../../player/ship-layout';
@@ -21,6 +22,8 @@ export interface ShipArticulation {
   gear01: number;
   /** 0 raised .. 1 lowered. */
   ramp01: number;
+  /** 0 closed .. 1 open. */
+  canopy01: number;
   /** 0 closed .. 1 open per layout door id. */
   doors: Record<string, number>;
 }
@@ -44,6 +47,8 @@ export interface ShipModelOptions {
   gearHinges?: ShipGearHingeSpec[];
   /** Prefab-authored boarding ramp hinge. */
   rampHinge?: ShipRampHingeSpec | null;
+  /** Prefab-authored cockpit canopy hinge. No built-in default. */
+  canopyHinge?: ShipCanopyHingeSpec | null;
 }
 
 export interface ShipModelHandle {
@@ -80,6 +85,11 @@ interface BoundGearHinge extends ArticulatedNode {
 
 interface BoundRampHinge extends ArticulatedNode {
   lowerRadians: number;
+  axis: 'x' | 'y' | 'z';
+}
+
+interface BoundCanopyHinge extends ArticulatedNode {
+  openRadians: number;
   axis: 'x' | 'y' | 'z';
 }
 
@@ -159,11 +169,13 @@ export function createShipModel(
   const doorBindings = options?.doors ?? DEFAULT_SHIP_DOOR_BINDINGS;
   const gearSpecs = options?.gearHinges ?? DEFAULT_STARHOPPER_GEAR_HINGES;
   const rampSpec = options?.rampHinge ?? DEFAULT_STARHOPPER_RAMP_HINGE;
+  const canopySpec = options?.canopyHinge ?? null;
 
   let boundGear: BoundGearHinge[] = [];
   let boundRamp: BoundRampHinge | null = null;
+  let boundCanopy: BoundCanopyHinge | null = null;
   let boundDoors: BoundDoor[] = [];
-  let pending: ShipArticulation = { gear01: 1, ramp01: 0, doors: {} };
+  let pending: ShipArticulation = { gear01: 1, ramp01: 0, canopy01: 0, doors: {} };
 
   function applyArticulation(articulation: ShipArticulation): void {
     for (const hinge of boundGear) {
@@ -178,6 +190,13 @@ export function createShipModel(
         boundRamp,
         boundRamp.lowerRadians * articulation.ramp01,
         boundRamp.axis,
+      );
+    }
+    if (boundCanopy) {
+      applyHingeRotation(
+        boundCanopy,
+        boundCanopy.openRadians * articulation.canopy01,
+        boundCanopy.axis,
       );
     }
     for (const door of boundDoors) {
@@ -213,6 +232,17 @@ export function createShipModel(
             ...captured,
             lowerRadians: rampSpec.lowerRadians,
             axis: rampSpec.axis ?? 'x',
+          }
+        : null;
+    }
+
+    if (canopySpec) {
+      const captured = captureNode(sceneRoot, canopySpec.name);
+      boundCanopy = captured
+        ? {
+            ...captured,
+            openRadians: canopySpec.openRadians,
+            axis: canopySpec.axis ?? 'x',
           }
         : null;
     }

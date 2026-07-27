@@ -1,16 +1,17 @@
+import {
+  beginElevatorRide,
+  callShipToHangar,
+  elevatorDestinationFor,
+  resolveStationDoorInteractAim,
+  resolveStationInteraction,
+  type StationInteraction,
+} from "../../player/station-interaction";
 import type { StationCharacterState } from "../../player/station-walk";
 import {
   getActiveShip,
   PLAYER_SHIP_INSTANCE_ID,
 } from "../../player/world-state";
 import { getShipInstance } from "../../flight/ship-world";
-import {
-  beginElevatorRide,
-  callShipToHangar,
-  elevatorDestinationFor,
-  resolveStationInteraction,
-  type StationInteraction,
-} from "../../player/station-interaction";
 import { playSfx } from "../../audio/sfx";
 import {
   resetAssignedHangarBay,
@@ -106,6 +107,13 @@ export function stationInteractionPrompt(
       return pressInteractPrompt(interaction.ladder.label || "ladder");
     case "prefab-info":
       return prefabInfoPrompt(ctx, interaction);
+    case "door": {
+      const animState = ctx.stationAnimationStates[interaction.door.id];
+      const isOpen = animState ? animState.target === 1 : false;
+      return pressInteractPrompt(
+        `${isOpen ? "close" : "open"} ${interaction.door.label}`,
+      );
+    }
   }
 }
 
@@ -133,6 +141,7 @@ function networkInstanceForInteraction(
     case "terminal":
     case "avms-terminal":
     case "prefab-info":
+    case "door":
     case "ladder":
       return null;
   }
@@ -241,9 +250,17 @@ export function handleStationInteraction(
     pressInteractPrompt: (label: string) => string;
   },
 ): void {
+  const character = ctx.world.character as StationCharacterState;
+  const doorAim = resolveStationDoorInteractAim(
+    character.position,
+    ctx.world.cameraOrbit.yawRadians,
+    ctx.world.cameraOrbit.pitchRadians,
+    ctx.world.cameraOrbit.zoomDistance,
+  );
   const interaction = resolveStationInteraction(
-    ctx.world.character as StationCharacterState,
+    character,
     ctx.stationFrame,
+    doorAim,
   );
   trackPrefabProximitySound(ctx, interaction);
   ctx.world.prompt = stationInteractionPrompt(
@@ -273,6 +290,19 @@ export function handleStationInteraction(
 
   if (interaction.kind === "prefab-info") {
     handlePrefabInfoInteraction(actions, interaction, deps.animations);
+    return;
+  }
+
+  if (interaction.kind === "door") {
+    if (actions.interactPressed) {
+      const animState = ctx.stationAnimationStates[interaction.door.id];
+      const opening = !(animState && animState.target === 1);
+      deps.animations.toggleStationAnimation(interaction.door.id);
+      const sfx = opening
+        ? interaction.door.openSoundUrl
+        : interaction.door.closeSoundUrl;
+      if (sfx) playSfx(sfx);
+    }
     return;
   }
 

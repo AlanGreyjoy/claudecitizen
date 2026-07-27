@@ -3,8 +3,9 @@ import type { CockpitControlAction, ShipSpec } from "./ship-layout";
 import type { ShipRigState } from "./ship-rig";
 
 /**
- * One-shot SFX for ship gear / ramp toggles. URLs come from ship-controller
- * (baked onto ShipSpec). Auto-close in flight should not call these.
+ * One-shot SFX for ship gear / ramp / canopy toggles. URLs come from
+ * ship-controller (baked onto ShipSpec). Auto-close in flight should not call
+ * these.
  */
 
 export function playShipGearToggleSfx(spec: ShipSpec, gearDown: boolean): void {
@@ -17,11 +18,25 @@ export function playShipRampToggleSfx(spec: ShipSpec, rampDown: boolean): void {
   if (url) playSfx(url);
 }
 
+export function playShipCanopyToggleSfx(spec: ShipSpec, canopyOpen: boolean): void {
+  const url = canopyOpen ? spec.canopyOpenSoundUrl : spec.canopyCloseSoundUrl;
+  if (url) playSfx(url);
+}
+
 export function playCockpitControlToggleSfx(
   action: CockpitControlAction,
   rig: ShipRigState,
   spec: ShipSpec,
 ): void {
-  if (action === "landing-gear") playShipGearToggleSfx(spec, rig.gearDown);
-  else playShipRampToggleSfx(spec, rig.rampDown);
+  switch (action) {
+    case "landing-gear":
+      playShipGearToggleSfx(spec, rig.gearDown);
+      return;
+    case "cargo-ramp":
+      playShipRampToggleSfx(spec, rig.rampDown);
+      return;
+    case "canopy":
+      playShipCanopyToggleSfx(spec, rig.canopyOpen);
+      return;
+  }
 }

@@ -10,6 +10,7 @@ import {
   CheckboxRow,
   DoorNodeRow,
   EdButton,
+  EmptyNote,
   EntityRefField,
   FieldRow,
   NumberField,
@@ -22,6 +23,29 @@ export function ShipDoorFields({
   ctx,
   component,
 }: ComponentFieldsProps<Extract<PrefabComponent, { type: 'ship-door' }>>): ReactElement {
+  return <DoorLikeFields ctx={ctx} component={component} />;
+}
+
+export function DoorFields({
+  ctx,
+  component,
+}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'door' }>>): ReactElement {
+  return <DoorLikeFields ctx={ctx} component={component} showDuration />;
+}
+
+type DoorLikeComponent =
+  | Extract<PrefabComponent, { type: 'ship-door' }>
+  | Extract<PrefabComponent, { type: 'door' }>;
+
+function DoorLikeFields({
+  ctx,
+  component,
+  showDuration = false,
+}: {
+  ctx: ComponentFieldsProps<DoorLikeComponent>['ctx'];
+  component: DoorLikeComponent;
+  showDuration?: boolean;
+}): ReactElement {
   const { update, options } = ctx;
   const trigger = component.trigger ?? 'radial';
   return (
@@ -72,6 +96,19 @@ export function ShipDoorFields({
             value={component.aimRadius ?? 0.35}
             onCommit={(aimRadius) =>
               update({ ...component, aimRadius: Math.max(0.05, aimRadius) })
+            }
+          />
+        </FieldRow>
+      ) : null}
+      {showDuration && component.type === 'door' ? (
+        <FieldRow label="Duration (s)" wide>
+          <NumberField
+            value={component.duration ?? 1}
+            onCommit={(duration) =>
+              update({
+                ...component,
+                duration: Math.max(0.05, duration),
+              })
             }
           />
         </FieldRow>
@@ -163,10 +200,21 @@ export function ShipDoorFields({
   );
 }
 
-export function PilotSeatFields({
+type SeatSettingsComponent = Extract<
+  PrefabComponent,
+  { type: 'pilot-seat' } | { type: 'ship-seat' }
+>;
+
+/**
+ * Shared editor for `ship-seat` and the legacy `pilot-seat` — identical fields.
+ * The entity's own position is the seated character's root (rendered at floor
+ * level), so Eye is the field that moves the first-person view; raising the
+ * marker instead lifts the body off the chair.
+ */
+function SeatSettingsFields({
   ctx,
   component,
-}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'pilot-seat' }>>): ReactElement {
+}: ComponentFieldsProps<SeatSettingsComponent>): ReactElement {
   const { update } = ctx;
   const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
   const stand = component.stand ?? { x: 0, z: -1.55 };
@@ -194,6 +242,10 @@ export function PilotSeatFields({
           />
         ))}
       </FieldRow>
+      <EmptyNote>
+        Marker = character root, drawn as the floor disc. Eye is the sphere — raise
+        it for first-person height instead of moving the marker.
+      </EmptyNote>
       <FieldRow label="Stand XZ">
         <NumberField
           value={stand.x}
@@ -215,6 +267,18 @@ export function PilotSeatFields({
       </FieldRow>
     </>
   );
+}
+
+export function PilotSeatFields(
+  props: ComponentFieldsProps<Extract<PrefabComponent, { type: 'pilot-seat' }>>,
+): ReactElement {
+  return <SeatSettingsFields {...props} />;
+}
+
+export function ShipSeatFields(
+  props: ComponentFieldsProps<Extract<PrefabComponent, { type: 'ship-seat' }>>,
+): ReactElement {
+  return <SeatSettingsFields {...props} />;
 }
 
 export function BedFields({

@@ -31,6 +31,7 @@ message ShipRigState {
   double gear_01 = 1;
   double ramp_01 = 2;
   map<string, double> doors = 3;
+  double canopy_01 = 4;
 }
 
 message Join {

@@ -205,6 +205,7 @@ export function createEditorViewport(
       gizmo.setSpace(space);
     },
     setSnap: snap.setSnap,
+    setEnvironmentLights: viewportScene.setEnvironmentLights,
     setPlayMode(playing: boolean) {
       playMode = playing;
       container.classList.toggle("is-playing", playing);

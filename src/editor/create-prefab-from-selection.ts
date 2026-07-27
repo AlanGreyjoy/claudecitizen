@@ -27,6 +27,7 @@ const KIND_BY_COMPONENT_TYPE: Readonly<Record<string, PrefabKind>> = {
   elevator: 'station',
   'hangar-pad': 'station',
   'ship-door': 'ship',
+  door: 'station',
   'equipment-socket': 'item',
   'weapon-combat': 'item',
 };

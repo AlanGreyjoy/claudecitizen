@@ -1,18 +1,6 @@
 import * as THREE from "three";
-import type { PrefabComponent, ShipSeatRole } from "../../world/prefabs/schema";
-import type { Vec3 } from "../../types";
+import type { PrefabComponent } from "../../world/prefabs/schema";
 import { createViewportComponentBuilders } from "./viewport-component-builders";
-
-/** Seat gizmo tint per role, so a four-seat cockpit reads at a glance. */
-const SHIP_SEAT_ROLE_COLORS: Record<ShipSeatRole, number> = {
-  pilot: 0x7dffa8,
-  copilot: 0x5ec8ff,
-  turret: 0xff9d5c,
-  passenger: 0xc9d4e8,
-};
-
-/** Matches `collectPilotSeatComponent` in ship-runtime.ts. */
-const SHIP_SEAT_DEFAULT_EYE: Vec3 = { x: 0, y: 0.87, z: 0.25 };
 
 export type ViewportResourceTracker = <T extends { dispose: () => void }>(
   resource: T,
@@ -61,13 +49,11 @@ export interface ViewportComponentHelpers {
     options?: { auto?: boolean; radius?: number },
   ) => THREE.Group;
   clearRestHeightHelpers: (parent: THREE.Object3D) => void;
-  makeShipSeatHelper: (options: {
-    role: ShipSeatRole;
-    /** Seat-local eye offset from ship-controller; defaults to the bake default. */
-    eye?: Vec3;
-    /** Seat-local stand-up spot in scene XZ, when authored. */
-    stand?: { x: number; z: number };
-  }) => THREE.Group;
+  /**
+   * Strips the legacy seat gizmos stamped by the entity graph for
+   * `ship-controller.seats[]` entries whose marker has no `ship-seat`
+   * component of its own.
+   */
   clearShipSeatHelpers: (parent: THREE.Object3D) => void;
   makeMeshColliderHelper: (
     target: THREE.Object3D,
@@ -197,69 +183,6 @@ export function createViewportComponentHelpers(
     }
   }
 
-  /**
-   * Seat gizmo for an empty registered in `ship-controller.seats[]`. Those
-   * empties carry no component of their own, so nothing would draw at them.
-   *
-   * The marker is the seated character's **root**, which the avatar renders at
-   * floor level (`character-avatar-model.ts` drops the model so its bounds sit
-   * on the origin) — not the cushion. So the gizmo draws a flat foot disc at
-   * the marker and puts the sphere at the **eye** offset, which is where the
-   * cockpit camera actually ends up. Raising the marker to fix first-person
-   * lifts the whole body off the chair; raising `eye` does not, and the two
-   * shapes make that distinction visible while you drag.
-   */
-  function makeShipSeatHelper(options: {
-    role: ShipSeatRole;
-    eye?: Vec3;
-    stand?: { x: number; z: number };
-  }): THREE.Group {
-    const color = SHIP_SEAT_ROLE_COLORS[options.role];
-    const group = new THREE.Group();
-    group.userData.editorShipSeatHelper = true;
-
-    const foot = makeHelperMesh(new THREE.CircleGeometry(0.26, 24), color, 0.3);
-    foot.rotation.x = -Math.PI / 2;
-    const footRing = makeHelperMesh(
-      new THREE.TorusGeometry(0.26, 0.015, 6, 24),
-      color,
-      0.85,
-    );
-    footRing.rotation.x = Math.PI / 2;
-
-    const eye = options.eye ?? SHIP_SEAT_DEFAULT_EYE;
-    const eyeBall = makeHelperMesh(new THREE.SphereGeometry(0.16, 20, 14), color, 0.45);
-    eyeBall.position.set(eye.x, eye.y, eye.z);
-    const eyeWire = makeHelperMesh(
-      new THREE.SphereGeometry(0.165, 14, 10),
-      color,
-      0.5,
-      true,
-    );
-    eyeWire.position.copy(eyeBall.position);
-
-    // Root → eye stem: the distance you are really authoring with Eye.
-    const stemLength = Math.max(0.05, Math.hypot(eye.x, eye.y, eye.z));
-    const stem = makeHelperMesh(
-      new THREE.CylinderGeometry(0.012, 0.012, stemLength, 6),
-      color,
-      0.45,
-    );
-    stem.position.set(eye.x / 2, eye.y / 2, eye.z / 2);
-    stem.lookAt(new THREE.Vector3(eye.x, eye.y, eye.z));
-    stem.rotateX(Math.PI / 2);
-
-    group.add(foot, footRing, stem, eyeBall, eyeWire);
-
-    if (options.stand) {
-      const stand = makeHelperMesh(new THREE.CircleGeometry(0.3, 20), color, 0.22, true);
-      stand.rotation.x = -Math.PI / 2;
-      stand.position.set(options.stand.x, 0.01, options.stand.z);
-      group.add(stand);
-    }
-    return group;
-  }
-
   function clearShipSeatHelpers(parent: THREE.Object3D): void {
     for (const child of [...parent.children]) {
       if (child.userData.editorShipSeatHelper) parent.remove(child);
@@ -317,7 +240,6 @@ export function createViewportComponentHelpers(
     makeHelperMesh,
     makeRestHeightHelper,
     clearRestHeightHelpers,
-    makeShipSeatHelper,
     clearShipSeatHelpers,
     makeMeshColliderHelper,
     buildComponentHelper,

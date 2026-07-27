@@ -37,6 +37,7 @@ function buildShipRenderList(shipsEnabled: boolean) {
     rig: {
       gear01: instance.rig.gear01,
       ramp01: instance.rig.ramp01,
+      canopy01: instance.rig.canopy01,
       doors: doorBlends(instance.rig),
     },
     vitals: { ...instance.vitals },
@@ -95,6 +96,7 @@ export function buildRendererFrameArgs(
       shipRig: {
         gear01: activeRig.gear01,
         ramp01: activeRig.ramp01,
+        canopy01: activeRig.canopy01,
         doors: doorBlends(activeRig),
       },
       networkEntities: deps.remoteEntities,

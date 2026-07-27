@@ -8,11 +8,14 @@ export type GizmoSpace = "local" | "world";
 export interface ShipPreviewState {
   gearDown: boolean;
   rampDown: boolean;
+  canopyOpen: boolean;
   /**
    * Continuous ramp blend while the ramp preview is playing. Overrides
    * `rampDown` when set; cleared once the animation settles.
    */
   ramp01?: number;
+  /** Continuous canopy blend while the canopy preview is playing. */
+  canopy01?: number;
   /** Open/closed per ship-door id. */
   doorsOpen: Record<string, boolean>;
 }
@@ -32,6 +35,8 @@ export interface EditorViewport {
     translateStep: number,
     rotateStepDegrees: number,
   ) => void;
+  /** Toggle editor hemi/sun/fill so authored point/spot/area lights read clearly. */
+  setEnvironmentLights: (enabled: boolean) => void;
   /**
    * Unity-style in-editor Play: Scene view becomes Play view in place.
    * Disables edit picking/gizmos; flythrough camera remains available.

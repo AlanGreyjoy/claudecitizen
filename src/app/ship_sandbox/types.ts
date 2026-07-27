@@ -104,6 +104,7 @@ export interface SandboxPilotActions {
   exitSeatPressed: boolean;
   coupledToggled?: boolean;
   primaryClickPressed?: boolean;
+  toggleCanopyPressed?: boolean;
 }
 
 export interface SandboxBedActions {

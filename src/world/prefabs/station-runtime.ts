@@ -12,6 +12,7 @@ import {
   type StationFoodShopMarker,
   type FoodShopCatalogMode,
   type StationLayoutOverride,
+  type StationDoorSpec,
   type StationRoom,
   type StationSpawnPose,
 } from '../station';
@@ -158,6 +159,7 @@ interface FlattenedComponents {
     axis: "x" | "y" | "z";
     nodes: { name: string; delta: number }[];
   }[];
+  doors: StationDoorSpec[];
   npcSpawners: StationNpcSpawnerSpec[];
   npcWaypoints: StationNpcWaypointSpec[];
   npcPlacements: StationNpcPlacementSpec[];
@@ -486,6 +488,37 @@ function collectAnimation(
   });
 }
 
+function collectDoor(
+  component: Extract<PrefabComponent, { type: "door" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  if (out.doors.some((door) => door.id === component.id)) return;
+  out.doors.push({
+    id: component.id,
+    label: component.label,
+    motion: component.motion,
+    axis: component.axis,
+    nodes: component.nodes.map((node) => ({
+      name: node.name,
+      delta: node.delta,
+      ...(node.under ? { under: node.under } : {}),
+    })),
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    trigger: component.trigger ?? "radial",
+    radius: component.radius ?? 1.6,
+    aimRadius: component.aimRadius ?? 0.35,
+    defaultOpen: component.defaultOpen ?? false,
+    duration: component.duration ?? 1.0,
+    ...(component.openSoundUrl ? { openSoundUrl: component.openSoundUrl } : {}),
+    ...(component.closeSoundUrl
+      ? { closeSoundUrl: component.closeSoundUrl }
+      : {}),
+  });
+}
+
 function collectStationComponent(
   component: PrefabComponent,
   ctx: CollectStationContext,
@@ -536,6 +569,9 @@ function collectStationComponent(
       break;
     case 'animation':
       collectAnimation(component, out);
+      break;
+    case 'door':
+      collectDoor(component, ctx, out);
       break;
     case 'station-frame':
     case 'collider':
@@ -597,33 +633,63 @@ function collect(
  * player can't walk through. That case is warned about once per animation.
  */
 /**
- * GLB nodes an `animation` component moves. Kept out of parent mesh bakes and
- * given their own collider when the author did not author one, so a station
- * door stops being welded into the wall it sits in.
+ * GLB nodes an `animation` or `door` component moves. Kept out of parent mesh
+ * bakes and given their own collider when the author did not author one, so a
+ * station door stops being welded into the wall it sits in.
  */
 function stationAnimatedNodeNames(
   animations: FlattenedComponents["animationSpecs"],
+  doors: FlattenedComponents["doors"],
 ): string[] {
   const names = new Set<string>();
   for (const anim of animations) {
     for (const node of anim.nodes) names.add(node.name);
   }
+  for (const door of doors) {
+    for (const node of door.nodes) names.add(node.name);
+  }
   return [...names];
+}
+
+type StationArticulatedSpec = {
+  id: string;
+  motion: "slide" | "hinge";
+  axis: "x" | "y" | "z";
+  nodes: { name: string; delta: number }[];
+  kindLabel: string;
+};
+
+function stationArticulatedSpecs(
+  animations: FlattenedComponents["animationSpecs"],
+  doors: FlattenedComponents["doors"],
+): StationArticulatedSpec[] {
+  return [
+    ...animations.map((anim) => ({ ...anim, kindLabel: "animation" })),
+    ...doors.map((door) => ({
+      id: door.id,
+      motion: door.motion,
+      axis: door.axis,
+      nodes: door.nodes,
+      kindLabel: "door",
+    })),
+  ];
 }
 
 function bindStationColliderAnimations(
   colliders: GameplayCollider[],
   animations: FlattenedComponents["animationSpecs"],
+  doors: FlattenedComponents["doors"],
   prefabId: string,
 ): GameplayCollider[] {
-  if (animations.length === 0) return colliders;
-  const boundAnimationIds = new Set<string>();
+  const articulated = stationArticulatedSpecs(animations, doors);
+  if (articulated.length === 0) return colliders;
+  const boundIds = new Set<string>();
   const result = colliders.map((collider) => {
     if (!collider.node) return collider;
-    for (const anim of animations) {
+    for (const anim of articulated) {
       const node = anim.nodes.find((entry) => entry.name === collider.node);
       if (node) {
-        boundAnimationIds.add(anim.id);
+        boundIds.add(anim.id);
         const animation: ColliderAnimationBinding = {
           kind: "door",
           doorId: anim.id,
@@ -636,10 +702,10 @@ function bindStationColliderAnimations(
     }
     return collider;
   });
-  for (const anim of animations) {
-    if (!boundAnimationIds.has(anim.id)) {
+  for (const anim of articulated) {
+    if (!boundIds.has(anim.id)) {
       console.warn(
-        `Station prefab "${prefabId}" animation "${anim.id}" has no collider bound to node(s) ${anim.nodes
+        `Station prefab "${prefabId}" ${anim.kindLabel} "${anim.id}" has no collider bound to node(s) ${anim.nodes
           .map((n) => `"${n.name}"`)
           .join(", ")}; the door will animate visually but its collider stays enabled (player can't walk through).`,
       );
@@ -669,6 +735,7 @@ function createEmptyFlattened(): FlattenedComponents {
     outfittersSeeds: [],
     foodShopSeeds: [],
     animationSpecs: [],
+    doors: [],
     npcSpawners: [],
     npcWaypoints: [],
     npcPlacements: [],
@@ -837,9 +904,10 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
   }
   const colliders = bindStationColliderAnimations(
     await buildPrefabColliders(doc, {
-      articulatedNodes: stationAnimatedNodeNames(out.animationSpecs),
+      articulatedNodes: stationAnimatedNodeNames(out.animationSpecs, out.doors),
     }),
     out.animationSpecs,
+    out.doors,
     doc.id,
   );
   await preloadMeshColliders(colliders);
@@ -854,6 +922,7 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     elevatorMarkers: buildElevatorMarkers(out),
     ladders: out.ladders,
     infoMarkers: buildInfoMarkers(out),
+    doors: out.doors,
     avmsMarkers: buildAvmsMarkers(out),
     weaponShops: buildWeaponShops(out),
     outfitters: buildOutfitters(out),

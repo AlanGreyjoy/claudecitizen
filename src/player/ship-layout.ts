@@ -35,6 +35,13 @@ export interface ShipRampHingeSpec {
   axis?: "x" | "y" | "z";
 }
 
+/** Hinge binding for the cockpit canopy (GLB node + open angle). */
+export interface ShipCanopyHingeSpec {
+  name: string;
+  openRadians: number;
+  axis?: "x" | "y" | "z";
+}
+
 /** Static per-ship-type stats and articulation authored on the prefab. */
 export interface ShipSpec {
   maxSpeedMps: number;
@@ -69,6 +76,12 @@ export interface ShipSpec {
   shieldRegenPerSec: number;
   gearHinges: ShipGearHingeSpec[];
   rampHinge: ShipRampHingeSpec | null;
+  /**
+   * Cockpit canopy hinge, or null when the ship has no canopy. Unlike the
+   * ramp there is no built-in default — canopies are opt-in per prefab and
+   * exterior-entry only.
+   */
+  canopyHinge: ShipCanopyHingeSpec | null;
   /** Landing gear deploy SFX (gearDown → true). */
   gearDeploySoundUrl?: string;
   /** Landing gear retract SFX (gearDown → false). */
@@ -77,6 +90,10 @@ export interface ShipSpec {
   rampOpenSoundUrl?: string;
   /** Cargo ramp raise SFX (rampDown → false). */
   rampCloseSoundUrl?: string;
+  /** Canopy open SFX (canopyOpen → true). */
+  canopyOpenSoundUrl?: string;
+  /** Canopy close SFX (canopyOpen → false). */
+  canopyCloseSoundUrl?: string;
   /** Looping boost thruster SFX while Shift is held. */
   boostSoundUrl?: string;
   /** Boost SFX gain 0..1. */
@@ -153,6 +170,7 @@ export const DEFAULT_SHIP_SPEC: ShipSpec = {
   shieldRegenPerSec: 25,
   gearHinges: DEFAULT_STARHOPPER_GEAR_HINGES,
   rampHinge: DEFAULT_STARHOPPER_RAMP_HINGE,
+  canopyHinge: null,
 };
 
 export type ShipSeatRole = "pilot" | "copilot" | "turret" | "passenger";

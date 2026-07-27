@@ -18,6 +18,9 @@ function componentTargetsGlbNode(component: PrefabComponent, nodeName: string): 
   if (component.type === 'ship-door' && Array.isArray(component.nodes)) {
     return component.nodes.some((n) => n.name === nodeName);
   }
+  if (component.type === 'door' && Array.isArray(component.nodes)) {
+    return component.nodes.some((n) => n.name === nodeName);
+  }
   if (component.type === 'animation' && Array.isArray(component.nodes)) {
     return component.nodes.some((n) => n.name === nodeName);
   }
@@ -40,6 +43,9 @@ function componentReferencesAnyGlbNode(
   glbNodeNames: Set<string>,
 ): boolean {
   if (component.type === 'ship-door' && Array.isArray(component.nodes)) {
+    return component.nodes.some((n) => n.name && glbNodeNames.has(n.name));
+  }
+  if (component.type === 'door' && Array.isArray(component.nodes)) {
     return component.nodes.some((n) => n.name && glbNodeNames.has(n.name));
   }
   if (component.type === 'animation' && Array.isArray(component.nodes)) {

@@ -78,6 +78,18 @@ Optional: sub-select a GLB door panel first, then add Ship Door — `nodes` pre-
 
 Colliders bound to the same GLB node names still disable when the door is mostly open.
 
+### Station doors
+
+Prefer **Door** marker empties (not `animation` + `interaction` pairs):
+
+1. Add Empty at the interact stand position (or Add Component → Door on a GLB panel to spawn a marker with `nodes` pre-filled)
+2. Set **Id**, **Label**, **Motion** / **Axis**, GLB **nodes** + signed open **delta**, optional **Duration**
+3. Choose **Trigger**: `radial` (stand in sphere) or `raycast` (camera aim within max distance + aim radius)
+4. Drag audio onto **Open SFX** / **Close SFX**
+5. Preview with the inspector **Animate** button or toolbar door toggles; Play → stand/aim → **F**
+
+Legacy station doors still work via `animation` + `interaction{interactionType:"animation", targetAnimationId}`.
+
 ### Bed (ships)
 
 SC-style bunk: place an Empty on the mattress → **Bed** component → **radial** (or raycast) trigger.

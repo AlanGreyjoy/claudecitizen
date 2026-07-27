@@ -460,6 +460,15 @@ function createComponentForEntity(
       nodes: [{ name: subNodeName, delta: -1 }],
     };
   }
+  if (component.type === 'door' && subNodeName) {
+    const idSafe = subNodeName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    return {
+      ...component,
+      id: `door-${idSafe}`,
+      label: subNodeName,
+      nodes: [{ name: subNodeName, delta: -1 }],
+    };
+  }
   if (component.type !== 'collider') return component;
 
   const shape =

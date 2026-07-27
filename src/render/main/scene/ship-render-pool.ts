@@ -35,6 +35,7 @@ export function createShipRenderPool(scene: THREE.Scene, renderScale: number): S
       })),
       gearHinges: layout.spec.gearHinges,
       rampHinge: layout.spec.rampHinge,
+      canopyHinge: layout.spec.canopyHinge,
     });
     handle.group.frustumCulled = false;
     scene.add(handle.group);
@@ -52,6 +53,7 @@ export function createShipRenderPool(scene: THREE.Scene, renderScale: number): S
         handle.setArticulation({
           gear01: ship.rig.gear01,
           ramp01: ship.rig.ramp01,
+          canopy01: ship.rig.canopy01,
           doors: ship.rig.doors,
         });
         if (ship.id === activeShipId) activeGroup = handle.group;

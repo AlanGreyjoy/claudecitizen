@@ -310,6 +310,27 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Authored translation or rotation of GLB nodes inside this prefab.",
   },
   {
+    type: "door",
+    label: "Door",
+    category: "gameplay",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "door",
+      id: "door-1",
+      label: "door",
+      motion: "slide",
+      axis: "x",
+      nodes: [{ name: "Door", delta: -1 }],
+      trigger: "radial",
+      radius: 1.6,
+      aimRadius: 0.35,
+      duration: 1.0,
+    }),
+    hint:
+      "Station F-key door. Empty is the interact target (radial stand-in or camera-aim raycast). Bind GLB nodes + deltas; drag Open/Close SFX from the asset browser.",
+  },
+  {
     type: "object-animation",
     label: "Object Animation",
     category: "animation",
@@ -613,6 +634,22 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     }),
     hint:
       "F-key door/cubby. Empty is the interact target (radial stand-in or camera-aim raycast). Bind GLB nodes + deltas; drag Open/Close SFX from the asset browser.",
+  },
+  {
+    type: "ship-seat",
+    label: "Ship Seat",
+    category: "ship",
+    kinds: ["ship"],
+    marker: true,
+    createDefault: () => ({
+      type: "ship-seat",
+      role: "pilot",
+      eye: { x: 0, y: 0.87, z: 0.25 },
+      stand: { x: 0, z: -1.55 },
+      interactRadius: 1.45,
+    }),
+    hint:
+      "Seat settings on the marker itself. The empty is the seated character's root — put it at deck level under the chair, then raise Eye for first-person height. Drag it into the ship-controller seat list to register it.",
   },
   {
     type: "ship-entry",

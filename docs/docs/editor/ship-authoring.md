@@ -16,7 +16,7 @@ When the prefab kind is `ship`:
 
 - Toolbar shows a **SHIP EDITOR** chip
 - Component palette narrows to ship types
-- Viewport toolbar gains **Gear**, **Ramp**, and per-door toggle buttons
+- Viewport toolbar gains **Gear**, **Ramp**, **Canopy** (exterior-entry ships with a canopy enabled), and per-door toggle buttons
 
 ### Auto-detect from GLB drop
 
@@ -33,7 +33,8 @@ Confirming switches kind to `ship`, suggests the model name as the prefab id, an
 One wiring panel on the hull GLB entity. See [Ship controller](./components/ship-controller).
 
 - **stats**, **gear**, **ramp**, **doors[]**, **seats[]**
-- Child empties referenced by **entity id** for interact spots (ramp buttons, door panel, pilot seat)
+- Child empties referenced by **entity id** for interact spots (ramp buttons, door panel, seats)
+- Seat settings themselves live on each marker's [Ship Seat](./components/ship-seat) component, not in the controller
 - Prefer **Ship Door** / **Bed** marker empties for doors and bunks (not only controller arrays)
 - **cameraBounds[]** for interior third-person camera clamping
 
@@ -74,7 +75,7 @@ window.__claudecitizenShipModel.listNodeNames()
 1. Drop or place the hull GLB — confirm ship prefab creation
 2. Verify hull at origin with **ship-controller** only on the hull entity
 3. Tune ramp hinge **lowerRadians**, gear nodes, stats in the controller
-4. Place child empties for ramp buttons, door interact, pilot seat — wire their entity ids in the controller. **Seat empties go on the deck under the chair, not on the cushion** — see [Seats](./components/ship-controller#seats); tune first-person height with the seat's `eye`, not by raising the marker
+4. Place child empties for ramp buttons, door interact, seats — wire their entity ids in the controller. Seat empties get a **[Ship Seat](./components/ship-seat)** component on drop; **put them on the deck under the chair, not on the cushion**, and tune first-person height with that component's `eye` rather than by raising the marker
 5. Drill into the GLB → sub-select walk surfaces and doors → add **mesh** colliders per node (`RampParent`, interior floors, `CockpitDoor_L` / `CockpitDoor_R`, …)
 6. Set **cameraBounds** in the controller for interior camera clamp and ramp dismount detection (not walk floors — those are mesh colliders on GLB nodes)
 7. Save and press **Play**
@@ -90,12 +91,13 @@ Set **Entry** to `Exterior` on the hull's [Ship controller](./components/ship-co
 - **Hold Y** steps you back out onto the ground at the same circle, facing away from the hull — planet surface or hangar floor, whichever the ship is parked on. You must land first; mid-flight it refuses rather than dropping you into air.
 - A **pilot**-role seat becomes mandatory (there is no deck to fall back to), and the "no deck colliders" / "no deck spawn hint" blockers no longer apply.
 - With no Ship Entry marker placed, one circle is synthesised at the pilot seat's ground projection so the hull is testable immediately.
+- A **Canopy** section appears on the controller. Tick **Enabled**, drag the canopy GLB node onto **Hinge**, set **Open °**, and press **Play** to check the swing in the viewport. Seated pilots toggle it with the **Toggle Canopy** key (default **N**) or a `canopy` [Cockpit control](./components/cockpit-control) marker. See [Canopy](./components/ship-controller#canopy).
 
 Authoring an open-frame hull, start to finish:
 
 1. Hull GLB at origin with **ship-controller**; set **Entry** to `Exterior`
 2. Set **restHeight** to the parked ground clearance — the board circle is matched against that band
-3. Add a child empty per seat; register them in the controller's seat list with roles (**one must be `pilot`**)
+3. Add a child empty per seat **on the deck under each chair**, and drag them into the controller's seat list — each gets a [Ship Seat](./components/ship-seat) component where you set its role (**one must be `pilot`**) and eye offset
 4. Add an Empty on the ground beside the hull → component **Ship Entry** → radius ≈ 3
 5. Save, **Test** on Pad, walk up, **F** to board, **hold Y** to step off
 

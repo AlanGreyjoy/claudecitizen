@@ -371,6 +371,52 @@ function parseShipControllerRamp(value: Record<string, unknown>, path: string) {
   return ramp;
 }
 
+function parseShipControllerCanopy(value: Record<string, unknown>, path: string) {
+  if (value.canopy === undefined) return undefined;
+  if (!isRecord(value.canopy)) fail(`${path}.canopy`, "expected canopy object");
+  if (!isRecord(value.canopy.hinge))
+    fail(`${path}.canopy.hinge`, "expected hinge object");
+  return {
+    enabled:
+      value.canopy.enabled === undefined
+        ? undefined
+        : Boolean(value.canopy.enabled),
+    hinge: {
+      node: parseString(value.canopy.hinge.node, `${path}.canopy.hinge.node`, 128),
+      openRadians: Math.min(
+        10,
+        Math.max(
+          -10,
+          parseFiniteNumber(
+            value.canopy.hinge.openRadians,
+            `${path}.canopy.hinge.openRadians`,
+          ),
+        ),
+      ),
+      axis: parseShipControllerHingeAxis(
+        value.canopy.hinge.axis,
+        `${path}.canopy.hinge.axis`,
+      ),
+    },
+    ...(value.canopy.openSoundUrl === undefined
+      ? {}
+      : {
+          openSoundUrl: parseAssetUrl(
+            value.canopy.openSoundUrl,
+            `${path}.canopy.openSoundUrl`,
+          ),
+        }),
+    ...(value.canopy.closeSoundUrl === undefined
+      ? {}
+      : {
+          closeSoundUrl: parseAssetUrl(
+            value.canopy.closeSoundUrl,
+            `${path}.canopy.closeSoundUrl`,
+          ),
+        }),
+  };
+}
+
 function parseShipControllerStats(value: Record<string, unknown>, path: string) {
   return {
     maxSpeedMps: optionalClamped(value.maxSpeedMps, `${path}.maxSpeedMps`, 5, 500),
@@ -435,6 +481,7 @@ export function parseShipControllerComponent(
         ? undefined
         : parseShipControllerGear(value.gear, `${path}.gear`),
     ramp: parseShipControllerRamp(value, path),
+    canopy: parseShipControllerCanopy(value, path),
     doors: parseShipControllerDoors(value, path),
     seats: parseShipControllerSeats(value, path),
     entry: parseShipControllerEntryMode(value.entry, `${path}.entry`),

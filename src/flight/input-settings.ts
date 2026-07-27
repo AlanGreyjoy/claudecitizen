@@ -31,7 +31,8 @@ export type KeyboardActionId =
   | 'hangarCancel'
   | 'haloBand'
   | 'personalInventory'
-  | 'cycleFlightMode';
+  | 'cycleFlightMode'
+  | 'toggleCanopy';
 
 export type FlightAnalogControlId =
   | 'pitch'
@@ -170,6 +171,7 @@ export const KEYBOARD_ACTIONS: readonly KeyboardActionDefinition[] = [
   { id: 'haloBand', label: 'HaloBand Device', defaultBinding: { primary: 'F2' } },
   { id: 'personalInventory', label: 'Personal Inventory', defaultBinding: { primary: 'KeyI' } },
   { id: 'cycleFlightMode', label: 'Flight Mode / Quantum', defaultBinding: { primary: 'KeyU' } },
+  { id: 'toggleCanopy', label: 'Toggle Canopy', defaultBinding: { primary: 'KeyN' } },
 ] as const;
 
 export const FLIGHT_ANALOG_CONTROLS: readonly FlightAnalogControlDefinition[] = [

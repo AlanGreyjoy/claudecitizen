@@ -261,6 +261,7 @@ function writeShipRig(writer: ProtoWriter, field: number, value: NetworkShipRig 
         entry.doubleField(2, open01);
       });
     }
+    nested.doubleField(4, value.canopy01);
   });
 }
 
@@ -475,7 +476,7 @@ function readShip(reader: ProtoReader): NetworkShipBody {
 }
 
 function readShipRig(reader: ProtoReader): NetworkShipRig {
-  const rig: NetworkShipRig = { gear01: 0, ramp01: 0, doors: {} };
+  const rig: NetworkShipRig = { gear01: 0, ramp01: 0, canopy01: 0, doors: {} };
   while (!reader.done) {
     const { field, wire } = reader.tag();
     if (field === 1) rig.gear01 = reader.double();
@@ -491,7 +492,8 @@ function readShipRig(reader: ProtoReader): NetworkShipRig {
         else entry.skip(tag.wire);
       }
       if (id) rig.doors[id] = open01;
-    } else reader.skip(wire);
+    } else if (field === 4) rig.canopy01 = reader.double();
+    else reader.skip(wire);
   }
   return rig;
 }

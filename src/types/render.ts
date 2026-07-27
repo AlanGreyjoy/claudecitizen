@@ -85,6 +85,7 @@ export interface RenderStats {
 export interface NetworkShipRig {
   gear01: number;
   ramp01: number;
+  canopy01: number;
   doors: Record<string, number>;
 }
 
@@ -217,8 +218,13 @@ export interface SpikeRenderWorld {
   cameraOcclusion?: (from: Vec3, to: Vec3) => Vec3;
   /** Current ship camera-bound id while on board; drives interior camera clamping. */
   shipZoneId?: string | null;
-  /** Landing gear / ramp / door articulation, 0..1 each (doors by layout id). */
-  shipRig?: { gear01: number; ramp01: number; doors: Record<string, number> };
+  /** Landing gear / ramp / canopy / door articulation, 0..1 each (doors by layout id). */
+  shipRig?: {
+    gear01: number;
+    ramp01: number;
+    canopy01: number;
+    doors: Record<string, number>;
+  };
   /** Remote players/ships received from WebTransport cell snapshots. */
   networkEntities?: NetworkRenderEntity[];
   /** Authored ambient station NPCs. Local/cosmetic until NPCs become cell entities. */

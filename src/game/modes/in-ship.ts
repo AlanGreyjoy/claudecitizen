@@ -6,6 +6,9 @@ import {
 } from "../../flight/quantum-travel";
 import { beginStandTransition } from "../../player/transitions";
 import { canLeavePilotSeat } from "../../player/ship-interaction";
+import { toggleShipCanopy } from "../../player/cockpit-gaze";
+import { getShipLayout } from "../../player/ship-layout";
+import { playShipCanopyToggleSfx } from "../../player/ship-articulation-sfx";
 import type { CameraState, FrameActions } from "../types";
 import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
@@ -57,6 +60,13 @@ export function createInShipMode(
 
     if (actions.quantumEngagePressed && ctx.world.quantum.phase === "idle") {
       tryEngageQuantum(ctx);
+    }
+
+    if (actions.toggleCanopyPressed) {
+      const spec = getShipLayout().spec;
+      if (toggleShipCanopy(instance.rig, spec)) {
+        playShipCanopyToggleSfx(spec, instance.rig.canopyOpen);
+      }
     }
 
     if (ctx.world.quantum.phase !== "idle") {

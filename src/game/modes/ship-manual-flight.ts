@@ -44,7 +44,9 @@ function applyCockpitLookAt(
     view.forward,
   );
   if (actions.primaryClickPressed && hit) {
-    const applied = applyCockpitControlAction(hit.control.action, instance.rig);
+    const applied = applyCockpitControlAction(hit.control.action, instance.rig, {
+      spec: getShipLayout().spec,
+    });
     if (applied) {
       playCockpitControlToggleSfx(
         hit.control.action,

@@ -359,6 +359,9 @@ export function createHaloBandPanels(ctx: HaloBandPanelContext) {
     systems.append(systemsTitle);
     systems.append(makeRowStat('Landing Gear', rig.gearDown ? 'Deployed' : 'Retracted'));
     systems.append(makeRowStat('Boarding Ramp', rig.rampDown ? 'Lowered' : 'Raised'));
+    if (ship.spec.canopyHinge) {
+      systems.append(makeRowStat('Canopy', rig.canopyOpen ? 'Open' : 'Closed'));
+    }
     for (const [id, door] of Object.entries(rig.doors)) {
       systems.append(makeRowStat(`${id} Door`, door.isOpen ? 'Open' : 'Closed'));
     }

@@ -11,6 +11,8 @@ export interface ViewportScene {
   entityRoot: THREE.Group;
   orbit: OrbitControls;
   gizmo: TransformControls;
+  /** Editor fill lighting (hemi + sun + fill). Off = authored local lights only. */
+  setEnvironmentLights: (enabled: boolean) => void;
   resize: () => void;
   dispose: () => void;
 }
@@ -36,7 +38,9 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 10_000);
   camera.position.set(20, 16, 20);
 
-  scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x121725, 0.82));
+  const envLights = new THREE.Group();
+  envLights.name = "editor-env-lights";
+  envLights.add(new THREE.HemisphereLight(0xbcd4ff, 0x121725, 0.82));
   const sun = new THREE.DirectionalLight(0xfff3dc, 2.45);
   sun.position.set(36, 62, 26);
   sun.castShadow = true;
@@ -50,10 +54,11 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias = -0.00035;
   sun.shadow.radius = 2;
-  scene.add(sun);
+  envLights.add(sun);
   const fill = new THREE.DirectionalLight(0x7db8ff, 0.42);
   fill.position.set(-32, 18, -42);
-  scene.add(fill);
+  envLights.add(fill);
+  scene.add(envLights);
 
   const grid = new THREE.GridHelper(400, 400, 0x33507a, 0x18243c);
   (grid.material as THREE.Material).transparent = true;
@@ -96,6 +101,9 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
     entityRoot,
     orbit,
     gizmo,
+    setEnvironmentLights(enabled: boolean) {
+      envLights.visible = enabled;
+    },
     resize,
     dispose() {
       gizmo.detach();

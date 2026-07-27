@@ -256,7 +256,11 @@ function shipHud(
           visible: true,
           label: cockpitControlLabel(
             hit.control.action,
-            { gearDown: rig.gearDown, rampDown: rig.rampDown },
+            {
+              gearDown: rig.gearDown,
+              rampDown: rig.rampDown,
+              canopyOpen: rig.canopyOpen,
+            },
             hit.control.label,
           ),
           offsetPx: { x: offset.x, y: offset.y },

@@ -171,6 +171,7 @@ export function createSandboxShipVisuals(
     })),
     gearHinges: layout.spec.gearHinges,
     rampHinge: layout.spec.rampHinge,
+    canopyHinge: layout.spec.canopyHinge,
   });
   shipModel.group.frustumCulled = false;
   sandboxScene.scene.add(shipModel.group);

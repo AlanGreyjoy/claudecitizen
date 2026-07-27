@@ -4,6 +4,7 @@ import { localOffsetToWorld } from "./ship-interaction";
 import type {
   CockpitControlAction,
   CockpitControlSpec,
+  ShipSpec,
 } from "./ship-layout";
 import type { ShipRigState } from "./ship-rig";
 
@@ -25,6 +26,7 @@ export interface CockpitGazeHit {
 export interface CockpitGazeLabelState {
   gearDown: boolean;
   rampDown: boolean;
+  canopyOpen: boolean;
 }
 
 /** Dynamic prompt when no authored label override is set. */
@@ -39,6 +41,8 @@ export function cockpitControlLabel(
       return state.gearDown ? "Raise Landing Gear" : "Lower Landing Gear";
     case "cargo-ramp":
       return state.rampDown ? "Raise Cargo Ramp" : "Lower Cargo Ramp";
+    case "canopy":
+      return state.canopyOpen ? "Close Canopy" : "Open Canopy";
   }
 }
 
@@ -85,11 +89,22 @@ export function resolveCockpitGazeTarget(
   return best;
 }
 
-/** Toggle gear/ramp from a cockpit control action. */
+/**
+ * Toggle the ship canopy. No-ops when the layout authored no canopy hinge, so
+ * a stray keybind or gaze marker on a canopy-less ship does nothing rather
+ * than silently desyncing the rig from the model.
+ */
+export function toggleShipCanopy(rig: ShipRigState, spec: ShipSpec): boolean {
+  if (!spec.canopyHinge) return false;
+  rig.canopyOpen = !rig.canopyOpen;
+  return true;
+}
+
+/** Toggle gear/ramp/canopy from a cockpit control action. */
 export function applyCockpitControlAction(
   action: CockpitControlAction,
   rig: ShipRigState,
-  options?: { allowRamp?: boolean },
+  options?: { allowRamp?: boolean; spec?: ShipSpec },
 ): boolean {
   switch (action) {
     case "landing-gear":
@@ -99,6 +114,8 @@ export function applyCockpitControlAction(
       if (options?.allowRamp === false) return false;
       rig.rampDown = !rig.rampDown;
       return true;
+    case "canopy":
+      return options?.spec ? toggleShipCanopy(rig, options.spec) : false;
   }
 }
 

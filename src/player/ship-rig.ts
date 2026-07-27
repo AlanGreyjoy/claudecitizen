@@ -17,8 +17,11 @@ export interface ShipRigState {
   gear01: number;
   /** 0 raised .. 1 lowered. */
   ramp01: number;
+  /** 0 closed .. 1 open. */
+  canopy01: number;
   gearDown: boolean;
   rampDown: boolean;
+  canopyOpen: boolean;
   /** Keyed by ship-door id from the layout. */
   doors: Record<string, ShipDoorRigState>;
 }
@@ -27,11 +30,14 @@ const GEAR_RATE_PER_SECOND = 1 / 2.333;
 /** Full raise/lower matches Phobos Ramp1.wav (~4.66s). Exported so the editor
  * ramp preview plays at the same speed the game does. */
 export const RAMP_RATE_PER_SECOND = 1 / 4.661;
+/** ~2s full swing. Exported so the editor canopy preview matches the game. */
+export const CANOPY_RATE_PER_SECOND = 1 / 2;
 const DOOR_RATE_PER_SECOND = 1.5;
 
 export interface ShipRigOptions {
   gearDown?: boolean;
   rampDown?: boolean;
+  canopyOpen?: boolean;
   /** Overrides the layout's defaultOpen per door id. */
   doorsOpen?: Record<string, boolean>;
 }
@@ -42,6 +48,7 @@ export function createShipRigState(
 ): ShipRigState {
   const gearDown = options?.gearDown ?? true;
   const rampDown = options?.rampDown ?? false;
+  const canopyOpen = options?.canopyOpen ?? false;
   const doorList = doors ?? getShipLayout().doors;
   const doorStates: Record<string, ShipDoorRigState> = {};
   for (const door of doorList) {
@@ -51,8 +58,10 @@ export function createShipRigState(
   return {
     gear01: gearDown ? 1 : 0,
     ramp01: rampDown ? 1 : 0,
+    canopy01: canopyOpen ? 1 : 0,
     gearDown,
     rampDown,
+    canopyOpen,
     doors: doorStates,
   };
 }
@@ -66,6 +75,11 @@ function moveToward(value: number, target: number, maxDelta: number): number {
 export function updateShipRig(rig: ShipRigState, dt: number): void {
   rig.gear01 = moveToward(rig.gear01, rig.gearDown ? 1 : 0, GEAR_RATE_PER_SECOND * dt);
   rig.ramp01 = moveToward(rig.ramp01, rig.rampDown ? 1 : 0, RAMP_RATE_PER_SECOND * dt);
+  rig.canopy01 = moveToward(
+    rig.canopy01,
+    rig.canopyOpen ? 1 : 0,
+    CANOPY_RATE_PER_SECOND * dt,
+  );
   for (const door of Object.values(rig.doors)) {
     door.open01 = moveToward(door.open01, door.isOpen ? 1 : 0, DOOR_RATE_PER_SECOND * dt);
   }

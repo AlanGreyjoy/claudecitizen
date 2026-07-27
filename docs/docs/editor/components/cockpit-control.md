@@ -1,7 +1,7 @@
 ---
 sidebar_position: 41
 title: Cockpit control
-description: Seat free-look gaze + LMB control for landing gear and cargo ramp.
+description: Seat free-look gaze + LMB control for landing gear, cargo ramp, and canopy.
 ---
 
 # Cockpit control
@@ -19,7 +19,7 @@ While piloting, hold **F** for free-look; gaze + **LMB** activates the control.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `id` | string | Unique within prefab |
-| `action` | enum | Control action (landing gear, cargo ramp, …) |
+| `action` | enum | `landing-gear`, `cargo-ramp`, or `canopy`. A `canopy` marker does nothing unless the controller enables a canopy |
 | `label` | string? | Override; runtime otherwise derives from action + rig state |
 | `gazeRadius` | number? | Max miss from camera ray (m) |
 | `maxDistance` | number? | Max distance from camera to marker (m) |

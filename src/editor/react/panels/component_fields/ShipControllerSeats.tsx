@@ -4,28 +4,20 @@ import {
   findEntityById,
   parseDraggedEntityIds,
 } from '../../../panels/inspector-logic';
+import type { EditorStore } from '../../../document';
 import type { PrefabComponent, ShipSeatRole } from '../../../../world/prefabs/schema';
-import { SHIP_SEAT_ROLES } from '../../../../world/prefabs/schema';
 import type { ComponentFieldContext } from './context';
 import {
   EmptyNote,
   EntityRefField,
   FieldRow,
   Hint,
-  NumberField,
   RemoveButton,
   SectionLabel,
-  SelectField,
-  Vec3NumberRow,
 } from '../InspectorForm';
 
 type ShipControllerComponent = Extract<PrefabComponent, { type: 'ship-controller' }>;
 type ShipSeat = NonNullable<ShipControllerComponent['seats']>[number];
-
-/** Must match `bakeControllerSeat` in ship-runtime.ts. */
-const SEAT_DEFAULT_EYE = { x: 0, y: 0.87, z: 0.25 };
-const SEAT_DEFAULT_STAND = { x: 0, z: -1.55 };
-const SEAT_DEFAULT_INTERACT_RADIUS = 1.45;
 
 export type ShipControllerSeatsProps = {
   ctx: ComponentFieldContext;
@@ -40,95 +32,61 @@ function commitSeats(
   ctx.update({ ...component, seats });
 }
 
-/**
- * One seat row. The marker empty is the seated character's **root**, which the
- * avatar renders at floor level — so it belongs on the deck under the chair,
- * not on the cushion. Eye is the offset from there to the cockpit camera, and
- * is the field to tune for first-person feel; moving the marker to fix the view
- * instead drags the body off the seat and breaks the sitting pose.
- */
-function ShipSeatRow({
-  seat,
-  index,
-  seats,
-  store,
-  setSeats,
-}: {
-  seat: ShipSeat;
-  index: number;
-  seats: ShipSeat[];
-  store: ComponentFieldContext['store'];
-  setSeats: (next: ShipSeat[]) => void;
-}): ReactElement {
-  const patch = (next: Partial<ShipSeat>): void => {
-    setSeats(seats.map((entry, i) => (i === index ? { ...entry, ...next } : entry)));
-  };
-  const eye = seat.eye ?? SEAT_DEFAULT_EYE;
-  const stand = seat.stand ?? SEAT_DEFAULT_STAND;
-  return (
-    <li className="ed-ship-seats-item">
-      <FieldRow label={`Seat ${index + 1}`} wide>
-        <EntityRefField
-          store={store}
-          value={seat.entityId}
-          onPick={(nextId) => {
-            if (!nextId) {
-              setSeats(seats.filter((_, i) => i !== index));
-              return;
-            }
-            if (seats.some((other, i) => i !== index && other.entityId === nextId)) return;
-            if (!findEntityById(store.getState().roots, nextId)) return;
-            patch({ entityId: nextId });
-          }}
-        />
-        <RemoveButton
-          title="Remove seat"
-          onClick={() => setSeats(seats.filter((_, i) => i !== index))}
-        />
-      </FieldRow>
-      <FieldRow label="Role" wide>
-        <SelectField
-          options={SHIP_SEAT_ROLES}
-          value={seat.role ?? 'passenger'}
-          onCommit={(role) => patch({ role: role as ShipSeatRole })}
-        />
-      </FieldRow>
-      <Vec3NumberRow
-        label="Eye"
-        values={eye}
-        onCommitAxis={(axis, next) => patch({ eye: { ...eye, [axis]: next } })}
-      />
-      <FieldRow label="Stand">
-        <NumberField
-          value={stand.x}
-          onCommit={(x) => patch({ stand: { ...stand, x } })}
-        />
-        <NumberField
-          value={stand.z}
-          onCommit={(z) => patch({ stand: { ...stand, z } })}
-        />
-        <span />
-        <span />
-      </FieldRow>
-      <FieldRow label="Reach">
-        <NumberField
-          value={seat.interactRadius ?? SEAT_DEFAULT_INTERACT_RADIUS}
-          onCommit={(next) =>
-            patch({ interactRadius: Math.min(10, Math.max(0.5, next)) })
-          }
-        />
-        <span />
-        <span />
-        <span />
-      </FieldRow>
-    </li>
-  );
+/** Seat settings authored on the marker itself, legacy `pilot-seat` included. */
+function findSeatComponent(
+  store: EditorStore,
+  entityId: string,
+): Extract<PrefabComponent, { type: 'ship-seat' } | { type: 'pilot-seat' }> | null {
+  const entity = findEntityById(store.getState().roots, entityId);
+  for (const component of entity?.components ?? []) {
+    if (component.type === 'ship-seat' || component.type === 'pilot-seat') {
+      return component;
+    }
+  }
+  return null;
 }
 
 /**
- * Hierarchy drag targets for `ship-controller.seats[]`. Empty marker entities
- * supply world pose at bake; per-seat role, eye, stand, and reach are edited
- * here.
+ * Registering an empty as a seat should be one gesture. Without the component
+ * the entity has nowhere to hold role / eye / stand, and the author would have
+ * to know to add it by hand — so the drop adds it, defaulted to pilot.
+ */
+function ensureSeatComponent(store: EditorStore, entityId: string): void {
+  const entity = findEntityById(store.getState().roots, entityId);
+  if (!entity) return;
+  if (findSeatComponent(store, entityId)) return;
+  store.setComponents(entityId, [
+    ...entity.components,
+    {
+      type: 'ship-seat',
+      role: 'pilot',
+      eye: { x: 0, y: 0.87, z: 0.25 },
+      stand: { x: 0, z: -1.55 },
+      interactRadius: 1.45,
+    },
+  ]);
+}
+
+function seatRoleLabel(
+  store: EditorStore,
+  seat: ShipSeat,
+): { text: string; role: ShipSeatRole | null } {
+  const authored = findSeatComponent(store, seat.entityId);
+  const role = authored?.role ?? seat.role ?? null;
+  if (!authored) {
+    return {
+      text: role ? `${role} · legacy settings on the controller` : 'no Ship Seat component',
+      role,
+    };
+  }
+  return { text: role ?? 'passenger', role };
+}
+
+/**
+ * Hierarchy drag targets for `ship-controller.seats[]`. This list only decides
+ * *which* entities are seats and in what order (the first pilot-role seat
+ * drives flight anchors) — role, eye, stand, and reach live on each marker's
+ * own `ship-seat` component, so they are edited where the gizmo is.
  */
 export function ShipControllerSeats({
   ctx,
@@ -150,7 +108,8 @@ export function ShipControllerSeats({
       if (!id || known.has(id)) continue;
       if (!findEntityById(roots, id)) continue;
       known.add(id);
-      added.push({ entityId: id, role: 'pilot' });
+      ensureSeatComponent(store, id);
+      added.push({ entityId: id });
     }
     if (added.length > 0) setSeats([...seats, ...added]);
   };
@@ -188,26 +147,55 @@ export function ShipControllerSeats({
       </div>
       {seats.length === 0 ? (
         <EmptyNote>
-          Drop seat marker empties here. First pilot seat drives flight anchors.
+          Drop seat marker empties here — each one gets a Ship Seat component.
+          First pilot seat drives flight anchors.
         </EmptyNote>
       ) : (
         <>
           <Hint>
-            Marker = the seated character&apos;s root, rendered at floor level — put it
-            on the deck under the chair, not on the cushion. Tune first-person height
-            with Eye, never by raising the marker.
+            Select a seat entity to edit its role, eye, stand, and reach on its Ship
+            Seat component. This list only sets which entities are seats and their
+            order.
           </Hint>
           <ul className="ed-ship-seats-list">
-            {seats.map((seat, index) => (
-              <ShipSeatRow
-                key={`${seat.entityId}:${index}`}
-                seat={seat}
-                index={index}
-                seats={seats}
-                store={store}
-                setSeats={setSeats}
-              />
-            ))}
+            {seats.map((seat, index) => {
+              const label = seatRoleLabel(store, seat);
+              return (
+                <li key={`${seat.entityId}:${index}`} className="ed-ship-seats-item">
+                  <FieldRow label={`Seat ${index + 1}`} wide>
+                    <EntityRefField
+                      store={store}
+                      value={seat.entityId}
+                      onPick={(nextId) => {
+                        if (!nextId) {
+                          setSeats(seats.filter((_, i) => i !== index));
+                          return;
+                        }
+                        if (
+                          seats.some(
+                            (other, i) => i !== index && other.entityId === nextId,
+                          )
+                        ) {
+                          return;
+                        }
+                        if (!findEntityById(store.getState().roots, nextId)) return;
+                        ensureSeatComponent(store, nextId);
+                        setSeats(
+                          seats.map((entry, i) =>
+                            i === index ? { ...entry, entityId: nextId } : entry,
+                          ),
+                        );
+                      }}
+                    />
+                    <RemoveButton
+                      title="Remove seat"
+                      onClick={() => setSeats(seats.filter((_, i) => i !== index))}
+                    />
+                  </FieldRow>
+                  <EmptyNote>{label.text}</EmptyNote>
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

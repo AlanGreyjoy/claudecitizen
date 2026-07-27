@@ -16,6 +16,7 @@ import {
   cockpitControlLabel,
   projectWorldPointToScreenOffset,
   resolveCockpitGazeTarget,
+  toggleShipCanopy,
 } from '../../player/cockpit-gaze';
 import { resolveVisibleCockpitSpeedInstruments } from '../../player/cockpit-stats';
 import { updateFlightCameraFeel } from '../../player/flight-camera-feel';
@@ -27,7 +28,10 @@ import {
   localOffsetToWorld,
 } from '../../player/ship-interaction';
 import { getLeavePilotStandPose } from '../../player/ship-deck';
-import { playCockpitControlToggleSfx } from '../../player/ship-articulation-sfx';
+import {
+  playCockpitControlToggleSfx,
+  playShipCanopyToggleSfx,
+} from '../../player/ship-articulation-sfx';
 import { FIRST_PERSON_PITCH_LIMIT } from '../../player/character-controller';
 import { MODE_IN_SHIP } from '../../player/modes';
 import type { ShipSandboxSession, SandboxPilotActions } from './types';
@@ -101,9 +105,22 @@ function handleCockpitGazeClick(session: ShipSandboxSession, actions: SandboxPil
   );
   const hit = resolveCockpitGazeTarget(layout.cockpitControls, session.ship, eye, view.forward);
   if (!hit) return;
-  const applied = applyCockpitControlAction(hit.control.action, session.rig);
+  const applied = applyCockpitControlAction(hit.control.action, session.rig, {
+    spec: layout.spec,
+  });
   if (applied) {
-    playCockpitControlToggleSfx(hit.control.action, session.rig, getShipLayout().spec);
+    playCockpitControlToggleSfx(hit.control.action, session.rig, layout.spec);
+  }
+}
+
+function handleCanopyToggle(
+  session: ShipSandboxSession,
+  actions: SandboxPilotActions,
+): void {
+  if (!actions.toggleCanopyPressed) return;
+  const spec = getShipLayout().spec;
+  if (toggleShipCanopy(session.rig, spec)) {
+    playShipCanopyToggleSfx(spec, session.rig.canopyOpen);
   }
 }
 
@@ -274,7 +291,11 @@ function updateSeatLookGazeHud(
     visible: true,
     label: cockpitControlLabel(
       hit.control.action,
-      { gearDown: session.rig.gearDown, rampDown: session.rig.rampDown },
+      {
+        gearDown: session.rig.gearDown,
+        rampDown: session.rig.rampDown,
+        canopyOpen: session.rig.canopyOpen,
+      },
       hit.control.label,
     ),
     offsetPx: { x: offset.x, y: offset.y },
@@ -312,6 +333,7 @@ export function updateShipSandboxPilot(
   integrateSandboxShip(session, dt, aimForward);
   updateSandboxFlightAudio(session, dt);
   handleCockpitGazeClick(session, actions);
+  handleCanopyToggle(session, actions);
 
   const speed = length(session.ship.velocity);
   const restHeight = getShipRestHeightMeters();

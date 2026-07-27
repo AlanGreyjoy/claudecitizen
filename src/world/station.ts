@@ -494,6 +494,32 @@ export interface StationInfoMarker {
   interactSoundUrl?: string;
 }
 
+export type StationDoorTrigger = "radial" | "raycast";
+
+/** Self-contained station door baked from a `door` component. */
+export interface StationDoorSpec {
+  id: string;
+  label: string;
+  motion: "slide" | "hinge";
+  axis: "x" | "y" | "z";
+  nodes: {
+    name: string;
+    delta: number;
+    under?: string;
+  }[];
+  right: number;
+  up: number;
+  forward: number;
+  trigger: StationDoorTrigger;
+  radius: number;
+  aimRadius: number;
+  defaultOpen: boolean;
+  /** Seconds to fully open/close. */
+  duration: number;
+  openSoundUrl?: string;
+  closeSoundUrl?: string;
+}
+
 export interface StationAvmsMarker {
   id: string;
   floorId: StationFloorId;
@@ -580,6 +606,8 @@ export interface StationLayoutOverride {
   /** Climbable ladders in station-local meters. */
   ladders: LadderSpec[];
   infoMarkers: StationInfoMarker[];
+  /** Self-contained F-key doors from `door` components. */
+  doors: StationDoorSpec[];
   avmsMarkers: StationAvmsMarker[];
   weaponShops: StationWeaponShopMarker[];
   outfitters: StationOutfittersMarker[];

@@ -1,4 +1,10 @@
-import { vec3 } from '../math/vec3';
+import { add, length, scale, sub, dot, vec3 } from '../math/vec3';
+import {
+  ORBIT_PITCH_LIMIT,
+  resolveCharacterCameraRig,
+  resolveOrbitCamera,
+  CHARACTER_GROUND_OFFSET_METERS,
+} from './character-controller';
 import { MODE_IN_STATION, MODE_RIDING_ELEVATOR } from './modes';
 import {
   getStationFrame,
@@ -16,17 +22,17 @@ import {
   type ElevatorDestination,
   type HangarSpec,
   type StationAnchor,
+  type StationDoorSpec,
   type StationElevatorMarker,
   type StationFrame,
 } from '../world/station';
 import { nearestLadderMount, type LadderSpec } from '../world/ladders';
-import { CHARACTER_GROUND_OFFSET_METERS } from './character-controller';
 import type { GameBootstrap } from '../net/api';
 import { applyOwnedShipToInstance, ensurePlayerShipInstance } from '../world/ships';
 import { getShipRestHeightMeters } from './ship-layout';
 import { characterAtElevatorDestination, type StationCharacterState } from './station-walk';
 import { teleportStationPlayer, type StationPhysics } from '../physics/station-physics';
-import type { Planet } from '../types';
+import type { Planet, Vec3 } from '../types';
 import { getShipInstance } from '../flight/ship-world';
 import { PLAYER_SHIP_INSTANCE_ID, getActiveShip, type WorldState } from './world-state';
 
@@ -39,6 +45,11 @@ export interface StationElevatorRide {
   duration: number;
   elapsed: number;
   teleported: boolean;
+}
+
+export interface StationDoorInteractAim {
+  cameraPos: Vec3;
+  cameraForward: Vec3;
 }
 
 export type StationInteraction =
@@ -59,7 +70,81 @@ export type StationInteraction =
       proximitySoundUrl?: string;
       interactSoundUrl?: string;
     }
+  | { kind: 'door'; door: StationDoorSpec }
   | { kind: 'avms-terminal' };
+
+/** Build on-foot camera aim for station door raycasts. */
+export function resolveStationDoorInteractAim(
+  characterPosition: Vec3,
+  yawRadians: number,
+  pitchRadians: number,
+  zoomDistance = 7.4,
+): StationDoorInteractAim {
+  const orbit = resolveOrbitCamera(
+    characterPosition,
+    yawRadians,
+    pitchRadians,
+    ORBIT_PITCH_LIMIT,
+  );
+  const rig = resolveCharacterCameraRig(orbit, zoomDistance);
+  return {
+    cameraPos: add(characterPosition, rig.positionOffset),
+    cameraForward: orbit.forward,
+  };
+}
+
+function scoreRaycastStationDoor(
+  frame: StationFrame,
+  door: StationDoorSpec,
+  aim: StationDoorInteractAim,
+): number | null {
+  const worldPos = stationLocalToWorld(frame, {
+    right: door.right,
+    up: door.up,
+    forward: door.forward,
+  });
+  const forward = aim.cameraForward;
+  const toPoint = sub(worldPos, aim.cameraPos);
+  const distance = length(toPoint);
+  if (distance > door.radius || distance < 1e-4) return null;
+
+  const along = dot(toPoint, forward);
+  if (along < 0.05) return null;
+
+  const closestOnRay = scale(forward, along);
+  const perpDistance = length(sub(toPoint, closestOnRay));
+  if (perpDistance > door.aimRadius) return null;
+
+  const angular = perpDistance / Math.max(along, 0.05);
+  return angular * 10 + along * 0.05;
+}
+
+function nearestStationDoor(
+  character: StationCharacterState,
+  frame: StationFrame,
+  doors: StationDoorSpec[],
+  localUp: number,
+  aim?: StationDoorInteractAim | null,
+): StationDoorSpec | null {
+  let best: { door: StationDoorSpec; score: number } | null = null;
+  for (const door of doors) {
+    if (door.trigger === 'raycast') {
+      if (!aim) continue;
+      const hit = scoreRaycastStationDoor(frame, door, aim);
+      if (hit == null) continue;
+      if (!best || hit < best.score) best = { door, score: hit };
+      continue;
+    }
+    const distance = Math.hypot(
+      character.stationLocal.right - door.right,
+      localUp - door.up,
+      character.stationLocal.forward - door.forward,
+    );
+    if (distance > door.radius) continue;
+    if (!best || distance < best.score) best = { door, score: distance };
+  }
+  return best?.door ?? null;
+}
 
 function nearAnchor(character: StationCharacterState, anchor: StationAnchor): boolean {
   const room = getStationRoom(character.stationRoomId);
@@ -76,6 +161,7 @@ function nearAnchor(character: StationCharacterState, anchor: StationAnchor): bo
 function resolvePrefabInteraction(
   character: StationCharacterState,
   frame: StationFrame,
+  doorAim?: StationDoorInteractAim | null,
 ): StationInteraction | null {
   const override = getStationLayoutOverride();
   if (!override) return null;
@@ -113,6 +199,15 @@ function resolvePrefabInteraction(
     if (near) return { kind: 'avms-terminal' };
   }
 
+  const door = nearestStationDoor(
+    character,
+    frame,
+    override.doors,
+    localUp,
+    doorAim,
+  );
+  if (door) return { kind: 'door', door };
+
   for (const info of override.infoMarkers) {
     const near =
       Math.hypot(
@@ -140,9 +235,14 @@ function resolvePrefabInteraction(
 export function resolveStationInteraction(
   character: StationCharacterState,
   frame?: StationFrame,
+  doorAim?: StationDoorInteractAim | null,
 ): StationInteraction | null {
   if (getStationLayoutOverride()) {
-    return resolvePrefabInteraction(character, frame ?? getStationFrame({ name: '', radiusMeters: 0 } as Planet));
+    return resolvePrefabInteraction(
+      character,
+      frame ?? getStationFrame({ name: '', radiusMeters: 0 } as Planet),
+      doorAim,
+    );
   }
 
   const room = getStationRoom(character.stationRoomId);

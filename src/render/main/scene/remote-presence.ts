@@ -32,6 +32,7 @@ const DEFAULT_REMOTE_SHIP_PREFAB_ID = 'phobos-starhopper';
 const DEFAULT_REMOTE_SHIP_RIG: NetworkShipRig = {
   gear01: 0,
   ramp01: 0,
+  canopy01: 0,
   doors: {},
 };
 
@@ -76,6 +77,7 @@ function createRemoteShipHandle(prefabId: string, renderScale: number): ShipMode
     })),
     gearHinges: layout.spec.gearHinges,
     rampHinge: layout.spec.rampHinge,
+    canopyHinge: layout.spec.canopyHinge,
   });
   handle.group.frustumCulled = false;
   return handle;

@@ -206,6 +206,8 @@ const toolbarActions = useMemo(
     onGizmoSpace: (space: 'local' | 'world') => viewportRef.current?.setGizmoSpace(space),
     onSnapChange: (enabled: boolean, translate: number, rotate: number) =>
       viewportRef.current?.setSnap(enabled, translate, rotate),
+    onEnvironmentLightsChange: (enabled: boolean) =>
+      viewportRef.current?.setEnvironmentLights(enabled),
     onFocusSelection: () => viewportRef.current?.focusSelection(),
     onAddBox: () => addBox(store),
     onAddEmpty: () => addEmpty(store),

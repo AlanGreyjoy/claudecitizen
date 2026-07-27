@@ -434,6 +434,36 @@ function buildInteractionHelper(
   );
   return sphere;
 }
+function buildDoorHelper(
+  component: Extract<PrefabComponent, { type: "door" }>,
+): THREE.Object3D | null {
+  const group = new THREE.Group();
+  const radius = component.radius ?? 1.6;
+  const raycast = (component.trigger ?? "radial") === "raycast";
+  const sphere = makeHelperMesh(
+    new THREE.SphereGeometry(radius, 16, 12),
+    raycast ? 0x7db8ff : 0xffce6f,
+    raycast ? 0.14 : 0.24,
+    true,
+  );
+  if (raycast) {
+    const aim = makeHelperMesh(
+      new THREE.SphereGeometry(component.aimRadius ?? 0.35, 12, 10),
+      0x7db8ff,
+      0.45,
+      true,
+    );
+    group.add(aim);
+  }
+  const panel = makeHelperMesh(
+    new THREE.BoxGeometry(1.2, 1.8, 0.08),
+    raycast ? 0x7db8ff : 0xffce6f,
+    0.4,
+  );
+  panel.position.y = 0.9;
+  group.add(sphere, panel);
+  return group;
+}
 function buildColliderHelper(
   component: Extract<PrefabComponent, { type: "collider" }>,
   meshColliderTarget?: THREE.Object3D,
@@ -495,6 +525,7 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
       ),
     "hangar-pad": buildHangarPadHelper,
     "interaction": buildInteractionHelper,
+    "door": buildDoorHelper,
     "station-frame": () => buildFrameAxesHelper(),
     "ship-frame": () => buildFrameAxesHelper(),
   } as Record<string, (component: PrefabComponent) => THREE.Object3D | null>;

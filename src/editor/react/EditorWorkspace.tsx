@@ -258,6 +258,9 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
                 onPlayShipRampPreview={() =>
                   toolbarRef.current?.playRampPreview()
                 }
+                onPlayShipCanopyPreview={() =>
+                  toolbarRef.current?.playCanopyPreview()
+                }
               />
             ) : null}
           </div>

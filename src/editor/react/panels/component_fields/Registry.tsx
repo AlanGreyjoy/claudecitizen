@@ -44,11 +44,13 @@ import { ShipControllerFields } from './ShipControllerFields';
 import {
   BedFields,
   CockpitControlFields,
+  DoorFields,
   EntertainmentSystemFields,
   PilotSeatFields,
   RampInteractFields,
   ShipDoorFields,
   ShipEntryFields,
+  ShipSeatFields,
 } from './Builders5';
 import {
   CanteenFields,
@@ -97,6 +99,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'hangar-pad': field(HangarPadFields),
   interaction: field(InteractionFields),
   animation: field(AnimationFields),
+  door: field(DoorFields),
   'object-animation': field(ObjectAnimationFields),
   'avms-terminal': field(AvmsTerminalFields),
   'point-light': field(PointLightFields),
@@ -113,6 +116,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'ship-hull': field(ShipHullFields),
   'ship-door': field(ShipDoorFields),
   'pilot-seat': field(PilotSeatFields),
+  'ship-seat': field(ShipSeatFields),
   bed: field(BedFields),
   'ramp-interact': field(RampInteractFields),
   'ship-entry': field(ShipEntryFields),

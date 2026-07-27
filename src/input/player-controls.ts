@@ -57,6 +57,7 @@ const ONE_SHOT_KEYBOARD_ACTIONS: readonly KeyboardActionId[] = [
   'hangarBuild',
   'hangarRotate',
   'hangarCancel',
+  'toggleCanopy',
 ];
 const FLIGHT_INPUT_FIELDS: Record<FlightAnalogControlId, keyof FlightInput> = {
   lift: 'lift01',
@@ -529,6 +530,7 @@ function suppressedActions() {
     hangarBuildPressed: false,
     hangarRotatePressed: false,
     hangarCancelPressed: false,
+    toggleCanopyPressed: false,
     weaponSlotPress: null,
     cycleFlightModePressed: false,
     coupledToggled: false,
@@ -581,6 +583,7 @@ function consumeActions(state: ControlsState) {
     hangarBuildPressed: wasKeyboardActionPressed(state, 'hangarBuild'),
     hangarRotatePressed: wasKeyboardActionPressed(state, 'hangarRotate'),
     hangarCancelPressed: wasKeyboardActionPressed(state, 'hangarCancel'),
+    toggleCanopyPressed: wasKeyboardActionPressed(state, 'toggleCanopy'),
     weaponSlotPress,
     cycleFlightModePressed: cycleFlightModeTap,
     coupledToggled,

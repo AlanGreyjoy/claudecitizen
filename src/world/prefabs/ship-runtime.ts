@@ -30,7 +30,14 @@ import {
   LADDER_DEFAULT_RADIUS,
   type LadderSpec,
 } from "../ladders";
-import type { PrefabComponent, PrefabDocument, PrefabEntity, PrefabNodeOverride } from "./schema";
+import type {
+  PrefabComponent,
+  PrefabDocument,
+  PrefabEntity,
+  PrefabNodeOverride,
+  PrefabVec2,
+  ShipSeatRole,
+} from "./schema";
 import type { LocalOffset, Vec3 } from "../../types";
 import {
   type ColliderAnimationBinding,
@@ -55,6 +62,8 @@ const DEFAULT_DOOR_AIM_RADIUS = 0.35;
 const DEFAULT_RAMP_OUTSIDE_RADIUS = 3.0;
 const DEFAULT_RAMP_DECK_RADIUS = 1.7;
 const DEFAULT_CHAIR_RADIUS = 1.45;
+const DEFAULT_SEAT_EYE: Vec3 = { x: 0, y: 0.87, z: 0.25 };
+const DEFAULT_SEAT_STAND: PrefabVec2 = { x: 0, z: -1.55 };
 const DEFAULT_BED_RADIUS = 1.6;
 const DEFAULT_BED_AIM_RADIUS = 0.35;
 const DEFAULT_COCKPIT_GAZE_RADIUS = 0.2;
@@ -122,6 +131,27 @@ function buildEntityTransformMap(
   for (const child of entity.children ?? []) {
     buildEntityTransformMap(child, position, rotation, scale, out);
   }
+}
+
+function buildEntityIdMap(
+  entity: PrefabEntity,
+  out: Map<string, PrefabEntity>,
+): Map<string, PrefabEntity> {
+  out.set(entity.id, entity);
+  for (const child of entity.children ?? []) buildEntityIdMap(child, out);
+  return out;
+}
+
+/** Seat settings authored on the marker itself (`ship-seat`, legacy `pilot-seat`). */
+function findSeatSettingsComponent(
+  entity: PrefabEntity | undefined,
+): Extract<PrefabComponent, { type: "ship-seat" } | { type: "pilot-seat" }> | null {
+  for (const component of entity?.components ?? []) {
+    if (component.type === "ship-seat" || component.type === "pilot-seat") {
+      return component;
+    }
+  }
+  return null;
 }
 
 function findEntityByName(
@@ -300,6 +330,28 @@ function bakeControllerRamp(
   }
 }
 
+/**
+ * Canopy is exterior-entry only for now: interior hulls board through the ramp
+ * and their deck colliders never consult it, so an authored canopy there would
+ * animate with nothing driving it. Requires `enabled` — the block exists as
+ * soon as the inspector checkbox is ticked.
+ */
+function bakeControllerCanopy(
+  controller: ShipControllerComponent,
+  out: CollectedShip,
+): void {
+  const canopy = controller.canopy;
+  if (!canopy?.enabled || !canopy.hinge?.node) return;
+  if (out.entry !== "exterior") return;
+  out.spec.canopyHinge = {
+    name: canopy.hinge.node,
+    openRadians: canopy.hinge.openRadians,
+    ...(canopy.hinge.axis ? { axis: canopy.hinge.axis } : {}),
+  };
+  if (canopy.openSoundUrl) out.spec.canopyOpenSoundUrl = canopy.openSoundUrl;
+  if (canopy.closeSoundUrl) out.spec.canopyCloseSoundUrl = canopy.closeSoundUrl;
+}
+
 function bakeControllerDoor(
   door: NonNullable<ShipControllerComponent["doors"]>[number],
   transforms: Map<string, EntityWorldTransform>,
@@ -332,9 +384,35 @@ function bakeControllerDoor(
   });
 }
 
+/**
+ * Settings come from the marker's own `ship-seat` component when it has one;
+ * the controller's inline fields are the pre-component fallback. Merged
+ * per-field so a half-authored component still inherits legacy values instead
+ * of silently resetting a shipped prefab to defaults.
+ */
+function resolveSeatSettings(
+  seat: NonNullable<ShipControllerComponent["seats"]>[number],
+  entity: PrefabEntity | undefined,
+): {
+  role: ShipSeatRole;
+  eye: Vec3;
+  stand: PrefabVec2;
+  interactRadius: number;
+} {
+  const authored = findSeatSettingsComponent(entity);
+  return {
+    role: authored?.role ?? seat.role ?? "passenger",
+    eye: authored?.eye ?? seat.eye ?? DEFAULT_SEAT_EYE,
+    stand: authored?.stand ?? seat.stand ?? DEFAULT_SEAT_STAND,
+    interactRadius:
+      authored?.interactRadius ?? seat.interactRadius ?? DEFAULT_CHAIR_RADIUS,
+  };
+}
+
 function bakeControllerSeat(
   seat: NonNullable<ShipControllerComponent["seats"]>[number],
   transforms: Map<string, EntityWorldTransform>,
+  entities: Map<string, PrefabEntity>,
   out: CollectedShip,
 ): void {
   const point = resolveEntityShipPoint(seat.entityId, transforms);
@@ -342,13 +420,15 @@ function bakeControllerSeat(
     console.warn(`Ship controller seat entityId "${seat.entityId}" not found.`);
     return;
   }
-  const eye = seat.eye ?? { x: 0, y: 0.87, z: 0.25 };
-  const stand = seat.stand ?? { x: 0, z: -1.55 };
+  const { role, eye, stand, interactRadius } = resolveSeatSettings(
+    seat,
+    entities.get(seat.entityId),
+  );
   const transform = transforms.get(seat.entityId);
   const position = transform?.position ?? vec3(0, 0, 0);
   out.seats.push({
     id: seat.entityId,
-    role: seat.role ?? "passenger",
+    role,
     seat: { right: point.right, up: point.up, forward: point.forward },
     eye: {
       right: -(position.x + eye.x),
@@ -359,7 +439,7 @@ function bakeControllerSeat(
       right: -(position.x + stand.x),
       forward: position.z + stand.z,
     },
-    interactRadius: seat.interactRadius ?? DEFAULT_CHAIR_RADIUS,
+    interactRadius,
   });
 }
 
@@ -386,17 +466,19 @@ function bakeFromShipController(
   hull: PrefabEntity,
   controller: ShipControllerComponent,
   transforms: Map<string, EntityWorldTransform>,
+  entities: Map<string, PrefabEntity>,
   out: CollectedShip,
 ): void {
   out.entry = controller.entry ?? "interior";
   bakeControllerHull(hull, controller, out);
   bakeControllerGear(controller, out);
   bakeControllerRamp(controller, transforms, out);
+  bakeControllerCanopy(controller, out);
   for (const door of controller.doors ?? []) {
     bakeControllerDoor(door, transforms, out);
   }
   for (const seat of controller.seats ?? []) {
-    bakeControllerSeat(seat, transforms, out);
+    bakeControllerSeat(seat, transforms, entities, out);
   }
   if (controller.deckSpawnEntityId) {
     const point = resolveEntityShipPoint(controller.deckSpawnEntityId, transforms);
@@ -457,6 +539,7 @@ function buildCoreShipSpec(
         ? partial.gearHinges
         : DEFAULT_STARHOPPER_GEAR_HINGES,
     rampHinge: partial.rampHinge ?? DEFAULT_STARHOPPER_RAMP_HINGE,
+    canopyHinge: partial.canopyHinge ?? null,
   };
   for (const key of CORE_SPEC_OVERRIDE_KEYS) {
     const value = partial[key];
@@ -484,6 +567,12 @@ function appendOptionalShipSounds(
       : {}),
     ...(partial.rampCloseSoundUrl
       ? { rampCloseSoundUrl: partial.rampCloseSoundUrl }
+      : {}),
+    ...(partial.canopyOpenSoundUrl
+      ? { canopyOpenSoundUrl: partial.canopyOpenSoundUrl }
+      : {}),
+    ...(partial.canopyCloseSoundUrl
+      ? { canopyCloseSoundUrl: partial.canopyCloseSoundUrl }
       : {}),
     ...(partial.boostSoundUrl ? { boostSoundUrl: partial.boostSoundUrl } : {}),
     ...(partial.thrustSoundUrl ? { thrustSoundUrl: partial.thrustSoundUrl } : {}),
@@ -930,6 +1019,50 @@ function collectCockpitControls(
   }
 }
 
+/**
+ * Walks the entity tree for `ship-seat` markers. The controller's `seats[]`
+ * list has already baked (and wins on ordering — the first pilot seat drives
+ * flight anchors); this adopts any seat whose component exists but was never
+ * dragged into that list, so adding the component is enough to get a working
+ * seat instead of a silently dead one.
+ */
+function collectShipSeats(
+  entity: PrefabEntity,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  for (const component of entity.components ?? []) {
+    if (component.type !== "ship-seat") continue;
+    if (out.seats.some((seat) => seat.id === entity.id)) continue;
+    const point = resolveEntityShipPoint(entity.id, transforms);
+    if (!point) {
+      console.warn(`Ship seat marker entity "${entity.id}" has no transform.`);
+      continue;
+    }
+    const position = transforms.get(entity.id)?.position ?? vec3(0, 0, 0);
+    const eye = component.eye ?? DEFAULT_SEAT_EYE;
+    const stand = component.stand ?? DEFAULT_SEAT_STAND;
+    out.seats.push({
+      id: entity.id,
+      role: component.role ?? "passenger",
+      seat: { right: point.right, up: point.up, forward: point.forward },
+      eye: {
+        right: -(position.x + eye.x),
+        up: position.y + eye.y,
+        forward: position.z + eye.z,
+      },
+      stand: {
+        right: -(position.x + stand.x),
+        forward: position.z + stand.z,
+      },
+      interactRadius: component.interactRadius ?? DEFAULT_CHAIR_RADIUS,
+    });
+  }
+  for (const child of entity.children ?? []) {
+    collectShipSeats(child, transforms, out);
+  }
+}
+
 /** Walks the entity tree for ship-entry markers (works with ship-controller hulls). */
 function collectShipEntries(
   entity: PrefabEntity,
@@ -1076,9 +1209,9 @@ function animationForNode(
 
 /**
  * GLB nodes the rig moves and that therefore must not be welded into the hull
- * bake: door leaves and the boarding ramp. Landing gear stays part of the hull
- * — it is exterior, never gates a doorway, and pulling it out would drop leg
- * collision from every existing ship.
+ * bake: door leaves, the boarding ramp, and the canopy. Landing gear stays
+ * part of the hull — it is exterior, never gates a doorway, and pulling it out
+ * would drop leg collision from every existing ship.
  */
 function articulatedNodeNames(doors: ShipDoorSpec[], spec: ShipSpec): string[] {
   const names = new Set<string>();
@@ -1086,6 +1219,7 @@ function articulatedNodeNames(doors: ShipDoorSpec[], spec: ShipSpec): string[] {
     for (const node of door.nodes) names.add(node.name);
   }
   if (spec.rampHinge) names.add(spec.rampHinge.name);
+  if (spec.canopyHinge) names.add(spec.canopyHinge.name);
   return [...names];
 }
 
@@ -1146,6 +1280,7 @@ function createEmptyCollectedShip(): CollectedShip {
 function populateCollectedShipFromPrefab(
   doc: PrefabDocument,
   transforms: Map<string, EntityWorldTransform>,
+  entities: Map<string, PrefabEntity>,
   out: CollectedShip,
 ): void {
   const hullWithController = findHullEntityWithController(doc.root);
@@ -1154,6 +1289,7 @@ function populateCollectedShipFromPrefab(
       hullWithController.entity,
       hullWithController.controller,
       transforms,
+      entities,
       out,
     );
   } else {
@@ -1164,6 +1300,7 @@ function populateCollectedShipFromPrefab(
   collectEntertainmentSystems(doc.root, transforms, out);
   collectShipDoors(doc.root, transforms, out);
   collectShipEntries(doc.root, transforms, out);
+  collectShipSeats(doc.root, transforms, out);
   collectBeds(doc.root, transforms, out);
   collectLadders(doc.root, transforms, out);
 }
@@ -1327,8 +1464,10 @@ export async function buildShipLayoutFromPrefab(
     transforms,
   );
 
+  const entities = buildEntityIdMap(doc.root, new Map<string, PrefabEntity>());
+
   const out = createEmptyCollectedShip();
-  populateCollectedShipFromPrefab(doc, transforms, out);
+  populateCollectedShipFromPrefab(doc, transforms, entities, out);
   resolveTestSpawn(doc, transforms, out);
 
   if (!shipPrefabHasContent(out)) {

@@ -8,6 +8,7 @@ import type { ComponentFieldContext, ComponentFieldsProps } from './context';
 import { ShipControllerSeats } from './ShipControllerSeats';
 import {
   AssetUrlField,
+  CheckboxRow,
   EdButton,
   EmptyNote,
   EntityRefField,
@@ -458,6 +459,123 @@ function ShipControllerRampFields({
   );
 }
 
+const DEFAULT_CANOPY_OPEN_RADIANS = 1.2;
+
+/**
+ * Canopy is exterior-entry only, so this whole section is hidden on interior
+ * hulls. Unchecking Enabled drops `canopy` from the document rather than
+ * leaving a disabled block behind.
+ */
+function ShipControllerCanopyFields({
+  ctx,
+  component,
+}: {
+  ctx: ComponentFieldContext;
+  component: ShipControllerComponent;
+}): ReactElement {
+  const { update, store, options } = ctx;
+  const canopy = component.canopy;
+  const enabled = canopy?.enabled ?? false;
+  const hinge = canopy?.hinge;
+  return (
+    <>
+      <SectionLabel>Canopy</SectionLabel>
+      <CheckboxRow
+        label="Enabled"
+        checked={enabled}
+        onChange={(checked) =>
+          update({
+            ...component,
+            canopy: checked
+              ? {
+                  ...canopy,
+                  enabled: true,
+                  hinge: {
+                    node: hinge?.node ?? '',
+                    openRadians: hinge?.openRadians ?? DEFAULT_CANOPY_OPEN_RADIANS,
+                    axis: hinge?.axis,
+                  },
+                }
+              : undefined,
+          })
+        }
+      />
+      {enabled ? (
+        <>
+          <FieldRow label="Hinge" wide>
+            <GlbNodeRefField
+              store={store}
+              value={hinge?.node ?? ''}
+              onCommit={(node) =>
+                update({
+                  ...component,
+                  canopy: {
+                    ...canopy,
+                    enabled: true,
+                    hinge: {
+                      ...hinge,
+                      node,
+                      openRadians: hinge?.openRadians ?? DEFAULT_CANOPY_OPEN_RADIANS,
+                    },
+                  },
+                })
+              }
+            />
+          </FieldRow>
+          <FieldRow label="Open °" wide>
+            <NumberField
+              value={hinge?.openRadians ?? DEFAULT_CANOPY_OPEN_RADIANS}
+              onCommit={(openRadians) =>
+                update({
+                  ...component,
+                  canopy: {
+                    ...canopy,
+                    enabled: true,
+                    hinge: {
+                      node: hinge?.node ?? '',
+                      openRadians: Math.min(10, Math.max(-10, openRadians)),
+                      axis: hinge?.axis,
+                    },
+                  },
+                })
+              }
+            />
+          </FieldRow>
+          <FieldRow label="Preview" wide>
+            <EdButton
+              title="Play the canopy open / close in the viewport at the in-game rate"
+              onClick={() => options.onPlayShipCanopyPreview?.()}
+            >
+              Play
+            </EdButton>
+          </FieldRow>
+          <AssetUrlField
+            label="Open SFX"
+            value={canopy?.openSoundUrl}
+            onCommit={(openSoundUrl) =>
+              canopy &&
+              update({ ...component, canopy: { ...canopy, openSoundUrl } })
+            }
+          />
+          <AssetUrlField
+            label="Close SFX"
+            value={canopy?.closeSoundUrl}
+            onCommit={(closeSoundUrl) =>
+              canopy &&
+              update({ ...component, canopy: { ...canopy, closeSoundUrl } })
+            }
+          />
+          <EmptyNote>
+            Drag the canopy node from the Hierarchy onto Hinge. Pilots toggle it from
+            the seat with the Toggle Canopy key, or from a Cockpit Control marker set
+            to the canopy action.
+          </EmptyNote>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function ShipControllerGearFields({
   ctx,
   component,
@@ -518,6 +636,9 @@ export function ShipControllerFields({
       <ShipControllerCameraFeelFields ctx={ctx} component={component} stats={stats} />
       <ShipControllerAudioFields ctx={ctx} component={component} stats={stats} />
       <ShipControllerRampFields ctx={ctx} component={component} ramp={ramp} />
+      {component.entry === 'exterior' ? (
+        <ShipControllerCanopyFields ctx={ctx} component={component} />
+      ) : null}
       <ShipControllerSeats ctx={ctx} component={component} />
       <ShipControllerGearFields ctx={ctx} component={component} gear={gear} />
     </>
