@@ -1,4 +1,5 @@
 import { createPlayerControls } from '../input/player-controls';
+import type { SceneExitTarget } from '../game/station/scene-exit';
 import { createGameLoop } from '../game/create-game-loop';
 import type { BuildAreaRuntime } from '../game/types';
 import type { LoadingScreenHandle } from './loading-screen';
@@ -185,7 +186,12 @@ export interface StartPlaySessionOptions {
   /** Scene-resolved world config. Skips URL param resolution when provided. */
   worldParams?: PlayWorldParams;
   /** Mid-play portal callback (scene-exit markers). */
-  onRequestScene?: (sceneId: string) => void;
+  onRequestScene?: (target: SceneExitTarget) => void;
+  /**
+   * Cell this session must land in, handed over by the scene-exit that caused
+   * the swap. Null on a fresh login, where the game-manager scene decides.
+   */
+  networkTarget?: SceneExitTarget | null;
 }
 
 async function warmPlaySpawnSurface(
@@ -233,7 +239,7 @@ function createPlayGameLoop(options: {
   buildAreas: Partial<Record<string, BuildAreaRuntime>>;
   physics: StationPhysics | null;
   vitalsSession: PlayerVitalsSessionController;
-  onRequestScene?: (sceneId: string) => void;
+  onRequestScene?: (target: SceneExitTarget) => void;
 }) {
   const {
     world,
@@ -538,6 +544,7 @@ export async function startPlaySession(
     vitalsSessionRef,
     characterAppearance,
     scene: world.params.scene,
+    networkTarget: options.networkTarget,
   });
 
   const buildSystems = initializePlayBuildPhase({

@@ -5,6 +5,7 @@ import {
   fetchScene,
   fetchSceneList,
   fetchSceneReferences,
+  rememberLastOpenedScene,
 } from '../api';
 import { createPrefabFromSelection } from '../create-prefab-from-selection';
 import type { EditorAudioPreviewController } from '../audio-preview';
@@ -93,6 +94,7 @@ export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
         const doc = await fetchScene(id);
         store.loadDocument(fromSceneDocument(doc));
         setTab('scene');
+        rememberLastOpenedScene(id);
         showToast(`Loaded scene "${id}"`);
       } catch (error) {
         showToast(`Load failed: ${(error as Error).message}`, true);
@@ -134,6 +136,7 @@ export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
         const doc = await fetchScene(nextId);
         store.loadDocument(fromSceneDocument(doc));
         setTab('scene');
+        rememberLastOpenedScene(nextId);
         return;
       } catch {
         // Fall through to empty template.

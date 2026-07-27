@@ -183,13 +183,61 @@ were connected, healthy, publishing presence — into two separate cells.
 
 Scene kind `instance` now means what it says: the play session transitions into
 `scene:<scene id>` immediately after connecting, so everyone who loads that scene
-shares one cell. `main-game` scenes are unchanged; their elevators still
-transition to `station:public`.
+shares one cell. Movement between places later became `scene-exit`'s job
+exclusively — see the note on the single-mechanism model below.
 
 Registration also keyed that starting apartment by **user** id while
 `/game/bootstrap` reported — and `authorize_instance` checked — the **player**
 id, so the apartment a player started in was one they could never transition back
 to. Fixed in `auth.rs`; migration `0019` re-keys existing rows.
+
+### …and then still could not, for three more reasons
+
+Sharing a cell turned out to be necessary and not sufficient. Chat kept working
+throughout, which read as "the connection is fine" — but the server echoes your
+own messages back to you, so chat working proves nothing about whether anyone
+else is there. Three separate faults sat behind it:
+
+1. **Snapshots were sized against `MAX_DATAGRAM_BYTES`** (48 KB, a protocol
+   sanity bound) rather than what QUIC actually carries (~1.2 KB). Every
+   snapshot repeated every entity's appearance JSON, so a cell with two players
+   cleared the real limit immediately and the send failed into `let _`. Chat was
+   unaffected because it goes over the reliable stream. This is the one that
+   made "populated cell" and "empty cell" look identical to a client.
+2. **A cell was also a view distance.** Presence only ever crossed a cell's own
+   channel, while the visibility filter claimed a 50 km radius over a 5 km grid.
+   The effective view distance was "same bucket": two players ten metres apart
+   across a grid line shared nothing.
+3. **A remote player with no appearance yet rendered as an invisible mannequin**
+   whose GLB 404'd, so an entity that replicated correctly still drew nothing.
+
+### The replication rewrite (protocol v2)
+
+Fixing these one at a time would have left the shape that produced them, so the
+replication layer was rebuilt into three stages with separate jobs — cells
+simulate, edges decide what each viewer needs, clients render. The load-bearing
+changes:
+
+- **Identity left the per-tick path.** Appearance and display name are an
+  `EntityProfile` sent once per viewer on entry; state is addressed by a small
+  per-connection handle instead of a repeated 36-byte UUID. A moving player now
+  costs well under 200 bytes per frame; an idle one costs nothing at all.
+- **Interest management moved to the edge**, which subscribes to the whole 3×3×3
+  neighbourhood around the viewer. Cell size and interest radius are now separate
+  numbers in `grid.rs` tied by `interest <= size`, which is what makes that
+  neighbourhood provably sufficient. Cell edges are no longer sight walls.
+- **Path choice is by kind, not size.** Baselines, entries and exits take the
+  reliable stream; state churn takes a datagram. The client therefore never
+  expires an entity on silence — silence is the expected cost of standing still.
+- **Boundary hysteresis**, so standing on a cell line no longer re-subscribes and
+  re-baselines every frame.
+- **Checkpoints stopped reusing the wire snapshot.** The wire format is lossy on
+  purpose now (no velocity, f32 orientation, no identity), which would have made
+  a bandwidth optimisation silently corrupt persistence.
+
+Bumping `PROTOCOL_VERSION` to 2 invalidates old cell checkpoints by design; they
+restore as empty. Client and backend must be deployed together — a v1 client
+against a v2 server fails the version check at connect rather than mis-decoding.
 
 ## Known gaps
 

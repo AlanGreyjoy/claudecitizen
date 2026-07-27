@@ -1,7 +1,6 @@
 import {
   MODE_IN_STATION,
   MODE_ON_FOOT,
-  MODE_RIDING_ELEVATOR,
 } from "../../player/modes";
 import { getActiveShipBody } from "../../player/world-state";
 import { occludeStationCamera } from "../../physics/station-physics";
@@ -36,7 +35,7 @@ export function createCameraOcclusion(ctx: LoopContext): CameraOcclusion {
       }
     };
     const mode = ctx.world.mode;
-    if ((mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR) && ctx.physics) {
+    if (mode === MODE_IN_STATION && ctx.physics) {
       consider(occludeStationCamera(ctx.physics, ctx.stationFrame, from, to));
     }
     // Deck walking, hull/pad exterior walk, and seat/bed transitions all

@@ -33,8 +33,7 @@ function configureShadowCamera(
   if (
     renderMode === 'on-foot' ||
     renderMode === 'on-ship-deck' ||
-    renderMode === 'in-station' ||
-    renderMode === 'riding-elevator'
+    renderMode === 'in-station'
   ) {
     const shadowSize = 35 * renderScale;
     light.shadow.camera.left = -shadowSize;
@@ -94,8 +93,7 @@ export function updateSunSystem(
   const shadowDist =
     (renderMode === 'on-foot' ||
     renderMode === 'on-ship-deck' ||
-    renderMode === 'in-station' ||
-    renderMode === 'riding-elevator'
+    renderMode === 'in-station'
       ? 200
       : 1500) * renderScale;
   sun.position.copy(sunDirScratch).multiplyScalar(shadowDist);

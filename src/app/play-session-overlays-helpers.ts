@@ -39,6 +39,7 @@ import type { SpikeRenderer } from '../render/main';
 import type { PlaySessionDom } from './play-session-dom';
 import type { PlayerVitalsSessionController } from './player-vitals-session';
 import { stopPlaySession } from './play-session';
+import type { SceneExitTarget } from '../game/station/scene-exit';
 
 export function requireElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -84,18 +85,32 @@ export function createPlayHud(
 }
 
 /**
- * Shared `instance` scenes force a common cell (`scene:<id>`). Player/party
- * scoped habs stay on bootstrap's private `apartment:<playerId>` — the Join
- * ticket already carries that, and Transition is what moves cells.
+ * The cell a *fresh session* lands in, when no `scene-exit` handed one over.
  *
- * Scope comes from `instanced-scene`. Missing scope on `kind: "instance"` keeps
- * the historical shared behavior so older shared interiors still meet.
+ * This is the game-manager's call — where a player begins after logging in —
+ * and it is the only place other than a `scene-exit` that may choose a cell.
+ * Once in world, movement between places is `scene-exit` and nothing else; two
+ * mechanisms racing to pick a cell is how a player ends up rendering one place
+ * while being simulated in another.
+ *
+ * Scope comes from `instanced-scene`. A missing scope on `kind: "instance"`
+ * keeps the historical shared behaviour so older shared interiors still meet.
  */
-export function sharedInstanceIdForScene(scene: SceneDocument | null): string | null {
+export function loginInstanceForScene(
+  scene: SceneDocument | null,
+  bootstrap: GameBootstrap | null,
+): SceneExitTarget | null {
   if (!scene || scene.kind !== 'instance') return null;
   const scope = resolveScenePlayConfig(scene).instanceScope;
-  if (scope === 'player' || scope === 'party') return null;
-  return `scene:${scene.id}`;
+  if (scope === 'party') return null;
+  // A per-player scene is the player's own hab: the ticket usually already
+  // says so, but a player who logged out elsewhere would otherwise resume in
+  // the cell they left rather than the one this scene depicts.
+  if (scope === 'player') {
+    const apartment = bootstrap?.spawn.apartmentInstanceId;
+    return apartment ? { sceneId: scene.id, instanceId: apartment, roomId: 'hab-room' } : null;
+  }
+  return { sceneId: scene.id, instanceId: `scene:${scene.id}`, roomId: '' };
 }
 
 export async function connectPlayNetwork(
@@ -103,6 +118,7 @@ export async function connectPlayNetwork(
   hud: ReturnType<typeof createHud>,
   getHaloBand: () => HaloBandController | null,
   scene: SceneDocument | null = null,
+  networkTarget: SceneExitTarget | null = null,
 ): Promise<WorldClient | null> {
   if (!bootstrap) {
     hud.appendChatMessage('SYS', 'Offline dev session.');
@@ -118,8 +134,10 @@ export async function connectPlayNetwork(
   });
   try {
     await networkClient.connect();
-    const sharedInstanceId = sharedInstanceIdForScene(scene);
-    if (sharedInstanceId) networkClient.transition(sharedInstanceId, '');
+    // An explicit scene-exit target always wins: it is what the player just
+    // walked or flew through. The scene's own scope only decides a fresh login.
+    const target = networkTarget ?? loginInstanceForScene(scene, bootstrap);
+    if (target?.instanceId) networkClient.transition(target.instanceId, target.roomId);
     return networkClient;
   } catch (error) {
     console.warn('ClaudeCitizen world socket failed to connect.', error);

@@ -3,6 +3,7 @@ import type {
   NpcSpawnerBehavior,
   PrefabComponent,
   PrefabSoundZone,
+  SceneExitTrigger,
   SceneInstanceScope,
   SceneUiScreen,
   ShipSeatRole,
@@ -10,6 +11,7 @@ import type {
 import {
   COCKPIT_CONTROL_ACTIONS,
   COCKPIT_STAT_KINDS,
+  SCENE_EXIT_TRIGGERS,
   SCENE_INSTANCE_SCOPES,
   SCENE_UI_SCREENS,
   SHIP_SEAT_ROLES,
@@ -293,19 +295,6 @@ function parseNpcPlacementComponent(
         };
 }
 
-function parseElevatorComponent(
-  value: Record<string, unknown>,
-  path: string,
-): PrefabComponent {
-  const type = "elevator" as const;
-  return {
-          type,
-          id: parseString(value.id, `${path}.id`, 64),
-          targetFloor: parseFloorId(value.targetFloor, `${path}.targetFloor`),
-          floorId: parseFloorId(value.floorId, `${path}.floorId`),
-        };
-}
-
 function parseSceneExitComponent(
   value: Record<string, unknown>,
   path: string,
@@ -318,9 +307,13 @@ function parseSceneExitComponent(
     value.arrivalRoomId === undefined
       ? undefined
       : parseString(value.arrivalRoomId, `${path}.arrivalRoomId`, 64).trim();
+  const trigger = SCENE_EXIT_TRIGGERS.includes(value.trigger as SceneExitTrigger)
+    ? (value.trigger as SceneExitTrigger)
+    : "interact";
   return {
     type: "scene-exit",
     sceneId: parseString(value.sceneId ?? "", `${path}.sceneId`, 64).trim(),
+    trigger,
     ...(value.prompt === undefined
       ? {}
       : { prompt: parseString(value.prompt, `${path}.prompt`, 128) }),
@@ -1674,7 +1667,6 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "npc-spawner": parseNpcSpawnerComponent,
   "npc-waypoint": parseNpcWaypointComponent,
   "npc-placement": parseNpcPlacementComponent,
-  "elevator": parseElevatorComponent,
   "scene-exit": parseSceneExitComponent,
   "ladder": parseLadderComponent,
   "hangar-pad": parseHangarPadComponent,

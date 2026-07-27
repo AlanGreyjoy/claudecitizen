@@ -20,7 +20,6 @@ import {
 import {
   AnimationFields,
   AvmsTerminalFields,
-  ElevatorFields,
   HangarPadFields,
   InteractionFields,
   LadderFields,
@@ -95,7 +94,6 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'npc-spawner': field(NpcSpawnerFields),
   'npc-waypoint': field(NpcWaypointFields),
   'npc-placement': field(NpcPlacementFields),
-  elevator: field(ElevatorFields),
   'scene-exit': field(SceneExitFields),
   ladder: field(LadderFields),
   'hangar-pad': field(HangarPadFields),

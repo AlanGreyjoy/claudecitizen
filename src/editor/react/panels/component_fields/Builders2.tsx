@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import type { PrefabComponent } from '../../../../world/prefabs/schema';
+import type { PrefabComponent, SceneExitTrigger } from '../../../../world/prefabs/schema';
+import { SCENE_EXIT_TRIGGERS } from '../../../../world/prefabs/schema';
 import type { StationFloorId } from '../../../../world/station';
 import { collectAnimationIds, FLOOR_OPTIONS } from '../../../panels/inspector-logic';
 import {
@@ -22,37 +23,8 @@ import {
   TextField,
 } from '../InspectorForm';
 
-export function ElevatorFields({
-  ctx,
-  component,
-}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'elevator' }>>): ReactElement {
-  const { update } = ctx;
-  return (
-    <>
-      <FieldRow label="Pair id" wide>
-        <TextField value={component.id} onCommit={(id) => update({ ...component, id })} />
-      </FieldRow>
-      <FieldRow label="On floor" wide>
-        <SelectField
-          options={FLOOR_OPTIONS}
-          value={component.floorId}
-          onCommit={(floorId) =>
-            update({ ...component, floorId: floorId as StationFloorId })
-          }
-        />
-      </FieldRow>
-      <FieldRow label="To floor" wide>
-        <SelectField
-          options={FLOOR_OPTIONS}
-          value={component.targetFloor}
-          onCommit={(targetFloor) =>
-            update({ ...component, targetFloor: targetFloor as StationFloorId })
-          }
-        />
-      </FieldRow>
-    </>
-  );
-}
+/** Press F on foot, or cross it in a ship (a hangar mouth is not a door). */
+const SCENE_EXIT_TRIGGER_OPTIONS = [...SCENE_EXIT_TRIGGERS];
 
 export function SceneExitFields({
   ctx,
@@ -98,6 +70,15 @@ export function SceneExitFields({
             </option>
           ))}
         </select>
+      </FieldRow>
+      <FieldRow label="Trigger" wide>
+        <SelectField
+          options={SCENE_EXIT_TRIGGER_OPTIONS}
+          value={component.trigger ?? 'interact'}
+          onCommit={(trigger) =>
+            update({ ...component, trigger: trigger as SceneExitTrigger })
+          }
+        />
       </FieldRow>
       <FieldRow label="Prompt" wide>
         <TextField

@@ -2,12 +2,36 @@ syntax = "proto3";
 
 package cc.world.v1;
 
+// Replication is a three-stage pipeline and this file carries all three stages:
+//
+//   client  --intent-->  edge  --command-->  cell        (authority)
+//   cell    --CellFrame(full state)-->  edge             (server-internal fan-out)
+//   edge    --Snapshot(per-viewer delta)-->  client      (metered, AOI-filtered)
+//
+// The cell owns simulation and knows nothing about who is watching. The edge
+// owns interest management: it caches profiles, assigns per-connection handles,
+// and sends each viewer only what changed inside their area of interest. Messages
+// marked "cell -> edge" never reach a client; messages marked "edge -> client"
+// are never published by a cell.
+
+// Planet- and system-scale positions. Doubles are deliberate: f32 loses metre
+// precision past ~10^7 m, which is inside the space cell grid.
 message Vec3 {
   double x = 1;
   double y = 2;
   double z = 3;
 }
 
+// Directions and other unit-ish quantities, where f32 is exact enough and the
+// 4 bytes matter because these repeat per entity per snapshot.
+message Vec3f {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+// Full-precision body, used for the one body a connection cares about exactly:
+// its own. Client intents and server reconciles only.
 message BodyState {
   Vec3 position = 1;
   Vec3 forward = 2;
@@ -32,6 +56,26 @@ message ShipRigState {
   double ramp_01 = 2;
   map<string, double> doors = 3;
   double canopy_01 = 4;
+}
+
+// Replicated bodies drop velocity — viewers interpolate between samples and
+// never integrate a remote body — and drop to f32 for orientation.
+message ReplicatedBody {
+  Vec3 position = 1;
+  Vec3f forward = 2;
+  Vec3f up = 3;
+  string animation = 4;
+  bool grounded = 5;
+}
+
+message ReplicatedShip {
+  ReplicatedBody body = 1;
+  string ship_id = 2;
+  string prefab_id = 3;
+  float hp = 4;
+  float shields = 5;
+  float max_hp = 6;
+  float max_shields = 7;
 }
 
 message Join {
@@ -93,27 +137,57 @@ message Ready {
   uint32 simulation_version = 3;
 }
 
-message SnapshotEntity {
-  string id = 1;
-  string player_id = 2;
-  string display_name = 3;
-  NetworkLod lod = 4;
-  string mode = 5;
-  bytes character_appearance_json = 6;
-  BodyState character = 7;
-  ShipState ship = 8;
-  ShipRigState ship_rig = 9;
-  Vec3 marker_position = 10;
-  string station_room_id = 11;
-  string ship_zone_id = 12;
+// Identity and appearance: immutable for the life of a session, so it is sent
+// once per viewer when an entity enters their interest set, never per tick.
+// `handle` is set edge -> client; `id` is set cell -> edge.
+message EntityProfile {
+  uint32 handle = 1;
+  string id = 2;
+  string player_id = 3;
+  string display_name = 4;
+  bytes character_appearance_json = 5;
 }
 
+// cell -> edge. Republished on every join and on a slow heartbeat so an edge
+// that attaches mid-flight, or misses a pub/sub message, self-heals.
+message EntityProfiles {
+  string cell_id = 1;
+  repeated EntityProfile profiles = 2;
+}
+
+// The per-tick mutable state of one entity. `handle` is the per-connection
+// integer the edge assigns (edge -> client); `id` is the durable player id
+// (cell -> edge). Exactly one of the two is populated on any given hop.
+message ReplicatedEntity {
+  uint32 handle = 1;
+  string id = 2;
+  NetworkLod lod = 3;
+  string mode = 4;
+  ReplicatedBody character = 5;
+  ReplicatedShip ship = 6;
+  ShipRigState ship_rig = 7;
+  Vec3 marker_position = 8;
+  string station_room_id = 9;
+  string ship_zone_id = 10;
+}
+
+// cell -> edge: `baseline` is always true, `entities` carry `id`, and the cell
+// never populates `profiles` or `removed_handles`.
+//
+// edge -> client: `entities` carry `handle` and hold only entities whose state
+// changed since this viewer last received them, `profiles` introduces handles
+// the viewer has not seen, and `removed_handles` retires entities that left the
+// interest set. When `baseline` is set, `entities` is the complete interest set
+// and the viewer must drop every handle absent from it.
 message Snapshot {
   uint64 now_ms = 1;
   uint64 tick = 2;
   uint64 epoch = 3;
   string cell_id = 4;
-  repeated SnapshotEntity entities = 5;
+  repeated ReplicatedEntity entities = 5;
+  repeated EntityProfile profiles = 6;
+  repeated uint32 removed_handles = 7;
+  bool baseline = 8;
 }
 
 message Reconcile {
@@ -126,6 +200,7 @@ message Reconcile {
   string player_id = 7;
 }
 
+// cell -> edge only. Viewers learn about removals through `removed_handles`.
 message EntityRemove {
   string id = 1;
 }
@@ -151,6 +226,29 @@ message Pong {
   uint64 server_time_ms = 3;
 }
 
+// Cell persistence. Deliberately not a `Snapshot`: the wire format is lossy by
+// design (no velocity, f32 orientation, no identity) and a checkpoint has to
+// restore a cell exactly. Reusing the wire message here is what would silently
+// couple a bandwidth optimisation to a data-loss bug.
+message CheckpointEntity {
+  string id = 1;
+  string display_name = 2;
+  bytes character_appearance_json = 3;
+  string mode = 4;
+  BodyState character = 5;
+  ShipState ship = 6;
+  ShipRigState ship_rig = 7;
+  string station_room_id = 8;
+  string ship_zone_id = 9;
+}
+
+message CellCheckpoint {
+  uint64 tick = 1;
+  uint64 epoch = 2;
+  string cell_id = 3;
+  repeated CheckpointEntity entities = 4;
+}
+
 message ServerEnvelope {
   uint32 protocol_version = 1;
 
@@ -162,5 +260,6 @@ message ServerEnvelope {
     ChatMessage chat_message = 14;
     WorldError error = 15;
     Pong pong = 16;
+    EntityProfiles entity_profiles = 17;
   }
 }

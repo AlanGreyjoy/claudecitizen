@@ -1,7 +1,5 @@
 import {
-  beginElevatorRide,
   callShipToHangar,
-  elevatorDestinationFor,
   resolveStationDoorInteractAim,
   resolveStationInteraction,
   type StationInteraction,
@@ -18,6 +16,7 @@ import {
   setAssignedHangarBay,
   type GameBootstrap,
 } from "../../net/api";
+import { sceneExitTarget } from "./scene-exit";
 import type { LoopContext } from "../loop-context";
 import type { BuildTool } from "./build-tool";
 import type { StationAnimations } from "./animations";
@@ -48,15 +47,7 @@ export function isVitalsLockedApartmentExit(
   interaction: StationInteraction,
 ): boolean {
   if (!ctx.world.vitalsSyncLocked) return false;
-  if (interaction.kind === "hab-lift-down") return true;
-  if (interaction.kind === "scene-exit") return true;
-  if (interaction.kind === "prefab-elevator") {
-    return interaction.marker.targetFloor !== "hab";
-  }
-  return (
-    interaction.kind === "hangar-bank" ||
-    interaction.kind === "hangar-lift-up"
-  );
+  return interaction.kind === "scene-exit";
 }
 
 function prefabInfoPrompt(ctx: LoopContext, interaction: Extract<StationInteraction, { kind: "prefab-info" }>): string {
@@ -87,23 +78,9 @@ export function stationInteractionPrompt(
     return "Vitals sync unavailable — apartment exit locked";
   }
   switch (interaction.kind) {
-    case "hab-lift-down":
-      return pressInteractPrompt("elevator to Lobby");
-    case "hab-lift-up":
-      return pressInteractPrompt("elevator to Habs");
     case "terminal":
     case "avms-terminal":
       return pressInteractPrompt("AVMS terminal");
-    case "hangar-bank":
-      return ctx.world.assignedHangar === null
-        ? pressInteractPrompt("elevator to hangars")
-        : pressInteractPrompt(
-            `elevator to Hangar ${ctx.world.assignedHangar} (your ship)`,
-          );
-    case "hangar-lift-up":
-      return pressInteractPrompt("elevator to Lobby");
-    case "prefab-elevator":
-      return pressInteractPrompt(`elevator to ${interaction.marker.targetFloor}`);
     case "scene-exit":
       return interaction.marker.prompt.includes("Press ")
         ? interaction.marker.prompt
@@ -120,47 +97,6 @@ export function stationInteractionPrompt(
       );
     }
   }
-}
-
-function networkInstanceForInteraction(
-  ctx: LoopContext,
-  interaction: StationInteraction,
-): string | null {
-  if (!ctx.bootstrap) return null;
-  switch (interaction.kind) {
-    case "hab-lift-down":
-    case "hangar-lift-up":
-      return "station:public";
-    case "hab-lift-up":
-      return ctx.bootstrap.spawn.apartmentInstanceId;
-    case "hangar-bank":
-      return ctx.bootstrap.spawn.hangarInstanceId;
-    case "prefab-elevator":
-      if (interaction.marker.targetFloor === "hangar") {
-        return ctx.bootstrap.spawn.hangarInstanceId;
-      }
-      if (interaction.marker.targetFloor === "hab") {
-        return ctx.bootstrap.spawn.apartmentInstanceId;
-      }
-      return "station:public";
-    case "terminal":
-    case "avms-terminal":
-    case "prefab-info":
-    case "door":
-    case "ladder":
-    case "scene-exit":
-      return null;
-  }
-}
-
-function announceElevatorTransition(
-  ctx: LoopContext,
-  interaction: StationInteraction,
-  destination: { roomId: string } | null,
-): void {
-  const instanceId = networkInstanceForInteraction(ctx, interaction);
-  if (!instanceId || !destination) return;
-  ctx.network?.transition(instanceId, destination.roomId);
 }
 
 async function syncHangarAfterAvms(
@@ -268,11 +204,11 @@ function handleSceneExitInteraction(
   interaction: Extract<StationInteraction, { kind: "scene-exit" }>,
 ): void {
   if (!actions.interactPressed) return;
-  const { marker } = interaction;
-  if (marker.networkInstanceId) {
-    ctx.network?.transition(marker.networkInstanceId, marker.arrivalRoomId);
-  }
-  ctx.onRequestScene?.(marker.sceneId);
+  // The cell move rides the scene swap rather than being sent on the outgoing
+  // connection. A scene swap tears the world session down and dials a fresh
+  // one, so a Transition sent here would be racing its own reconnect for the
+  // Postgres write that decides the new session's cell.
+  ctx.onRequestScene?.(sceneExitTarget(interaction.marker, ctx.bootstrap, ctx.systemId));
 }
 
 function activateStationInteraction(
@@ -286,17 +222,6 @@ function activateStationInteraction(
 ): void {
   if (interaction.kind === "terminal" || interaction.kind === "avms-terminal") {
     if (actions.interactPressed) openAvmsTerminal(ctx, deps.buildTool);
-    return;
-  }
-  if (interaction.kind === "hangar-bank") {
-    if (actions.interactPressed) {
-      const hangarIndex = ctx.world.assignedHangar ?? 1;
-      const destination = elevatorDestinationFor(interaction, hangarIndex);
-      if (destination) {
-        beginElevatorRide(ctx.world, destination);
-        announceElevatorTransition(ctx, interaction, destination);
-      }
-    }
     return;
   }
   if (interaction.kind === "prefab-info") {
@@ -319,18 +244,10 @@ function activateStationInteraction(
   }
   if (interaction.kind === "scene-exit") {
     handleSceneExitInteraction(ctx, actions, interaction);
-    return;
-  }
-  if (actions.interactPressed) {
-    const destination = elevatorDestinationFor(interaction);
-    if (destination) {
-      beginElevatorRide(ctx.world, destination);
-      announceElevatorTransition(ctx, interaction, destination);
-    }
   }
 }
 
-/** Resolve nearby station markers, prompts, elevators, AVMS, and prefab F-key toggles. */
+/** Resolve nearby station markers, prompts, AVMS, and prefab F-key toggles. */
 export function handleStationInteraction(
   ctx: LoopContext,
   actions: FrameActions,

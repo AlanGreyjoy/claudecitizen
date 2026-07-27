@@ -8,7 +8,6 @@ import {
   MODE_LEAVING_PILOT,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
-  MODE_RIDING_ELEVATOR,
   modeLabel,
 } from '../../../player/modes';
 import type { WorldState } from '../../../player/world-state';
@@ -144,17 +143,14 @@ function resolveStatusMessage(
   if (world.mode === MODE_LEAVING_PILOT) {
     return 'Standing up behind the seat. Walk control returns on your feet.';
   }
-  if (world.mode === MODE_RIDING_ELEVATOR) {
-    return 'Riding the station elevator.';
-  }
   if (world.mode === MODE_IN_STATION) {
     if (!isPointerLocked) {
       return 'Click the view to lock the mouse, then walk the station with WASD and sprint with Shift.';
     }
     if (world.assignedHangar === null) {
-      return 'Your ship is in storage. Take the hab elevator down to the lobby and call it from the AVMS terminal.';
+      return 'Your ship is in storage. Call it from the AVMS terminal.';
     }
-    return `Your ship is parked in Hangar ${world.assignedHangar}. Ride the hangar elevators from the lobby.`;
+    return `Your ship is parked in Hangar ${world.assignedHangar}.`;
   }
   if (world.mode === MODE_ON_SHIP_DECK && !world.shipExteriorWalk) {
     if (!isPointerLocked) {

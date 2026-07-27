@@ -5,11 +5,13 @@ mod cell;
 mod config;
 mod error;
 mod game;
+mod grid;
 mod health;
 mod http;
 mod mail;
 mod mall;
 mod payments;
+mod replication;
 mod state;
 mod world_transport;
 

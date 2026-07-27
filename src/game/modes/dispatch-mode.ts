@@ -4,7 +4,6 @@ import {
   MODE_IN_STATION,
   MODE_ON_FOOT,
   MODE_ON_SHIP_DECK,
-  MODE_RIDING_ELEVATOR,
 } from "../../player/modes";
 import type { LoopContext } from "../loop-context";
 import type { CameraState, CharacterInput, FrameActions } from "../types";
@@ -13,7 +12,6 @@ import type { InShipMode } from "./in-ship";
 import type { InBedMode } from "./in-bed";
 import type { OnShipDeckMode } from "./on-ship-deck";
 import type { InStationMode } from "./in-station";
-import type { ElevatorMode } from "./elevator";
 import type { Transitions } from "./transitions";
 
 export interface ModeHandlers {
@@ -22,7 +20,6 @@ export interface ModeHandlers {
   inBed: InBedMode;
   onShipDeck: OnShipDeckMode;
   inStation: InStationMode;
-  elevator: ElevatorMode;
   transitions: Transitions;
 }
 
@@ -53,9 +50,6 @@ export function dispatchMode(
       return false;
     case MODE_IN_STATION:
       modes.inStation.updateInStationMode({ characterInput, actions, dt });
-      return false;
-    case MODE_RIDING_ELEVATOR:
-      modes.elevator.updateElevatorMode(dt);
       return false;
     default:
       modes.transitions.updateTransitionMode(dt);

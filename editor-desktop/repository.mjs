@@ -182,6 +182,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     resolve(projectRoot, 'src/player/data/character-settings.json');
   const projectSettingsPath = () => resolve(projectRoot, 'asteron.project.json');
   const folderOrderPath = () => resolve(projectRoot, 'asteron.folder-order.json');
+  const editorSessionPath = () => resolve(projectRoot, 'asteron.editor-session.json');
 
   function resolveAssetRoot(root) {
     if (!PROJECT_ASSET_ROOTS.includes(root)) {
@@ -549,6 +550,39 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
   async function saveFolderOrder(value) {
     const document = normalizeFolderOrder(requireDocument(value));
     const path = await writeJson(projectRoot, folderOrderPath(), document);
+    return { saved: true, path, document };
+  }
+
+  /**
+   * Local editor workspace state (`asteron.editor-session.json`). Remembers the
+   * last scene opened in the Scene tab so cold start can restore it.
+   */
+  function normalizeEditorSession(value) {
+    const source = typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
+    let lastOpenedSceneId = null;
+    if (typeof source.lastOpenedSceneId === 'string' && source.lastOpenedSceneId.trim()) {
+      try {
+        lastOpenedSceneId = requireSlugId(source.lastOpenedSceneId.trim(), 'lastOpenedSceneId');
+      } catch {
+        lastOpenedSceneId = null;
+      }
+    }
+    return { schemaVersion: 1, lastOpenedSceneId };
+  }
+
+  async function getEditorSession() {
+    let raw = {};
+    try {
+      raw = JSON.parse(await readFile(editorSessionPath(), 'utf8'));
+    } catch {
+      // First open — cold start falls back to main-game.
+    }
+    return { document: normalizeEditorSession(raw) };
+  }
+
+  async function saveEditorSession(value) {
+    const document = normalizeEditorSession(requireDocument(value));
+    const path = await writeJson(projectRoot, editorSessionPath(), document);
     return { saved: true, path, document };
   }
 
@@ -969,6 +1003,8 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     saveProjectSettings,
     getFolderOrder,
     saveFolderOrder,
+    getEditorSession,
+    saveEditorSession,
     listAnimationControllers,
     getAnimationController,
     saveAnimationController,

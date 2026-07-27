@@ -217,7 +217,9 @@ dies with `address already in use`. `!override` replaces the base list;
 | Every API call fails CORS | `CLIENT_ORIGIN` does not byte-match the browser's origin, or has a trailing slash |
 | Login appears to succeed, next request is anonymous | `COOKIE_SAME_SITE` is not `none`, or `COOKIE_SECURE` is not `true` |
 | Every character stands in T-pose | Animation clip GLBs are missing from the release. Load the game and check the network panel for a 404 on `/assets/animations/…`. Stance packs are `ProRifle/locomotion.glb` / `HandgunLocomotions/locomotion.glb` (build with `npm run pack:anims -- --project <root>`). The clips are referenced by the animation controller, not by any prefab, so the release build copies them from `src/player/animation/data/*.controller.json`; the build warns for each source the project's asset library does not have. |
-| Game loads, players never see each other | Three distinct causes: the two players are in different authoritative cells (see below); UDP 4433 is blocked; or the WebTransport listener fell back to self-signed because it could not read `/certs/privkey.pem` |
+| Game loads, players never see each other | Check chat first — the server echoes your own messages back, so "chat works" is satisfied by an empty cell. If you can see *each other's* messages you share a cell and the fault is downstream; if you only see your own you are in different cells (see below). Other causes: UDP 4433 blocked, or the WebTransport listener fell back to self-signed because it could not read `/certs/privkey.pem` |
+| Players see each other, then stop | Backend predates the replication rewrite (protocol v2). Snapshots were sized against `MAX_DATAGRAM_BYTES` rather than the path MTU, so any cell holding two players silently stopped replicating everyone while chat kept working over the reliable stream. `git pull && docker compose … up -d --build` |
+| A remote player is present but invisible | Their appearance never arrived, so the renderer fell back to a mannequin GLB that 404s. Check the network panel for `/assets/protected/animations/universal-animation-library/`. Protocol v2 holds an entity out of view until its profile lands, so this should now present as "briefly absent", not "invisible forever" |
 | `WebTransport` connect fails after ~14 days | Running on a self-signed certificate; browsers cap hashed certs at 14 days |
 | Requests blocked as mixed content | `backendUrl` in the release is `http://` |
 
@@ -234,8 +236,17 @@ with a healthy connection and open ports throughout.
 
 A scene of kind **`instance`** is a shared place: the play session transitions
 into `scene:<scene id>` right after connecting, so everyone who loads that scene
-shares one cell. `main-game` scenes keep the station flow, where the elevator
-interactions transition to `station:public`.
+shares one cell. Every other move between places is a `scene-exit` marker, which
+carries the destination cell with it — a literal id like `station:public`, or a
+per-player token (`@apartment`, `@hangar`, `@space`). Elevators no longer exist.
+
+**A cell is no longer a view distance.** Planet and space instances are still
+partitioned on a grid, but an edge session subscribes to the whole 3×3×3
+neighbourhood around the viewer, so standing either side of a grid line no
+longer hides anyone. Interiors — apartments, hangars, station rooms, shared
+scenes — are a single unpartitioned cell. Two players who are both in
+`apartment:<their own id>` still cannot see each other, and that is by design:
+those instances are private.
 
 Check who is where:
 

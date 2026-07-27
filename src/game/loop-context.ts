@@ -34,6 +34,7 @@ import type { PlayerVitalsSessionController } from "../app/player-vitals-session
 import type { HudUpdateParams } from "../render/effects";
 import type { PrefabDocument } from "../world/prefabs/schema";
 import type { ScenePlayContent } from "../world/scenes/scene-runtime";
+import type { SceneExitTarget } from "./station/scene-exit";
 import type {
   InventoryState,
   LoadoutState,
@@ -102,7 +103,7 @@ export interface LoopContext {
     events: readonly WeaponCombatRuntimeEvent[],
   ) => void;
   readonly vitalsSession: PlayerVitalsSessionController | null;
-  readonly onRequestScene: ((sceneId: string) => void) | null;
+  readonly onRequestScene: ((target: SceneExitTarget) => void) | null;
 
   // ---- immutable runtime handles ----
   readonly flightCameraFeelState: ReturnType<typeof createFlightCameraFeelState>;

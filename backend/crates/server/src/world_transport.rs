@@ -1,3 +1,10 @@
+//! The edge: one WebTransport session per player.
+//!
+//! An edge session is not a relay. It claims authority for the cell its viewer
+//! stands in, observes the whole neighbourhood around it, and runs a
+//! `Replicator` that decides what *this* viewer needs to know. Cells publish
+//! world state; edges publish viewer state.
+
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -9,10 +16,7 @@ use base64::{
 use cc_protocol::{
     MAX_DATAGRAM_BYTES, MAX_STREAM_FRAME_BYTES, PROTOCOL_VERSION, SIMULATION_VERSION,
     decode_datagram, encode_message, encode_stream_frame,
-    world::{
-        ClientEnvelope, NetworkLod, Ready, ServerEnvelope, Snapshot, Vec3, client_envelope,
-        server_envelope,
-    },
+    world::{ClientEnvelope, Ready, ServerEnvelope, Vec3, client_envelope, server_envelope},
 };
 use prost::Message;
 use rand::RngCore;
@@ -20,18 +24,32 @@ use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::Row;
-use tokio::sync::mpsc;
+use tokio::{
+    sync::mpsc,
+    time::{MissedTickBehavior, interval},
+};
 use url::Url;
-use wtransport::{Endpoint, Identity, ServerConfig, endpoint::IncomingSession};
+use wtransport::{Connection, Endpoint, Identity, ServerConfig, endpoint::IncomingSession};
 
 use crate::{
     auth::{AccessUser, rate_limit, require_player_id},
-    cell::{CellSubscription, RoutedCommand, cell_id_for, cell_id_for_position},
+    cell::{CellSubscription, RoutedCommand},
     error::{ApiError, ApiResult},
+    grid::{CellAddress, CellGrid, grid_for},
+    replication::Replicator,
     state::AppState,
 };
 
 const TICKET_TTL_SECONDS: u64 = 30;
+/// Viewer frames are produced on the edge's own clock, not on cell arrivals: a
+/// viewer holding nine cells would otherwise get nine frames per cell tick.
+const EMIT_INTERVAL_MS: u64 = 50;
+/// A cell whose owner died leaves an expired lease behind. Re-claiming on a
+/// timer is what turns that into a two-second gap instead of a dead cell.
+const CLAIM_INTERVAL_SECONDS: u64 = 5;
+/// Headroom under the negotiated datagram size for the QUIC framing the
+/// application does not control.
+const DATAGRAM_HEADROOM_BYTES: usize = 64;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -125,6 +143,142 @@ pub async fn run(state: AppState) -> Result<()> {
     }
 }
 
+/// Everything about where a viewer is and what they can see.
+struct Session {
+    state: AppState,
+    ticket: SessionTicket,
+    instance_id: String,
+    station_room_id: String,
+    grid: CellGrid,
+    address: CellAddress,
+    position: Option<Vec3>,
+    replicator: Replicator,
+}
+
+impl Session {
+    fn new(state: AppState, ticket: SessionTicket) -> Self {
+        let grid = grid_for(&ticket.instance_id);
+        let address = CellAddress::base(&ticket.instance_id, &ticket.station_room_id);
+        Self {
+            replicator: Replicator::new(ticket.player_id.clone(), grid),
+            instance_id: ticket.instance_id.clone(),
+            station_room_id: ticket.station_room_id.clone(),
+            grid,
+            address,
+            position: None,
+            state,
+            ticket,
+        }
+    }
+
+    fn cell_id(&self) -> String {
+        self.address.id()
+    }
+
+    /// Take authority for the current cell and start listening to everything
+    /// around it.
+    async fn attach(&self) -> ApiResult<CellSubscription> {
+        let neighbourhood = self.address.neighbourhood();
+        self.state.cells.claim(&self.cell_id()).await?;
+        self.state.cells.observe(&neighbourhood).await
+    }
+
+    async fn join(&self) -> ApiResult<()> {
+        let join = ClientEnvelope {
+            protocol_version: PROTOCOL_VERSION,
+            payload: Some(client_envelope::Payload::Join(cc_protocol::world::Join {
+                instance_id: self.instance_id.clone(),
+                station_room_id: self.station_room_id.clone(),
+            })),
+        };
+        submit(&self.state, &self.cell_id(), &self.ticket, &join).await
+    }
+
+    async fn leave(&self) -> ApiResult<()> {
+        let leave = ClientEnvelope {
+            protocol_version: PROTOCOL_VERSION,
+            payload: Some(client_envelope::Payload::Leave(
+                cc_protocol::world::Leave {},
+            )),
+        };
+        submit(&self.state, &self.cell_id(), &self.ticket, &leave).await
+    }
+
+    /// Move the viewer to a different instance. Everything they could see
+    /// belongs to the place they left, so the replicator starts over.
+    async fn transition(
+        &mut self,
+        instance_id: String,
+        station_room_id: String,
+    ) -> ApiResult<CellSubscription> {
+        authorize_instance(&self.ticket.player_id, &instance_id)?;
+        self.leave().await?;
+        self.instance_id = instance_id;
+        self.station_room_id = station_room_id;
+        self.grid = grid_for(&self.instance_id);
+        self.address = CellAddress::base(&self.instance_id, &self.station_room_id);
+        self.position = None;
+        self.replicator.reset(self.grid);
+        sqlx::query(
+            r#"UPDATE "Player" SET "currentInstanceId"=$2,"currentRoomId"=$3,"updatedAt"=NOW() WHERE "id"=$1"#,
+        )
+        .bind(&self.ticket.player_id)
+        .bind(&self.instance_id)
+        .bind(&self.station_room_id)
+        .execute(&self.state.db)
+        .await?;
+        let subscription = self.attach().await?;
+        self.join().await?;
+        Ok(subscription)
+    }
+
+    /// Follow the viewer across a cell boundary. Unlike a transition this keeps
+    /// the replicator's state: the neighbourhoods overlap, so most of what the
+    /// viewer can see is the same on both sides of the line.
+    async fn migrate(&mut self) -> ApiResult<Option<CellSubscription>> {
+        let next = self.address.advance(&self.grid, self.position.as_ref());
+        if next == self.address {
+            return Ok(None);
+        }
+        self.leave().await?;
+        self.address = next;
+        let subscription = self.attach().await?;
+        self.replicator.retain_cells(&self.address.neighbourhood());
+        self.join().await?;
+        Ok(Some(subscription))
+    }
+
+    /// Fold one message published by a cell into this viewer's world.
+    /// Returns anything that must be forwarded to the client verbatim.
+    fn absorb(&mut self, envelope: ServerEnvelope) -> Option<ServerEnvelope> {
+        match envelope.payload {
+            Some(server_envelope::Payload::Snapshot(snapshot)) => {
+                self.replicator.apply_cell_snapshot(snapshot);
+                None
+            }
+            Some(server_envelope::Payload::EntityProfiles(profiles)) => {
+                self.replicator.apply_profiles(profiles);
+                None
+            }
+            Some(server_envelope::Payload::EntityRemove(remove)) => {
+                self.replicator.apply_removal(&remove.id);
+                None
+            }
+            // A reconcile is addressed to exactly one player and corrects their
+            // own prediction; everyone else's is none of this viewer's business.
+            Some(server_envelope::Payload::Reconcile(reconcile))
+                if reconcile.player_id != self.ticket.player_id =>
+            {
+                None
+            }
+            payload => Some(ServerEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                payload,
+            }),
+        }
+    }
+}
+
 async fn accept_session(state: AppState, incoming: IncomingSession) -> Result<()> {
     let request = incoming
         .await
@@ -146,141 +300,137 @@ async fn accept_session(state: AppState, incoming: IncomingSession) -> Result<()
         .accept_bi()
         .await
         .context("accept control stream")?;
-    let mut instance_id = ticket.instance_id.clone();
-    let mut station_room_id = ticket.station_room_id.clone();
-    let mut cell_id = cell_id_for(&instance_id, &station_room_id);
-    let mut subscription = state.cells.subscribe(&cell_id).await?;
-    let join = ClientEnvelope {
-        protocol_version: PROTOCOL_VERSION,
-        payload: Some(client_envelope::Payload::Join(cc_protocol::world::Join {
-            instance_id: ticket.instance_id.clone(),
-            station_room_id: ticket.station_room_id.clone(),
-        })),
-    };
-    submit(&state, &cell_id, &ticket, &join).await?;
+
+    let mut session = Session::new(state, ticket);
+    let mut subscription = session.attach().await?;
+    session.join().await?;
+
     let ready = ServerEnvelope {
         protocol_version: PROTOCOL_VERSION,
         payload: Some(server_envelope::Payload::Ready(Ready {
-            player_id: ticket.player_id.clone(),
-            node_id: state.config.node_id.clone(),
+            player_id: session.ticket.player_id.clone(),
+            node_id: session.state.config.node_id.clone(),
             simulation_version: SIMULATION_VERSION,
         })),
     };
     write_control(&mut send_stream, &ready).await?;
+
     let (control_sender, mut control_receiver) = mpsc::channel(64);
     tokio::spawn(read_control(recv_stream, control_sender));
-    // Logged once per session: the fallback is per-snapshot and would flood.
-    let mut oversize_logged = false;
+    let mut emit = interval(Duration::from_millis(EMIT_INTERVAL_MS));
+    emit.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut claim = interval(Duration::from_secs(CLAIM_INTERVAL_SECONDS));
+    claim.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
         tokio::select! {
             maybe_envelope = control_receiver.recv() => {
-                let Some(envelope) = maybe_envelope else { break; };
-                if let Some(client_envelope::Payload::Transition(transition)) = envelope.payload.as_ref() {
-                    authorize_instance(&ticket.player_id, &transition.instance_id)?;
-                    leave_cell(&state, &cell_id, &ticket).await?;
-                    instance_id = transition.instance_id.clone();
-                    station_room_id = transition.station_room_id.clone();
-                    cell_id = cell_id_for(&instance_id, &station_room_id);
-                    subscription = state.cells.subscribe(&cell_id).await?;
-                    sqlx::query(r#"UPDATE "Player" SET "currentInstanceId"=$2,"currentRoomId"=$3,"updatedAt"=NOW() WHERE "id"=$1"#)
-                        .bind(&ticket.player_id).bind(&transition.instance_id).bind(&transition.station_room_id).execute(&state.db).await?;
-                    let join = ClientEnvelope { protocol_version: PROTOCOL_VERSION, payload: Some(client_envelope::Payload::Join(cc_protocol::world::Join { instance_id: transition.instance_id.clone(), station_room_id: transition.station_room_id.clone() })) };
-                    submit(&state, &cell_id, &ticket, &join).await?;
-                } else {
-                    route_envelope(&state, &ticket, &instance_id, &station_room_id, &mut cell_id, &mut subscription, &envelope).await?;
+                let Some(envelope) = maybe_envelope else { break };
+                if let Some(next) = handle_client(&mut session, &envelope).await? {
+                    subscription = next;
                 }
             }
             datagram = connection.receive_datagram() => {
                 let payload = datagram.context("receive WebTransport datagram")?;
                 let envelope: ClientEnvelope = decode_datagram(&payload)?;
-                if envelope.protocol_version != PROTOCOL_VERSION { anyhow::bail!("protocol version mismatch"); }
-                route_envelope(&state, &ticket, &instance_id, &station_room_id, &mut cell_id, &mut subscription, &envelope).await?;
+                if envelope.protocol_version != PROTOCOL_VERSION {
+                    anyhow::bail!("protocol version mismatch");
+                }
+                if let Some(next) = handle_client(&mut session, &envelope).await? {
+                    subscription = next;
+                }
             }
             maybe_payload = subscription.receiver.recv() => {
                 let Some(payload) = maybe_payload else {
-                    subscription = state.cells.subscribe(&cell_id).await?;
+                    subscription = session.attach().await?;
                     continue;
                 };
-                let Some(filtered) = filter_server_message(&payload, &ticket.player_id)? else { continue; };
-                let envelope = ServerEnvelope::decode(filtered.as_slice())?;
-                match envelope.payload {
-                    Some(server_envelope::Payload::Snapshot(_)) | Some(server_envelope::Payload::Reconcile(_)) => {
-                        // MAX_DATAGRAM_BYTES is a protocol sanity bound, not what
-                        // the path will carry: QUIC caps a datagram near the MTU,
-                        // a little over a kilobyte. Every snapshot repeats each
-                        // entity's appearance JSON, so a cell with more than one
-                        // player clears that in a hurry — and these sends used to
-                        // fail into `let _`, so every client in a populated cell
-                        // silently stopped receiving anyone. Send what fits, and
-                        // put the rest on the reliable stream.
-                        let datagram_limit = connection
-                            .max_datagram_size()
-                            .unwrap_or(0)
-                            .min(MAX_DATAGRAM_BYTES);
-                        let mut delivered = false;
-                        if filtered.len() <= datagram_limit {
-                            match connection.send_datagram(&filtered) {
-                                Ok(()) => delivered = true,
-                                Err(error) => tracing::warn!(
-                                    error = ?error,
-                                    len = filtered.len(),
-                                    limit = datagram_limit,
-                                    "snapshot datagram send failed; using the control stream",
-                                ),
-                            }
-                        } else if !oversize_logged {
-                            oversize_logged = true;
-                            tracing::info!(
-                                len = filtered.len(),
-                                limit = datagram_limit,
-                                "snapshot exceeds the datagram limit; using the control stream",
-                            );
-                        }
-                        if !delivered {
-                            write_raw_control(&mut send_stream, &filtered).await?;
-                        }
-                    }
-                    _ => write_raw_control(&mut send_stream, &filtered).await?,
+                let Ok(envelope) = ServerEnvelope::decode(payload.as_slice()) else { continue };
+                if let Some(forward) = session.absorb(envelope) {
+                    write_control(&mut send_stream, &forward).await?;
                 }
+            }
+            _ = emit.tick() => {
+                publish_frame(&mut session, &connection, &mut send_stream).await?;
+            }
+            _ = claim.tick() => {
+                session.state.cells.claim(&session.cell_id()).await?;
             }
         }
     }
-    leave_cell(&state, &cell_id, &ticket).await?;
+    session.leave().await?;
     Ok(())
 }
 
-async fn route_envelope(
-    state: &AppState,
-    ticket: &SessionTicket,
-    instance_id: &str,
-    station_room_id: &str,
-    cell_id: &mut String,
-    subscription: &mut CellSubscription,
+/// Route one client message, returning a new subscription when the message
+/// moved the viewer to a different cell.
+async fn handle_client(
+    session: &mut Session,
     envelope: &ClientEnvelope,
-) -> Result<()> {
+) -> Result<Option<CellSubscription>> {
+    if let Some(client_envelope::Payload::Transition(transition)) = envelope.payload.as_ref() {
+        let subscription = session
+            .transition(
+                transition.instance_id.clone(),
+                transition.station_room_id.clone(),
+            )
+            .await?;
+        return Ok(Some(subscription));
+    }
     if matches!(
         envelope.payload.as_ref(),
         Some(client_envelope::Payload::ChatSend(_))
     ) {
-        rate_limit(state, &format!("world-chat:{}", ticket.player_id), 20, 10).await?;
+        rate_limit(
+            &session.state,
+            &format!("world-chat:{}", session.ticket.player_id),
+            20,
+            10,
+        )
+        .await?;
     }
-    let target = presence_position(envelope)
-        .map(|position| cell_id_for_position(instance_id, station_room_id, Some(position)));
-    if let Some(target) = target.filter(|target| target.as_str() != cell_id.as_str()) {
-        leave_cell(state, cell_id, ticket).await?;
-        *cell_id = target;
-        *subscription = state.cells.subscribe(cell_id).await?;
-        let join = ClientEnvelope {
-            protocol_version: PROTOCOL_VERSION,
-            payload: Some(client_envelope::Payload::Join(cc_protocol::world::Join {
-                instance_id: instance_id.to_owned(),
-                station_room_id: station_room_id.to_owned(),
-            })),
-        };
-        submit(state, cell_id, ticket, &join).await?;
+    if let Some(position) = presence_position(envelope) {
+        session.position = Some(*position);
     }
-    submit(state, cell_id, ticket, envelope).await?;
+    let migrated = session.migrate().await?;
+    submit(
+        &session.state,
+        &session.cell_id(),
+        &session.ticket,
+        envelope,
+    )
+    .await?;
+    Ok(migrated)
+}
+
+async fn publish_frame(
+    session: &mut Session,
+    connection: &Connection,
+    send_stream: &mut wtransport::SendStream,
+) -> Result<()> {
+    let budget = connection
+        .max_datagram_size()
+        .unwrap_or(0)
+        .min(MAX_DATAGRAM_BYTES)
+        .saturating_sub(DATAGRAM_HEADROOM_BYTES);
+    let position = session.position;
+    let Some(frame) = session.replicator.emit(position.as_ref(), budget) else {
+        return Ok(());
+    };
+    let envelope = ServerEnvelope {
+        protocol_version: PROTOCOL_VERSION,
+        payload: Some(server_envelope::Payload::Snapshot(frame.snapshot)),
+    };
+    let payload = encode_message(&envelope);
+    // Structural frames, and anything the path will not carry, take the
+    // reliable stream. Everything else is state churn: losing one costs 50 ms.
+    if frame.reliable || payload.len() > budget {
+        return write_raw_control(send_stream, &payload).await;
+    }
+    if let Err(error) = connection.send_datagram(&payload) {
+        tracing::debug!(error = ?error, len = payload.len(), "snapshot datagram refused; using the control stream");
+        return write_raw_control(send_stream, &payload).await;
+    }
     Ok(())
 }
 
@@ -373,101 +523,6 @@ async fn submit(
             },
         )
         .await
-}
-
-async fn leave_cell(state: &AppState, cell_id: &str, ticket: &SessionTicket) -> ApiResult<()> {
-    let leave = ClientEnvelope {
-        protocol_version: PROTOCOL_VERSION,
-        payload: Some(client_envelope::Payload::Leave(
-            cc_protocol::world::Leave {},
-        )),
-    };
-    submit(state, cell_id, ticket, &leave).await
-}
-
-fn filter_server_message(payload: &[u8], player_id: &str) -> Result<Option<Vec<u8>>> {
-    let mut envelope = ServerEnvelope::decode(payload)?;
-    match envelope.payload.as_mut() {
-        Some(server_envelope::Payload::Reconcile(reconcile))
-            if reconcile.player_id != player_id =>
-        {
-            return Ok(None);
-        }
-        Some(server_envelope::Payload::Snapshot(snapshot)) => filter_snapshot(snapshot, player_id),
-        _ => {}
-    }
-    Ok(Some(envelope.encode_to_vec()))
-}
-
-fn filter_snapshot(snapshot: &mut Snapshot, player_id: &str) {
-    let viewer = snapshot
-        .entities
-        .iter()
-        .find(|entity| entity.player_id == player_id)
-        .and_then(entity_position)
-        .cloned();
-    let is_planet = snapshot.cell_id.starts_with("planet:");
-    let is_space = snapshot.cell_id.starts_with("space:");
-    let tick = snapshot.tick;
-    snapshot.entities.retain_mut(|entity| {
-        if entity.player_id == player_id {
-            return false;
-        }
-        let entity_point = entity_position(entity).cloned();
-        let distance = viewer
-            .as_ref()
-            .zip(entity_point.as_ref())
-            .map(|(a, b)| distance(a, b));
-        if let Some(distance) = distance {
-            if is_planet && distance > 50_000.0 {
-                return false;
-            }
-            if is_space && distance > 500_000.0 {
-                return false;
-            }
-            let lod = if distance <= 250.0 {
-                NetworkLod::Full
-            } else if distance <= 2_500.0 {
-                NetworkLod::Medium
-            } else {
-                NetworkLod::Marker
-            };
-            if (lod == NetworkLod::Medium && !tick.is_multiple_of(2))
-                || (lod == NetworkLod::Marker && !tick.is_multiple_of(10))
-            {
-                return false;
-            }
-            entity.lod = lod as i32;
-            if lod == NetworkLod::Marker {
-                entity.character = None;
-                entity.ship = None;
-                entity.ship_rig = None;
-                entity.character_appearance_json.clear();
-            } else if lod == NetworkLod::Medium {
-                entity.ship_rig = None;
-            }
-        }
-        true
-    });
-}
-
-fn entity_position(entity: &cc_protocol::world::SnapshotEntity) -> Option<&Vec3> {
-    entity
-        .ship
-        .as_ref()
-        .and_then(|ship| ship.body.as_ref())
-        .and_then(|body| body.position.as_ref())
-        .or_else(|| {
-            entity
-                .character
-                .as_ref()
-                .and_then(|body| body.position.as_ref())
-        })
-        .or(entity.marker_position.as_ref())
-}
-
-fn distance(left: &Vec3, right: &Vec3) -> f64 {
-    ((left.x - right.x).powi(2) + (left.y - right.y).powi(2) + (left.z - right.z).powi(2)).sqrt()
 }
 
 fn authorize_instance(player_id: &str, instance_id: &str) -> ApiResult<()> {

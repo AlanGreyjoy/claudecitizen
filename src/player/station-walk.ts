@@ -34,7 +34,6 @@ import {
   stationDirToWorld,
   stationLocalToWorld,
   worldToStationLocal,
-  type ElevatorDestination,
   type StationDir2,
   type StationFrame,
 } from '../world/station';
@@ -124,18 +123,6 @@ export function createStationSpawnCharacter(planet: Planet): StationCharacterSta
     { right: spawn.right, forward: spawn.forward },
     spawn.face,
     spawn.up,
-  );
-}
-
-export function characterAtElevatorDestination(
-  frame: StationFrame,
-  destination: ElevatorDestination,
-): StationCharacterState {
-  return createStationCharacterAt(
-    frame,
-    destination.roomId,
-    { right: destination.right, forward: destination.forward },
-    destination.face,
   );
 }
 

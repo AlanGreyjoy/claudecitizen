@@ -17,7 +17,6 @@ import {
 import { createShipInstance } from '../flight/ship-instance';
 import type { DeckCharacterState } from './ship-deck';
 import type { ShipRigState } from './ship-rig';
-import type { StationElevatorRide } from './station-interaction';
 import type { StationCharacterState } from './station-walk';
 import { MODE_IN_STATION, MODE_ON_FOOT } from './modes';
 import { createSpawnCharacter, createSpawnShip, initialCameraYaw } from './spawn';
@@ -86,14 +85,13 @@ export interface WorldState {
   transition: WorldTransition | null;
   /** Hangar the ship was delivered to via the lobby terminal, if called. */
   assignedHangar: number | null;
-  stationElevator: StationElevatorRide | null;
   /**
    * Set while the player is attached to a ladder. Climbing is a sub-state of
    * the walking modes, not a mode of its own: the player is still in the
    * station / on the ship deck, so camera, HUD, and combat gating stay put.
    */
   ladderClimb: LadderClimbState | null;
-  /** 0..1 black overlay opacity used for elevator rides. */
+  /** 0..1 black overlay opacity used for scripted fades. */
   screenFade: number;
   /** Piloting sub-mode: traverse, combat, or nav (quantum). */
   flightMode: ShipFlightMode;
@@ -176,7 +174,6 @@ export function createWorldState(
     activeBedId: null,
     transition: null,
     assignedHangar: null,
-    stationElevator: null,
     ladderClimb: null,
     screenFade: 0,
     flightMode: 'traverse',

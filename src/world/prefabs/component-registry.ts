@@ -231,20 +231,6 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     hint: "Explicit named or service NPC. Wander/patrol placements can use an authored waypoint route group.",
   },
   {
-    type: "elevator",
-    label: "Elevator",
-    category: "gameplay",
-    kinds: ["station"],
-    marker: true,
-    createDefault: () => ({
-      type: "elevator",
-      id: "lift-1",
-      targetFloor: "lobby",
-      floorId: "lobby",
-    }),
-    hint: "Pair two markers with the same id on different floors to ride between them.",
-  },
-  {
     type: "scene-exit",
     label: "Scene Exit",
     category: "gameplay",
@@ -256,11 +242,12 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       sceneId: "",
       prompt: "Press F — exit to station",
       radius: 2.5,
+      trigger: "interact",
       networkInstanceId: "station:public",
       arrivalRoomId: "lobby",
     }),
     hint:
-      "In-play portal: press F to load another scene (e.g. private hab → Black Market station).",
+      "The only way a player moves between places in Play. `interact` prompts for F on foot; `fly-through` fires when a ship crosses it (hangar → open space). Target cell takes a literal id or a per-player token: @apartment, @hangar, @space.",
   },
   {
     type: "ladder",

@@ -49,7 +49,6 @@ export function teleportToSurface(
   ctx.world.shipExteriorWalk = false;
   ctx.world.activeBedId = null;
   ctx.world.transition = null;
-  ctx.world.stationElevator = null;
   ctx.world.screenFade = 0;
   ctx.world.flightMode = "traverse";
   ctx.world.quantum = createQuantumTravelState();

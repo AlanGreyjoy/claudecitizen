@@ -3,7 +3,6 @@ import { vec3 } from '../../math/vec3';
 import {
   type HangarSpec,
   type StationDir2,
-  type StationElevatorMarker,
   type StationFloorId,
   type StationInfoMarker,
   type StationSceneExitMarker,
@@ -23,7 +22,12 @@ import {
   LADDER_DEFAULT_RADIUS,
   type LadderSpec,
 } from '../ladders';
-import type { PrefabComponent, PrefabDocument, PrefabEntity } from './schema';
+import type {
+  PrefabComponent,
+  PrefabDocument,
+  PrefabEntity,
+  SceneExitTrigger,
+} from './schema';
 import type { Vec3 } from '../../types';
 import { buildPrefabColliders } from '../../physics/prefab-colliders';
 import {
@@ -41,7 +45,7 @@ import {
 } from '../npc';
 
 /**
- * Derives gameplay layout (spawn, elevators, hangar pads, info prompts) from a
+ * Derives gameplay layout (spawn, scene exits, hangar pads, info prompts) from a
  * station prefab's components. The player now walks on real collider geometry,
  * so this no longer produces walk-volume rooms.
  *
@@ -50,7 +54,6 @@ import {
  * updateShipPlacement).
  */
 
-const MARKER_RADIUS = 2.5;
 const DEFAULT_WEAPON_SHOP_GAZE_RADIUS = 0.4;
 const DEFAULT_WEAPON_SHOP_MAX_DISTANCE = 3;
 const DEFAULT_WEAPON_SHOP_SCREEN_WIDTH = 0.45;
@@ -68,15 +71,6 @@ const DEFAULT_FOOD_SHOP_SCREEN_HEIGHT = 0.28;
 interface FlattenedComponents {
   rooms: StationRoom[];
   spawnCandidates: {
-    floorId: StationFloorId;
-    right: number;
-    up: number;
-    forward: number;
-    face: StationDir2;
-  }[];
-  elevatorSeeds: {
-    pairId: string;
-    targetFloor: StationFloorId;
     floorId: StationFloorId;
     right: number;
     up: number;
@@ -113,6 +107,7 @@ interface FlattenedComponents {
     right: number;
     up: number;
     forward: number;
+    trigger: SceneExitTrigger;
     networkInstanceId: string;
     arrivalRoomId: string;
   }[];
@@ -270,22 +265,6 @@ function collectNpcPlacement(
   });
 }
 
-function collectElevator(
-  component: Extract<PrefabComponent, { type: "elevator" }>,
-  ctx: CollectStationContext,
-  out: FlattenedComponents,
-): void {
-  out.elevatorSeeds.push({
-    pairId: component.id,
-    targetFloor: component.targetFloor,
-    floorId: component.floorId,
-    right: ctx.right,
-    up: ctx.up,
-    forward: ctx.forward,
-    face: sceneToStationDir2(ctx.rotation),
-  });
-}
-
 function collectLadder(
   component: Extract<PrefabComponent, { type: "ladder" }>,
   ctx: CollectStationContext,
@@ -356,6 +335,7 @@ function collectSceneExit(
     right: ctx.right,
     up: ctx.up,
     forward: ctx.forward,
+    trigger: component.trigger ?? 'interact',
     networkInstanceId:
       component.networkInstanceId === undefined
         ? 'station:public'
@@ -573,9 +553,6 @@ function collectStationComponent(
     case 'npc-placement':
       collectNpcPlacement(component, ctx, out);
       break;
-    case 'elevator':
-      collectElevator(component, ctx, out);
-      break;
     case 'scene-exit':
       collectSceneExit(component, ctx, out);
       break;
@@ -765,7 +742,6 @@ function createEmptyFlattened(): FlattenedComponents {
   return {
     rooms: [],
     spawnCandidates: [],
-    elevatorSeeds: [],
     ladders: [],
     hangarSeeds: [],
     infoSeeds: [],
@@ -795,20 +771,6 @@ function buildStationSpawn(out: FlattenedComponents, docId: string): StationSpaw
   }
   console.warn(`Prefab "${docId}" has no spawn-point; spawning at origin with collider-based floor.`);
   return { roomId: 'none', right: 0, up: 0, forward: 0, face: { right: 0, forward: 1 } };
-}
-
-function buildElevatorMarkers(out: FlattenedComponents): StationElevatorMarker[] {
-  return out.elevatorSeeds.map((seed) => ({
-    pairId: seed.pairId,
-    floorId: seed.floorId,
-    roomId: seed.floorId,
-    right: seed.right,
-    up: seed.up,
-    forward: seed.forward,
-    radius: MARKER_RADIUS,
-    targetFloor: seed.targetFloor,
-    face: seed.face,
-  }));
 }
 
 function buildHangars(out: FlattenedComponents): HangarSpec[] {
@@ -850,6 +812,7 @@ function buildSceneExitMarkers(out: FlattenedComponents): StationSceneExitMarker
     up: seed.up,
     forward: seed.forward,
     radius: seed.radius,
+    trigger: seed.trigger,
     networkInstanceId: seed.networkInstanceId,
     arrivalRoomId: seed.arrivalRoomId,
   }));
@@ -972,7 +935,6 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     hangars: buildHangars(out),
     colliders,
     spawn: buildStationSpawn(out, doc.id),
-    elevatorMarkers: buildElevatorMarkers(out),
     ladders: out.ladders,
     infoMarkers: buildInfoMarkers(out),
     sceneExitMarkers: buildSceneExitMarkers(out),

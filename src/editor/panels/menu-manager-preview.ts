@@ -114,7 +114,6 @@ function createMockWorld(shipMode: boolean): WorldState {
     activeBedId: null,
     transition: null,
     assignedHangar: null,
-    stationElevator: null,
     ladderClimb: null,
     screenFade: 0,
     flightMode: 'traverse',

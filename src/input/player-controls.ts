@@ -850,7 +850,7 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       if (!next) state.primaryClickHeld = false;
     },
     setMode: (nextMode: ControlsMode) => setControlsMode(state, nextMode),
-    /** Snaps the orbit camera, e.g. to face out of an elevator on arrival. */
+    /** Snaps the orbit camera to a station-local facing. */
     setOrbitFacing: (yawRadians: number, pitchRadians = -0.12) =>
       setOrbitFacing(state, yawRadians, pitchRadians),
   };

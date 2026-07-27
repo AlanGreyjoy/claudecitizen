@@ -4,7 +4,6 @@ import {
   MODE_IN_BED,
   MODE_IN_STATION,
   MODE_ON_SHIP_DECK,
-  MODE_RIDING_ELEVATOR,
 } from '../../../player/modes';
 import {
   updateCharacterOrbitCameraRig,
@@ -70,7 +69,7 @@ export function updateCameraRig(
     shipExteriorWalk = false,
   } = world;
   const stationActive =
-    station !== null && (mode === MODE_IN_STATION || mode === MODE_RIDING_ELEVATOR);
+    station !== null && mode === MODE_IN_STATION;
   const onShipDeckInterior = mode === MODE_ON_SHIP_DECK && !shipExteriorWalk;
   const weaponAimZoom01 = resolveWeaponAimZoom01(camera, world, dt);
 

@@ -119,7 +119,7 @@ function handleActiveBuildTool(
   }
 }
 
-/** Station walking: build tool, vendor screens, terminals, and elevators. */
+/** Station walking: build tool, vendor screens, terminals, and scene exits. */
 export function createInStationMode(
   ctx: LoopContext,
   deps: InStationDeps,

@@ -245,6 +245,41 @@ export async function saveFolderOrder(
   return payload.document;
 }
 
+/** Project-local workspace memory (last Scene-tab document, etc.). */
+export interface EditorSessionDocument {
+  schemaVersion: 1;
+  lastOpenedSceneId: string | null;
+}
+
+export async function fetchEditorSession(): Promise<EditorSessionDocument> {
+  const payload = await requestJson<{ document: EditorSessionDocument }>(
+    '/__editor/editor-session',
+  );
+  return payload.document;
+}
+
+export async function saveEditorSession(
+  document: EditorSessionDocument,
+): Promise<EditorSessionDocument> {
+  const payload = await requestJson<{ document: EditorSessionDocument }>(
+    '/__editor/editor-session',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document }),
+    },
+  );
+  return payload.document;
+}
+
+/** Fire-and-forget: remember which scene the editor should reopen next cold start. */
+export function rememberLastOpenedScene(sceneId: string): void {
+  if (!sceneId) return;
+  void saveEditorSession({ schemaVersion: 1, lastOpenedSceneId: sceneId }).catch(() => {
+    // Editor API unavailable outside Electron — ignore.
+  });
+}
+
 export async function fetchSceneList(): Promise<SceneListEntry[]> {
   const payload = await requestJson<{ scenes: SceneListEntry[] }>('/__editor/scenes');
   return payload.scenes;

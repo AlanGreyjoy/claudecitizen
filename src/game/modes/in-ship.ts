@@ -9,6 +9,9 @@ import { canLeavePilotSeat } from "../../player/ship-interaction";
 import { toggleShipCanopy } from "../../player/cockpit-gaze";
 import { getShipLayout } from "../../player/ship-layout";
 import { playShipCanopyToggleSfx } from "../../player/ship-articulation-sfx";
+import { getStationLayoutOverride, worldToStationLocal } from "../../world/station";
+import { sceneExitTarget, shipCrossedExit } from "../station/scene-exit";
+import type { Vec3 } from "../../types";
 import type { CameraState, FrameActions } from "../types";
 import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
@@ -43,6 +46,26 @@ function tryEngageQuantum(ctx: LoopContext): void {
     ctx.seed,
     eligibility.destinationId,
   );
+}
+
+/**
+ * Fly-through `scene-exit` markers: leaving a hangar for open space is a
+ * continuous act, so it fires on crossing rather than on a key press. Returns
+ * true when the scene swap was requested, which stops the rest of the frame —
+ * the world is about to be torn down underneath it.
+ */
+function tryFlyThroughExit(ctx: LoopContext, position: Vec3): boolean {
+  if (!ctx.onRequestScene) return false;
+  const override = getStationLayoutOverride();
+  if (!override) return false;
+  const local = worldToStationLocal(ctx.stationFrame, position);
+  for (const marker of override.sceneExitMarkers) {
+    if (marker.trigger !== "fly-through" || !marker.sceneId) continue;
+    if (!shipCrossedExit(marker, local)) continue;
+    ctx.onRequestScene(sceneExitTarget(marker, ctx.bootstrap, ctx.systemId));
+    return true;
+  }
+  return false;
 }
 
 /** Cockpit flight: IFCS integrate, dual-reticle aim, quantum travel, look-at. */
@@ -83,6 +106,9 @@ export function createInShipMode(
     }
     if (ctx.world.quantum.phase === "idle" && ctx.world.screenFade > 0) {
       ctx.world.screenFade = Math.max(0, ctx.world.screenFade - dt * 4);
+    }
+    if (ctx.world.quantum.phase === "idle" && tryFlyThroughExit(ctx, instance.body.position)) {
+      return true;
     }
     return false;
   }

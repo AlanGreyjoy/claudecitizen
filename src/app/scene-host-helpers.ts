@@ -6,6 +6,7 @@ import {
 } from '../world/scenes/scene-runtime';
 import type { SceneDocument } from '../world/scenes/schema';
 import type { SceneUiScreen } from '../world/prefabs/schema';
+import type { SceneExitTarget } from '../game/station/scene-exit';
 import {
   fetchGameBootstrap,
   type AuthSession,
@@ -186,7 +187,8 @@ export async function startSceneGameplay(options: {
   getLoading: () => LoadingScreenHandle | null;
   setLoading: (handle: LoadingScreenHandle | null) => void;
   onRedirectCharacterCreate: (session: AuthSession) => void;
-  onRequestScene: (sceneId: string) => void;
+  onRequestScene: (target: SceneExitTarget) => void;
+  networkTarget?: SceneExitTarget | null;
 }): Promise<void> {
   if (isPlaySessionRunning()) stopPlaySession({ restoreTitle: false });
   let screen = options.getLoading() ?? showLoadingScreen();
@@ -224,6 +226,7 @@ export async function startSceneGameplay(options: {
         ...playOverridesFromEntryFlow(options.entryFlow),
       }),
       onRequestScene: options.onRequestScene,
+      networkTarget: options.networkTarget ?? null,
     });
   } finally {
     options.setLoading(null);

@@ -13,7 +13,6 @@ import {
   MODE_LEAVING_BED,
   MODE_IN_SHIP,
   MODE_IN_STATION,
-  MODE_RIDING_ELEVATOR,
 } from "../../player/modes";
 import type {
   GameMode,
@@ -33,10 +32,7 @@ import {
   stationFootstepActors,
 } from "./footstep-actors";
 
-export const STATION_SOUND_MODES = new Set<GameMode>([
-  MODE_IN_STATION,
-  MODE_RIDING_ELEVATOR,
-]);
+export const STATION_SOUND_MODES = new Set<GameMode>([MODE_IN_STATION]);
 export const SHIP_SOUND_MODES = new Set<GameMode>([
   MODE_IN_SHIP,
   MODE_ON_SHIP_DECK,

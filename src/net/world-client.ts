@@ -9,7 +9,6 @@ import type {
   NetworkShipBody,
   Vec3,
 } from '../types';
-import { resolveSnapshotCharacterAppearance } from './remote-appearance';
 import { loadPredictionEngine, type PredictionEngine, type PredictionFrame } from './prediction-wasm';
 import {
   WORLD_PROTOCOL_VERSION,
@@ -22,6 +21,7 @@ import {
   encodeTransition,
   readStreamFrames,
   streamFrame,
+  type EntityProfileMessage,
   type SnapshotEntityMessage,
   type SnapshotMessage,
 } from './world-protocol';
@@ -52,12 +52,17 @@ export interface WorldClientOptions {
   onStatus?: (status: string) => void;
 }
 
-function toRenderEntity(wire: SnapshotEntityMessage): NetworkRenderEntity {
+function toRenderEntity(
+  wire: SnapshotEntityMessage,
+  profile: EntityProfileMessage,
+): NetworkRenderEntity {
   return {
-    id: wire.id,
-    playerId: wire.playerId,
-    displayName: wire.displayName,
-    characterAppearance: wire.characterAppearance ?? null,
+    id: profile.id,
+    playerId: profile.playerId,
+    displayName: profile.displayName,
+    // Appearance arrives once, with the profile, and is stable for the life of
+    // the handle — including at marker range, where the body is not sent at all.
+    characterAppearance: profile.characterAppearance,
     lod: wire.lod,
     mode: wire.mode,
     character: wire.character,
@@ -90,55 +95,58 @@ function interpolateBody<T extends CharacterRenderState | NetworkShipBody>(a: T,
   };
 }
 
+/**
+ * Mirrors the server's per-connection replication state.
+ *
+ * Entities are keyed by the handle the edge assigned, identity comes from the
+ * profile sent when that handle entered the interest set, and state arrives
+ * only when it changed. An entity that stops moving simply stops being
+ * mentioned, so nothing here may expire an entity on silence — lifecycle is
+ * driven exclusively by `removedHandles` and `baseline`, both of which arrive
+ * on the reliable stream and therefore cannot be lost.
+ */
 class RemoteEntityStore {
-  private readonly samples = new Map<string, EntitySample[]>();
-  private epochByCell = new Map<string, number>();
+  private readonly profiles = new Map<number, EntityProfileMessage>();
+  private readonly samples = new Map<number, EntitySample[]>();
 
   applySnapshot(snapshot: SnapshotMessage, receivedAt: number): void {
-    const previousEpoch = this.epochByCell.get(snapshot.cellId) ?? 0;
-    if (snapshot.epoch < previousEpoch) return;
-    if (snapshot.epoch > previousEpoch) {
-      this.epochByCell.set(snapshot.cellId, snapshot.epoch);
+    for (const profile of snapshot.profiles) this.profiles.set(profile.handle, profile);
+    for (const handle of snapshot.removedHandles) {
+      this.profiles.delete(handle);
+      this.samples.delete(handle);
     }
-    const liveIds = new Set<string>();
     for (const wire of snapshot.entities) {
-      liveIds.add(wire.id);
-      const list = this.samples.get(wire.id) ?? [];
-      const next = toRenderEntity(wire);
-      next.characterAppearance = resolveSnapshotCharacterAppearance(
-        wire.lod,
-        wire.characterAppearance,
-        list[list.length - 1]?.entity.characterAppearance ?? null,
-      );
-      list.push({ at: receivedAt, entity: next });
+      const profile = this.profiles.get(wire.handle);
+      // A handle with no profile means the introducing frame was lost. It
+      // cannot be rendered — and guessing an identity is how a player ends up
+      // wearing someone else's face — so wait for the next baseline.
+      if (!profile) continue;
+      const list = this.samples.get(wire.handle) ?? [];
+      list.push({ at: receivedAt, entity: toRenderEntity(wire, profile) });
       while (list.length > 3) list.shift();
-      this.samples.set(wire.id, list);
+      this.samples.set(wire.handle, list);
     }
-    for (const id of this.samples.keys()) {
-      if (liveIds.has(id)) continue;
-      const list = this.samples.get(id);
-      if (list && receivedAt - list[list.length - 1]!.at > 15_000) this.samples.delete(id);
+    if (snapshot.baseline) {
+      const live = new Set(snapshot.entities.map((wire) => wire.handle));
+      for (const handle of [...this.samples.keys()]) {
+        if (!live.has(handle)) this.samples.delete(handle);
+      }
+      for (const handle of [...this.profiles.keys()]) {
+        if (!live.has(handle)) this.profiles.delete(handle);
+      }
     }
-  }
-
-  remove(id: string): void {
-    this.samples.delete(id);
   }
 
   clear(): void {
     this.samples.clear();
-    this.epochByCell.clear();
+    this.profiles.clear();
   }
 
   entities(nowMs: number): NetworkRenderEntity[] {
     const renderAt = nowMs - 100;
     const out: NetworkRenderEntity[] = [];
-    for (const [id, list] of this.samples) {
+    for (const list of this.samples.values()) {
       if (list.length === 0) continue;
-      if (nowMs - list[list.length - 1]!.at > 15_000) {
-        this.samples.delete(id);
-        continue;
-      }
       const previous = [...list].reverse().find((sample) => sample.at <= renderAt) ?? list[0]!;
       const next = list.find((sample) => sample.at >= renderAt) ?? list[list.length - 1]!;
       if (previous === next || next.at === previous.at) {
@@ -291,9 +299,6 @@ function handlePayload(state: WorldClientState, payload: Uint8Array): void {
       break;
     case 'reconcile':
       handleReconcile(state, message);
-      break;
-    case 'entity-remove':
-      state.store.remove(message.id);
       break;
     case 'chat-message':
       state.options.onChatMessage?.(message.message);

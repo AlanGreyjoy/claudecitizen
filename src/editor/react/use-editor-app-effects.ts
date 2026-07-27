@@ -4,12 +4,39 @@ import type { EditorStore } from '../document';
 import { isTypingTarget } from '../session-helpers';
 import { parsePrefabDocument } from '../../world/prefabs/schema';
 import { toPrefabDocument } from '../serialize';
+import { fetchEditorSession, fetchScene } from '../api';
 import { saveEditorHmrSnapshot, takeEditorHmrSnapshot } from './hmr-snapshot';
 import { dispatchNativeCommand, GIZMO_SHORTCUTS } from './editor-app-native';
 import type { ToolbarGizmoMode, ToolbarHandle } from './panels/Toolbar';
 import type { TabEditorHandles } from './TabEditorHosts';
 import type { SceneEditorTab } from './types';
 import type { EditorViewport } from '../../render/editor/viewport';
+
+const FALLBACK_BOOT_SCENE_ID = 'main-game';
+
+async function resolveBootSceneId(): Promise<string> {
+  let preferred = FALLBACK_BOOT_SCENE_ID;
+  try {
+    const session = await fetchEditorSession();
+    if (session.lastOpenedSceneId) preferred = session.lastOpenedSceneId;
+  } catch {
+    // No project session yet — use the scaffold default.
+  }
+
+  const candidates =
+    preferred === FALLBACK_BOOT_SCENE_ID
+      ? [preferred]
+      : [preferred, FALLBACK_BOOT_SCENE_ID];
+  for (const id of candidates) {
+    try {
+      await fetchScene(id);
+      return id;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return FALLBACK_BOOT_SCENE_ID;
+}
 
 export type EditorAppEffectsArgs = {
   store: EditorStore;
@@ -145,7 +172,7 @@ useEffect(() => {
   exitToTitle,
 ]);
 
-// Boot query params + default open main-game scene when starting fresh.
+// Boot query params + restore last opened scene (or main-game) when starting fresh.
 useEffect(() => {
   const bootParams = new URLSearchParams(window.location.search);
   const prefabParam = bootParams.get('prefab');
@@ -175,7 +202,7 @@ useEffect(() => {
     }
     return;
   }
-  // Cold start: open main-game scene when the store is still an empty untitled scene.
+  // Cold start: reopen last scene when the store is still an empty untitled scene.
   const state = store.getState();
   if (
     state.documentType === 'scene'
@@ -183,7 +210,9 @@ useEffect(() => {
     && state.roots.length === 0
     && !takeEditorHmrSnapshot()
   ) {
-    void loadSceneById('main-game');
+    void resolveBootSceneId().then((sceneId) => {
+      void loadSceneById(sceneId);
+    });
   }
 }, [loadById, loadSceneById, setTab, store]);
 

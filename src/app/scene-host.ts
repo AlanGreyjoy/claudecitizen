@@ -1,4 +1,5 @@
 import { loadSceneDocument } from '../world/scenes/loader';
+import type { SceneExitTarget } from '../game/station/scene-exit';
 import {
   resolveSceneEntryFlow,
   resolveScenePlayConfig,
@@ -61,7 +62,11 @@ interface SceneHostState {
   getResumeSceneId: () => string | null;
   setResumeSceneId: (id: string | null) => void;
   isDisposed: () => boolean;
-  loadScene: (sceneId: string, session?: AuthSession | null) => Promise<void>;
+  loadScene: (
+    sceneId: string,
+    session?: AuthSession | null,
+    networkTarget?: SceneExitTarget | null,
+  ) => Promise<void>;
   scheduleAutoLinks: (scene: SceneDocument) => void;
 }
 
@@ -69,6 +74,7 @@ async function startHostGameplay(
   state: SceneHostState,
   scene: SceneDocument,
   session: AuthSession | null,
+  networkTarget: SceneExitTarget | null = null,
 ): Promise<void> {
   const requireAuth = state.options.requireAuth ?? false;
   await startSceneGameplay({
@@ -83,12 +89,16 @@ async function startHostGameplay(
       const createId = state.getEntryFlow()?.characterCreateSceneId;
       if (createId) void state.loadScene(createId, authSession);
     },
-    onRequestScene: (sceneId) => {
+    // A scene-exit carries the destination cell with it. Passing it through
+    // the swap is what keeps the scene the player sees and the cell they are
+    // simulated in from disagreeing.
+    onRequestScene: (target) => {
       void (async () => {
         const resolved = session ?? (requireAuth ? await getSession() : null);
-        await state.loadScene(sceneId, resolved);
+        await state.loadScene(target.sceneId, resolved, target);
       })();
     },
+    networkTarget,
   });
 }
 
@@ -96,6 +106,7 @@ async function enterGameplayScene(
   state: SceneHostState,
   scene: SceneDocument,
   session?: AuthSession | null,
+  networkTarget: SceneExitTarget | null = null,
 ): Promise<void> {
   const requireAuth = state.options.requireAuth ?? false;
   const resolved = session ?? (requireAuth ? await getSession() : null);
@@ -107,7 +118,7 @@ async function enterGameplayScene(
     await state.loadScene(runtimeConfig().bootScene || 'title');
     return;
   }
-  await startHostGameplay(state, scene, resolved);
+  await startHostGameplay(state, scene, resolved, networkTarget);
   state.scheduleAutoLinks(scene);
 }
 
@@ -154,6 +165,7 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
   async function enterScene(
     scene: SceneDocument,
     session?: AuthSession | null,
+    networkTarget: SceneExitTarget | null = null,
   ): Promise<void> {
     if (disposed) return;
     clearPendingTransition();
@@ -162,7 +174,7 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
     if (nextFlow) entryFlow = nextFlow;
 
     if (GAMEPLAY_KINDS.has(scene.kind)) {
-      await enterGameplayScene(state, scene, session);
+      await enterGameplayScene(state, scene, session, networkTarget);
       return;
     }
 
@@ -181,13 +193,13 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
     state.scheduleAutoLinks(scene);
   }
 
-  state.loadScene = async (sceneId, session) => {
+  state.loadScene = async (sceneId, session, networkTarget) => {
     const scene = await loadSceneDocument(sceneId);
     if (!scene) {
       console.error(`AsteronEngine scene "${sceneId}" was not found or is invalid.`);
       return;
     }
-    await enterScene(scene, session);
+    await enterScene(scene, session, networkTarget);
   };
 
   function reportBootFailure(error: unknown): void {

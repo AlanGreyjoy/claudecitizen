@@ -33,7 +33,6 @@ export function returnToApartmentForVitalsFailure(
   ctx.world.prompt = "";
   ctx.world.activeBedId = null;
   ctx.world.transition = null;
-  ctx.world.stationElevator = null;
   ctx.world.screenFade = 0;
   ctx.world.quantum = createQuantumTravelState();
   ctx.controls.setMode(MODE_ON_FOOT);

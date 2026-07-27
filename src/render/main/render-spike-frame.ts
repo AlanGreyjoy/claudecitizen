@@ -615,7 +615,7 @@ function updateNormalPlayPresentation(
     focusPosition: focusBody.position,
     volumetricEnabled: volumetricEnabled && !quantumBusy,
     stationInteriorActive:
-      focus.renderMode === 'in-station' || focus.renderMode === 'riding-elevator',
+      focus.renderMode === 'in-station',
   });
   deps.avatar.update(
     character,

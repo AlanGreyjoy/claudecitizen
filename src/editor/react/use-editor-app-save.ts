@@ -3,6 +3,7 @@ import {
   fetchPlanetList,
   fetchPrefabList,
   fetchSceneList,
+  rememberLastOpenedScene,
   savePrefab,
   saveScene,
 } from '../api';
@@ -143,6 +144,7 @@ const saveCurrent = useCallback(async (): Promise<string | null> => {
       }
       const path = await saveScene(doc);
       store.markSaved();
+      rememberLastOpenedScene(id);
       showToast(`Saved ${path}`);
       void refreshSceneList();
       return id;

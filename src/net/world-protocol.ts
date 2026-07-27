@@ -7,7 +7,7 @@ import type {
 } from '../types';
 import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
 
-export const WORLD_PROTOCOL_VERSION = 1;
+export const WORLD_PROTOCOL_VERSION = 2;
 export const WORLD_SIMULATION_VERSION = 1;
 
 export interface PresenceIntentMessage {
@@ -22,11 +22,22 @@ export interface PresenceIntentMessage {
   desiredVelocity: Vec3;
 }
 
-export interface SnapshotEntityMessage {
+/**
+ * Identity and appearance, sent once when an entity enters the viewer's
+ * interest set. `handle` is a small per-connection integer that stands in for
+ * the 36-byte player id everywhere else in the snapshot stream.
+ */
+export interface EntityProfileMessage {
+  handle: number;
   id: string;
   playerId: string;
   displayName: string;
-  characterAppearance?: PlayerCharacterAppearanceV1 | null;
+  characterAppearance: PlayerCharacterAppearanceV1 | null;
+}
+
+/** The mutable half: only ever sent for entities whose state actually moved. */
+export interface SnapshotEntityMessage {
+  handle: number;
   lod: NetworkLod;
   mode: string;
   character: CharacterRenderState | null;
@@ -42,7 +53,18 @@ export interface SnapshotMessage {
   tick: number;
   epoch: number;
   cellId: string;
+  /** Entities whose state changed since this viewer last heard about them. */
   entities: SnapshotEntityMessage[];
+  /** Handles being introduced in this frame. */
+  profiles: EntityProfileMessage[];
+  /** Handles that left the interest set or disconnected. */
+  removedHandles: number[];
+  /**
+   * The frame is the complete interest set: drop every handle absent from
+   * `entities`. Baselines always arrive on the reliable stream, so unlike a
+   * delta they cannot be lost.
+   */
+  baseline: boolean;
 }
 
 export interface ReconcileCharacterBody extends CharacterRenderState {
@@ -62,7 +84,6 @@ export type ServerWorldMessage =
       character: ReconcileCharacterBody | null;
       ship: NetworkShipBody | null;
     }
-  | { kind: 'entity-remove'; id: string }
   | {
       kind: 'chat-message';
       message: {
@@ -75,7 +96,13 @@ export type ServerWorldMessage =
       };
     }
   | { kind: 'error'; code: string; message: string; retryable: boolean }
-  | { kind: 'pong'; nonce: number; clientTimeMs: number; serverTimeMs: number };
+  | { kind: 'pong'; nonce: number; clientTimeMs: number; serverTimeMs: number }
+  /**
+   * A payload this client does not model — an internal cell message that leaked
+   * through, or a variant added by a newer server. Skipping it beats throwing
+   * and tearing down a session that is otherwise fine.
+   */
+  | { kind: 'unknown' };
 
 class ProtoWriter {
   private readonly output: number[] = [];
@@ -174,6 +201,25 @@ class ProtoReader {
     const value = this.view.getFloat64(this.offset, true);
     this.offset += 8;
     return value;
+  }
+
+  float(): number {
+    this.require(4);
+    const value = this.view.getFloat32(this.offset, true);
+    this.offset += 4;
+    return value;
+  }
+
+  /**
+   * Proto3 packs repeated scalars into one length-delimited field by default,
+   * but is required to accept the unpacked form too.
+   */
+  packedUints(wire: number): number[] {
+    if (wire !== 2) return [this.uint()];
+    const packed = new ProtoReader(this.bytes());
+    const out: number[] = [];
+    while (!packed.done) out.push(packed.uint());
+    return out;
   }
 
   bytes(): Uint8Array {
@@ -345,11 +391,13 @@ export function decodeServerWorldMessage(payload: Uint8Array): ServerWorldMessag
     else if (field === 10) message = readReady(reader.message());
     else if (field === 11) message = { kind: 'snapshot', snapshot: readSnapshot(reader.message()) };
     else if (field === 12) message = readReconcile(reader.message());
-    else if (field === 13) message = readEntityRemove(reader.message());
     else if (field === 14) message = readChatMessage(reader.message());
     else if (field === 15) message = readError(reader.message());
     else if (field === 16) message = readPong(reader.message());
-    else reader.skip(wire);
+    else if (field >= 10) {
+      reader.skip(wire);
+      message = { kind: 'unknown' };
+    } else reader.skip(wire);
   }
   if (protocolVersion !== WORLD_PROTOCOL_VERSION) {
     throw new Error(
@@ -375,7 +423,16 @@ function readReady(reader: ProtoReader): ServerWorldMessage {
 }
 
 function readSnapshot(reader: ProtoReader): SnapshotMessage {
-  const snapshot: SnapshotMessage = { now: 0, tick: 0, epoch: 0, cellId: '', entities: [] };
+  const snapshot: SnapshotMessage = {
+    now: 0,
+    tick: 0,
+    epoch: 0,
+    cellId: '',
+    entities: [],
+    profiles: [],
+    removedHandles: [],
+    baseline: false,
+  };
   while (!reader.done) {
     const { field, wire } = reader.tag();
     if (field === 1) snapshot.now = reader.uint();
@@ -383,16 +440,37 @@ function readSnapshot(reader: ProtoReader): SnapshotMessage {
     else if (field === 3) snapshot.epoch = reader.uint();
     else if (field === 4) snapshot.cellId = reader.string();
     else if (field === 5) snapshot.entities.push(readSnapshotEntity(reader.message()));
+    else if (field === 6) snapshot.profiles.push(readEntityProfile(reader.message()));
+    else if (field === 7) snapshot.removedHandles.push(...reader.packedUints(wire));
+    else if (field === 8) snapshot.baseline = reader.bool();
     else reader.skip(wire);
   }
   return snapshot;
 }
 
-function readSnapshotEntity(reader: ProtoReader): SnapshotEntityMessage {
-  const entity: SnapshotEntityMessage = {
+function readEntityProfile(reader: ProtoReader): EntityProfileMessage {
+  const profile: EntityProfileMessage = {
+    handle: 0,
     id: '',
     playerId: '',
     displayName: '',
+    characterAppearance: null,
+  };
+  while (!reader.done) {
+    const { field, wire } = reader.tag();
+    if (field === 1) profile.handle = reader.uint();
+    else if (field === 2) profile.id = reader.string();
+    else if (field === 3) profile.playerId = reader.string();
+    else if (field === 4) profile.displayName = reader.string();
+    else if (field === 5) profile.characterAppearance = readAppearance(reader.bytes()) ?? null;
+    else reader.skip(wire);
+  }
+  return profile;
+}
+
+function readSnapshotEntity(reader: ProtoReader): SnapshotEntityMessage {
+  const entity: SnapshotEntityMessage = {
+    handle: 0,
     lod: 'full',
     mode: '',
     character: null,
@@ -404,21 +482,71 @@ function readSnapshotEntity(reader: ProtoReader): SnapshotEntityMessage {
   };
   while (!reader.done) {
     const { field, wire } = reader.tag();
-    if (field === 1) entity.id = reader.string();
-    else if (field === 2) entity.playerId = reader.string();
-    else if (field === 3) entity.displayName = reader.string();
-    else if (field === 4) entity.lod = readLod(reader.uint());
-    else if (field === 5) entity.mode = reader.string();
-    else if (field === 6) entity.characterAppearance = readAppearance(reader.bytes());
-    else if (field === 7) entity.character = readCharacterBody(reader.message());
-    else if (field === 8) entity.ship = readShip(reader.message());
-    else if (field === 9) entity.shipRig = readShipRig(reader.message());
-    else if (field === 10) entity.markerPosition = readVec(reader.message());
-    else if (field === 11) entity.stationRoomId = reader.string() || null;
-    else if (field === 12) entity.shipZoneId = reader.string() || null;
+    if (field === 1) entity.handle = reader.uint();
+    // Field 2 is the cell-internal entity id; the edge clears it before send.
+    else if (field === 3) entity.lod = readLod(reader.uint());
+    else if (field === 4) entity.mode = reader.string();
+    else if (field === 5) entity.character = readReplicatedCharacter(reader.message());
+    else if (field === 6) entity.ship = readReplicatedShip(reader.message());
+    else if (field === 7) entity.shipRig = readShipRig(reader.message());
+    else if (field === 8) entity.markerPosition = readVec(reader.message());
+    else if (field === 9) entity.stationRoomId = reader.string() || null;
+    else if (field === 10) entity.shipZoneId = reader.string() || null;
     else reader.skip(wire);
   }
   return entity;
+}
+
+/**
+ * Replicated bodies carry no velocity — a viewer interpolates between samples
+ * and never integrates a remote body — and drop to f32 for orientation.
+ */
+function readReplicatedBody(reader: ProtoReader): DecodedBody {
+  const body: DecodedBody = {
+    position: { x: 0, y: 0, z: 0 },
+    forward: { x: 0, y: 0, z: -1 },
+    up: { x: 0, y: 1, z: 0 },
+    velocity: { x: 0, y: 0, z: 0 },
+    animation: 'idle',
+    grounded: false,
+  };
+  while (!reader.done) {
+    const { field, wire } = reader.tag();
+    if (field === 1) body.position = readVec(reader.message());
+    else if (field === 2) body.forward = readVecF(reader.message());
+    else if (field === 3) body.up = readVecF(reader.message());
+    else if (field === 4) body.animation = reader.string();
+    else if (field === 5) body.grounded = reader.bool();
+    else reader.skip(wire);
+  }
+  return body;
+}
+
+function readReplicatedCharacter(reader: ProtoReader): CharacterRenderState {
+  const body = readReplicatedBody(reader);
+  return {
+    animation: body.animation,
+    forward: body.forward,
+    position: body.position,
+    up: body.up,
+  };
+}
+
+function readReplicatedShip(reader: ProtoReader): NetworkShipBody {
+  let body: DecodedBody = readReplicatedBody(new ProtoReader(new Uint8Array()));
+  const ship: Partial<NetworkShipBody> = {};
+  while (!reader.done) {
+    const { field, wire } = reader.tag();
+    if (field === 1) body = readReplicatedBody(reader.message());
+    else if (field === 2) ship.shipId = reader.string();
+    else if (field === 3) ship.prefabId = reader.string();
+    else if (field === 4) ship.hp = reader.float();
+    else if (field === 5) ship.shields = reader.float();
+    else if (field === 6) ship.maxHp = reader.float();
+    else if (field === 7) ship.maxShields = reader.float();
+    else reader.skip(wire);
+  }
+  return { ...body, ...ship };
 }
 
 interface DecodedBody extends ReconcileCharacterBody {
@@ -446,16 +574,6 @@ function readBody(reader: ProtoReader): DecodedBody {
     else reader.skip(wire);
   }
   return body;
-}
-
-function readCharacterBody(reader: ProtoReader): CharacterRenderState {
-  const body = readBody(reader);
-  return {
-    animation: body.animation,
-    forward: body.forward,
-    position: body.position,
-    up: body.up,
-  };
 }
 
 function readShip(reader: ProtoReader): NetworkShipBody {
@@ -510,6 +628,18 @@ function readVec(reader: ProtoReader): Vec3 {
   return value;
 }
 
+function readVecF(reader: ProtoReader): Vec3 {
+  const value = { x: 0, y: 0, z: 0 };
+  while (!reader.done) {
+    const { field, wire } = reader.tag();
+    if (field === 1) value.x = reader.float();
+    else if (field === 2) value.y = reader.float();
+    else if (field === 3) value.z = reader.float();
+    else reader.skip(wire);
+  }
+  return value;
+}
+
 function readReconcile(reader: ProtoReader): ServerWorldMessage {
   let acceptedSequence = 0;
   let tick = 0;
@@ -532,15 +662,6 @@ function readReconcile(reader: ProtoReader): ServerWorldMessage {
   return { kind: 'reconcile', acceptedSequence, tick, epoch, cellId, playerId, character, ship };
 }
 
-function readEntityRemove(reader: ProtoReader): ServerWorldMessage {
-  let id = '';
-  while (!reader.done) {
-    const tag = reader.tag();
-    if (tag.field === 1) id = reader.string();
-    else reader.skip(tag.wire);
-  }
-  return { kind: 'entity-remove', id };
-}
 
 function readChatMessage(reader: ProtoReader): ServerWorldMessage {
   const message = { id: '', playerId: '', author: '', text: '', instanceId: '', at: 0 };

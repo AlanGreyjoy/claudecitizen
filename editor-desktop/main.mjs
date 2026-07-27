@@ -243,6 +243,13 @@ async function handleEditorApi(repository, request, url) {
           200,
           await repository.saveFolderOrder(await parseDocumentBody(request)),
         );
+      case 'GET /__editor/editor-session':
+        return jsonResponse(200, await repository.getEditorSession());
+      case 'POST /__editor/editor-session':
+        return jsonResponse(
+          200,
+          await repository.saveEditorSession(await parseDocumentBody(request)),
+        );
       case 'GET /__editor/animation-controllers':
         return jsonResponse(
           200,

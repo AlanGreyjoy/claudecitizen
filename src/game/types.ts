@@ -25,6 +25,7 @@ import type {
 } from "../player/inventory/types";
 import type { WeaponGeometryHit } from "../player/weapon-ballistics";
 import type { Planet, Vec3 } from "../types";
+import type { SceneExitTarget } from './station/scene-exit';
 
 export type PlayerControls = ReturnType<typeof createPlayerControls>;
 export type CharacterInput = ReturnType<PlayerControls["sampleCharacterInput"]>;
@@ -89,7 +90,7 @@ export interface GameLoopOptions {
    * Mid-play portal: load another scene document (stops this session via
    * startSceneGameplay on the host).
    */
-  onRequestScene?: (sceneId: string) => void;
+  onRequestScene?: (target: SceneExitTarget) => void;
 }
 
 export type WeaponCombatRuntimeEvent =

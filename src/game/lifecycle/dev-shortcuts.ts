@@ -33,7 +33,6 @@ export function attachDevShortcuts(
         { right: 0, forward: 1 },
       );
       ctx.world.mode = MODE_IN_STATION;
-      ctx.world.stationElevator = null;
       ctx.world.screenFade = 0;
     },
     face: (yawRadians: number, pitchRadians?: number) =>

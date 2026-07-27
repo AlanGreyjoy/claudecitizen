@@ -10,6 +10,7 @@ import type {
   StationNpcSpawnerSpec,
   StationNpcWaypointSpec,
 } from './npc';
+import type { SceneExitTrigger } from './prefabs/schema';
 
 /**
  * Orbital habitat station fixed above the default landing site. Gameplay uses
@@ -93,20 +94,11 @@ export interface StationAnchor {
   radius: number;
 }
 
-export interface ElevatorDestination {
-  roomId: string;
-  right: number;
-  forward: number;
-  face: StationDir2;
-  /** Shown on the prompt while the elevator is moving. */
-  label: string;
-}
-
 export interface HangarSpec {
   index: number;
   roomId: string;
   centerRight: number;
-  /** Forward coordinate of this hangar's elevator door on the lobby wall. */
+  /** Forward coordinate of this hangar's door on the lobby wall. */
   lobbyDoorForward: number;
   /**
    * Pad surface point in station-local coordinates. A parked ship's origin
@@ -282,46 +274,6 @@ export const STATION_ANCHORS = {
   hangarBank: { floorId: 'lobby', right: 12.8, forward: 0, radius: 7.6 } as StationAnchor,
 };
 
-export function hangarLiftAnchor(hangar: HangarSpec): StationAnchor {
-  return { floorId: 'hangar', right: hangar.centerRight, forward: -20.6, radius: 2.6 };
-}
-
-export const LOBBY_ARRIVAL_FROM_HAB: ElevatorDestination = {
-  roomId: 'lobby',
-  right: 0,
-  forward: -9.8,
-  face: { right: 0, forward: 1 },
-  label: 'Descending to the lobby',
-};
-
-export const HAB_ARRIVAL_FROM_LOBBY: ElevatorDestination = {
-  roomId: 'hab-lift',
-  right: 0,
-  forward: -11.9,
-  face: { right: 0, forward: 1 },
-  label: 'Ascending to the habs',
-};
-
-export function hangarArrival(hangar: HangarSpec): ElevatorDestination {
-  return {
-    roomId: hangar.roomId,
-    right: hangar.centerRight,
-    forward: -19.6,
-    face: { right: 0, forward: 1 },
-    label: `Descending to Hangar ${hangar.index}`,
-  };
-}
-
-export function lobbyArrivalFromHangar(hangar: HangarSpec): ElevatorDestination {
-  return {
-    roomId: 'lobby',
-    right: 12.2,
-    forward: hangar.lobbyDoorForward,
-    face: { right: -1, forward: 0 },
-    label: 'Ascending to the lobby',
-  };
-}
-
 const frameCache = new Map<string, StationFrame>();
 
 /** Optional orbit override set from System Map station entries (play bootstrap). */
@@ -463,22 +415,9 @@ export function stationDirToWorld(frame: StationFrame, dir: StationDir2): Vec3 {
  *
  * When an override is active the room/walk/hangar/spawn queries below read
  * from it instead of the hand-authored constants. The default path (no
- * override) is bit-identical to the original behavior. Elevator and info
+ * override) is bit-identical to the original behavior. Scene-exit and info
  * markers replace the bespoke anchor wiring in station_interaction.ts.
  */
-export interface StationElevatorMarker {
-  /** Markers sharing a pairId form one elevator; ride goes to the marker on targetFloor. */
-  pairId: string;
-  floorId: StationFloorId;
-  roomId: string;
-  right: number;
-  up: number;
-  forward: number;
-  radius: number;
-  targetFloor: StationFloorId;
-  face: StationDir2;
-}
-
 export interface StationInfoMarker {
   id: string;
   floorId: StationFloorId;
@@ -502,7 +441,12 @@ export interface StationSceneExitMarker {
   up: number;
   forward: number;
   radius: number;
-  /** Empty skips network Transition before the scene swap. */
+  /** `interact` prompts on foot; `fly-through` fires when a ship crosses it. */
+  trigger: SceneExitTrigger;
+  /**
+   * Target cell: a literal id, or an `@apartment` / `@hangar` / `@space` token
+   * resolved from the session bootstrap. Empty skips the network Transition.
+   */
   networkInstanceId: string;
   arrivalRoomId: string;
 }
@@ -615,7 +559,6 @@ export interface StationLayoutOverride {
   hangars: HangarSpec[];
   colliders: GameplayCollider[];
   spawn: StationSpawnPose;
-  elevatorMarkers: StationElevatorMarker[];
   /** Climbable ladders in station-local meters. */
   ladders: LadderSpec[];
   infoMarkers: StationInfoMarker[];

@@ -129,7 +129,7 @@ Covered above. Same letter, same goal.
 
 > Open for extension, closed for modification.
 
-**Prefabs are the main extension point.** New station elevators, ship doors, or hangar pads ship as new component types in JSON — not forks of the play loop (`src/game/`).
+**Prefabs are the main extension point.** New scene exits, ship doors, or hangar pads ship as new component types in JSON — not forks of the play loop (`src/game/`).
 
 ```mermaid
 flowchart LR

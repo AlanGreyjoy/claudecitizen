@@ -17,7 +17,6 @@ const STATION_COMPONENT_TYPES = new Set<PrefabComponent['type']>([
   'npc-spawner',
   'npc-waypoint',
   'npc-placement',
-  'elevator',
   'scene-exit',
   'hangar-pad',
   'interaction',

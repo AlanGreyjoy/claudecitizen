@@ -6,7 +6,7 @@ import type { StationFloorId } from "../station";
 /**
  * Prefab documents are the contract between the editor and the game: a tree
  * of entities with transforms, optional visual content (GLB asset url or a
- * simple primitive), and gameplay components (spawn points, elevators, walk
+ * simple primitive), and gameplay components (spawn points, scene exits, walk
  * volumes, ...). Documents are plain JSON filed anywhere under the project's
  * asset library as <folder>/<id>.prefab.json. The `id` — not the path — is the
  * reference, so prefabs can be moved freely. Documents hold metadata only;
@@ -37,6 +37,20 @@ export type SceneUiScreen = (typeof SCENE_UI_SCREENS)[number];
 export const SCENE_INSTANCE_SCOPES = ["player", "party", "shared"] as const;
 
 export type SceneInstanceScope = (typeof SCENE_INSTANCE_SCOPES)[number];
+
+/** How a `scene-exit` marker fires. */
+export const SCENE_EXIT_TRIGGERS = ["interact", "fly-through"] as const;
+
+export type SceneExitTrigger = (typeof SCENE_EXIT_TRIGGERS)[number];
+
+/**
+ * Per-player instance tokens usable as a `scene-exit` `networkInstanceId`.
+ * Resolved against the session bootstrap at the moment the exit fires — the
+ * ids are per-player, so a prefab document cannot name them directly.
+ */
+export const SCENE_EXIT_INSTANCE_TOKENS = ["@apartment", "@hangar", "@space"] as const;
+
+export type SceneExitInstanceToken = (typeof SCENE_EXIT_INSTANCE_TOKENS)[number];
 
 /** Horizontal (XZ plane) extent, in prefab/scene axes. */
 export interface PrefabVec2 {
@@ -371,22 +385,36 @@ export type PrefabComponent =
       /** Required by wander/patrol; omitted for stationary placements. */
       routeGroup?: string;
     }
-  | { type: "elevator"; id: string; targetFloor: StationFloorId; floorId: StationFloorId }
   /**
-   * In-play portal: F loads another scene (e.g. private hab → shared station).
-   * Not a menu `scene-link` — this is a walkable marker during Play.
+   * In-play portal to another scene, and the **only** way a player moves
+   * between places during Play. Not a menu `scene-link` — this is a marker in
+   * the world. Where a player starts a session is the `game-manager`'s call;
+   * every move after that is a `scene-exit`.
    */
   | {
       type: "scene-exit";
       /** Target scene document id. */
       sceneId: string;
-      /** HUD prompt when in range. */
+      /** HUD prompt when in range. Unused by `fly-through`. */
       prompt?: string;
-      /** Interact radius in meters. */
+      /** Interact radius in meters — reach on foot, crossing radius in a ship. */
       radius?: number;
       /**
-       * Network cell before the scene swap. Default `station:public` (leave
-       * private apartment). Empty string skips the Transition.
+       * `interact` (default) prompts for F on foot. `fly-through` fires when a
+       * ship crosses the marker and shows no prompt — this is how a player
+       * leaves their hangar for open space without stopping to press a key.
+       */
+      trigger?: SceneExitTrigger;
+      /**
+       * Network cell to move to. A literal id (`station:public`) or one of the
+       * runtime tokens below, because the private instances are per-player and
+       * cannot be written down at authoring time:
+       *
+       * - `@apartment` — the player's own hab
+       * - `@hangar` — the player's own hangar
+       * - `@space` — open space for the current system
+       *
+       * Empty string skips the Transition and only swaps the scene.
        */
       networkInstanceId?: string;
       /** Room id sent with the network Transition (default `lobby`). */

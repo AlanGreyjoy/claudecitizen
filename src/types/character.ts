@@ -68,8 +68,7 @@ export type GameMode =
   | 'entering-bed'
   | 'in-bed'
   | 'leaving-bed'
-  | 'in-station'
-  | 'riding-elevator';
+  | 'in-station';
 
 export interface CharacterRenderState {
   animation: string;

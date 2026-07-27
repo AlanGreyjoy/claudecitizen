@@ -2,8 +2,13 @@ use bytes::{Buf, BufMut, BytesMut};
 use prost::Message;
 use thiserror::Error;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 pub const SIMULATION_VERSION: u32 = 1;
+/// Protocol sanity bound, *not* a path MTU. QUIC caps a datagram near the link
+/// MTU — around 1.2 KB — and `Connection::max_datagram_size()` is the only
+/// number that describes what will actually be carried. Sizing a snapshot
+/// against this constant is how every client in a populated cell silently
+/// stopped receiving everyone.
 pub const MAX_DATAGRAM_BYTES: usize = 48 * 1024;
 pub const MAX_STREAM_FRAME_BYTES: usize = 256 * 1024;
 

@@ -382,8 +382,8 @@ function buildNpcPlacementHelper(
   group.add(body, head, new THREE.Line(facingGeometry, facingMaterial));
   return group;
 }
-function buildElevatorHelper(
-  component: Extract<PrefabComponent, { type: "elevator" }>,
+function buildSceneExitHelper(
+  component: Extract<PrefabComponent, { type: "scene-exit" }>,
 ): THREE.Object3D | null {
 void component;
   const group = new THREE.Group();
@@ -517,8 +517,7 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
       ),
     "npc-waypoint": buildNpcWaypointHelper,
     "npc-placement": buildNpcPlacementHelper,
-    "elevator": buildElevatorHelper,
-    "scene-exit": buildElevatorHelper,
+    "scene-exit": buildSceneExitHelper,
     "ladder": (component: PrefabComponent) =>
       buildLadderHelper(
         component as Extract<PrefabComponent, { type: "ladder" }>,

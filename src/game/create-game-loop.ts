@@ -19,7 +19,6 @@ import { createInShipMode } from "./modes/in-ship";
 import { createInBedMode } from "./modes/in-bed";
 import { createOnShipDeckMode } from "./modes/on-ship-deck";
 import { createInStationMode } from "./modes/in-station";
-import { createElevatorMode } from "./modes/elevator";
 import type { GameLoopHandle, GameLoopOptions } from "./types";
 
 export type {
@@ -70,14 +69,12 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
     animations,
     buildTool,
   });
-  const elevator = createElevatorMode(ctx);
   const modes = {
     onFoot,
     inShip,
     inBed,
     onShipDeck,
     inStation,
-    elevator,
     transitions,
   };
   const renderDeps = { occlusion, sceneSounds, screens, combat, buildTool };

@@ -308,11 +308,66 @@ Docs: `docs/docs/server-console/payments.md`.
 
 ### Authoritative multiplayer
 
+Replication is a three-stage pipeline; the stages own different things and
+conflating any two of them has already cost a launch.
+
+| Stage | Code | Owns |
+|-------|------|------|
+| Cell | `backend/crates/server/src/cell.rs` | Simulation. Publishes its full state to one Redis channel. Knows nothing about who is watching. |
+| Edge | `world_transport.rs` + `replication.rs` | One per connection. Claims the viewer's cell, observes the neighbourhood, decides what *this* viewer needs. |
+| Client | `src/net/world-client.ts` | Mirrors the edge's per-connection state, interpolates, renders. |
+
 - Cells are single-writer authorities leased through Redis and fenced by a PostgreSQL epoch.
 - `backend/crates/sim-core/` is shared by native Rapier authority and browser WASM prediction.
-- `proto/world.proto` is the canonical realtime contract. WebTransport carries reliable control/reconciliation streams plus datagram intents/snapshots.
-- PostgreSQL stores durable accounts, catalog, inventory, and cell checkpoints; Redis stores ephemeral tickets, leases, routing streams, and cross-pod snapshot fan-out.
+- `proto/world.proto` is the canonical realtime contract.
+- PostgreSQL stores durable accounts, catalog, inventory, and cell checkpoints; Redis stores ephemeral tickets, leases, routing streams, and snapshot fan-out.
 - Never add a WebSocket fallback, second backend, client-authoritative outcomes, or a separate prediction implementation.
+
+**`scene-exit` is the only way a player moves between places during Play.**
+The `game-manager` decides where a session *begins*; every move after that is a
+`scene-exit` marker and nothing else. Elevators are gone — mode, ride state,
+`elevator` component and all. Do not reintroduce a second mechanism that picks a
+cell: two of them race, and the loser is a player rendering one place while
+being simulated in another.
+
+- `trigger: "interact"` prompts for F on foot; `trigger: "fly-through"` fires
+  when a ship crosses the marker (hangar → open space) and shows no prompt.
+- `networkInstanceId` takes a literal cell id or a per-player token —
+  `@apartment`, `@hangar`, `@space` — resolved from the session bootstrap in
+  `src/game/station/scene-exit.ts`. Private instance ids are per player and
+  cannot be written into a prefab document.
+- The target rides the scene swap **in memory** (`onRequestScene` carries a
+  `SceneExitTarget`). Do not send the Transition on the outgoing connection: a
+  scene swap tears the world session down and dials a new one, so that
+  Transition would be racing its own reconnect for the Postgres write that
+  decides the new session's cell.
+- `loginInstanceForScene` is the *only* other thing allowed to choose a cell,
+  and only for a fresh session.
+
+**An authority cell is not a view distance.** `src/grid.rs` sizes cells and
+interest radii separately, tied by one invariant — `interest <= size` — so a
+viewer's interest sphere is always covered by the 3×3×3 neighbourhood of the
+cell they stand in. Edges subscribe to that whole neighbourhood. Shrink a cell
+below its interest radius and players standing next to each other across a
+boundary go invisible again, silently, with a healthy connection throughout.
+
+**Never size a snapshot against `MAX_DATAGRAM_BYTES`.** It is a protocol sanity
+bound (48 KB); QUIC carries about 1.2 KB. `Connection::max_datagram_size()` is
+the only number that describes the path.
+
+**What goes on which QUIC path is decided by kind, not size.** Structural frames
+— a baseline, an entity entering, an entity leaving — take the reliable stream
+because nothing restates them. Pure state churn takes a datagram because losing
+one costs 50 ms. The client depends on this: it never expires an entity on
+silence, because an idle entity is *supposed* to send nothing.
+
+**Identity is not per-tick data.** Appearance and display name ride an
+`EntityProfile` sent once per viewer when an entity enters interest; entity
+state is addressed by a small per-connection handle. Putting appearance back in
+the per-tick path is what blew the MTU and blanked every populated cell.
+
+Cell persistence uses `CellCheckpoint`, deliberately *not* the wire `Snapshot` —
+the wire format is lossy by design (no velocity, f32 orientation, no identity).
 
 ## Architecture — Domain-Driven Design
 

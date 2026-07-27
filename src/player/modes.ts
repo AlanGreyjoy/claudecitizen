@@ -9,7 +9,6 @@ export const MODE_ENTERING_BED: GameMode = 'entering-bed';
 export const MODE_IN_BED: GameMode = 'in-bed';
 export const MODE_LEAVING_BED: GameMode = 'leaving-bed';
 export const MODE_IN_STATION: GameMode = 'in-station';
-export const MODE_RIDING_ELEVATOR: GameMode = 'riding-elevator';
 
 export const SIT_TRANSITION_SECONDS = 1.3;
 export const STAND_TRANSITION_SECONDS = 1.0;
@@ -42,8 +41,6 @@ export function modeLabel(mode: GameMode): string {
       return 'Getting Up';
     case MODE_IN_STATION:
       return 'On Station';
-    case MODE_RIDING_ELEVATOR:
-      return 'Elevator';
     default:
       return 'On Foot';
   }
