@@ -532,6 +532,7 @@ export async function startPlaySession(
     loopRef,
     vitalsSessionRef,
     characterAppearance,
+    scene: world.params.scene,
   });
 
   const buildSystems = initializePlayBuildPhase({

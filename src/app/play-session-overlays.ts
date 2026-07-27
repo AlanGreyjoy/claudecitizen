@@ -8,6 +8,7 @@ import {
 import type { createPlayerControls } from '../input/player-controls';
 import type { createGameLoop } from '../game/create-game-loop';
 import type { SpikeRenderer } from '../render/main';
+import type { SceneDocument } from '../world/scenes/schema';
 import type { PlaySessionDom } from './play-session-dom';
 import type { PlayerVitalsSessionController } from './player-vitals-session';
 import {
@@ -54,6 +55,8 @@ export async function createPlayOverlayStack(options: {
   loopRef: { loop?: ReturnType<typeof createGameLoop> };
   vitalsSessionRef: { current: PlayerVitalsSessionController | null };
   characterAppearance: GameBootstrap['player']['characterAppearance'] | null;
+  /** Scene being played. Decides which authoritative instance the session joins. */
+  scene: SceneDocument | null;
 }): Promise<PlayOverlayStack> {
   const {
     dom,
@@ -73,7 +76,7 @@ export async function createPlayOverlayStack(options: {
   let haloBand: HaloBandController | null = null;
 
   const hud = createPlayHud(dom, () => networkClient, options.renderer);
-  networkClient = await connectPlayNetwork(bootstrap, hud, () => haloBand);
+  networkClient = await connectPlayNetwork(bootstrap, hud, () => haloBand, options.scene);
   // Offline / editor-preview sessions have no bootstrap, so the Mall tab stays hidden.
   const mallCallbacks = bootstrap
     ? createPlayMallCallbacks({

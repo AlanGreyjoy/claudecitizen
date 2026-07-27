@@ -8,6 +8,7 @@ import { createFoodShop } from '../render/effects/hud/food-shop';
 import { createPersonalInventory } from '../render/effects/hud/personal-inventory';
 import { collectHaloBandElements } from '../render/effects/hud/haloband-dom';
 import { createWorldClient, type WorldClient } from '../net/world-client';
+import type { SceneDocument } from '../world/scenes/schema';
 import type { GameBootstrap } from '../net/api';
 import {
   createCheckoutSession,
@@ -81,10 +82,25 @@ export function createPlayHud(
   );
 }
 
+/**
+ * A scene of kind `instance` is a shared place: everyone who loads it belongs in
+ * the same authoritative cell.
+ *
+ * The server takes the cell from the session ticket — the player's stored
+ * `currentInstanceId`, which starts life as their private `apartment:<id>` — and
+ * only a Transition moves it. The Join the client sends on connect is ignored.
+ * So without this the two players standing in the same scene sit in two private
+ * cells and never see each other.
+ */
+export function sharedInstanceIdForScene(scene: SceneDocument | null): string | null {
+  return scene?.kind === 'instance' ? `scene:${scene.id}` : null;
+}
+
 export async function connectPlayNetwork(
   bootstrap: GameBootstrap | null,
   hud: ReturnType<typeof createHud>,
   getHaloBand: () => HaloBandController | null,
+  scene: SceneDocument | null = null,
 ): Promise<WorldClient | null> {
   if (!bootstrap) {
     hud.appendChatMessage('SYS', 'Offline dev session.');
@@ -100,6 +116,8 @@ export async function connectPlayNetwork(
   });
   try {
     await networkClient.connect();
+    const sharedInstanceId = sharedInstanceIdForScene(scene);
+    if (sharedInstanceId) networkClient.transition(sharedInstanceId, '');
     return networkClient;
   } catch (error) {
     console.warn('ClaudeCitizen world socket failed to connect.', error);
