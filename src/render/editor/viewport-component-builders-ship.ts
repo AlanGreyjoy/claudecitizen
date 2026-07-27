@@ -180,6 +180,29 @@ function buildRampInteractHelper(
   true,
   );
 }
+function buildShipEntryHelper(
+  component: Extract<PrefabComponent, { type: "ship-entry" }>,
+): THREE.Object3D | null {
+  const group = new THREE.Group();
+  const radius = component.radius ?? 3;
+  // Flat disc, not a sphere: the board test is horizontal at ground level, so
+  // a sphere would read as reaching up the hull side when it does not.
+  const disc = makeHelperMesh(
+  new THREE.CircleGeometry(radius, 32),
+  0x7dffd0,
+  0.2,
+  true,
+  );
+  disc.rotation.x = -Math.PI / 2;
+  const core = makeHelperMesh(
+  new THREE.SphereGeometry(0.12, 12, 10),
+  0x7dffd0,
+  0.9,
+  false,
+  );
+  group.add(disc, core);
+  return group;
+}
 function buildCockpitControlHelper(
   component: Extract<PrefabComponent, { type: "cockpit-control" }>,
 ): THREE.Object3D | null {
@@ -329,6 +352,7 @@ return {
     "pilot-seat": buildPilotSeatHelper,
     "bed": buildBedHelper,
     "ramp-interact": buildRampInteractHelper,
+    "ship-entry": buildShipEntryHelper,
     "cockpit-control": buildCockpitControlHelper,
     "cockpit-stat": buildCockpitStatHelper,
     "entertainment-system": buildEntertainmentSystemHelper,

@@ -30,6 +30,7 @@ export type HierarchyPanelProps = HierarchyPanelOptions & {
  */
 export function HierarchyPanel({
   store,
+  getViewFocusPosition,
   getGlbNodePrefabPosition,
   getGlbNodeBounds,
   onDuplicateGlbNode,
@@ -103,7 +104,7 @@ export function HierarchyPanel({
     onPrefabLibraryChanged,
   });
 
-  const { entityMenuEntries, glbMenuEntries } = useHierarchyMenus({
+  const { createObjectEntries, entityMenuEntries, glbMenuEntries } = useHierarchyMenus({
     store,
     addEmptyTo,
     addBoxTo,
@@ -111,6 +112,7 @@ export function HierarchyPanel({
     createPrefab,
     filterByItemName,
     spawnPositionForEntity,
+    getViewFocusPosition,
     getGlbNodePrefabPosition,
     getGlbNodeBounds,
     onDuplicateGlbNode,
@@ -204,6 +206,7 @@ export function HierarchyPanel({
       collapseAll={collapseAll}
       addEmptyTo={addEmptyTo}
       addBoxTo={addBoxTo}
+      createObjectEntries={createObjectEntries}
     />
   );
 }

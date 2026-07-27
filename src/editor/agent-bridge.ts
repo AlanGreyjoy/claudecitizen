@@ -12,12 +12,27 @@ const DEFAULT_HIERARCHY_LIMIT = 400;
 const MAX_HIERARCHY_DEPTH = 32;
 const MAX_HIERARCHY_LIMIT = 2000;
 
+export type AgentCaptureRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type AgentCaptureTarget = {
+  source: 'scene' | 'play';
+  tab: SceneEditorTab;
+  playing: boolean;
+  rect: AgentCaptureRect;
+};
+
 export type AgentBridgeHandlers = {
   store: EditorStore;
   getTab: () => SceneEditorTab;
   getPlaying: () => boolean;
   getPaused: () => boolean;
   getIsolation: () => IsolationBreadcrumb | null;
+  getCaptureTarget: () => AgentCaptureTarget | null;
   play: () => void;
   stopPlay: () => void;
   save: () => void | Promise<void>;
@@ -205,6 +220,17 @@ async function handleSnapshot(
         documentId: state.prefabId,
         documentName: state.prefabName,
       };
+    case 'capture_viewport_target': {
+      const target = handlers.getCaptureTarget();
+      if (!target) {
+        throw agentError(
+          'No capturable Scene/Ship viewport or Play host. Switch to Scene or Ship, or start Play.',
+          'viewport_unavailable',
+          409,
+        );
+      }
+      return target;
+    }
     case 'command':
       return runCommand(handlers, params);
     default:

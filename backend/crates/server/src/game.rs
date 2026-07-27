@@ -105,7 +105,8 @@ pub async fn bootstrap(
     grant_starter_loadout(&state, &player_id).await?;
     let player = sqlx::query(
         r#"SELECT "id", "handle", "displayName", "characterAppearance", "arcBalance",
-                  "currentInstanceId", "currentRoomId", "hungerReserve", "thirstReserve"
+                  "creditBalance", "currentInstanceId", "currentRoomId",
+                  "hungerReserve", "thirstReserve"
            FROM "Player" WHERE "id" = $1"#,
     )
     .bind(&player_id)
@@ -126,7 +127,11 @@ pub async fn bootstrap(
                 player.try_get::<f64, _>("thirstReserve")?,
             ),
         },
-        "economy": { "arcBalance": player.try_get::<i32, _>("arcBalance")? },
+        "economy": {
+            "arcBalance": player.try_get::<i32, _>("arcBalance")?,
+            "creditBalance": player.try_get::<i32, _>("creditBalance")?,
+        },
+        "mall": { "listings": crate::mall::mall_listings(&state).await? },
         "spawn": {
             "instanceId": player.try_get::<String, _>("currentInstanceId")?,
             "apartmentInstanceId": format!("apartment:{player_id}"),
@@ -1256,7 +1261,7 @@ async fn build_state(state: &AppState, player_id: &str, area: BuildArea) -> ApiR
     }))
 }
 
-async fn inventory_state(state: &AppState, player_id: &str) -> ApiResult<Value> {
+pub(crate) async fn inventory_state(state: &AppState, player_id: &str) -> ApiResult<Value> {
     let catalog = sqlx::query(
         r#"SELECT i."id", i."name", i."description", i."itemType", i."subType", i."prefabId", i."iconUrl", i."stackMax", i."costArc", i."rarity",
                   i."metadata",

@@ -1,5 +1,5 @@
-import type { PrefabComponent, ShipSeatRole } from "./schema";
-import { SHIP_SEAT_ROLES } from "./schema";
+import type { PrefabComponent, ShipEntryMode, ShipSeatRole } from "./schema";
+import { SHIP_ENTRY_MODES, SHIP_SEAT_ROLES } from "./schema";
 import {
   fail,
   isRecord,
@@ -18,6 +18,15 @@ function parseShipControllerHingeAxis(
   if (raw === undefined) return undefined;
   if (raw === "x" || raw === "y" || raw === "z") return raw;
   fail(path, 'expected "x", "y", or "z"');
+}
+
+function parseShipControllerEntryMode(
+  raw: unknown,
+  path: string,
+): ShipEntryMode | undefined {
+  if (raw === undefined) return undefined;
+  if (SHIP_ENTRY_MODES.includes(raw as ShipEntryMode)) return raw as ShipEntryMode;
+  fail(path, `expected one of: ${SHIP_ENTRY_MODES.join(", ")}`);
 }
 
 function parseShipControllerGearNodes(raw: unknown, path: string) {
@@ -428,6 +437,7 @@ export function parseShipControllerComponent(
     ramp: parseShipControllerRamp(value, path),
     doors: parseShipControllerDoors(value, path),
     seats: parseShipControllerSeats(value, path),
+    entry: parseShipControllerEntryMode(value.entry, `${path}.entry`),
     deckSpawnEntityId:
       value.deckSpawnEntityId === undefined
         ? undefined

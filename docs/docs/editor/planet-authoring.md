@@ -68,19 +68,14 @@ In play, props stream as asset-batched instanced meshes near the player. Nearby 
 
 The Planet Authoring panel shows a bounded heightfield patch around the spawn hint with biome vertex colors plus a translucent ocean/lake/river water overlay (ocean / lakes from the same domain as play). Click **Preview** to plant grass/trees and spawn-catalog GLBs across the whole patch (bounded sample counts — not a full play LOD stream). Camera controls match the Scene tab: **LMB** orbit, **MMB** pan, hold **RMB + WASD/QE** fly (wheel adjusts speed while flying, **Shift** boosts). Use **Test Play** for full terrain LOD, surface-spawn streaming, and FPS/stats.
 
-## Offline surface playtest
+## Test Play
 
-```text
-http://localhost:4173/?boot=play&planetId=asteron&spawn=surface&from=editor&debug=1
-```
+Use **Test Play** in the Planet Authoring panel for full terrain LOD,
+surface-spawn streaming, and FPS/stats. There is no browser URL playtest
+workflow — author and test in the editor; ship with **File → Build Web**.
 
-| Param | Effect |
-| --- | --- |
-| `planetId` | Loads that planet document (default `asteron`) |
-| `spawn=surface` | Starts on-foot at the landing site (skips station spawn) |
-| `from=editor` | Shows **Back to Editor** → Planet Authoring tab |
-| `debug=1` | Forces the stats panel open |
-| `quality=` | `performance` \| `balanced` \| `high` |
+Optional quality presets apply when the play session boots
+(`performance` \| `balanced` \| `high`).
 
 Terrain/vegetation tiles stay in IndexedDB, keyed by `planetId` + generation fingerprint. Palette, noise, vegetation, and spawn-catalog edits invalidate related caches automatically (`SURFACE_SPAWN_CACHE_VERSION` for spawn placement algorithm or stored-tile schema changes).
 

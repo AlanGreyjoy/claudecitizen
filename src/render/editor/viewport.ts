@@ -10,6 +10,7 @@ import { createViewportScene } from "./viewport-scene";
 import { createViewportSelection } from "./viewport-selection";
 import { createViewportShipPreview } from "./viewport-ship-preview";
 import { createViewportSnap } from "./viewport-snap";
+import { createViewFocus } from "./viewport-view-focus";
 import type {
   EditorViewport,
   EditorViewportOptions,
@@ -101,6 +102,15 @@ export function createEditorViewport(
     isFlying: flythrough.isFlying,
     isPlayMode: () => playMode,
     glbQueries,
+  });
+
+  const viewFocus = createViewFocus({
+    camera,
+    getTarget: () => orbit.target,
+    entityRoot,
+    objectsById: graph.objectsById,
+    isSnapEnabled: snap.isEnabled,
+    getTranslateStep: snap.getTranslateStep,
   });
 
   const drop = attachViewportDrop({
@@ -208,6 +218,7 @@ export function createEditorViewport(
       shipPreview.setState(state);
     },
     focusSelection: selection.focusSelection,
+    getViewFocusPosition: viewFocus.getViewFocusPosition,
     getGlbNodePrefabPosition: glbQueries.getGlbNodePrefabPosition,
     getGlbNodePrefabTransform: glbQueries.getGlbNodePrefabTransform,
     getGlbNodeBounds: glbQueries.getGlbNodeBounds,

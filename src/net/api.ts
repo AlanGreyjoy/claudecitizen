@@ -31,7 +31,11 @@ export interface GameBootstrap {
   };
   economy: {
     arcBalance: number;
+    /** AsteronCredits — the hard currency the Item Mall spends. */
+    creditBalance: number;
   };
+  /** Item Mall storefront, so the HUD can render without a second round trip. */
+  mall: { listings: unknown[] };
   spawn: {
     instanceId: string;
     apartmentInstanceId: string;
@@ -324,6 +328,85 @@ export function equipInventoryItem(
   return requestJson<InventoryEquipResponse>('/game/inventory/equip', {
     method: 'POST',
     body: JSON.stringify({ slotId, itemDefinitionId }),
+  });
+}
+
+// --- Item Mall and AsteronCredits -----------------------------------------
+
+export interface CreditPacksResponse {
+  packs: unknown[];
+  /** False when the operator has not finished configuring Stripe; hide the buy flow. */
+  checkoutEnabled: boolean;
+}
+
+/** Real-money credit bundles a player can buy. */
+export function fetchCreditPacks(): Promise<CreditPacksResponse> {
+  return requestJson<CreditPacksResponse>('/payments/packs', { method: 'GET' });
+}
+
+export interface CheckoutSessionResponse {
+  purchaseId: string;
+  sessionId: string;
+  /** Hosted Stripe Checkout URL. Open it externally; never embed it. */
+  url: string;
+}
+
+/**
+ * Starts a Stripe Checkout session.
+ *
+ * Credits are granted by the Stripe webhook, not by this call and not by the success redirect,
+ * so the client must treat the returned URL as the whole of its responsibility.
+ */
+export function createCheckoutSession(packId: string): Promise<CheckoutSessionResponse> {
+  return requestJson<CheckoutSessionResponse>('/payments/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ packId }),
+  });
+}
+
+export interface CreditPurchaseSummary {
+  id: string;
+  packId: string;
+  packName: string | null;
+  status: 'pending' | 'paid' | 'failed' | 'refunded' | 'disputed';
+  priceCents: number;
+  currency: string;
+  creditsGranted: number;
+  createdAt: string;
+}
+
+export interface CreditPurchasesResponse {
+  purchases: CreditPurchaseSummary[];
+  creditBalance: number;
+}
+
+/** Recent purchase attempts, polled after checkout to pick up webhook fulfillment. */
+export function fetchCreditPurchases(): Promise<CreditPurchasesResponse> {
+  return requestJson<CreditPurchasesResponse>('/payments/purchases', { method: 'GET' });
+}
+
+export interface MallStateResponse {
+  listings: unknown[];
+  creditBalance: number;
+}
+
+export function fetchMall(): Promise<MallStateResponse> {
+  return requestJson<MallStateResponse>('/game/mall', { method: 'GET' });
+}
+
+export interface MallPurchaseResponse {
+  creditBalance: number;
+  inventory: InventoryState;
+}
+
+/** Spends AsteronCredits on a mall listing and adds the item to the player's inventory. */
+export function purchaseMallItem(
+  listingId: string,
+  quantity = 1,
+): Promise<MallPurchaseResponse> {
+  return requestJson<MallPurchaseResponse>('/game/mall/purchase', {
+    method: 'POST',
+    body: JSON.stringify({ listingId, quantity }),
   });
 }
 

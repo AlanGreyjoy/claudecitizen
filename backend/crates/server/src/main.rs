@@ -1,4 +1,5 @@
 mod admin;
+mod admin_payments;
 mod auth;
 mod cell;
 mod config;
@@ -7,6 +8,8 @@ mod game;
 mod health;
 mod http;
 mod mail;
+mod mall;
+mod payments;
 mod state;
 mod world_transport;
 
@@ -145,6 +148,13 @@ fn router(state: AppState) -> Result<Router> {
             "/game/hangar/assigned-bay",
             post(game::set_assigned_bay).delete(game::reset_assigned_bay),
         )
+        .route("/payments/packs", get(payments::list_packs))
+        .route("/payments/checkout", post(payments::create_checkout))
+        .route("/payments/purchases", get(payments::list_purchases))
+        // Unauthenticated by design: Stripe authenticates with an HMAC over the raw body.
+        .route("/payments/stripe/webhook", post(payments::stripe_webhook))
+        .route("/game/mall", get(mall::list_mall))
+        .route("/game/mall/purchase", post(mall::purchase_mall_item))
         .route("/world/session", post(world_transport::create_session))
         .route(
             "/admin/session",
@@ -153,6 +163,35 @@ fn router(state: AppState) -> Result<Router> {
         .route("/admin/users", get(admin::list_users))
         .route("/admin/users/{id}", get(admin::get_user))
         .route("/admin/users/{id}/ships", post(admin::assign_ship))
+        .route(
+            "/admin/users/{id}/credits",
+            get(admin_payments::list_player_ledger).post(admin_payments::grant_credits),
+        )
+        .route(
+            "/admin/payments/config",
+            get(admin_payments::get_payment_config).put(admin_payments::update_payment_config),
+        )
+        .route(
+            "/admin/payments/purchases",
+            get(admin_payments::list_purchases),
+        )
+        .route(
+            "/admin/credit-packs",
+            get(admin_payments::list_credit_packs).post(admin_payments::create_credit_pack),
+        )
+        .route(
+            "/admin/credit-packs/{id}",
+            patch(admin_payments::update_credit_pack).delete(admin_payments::delete_credit_pack),
+        )
+        .route("/admin/mall/preview", get(admin_payments::preview_mall))
+        .route(
+            "/admin/mall",
+            get(admin_payments::list_mall_listings).post(admin_payments::create_mall_listing),
+        )
+        .route(
+            "/admin/mall/{id}",
+            patch(admin_payments::update_mall_listing).delete(admin_payments::delete_mall_listing),
+        )
         .route(
             "/admin/ships",
             get(admin::list_ships).post(admin::create_ship),

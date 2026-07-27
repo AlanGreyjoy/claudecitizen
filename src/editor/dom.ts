@@ -131,8 +131,10 @@ export function showContextMenu(x: number, y: number, entries: ContextMenuEntry[
         else if (entry.children) appendEntries(flyout, entry.children);
         submenuWrap.append(trigger, flyout);
         const openSubmenu = (): void => {
-          for (const node of menu.querySelectorAll('.ed-menu-submenu')) {
-            node.classList.remove('is-open');
+          // Siblings only — a descendant query would also close the ancestor
+          // flyout this submenu lives in, collapsing the whole chain.
+          for (const node of host.querySelectorAll(':scope > .ed-menu-submenu')) {
+            if (node !== submenuWrap) node.classList.remove('is-open');
           }
           submenuWrap.classList.add('is-open');
           panel?.focusSearch?.();

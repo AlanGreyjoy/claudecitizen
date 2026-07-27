@@ -91,32 +91,20 @@ A shipped release boots the scene named in `asteron.runtime.json` and follows th
 `ui-screen` and `scene-link` GameObjects from there — scene changes happen
 **in-process**, never by reloading the page.
 
-The runtime also understands a few deep links, used mainly by the editor's own
-preview commands:
-
-| Param | Effect |
-| --- | --- |
-| `?boot=scene&sceneId=<id>` | Start the scene host on a specific scene |
-| `?boot=play` | Direct playtest from URL params |
-| `?boot=play&planetId=<id>&spawn=surface` | Planet surface playtest |
-| `?boot=play&systemId=<id>` | System playtest |
-| `?boot=characterCreator` | Character creator preview |
-| `?stationPrefab=<id>` | Station prefab playtest |
-| `?shipPrefab=<id>` | Ship sandbox (deck walk + flight preview) |
-
-Preview routes are gated behind the authoring build flag, so most of them are
-inert in a shipped web release.
+Authoring and playtest happen in AsteronEngine (**F6** / Ship tab **Test** /
+Planet **Test Play**). There is no browser URL playtest workflow for day-to-day
+work; the web build is a release artifact from **File → Build Web**.
 
 ## System Map and stations
 
-Play loads a **system document** and places the stations authored on the System
-Map around the active planet.
+Playable scenes select a **system document** through `game-manager` and place
+stations authored on the System Map around the active planet.
 
-| Param | Effect |
+| Field | Effect |
 | --- | --- |
-| `systemId` | System document under `src/world/systems/data/` (default `default`) |
+| `systemId` | System document under the project's systems data (default `default`) |
 | `planetId` | Active planet terrain at world origin (one planet at a time) |
-| `stationPrefab` | Which station interior is walkable (matches a system station instance when possible) |
+| Station `prefab-instance` | Which station interior is walkable |
 
 Stations parented to the active planet spawn at distinct orbital bearings derived
 from their System Map `offsetMeters`. The primary station owns walk physics; other

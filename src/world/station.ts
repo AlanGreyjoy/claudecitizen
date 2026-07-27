@@ -1,4 +1,4 @@
-import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
+import { cross, dot, normalize, sub } from '../math/vec3';
 import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
 import { DEFAULT_SPAWN_SITE } from './landing-sites';
 import type { LandingSiteHint, Planet, Vec3 } from '../types';
@@ -397,11 +397,29 @@ export function getStationFrame(planet: Planet): StationFrame {
   return getStationFrameAt(planet, latRadians, lonRadians, altitudeMeters);
 }
 
+/**
+ * In-place `stationLocalToWorld` for per-frame callers that must not allocate.
+ * Term grouping matches the allocating version so both agree bit for bit.
+ */
+export function writeStationLocalToWorld(
+  frame: StationFrame,
+  local: StationLocalPoint,
+  out: Vec3,
+): Vec3 {
+  out.x =
+    frame.origin.x + frame.right.x * local.right
+    + (frame.up.x * local.up + frame.forward.x * local.forward);
+  out.y =
+    frame.origin.y + frame.right.y * local.right
+    + (frame.up.y * local.up + frame.forward.y * local.forward);
+  out.z =
+    frame.origin.z + frame.right.z * local.right
+    + (frame.up.z * local.up + frame.forward.z * local.forward);
+  return out;
+}
+
 export function stationLocalToWorld(frame: StationFrame, local: StationLocalPoint): Vec3 {
-  return add(
-    add(frame.origin, scale(frame.right, local.right)),
-    add(scale(frame.up, local.up), scale(frame.forward, local.forward)),
-  );
+  return writeStationLocalToWorld(frame, local, { x: 0, y: 0, z: 0 });
 }
 
 export function worldToStationLocal(frame: StationFrame, position: Vec3): StationLocalPoint {
@@ -413,10 +431,31 @@ export function worldToStationLocal(frame: StationFrame, position: Vec3): Statio
   };
 }
 
+/** In-place `stationDirToWorld`; same degenerate-input fallback as `normalize`. */
+export function writeStationDirToWorld(
+  frame: StationFrame,
+  dir: StationDir2,
+  out: Vec3,
+): Vec3 {
+  const x = frame.right.x * dir.right + frame.forward.x * dir.forward;
+  const y = frame.right.y * dir.right + frame.forward.y * dir.forward;
+  const z = frame.right.z * dir.right + frame.forward.z * dir.forward;
+  const len = Math.hypot(x, y, z);
+  if (len < 1e-9) {
+    out.x = 0;
+    out.y = 1;
+    out.z = 0;
+    return out;
+  }
+  const inverseLength = 1 / len;
+  out.x = x * inverseLength;
+  out.y = y * inverseLength;
+  out.z = z * inverseLength;
+  return out;
+}
+
 export function stationDirToWorld(frame: StationFrame, dir: StationDir2): Vec3 {
-  return normalize(
-    add(scale(frame.right, dir.right), scale(frame.forward, dir.forward)),
-  );
+  return writeStationDirToWorld(frame, dir, { x: 0, y: 0, z: 0 });
 }
 
 /**

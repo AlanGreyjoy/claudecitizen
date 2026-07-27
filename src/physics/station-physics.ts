@@ -11,15 +11,22 @@ import {
   createRapierWorld,
   removeCollider,
   removeStaticColliders,
+  QUERY_GROUPS_EXCLUDE_NPCS,
   type RapierWorldHandle,
   type PhysicsRayHit,
 } from "./rapier-world";
 import { castCameraOcclusion } from "./camera-occlusion";
+import {
+  createStationNpcBodies,
+  type StationNpcBodies,
+} from "./station-npc-capsules";
 
 export interface StationPhysics {
   world: RAPIER.World;
   player: RapierWorldHandle;
   dynamicColliders: RAPIER.Collider[];
+  /** Kinematic NPC capsules plus the wander path probe that shares their shape. */
+  npcBodies: StationNpcBodies;
   /** Disable (or re-enable) every static collider bound to the given animation/door id. */
   setDoorColliderEnabled(doorId: string, enabled: boolean): void;
   dispose(): void;
@@ -58,6 +65,7 @@ export async function createStationPhysics(
     world,
     player,
     dynamicColliders: [],
+    npcBodies: createStationNpcBodies(world, player.playerCollider),
     setDoorColliderEnabled(doorId: string, enabled: boolean) {
       const handles = doorColliderHandles.get(doorId);
       if (!handles) return;
@@ -68,6 +76,7 @@ export async function createStationPhysics(
         removeCollider(world, collider);
       }
       physics.dynamicColliders.length = 0;
+      physics.npcBodies.dispose();
       removeStaticColliders(world, staticColliders);
       player.dispose();
       // Rapier has no explicit world destroy in the JS API; remove bodies/colliders above.
@@ -173,6 +182,9 @@ export function castStationWorldRay(
     localDirection,
     maxDistance,
     physics.player.playerCollider,
+    // NPCs have no health model yet, so a bullet stopping on an NPC capsule
+    // would spawn a station impact in mid-air with no damage feedback.
+    QUERY_GROUPS_EXCLUDE_NPCS,
   );
   if (!hit) return null;
   return {

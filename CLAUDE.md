@@ -49,6 +49,17 @@ Rust: `cargo check|clippy|build --manifest-path backend/Cargo.toml`.
 - **The user owns interactive QA.** Do not start dev servers, do browser/screenshot checks, or launch watchers unless explicitly asked — in particular never bare `vite`, `tsx watch`, or `npm run dev:server`. If server context is needed, check running ports or ask.
 - State plainly what validation you skipped.
 
+## Multiple agents run at once
+
+Several agents work this repo concurrently, so the working tree is almost never clean and is not a snapshot of *your* work.
+
+- **Do not get hung up on pre-existing changes.** Unstaged/uncommitted edits, unfamiliar new files, and a long `git status` are expected. They are not breakage, not yours to explain, and not a reason to pause and ask.
+- **Do not revert, stash, `git checkout --`, or "clean up" changes you did not make.** Assume another agent is mid-task in them.
+- **Stay in your lane.** Touch only the files your task requires. If your task needs a file another agent is clearly rewriting, make the minimal edit and say so; do not restructure around it.
+- **Never `git add -A` / `git commit -a`.** Stage explicit paths you touched, and only when the user asks for a commit.
+- **Typecheck/lint noise may not be yours.** `npm run typecheck` and `npm run lint` cover the whole repo — errors in files outside your change are someone else's in-flight work. Fix what your change caused, report the rest as pre-existing, and do not chase it.
+- If the tree moves under you (a file changed between read and edit), re-read and reapply on top of the newer content rather than overwriting.
+
 ## The two surfaces
 
 Everything else is a build output of these:

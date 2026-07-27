@@ -940,6 +940,20 @@
                 </section>
                 <section
                   class="sc-haloband-panel"
+                  id="haloband-panel-mall"
+                  data-haloband-panel="mall"
+                >
+                  <div class="sc-haloband-mall-header">
+                    <h3 class="sc-haloband-panel-title">Item Mall</h3>
+                    <span class="sc-haloband-mall-balance" id="haloband-mall-balance">0 AC</span>
+                  </div>
+                  <p class="sc-haloband-mall-notice is-hidden" id="haloband-mall-notice"></p>
+                  <div class="sc-haloband-mall-grid" id="haloband-mall-store"></div>
+                  <h4 class="sc-haloband-mall-subtitle">Buy AsteronCredits</h4>
+                  <div class="sc-haloband-mall-packs" id="haloband-mall-packs"></div>
+                </section>
+                <section
+                  class="sc-haloband-panel"
                   id="haloband-panel-ship"
                   data-haloband-panel="ship"
                 >
@@ -1003,6 +1017,16 @@
                   title="Inventory"
                 >
                   <span class="sc-haloband-dock-label">Inventory</span>
+                </button>
+                <button
+                  class="sc-haloband-dock-btn"
+                  type="button"
+                  data-haloband-tab="mall"
+                  aria-controls="haloband-panel-mall"
+                  aria-label="Mall"
+                  title="Mall"
+                >
+                  <span class="sc-haloband-dock-label">Mall</span>
                 </button>
                 <button
                   class="sc-haloband-dock-btn sc-haloband-ship-only is-hidden"

@@ -203,6 +203,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
       getStationLayoutOverride(),
       stationFrame,
       resolved.seed,
+      () => resolved.physics?.npcBodies ?? null,
     ),
     weaponFireStates: new Map(),
     ballisticSegments: [],

@@ -20,7 +20,12 @@ import {
 import { resolveVisibleCockpitSpeedInstruments } from '../../player/cockpit-stats';
 import { updateFlightCameraFeel } from '../../player/flight-camera-feel';
 import { getShipLayout, getShipRestHeightMeters } from '../../player/ship-layout';
-import { getPilotSeatAnchor, localOffsetToWorld } from '../../player/ship-interaction';
+import {
+  canLeavePilotSeat,
+  getPilotSeatAnchor,
+  getShipEntryStandPose,
+  localOffsetToWorld,
+} from '../../player/ship-interaction';
 import { getLeavePilotStandPose } from '../../player/ship-deck';
 import { playCockpitControlToggleSfx } from '../../player/ship-articulation-sfx';
 import { FIRST_PERSON_PITCH_LIMIT } from '../../player/character-controller';
@@ -124,7 +129,9 @@ function settleShipOnPad(session: ShipSandboxSession): void {
 function beginLeavePilotSeat(session: ShipSandboxSession): void {
   session.transition = {
     start: getPilotSeatAnchor(session.ship),
-    end: getLeavePilotStandPose(session.ship),
+    end: session.exteriorEntry
+      ? getShipEntryStandPose(session.ship, null)
+      : getLeavePilotStandPose(session.ship),
     elapsed: 0,
     duration: STAND_SECONDS,
   };
@@ -144,6 +151,10 @@ function updatePilotPrompt(
   }
   if (actions.exitSeatPressed) {
     if (nearPad) settleShipOnPad(session);
+    if (!canLeavePilotSeat(session.ship)) {
+      session.prompt = 'Land before getting up';
+      return;
+    }
     beginLeavePilotSeat(session);
     return;
   }

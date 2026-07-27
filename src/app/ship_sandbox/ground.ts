@@ -7,10 +7,15 @@ import {
   animationFromState,
   resolveWalkInputIntent,
 } from '../../player/character-locomotion';
+import {
+  getPilotSeatAnchor,
+  nearShipEntryPoint,
+} from '../../player/ship-interaction';
 import type { CharacterState, Vec3 } from '../../types';
 import type { ShipSandboxSession, SandboxWalkActions } from './types';
 import { PAD_RADIUS_METERS, SANDBOX_GROUND_Y_METERS, SANDBOX_GRAVITY, WORLD_UP } from './types';
 import { resolveSandboxOrbit, clamp } from './camera-math';
+import { SIT_SECONDS } from './transition';
 
 const TURN_SPEED = 10;
 
@@ -130,5 +135,31 @@ export function updateShipSandboxGroundFallback(
     up: motion.up,
     velocity: motion.velocity,
   };
-  session.prompt = '';
+  session.prompt = handleExteriorBoard(session, actions);
+}
+
+/**
+ * Exterior-entry board prompt for the pad walk. The deck path has no say here
+ * — there are no colliders — so this is the only way into the seat.
+ */
+function handleExteriorBoard(
+  session: ShipSandboxSession,
+  actions: SandboxWalkActions,
+): string {
+  if (!session.exteriorEntry) return '';
+  const entry = nearShipEntryPoint(session.character, session.ship);
+  if (!entry) return '';
+  if (!actions.interactPressed) return `Press F — board ${entry.label}`;
+  session.transition = {
+    start: {
+      forward: session.character.forward,
+      position: session.character.position,
+      up: session.character.up,
+    },
+    end: getPilotSeatAnchor(session.ship),
+    elapsed: 0,
+    duration: SIT_SECONDS,
+  };
+  session.mode = 'sitting';
+  return '';
 }

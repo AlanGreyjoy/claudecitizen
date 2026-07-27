@@ -4,6 +4,7 @@ import { teleportShipPlayerLocal } from "../../physics/ship-physics";
 import { updateTransition } from "../../player/transitions";
 import type { LoopContext } from "../loop-context";
 import type { DeckPhysics } from "../ship/deck-physics";
+import type { PadInterest } from "../station/pad-interest";
 
 export interface Transitions {
   updateTransitionMode: (dt: number) => void;
@@ -12,12 +13,16 @@ export interface Transitions {
 /** Sit/stand/lie/get-up transitions and their deck teleport landing. */
 export function createTransitions(
   ctx: LoopContext,
-  deps: { deckPhysics: DeckPhysics },
+  deps: { deckPhysics: DeckPhysics; padInterest: PadInterest },
 ): Transitions {
   const transitionContext = {
     planet: ctx.planet,
     seed: ctx.seed,
     setControlsMode: ctx.controls.setMode.bind(ctx.controls),
+    // Exterior-entry pilots step onto the ground, not a deck. The character
+    // already holds the ground pose, so this reuses the same planet-vs-hangar
+    // resolution that walking off a deck goes through.
+    onDisembarked: () => deps.padInterest.leaveShipDeck(),
     onDeckEntered: (
       local: { right: number; forward: number },
       floorUp: number,

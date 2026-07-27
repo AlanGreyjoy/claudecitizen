@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import type { EditorStore } from '../../../document';
-import { showContextMenu } from '../../../dom';
+import { showContextMenu, type ContextMenuEntry } from '../../../dom';
 import { entitySubtreeHasMatch } from '../../../panels/hierarchy-logic';
 import { getComponentDef } from '../../../../world/prefabs/component-registry';
 import type { PrefabComponentType } from '../../../../world/prefabs/schema';
@@ -23,6 +23,7 @@ export type HierarchyPanelViewProps = {
   collapseAll: () => void;
   addEmptyTo: (parentId: string | null) => void;
   addBoxTo: (parentId: string | null) => void;
+  createObjectEntries: (parentId: string | null) => ContextMenuEntry[];
 };
 
 export function HierarchyPanelView(props: HierarchyPanelViewProps): ReactElement {
@@ -42,6 +43,7 @@ export function HierarchyPanelView(props: HierarchyPanelViewProps): ReactElement
     collapseAll,
     addEmptyTo,
     addBoxTo,
+    createObjectEntries,
   } = props;
 
   const roots = store.getState().roots;
@@ -179,6 +181,8 @@ export function HierarchyPanelView(props: HierarchyPanelViewProps): ReactElement
           showContextMenu(event.clientX, event.clientY, [
             { label: 'Add Empty', action: () => addEmptyTo(null) },
             { label: 'Add Box', action: () => addBoxTo(null) },
+            'sep',
+            { label: 'Create', children: createObjectEntries(null) },
           ]);
         }}
       >

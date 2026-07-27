@@ -10,6 +10,10 @@ export interface HaloBandElements {
   inventoryFiltersEl: HTMLElement;
   inventoryGridEl: HTMLElement;
   inventoryDetailEl: HTMLElement;
+  mallBalanceEl: HTMLElement;
+  mallStoreEl: HTMLElement;
+  mallPacksEl: HTMLElement;
+  mallNoticeEl: HTMLElement;
   balanceEl: HTMLElement;
   balanceValueEl: HTMLElement;
   holoCanvasEl: HTMLCanvasElement;
@@ -226,6 +230,35 @@ export function buildHaloBandDom(idPrefix = ''): HaloBandElements {
   inventoryBody.append(inventoryGridEl, inventoryDetailEl);
   panelInventory.append(inventoryTitle, inventoryFiltersEl, inventoryBody);
 
+  // —— Item Mall ——
+  const panelMall = document.createElement('section');
+  panelMall.className = 'sc-haloband-panel';
+  panelMall.id = idFor(idPrefix, 'haloband-panel-mall');
+  panelMall.dataset.halobandPanel = 'mall';
+  const mallHeader = document.createElement('div');
+  mallHeader.className = 'sc-haloband-mall-header';
+  const mallTitle = document.createElement('h3');
+  mallTitle.className = 'sc-haloband-panel-title';
+  mallTitle.textContent = 'Item Mall';
+  const mallBalanceEl = document.createElement('span');
+  mallBalanceEl.className = 'sc-haloband-mall-balance';
+  mallBalanceEl.id = idFor(idPrefix, 'haloband-mall-balance');
+  mallBalanceEl.textContent = '0 AC';
+  mallHeader.append(mallTitle, mallBalanceEl);
+  const mallNoticeEl = document.createElement('p');
+  mallNoticeEl.className = 'sc-haloband-mall-notice is-hidden';
+  mallNoticeEl.id = idFor(idPrefix, 'haloband-mall-notice');
+  const mallStoreEl = document.createElement('div');
+  mallStoreEl.className = 'sc-haloband-mall-grid';
+  mallStoreEl.id = idFor(idPrefix, 'haloband-mall-store');
+  const mallPacksTitle = document.createElement('h4');
+  mallPacksTitle.className = 'sc-haloband-mall-subtitle';
+  mallPacksTitle.textContent = 'Buy AsteronCredits';
+  const mallPacksEl = document.createElement('div');
+  mallPacksEl.className = 'sc-haloband-mall-packs';
+  mallPacksEl.id = idFor(idPrefix, 'haloband-mall-packs');
+  panelMall.append(mallHeader, mallNoticeEl, mallStoreEl, mallPacksTitle, mallPacksEl);
+
   // —— Ship ——
   const panelShip = document.createElement('section');
   panelShip.className = 'sc-haloband-panel';
@@ -276,6 +309,7 @@ export function buildHaloBandDom(idPrefix = ''): HaloBandElements {
     { id: 'missions', label: 'Missions' },
     { id: 'map', label: 'Map' },
     { id: 'inventory', label: 'Inventory' },
+    { id: 'mall', label: 'Mall' },
     { id: 'ship', label: 'Ship', shipOnly: true },
   ];
 
@@ -322,6 +356,10 @@ export function buildHaloBandDom(idPrefix = ''): HaloBandElements {
     inventoryFiltersEl,
     inventoryGridEl,
     inventoryDetailEl,
+    mallBalanceEl,
+    mallStoreEl,
+    mallPacksEl,
+    mallNoticeEl,
     balanceEl,
     balanceValueEl,
     holoCanvasEl,
@@ -356,6 +394,10 @@ export function collectHaloBandElements(
     inventoryFiltersEl: req('haloband-inventory-filters'),
     inventoryGridEl: req('haloband-inventory-grid'),
     inventoryDetailEl: req('haloband-inventory-detail'),
+    mallBalanceEl: req('haloband-mall-balance'),
+    mallStoreEl: req('haloband-mall-store'),
+    mallPacksEl: req('haloband-mall-packs'),
+    mallNoticeEl: req('haloband-mall-notice'),
     balanceEl: req('haloband-balance'),
     balanceValueEl: req('haloband-balance-value'),
     holoCanvasEl: req<HTMLCanvasElement>('haloband-holo'),

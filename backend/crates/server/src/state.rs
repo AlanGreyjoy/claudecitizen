@@ -66,7 +66,7 @@ impl AppState {
         )
         .fetch_one(&self.db)
         .await?;
-        anyhow::ensure!(latest_migration >= 11, "SQLx migrations are behind");
+        anyhow::ensure!(latest_migration >= 18, "SQLx migrations are behind");
         let mut redis = self.redis.clone();
         let pong: String = redis::cmd("PING").query_async(&mut redis).await?;
         anyhow::ensure!(pong == "PONG", "Redis PING returned an unexpected response");

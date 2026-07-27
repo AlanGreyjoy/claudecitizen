@@ -29,12 +29,38 @@ export interface PhysicsRayHit {
   point: Vec3;
 }
 
+/**
+ * Interaction-group membership bit reserved for NPC capsules.
+ *
+ * Static geometry and the player keep Rapier's default all-bits membership, so
+ * adding NPC bodies changes nothing for them: only NPC capsules carry this
+ * single membership bit. Scene queries drop NPCs by passing
+ * `QUERY_GROUPS_EXCLUDE_NPCS`, while the player's character controller runs
+ * unfiltered and therefore still collides with them.
+ */
+export const NPC_CAPSULE_MEMBERSHIP = 0x0004;
+
+/** NPC capsule groups: own membership bit, interacts with everything. */
+const NPC_CAPSULE_GROUPS = ((NPC_CAPSULE_MEMBERSHIP << 16) | 0xffff) >>> 0;
+
+/**
+ * Query interaction groups that hit every collider except NPC capsules.
+ *
+ * Weapon rays, camera occlusion, and the NPC path probe all use this. NPCs have
+ * no health model, so a weapon ray stopping on one would spawn a station impact
+ * in mid-air with no damage feedback, and the third-person camera would jump
+ * every time an NPC walked between the player and the eye.
+ */
+export const QUERY_GROUPS_EXCLUDE_NPCS =
+  ((0xffff << 16) | (0xffff & ~NPC_CAPSULE_MEMBERSHIP)) >>> 0;
+
 export function castRapierWorldRay(
   world: RAPIER.World,
   origin: Vec3,
   direction: Vec3,
   maxDistance: number,
   excludeCollider?: RAPIER.Collider,
+  filterGroups?: number,
 ): PhysicsRayHit | null {
   const directionLength = Math.hypot(direction.x, direction.y, direction.z);
   if (directionLength < 1e-9 || maxDistance <= 0) return null;
@@ -48,7 +74,7 @@ export function castRapierWorldRay(
     maxDistance,
     true,
     undefined,
-    undefined,
+    filterGroups,
     excludeCollider,
   );
   if (!hit) return null;
@@ -124,6 +150,50 @@ export function createPlayerCharacter(
       world.removeRigidBody(playerBody);
     },
   };
+}
+
+/**
+ * Slimmer than the player capsule on purpose: two bodies at the full 0.42 m
+ * radius cannot pass each other in the narrower authored corridors, so a
+ * roaming NPC would wedge the player against a wall.
+ */
+export const NPC_CAPSULE_RADIUS = 0.32;
+export const NPC_CAPSULE_HEIGHT = 1.75;
+const NPC_CAPSULE_HALF_HEIGHT = NPC_CAPSULE_HEIGHT / 2;
+
+export interface NpcCapsuleHandle {
+  body: RAPIER.RigidBody;
+  collider: RAPIER.Collider;
+}
+
+/**
+ * Kinematic capsule that makes an NPC solid to the walking player. There is no
+ * character controller behind it — the NPC's own motion stays the analytic
+ * wander step in `npc/station-population.ts`; this body only exists so the
+ * player's controller has something to slide along.
+ */
+export function createNpcCapsule(
+  world: RAPIER.World,
+  position: { x: number; y: number; z: number },
+): NpcCapsuleHandle {
+  const body = world.createRigidBody(
+    RAPIER.RigidBodyDesc.kinematicPositionBased()
+      .setTranslation(position.x, position.y, position.z)
+      .setRotation({ w: 1, x: 0, y: 0, z: 0 }),
+  );
+  const collider = world.createCollider(
+    RAPIER.ColliderDesc.capsule(
+      NPC_CAPSULE_HALF_HEIGHT - NPC_CAPSULE_RADIUS,
+      NPC_CAPSULE_RADIUS,
+    )
+      .setTranslation(0, NPC_CAPSULE_HALF_HEIGHT, 0)
+      .setFriction(0.0)
+      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
+      .setRestitution(0.0)
+      .setCollisionGroups(NPC_CAPSULE_GROUPS),
+    body,
+  );
+  return { body, collider };
 }
 
 function gameplayMatrixToRapier(

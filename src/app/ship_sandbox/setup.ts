@@ -1,12 +1,18 @@
 import { loadPrefabDocument } from '../../world/prefabs/loader';
 import { buildShipLayoutFromPrefab } from '../../world/prefabs/ship-runtime';
-import { setShipLayoutOverride, usesColliderDeck } from '../../player/ship-layout';
+import {
+  setShipLayoutOverride,
+  usesColliderDeck,
+  usesExteriorEntry,
+} from '../../player/ship-layout';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 
 export interface ShipSandboxPrefabLoad {
   doc: PrefabDocument | null;
   prefabApplied: boolean;
   walkable: boolean;
+  /** Exterior-entry hull: no deck, board from the pad beside the ship. */
+  exteriorEntry: boolean;
   hint: string;
 }
 
@@ -35,12 +41,15 @@ export async function applyShipSandboxDocument(
     }
   }
   const walkable = (prefabApplied || !doc) && usesColliderDeck();
+  const exteriorEntry = (prefabApplied || !doc) && usesExteriorEntry();
   const hint = walkable
     ? 'Ship sandbox — WASD walk · F interact · sit pilot to fly · G gear · Esc menu'
-    : prefabApplied
-      ? 'Hull loaded — add a ship-controller with deck colliders to walk the interior'
-      : 'Ship prefab not applied (kind must be "ship") — showing the built-in ship';
-  return { doc, prefabApplied, walkable, hint };
+    : exteriorEntry
+      ? 'Exterior entry — walk to the ship · F to board · hold Y to step off · G gear · Esc menu'
+      : prefabApplied
+        ? 'Hull loaded — add a ship-controller with deck colliders to walk the interior'
+        : 'Ship prefab not applied (kind must be "ship") — showing the built-in ship';
+  return { doc, prefabApplied, walkable, exteriorEntry, hint };
 }
 
 export async function loadShipSandboxPrefab(prefabId: string): Promise<ShipSandboxPrefabLoad> {

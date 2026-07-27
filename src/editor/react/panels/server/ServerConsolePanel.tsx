@@ -12,6 +12,10 @@ import { WeaponsPanel, WeaponFormPanel } from './WeaponsPanel';
 import { BackpacksPanel, BackpackFormPanel } from './BackpacksPanel';
 import { WearablesPanel, WearableFormPanel } from './WearablesPanel';
 import { SettingsPanel } from './SettingsPanel';
+import { PaymentsPanel } from './PaymentsPanel';
+import { CreditPacksPanel, CreditPackFormPanel } from './CreditPacksPanel';
+import { MallPanel, MallListingFormPanel } from './MallPanel';
+import { PurchasesPanel } from './PurchasesPanel';
 import type { ServerRoute } from './types';
 import { routeScene, routeTab } from './types';
 
@@ -19,7 +23,29 @@ type ServerConsolePanelProps = {
   active: boolean;
 };
 
+/** Commerce routes, split out so the main switch stays under the complexity ceiling. */
+function CommerceRoute({ route }: { route: ServerRoute }): ReactElement | null {
+  switch (route.scene) {
+    case 'payments':
+      return <PaymentsPanel />;
+    case 'credit-packs':
+      return <CreditPacksPanel />;
+    case 'credit-pack-form':
+      return <CreditPackFormPanel packId={route.packId} />;
+    case 'mall':
+      return <MallPanel />;
+    case 'mall-form':
+      return <MallListingFormPanel listingId={route.listingId} />;
+    case 'purchases':
+      return <PurchasesPanel />;
+    default:
+      return null;
+  }
+}
+
 function RouteContent({ route }: { route: ServerRoute }): ReactElement {
+  const commerce = CommerceRoute({ route });
+  if (commerce) return commerce;
   switch (route.scene) {
     case 'users':
       return <UsersPanel />;

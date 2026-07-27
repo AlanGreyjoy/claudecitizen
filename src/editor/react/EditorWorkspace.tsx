@@ -131,6 +131,9 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
           >
             <HierarchyPanel
               store={store}
+              getViewFocusPosition={(parentEntityId) =>
+                viewportRef.current?.getViewFocusPosition(parentEntityId) ?? null
+              }
               getGlbNodePrefabPosition={(entityId, nodeUuid) =>
                 viewportRef.current?.getGlbNodePrefabPosition(entityId, nodeUuid) ?? null
               }

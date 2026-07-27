@@ -10,6 +10,7 @@ import {
   CheckboxRow,
   DoorNodeRow,
   EdButton,
+  EntityRefField,
   FieldRow,
   NumberField,
   RemoveButton,
@@ -309,6 +310,36 @@ export function RampInteractFields({
           onCommit={(radius) =>
             update({ ...component, radius: Math.max(0.5, radius) })
           }
+        />
+      </FieldRow>
+    </>
+  );
+}
+
+export function ShipEntryFields({
+  ctx,
+  component,
+}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'ship-entry' }>>): ReactElement {
+  const { update, store } = ctx;
+  return (
+    <>
+      <FieldRow label="Label" wide>
+        <TextField
+          value={component.label ?? 'ship'}
+          onCommit={(label) => update({ ...component, label })}
+        />
+      </FieldRow>
+      <FieldRow label="Radius" wide>
+        <NumberField
+          value={component.radius ?? 3}
+          onCommit={(radius) => update({ ...component, radius: Math.max(0.5, radius) })}
+        />
+      </FieldRow>
+      <FieldRow label="Seat" wide>
+        <EntityRefField
+          store={store}
+          value={component.seatEntityId}
+          onPick={(seatEntityId) => update({ ...component, seatEntityId })}
         />
       </FieldRow>
     </>

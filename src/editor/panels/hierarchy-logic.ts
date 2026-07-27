@@ -12,6 +12,8 @@ import type { Vec3 } from '../../types';
 export const GLB_NODE_DND_TYPE = 'application/x-claudecitizen-glb-node';
 
 export interface HierarchyPanelOptions {
+  /** Where the Scene view is looking, in the given parent's local space. */
+  getViewFocusPosition?: (parentEntityId: string | null) => Vec3 | null;
   getGlbNodePrefabPosition?: (entityId: string, nodeUuid: string) => Vec3 | null;
   getGlbNodeBounds?: (entityId: string, nodeUuid: string) => { min: Vec3; max: Vec3 } | null;
   onDuplicateGlbNode?: (entityId: string, nodeUuid: string) => void;

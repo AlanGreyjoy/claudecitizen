@@ -7,13 +7,30 @@ import { createOutfitters } from '../render/effects/hud/outfitters';
 import { createFoodShop } from '../render/effects/hud/food-shop';
 import { createPersonalInventory } from '../render/effects/hud/personal-inventory';
 import { collectHaloBandElements } from '../render/effects/hud/haloband-dom';
-import type { HaloBandController } from '../render/effects/hud/haloband';
 import { createWorldClient, type WorldClient } from '../net/world-client';
 import type { GameBootstrap } from '../net/api';
+import {
+  createCheckoutSession,
+  fetchCreditPacks,
+  fetchCreditPurchases,
+  fetchMall,
+  purchaseMallItem,
+} from '../net/api';
 import {
   normalizeInventoryState,
   type InventoryState,
 } from '../player/inventory/types';
+import {
+  normalizeCreditPack,
+  normalizeMallState,
+  type CreditPack,
+} from '../player/mall/types';
+import { openExternalUrl } from '../platform/editor-desktop';
+import type {
+  HaloBandController,
+  HaloBandMallCallbacks,
+  HaloBandMallSnapshot,
+} from '../render/effects/hud/haloband';
 import type { createPlayerControls } from '../input/player-controls';
 import type { createGameLoop } from '../game/create-game-loop';
 import type { SpikeRenderer } from '../render/main';
@@ -97,6 +114,7 @@ export function createPlayHaloBand(
   getNetworkClient: () => WorldClient | null,
   getArcBalance: () => number | null,
   getInventory: () => InventoryState | null,
+  mall?: HaloBandMallCallbacks,
 ): HaloBandController {
   return createHaloBand(
     collectHaloBandElements(dom.halobandEl),
@@ -105,8 +123,60 @@ export function createPlayHaloBand(
       playerControls: controls,
       getArcBalance,
       getInventory,
+      mall,
     },
   );
+}
+
+/**
+ * Wires the HaloBand Mall tab to the backend.
+ *
+ * Credits are granted server-side by the Stripe webhook, so `startCheckout` only hands the
+ * player off to the browser — it never adjusts the balance itself.
+ */
+export function createPlayMallCallbacks(options: {
+  getCreditBalance: () => number;
+  setCreditBalance: (balance: number) => void;
+  getInventory: () => InventoryState | null;
+  onInventoryChanged: (inventory: unknown) => void;
+}): HaloBandMallCallbacks {
+  return {
+    fetchMall: async (): Promise<HaloBandMallSnapshot> => {
+      const [mall, packsResponse] = await Promise.all([fetchMall(), fetchCreditPacks()]);
+      const state = normalizeMallState(mall);
+      options.setCreditBalance(state.creditBalance);
+      const packs = packsResponse.packs
+        .map(normalizeCreditPack)
+        .filter((pack): pack is CreditPack => pack !== null);
+      return {
+        listings: state.listings,
+        packs,
+        creditBalance: state.creditBalance,
+        checkoutEnabled: packsResponse.checkoutEnabled,
+      };
+    },
+    purchaseListing: async (listingId, quantity) => {
+      const result = await purchaseMallItem(listingId, quantity);
+      options.setCreditBalance(result.creditBalance);
+      options.onInventoryChanged(result.inventory);
+      return result.creditBalance;
+    },
+    startCheckout: async (packId) => {
+      const session = await createCheckoutSession(packId);
+      return openExternalUrl(session.url);
+    },
+    fetchPurchases: async () => {
+      const result = await fetchCreditPurchases();
+      options.setCreditBalance(result.creditBalance);
+      return { creditBalance: result.creditBalance };
+    },
+    getOwnedQuantity: (itemDefinitionId) => {
+      const inventory = options.getInventory();
+      if (!inventory) return 0;
+      const stack = inventory.items.find((item) => item.itemDefinitionId === itemDefinitionId);
+      return stack?.quantity ?? 0;
+    },
+  };
 }
 
 export function createPlayGameMenu(dom: PlaySessionDom): ReturnType<typeof createGameMenu> {

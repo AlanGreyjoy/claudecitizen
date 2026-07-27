@@ -177,6 +177,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     label: "NPC Spawner",
     category: "npc",
     kinds: ["station"],
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "npc-spawner",
@@ -187,14 +188,19 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       maxAlive: 5,
       routeGroup: "lobby",
       radius: 1.5,
+      behavior: "route",
+      roamRadius: 6,
+      roamWaitMinSeconds: 1,
+      roamWaitMaxSeconds: 4,
     }),
-    hint: "Runtime ambient population source. Spawned NPCs walk the selected waypoint route group.",
+    hint: "Runtime ambient population source. Route mode walks the selected waypoint group; roam mode needs no waypoints and wanders a disc around the marker.",
   },
   {
     type: "npc-waypoint",
     label: "NPC Waypoint",
     category: "npc",
     kinds: ["station"],
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "npc-waypoint",
@@ -212,6 +218,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     label: "NPC Placement",
     category: "npc",
     kinds: ["station"],
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "npc-placement",
@@ -606,6 +613,16 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     }),
     hint:
       "F-key door/cubby. Empty is the interact target (radial stand-in or camera-aim raycast). Bind GLB nodes + deltas; drag Open/Close SFX from the asset browser.",
+  },
+  {
+    type: "ship-entry",
+    label: "Ship Entry",
+    category: "ship",
+    kinds: ["ship"],
+    marker: true,
+    createDefault: () => ({ type: "ship-entry", radius: 3, label: "ship" }),
+    hint:
+      "Ground-level board point for exterior-entry hulls. Place the empty on the ground beside the ship; stand in the circle and press F to take the pilot seat. Needs ship-controller Entry Mode = Exterior.",
   },
   {
     type: "cockpit-control",

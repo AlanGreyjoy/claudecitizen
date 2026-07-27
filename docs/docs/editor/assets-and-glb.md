@@ -89,10 +89,10 @@ Asset listing (proxied by Electron):
 
 ```text
 GET /__editor/assets?root=assets
-GET /__editor/assets?root=src/assets
 ```
 
-Returns `{ entries: [{ path, kind, size? }] }`.
+Returns `{ entries: [{ path, kind, size? }] }`. The only project asset root is
+`assets/`. Engine-owned `src/assets/` is not listed here.
 
 ## Build pipeline
 

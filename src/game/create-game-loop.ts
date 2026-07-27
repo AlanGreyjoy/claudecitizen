@@ -52,7 +52,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
   const buildTool = createBuildTool(ctx);
   const lifecycle = createWorldLifecycle(ctx, { deckPhysics });
 
-  const transitions = createTransitions(ctx, { deckPhysics });
+  const transitions = createTransitions(ctx, { deckPhysics, padInterest });
   const onFoot = createOnFootMode(ctx, { combat, padInterest, shipSystems });
   const inShip = createInShipMode(ctx, { prompts });
   const inBed = createInBedMode(ctx, { prompts });

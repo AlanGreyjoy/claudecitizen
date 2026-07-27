@@ -36,11 +36,12 @@ player records, and game settings all live in PostgreSQL, not in project files.
 
    ```env
    ADMIN_EMAIL=admin@claude-citizen.com
-   ADMIN_PASSWORD=k33p3m0ut
-   ADMIN_SESSION_SECRET=dev-admin-secret-change-me
+   ADMIN_PASSWORD=          # set a long random value; never commit real passwords
+   ADMIN_SESSION_SECRET=    # set a long random value
    ```
 
-   See [Authentication](./authentication) for what each variable does.
+   Development-only placeholders are fine in a private `.env` that stays out of
+   git. See [Authentication](./authentication) for what each variable does.
 
 ## Open the Server console
 

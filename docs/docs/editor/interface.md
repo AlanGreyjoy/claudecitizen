@@ -95,10 +95,9 @@ Edits the current selection:
 
 ## Project (bottom)
 
-Merged asset browser over the **open project's** asset trees:
+Asset browser over the **open project's** single library root:
 
 - `assets/` — importable library (`free/` plus gitignored `protected/` packs)
-- `src/assets/` — assets tracked with the project
 
 Folder tree on the left, thumbnail grid on the right. Model cards support drag-and-drop into the scene. GLB cards also expose an **Anims** button that loads clips into the **Base Characters** tab.
 

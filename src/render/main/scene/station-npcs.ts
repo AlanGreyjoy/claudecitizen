@@ -14,7 +14,11 @@ const NPC_RENDER_DISTANCE_SQUARED = NPC_RENDER_DISTANCE_METERS * NPC_RENDER_DIST
 
 interface StationNpcObject {
   avatar: CharacterAvatarInstance;
+  /** Identity-compared first; see `ensure`. */
+  appearance: PlayerCharacterAppearanceV1;
   appearanceKey: string;
+  /** Authored character GLB, or null for the modular Sidekick avatar. */
+  modelUrl: string | null;
 }
 
 export interface StationNpcRenderer {
@@ -35,13 +39,16 @@ function distanceSquared(a: Vec3, b: Vec3): number {
 
 function createNpcObject(
   appearance: PlayerCharacterAppearanceV1,
+  modelUrl: string | null,
   renderScale: number,
 ): StationNpcObject {
-  const avatar = createCharacterAvatarInstance(renderScale, appearance);
+  const avatar = createCharacterAvatarInstance(renderScale, appearance, modelUrl);
   avatar.root.visible = false;
   return {
     avatar,
+    appearance,
     appearanceKey: playerCharacterAppearanceKey(appearance),
+    modelUrl,
   };
 }
 
@@ -50,6 +57,7 @@ export function createStationNpcRenderer(
   renderScale: number,
 ): StationNpcRenderer {
   const objects = new Map<string, StationNpcObject>();
+  const present = new Set<string>();
 
   function remove(id: string, object: StationNpcObject): void {
     scene.remove(object.avatar.root);
@@ -57,12 +65,29 @@ export function createStationNpcRenderer(
     objects.delete(id);
   }
 
+  /**
+   * NPC appearances are immutable once spawned and only swap when the
+   * population resets, so the identity check carries the steady path. Rebuilding
+   * the key string for every visible NPC every frame was pure allocation.
+   */
   function ensure(npc: StationNpcRenderState): StationNpcObject {
-    const appearanceKey = playerCharacterAppearanceKey(npc.appearance);
+    const modelUrl = npc.modelUrl ?? null;
     const existing = objects.get(npc.id);
-    if (existing?.appearanceKey === appearanceKey) return existing;
-    if (existing) remove(npc.id, existing);
-    const created = createNpcObject(npc.appearance, renderScale);
+    if (existing) {
+      const sameModel = existing.modelUrl === modelUrl;
+      // An authored model ignores appearance entirely, so nothing but the url
+      // can invalidate it.
+      if (sameModel && (modelUrl !== null || existing.appearance === npc.appearance)) {
+        return existing;
+      }
+      const appearanceKey = playerCharacterAppearanceKey(npc.appearance);
+      if (sameModel && existing.appearanceKey === appearanceKey) {
+        existing.appearance = npc.appearance;
+        return existing;
+      }
+      remove(npc.id, existing);
+    }
+    const created = createNpcObject(npc.appearance, modelUrl, renderScale);
     objects.set(npc.id, created);
     scene.add(created.avatar.root);
     return created;
@@ -70,7 +95,7 @@ export function createStationNpcRenderer(
 
   return {
     update(npcs, focusPosition, nowSeconds) {
-      const present = new Set<string>();
+      present.clear();
       for (const npc of npcs) {
         present.add(npc.id);
         if (distanceSquared(npc.position, focusPosition) > NPC_RENDER_DISTANCE_SQUARED) {

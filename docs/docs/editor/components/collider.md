@@ -22,7 +22,7 @@ Simple walls, floors, and crates. Tune `size` and optional `offset` to match the
 | Field | Type | Notes |
 | --- | --- | --- |
 | `shape` | `"box"` | Required |
-| `size` | `{ x, y, z }` | Half-extents in meters |
+| `size` | `{ x, y, z }` | Full box dimensions in meters (physics derives half-extents as `size / 2`) |
 | `offset` | `{ x, y, z }` | Local offset from entity origin |
 | `node` | string | Optional GLB node whose ship rig motion drives this collider |
 

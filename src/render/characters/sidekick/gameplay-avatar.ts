@@ -18,6 +18,7 @@ import type {
   Vec3,
 } from '../../../types';
 import type { CharacterAvatarInstance } from '../../main/scene/character-avatar-model';
+import { avatarGeometryBounds } from '../avatar-bounds';
 import { assembleSidekickCharacter } from './assemble-avatar';
 import {
   createSidekickAnimationRuntime,
@@ -36,19 +37,6 @@ import {
 } from '../../../player/animation';
 
 const GAMEPLAY_ANIMATION_TIME_SCALE = 1;
-
-function geometryBounds(root: THREE.Object3D): THREE.Box3 {
-  const bounds = new THREE.Box3().makeEmpty();
-  root.updateMatrixWorld(true);
-  root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh) || !object.visible) return;
-    if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
-    if (object.geometry.boundingBox) {
-      bounds.union(object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
-    }
-  });
-  return bounds.isEmpty() ? new THREE.Box3().setFromObject(root) : bounds;
-}
 
 export function createSidekickGameplayAvatar(
   renderScale: number,
@@ -311,7 +299,7 @@ export function createSidekickGameplayAvatar(
       // Measure before parenting beneath the gameplay root. That root may already
       // be rotated into a planet/station frame while assets load; world-aligned
       // bounds from that frame cannot be reused as this model's local offset.
-      const bounds = geometryBounds(avatar.root);
+      const bounds = avatarGeometryBounds(avatar.root);
       const center = bounds.getCenter(new THREE.Vector3());
       modelOffsetPosition.set(
         -center.x,

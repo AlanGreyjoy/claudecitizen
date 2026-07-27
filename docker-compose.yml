@@ -30,6 +30,11 @@ services:
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_FROM: ClaudeCitizen <noreply@localhost>
+      # Development placeholder. Generate a real key with `openssl rand -base64 32`.
+      PAYMENTS_ENCRYPTION_KEY: ${PAYMENTS_ENCRYPTION_KEY:-ZGV2LW9ubHktYXN0ZXJvbi1wYXltZW50cy1rZXktMzI=}
+      # Optional: overrides whatever the Server console has stored.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       WEBTRANSPORT_BIND: 0.0.0.0:4433
       WEBTRANSPORT_PUBLIC_URL: https://localhost:4433/world
     ports:

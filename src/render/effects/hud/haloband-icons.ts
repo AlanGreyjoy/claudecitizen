@@ -5,6 +5,7 @@ import {
   Map,
   MessageSquare,
   Rocket,
+  ShoppingBag,
 } from 'lucide';
 import { createUiIcon, type UiIconNode } from '../../../ui/icons';
 
@@ -14,6 +15,7 @@ const DOCK_ICON_NODES: Record<string, UiIconNode> = {
   missions: ClipboardList,
   map: Map,
   inventory: Backpack,
+  mall: ShoppingBag,
   ship: Rocket,
 };
 

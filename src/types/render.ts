@@ -131,6 +131,11 @@ export interface StationNpcRenderState extends CharacterRenderState {
   displayName: string;
   appearance: PlayerCharacterAppearanceV1;
   /**
+   * Authored character GLB. When set the NPC wears that model instead of the
+   * modular Sidekick avatar built from `appearance`.
+   */
+  modelUrl?: string | null;
+  /**
    * Optional Head-bone look (yaw/pitch relative to NPC facing). Used when
    * glancing at the local player walking by.
    */

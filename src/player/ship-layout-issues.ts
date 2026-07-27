@@ -15,7 +15,9 @@ export interface ShipLayoutIssue {
 function collectSeatIssues(layout: ShipLayout, issues: ShipLayoutIssue[]): void {
   if (layout.seats.length === 0) {
     issues.push({
-      severity: "warning",
+      // Exterior entry has no deck to stand on, so the built-in Starhopper
+      // anchors would drop the pilot outside the hull with no way back in.
+      severity: layout.entry === "exterior" ? "blocker" : "warning",
       message:
         "No ship-seat markers — flight uses the built-in Starhopper pilot anchors.",
     });
@@ -47,14 +49,16 @@ function collectArticulationIssues(
     if (animation.kind === "door") boundDoorIds.add(animation.doorId);
     if (animation.kind === "ramp") hasRampCollider = true;
   }
-  for (const door of layout.doors) {
+  // Only an interior walker can be blocked by an unbound door collider.
+  for (const door of layout.entry === "exterior" ? [] : layout.doors) {
     if (boundDoorIds.has(door.id)) continue;
     issues.push({
       severity: "warning",
       message: `Door "${door.label || door.id}" animates but has no collider bound — it opens visually and still blocks the player.`,
     });
   }
-  if (layout.spec.rampHinge && !hasRampCollider) {
+  // Exterior entry never walks the ramp, so an unbound hinge is cosmetic.
+  if (layout.entry !== "exterior" && layout.spec.rampHinge && !hasRampCollider) {
     issues.push({
       severity: "warning",
       message:
@@ -88,6 +92,34 @@ function collectDeckSpawnIssues(
   });
 }
 
+/**
+ * Exterior-entry ships trade deck colliders for a ground-level board circle,
+ * so the deck checks do not apply. What matters instead is that the circle
+ * lands where the player actually stands.
+ */
+function collectExteriorEntryIssues(
+  layout: ShipLayout,
+  issues: ShipLayoutIssue[],
+): void {
+  const pilotSeatIds = new Set(
+    layout.seats.filter((seat) => seat.role === "pilot").map((seat) => seat.id),
+  );
+  for (const entry of layout.entryPoints) {
+    if (!entry.seatId || pilotSeatIds.has(entry.seatId)) continue;
+    issues.push({
+      severity: "warning",
+      message: `Ship Entry "${entry.label}" targets a non-pilot seat — only pilot seats can be boarded, so this prompt does nothing.`,
+    });
+  }
+  if (layout.restHeightMeters === null) {
+    issues.push({
+      severity: "warning",
+      message:
+        "No rest height on the ship-controller — the board circle is matched against the parked ground band, so the F prompt may not appear where you stand.",
+    });
+  }
+}
+
 /** Inspects a built layout. An empty list means the ship is ready to test. */
 export function collectShipLayoutIssues(
   layout: ShipLayout | null,
@@ -110,14 +142,18 @@ export function collectShipLayoutIssues(
         "No hull GLB on the ship-controller entity — previews fall back to the built-in hull.",
     });
   }
-  if (layout.colliders.length === 0) {
-    issues.push({
-      severity: "blocker",
-      message:
-        "No deck colliders — the interior is not walkable, so the deck loop cannot be tested.",
-    });
+  if (layout.entry === "exterior") {
+    collectExteriorEntryIssues(layout, issues);
+  } else {
+    if (layout.colliders.length === 0) {
+      issues.push({
+        severity: "blocker",
+        message:
+          "No deck colliders — the interior is not walkable, so the deck loop cannot be tested. Set Entry Mode to Exterior if this hull is boarded from the ground.",
+      });
+    }
+    collectDeckSpawnIssues(layout, issues);
   }
-  collectDeckSpawnIssues(layout, issues);
   collectSeatIssues(layout, issues);
   collectArticulationIssues(layout, issues);
   return issues;

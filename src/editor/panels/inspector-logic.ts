@@ -10,6 +10,7 @@ export const FLOOR_OPTIONS: StationFloorId[] = ['hab', 'lobby', 'hangar'];
 
 const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.m4a'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.ktx2', '.ktx'];
+const MODEL_EXTENSIONS = ['.glb', '.gltf'];
 
 export function isAudioAssetUrl(url: string): boolean {
   const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
@@ -19,6 +20,11 @@ export function isAudioAssetUrl(url: string): boolean {
 export function isImageAssetUrl(url: string): boolean {
   const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
   return IMAGE_EXTENSIONS.some((extension) => pathname.endsWith(extension));
+}
+
+export function isModelAssetUrl(url: string): boolean {
+  const pathname = url.split(/[?#]/, 1)[0].toLowerCase();
+  return MODEL_EXTENSIONS.some((extension) => pathname.endsWith(extension));
 }
 
 export function parseDraggedEntityIds(data: string): string[] {

@@ -1199,6 +1199,15 @@ if (!hasSingleInstanceLock) {
         const result = await projectHub.deleteProject(root);
         return { canceled: false, ...result };
       });
+      // Stripe Checkout must open in the system browser: the hosted page has to run on
+      // stripe.com, and `openExternal` already restricts the scheme to http/https/mailto.
+      ipcMain.handle('shell:openExternal', async (_event, rawUrl) => {
+        if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
+          throw new Error('A URL is required.');
+        }
+        openExternal(rawUrl);
+        return { ok: true };
+      });
       ipcMain.handle('projects:showInFolder', async (_event, projectRoot) => {
         if (typeof projectRoot !== 'string' || !projectRoot.trim()) {
           throw new Error('Project path is required.');

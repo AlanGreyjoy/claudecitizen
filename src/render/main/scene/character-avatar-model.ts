@@ -15,6 +15,7 @@ import {
 } from '../../characters/unity-humanoid-retarget';
 import type { PlayerCharacterAppearanceV1 } from '../../../player/character_creator/player-character-appearance';
 import { createSidekickGameplayAvatar } from '../../characters/sidekick/gameplay-avatar';
+import { createModelCharacterAvatar } from '../../characters/model-character-avatar';
 import { applyDefaultFrustumCulling } from '../../frustum-policy';
 import type { ActiveWeaponAttachment } from '../../characters/sidekick/equipment-attach';
 import type { InventoryState } from '../../../player/inventory/types';
@@ -378,7 +379,11 @@ function createLegacyCharacterAvatarInstance(renderScale: number): CharacterAvat
 export function createCharacterAvatarInstance(
   renderScale: number,
   appearance: PlayerCharacterAppearanceV1 | null = null,
+  modelUrl: string | null = null,
 ): CharacterAvatarInstance {
+  // An authored character GLB replaces the modular Sidekick build entirely:
+  // appearance variants only mean something for assembled Sidekick parts.
+  if (modelUrl) return createModelCharacterAvatar(renderScale, modelUrl);
   if (appearance) {
     return createSidekickGameplayAvatar(
       renderScale,

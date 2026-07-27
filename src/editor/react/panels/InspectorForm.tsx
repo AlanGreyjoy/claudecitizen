@@ -12,6 +12,7 @@ import {
   formatInspectorNumber,
   isAudioAssetUrl,
   isImageAssetUrl,
+  isModelAssetUrl,
   parseDraggedEntityIds,
 } from '../../panels/inspector-logic';
 import {
@@ -329,6 +330,15 @@ export function ImageAssetUrlField(props: {
   onCommit: (next: string | undefined) => void;
 }): ReactElement {
   return <TypedAssetUrlField {...props} accepts={isImageAssetUrl} />;
+}
+
+/** GLB/glTF slot fed by dragging a model out of the Project asset browser. */
+export function ModelAssetUrlField(props: {
+  label: string;
+  value: string | undefined;
+  onCommit: (next: string | undefined) => void;
+}): ReactElement {
+  return <TypedAssetUrlField {...props} accepts={isModelAssetUrl} />;
 }
 
 export function Vec3NumberRow({

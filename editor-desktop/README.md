@@ -113,9 +113,13 @@ When the app starts, Electron writes `~/.asteron/agent.json` (`port`, `token`,
 `tools/asteron-mcp` reads that file and calls `/agent/v1/*`.
 
 Useful tools: `session`, `open_document`, `hierarchy`, `selection`, `entity`,
-`play_state`, `list_scenes` / `list_prefabs`, `get_scene` / `get_prefab`, plus
-safe commands `play` / `stop_play` / `save` / `select_entity` /
-`open_document_by_id`.
+`play_state`, `capture_viewport`, `list_scenes` / `list_prefabs`, `get_scene` /
+`get_prefab`, plus safe commands `play` / `stop_play` / `save` /
+`select_entity` / `open_document_by_id`.
+
+`capture_viewport` screenshots the active 3D view (Scene/Ship viewport while
+editing, Play host while playing) via Electron `capturePage` and returns JPEG
+image content to the MCP client.
 
 If the editor is not running, tools return `editor_unavailable` (they do not hang).
 

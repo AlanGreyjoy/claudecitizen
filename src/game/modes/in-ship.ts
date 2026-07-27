@@ -5,6 +5,7 @@ import {
   tryBeginQuantumTravel,
 } from "../../flight/quantum-travel";
 import { beginStandTransition } from "../../player/transitions";
+import { canLeavePilotSeat } from "../../player/ship-interaction";
 import type { CameraState, FrameActions } from "../types";
 import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
@@ -65,7 +66,10 @@ export function createInShipMode(
     }
 
     if (actions.exitSeatPressed && ctx.world.quantum.phase === "idle") {
-      beginStandTransition(ctx.world);
+      // Exterior entry steps onto the ground — refuse mid-flight rather than
+      // dropping the pilot into empty air.
+      if (canLeavePilotSeat(instance.body)) beginStandTransition(ctx.world);
+      else ctx.world.prompt = "Land before leaving the seat";
     }
     if (ctx.world.quantum.phase === "idle" && ctx.world.screenFade > 0) {
       ctx.world.screenFade = Math.max(0, ctx.world.screenFade - dt * 4);

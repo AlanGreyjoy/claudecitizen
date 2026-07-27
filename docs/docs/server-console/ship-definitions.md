@@ -32,7 +32,7 @@ Click a row to edit. Use **Create ship definition** for a new entry.
 | --- | --- | --- |
 | **Name** | Required, max 80 chars | Display name in catalog and admin |
 | **Description** | Required, max 2000 chars | Flavor / shop text |
-| **Ship prefab** | Required | Dropdown of bundled ship prefabs (`kind: "ship"` in prefab JSON) |
+| **Ship prefab** | Required | Dropdown of project ship prefabs (`kind: "ship"` in prefab JSON) |
 | **Cost (ARC)** | Integer 0 – 2B | Shop price in Asteron Reserve Credits |
 | **Max HP** | Float 1 – 100,000 | Full-health pool |
 | **Max shields** | Float 0 – 100,000 | Shield capacity |
@@ -52,7 +52,7 @@ Prefab ids must match `^[a-z0-9][a-z0-9-]{0,63}$`.
 ## Runtime behavior
 
 - **Starter loadout** — definitions referenced in [Game settings](./game-settings) are instantiated as owned ships on first player bootstrap. Order in the starter list matters: the first entry becomes the default primary ship.
-- **Owned ships** — each player `Ship` row may reference a `shipDefinitionId`. Stats on the definition are copied when the ship is created; later definition edits do not automatically patch existing owned ships.
+- **Owned ships** — each player `Ship` row may reference a `shipDefinitionId`. Creating a ship copies definition prefab, display name, and max HP/shields. Later `PATCH /admin/ships/:id` updates also patch owned ships' `prefabId`, `displayName`, `maxHp`, and `maxShields` from the definition. Other definition fields (cost, regen, speed, accel, description) do not rewrite existing owned rows.
 - **No delete in UI** — ship definitions cannot be removed from the Server console. Existing player ships keep a nullable foreign key (`onDelete: SetNull`) if a definition were removed at the database level.
 
 ## API

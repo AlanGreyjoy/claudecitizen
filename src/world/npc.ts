@@ -1,15 +1,39 @@
 import type { StationDir2, StationFloorId, StationLocalPoint } from './station';
 
-export type StationNpcBehavior = 'stationary' | 'wander' | 'patrol';
+/** `roam` is waypoint-free: the actor wanders a disc around its spawn marker. */
+export type StationNpcBehavior = 'stationary' | 'wander' | 'patrol' | 'roam';
+
+/**
+ * Walkability tests for roam targets, implemented against the station Rapier
+ * world in `physics/station-npc-capsules.ts`. Kept as an injected interface so
+ * the population stays free of physics imports: a candidate target is validated
+ * once when it is picked, which is what lets the walk itself run with no
+ * per-frame collision.
+ */
+export interface StationNpcNavProbe {
+  /** True when a capsule can walk the straight segment `from` → `to`. */
+  isPathClear(from: StationLocalPoint, to: StationLocalPoint): boolean;
+  /** Floor height under a point, or null when nothing is within reach. */
+  sampleFloorHeight(point: StationLocalPoint): number | null;
+}
+
+export type StationNpcSpawnerBehavior = 'route' | 'roam';
 
 export interface StationNpcSpawnerSpec extends StationLocalPoint {
   id: string;
   populationId: string;
+  /** Character GLB override for everyone this spawner spawns. */
+  modelUrl?: string;
   floorId: StationFloorId;
   minAlive: number;
   maxAlive: number;
   routeGroup: string;
   radius: number;
+  behavior: StationNpcSpawnerBehavior;
+  /** Roam only: wander disc radius around the marker, in meters. */
+  roamRadius: number;
+  roamWaitMinSeconds: number;
+  roamWaitMaxSeconds: number;
   face: StationDir2;
 }
 
@@ -26,6 +50,8 @@ export interface StationNpcPlacementSpec extends StationLocalPoint {
   id: string;
   npcDefinitionId: string;
   displayName?: string;
+  /** Character GLB override for this NPC. */
+  modelUrl?: string;
   floorId: StationFloorId;
   behavior: StationNpcBehavior;
   routeGroup?: string;
@@ -116,14 +142,29 @@ function disconnectedWaypointIds(group: readonly StationNpcWaypointSpec[]): stri
     .map((waypoint) => waypoint.id);
 }
 
+/**
+ * Connectivity is per floor: the runtime drops links that cross floors, and a
+ * route group is allowed to cover more than one deck. Walking the merged group
+ * would report every waypoint on the second deck as disconnected.
+ */
 function validateRouteConnectivity(
   waypointsByGroup: ReadonlyMap<string, readonly StationNpcWaypointSpec[]>,
   issues: string[],
 ): void {
   for (const [routeGroup, group] of waypointsByGroup) {
-    const disconnected = disconnectedWaypointIds(group);
-    if (disconnected.length > 0) {
-      issues.push(`NPC route group "${routeGroup}" is disconnected at: ${disconnected.join(', ')}.`);
+    const byFloor = new Map<StationFloorId, StationNpcWaypointSpec[]>();
+    for (const waypoint of group) {
+      const floor = byFloor.get(waypoint.floorId);
+      if (floor) floor.push(waypoint);
+      else byFloor.set(waypoint.floorId, [waypoint]);
+    }
+    for (const [floorId, floor] of byFloor) {
+      const disconnected = disconnectedWaypointIds(floor);
+      if (disconnected.length > 0) {
+        issues.push(
+          `NPC route group "${routeGroup}" is disconnected on floor "${floorId}" at: ${disconnected.join(', ')}.`,
+        );
+      }
     }
   }
 }
@@ -171,6 +212,14 @@ function validateSpawners(
     if (!spawner.populationId) {
       issues.push(`NPC spawner "${spawner.id}" has an empty population id.`);
     }
+    if (spawner.behavior === 'roam') {
+      if (spawner.roamRadius <= 0) {
+        issues.push(
+          `NPC spawner "${spawner.id}" roams with a zero radius, so its NPCs never move.`,
+        );
+      }
+      continue;
+    }
     validateRouteReference(
       `NPC spawner "${spawner.id}"`,
       spawner.routeGroup,
@@ -192,7 +241,7 @@ function validatePlacements(
     if (!placement.npcDefinitionId) {
       issues.push(`NPC placement "${placement.id}" has an empty definition id.`);
     }
-    if (placement.behavior !== 'stationary') {
+    if (placement.behavior === 'wander' || placement.behavior === 'patrol') {
       validateRouteReference(
         `NPC placement "${placement.id}"`,
         placement.routeGroup ?? '',

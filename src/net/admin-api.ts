@@ -493,3 +493,208 @@ export function deleteWearableDefinition(id: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+// --- Commerce: payments, credit packs, and the Item Mall -------------------
+
+/** Where a resolved Stripe secret came from. Environment always wins over the console. */
+export type PaymentSecretSource = 'environment' | 'console' | 'unset';
+
+/**
+ * Provider status. Secrets are never returned — only whether one exists and a masked preview,
+ * so the console can render a form without ever holding a live key.
+ */
+export interface PaymentConfig {
+  provider: string;
+  mode: 'test' | 'live';
+  secretKeyConfigured: boolean;
+  secretKeySource: PaymentSecretSource;
+  secretKeyPreview: string | null;
+  webhookSecretConfigured: boolean;
+  webhookSecretSource: PaymentSecretSource;
+  successUrl: string;
+  cancelUrl: string;
+  /** Paste this into the Stripe dashboard's webhook endpoint settings. */
+  webhookUrl: string;
+  checkoutEnabled: boolean;
+  /** False when PAYMENTS_ENCRYPTION_KEY is unset, which blocks storing secrets. */
+  encryptionConfigured: boolean;
+}
+
+export interface PaymentConfigInput {
+  mode?: 'test' | 'live';
+  /** Omit or send empty to leave the stored secret untouched. */
+  secretKey?: string;
+  webhookSecret?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface CreditPack {
+  id: string;
+  name: string;
+  description: string;
+  credits: number;
+  bonusCredits: number;
+  totalCredits: number;
+  priceCents: number;
+  currency: string;
+  stripePriceId: string | null;
+  iconUrl: string | null;
+  sortOrder: number;
+  active: boolean;
+}
+
+export interface CreditPackInput {
+  name?: string;
+  description?: string;
+  credits?: number;
+  bonusCredits?: number;
+  priceCents?: number;
+  currency?: string;
+  stripePriceId?: string | null;
+  iconUrl?: string | null;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+export interface AdminMallListing {
+  id: string;
+  itemDefinitionId: string;
+  itemName: string;
+  itemType: string;
+  subType: string;
+  iconUrl: string | null;
+  costArc: number;
+  priceCredits: number;
+  category: string;
+  sortOrder: number;
+  featured: boolean;
+  active: boolean;
+  limitPerPlayer: number | null;
+}
+
+export interface MallListingInput {
+  itemDefinitionId?: string;
+  priceCredits?: number;
+  category?: string;
+  sortOrder?: number;
+  featured?: boolean;
+  active?: boolean;
+  limitPerPlayer?: number | null;
+}
+
+export interface AdminCreditPurchase {
+  id: string;
+  playerId: string;
+  playerHandle: string | null;
+  packId: string;
+  packName: string | null;
+  status: 'pending' | 'paid' | 'failed' | 'refunded' | 'disputed';
+  priceCents: number;
+  currency: string;
+  creditsGranted: number;
+  providerSessionId: string | null;
+  providerPaymentIntentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreditLedgerEntry {
+  id: string;
+  delta: number;
+  balanceAfter: number;
+  reason: 'purchase' | 'grant' | 'refund' | 'chargeback' | 'spend' | 'award';
+  refType: string | null;
+  refId: string | null;
+  createdAt: string;
+}
+
+export interface PlayerCreditLedger {
+  creditBalance: number;
+  entries: CreditLedgerEntry[];
+}
+
+export function getPaymentConfig(): Promise<PaymentConfig> {
+  return requestAdminJson<PaymentConfig>('/admin/payments/config', { method: 'GET' });
+}
+
+export function updatePaymentConfig(body: PaymentConfigInput): Promise<PaymentConfig> {
+  return requestAdminJson<PaymentConfig>('/admin/payments/config', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export function listCreditPacks(): Promise<CreditPack[]> {
+  return requestAdminJson<CreditPack[]>('/admin/credit-packs', { method: 'GET' });
+}
+
+export function createCreditPack(body: CreditPackInput): Promise<CreditPack> {
+  return requestAdminJson<CreditPack>('/admin/credit-packs', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateCreditPack(id: string, body: CreditPackInput): Promise<CreditPack> {
+  return requestAdminJson<CreditPack>(`/admin/credit-packs/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteCreditPack(id: string): Promise<void> {
+  return requestAdminJson<void>(`/admin/credit-packs/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function listAdminMallListings(): Promise<AdminMallListing[]> {
+  return requestAdminJson<AdminMallListing[]>('/admin/mall', { method: 'GET' });
+}
+
+export function createMallListing(body: MallListingInput): Promise<AdminMallListing> {
+  return requestAdminJson<AdminMallListing>('/admin/mall', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateMallListing(
+  id: string,
+  body: MallListingInput,
+): Promise<AdminMallListing> {
+  return requestAdminJson<AdminMallListing>(`/admin/mall/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteMallListing(id: string): Promise<void> {
+  return requestAdminJson<void>(`/admin/mall/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function listAdminCreditPurchases(status?: string): Promise<AdminCreditPurchase[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return requestAdminJson<AdminCreditPurchase[]>(`/admin/payments/purchases${query}`, {
+    method: 'GET',
+  });
+}
+
+/** `playerId` here is the player record id, not the user id. */
+export function getPlayerCreditLedger(playerId: string): Promise<PlayerCreditLedger> {
+  return requestAdminJson<PlayerCreditLedger>(
+    `/admin/users/${encodeURIComponent(playerId)}/credits`,
+    { method: 'GET' },
+  );
+}
+
+export function grantPlayerCredits(
+  playerId: string,
+  body: { delta: number; reason?: string; reasonCode?: 'grant' | 'award' },
+): Promise<{ creditBalance: number }> {
+  return requestAdminJson<{ creditBalance: number }>(
+    `/admin/users/${encodeURIComponent(playerId)}/credits`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}

@@ -1,5 +1,6 @@
 import { isWeaponSlotType } from "../../types/equipment";
 import type {
+  NpcSpawnerBehavior,
   PrefabComponent,
   PrefabSoundZone,
   SceneInstanceScope,
@@ -138,6 +139,69 @@ function parseSpawnPointComponent(
   return { type, floorId: parseFloorId(value.floorId, `${path}.floorId`) };
 }
 
+/**
+ * Optional character GLB on NPC markers. Absent or blank means "no override",
+ * so the marker keeps the modular Sidekick avatar rather than storing an empty
+ * url the renderer would then have to special-case.
+ */
+function npcModelUrlFields(
+  value: unknown,
+  path: string,
+): { modelUrl?: string } {
+  const url = parseNullableAssetUrl(value, path);
+  return url === null ? {} : { modelUrl: url };
+}
+
+/**
+ * Roam tuning is optional on disk: documents authored before roaming existed
+ * parse as route spawners with the same defaults the editor writes for new ones.
+ */
+function parseNpcSpawnerRoamFields(
+  value: Record<string, unknown>,
+  path: string,
+): {
+  behavior: NpcSpawnerBehavior;
+  roamRadius: number;
+  roamWaitMinSeconds: number;
+  roamWaitMaxSeconds: number;
+} {
+  const behavior = value.behavior === undefined ? "route" : value.behavior;
+  if (behavior !== "route" && behavior !== "roam") {
+    fail(`${path}.behavior`, 'expected "route" or "roam"');
+  }
+  const roamWaitMinSeconds =
+    value.roamWaitMinSeconds === undefined
+      ? 1
+      : Math.min(
+          120,
+          Math.max(
+            0,
+            parseFiniteNumber(value.roamWaitMinSeconds, `${path}.roamWaitMinSeconds`),
+          ),
+        );
+  return {
+    behavior,
+    roamRadius:
+      value.roamRadius === undefined
+        ? 6
+        : Math.min(
+            60,
+            Math.max(0, parseFiniteNumber(value.roamRadius, `${path}.roamRadius`)),
+          ),
+    roamWaitMinSeconds,
+    roamWaitMaxSeconds:
+      value.roamWaitMaxSeconds === undefined
+        ? Math.max(roamWaitMinSeconds, 4)
+        : Math.min(
+            120,
+            Math.max(
+              roamWaitMinSeconds,
+              parseFiniteNumber(value.roamWaitMaxSeconds, `${path}.roamWaitMaxSeconds`),
+            ),
+          ),
+  };
+}
+
 function parseNpcSpawnerComponent(
   value: Record<string, unknown>,
   path: string,
@@ -155,6 +219,7 @@ function parseNpcSpawnerComponent(
           type,
           id: parseString(value.id, `${path}.id`, 64),
           populationId: parseString(value.populationId, `${path}.populationId`, 64),
+          ...npcModelUrlFields(value.modelUrl, `${path}.modelUrl`),
           floorId: parseFloorId(value.floorId, `${path}.floorId`),
           minAlive,
           maxAlive,
@@ -163,6 +228,7 @@ function parseNpcSpawnerComponent(
             20,
             Math.max(0, parseFiniteNumber(value.radius, `${path}.radius`)),
           ),
+          ...parseNpcSpawnerRoamFields(value, path),
         };
 }
 
@@ -218,6 +284,7 @@ function parseNpcPlacementComponent(
           ...(value.displayName === undefined
             ? {}
             : { displayName: parseString(value.displayName, `${path}.displayName`, 64) }),
+          ...npcModelUrlFields(value.modelUrl, `${path}.modelUrl`),
           floorId: parseFloorId(value.floorId, `${path}.floorId`),
           behavior,
           ...(value.routeGroup === undefined
@@ -1229,6 +1296,27 @@ function parseRampInteractComponent(
         };
 }
 
+function parseShipEntryComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  return {
+    type: "ship-entry" as const,
+    seatEntityId:
+      value.seatEntityId === undefined
+        ? undefined
+        : parseString(value.seatEntityId, `${path}.seatEntityId`, 128),
+    radius:
+      value.radius === undefined
+        ? undefined
+        : Math.min(30, Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`))),
+    label:
+      value.label === undefined
+        ? undefined
+        : parseString(value.label, `${path}.label`, 64),
+  };
+}
+
 function parseCockpitControlComponent(
   value: Record<string, unknown>,
   path: string,
@@ -1507,6 +1595,7 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "pilot-seat": parsePilotSeatComponent,
   "bed": parseBedComponent,
   "ramp-interact": parseRampInteractComponent,
+  "ship-entry": parseShipEntryComponent,
   "cockpit-control": parseCockpitControlComponent,
   "cockpit-stat": parseCockpitStatComponent,
   "entertainment-system": parseEntertainmentSystemComponent,

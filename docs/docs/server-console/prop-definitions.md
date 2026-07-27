@@ -32,7 +32,7 @@ Click a row to edit, or **Create prop definition** for a new entry.
 | --- | --- | --- |
 | **Name** | Required, max 80 chars | |
 | **Description** | Required, max 2000 chars | |
-| **Prop prefab** | Required | Bundled prefabs suitable for props (see `list-prop-prefabs.ts`) |
+| **Prop prefab** | Required | Ship/prop-kind prefabs from the open project's `assets/` library |
 | **Category** | Max 40 chars | Organize shop or UI groupings |
 | **Cost (ARC)** | Integer 0 – 2B | Purchase price |
 | **Max per space** | Integer 1 – 64, or empty | Cap per hangar/apartment instance; empty = unlimited |

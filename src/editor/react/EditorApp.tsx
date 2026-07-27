@@ -345,6 +345,31 @@ export function EditorApp(): ReactElement {
       getPlaying: () => playingRef.current,
       getPaused: () => pausedRef.current,
       getIsolation: () => isolationUiRef.current,
+      getCaptureTarget: () => {
+        const tab = tabRef.current;
+        const playing = playingRef.current;
+        const element = playing
+          ? document.getElementById('editor-play-host')
+          : tab === 'scene' || tab === 'ship'
+            ? document.querySelector('.ed-viewport')
+            : null;
+        if (!(element instanceof HTMLElement)) return null;
+        const bounds = element.getBoundingClientRect();
+        const width = Math.floor(bounds.width);
+        const height = Math.floor(bounds.height);
+        if (width <= 0 || height <= 0) return null;
+        return {
+          source: playing ? 'play' : 'scene',
+          tab,
+          playing,
+          rect: {
+            x: Math.floor(bounds.x),
+            y: Math.floor(bounds.y),
+            width,
+            height,
+          },
+        };
+      },
       play: () => {
         if (!playingRef.current) togglePlay();
       },

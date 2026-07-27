@@ -25,8 +25,10 @@ import {
   getBedAnchor,
   getBedSpec,
   getPilotSeatAnchor,
+  getShipEntryStandPose,
   worldToShipLocal,
 } from './ship-interaction';
+import { getShipLayout } from './ship-layout';
 import type { FlightBody, GameMode, Planet, Pose } from '../types';
 import type { TransitionType, WorldState } from './world-state';
 import { getActiveShip, getActiveShipBody } from './world-state';
@@ -78,6 +80,13 @@ export interface TransitionContext {
     local: { right: number; forward: number },
     floorUp: number,
   ) => void;
+  /**
+   * Called when an exterior-entry pilot steps off onto the ground instead of
+   * a deck. The host owns the resulting mode (planet on-foot vs. station
+   * hangar) and any physics teleport; `world.character` already holds the
+   * ground pose.
+   */
+  onDisembarked?: () => void;
 }
 
 /** Deck character near the chair sits down and takes the controls. */
@@ -105,7 +114,10 @@ export function beginStandTransition(world: WorldState): void {
   const instance = getActiveShip(world);
   const ship = instance.body;
   const seat = getPilotSeatAnchor(ship);
-  const stand = getLeavePilotStandPose(ship);
+  const stand =
+    getShipLayout().entry === 'exterior'
+      ? getShipEntryStandPose(ship, null)
+      : getLeavePilotStandPose(ship);
   instance.body = {
     ...ship,
     velocity: zeroVelocity(),
@@ -192,6 +204,20 @@ export function updateTransition(world: WorldState, dt: number, ctx: TransitionC
     world.mode = MODE_IN_BED;
     world.transition = null;
     ctx.setControlsMode(MODE_IN_BED);
+    return;
+  }
+
+  // Exterior entry has no deck to land on — step off onto the ground beside
+  // the hull and hand mode selection (planet vs. hangar) to the host.
+  if (getShipLayout().entry === 'exterior' && !world.activeBedId) {
+    world.character = transitionCharacterFromPose(transition.endPose, 'Idle_Loop');
+    world.activeBedId = null;
+    world.transition = null;
+    // The hook re-picks planet vs. station; this is the floor so a host
+    // without one still leaves the transition mode.
+    world.mode = MODE_ON_FOOT;
+    ctx.setControlsMode(MODE_ON_FOOT);
+    ctx.onDisembarked?.();
     return;
   }
 

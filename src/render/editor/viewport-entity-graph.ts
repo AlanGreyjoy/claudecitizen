@@ -12,6 +12,7 @@ import {
   type ParticleSystemHandle,
 } from "../particles";
 import type { EditorEntity, EditorStore, EntityTransform } from "../../editor/document";
+import type { PrefabComponent } from "../../world/prefabs/schema";
 import { loadPrefabDocument } from "../../world/prefabs/loader";
 import {
   createViewportComponentHelpers,
@@ -25,7 +26,6 @@ import {
   clearEntityLevelComponentHelpers,
   finalizeLoadedEntityModel,
   refreshEntityModelComponentHelpers,
-  refreshNodeOverrideComponentHelpers,
 } from "./viewport-entity-model";
 import { createViewportNpcRoutes } from "./viewport-npc-routes";
 import {
@@ -36,6 +36,27 @@ import {
   sanitizeNodeName,
   tagGlbNodes,
 } from "./viewport-transforms";
+
+type ShipControllerSeat = NonNullable<
+  Extract<PrefabComponent, { type: "ship-controller" }>["seats"]
+>[number];
+
+/** Walks the document for `ship-controller.seats[]` entity-id references. */
+function collectShipSeatRefs(
+  entities: readonly EditorEntity[],
+  out = new Map<string, ShipControllerSeat>(),
+): Map<string, ShipControllerSeat> {
+  for (const entity of entities) {
+    for (const component of entity.components) {
+      if (component.type !== "ship-controller") continue;
+      for (const seat of component.seats ?? []) {
+        if (seat.entityId) out.set(seat.entityId, seat);
+      }
+    }
+    collectShipSeatRefs(entity.children, out);
+  }
+  return out;
+}
 
 export interface ViewportEntityGraph {
   objectsById: Map<string, THREE.Group>;
@@ -93,14 +114,77 @@ export function createViewportEntityGraph(
     disposeParticleHandlesForEntity,
   } = deps;
 
+  type Disposable = { dispose: () => void };
+
   const objectsById = new Map<string, THREE.Group>();
-  const disposables: { dispose: () => void }[] = [];
+  /** Resources that live for the whole build (primitive meshes, empty markers). */
+  const buildDisposables: Disposable[] = [];
+  /** Per-entity helper resources, replaced wholesale on every entity refresh. */
+  const entityDisposables = new Map<string, Disposable[]>();
+  /**
+   * Seat gizmos are resolved document-wide, not per entity, so they get their
+   * own bucket — routing them into an entity bucket would let that entity's
+   * next refresh free geometry the sync still has in the scene.
+   */
+  let seatHelperDisposables: Disposable[] = [];
+  let trackTarget: Disposable[] = buildDisposables;
   let buildGeneration = 0;
   let pendingModelLoads = 0;
 
-  function track<T extends { dispose: () => void }>(resource: T): T {
-    disposables.push(resource);
+  function track<T extends Disposable>(resource: T): T {
+    trackTarget.push(resource);
     return resource;
+  }
+
+  /**
+   * Route everything `build` tracks into the entity's bucket so the next
+   * refresh can free exactly what it re-creates. Mesh collider helpers clone
+   * whole GLB geometries, so leaking one refresh's worth is megabytes.
+   * Synchronous regions only — `trackTarget` is restored on return.
+   */
+  function withEntityTrack<T>(entityId: string, build: () => T): T {
+    const previous = trackTarget;
+    let bucket = entityDisposables.get(entityId);
+    if (!bucket) {
+      bucket = [];
+      entityDisposables.set(entityId, bucket);
+    }
+    trackTarget = bucket;
+    try {
+      return build();
+    } finally {
+      trackTarget = previous;
+    }
+  }
+
+  /**
+   * Same, for a refresh: `build` fills a fresh bucket and the previous one is
+   * disposed only once the replacements exist, so nothing in the scene is ever
+   * left pointing at a freed buffer mid-rebuild.
+   */
+  function replaceEntityTracked<T>(entityId: string, build: () => T): T {
+    const previous = entityDisposables.get(entityId) ?? [];
+    const bucket: Disposable[] = [];
+    entityDisposables.set(entityId, bucket);
+    const previousTarget = trackTarget;
+    trackTarget = bucket;
+    try {
+      return build();
+    } finally {
+      trackTarget = previousTarget;
+      for (const resource of previous) resource.dispose();
+    }
+  }
+
+  function disposeAllTracked(): void {
+    for (const resource of buildDisposables) resource.dispose();
+    buildDisposables.length = 0;
+    for (const resource of seatHelperDisposables) resource.dispose();
+    seatHelperDisposables = [];
+    for (const bucket of entityDisposables.values()) {
+      for (const resource of bucket) resource.dispose();
+    }
+    entityDisposables.clear();
   }
 
   function notifyModelLoadSettled(generation: number): void {
@@ -108,19 +192,49 @@ export function createViewportEntityGraph(
     applyShipPreview({ quiet: false });
   }
 
-  const npcRoutes = createViewportNpcRoutes(
-    store,
-    entityRoot,
-    objectsById,
-    track,
-  );
+  const npcRoutes = createViewportNpcRoutes(store, entityRoot, objectsById);
 
   const {
     makeHelperMesh,
     makeRestHeightHelper,
     clearRestHeightHelpers,
+    makeShipSeatHelper,
+    clearShipSeatHelpers,
     buildComponentHelper,
   } = createViewportComponentHelpers(track);
+
+  /**
+   * Seats live in `ship-controller.seats[]` as entity-id references, so the
+   * referenced empties carry no component and nothing draws at them. This
+   * resolves the references document-wide and stamps a gizmo on each target,
+   * independent of the per-component helper pass.
+   */
+  function syncShipSeatHelpers(): void {
+    const seatsByEntityId = collectShipSeatRefs(store.getState().roots);
+    const previous = seatHelperDisposables;
+    const bucket: Disposable[] = [];
+    seatHelperDisposables = bucket;
+    const previousTarget = trackTarget;
+    trackTarget = bucket;
+    try {
+      for (const [entityId, group] of objectsById) {
+        clearShipSeatHelpers(group);
+        const seat = seatsByEntityId.get(entityId);
+        if (!seat) continue;
+        group.add(
+          makeShipSeatHelper({
+            role: seat.role ?? "passenger",
+            eye: seat.eye,
+            stand: seat.stand,
+          }),
+        );
+      }
+    } finally {
+      trackTarget = previousTarget;
+      // Replacements are in the scene before the old buffers are freed.
+      for (const resource of previous) resource.dispose();
+    }
+  }
 
   function applyGlbOverrideToNode(
     entityId: string,
@@ -151,22 +265,16 @@ export function createViewportEntityGraph(
     }
   }
 
+  /**
+   * Node-level collider edits go through the entity refresh so the helpers they
+   * replace are disposed with the rest of the entity's bucket. Rebuilding one
+   * node's helpers in isolation would strand the old geometry clones.
+   */
   function refreshGlbNodeComponents(
     edits: ReadonlyArray<{ entityId: string; nodeName: string }>,
   ): void {
-    for (const edit of edits) {
-      const entity = store.locate(edit.entityId)?.entity;
-      const group = objectsById.get(edit.entityId);
-      if (!entity?.asset || !group) continue;
-      const model = findLoadedEntityModel(group);
-      if (!model) continue;
-      refreshNodeOverrideComponentHelpers({
-        entity,
-        model,
-        nodeName: edit.nodeName,
-        helpers: { buildComponentHelper },
-        sanitizeNodeName,
-      });
+    for (const entityId of new Set(edits.map((edit) => edit.entityId))) {
+      refreshEntity(entityId);
     }
     selectionBoxes.forEach((box) => box.update());
   }
@@ -206,28 +314,30 @@ export function createViewportEntityGraph(
       pendingModelLoads += 1;
       void loadPrefabModel(url)
         .then((model) => {
-          finalizeLoadedEntityModel({
-            generation,
-            buildGeneration,
-            entity,
-            group,
-            model,
-            recenterAsHull,
-            entityRoot,
-            store,
-            helpers: {
-              buildComponentHelper,
-              makeRestHeightHelper,
-              clearRestHeightHelpers,
-              makeHelperMesh,
-            },
-            track,
-            sanitizeNodeName,
-            buildGlbNodeRef,
-            tagGlbNodes,
-            applyGlbOverridesForEntity,
-            applyHiddenNodesForEntity,
-          });
+          withEntityTrack(entity.id, () =>
+            finalizeLoadedEntityModel({
+              generation,
+              buildGeneration,
+              entity,
+              group,
+              model,
+              recenterAsHull,
+              entityRoot,
+              store,
+              helpers: {
+                buildComponentHelper,
+                makeRestHeightHelper,
+                clearRestHeightHelpers,
+                makeHelperMesh,
+              },
+              track,
+              sanitizeNodeName,
+              buildGlbNodeRef,
+              tagGlbNodes,
+              applyGlbOverridesForEntity,
+              applyHiddenNodesForEntity,
+            }),
+          );
         })
         .catch(() => {
           if (generation !== buildGeneration) return;
@@ -249,14 +359,16 @@ export function createViewportEntityGraph(
     }
 
     hasVisual =
-      attachTopLevelEntityComponents({
-        entity,
-        group,
-        entityRoot,
-        helpers: { buildComponentHelper },
-        registerParticleHandle,
-        createParticleSystem,
-      }) || hasVisual;
+      withEntityTrack(entity.id, () =>
+        attachTopLevelEntityComponents({
+          entity,
+          group,
+          entityRoot,
+          helpers: { buildComponentHelper },
+          registerParticleHandle,
+          createParticleSystem,
+        }),
+      ) || hasVisual;
 
     const prefabInstance = entity.components.find(
       (component) => component.type === "prefab-instance",
@@ -326,13 +438,13 @@ export function createViewportEntityGraph(
     disposeParticleHandles();
     npcRoutes.clear();
     setupUpdateObjectAnimations(entityRoot);
-    for (const resource of disposables) resource.dispose();
-    disposables.length = 0;
+    disposeAllTracked();
 
     for (const entity of store.getState().roots) {
       entityRoot.add(buildEntityObject(entity, buildGeneration));
     }
     npcRoutes.build();
+    syncShipSeatHelpers();
     syncSelectionHighlight();
     // Defer articulation preview until async GLBs finish (settled apply in load finally).
     if (pendingModelLoads === 0) applyShipPreview({ quiet: false });
@@ -374,17 +486,18 @@ export function createViewportEntityGraph(
     clearEntityLevelComponentHelpers(group);
     clearRestHeightHelpers(group);
 
-    attachTopLevelEntityComponents({
-      entity,
-      group,
-      entityRoot,
-      helpers: { buildComponentHelper },
-      registerParticleHandle,
-      createParticleSystem,
-    });
+    replaceEntityTracked(entityId, () => {
+      attachTopLevelEntityComponents({
+        entity,
+        group,
+        entityRoot,
+        helpers: { buildComponentHelper },
+        registerParticleHandle,
+        createParticleSystem,
+      });
 
-    const model = findLoadedEntityModel(group);
-    if (model) {
+      const model = findLoadedEntityModel(group);
+      if (!model) return;
       for (const material of applyPrefabMaterialOverrides(
         model,
         entity.materialOverrides,
@@ -411,9 +524,12 @@ export function createViewportEntityGraph(
           },
         });
       }
-    }
+    });
 
     npcRoutes.build();
+    // The seat list lives on the hull, not on the empties it points at, so
+    // editing it refreshes the hull only — re-sync every target here.
+    syncShipSeatHelpers();
     selectionBoxes.forEach((box) => box.update());
     syncSelectionHighlight();
     applyShipPreview({ quiet: true });
@@ -434,9 +550,6 @@ export function createViewportEntityGraph(
     applyGlbOverrideToNode,
     applyHiddenNodesForEntity,
     refreshGlbNodeComponents,
-    disposeTracked() {
-      for (const resource of disposables) resource.dispose();
-      disposables.length = 0;
-    },
+    disposeTracked: disposeAllTracked,
   };
 }

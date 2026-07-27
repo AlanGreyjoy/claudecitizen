@@ -11,32 +11,32 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Easy to Use',
+    title: 'AsteronEngine',
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        Electron authoring workspace for projects, scenes, prefabs, planets,
+        Play mode, and <strong>File → Build Web</strong> releases.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
+    title: 'Authoritative backend',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        Rust cells with Rapier authority, shared WASM prediction, and Protobuf
+        over WebTransport — clients send intents, the server owns outcomes.
       </>
     ),
   },
   {
-    title: 'Powered by React',
+    title: 'Scenes own content',
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        GameObject trees with components decide what a scene is. Switch scenes
+        in-process — no page reloads, no separate admin app.
       </>
     ),
   },

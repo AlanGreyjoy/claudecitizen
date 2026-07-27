@@ -31,6 +31,8 @@ A title screen is often just an empty with a `ui-screen` and a `scene-link`. A
 playable scene usually needs a `game-manager`, a `planet`, a `player-start`, and
 one or more `prefab-instance` GameObjects.
 
+Field-level reference: [Scene components](./scene-components).
+
 Scene-level startup options live in **File → Scene Settings…**; everything about
 the scene's *contents* is components on GameObjects.
 

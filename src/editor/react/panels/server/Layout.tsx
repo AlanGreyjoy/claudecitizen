@@ -98,6 +98,15 @@ export function Sidebar(): ReactElement {
         ],
       },
       {
+        heading: 'Commerce',
+        tabs: [
+          { id: 'payments', label: 'Payments' },
+          { id: 'credit-packs', label: 'Credit Packs' },
+          { id: 'mall', label: 'Item Mall' },
+          { id: 'purchases', label: 'Purchases' },
+        ],
+      },
+      {
         heading: 'Systems',
         tabs: [{ id: 'settings', label: 'Game Settings' }],
       },

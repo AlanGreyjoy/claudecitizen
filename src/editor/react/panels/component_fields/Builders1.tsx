@@ -8,6 +8,7 @@ import {
   FieldRow,
   Hint,
   ImageAssetUrlField,
+  ModelAssetUrlField,
   NumberField,
   SelectField,
   TextField,
@@ -95,6 +96,15 @@ export function NpcSpawnerFields({
           }
         />
       </FieldRow>
+      <ModelAssetUrlField
+        label="Character model"
+        value={component.modelUrl}
+        onCommit={(modelUrl) => update({ ...component, modelUrl })}
+      />
+      <Hint>
+        Drag a character GLB from the asset browser. Empty uses the modular
+        Sidekick avatar from the population definition.
+      </Hint>
       <FieldRow label="Floor" wide>
         <SelectField
           options={FLOOR_OPTIONS}
@@ -104,14 +114,31 @@ export function NpcSpawnerFields({
           }
         />
       </FieldRow>
-      <FieldRow label="Route group" wide>
-        <TextField
-          value={component.routeGroup}
-          onCommit={(routeGroup) =>
-            update({ ...component, routeGroup: routeGroup.trim() })
+      <FieldRow label="Behavior" wide>
+        <SelectField
+          options={['route', 'roam']}
+          value={component.behavior}
+          onCommit={(behavior) =>
+            update({ ...component, behavior: behavior as 'route' | 'roam' })
           }
         />
       </FieldRow>
+      {component.behavior === 'route' ? (
+        <FieldRow label="Route group" wide>
+          <TextField
+            value={component.routeGroup}
+            onCommit={(routeGroup) =>
+              update({ ...component, routeGroup: routeGroup.trim() })
+            }
+          />
+        </FieldRow>
+      ) : (
+        <Hint>
+          Roaming needs no waypoints, but there is no station navmesh either —
+          NPCs walk straight lines and pass through walls and props. Keep the
+          roam radius inside open floor.
+        </Hint>
+      )}
       <FieldRow label="Min alive" wide>
         <NumberField
           value={component.minAlive}
@@ -149,6 +176,49 @@ export function NpcSpawnerFields({
           }
         />
       </FieldRow>
+      <Hint>Spawn jitter around the marker.</Hint>
+      {component.behavior === 'roam' ? (
+        <>
+          <FieldRow label="Roam radius" wide>
+            <NumberField
+              value={component.roamRadius}
+              onCommit={(roamRadius) =>
+                update({
+                  ...component,
+                  roamRadius: Math.max(0, Math.min(60, roamRadius)),
+                })
+              }
+            />
+          </FieldRow>
+          <FieldRow label="Roam wait min" wide>
+            <NumberField
+              value={component.roamWaitMinSeconds}
+              onCommit={(seconds) => {
+                const nextMin = Math.max(0, Math.min(120, seconds));
+                update({
+                  ...component,
+                  roamWaitMinSeconds: nextMin,
+                  roamWaitMaxSeconds: Math.max(nextMin, component.roamWaitMaxSeconds),
+                });
+              }}
+            />
+          </FieldRow>
+          <FieldRow label="Roam wait max" wide>
+            <NumberField
+              value={component.roamWaitMaxSeconds}
+              onCommit={(seconds) =>
+                update({
+                  ...component,
+                  roamWaitMaxSeconds: Math.max(
+                    component.roamWaitMinSeconds,
+                    Math.min(120, seconds),
+                  ),
+                })
+              }
+            />
+          </FieldRow>
+        </>
+      ) : null}
     </>
   );
 }
@@ -257,6 +327,15 @@ export function NpcPlacementFields({
           }
         />
       </FieldRow>
+      <ModelAssetUrlField
+        label="Character model"
+        value={component.modelUrl}
+        onCommit={(modelUrl) => update({ ...component, modelUrl })}
+      />
+      <Hint>
+        Drag a character GLB from the asset browser. Empty uses the modular
+        Sidekick avatar from the definition.
+      </Hint>
       <FieldRow label="Floor" wide>
         <SelectField
           options={FLOOR_OPTIONS}

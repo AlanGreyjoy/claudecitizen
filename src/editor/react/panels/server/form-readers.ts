@@ -7,7 +7,9 @@ import {
 import { WEAPON_SLOT_TYPES, type WeaponSlotType } from '../../../../types/equipment';
 import type {
   BackpackDefinitionInput,
+  CreditPackInput,
   ItemDefinitionInput,
+  MallListingInput,
   PropDefinitionInput,
   ShipDefinitionInput,
   WeaponDefinitionInput,
@@ -138,5 +140,46 @@ export function readWearableForm(form: HTMLFormElement): WearableDefinitionInput
     wearableSlotType: primary,
     occupiedSlotTypes,
     sidekickPartPresetId: Math.round(formNumber(form, 'sidekickPartPresetId')),
+  };
+}
+
+function formBoolean(form: HTMLFormElement, name: string): boolean {
+  return formValue(form, name) === 'true';
+}
+
+/** Blank text inputs become null so the API clears the column rather than storing "". */
+function formNullableText(form: HTMLFormElement, name: string): string | null {
+  const value = formValue(form, name);
+  return value === '' ? null : value;
+}
+
+export function readCreditPackForm(form: HTMLFormElement): CreditPackInput {
+  return {
+    name: formValue(form, 'name'),
+    description: formValue(form, 'description'),
+    credits: Math.round(formNumber(form, 'credits')),
+    bonusCredits: Math.round(formNumber(form, 'bonusCredits')),
+    priceCents: Math.round(formNumber(form, 'priceCents')),
+    currency: formValue(form, 'currency') || 'usd',
+    stripePriceId: formNullableText(form, 'stripePriceId'),
+    iconUrl: formNullableText(form, 'iconUrl'),
+    sortOrder: Math.round(formNumber(form, 'sortOrder')),
+    active: formBoolean(form, 'active'),
+  };
+}
+
+export function readMallListingForm(form: HTMLFormElement): MallListingInput {
+  // The form uses 0 to mean "no limit", since a blank number input is awkward to clear.
+  const limit = Math.round(formNumber(form, 'limitPerPlayer'));
+  const itemDefinitionId = formValue(form, 'itemDefinitionId');
+  return {
+    // Omitted when editing: the backing item of a listing is fixed once created.
+    ...(itemDefinitionId ? { itemDefinitionId } : {}),
+    priceCredits: Math.round(formNumber(form, 'priceCredits')),
+    category: formValue(form, 'category') || 'consumable',
+    sortOrder: Math.round(formNumber(form, 'sortOrder')),
+    featured: formBoolean(form, 'featured'),
+    active: formBoolean(form, 'active'),
+    limitPerPlayer: limit > 0 ? limit : null,
   };
 }

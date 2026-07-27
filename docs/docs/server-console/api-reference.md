@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9
+sidebar_position: 10
 title: API reference
 description: REST endpoints for the ClaudeCitizen admin API.
 ---
@@ -12,7 +12,7 @@ All admin endpoints are served by the Rust server under the `/admin` prefix (def
 
 - **Authentication** — except `POST /admin/session`, all routes require the `cc_admin` HTTP-only cookie set at login.
 - **Content-Type** — request and response bodies are JSON.
-- **Credentials** — browser clients must send `credentials: 'include'` (or `withCredentials: true`).
+- **Credentials** — external browser clients must send `credentials: 'include'` (or `withCredentials: true`). The AsteronEngine editor never calls these routes from the renderer; it uses `/__editor/backend/*` so Electron can hold the cookie.
 - **Errors** — validation failures return `400` with a `message` string; missing auth returns `401`; missing resources return `404`.
 
 Client helpers live in `src/net/admin-api.ts`.
@@ -281,11 +281,155 @@ Replace settings (all fields required).
 
 ---
 
+## Payments and commerce
+
+See [Payments and the Item Mall](./payments.md) for the setup walkthrough. All routes below require an operator session.
+
+### `GET /admin/payments/config`
+
+Stripe status. **Secrets are never returned** — only whether one exists and a masked preview.
+
+```json
+{
+  "provider": "stripe",
+  "mode": "test",
+  "secretKeyConfigured": true,
+  "secretKeySource": "console",
+  "secretKeyPreview": "sk_\u2022\u2022\u2022\u20224242",
+  "webhookSecretConfigured": true,
+  "webhookSecretSource": "environment",
+  "successUrl": "",
+  "cancelUrl": "",
+  "webhookUrl": "http://localhost:3000/payments/stripe/webhook",
+  "checkoutEnabled": true,
+  "encryptionConfigured": true
+}
+```
+
+`secretKeySource` is `environment`, `console`, or `unset`. Environment variables take priority over stored values.
+
+### `PUT /admin/payments/config`
+
+Stores Stripe settings. Secrets are encrypted with AES-256-GCM before they reach the database.
+
+```json
+{
+  "mode": "test",
+  "secretKey": "sk_test_...",
+  "webhookSecret": "whsec_...",
+  "successUrl": "https://your-game.example/?checkout=success",
+  "cancelUrl": "https://your-game.example/?checkout=cancelled"
+}
+```
+
+Omit or send an empty `secretKey` / `webhookSecret` to leave the stored value untouched. Returns the same shape as the `GET`. Fails with `400` when `PAYMENTS_ENCRYPTION_KEY` is not configured on the server.
+
+### `GET /admin/credit-packs`
+
+Every pack, active or not. `POST` creates one, `PATCH /admin/credit-packs/{id}` partially updates (omitted fields keep their value), `DELETE` removes it — or deactivates it instead when purchase history exists.
+
+```json
+{
+  "name": "Credit Chest",
+  "description": "A reinforced chest of AsteronCredits.",
+  "credits": 2500,
+  "bonusCredits": 250,
+  "priceCents": 2499,
+  "currency": "usd",
+  "stripePriceId": null,
+  "iconUrl": null,
+  "sortOrder": 3,
+  "active": true
+}
+```
+
+`credits` and `priceCents` must be positive.
+
+### `GET /admin/mall`
+
+Every Item Mall listing, including hidden ones, joined to its item definition. `POST` creates, `PATCH /admin/mall/{id}` updates, `DELETE` delists (the `ItemDefinition` is untouched).
+
+```json
+{
+  "itemDefinitionId": "station-hot-meal",
+  "priceCredits": 60,
+  "category": "consumable",
+  "sortOrder": 1,
+  "featured": true,
+  "active": true,
+  "limitPerPlayer": null
+}
+```
+
+`itemDefinitionId` is fixed once created. Returns `409` when the item is already listed.
+
+`GET /admin/mall/preview` returns exactly what a player would see, for verifying a curation change.
+
+### `GET /admin/payments/purchases`
+
+The purchase log, newest first, capped at 200. Optional `?status=` filter accepts `pending`, `paid`, `failed`, `refunded`, or `disputed`.
+
+### `GET /admin/users/{id}/credits`
+
+AsteronCredit balance and the last 50 ledger entries for one player. **`{id}` is the player id**, not the user id.
+
+```json
+{
+  "creditBalance": 1250,
+  "entries": [
+    {
+      "id": "...",
+      "delta": 1050,
+      "balanceAfter": 1250,
+      "reason": "purchase",
+      "refType": "credit_purchase",
+      "refId": "...",
+      "createdAt": "..."
+    }
+  ]
+}
+```
+
+### `POST /admin/users/{id}/credits`
+
+Grants or claws back credits. Writes one ledger entry.
+
+```json
+{ "delta": 500, "reason": "support ticket 1284", "reasonCode": "grant" }
+```
+
+`delta` must be non-zero; negative values deduct and clamp the balance at zero. `reasonCode` is `grant` (support/compensation) or `award` (promotion/prize).
+
+---
+
+## Player payment endpoints
+
+These use the player cookie session, not the operator session.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /payments/packs` | Active credit packs plus `checkoutEnabled` |
+| `POST /payments/checkout` | `{ packId }` → `{ purchaseId, sessionId, url }`. Records intent only; grants nothing. |
+| `GET /payments/purchases` | This player's recent purchases and current balance |
+| `GET /game/mall` | Active listings and the player's credit balance |
+| `POST /game/mall/purchase` | `{ listingId, quantity }` → `{ creditBalance, inventory }` |
+
+### `POST /payments/stripe/webhook`
+
+Unauthenticated by design: Stripe authenticates with an HMAC-SHA256 signature over the raw request body, verified in constant time with a five-minute timestamp tolerance. **This is the only place credits are granted for money.**
+
+Fulfillment is keyed on the Stripe event id through the ledger's unique idempotency index, so a replayed event is a no-op. Verified but unhandled event types return `200` so Stripe stops retrying.
+
+---
+
 ## Backend implementation map
 
 | Layer | Path |
 | --- | --- |
 | Admin HTTP/auth/catalog | `backend/crates/server/src/admin.rs` |
+| Admin payments/commerce | `backend/crates/server/src/admin_payments.rs` |
+| Stripe + credit ledger | `backend/crates/server/src/payments/` |
+| Item Mall | `backend/crates/server/src/mall.rs` |
 | Player game persistence | `backend/crates/server/src/game.rs` |
 | API router | `backend/crates/server/src/main.rs` |
 | SQL migrations | `backend/migrations/` |

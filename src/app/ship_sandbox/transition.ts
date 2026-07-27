@@ -1,4 +1,4 @@
-import { vec3 } from '../../math/vec3';
+import { normalize, vec3 } from '../../math/vec3';
 import {
   createDeckCharacterState,
   DECK_FLOOR_OFFSET_METERS,
@@ -6,11 +6,17 @@ import {
   getDeckWorldPose,
   getLeavePilotStandPose,
 } from '../../player/ship-deck';
-import { createTransitionPose, getBedSpec, worldToShipLocal } from '../../player/ship-interaction';
+import {
+  createTransitionPose,
+  getBedSpec,
+  getShipEntryStandPose,
+  worldToShipLocal,
+} from '../../player/ship-interaction';
 import { teleportShipPlayerLocal } from '../../physics/ship-physics';
 import { doorBlends } from '../../player/ship-rig';
 import { clamp } from './camera-math';
 import type { ShipSandboxSession } from './types';
+import { SANDBOX_GROUND_Y_METERS, WORLD_UP } from './types';
 
 const SIT_SECONDS = 1.3;
 const STAND_SECONDS = 1.0;
@@ -30,7 +36,37 @@ function finishLyingTransition(session: ShipSandboxSession): void {
   session.transition = null;
 }
 
+/**
+ * Exterior entry has no deck: step off onto the pad beside the hull. Y is
+ * pinned to the pad plane rather than the seat-relative floor hint the deck
+ * path uses, so the walker resumes exactly where ground locomotion expects it.
+ */
+function finishExteriorStandingTransition(session: ShipSandboxSession): void {
+  const leave = getShipEntryStandPose(session.ship, null);
+  session.character = {
+    animation: 'Idle_Loop',
+    forward: normalize({ x: leave.forward.x, y: 0, z: leave.forward.z }),
+    grounded: true,
+    jumpPhase: 'grounded',
+    jumpPhaseTime: 0,
+    position: {
+      x: leave.position.x,
+      y: SANDBOX_GROUND_Y_METERS,
+      z: leave.position.z,
+    },
+    up: { ...WORLD_UP },
+    velocity: vec3(0, 0, 0),
+  };
+  session.activeBedId = null;
+  session.mode = 'ground';
+  session.transition = null;
+}
+
 function finishStandingTransition(session: ShipSandboxSession): void {
+  if (session.exteriorEntry && !session.activeBedId) {
+    finishExteriorStandingTransition(session);
+    return;
+  }
   const leave =
     session.mode === 'getting-up' && session.activeBedId
       ? getDeckWorldPose(session.ship, getBedSpec(session.activeBedId)?.stand ?? { right: 0, forward: 0 })

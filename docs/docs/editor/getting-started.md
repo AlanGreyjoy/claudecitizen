@@ -32,7 +32,10 @@ Cold start opens the **AsteronEngine — Projects** window:
 | **Recent** | Click any entry in the recents list |
 
 Choosing a project closes the hub and opens the editor workspace on that project
-root. A folder only counts as a project when it contains `asteron.project.json`.
+root. A folder counts as a project when it has `package.json` and an `assets/`
+directory. `asteron.project.json` holds the display name, backend URL, boot
+scene, and build output — scaffolded on New Project and edited via **Project
+Settings…**.
 
 To skip the hub — handy for scripted launches — pass `--project-root=<path>` or set
 `CLAUDECITIZEN_EDITOR_PROJECT_ROOT`.

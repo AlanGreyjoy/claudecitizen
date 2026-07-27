@@ -70,7 +70,7 @@ Each cell has one active writer. A Redis lease selects the owner, and a PostgreS
 
 ## Persistence and coordination
 
-SQLx migration files under `backend/migrations/` are the only schema history. The baseline is idempotent so databases created before the Rust cutover can be adopted without replay failures.
+SQLx migration files under `backend/migrations/` are the only schema history.
 
 PostgreSQL stores accounts, tokens, catalog, inventory/loadout, player builds, ships, cell epochs, and cell checkpoints. Redis stores only ephemeral coordination state: rate limits, one-use WebTransport tickets, cell leases, routed command streams, and snapshot fan-out.
 
@@ -91,9 +91,4 @@ Environment variables are documented in `backend/.env.example`. WebTransport use
 
 `backend/Dockerfile` builds one server image. Run it on your host (for example Vultr) with Docker Compose alongside Postgres and Redis, or point the image at managed databases. Browser delivery remains separate from backend orchestration — ship the web build via **File → Build Web**.
 
-## History
-
-The [Rust Backend Cutover PRD](./rust-backend-cutover-prd) and
-[Cutover Implementation Plan](./rust-backend-cutover-plan) record the completed
-migration to this architecture. They are kept as historical rationale, not as
-current work.
+See [Deployment](./deployment) for env vars, health endpoints, and web release steps; [Realtime](./realtime) for WebTransport / cell ownership.

@@ -109,6 +109,19 @@ function textResult(payload) {
   };
 }
 
+function imageResult(payload) {
+  const { data, mimeType, ...meta } = payload;
+  if (typeof data !== 'string' || typeof mimeType !== 'string') {
+    return textResult(payload);
+  }
+  return {
+    content: [
+      { type: 'image', mimeType, data },
+      { type: 'text', text: JSON.stringify(meta, null, 2) },
+    ],
+  };
+}
+
 const server = new McpServer({
   name: 'asteron-engine',
   version: '1.0.0',
@@ -175,6 +188,32 @@ server.registerTool(
     inputSchema: {},
   },
   async () => textResult(await agentFetch('GET', '/agent/v1/play_state')),
+);
+
+server.registerTool(
+  'capture_viewport',
+  {
+    description:
+      'Screenshot the active 3D view (Scene/Ship viewport while editing, Play host while playing). Returns JPEG image content plus metadata.',
+    inputSchema: {
+      maxWidth: z
+        .number()
+        .int()
+        .min(320)
+        .max(1920)
+        .optional()
+        .describe('Max image width in pixels (default 1280)'),
+    },
+  },
+  async ({ maxWidth }) => {
+    const payload = await agentFetch('GET', '/agent/v1/capture_viewport', undefined, {
+      maxWidth,
+    });
+    if (payload && typeof payload === 'object' && 'error' in payload) {
+      return textResult(payload);
+    }
+    return imageResult(payload);
+  },
 );
 
 server.registerTool(

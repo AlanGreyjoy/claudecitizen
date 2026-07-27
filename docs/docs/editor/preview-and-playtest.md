@@ -30,46 +30,28 @@ Play runs under the opaque editor chrome and looks like a blank blue screen whil
 audio still works. Pause feeds the game loop's `isPaused()` check rather than
 tearing the session down.
 
-## Deep-link URLs
-
-These are the internal routes the editor's own preview commands use. You rarely
-type them by hand, but they are useful for debugging a single surface.
-
-| Scene/runtime | Internal route |
-| --- | --- |
-| Scene asset | `/?boot=scene&sceneId=<id>` |
-| Station prefab stage | `/?stationPrefab=<id>` |
-| Ship prefab stage | `/?shipPrefab=<id>` |
-| Planet surface test | `/?boot=play&planetId=<id>&spawn=surface&from=editor` |
-
-### Examples
-
-```text
-?stationPrefab=demo-station
-?shipPrefab=phobos-starhopper
-?boot=play&planetId=asteron&spawn=surface&from=editor
-?boot=scene&sceneId=main-game
-```
+There is **no browser URL playtest workflow**. Author and test in the editor;
+ship a browser build with **File → Build Web**.
 
 ## Station playtest
 
-Loads the prefab station instead of the default procedural layout in Play Mode.
+Open a station prefab and press **F6**. Play loads that prefab's layout in a
+stage scene.
 
 What comes from the prefab:
 
 - Visual geometry and materials
 - Collider-based walking
-- Spawn point, elevators, hangar pads
+- Spawn point, elevators, hangar pads, ladders
 - Interactions and animated doors
-- AVMS terminal zones
-
-Some UI flows (terminal/hangar-bank) may still use procedural hooks until full station cutover.
+- AVMS terminal and shop zones
+- NPC spawners, waypoints, and placements
 
 ## Ship tab
 
 The **Ship** tab is where ships are authored and flown. It reuses the scene
 viewport, hierarchy, and inspector — ship components (`ship-controller`,
-`ship-door`, `cockpit-control`, `bed`, `collider`) live in the normal prefab
+`ship-door`, `cockpit-control`, `bed`, `ladder`, `collider`) live in the normal prefab
 palette, and the toolbar's ship group still previews gear, ramp, and door
 articulation statically. What the tab adds is a bar with three things:
 
@@ -84,7 +66,7 @@ articulation statically. What the tab adds is a bar with three things:
 | Env | What it boots | Use it for |
 | --- | --- | --- |
 | **Pad** | Isolated flat pad, no terrain or station | Deck colliders, doors, ramp, seats, flight feel — fastest loop |
-| **Planet** | The full stage scene on `asteron` | Landing clamp, gravity, walking off the ship onto the surface |
+| **Planet** | The full stage scene on the active planet | Landing clamp, walking off the ship onto the surface |
 
 Both spawn you **on foot beside the ship with the ramp already down**, so a
 single run covers the whole loop. `F6` starts and stops it; `F7` pauses.
@@ -103,14 +85,10 @@ Verify in either environment:
 
 Stat edits (mass, thrust, torque) apply on the next **Test**, not live.
 
-`/?shipPrefab=<id>` still boots the same pad sandbox as a standalone page. It is
-a debugging fallback now, not the way in.
+## Planet and system
 
-## Back to editor
-
-The standalone `?shipPrefab=` page shows a **Back to Editor** banner. In-editor
-playtests stop in place with **Stop** / `Shift+F6` and leave the editor window
-untouched.
+- **Planet Authoring → Test Play** — full terrain LOD, vegetation, and surface-spawn streaming for the open planet document.
+- **System Map** — place stations and planets; playable scenes pick the system via `game-manager`, not URL reloads.
 
 ## Round-trip workflow
 
@@ -118,31 +96,18 @@ untouched.
 sequenceDiagram
   participant Ed as AsteronEngine editor
   participant Disk as prefab JSON
-  participant Play as Play sandbox
+  participant Play as Game view
 
   Ed->>Disk: Save (Ctrl+S)
-  Ed->>Play: Play active document
+  Ed->>Play: Play active document (F6)
   Play->>Play: Walk, interact, test
-  Play->>Ed: Stop / Back to Editor
+  Play->>Ed: Stop (F6 / Shift+F6)
 ```
-
-The Electron editor bundle enables authoring routes. Browser releases exclude
-the editor UI but bundle scene documents so released scene links can resolve.
 
 ## Build Web
 
 When a build is worth sharing, **File → Build Web** (`Ctrl+B`) saves the active
-document and produces the browser release:
-
-1. Builds the game runtime (`index.html` → `src/game-main.ts`) into the output
-   directory from **File → Project Settings…**.
-2. Writes `asteron.runtime.json` beside it with the backend URL and boot scene, so
-   the same bundle can be re-pointed at a different backend without rebuilding.
-3. Copies only the assets that saved prefab JSON actually references, leaving the
-   rest of your protected library out of the deploy.
-
-Serve that directory from any static host. Everything in it is publicly
-downloadable — see [Assets](/assets) for what may safely ship.
+document and produces the browser release. See [Build Web](./build-web).
 
 ## Catalog integration
 
@@ -151,5 +116,6 @@ Station and ship prefabs referenced by the [Server console](/server-console) cat
 ## Related
 
 - [Getting started](./getting-started) — save/load basics
+- [Projects and settings](./projects-and-settings)
 - [Station authoring](./station-authoring)
 - [Ship authoring](./ship-authoring)

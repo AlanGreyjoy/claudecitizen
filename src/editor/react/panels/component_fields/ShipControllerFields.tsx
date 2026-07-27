@@ -1,5 +1,9 @@
 import type { ReactElement } from 'react';
-import type { PrefabComponent } from '../../../../world/prefabs/schema';
+import type {
+  PrefabComponent,
+  ShipEntryMode,
+} from '../../../../world/prefabs/schema';
+import { SHIP_ENTRY_MODES } from '../../../../world/prefabs/schema';
 import type { ComponentFieldContext, ComponentFieldsProps } from './context';
 import { ShipControllerSeats } from './ShipControllerSeats';
 import {
@@ -11,6 +15,7 @@ import {
   FieldRow,
   NumberField,
   SectionLabel,
+  SelectField,
 } from '../InspectorForm';
 
 type ShipControllerComponent = Extract<PrefabComponent, { type: 'ship-controller' }>;
@@ -49,6 +54,20 @@ function ShipControllerRestFields({
       <EmptyNote>
         Ship origin height above the pad (m). Viewport: cyan pad = authored, amber dashed
         = auto from hull lowest point. 0 = auto.
+      </EmptyNote>
+      <FieldRow label="Entry" wide>
+        <SelectField
+          options={SHIP_ENTRY_MODES}
+          value={component.entry ?? 'interior'}
+          onCommit={(entry) =>
+            update({ ...component, entry: entry as ShipEntryMode })
+          }
+        />
+      </FieldRow>
+      <EmptyNote>
+        Interior: walk the deck to the seat (needs deck colliders). Exterior: open-frame
+        hull with no interior — stand beside it and press F. Add Ship Entry markers to
+        place the board circles; without one the pilot seat stands in.
       </EmptyNote>
     </>
   );

@@ -6,6 +6,7 @@ import { getKeyboardBindingCodes } from '../../../flight/input-settings';
 import type { ItemType } from '../../../player/inventory/types';
 import { mountHaloBandDockIcons } from './haloband-icons';
 import { createSystemMapPanel, type SystemMapPanel } from './system-map-panel';
+import { createHaloBandMall, type HaloBandMall } from './haloband-mall';
 import type { HaloBandElements } from './haloband-dom';
 import {
   createHaloBandPanels,
@@ -22,6 +23,8 @@ import type {
 export type { HaloBandElements } from './haloband-dom';
 export type {
   HaloBandCallbacks,
+  HaloBandMallCallbacks,
+  HaloBandMallSnapshot,
   HaloBandOptions,
   HaloBandTab,
   HaloBandUpdateParams,
@@ -76,6 +79,8 @@ export function createHaloBand(
   mountHaloBandDockIcons(elements.rootEl);
 
   let systemMapPanel: SystemMapPanel | null = null;
+  // Built lazily so a session without mall wiring (editor preview, offline) pays nothing.
+  let mallPanel: HaloBandMall | null = null;
 
   const navButtons = Array.from(
     elements.rootEl.querySelectorAll<HTMLButtonElement>('[data-haloband-tab]'),
@@ -86,6 +91,12 @@ export function createHaloBand(
   const shipNavBtn = elements.rootEl.querySelector<HTMLButtonElement>(
     '[data-haloband-tab="ship"]',
   );
+  const mallNavBtn = elements.rootEl.querySelector<HTMLButtonElement>(
+    '[data-haloband-tab="mall"]',
+  );
+  // No mall callbacks means this build has no storefront; hide the tab rather than show
+  // a panel that can never load.
+  if (!callbacks.mall) mallNavBtn?.classList.add('is-hidden');
 
   function refreshBindings(): void {
     const bindings = loadGameSettings().input.mouseKeyboard.bindings;
@@ -128,6 +139,18 @@ export function createHaloBand(
     if (tab === 'home') renderHome();
     if (tab === 'ship') renderShipStatus();
     if (tab === 'inventory') renderInventory();
+    if (tab === 'mall' && callbacks.mall) {
+      mallPanel ??= createHaloBandMall(
+        {
+          balanceEl: elements.mallBalanceEl,
+          storeEl: elements.mallStoreEl,
+          packsEl: elements.mallPacksEl,
+          noticeEl: elements.mallNoticeEl,
+        },
+        callbacks.mall,
+      );
+      mallPanel.refresh();
+    }
     if (tab === 'map') {
       systemMapPanel ??= createSystemMapPanel(elements.systemMapHostEl);
       systemMapPanel.refresh();
@@ -281,6 +304,8 @@ export function createHaloBand(
       }
       systemMapPanel?.dispose();
       systemMapPanel = null;
+      mallPanel?.dispose();
+      mallPanel = null;
     },
     isOpen() {
       return open;

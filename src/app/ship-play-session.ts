@@ -37,6 +37,8 @@ import {
 export interface ShipSandboxSessionHandle {
   /** True when the prefab is walkable; false means hull-only preview. */
   walkable: boolean;
+  /** True when the hull is boarded from the ground instead of a deck. */
+  exteriorEntry: boolean;
   /** One-line status for the caller's banner / bar. */
   hint: string;
   setPaused: (paused: boolean) => void;
@@ -191,7 +193,8 @@ export async function startShipSandboxSession(
   };
   const listeners = new AbortController();
 
-  const { doc, prefabApplied, walkable, hint } = await resolveSandboxPrefab(options);
+  const { doc, prefabApplied, walkable, exteriorEntry, hint } =
+    await resolveSandboxPrefab(options);
 
   // Editor Play hosts chrome in `#editor-play-host`; a body mount would leave
   // that host as an opaque overlay swallowing clicks.
@@ -236,6 +239,7 @@ export async function startShipSandboxSession(
   const session = buildShipSandboxSession({
     prefabId: options.prefabId,
     walkable,
+    exteriorEntry,
     doc,
     prefabApplied,
     ship: visuals.ship,
@@ -286,6 +290,7 @@ export async function startShipSandboxSession(
   startShipSandboxLoop(session);
   return {
     walkable,
+    exteriorEntry,
     hint,
     setPaused: (paused) => {
       session.externallyPaused = paused;
@@ -317,5 +322,5 @@ export async function startShipPlaySession(prefabId: string): Promise<void> {
       window.location.href = editorReturnUrl;
     },
   });
-  mountBanner(prefabId, session.hint, !session.walkable);
+  mountBanner(prefabId, session.hint, !session.walkable && !session.exteriorEntry);
 }

@@ -6,7 +6,7 @@ import rehypeKatex from 'rehype-katex';
 
 const config: Config = {
   title: 'ClaudeCitizen',
-  tagline: 'Browser-based space sandbox',
+  tagline: 'AsteronEngine editor, web build target, and Rust backend',
   favicon: 'img/claudecitizen-logo-transparent.png',
 
   future: {

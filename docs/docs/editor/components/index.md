@@ -42,23 +42,23 @@ Some types allow only one per document — the frames (`station-frame`, `ship-fr
 | [Point light](./point-light) | Omnidirectional light source |
 | [Area light](./area-light) | Rectangular soft panel light |
 | [Spot light](./spot-light) | Directional cone beam |
-| `particle-system` | Unity-style particle emitter — modules for emission, shape, velocity, color, size, trails, collision |
-| `sound` | Positional audio emitter (station and ship kinds) |
+| [Particle system](./particle-system) | Unity-style particle emitter — modules for emission, shape, velocity, color, size, trails, collision |
+| [Sound](./sound) | Positional audio emitter (station and ship kinds) |
 
 ### Scene
 
 These components only appear on scene documents, and they decide what the scene
-*is*. See [Building scenes](../building-scenes).
+*is*. See [Scene components](../scene-components) and [Building scenes](../building-scenes).
 
 | Component | Summary |
 | --- | --- |
-| `game-manager` | System, planet, and spawn mode for the scene |
-| `planet` | Planet document reference |
-| `player-start` | Spawn pose and mode |
-| `prefab-instance` | Places a reusable prefab in the scene |
-| `ui-screen` | Mounts title / login / character-create / loading UI |
-| `scene-link` | Scene transition target (`auto` + `delaySeconds` for timed hops) |
-| `instanced-scene` | Per-player content such as habs and hangars |
+| [game-manager](../scene-components#game-manager) | System, planet, and spawn mode for the scene |
+| [planet](../scene-components#planet) | Planet document reference |
+| [player-start](../scene-components#player-start) | Spawn pose and mode |
+| [prefab-instance](../scene-components#prefab-instance) | Places a reusable prefab in the scene |
+| [ui-screen](../scene-components#ui-screen) | Mounts title / login / character-create / loading UI |
+| [scene-link](../scene-components#scene-link) | Scene transition target (`auto` + `delaySeconds` for timed hops) |
+| [instanced-scene](../scene-components#instanced-scene) | Per-player content such as habs and hangars |
 
 ### Station
 
@@ -67,13 +67,14 @@ These components only appear on scene documents, and they decide what the scene
 | [Station frame](./station-frame) | Orbital placement origin (auto on save) |
 | [Spawn point](./spawn-point) | Player spawn location and facing |
 | [Elevator](./elevator) | Floor-to-floor travel between paired markers |
+| [Ladder](./ladder) | Climbable rail — foot marker, +Y up, +Z step-off |
 | [Hangar pad](./hangar-pad) | Ship parking spot inside a hangar |
 | [AVMS terminal](./avms-terminal) | Opens the vehicle management UI |
 | [Weapon Shop](./weapon-shop) | Gaze + F vendor screen — buy weapons and ammo for ARC |
 | [Outfitters](./outfitters) | Gaze + F vendor screen — buy backpacks / gear for ARC |
 | [Food Shop](./food-shop) | Gaze + F vendor screen — buy consumable food |
 | [Drinks Shop](./drinks-shop) | Gaze + F vendor screen — buy drinks |
-| [Canteen](./canteen) | Refill station for drink containers |
+| [Canteen](./canteen) | Gaze + F vendor — buy food and drink consumables |
 
 ### Station NPCs
 
@@ -82,9 +83,9 @@ characters are placed directly. Definitions live in `src/npc/catalog.ts`.
 
 | Component | Summary |
 | --- | --- |
-| `npc-spawner` | Seeds an ambient population that walks a waypoint route group |
-| `npc-waypoint` | A node in the walkable route graph |
-| `npc-placement` | A specific named or service character at a fixed spot |
+| [NPC spawner](./npc-spawner) | Seeds an ambient population that walks a waypoint route group or free-roams a disc |
+| [NPC waypoint](./npc-waypoint) | A node in the walkable route graph |
+| [NPC placement](./npc-placement) | A specific named or service character at a fixed spot |
 
 Station NPCs are cosmetic and non-authoritative: they do not collide with the
 player, hold inventory, or persist. Promote them to backend cell entities before
@@ -98,11 +99,11 @@ adding any of that.
 | --- | --- |
 | [Prop frame](./prop-frame) | Placement origin for hangar decorations |
 | [Item frame](./item-frame) | Origin for world pickup/drop visuals |
+| [Equipment socket](./equipment-socket) | Named attachment point for equipped items |
+| [Drawn grip](./drawn-grip) | Where the character's hands hold a drawn weapon |
 | [Muzzle flash](./muzzle-flash) | Firearm flash origin; local +Z is bore forward |
 | [Barrel end](./barrel-end) | Firearm shot origin and bore direction |
 | [Weapon combat](./weapon-combat) | Fire/reload/dry audio and hit-decal assets |
-| `equipment-socket` | Named attachment point on a character for equipped items |
-| `drawn-grip` | Where the character's hands hold a drawn weapon |
 
 → [Props and items](../props-and-items)
 
@@ -113,10 +114,12 @@ adding any of that.
 | [Ship frame](./ship-frame) | Flight body anchor (auto on save) |
 | [Ship controller](./ship-controller) | Singleton hull wiring — stats, gear, ramp, doors, seats |
 | [Ship door](./ship-door) | F-key articulated door / cubby (radial or raycast) |
+| [Ship entry](./ship-entry) | Ground-level board circle for exterior-entry hulls (no deck walk) |
 | [Bed](./bed) | F-key bunk — lie down, head look, Hold Y to get up (no flight) |
 | [Entertainment System](./entertainment-system) | Bunk mini-TV — gaze + F opens Docs / YouTube launcher |
+| [Cockpit control](./cockpit-control) | Gaze + LMB control in the cockpit (gear, ramp) while free-looking |
 | [Cockpit Stat](./cockpit-stat) | Always-on pilot instrument (speed number + bar; boost-aware) |
-| `cockpit-control` | Gaze + LMB control in the cockpit (gear, ramp) while free-looking |
+| [Ladder](./ladder) | Climbable rail on decks |
 | [Collider](./collider) | Deck floors, ramp, doors, hull blocking |
 
 → Workflow details in [Ship authoring](../ship-authoring)

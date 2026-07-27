@@ -3,6 +3,7 @@ import {
   addColliderShapeMenuEntries,
   addColliderToEntities,
   addColliderToGlbNodes,
+  buildCreateObjectMenu,
   buildEntityComponentsSubmenu,
   buildGlbAuthoringMenu,
   collectComponentTypesOnEntities,
@@ -30,6 +31,7 @@ export type HierarchyMenusArgs = {
   createPrefab: (entityId: string, kind: PrefabKind) => Promise<void>;
   filterByItemName: (name: string) => void;
   spawnPositionForEntity: (entityId: string) => (() => Vec3 | null) | undefined;
+  getViewFocusPosition: HierarchyPanelOptions['getViewFocusPosition'];
   getGlbNodePrefabPosition: HierarchyPanelOptions['getGlbNodePrefabPosition'];
   getGlbNodeBounds: HierarchyPanelOptions['getGlbNodeBounds'];
   onDuplicateGlbNode: HierarchyPanelOptions['onDuplicateGlbNode'];
@@ -45,11 +47,28 @@ export function useHierarchyMenus(args: HierarchyMenusArgs) {
     createPrefab,
     filterByItemName,
     spawnPositionForEntity,
+    getViewFocusPosition,
     getGlbNodePrefabPosition,
     getGlbNodeBounds,
     onDuplicateGlbNode,
     onExtractGlbNode,
   } = args;
+
+  /**
+   * "Create" submenu for a parent. Spawns at the selected GLB node when one is
+   * sub-selected, otherwise at what the Scene view is centred on.
+   */
+  const createObjectEntries = useCallback(
+    (parentId: string | null): ContextMenuEntry[] => {
+      const nodePosition = parentId
+        ? (spawnPositionForEntity(parentId)?.() ?? null)
+        : null;
+      const position =
+        nodePosition ?? getViewFocusPosition?.(parentId) ?? undefined;
+      return buildCreateObjectMenu(store, parentId, position);
+    },
+    [getViewFocusPosition, spawnPositionForEntity, store],
+  );
 
 const entityMenuEntries = useCallback(
   (entity: EditorEntity): ContextMenuEntry[] => {
@@ -108,6 +127,7 @@ const entityMenuEntries = useCallback(
     return [
       { label: 'Add Child Empty', action: () => addEmptyTo(entity.id) },
       { label: 'Add Child Box', action: () => addBoxTo(entity.id) },
+      { label: 'Create Child', children: createObjectEntries(entity.id) },
       {
         label: 'Move To',
         panel: () => {
@@ -145,6 +165,7 @@ const entityMenuEntries = useCallback(
     addBoxTo,
     addEmptyTo,
     beginRename,
+    createObjectEntries,
     createPrefab,
     filterByItemName,
     spawnPositionForEntity,
@@ -226,5 +247,5 @@ const glbMenuEntries = useCallback(
   ],
 );
 
-  return { entityMenuEntries, glbMenuEntries };
+  return { createObjectEntries, entityMenuEntries, glbMenuEntries };
 }

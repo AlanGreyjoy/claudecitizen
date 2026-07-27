@@ -12,6 +12,8 @@ import {
   DEFAULT_STARHOPPER_RAMP_HINGE,
   type ShipCameraBounds,
   type ShipDoorSpec,
+  type ShipEntryMode,
+  type ShipEntrySpec,
   type CockpitControlSpec,
   type CockpitStatSpec,
   type EntertainmentSystemSpec,
@@ -62,11 +64,15 @@ const DEFAULT_ES_MAX_DISTANCE = 2;
 const DEFAULT_ES_SCREEN_WIDTH = 0.55;
 const DEFAULT_ES_SCREEN_HEIGHT = 0.32;
 const DEFAULT_COCKPIT_STAT_MAX_DISTANCE = 3.5;
+const DEFAULT_SHIP_ENTRY_RADIUS = 3.0;
+const DEFAULT_SHIP_ENTRY_LABEL = "ship";
 
 interface CollectedShip {
   hullUrl: string | null;
   hullNodeOverrides: PrefabNodeOverride[] | null;
   restHeight: number | null;
+  entry: ShipEntryMode;
+  entryPoints: ShipEntrySpec[];
   spec: Partial<ShipSpec>;
   doors: ShipDoorSpec[];
   seats: ShipSeatSpec[];
@@ -382,6 +388,7 @@ function bakeFromShipController(
   transforms: Map<string, EntityWorldTransform>,
   out: CollectedShip,
 ): void {
+  out.entry = controller.entry ?? "interior";
   bakeControllerHull(hull, controller, out);
   bakeControllerGear(controller, out);
   bakeControllerRamp(controller, transforms, out);
@@ -923,6 +930,34 @@ function collectCockpitControls(
   }
 }
 
+/** Walks the entity tree for ship-entry markers (works with ship-controller hulls). */
+function collectShipEntries(
+  entity: PrefabEntity,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  for (const component of entity.components ?? []) {
+    if (component.type !== "ship-entry") continue;
+    const point = resolveEntityShipPoint(entity.id, transforms);
+    if (!point) {
+      console.warn(`Ship entry marker entity "${entity.id}" has no transform.`);
+      continue;
+    }
+    if (out.entryPoints.some((spec) => spec.id === entity.id)) continue;
+    out.entryPoints.push({
+      id: entity.id,
+      label: component.label || DEFAULT_SHIP_ENTRY_LABEL,
+      seatId: component.seatEntityId ?? null,
+      right: point.right,
+      forward: point.forward,
+      radius: component.radius ?? DEFAULT_SHIP_ENTRY_RADIUS,
+    });
+  }
+  for (const child of entity.children ?? []) {
+    collectShipEntries(child, transforms, out);
+  }
+}
+
 /** Walks the entity tree for cockpit-stat markers (works with ship-controller hulls). */
 function collectCockpitStats(
   entity: PrefabEntity,
@@ -1090,6 +1125,8 @@ function createEmptyCollectedShip(): CollectedShip {
     hullUrl: null,
     hullNodeOverrides: null,
     restHeight: null,
+    entry: "interior",
+    entryPoints: [],
     spec: {},
     doors: [],
     seats: [],
@@ -1126,6 +1163,7 @@ function populateCollectedShipFromPrefab(
   collectCockpitStats(doc.root, transforms, out);
   collectEntertainmentSystems(doc.root, transforms, out);
   collectShipDoors(doc.root, transforms, out);
+  collectShipEntries(doc.root, transforms, out);
   collectBeds(doc.root, transforms, out);
   collectLadders(doc.root, transforms, out);
 }
@@ -1159,6 +1197,7 @@ function shipPrefabHasContent(out: CollectedShip): boolean {
     out.seats.length > 0 ||
     out.beds.length > 0 ||
     out.rampInteracts.length > 0 ||
+    out.entryPoints.length > 0 ||
     Object.keys(out.spec).length > 0
   );
 }
@@ -1201,6 +1240,29 @@ function resolvePilotAnchors(out: CollectedShip): {
   };
 }
 
+/**
+ * Board circles for an exterior-entry hull. An unauthored ship still boards:
+ * the pilot seat's ground projection stands in until a `ship-entry` marker is
+ * placed, so a bare hull is testable the moment Entry Mode flips.
+ */
+function resolveEntryPoints(
+  out: CollectedShip,
+  pilotSeat: ShipLayout["pilotSeat"],
+): ShipEntrySpec[] {
+  if (out.entry !== "exterior") return out.entryPoints;
+  if (out.entryPoints.length > 0) return out.entryPoints;
+  return [
+    {
+      id: "entry-pilot-fallback",
+      label: DEFAULT_SHIP_ENTRY_LABEL,
+      seatId: null,
+      right: pilotSeat.right,
+      forward: pilotSeat.forward,
+      radius: DEFAULT_SHIP_ENTRY_RADIUS,
+    },
+  ];
+}
+
 async function finalizeShipLayout(
   doc: PrefabDocument,
   out: CollectedShip,
@@ -1215,13 +1277,15 @@ async function finalizeShipLayout(
   );
   await preloadMeshColliders(colliders);
   validateMeshColliders(colliders);
-  if (out.hasController && colliders.length === 0) {
+  if (out.entry !== "exterior" && out.hasController && colliders.length === 0) {
     console.warn(
       `Ship prefab "${doc.id}" uses ship-controller but has no deck colliders; the interior is not walkable yet.`,
     );
   }
   return {
     spec,
+    entry: out.entry,
+    entryPoints: resolveEntryPoints(out, pilotSeat),
     hullUrl: out.hullUrl,
     hullNodeOverrides: out.hullNodeOverrides ?? undefined,
     restHeightMeters: out.restHeight,

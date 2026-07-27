@@ -14,8 +14,8 @@ Set the kind in the toolbar dropdown before authoring gameplay markers.
 
 | Kind | Frame component (auto on save) | Primary use | Play preview |
 | --- | --- | --- | --- |
-| **station** | `station-frame` | Orbital station interiors | `?stationPrefab=<id>` |
-| **ship** | `ship-frame` | Flyable player ships | `?shipPrefab=<id>` |
+| **station** | `station-frame` | Orbital station interiors | Open prefab → **F6** |
+| **ship** | `ship-frame` | Flyable player ships | Ship tab **Test** (Pad / Planet) or **F6** |
 | **site** | _(none)_ | Surface outposts, landmarks, POIs | _(future)_ |
 | **prop** | `prop-frame` | Hangar/apartment decorations | _(catalog only)_ |
 | **item** | `item-frame` | Inventory item world visuals | _(catalog only)_ |

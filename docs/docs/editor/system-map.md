@@ -58,8 +58,15 @@ Planet terrain still lives in `src/world/planets/data/`. Station interiors still
 
 ## Relationship to play
 
-Play loads a system via `?systemId=` (default `default`) and places stations whose parent is the **active** planet (`?planetId=`). Moving stations on this map and reloading play updates their orbital bearings. Only one planet terrain is active at a time; switching planets later will re-bind which stations are local.
+Playable scenes select a system through the scene's `game-manager` component
+(`systemId` / `planetId` / spawn mode). Scenes load and switch **in-process** via
+the scene host — never by reloading the page with new URL params.
 
-The primary station (matched by `?stationPrefab=` when possible) is fully walkable. Other stations on the same planet render as visual roots without a second physics world.
+Stations parented to the **active** planet spawn at orbital bearings from their
+System Map `offsetMeters`. The primary station (matched by the scene's station
+`prefab-instance` when possible) is fully walkable. Other stations on the same
+planet render as visual roots without a second physics world. Stations parented
+to inactive planets are not spawned until that planet is active.
 
-See also: [Planet authoring](./planet-authoring), [Station authoring](./station-authoring), [Play](../play).
+See also: [Planet authoring](./planet-authoring), [Station authoring](./station-authoring),
+[Scene components](./scene-components), [Controls](../play).

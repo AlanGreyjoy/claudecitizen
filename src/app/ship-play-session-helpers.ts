@@ -226,6 +226,7 @@ export function createSandboxShipVisuals(
 export function buildShipSandboxSession(options: {
   prefabId: string;
   walkable: boolean;
+  exteriorEntry: boolean;
   doc: PrefabDocument | null;
   prefabApplied: boolean;
   ship: FlightBody;
@@ -243,6 +244,7 @@ export function buildShipSandboxSession(options: {
   return {
     prefabId: options.prefabId,
     walkable: options.walkable,
+    exteriorEntry: options.exteriorEntry,
     doc: options.doc,
     prefabApplied: options.prefabApplied,
     mode: options.walkable ? 'deck' : 'ground',

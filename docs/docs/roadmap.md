@@ -30,7 +30,7 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Earth-scale cube-sphere planet (Asteron) with deterministic seeded terrain
 - [x] Layered noise — continents, ridged mountains, hills, lake basins
 - [x] River valleys carved from procedural noise fields
-- [x] Biome classification and terrain texture splatting
+- [x] Biome classification and baked per-face palette colors (flat-shaded tiles)
 - [x] Adaptive quadtree LOD with horizon culling
 - [x] Web Worker tile meshing + IndexedDB disk cache
 - [x] Foot-surface LOD sync (terrain mesh ↔ character controller)
@@ -42,7 +42,7 @@ Living checklist — not a contract. Priorities shift with the vibe.
 
 ## Flight & ships
 
-- [x] Inertial ship physics — radial gravity, drag, boost, brake, hover assist
+- [x] Inertial ship physics — thruster-only altitude (no airborne gravity), drag, boost, brake, landing clamp
 - [x] Seamless takeoff, orbit, and landing (no loading screens)
 - [x] Pirate ship GLTF with walkable deck and landing pad
 - [ ] Additional ship hulls and interiors
@@ -68,8 +68,11 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Server-backed catalog — ships, props, items, weapons, backpacks, wearables
 - [x] Station shops — weapons, food, drinks, consumables
 - [x] Ammunition stacks and reload consumption
-- [x] Crafting and resource gathering
 - [x] Hangar / apartment build mode with placeable props
+- [x] AsteronCredits hard currency with an append-only audit ledger
+- [x] Item Mall — operator-curated storefront priced in AsteronCredits
+- [x] Stripe Checkout with signature-verified webhook fulfillment
+- [ ] Crafting and resource gathering
 - [ ] Trading, cargo hauling, and price simulation
 - [ ] NPC-driven contracts
 

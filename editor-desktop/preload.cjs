@@ -34,5 +34,6 @@ contextBridge.exposeInMainWorld(
     showProjectInFolder: (projectRoot) =>
       ipcRenderer.invoke('projects:showInFolder', projectRoot),
     returnToProjects: () => ipcRenderer.invoke('projects:returnToHub'),
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   }),
 );

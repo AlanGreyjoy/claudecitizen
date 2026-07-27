@@ -12,6 +12,10 @@ const DISCOVERY_DIR = join(homedir(), '.asteron');
 const DISCOVERY_PATH = join(DISCOVERY_DIR, 'agent.json');
 const HOST = '127.0.0.1';
 const REQUEST_TIMEOUT_MS = 30_000;
+const DEFAULT_CAPTURE_MAX_WIDTH = 1280;
+const MIN_CAPTURE_MAX_WIDTH = 320;
+const MAX_CAPTURE_MAX_WIDTH = 1920;
+const CAPTURE_JPEG_QUALITY = 75;
 
 /**
  * @typedef {object} AgentServerDeps
@@ -121,6 +125,100 @@ export function createAgentServer(deps) {
     return deps.requestRenderer(kind, params);
   }
 
+  function clampCaptureMaxWidth(raw) {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n)) return DEFAULT_CAPTURE_MAX_WIDTH;
+    return Math.min(
+      MAX_CAPTURE_MAX_WIDTH,
+      Math.max(MIN_CAPTURE_MAX_WIDTH, Math.floor(n)),
+    );
+  }
+
+  /**
+   * @param {unknown} value
+   * @returns {{ x: number, y: number, width: number, height: number } | null}
+   */
+  function parseCaptureRect(value) {
+    if (!value || typeof value !== 'object') return null;
+    const rect = /** @type {Record<string, unknown>} */ (value);
+    const x = Number(rect.x);
+    const y = Number(rect.y);
+    const width = Number(rect.width);
+    const height = Number(rect.height);
+    if (![x, y, width, height].every((n) => Number.isFinite(n))) return null;
+    if (width <= 0 || height <= 0) return null;
+    return {
+      x: Math.floor(x),
+      y: Math.floor(y),
+      width: Math.floor(width),
+      height: Math.floor(height),
+    };
+  }
+
+  async function handleCaptureViewport(maxWidthRaw) {
+    const win = deps.getEditorWindow();
+    if (!win || win.isDestroyed()) {
+      const err = new Error('AsteronEngine editor workspace is not open.');
+      err.status = 503;
+      err.code = 'editor_unavailable';
+      throw err;
+    }
+
+    const target = await liveOrThrow('capture_viewport_target');
+    if (!target || typeof target !== 'object') {
+      const err = new Error('Viewport capture target missing.');
+      err.status = 409;
+      err.code = 'viewport_unavailable';
+      throw err;
+    }
+
+    const targetObj = /** @type {Record<string, unknown>} */ (target);
+    const rect = parseCaptureRect(targetObj.rect);
+    if (!rect) {
+      const err = new Error('Viewport capture rect is empty or invalid.');
+      err.status = 409;
+      err.code = 'viewport_unavailable';
+      throw err;
+    }
+
+    let image;
+    try {
+      image = await win.webContents.capturePage(rect);
+    } catch (error) {
+      const err = new Error(
+        `Failed to capture viewport: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      err.status = 500;
+      err.code = 'capture_failed';
+      throw err;
+    }
+
+    if (!image || image.isEmpty()) {
+      const err = new Error('Viewport capture returned an empty image.');
+      err.status = 500;
+      err.code = 'capture_failed';
+      throw err;
+    }
+
+    const maxWidth = clampCaptureMaxWidth(maxWidthRaw);
+    const size = image.getSize();
+    if (size.width > maxWidth) {
+      const height = Math.max(1, Math.round((size.height * maxWidth) / size.width));
+      image = image.resize({ width: maxWidth, height, quality: 'better' });
+    }
+
+    const finalSize = image.getSize();
+    return {
+      source: targetObj.source === 'play' ? 'play' : 'scene',
+      tab: typeof targetObj.tab === 'string' ? targetObj.tab : null,
+      playing: Boolean(targetObj.playing),
+      width: finalSize.width,
+      height: finalSize.height,
+      mimeType: 'image/jpeg',
+      data: image.toJPEG(CAPTURE_JPEG_QUALITY).toString('base64'),
+    };
+  }
+
   async function handleSession() {
     const repository = deps.getRepository();
     const base = {
@@ -201,6 +299,11 @@ export function createAgentServer(deps) {
       }
       if (method === 'GET' && path === '/agent/v1/play_state') {
         json(res, 200, await liveOrThrow('play_state'));
+        return;
+      }
+      if (method === 'GET' && path === '/agent/v1/capture_viewport') {
+        const maxWidth = url.searchParams.get('maxWidth') ?? DEFAULT_CAPTURE_MAX_WIDTH;
+        json(res, 200, await handleCaptureViewport(maxWidth));
         return;
       }
       if (method === 'GET' && path === '/agent/v1/list_scenes') {

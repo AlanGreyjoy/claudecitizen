@@ -6,7 +6,7 @@ description: Singleton ship wiring on the hull entity.
 
 # Ship controller
 
-One **ship-controller** singleton on the hull GLB entity replaces the older scattered ship components (`ship-stats`, `ship-gear`, `ship-ramp`, `ship-door`, `pilot-seat`, `ramp-interact`).
+One **ship-controller** singleton on the hull GLB entity replaces the older scattered ship components (`ship-stats`, `ship-gear`, `ship-ramp`, `ship-hull`, `pilot-seat`, `ramp-interact`). Prefer separate **[Ship door](./ship-door)** markers for articulated doors; the controller's `doors[]` list remains for legacy wiring.
 
 | Property | Value |
 | --- | --- |
@@ -25,6 +25,7 @@ One **ship-controller** singleton on the hull GLB entity replaces the older scat
 - **seats[]** — role, entity id, eye/stand offsets
 - **cameraBounds[]** — interior camera clamp volumes
 - **deckSpawnEntityId** — optional spawn marker
+- **entry** — `interior` (default) or `exterior`; see [Entry mode](#entry-mode)
 
 Ramp / gear SFX play on intentional toggles (F interact, cockpit gaze click, sandbox **G** for gear). Auto-closing the ramp when taking off does not play audio.
 
@@ -54,17 +55,62 @@ Mass-scaled thrusters (Star Citizen–style IFCS). Acceleration ≈ thrust / mas
 | `thrustSoundVolume` | 0..1 | Thrust SFX gain (default 1) |
 | `maxHp` / `maxShields` / `shieldRegenPerSec` | — | Combat vitals |
 
-Prefab Play Mode (`?shipPrefab=` internally) and main play both use these values. Toggle **coupled / decoupled** with **Alt+C** while flying. Camera feel applies in cockpit view only (not external chase cam).
+Ship tab **Test** (Pad or Planet) and main Play both use these values. Toggle **coupled / decoupled** with **Alt+C** while flying. Camera feel applies in cockpit view only (not external chase cam).
 
 ## Child empties
 
 Place transform-only child entities for interact spots (`ramp-button-outside`, `door-cockpit`, `pilot-seat`, …) and reference them by **entity id** in the controller. Drag them with the gizmo; no per-marker components needed.
 
+### Seats
+
+A seat is an empty registered in `seats[]`. The empty is the seated character's **root**, and the avatar renders its model with the feet on that origin — so the marker belongs **on the deck under the chair, not on the cushion**.
+
+| Field | Meaning |
+| --- | --- |
+| Marker position | Character root — floor level under the seat |
+| `role` | `pilot` flies; `copilot` / `turret` / `passenger` are seated only |
+| `eye` | Offset from the marker to the cockpit camera (scene axes; default `0, 0.87, 0.25`) |
+| `stand` | Get-up spot beside the chair (scene XZ; default `0, −1.55`) |
+| `interactRadius` | Reach for the "take the seat" prompt (default 1.45) |
+
+:::caution Tune first-person with `eye`, not the marker
+
+Raising the marker to make the cockpit view feel right lifts the **whole body** with it — the character ends up floating above the chair and the sitting animation reads as sitting on top of the seat. The marker only sets where the body goes. Put it on the floor, then raise `eye.y` until the view sits where you want it.
+
+:::
+
+### Seat gizmos
+
+The referenced empty carries no component of its own, so the viewport draws its gizmo from the controller reference — it appears the moment you drop the empty into the seat list, and disappears when you remove it.
+
+| Part | Meaning |
+| --- | --- |
+| Flat disc + ring at the marker | Character root; keep this on the deck |
+| Sphere at the top of the stem | The `eye` point — where the cockpit camera lands |
+| Stem | The `eye` offset you are authoring |
+| Flat ring off to the side | `stand` — get-up spot |
+
+Colour follows the role: **pilot** green, **copilot** blue, **turret** orange, **passenger** grey. Drag the empty with the gizmo and the whole seat marker follows.
+
+## Entry mode
+
+`entry` decides how the player reaches the pilot seat.
+
+| Value | Behaviour |
+| --- | --- |
+| `interior` (default) | Board the ramp, walk the deck in ship-local Rapier, sit. Needs deck colliders and a deck spawn hint. |
+| `exterior` | No walkable interior. Stand on the ground beside the parked hull inside a **[Ship entry](./ship-entry)** circle and press **F** to take the pilot seat; leaving the seat steps you back onto the ground. |
+
+Use `exterior` for open-frame hulls — hovercraft, buggies, single-seat fighters — anything the player never walks around inside. It changes what the Ship tab validates: the "no deck colliders" and "no deck spawn hint" blockers disappear, and a **pilot-role seat becomes required** instead (there is no deck to fall back to).
+
+`exterior` skips deck Rapier entirely, so ramp and door colliders are never consulted for locomotion. Gear, ramp, and door *animation* still play.
+
 ## Walking
 
-Deck movement uses **collider** components on the hull (box floors, mesh ramp/doors). Walk zones are no longer required for new ships.
+Deck movement uses **collider** components on the hull (box floors, mesh ramp/doors). Walk zones are no longer required for new ships. Exterior-entry ships skip this entirely.
 
 ## See also
 
 - [Ship authoring](../ship-authoring)
+- [Ship entry](./ship-entry)
 - [Collider](./collider)

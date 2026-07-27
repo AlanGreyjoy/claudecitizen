@@ -24,6 +24,7 @@ import {
   UserOwnedShipsTable,
   UserPlayerDetails,
 } from './UserDetailSections';
+import { UserCreditsCard } from './UserCreditsCard';
 import { formatArc, formatDate, normalizeSearchQuery } from './utils';
 
 export function UsersPanel(): ReactElement {
@@ -262,6 +263,7 @@ export function UserDetailPanel({ userId }: { userId: string }): ReactElement {
         </dl>
       </AdminCard>
       <UserOwnedShipsTable user={user} />
+      <UserCreditsCard user={user} onAuthError={onAuthError} />
       <UserAssignShipCard
         user={user}
         shipDefinitions={shipDefinitions}

@@ -6,6 +6,7 @@ import type {
   CockpitControlAction,
   CockpitStatKind,
   PrefabNodeOverride,
+  ShipEntryMode,
 } from "../world/prefabs/schema";
 import type { PrefabSoundSpec } from "../world/prefabs/sound-runtime";
 
@@ -219,7 +220,7 @@ export interface ShipBedSpec {
 }
 
 /** Cockpit look-at control baked from a cockpit-control marker. */
-export type { CockpitControlAction, CockpitStatKind };
+export type { CockpitControlAction, CockpitStatKind, ShipEntryMode };
 
 export interface CockpitControlSpec {
   id: string;
@@ -268,6 +269,23 @@ export interface EntertainmentSystemSpec {
   screenHeight: number;
 }
 
+/**
+ * Ground-level board circle for an exterior-entry ship, baked from a
+ * `ship-entry` marker (or synthesised under the pilot seat when none is
+ * authored). Coordinates are ship-local right/forward meters.
+ */
+export interface ShipEntrySpec {
+  /** Prefab entity id of the marker, or a synthetic id for the fallback. */
+  id: string;
+  /** Prompt name ("Press F — board {label}"). */
+  label: string;
+  /** Seat spec id this entry seats you in; null = primary pilot seat. */
+  seatId: string | null;
+  right: number;
+  forward: number;
+  radius: number;
+}
+
 export interface ShipCameraBounds {
   id: string;
   minRight: number;
@@ -286,6 +304,13 @@ export interface ShipCameraBounds {
 export interface ShipLayout {
   /** Combat, speed, and articulation tuning baked from ship-stats / gear / ramp. */
   spec: ShipSpec;
+  /**
+   * `interior` walks the deck to the seat; `exterior` boards from the ground
+   * for open-frame hulls with no walkable interior.
+   */
+  entry: ShipEntryMode;
+  /** Ground-level board circles. Only consulted when `entry` is "exterior". */
+  entryPoints: ShipEntrySpec[];
   /** GLB url for the flyable hull; null = built-in Phobos Starhopper. */
   hullUrl: string | null;
   /** Hull GLB node overrides — must match collider bake for aligned render. */
@@ -331,6 +356,8 @@ export interface ShipLayout {
 /** Minimal fallback when a ship prefab is missing or not yet loaded. */
 export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   spec: DEFAULT_SHIP_SPEC,
+  entry: "interior",
+  entryPoints: [],
   hullUrl: null,
   restHeightMeters: 3.16,
   doors: [],
@@ -407,4 +434,12 @@ export function getShipRestHeightMeters(): number {
 /** True when the active ship has deck colliders for Rapier walking. */
 export function usesColliderDeck(): boolean {
   return getShipLayout().colliders.length > 0;
+}
+
+/**
+ * True when the active ship is boarded from the ground instead of by walking
+ * a deck. Deck Rapier, deck spawn, and ramp walking are all skipped.
+ */
+export function usesExteriorEntry(): boolean {
+  return getShipLayout().entry === "exterior";
 }

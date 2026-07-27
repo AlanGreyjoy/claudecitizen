@@ -40,8 +40,8 @@ placeholders.
 
 ## Runtime character avatars
 
-Skinned Unity character exports can live under the project's
-`src/assets/protected/characters/`. The runtime keeps the tracked UAL mannequin
+Skinned Unity character exports live under the project's
+`assets/protected/characters/` (or another folder under `assets/`). The runtime keeps the tracked UAL mannequin
 as the default avatar; local exports can be selected explicitly while their
 skeleton and animation mapping is tested.
 

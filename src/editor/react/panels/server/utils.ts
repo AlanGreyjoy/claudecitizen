@@ -12,6 +12,23 @@ export function formatArc(value: number | null | undefined): string {
   return `${value.toLocaleString()} ARC`;
 }
 
+export function formatCredits(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—';
+  return `${value.toLocaleString()} AC`;
+}
+
+export function formatMoney(cents: number, currency: string): string {
+  const code = currency.toUpperCase();
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).format(
+      cents / 100,
+    );
+  } catch {
+    // Intl throws on an unrecognised currency code, which an operator can easily type.
+    return `${(cents / 100).toFixed(2)} ${code}`;
+  }
+}
+
 export function normalizeSearchQuery(query: string): string {
   return query.trim().toLowerCase();
 }
@@ -30,6 +47,8 @@ export function isTabActive(tab: AdminTab, currentTab: AdminTab, currentScene: A
     currentScene !== 'item-form' &&
     currentScene !== 'weapon-form' &&
     currentScene !== 'backpack-form' &&
-    currentScene !== 'wearable-form'
+    currentScene !== 'wearable-form' &&
+    currentScene !== 'credit-pack-form' &&
+    currentScene !== 'mall-form'
   );
 }

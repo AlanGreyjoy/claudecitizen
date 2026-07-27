@@ -1,4 +1,5 @@
 import * as RAPIER from "@dimforge/rapier3d";
+import { QUERY_GROUPS_EXCLUDE_NPCS } from "./rapier-world";
 
 /**
  * Third-person camera collision via a sphere cast against a Rapier world.
@@ -72,7 +73,7 @@ export function castCameraOcclusion(
     distance,
     true,
     undefined,
-    undefined,
+    QUERY_GROUPS_EXCLUDE_NPCS,
     options.excludeCollider,
   );
   if (!hit || !Number.isFinite(hit.time_of_impact)) return to;

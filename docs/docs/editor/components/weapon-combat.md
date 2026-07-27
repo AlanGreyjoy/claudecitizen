@@ -29,7 +29,8 @@ Do not commit protected audio or texture binaries. The component stores URL refe
 
 ## Ownership boundary
 
-This component owns presentation assets. Combat balance is configured in **Admin → Weapons**:
+This component owns presentation assets. Combat balance is configured in the
+editor **Server** tab under **Weapons**:
 
 - ammo item definition
 - magazine size and fire modes

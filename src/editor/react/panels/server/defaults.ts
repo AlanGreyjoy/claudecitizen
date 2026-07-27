@@ -1,6 +1,8 @@
 import type {
   BackpackDefinitionInput,
+  CreditPackInput,
   ItemDefinitionInput,
+  MallListingInput,
   PropDefinitionInput,
   ShipDefinitionInput,
   WeaponDefinitionInput,
@@ -85,4 +87,48 @@ export const DEFAULT_SHIP_FORM: ShipDefinitionInput = {
   shieldRegenPerSec: 25,
   maxSpeedMps: 100,
   throttleAccelMps2: 308,
+};
+
+/**
+ * Item types the Item Mall is allowed to sell. Mirrors `SELLABLE_ITEM_TYPES` in
+ * `backend/crates/server/src/mall.rs` — keep the two in step, or the console will offer
+ * listings the purchase endpoint rejects.
+ */
+export const MALL_SELLABLE_ITEM_TYPES: readonly string[] = ['consumable'];
+
+export const DEFAULT_CREDIT_PACK_FORM: Required<
+  Pick<
+    CreditPackInput,
+    | 'name'
+    | 'description'
+    | 'credits'
+    | 'bonusCredits'
+    | 'priceCents'
+    | 'currency'
+    | 'sortOrder'
+    | 'active'
+  >
+> & { stripePriceId: string | null; iconUrl: string | null } = {
+  name: '',
+  description: '',
+  credits: 500,
+  bonusCredits: 0,
+  priceCents: 499,
+  currency: 'usd',
+  stripePriceId: null,
+  iconUrl: null,
+  sortOrder: 0,
+  active: true,
+};
+
+export const DEFAULT_MALL_LISTING_FORM: Required<
+  Pick<MallListingInput, 'itemDefinitionId' | 'priceCredits' | 'category' | 'sortOrder' | 'featured' | 'active'>
+> & { limitPerPlayer: number | null } = {
+  itemDefinitionId: '',
+  priceCredits: 50,
+  category: 'consumable',
+  sortOrder: 0,
+  featured: false,
+  active: true,
+  limitPerPlayer: null,
 };

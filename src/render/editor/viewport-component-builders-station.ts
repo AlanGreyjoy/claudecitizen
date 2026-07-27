@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createPrefabLightObject } from "../prefabs/prefab-renderer";
+import { cloneCharacterModel } from "../characters/model-character-avatar";
 import { createParticleShapeHelper } from "../particles";
 import type { PrefabComponent } from "../../world/prefabs/schema";
 
@@ -73,6 +74,62 @@ function buildLadderHelper(
   group.add(stepOff);
   return group;
 }
+function attachNpcModelPreview(
+  group: THREE.Group,
+  proxies: readonly THREE.Object3D[],
+  modelUrl: string,
+): void {
+  void cloneCharacterModel(modelUrl)
+    .then((model) => {
+      for (const proxy of proxies) proxy.visible = false;
+      group.add(model);
+    })
+    .catch(() => {
+      console.warn(`Editor: NPC character model failed to load: ${modelUrl}`);
+    });
+}
+
+function buildNpcSpawnerHelper(
+  component: Extract<PrefabComponent, { type: "npc-spawner" }>,
+  makeHelperMesh: ViewportHelperMeshFactory,
+): THREE.Object3D | null {
+  const group = new THREE.Group();
+  const color = 0x7de7ff;
+  const radius = Math.max(0.15, component.radius);
+  const zone = makeHelperMesh(
+  new THREE.CylinderGeometry(radius, radius, 0.05, 32),
+  color,
+  0.18,
+  true,
+  );
+  zone.position.y = 0.025;
+  const body = makeHelperMesh(
+  new THREE.CapsuleGeometry(0.22, 0.75, 5, 10),
+  color,
+  0.72,
+  );
+  body.position.y = 0.7;
+  const head = makeHelperMesh(
+  new THREE.SphereGeometry(0.25, 14, 10),
+  color,
+  0.88,
+  );
+  head.position.y = 1.55;
+  if (component.modelUrl) attachNpcModelPreview(group, [body, head], component.modelUrl);
+  group.add(zone, body, head);
+  if (component.behavior === "roam" && component.roamRadius > 0) {
+    const roam = makeHelperMesh(
+      new THREE.CylinderGeometry(component.roamRadius, component.roamRadius, 0.02, 48),
+      color,
+      0.08,
+      true,
+    );
+    roam.position.y = 0.01;
+    group.add(roam);
+  }
+  return group;
+}
+
 export function createViewportStationBuilders(deps: ViewportComponentBuilderDeps): {
   buildColliderHelper: (
     component: Extract<PrefabComponent, { type: "collider" }>,
@@ -257,34 +314,6 @@ void component;
   group.add(cone, disc);
   return group;
 }
-function buildNpcSpawnerHelper(
-  component: Extract<PrefabComponent, { type: "npc-spawner" }>,
-): THREE.Object3D | null {
-  const group = new THREE.Group();
-  const color = 0x7de7ff;
-  const radius = Math.max(0.15, component.radius);
-  const zone = makeHelperMesh(
-  new THREE.CylinderGeometry(radius, radius, 0.05, 32),
-  color,
-  0.18,
-  true,
-  );
-  zone.position.y = 0.025;
-  const body = makeHelperMesh(
-  new THREE.CapsuleGeometry(0.22, 0.75, 5, 10),
-  color,
-  0.72,
-  );
-  body.position.y = 0.7;
-  const head = makeHelperMesh(
-  new THREE.SphereGeometry(0.25, 14, 10),
-  color,
-  0.88,
-  );
-  head.position.y = 1.55;
-  group.add(zone, body, head);
-  return group;
-}
 function buildNpcWaypointHelper(
   component: Extract<PrefabComponent, { type: "npc-waypoint" }>,
 ): THREE.Object3D | null {
@@ -313,6 +342,12 @@ void component;
   group.add(node, new THREE.Line(stemGeometry, stemMaterial));
   return group;
 }
+/**
+ * Preview of an authored character GLB on an NPC marker. Loads out of band and
+ * hides the proxy capsule once the model lands; a marker whose model fails to
+ * load keeps the capsule so the placement never becomes invisible.
+ */
+
 function buildNpcPlacementHelper(
   component: Extract<PrefabComponent, { type: "npc-placement" }>,
 ): THREE.Object3D | null {
@@ -330,6 +365,7 @@ function buildNpcPlacementHelper(
   0.9,
   );
   head.position.y = 1.62;
+  if (component.modelUrl) attachNpcModelPreview(group, [body, head], component.modelUrl);
   const facingGeometry = track(new THREE.BufferGeometry());
   facingGeometry.setFromPoints([
   new THREE.Vector3(0, 0.04, 0),
@@ -444,7 +480,11 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
     "sound": buildSoundHelper,
     "particle-system": buildParticleSystemHelper,
     "spawn-point": buildSpawnPointHelper,
-    "npc-spawner": buildNpcSpawnerHelper,
+    "npc-spawner": (component: PrefabComponent) =>
+      buildNpcSpawnerHelper(
+        component as Extract<PrefabComponent, { type: "npc-spawner" }>,
+        makeHelperMesh,
+      ),
     "npc-waypoint": buildNpcWaypointHelper,
     "npc-placement": buildNpcPlacementHelper,
     "elevator": buildElevatorHelper,

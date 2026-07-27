@@ -25,10 +25,12 @@ pieces with colliders and transform gizmos.
 Cold start opens the **Projects** hub. You create a new project or open an
 existing one, and only then does the editor workspace load on that project root.
 
-A project is a folder containing `asteron.project.json`, which holds the project
-name, backend URL, default scene, and build output directory. Authoring assets
-live **inside the project** (`assets/`, `src/assets/`), not in the engine
-repository. Edit these values with **File → Project Settings…**.
+A valid project folder has `package.json` and an `assets/` library. Display name,
+backend URL, default scene, and build output live in `asteron.project.json`
+(**File → Project Settings…**). Authoring assets live in the project's single
+library root `assets/` — not in the engine repository. The engine checkout's
+`src/assets/` is engine-owned only (atmosphere LUTs, skybox, brand art) and is
+reached through ESM imports, not the Project panel.
 
 ## Three layers
 
@@ -134,15 +136,19 @@ editor writes document data; it does not own gameplay logic.
 ## Doc map
 
 - [Getting started](./getting-started) — projects and first session
+- [Projects and settings](./projects-and-settings) — hub, `asteron.project.json`, backend proxy
 - [Interface](./interface) — panels, toolbar, tabs, shortcuts
 - [Building scenes](./building-scenes) — entities, transforms, GLB editing
+- [Scene components](./scene-components) — game-manager, ui-screen, scene-link, …
 - [Components](./components) — gameplay component system
 - [Station authoring](./station-authoring)
 - [Ship authoring](./ship-authoring)
 - [Props and items](./props-and-items)
+- [Base Characters](./base-characters)
 - [Material manager](./material-manager)
 - [Planet authoring](./planet-authoring)
 - [System Map](./system-map)
 - [Menu Manager](./menu-manager)
 - [Assets and GLB](./assets-and-glb)
-- [Preview and playtest](./preview-and-playtest) — Play mode and Build Web
+- [Preview and playtest](./preview-and-playtest)
+- [Build Web](./build-web) — release browser builds

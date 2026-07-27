@@ -21,6 +21,10 @@ import type { Css3dScreens } from "../screens/css3d-screens";
 import type { BuildTool } from "../station/build-tool";
 import type { WeaponCombat } from "../combat/weapon-combat";
 import type { CameraOcclusion } from "../camera/occlusion";
+import type { StationLocalPoint } from "../../world/station";
+
+/** Shared empty list so the out-of-station capsule sync allocates nothing. */
+const EMPTY_NPC_POSITIONS: readonly StationLocalPoint[] = [];
 
 export interface RenderFrameInput {
   nowMs: number;
@@ -104,14 +108,23 @@ export function renderFrame(
   input: RenderFrameInput,
 ): void {
   const { nowMs, camera, weaponPoseAiming, frameDt, dt, paused } = input;
-  ctx.stationNpcPopulation.update(STATION_SOUND_MODES.has(ctx.world.mode) ? dt : 0);
-  const stationNpcRenderStates = STATION_SOUND_MODES.has(ctx.world.mode)
-    ? annotateNpcHeadLookTowardPlayer(
-        ctx.stationNpcPopulation.getRenderStates(),
-        ctx.world.character.position,
-        ctx.world.character.up,
-      )
+  const inStation = STATION_SOUND_MODES.has(ctx.world.mode);
+  ctx.stationNpcPopulation.update(inStation ? dt : 0);
+  const stationNpcRenderStates = inStation
+    ? ctx.stationNpcPopulation.getRenderStates()
     : [];
+  // Park the kinematic capsules on the actors so the player's controller can
+  // slide along them. Outside the station the pool goes inert instead: the
+  // Rapier world is station-local, so stale capsules would sit in the walkable
+  // volume the player returns to.
+  ctx.physics?.npcBodies.sync(
+    inStation ? ctx.stationNpcPopulation.getLocalPositions() : EMPTY_NPC_POSITIONS,
+  );
+  annotateNpcHeadLookTowardPlayer(
+    stationNpcRenderStates,
+    ctx.world.character.position,
+    ctx.world.character.up,
+  );
   const remoteEntities = ctx.network?.getRemoteEntities(nowMs) ?? [];
   const activeShip = getActiveShipBody(ctx.world);
   const focus = resolveFocus(ctx, activeShip);

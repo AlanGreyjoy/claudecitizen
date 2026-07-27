@@ -19,7 +19,10 @@ No configurable fields — `{ type: "ship-frame" }` only.
 
 ## Usage
 
-Injected automatically on the root entity when you save a ship prefab. Place [Ship stats](./ship-stats), [Ship gear](./ship-gear), and [Ship ramp](./ship-ramp) alongside it on the root.
+Injected automatically on the root entity when you save a ship prefab. Author
+new ships with [Ship controller](./ship-controller) on the hull. Legacy
+[Ship stats](./ship-stats) / [Ship gear](./ship-gear) / [Ship ramp](./ship-ramp)
+components still load on old prefabs but are not in the add palette.
 
 ## See also
 

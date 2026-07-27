@@ -1,5 +1,5 @@
 import { add, cross, dot, length, normalize, scale, sub, tangentize, vec3 } from '../math/vec3';
-import { getShipLayout, getShipRestHeightMeters } from './ship-layout';
+import { getShipLayout, getShipRestHeightMeters, type ShipEntrySpec } from './ship-layout';
 import type {
   CharacterState,
   FlightBody,
@@ -107,6 +107,72 @@ export function nearShipRampOutside(
       panel.placement === 'outside' &&
       Math.hypot(local.right - panel.right, local.forward - panel.forward) <= panel.radius,
   );
+}
+
+/**
+ * Nearest ground-level board circle of an exterior-entry ship, or null.
+ * Requires the ship parked and the player standing at the gear-rest band, so
+ * you cannot board a hovering hull or reach one through a station floor.
+ */
+export function nearShipEntryPoint(
+  character: Pick<CharacterState, 'position'>,
+  ship: FlightBody,
+): ShipEntrySpec | null {
+  const layout = getShipLayout();
+  if (layout.entry !== 'exterior') return null;
+  if (!isShipParked(ship)) return null;
+  const local = worldToShipLocal(ship, character.position);
+  if (!atShipGroundLevel(local.up)) return null;
+  let best: ShipEntrySpec | null = null;
+  let bestDistance = Infinity;
+  for (const entry of layout.entryPoints) {
+    const distance = Math.hypot(local.right - entry.right, local.forward - entry.forward);
+    if (distance > entry.radius || distance >= bestDistance) continue;
+    best = entry;
+    bestDistance = distance;
+  }
+  return best;
+}
+
+/**
+ * Exterior-entry pilots step onto the ground, so leaving the seat mid-flight
+ * would drop them into empty air. Interior ships always have a deck to land
+ * on and are never gated.
+ */
+export function canLeavePilotSeat(ship: FlightBody): boolean {
+  if (getShipLayout().entry !== 'exterior') return true;
+  return isShipParked(ship);
+}
+
+/**
+ * Where an exterior-entry pilot lands when they leave the seat: standing on
+ * the ground at the board circle, facing away from the hull. Falls back to the
+ * first entry point, then to the seat-stand spot projected to ground level.
+ */
+export function getShipEntryStandPose(
+  ship: FlightBody,
+  entry: ShipEntrySpec | null,
+): Pose {
+  const layout = getShipLayout();
+  const spot = entry ??
+    layout.entryPoints[0] ?? {
+      right: layout.seatStand.right,
+      forward: layout.seatStand.forward,
+    };
+  const position = localOffsetToWorld(ship, {
+    right: spot.right,
+    up: -getShipRestHeightMeters(),
+    forward: spot.forward,
+  });
+  const outward = add(
+    scale(getShipRight(ship), spot.right),
+    scale(normalize(tangentize(ship.forward, ship.up)), spot.forward),
+  );
+  const facing =
+    length(outward) > 1e-3
+      ? normalize(tangentize(outward, ship.up))
+      : normalize(tangentize(scale(ship.forward, -1), ship.up));
+  return { forward: facing, position, up: ship.up };
 }
 
 /** Horizontal pad interest (ignores height) — stay near ship while exterior-walking. */

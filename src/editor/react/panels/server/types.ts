@@ -6,6 +6,10 @@ export type AdminTab =
   | 'weapons'
   | 'backpacks'
   | 'wearables'
+  | 'payments'
+  | 'credit-packs'
+  | 'mall'
+  | 'purchases'
   | 'settings';
 
 export type AdminScene =
@@ -24,6 +28,12 @@ export type AdminScene =
   | 'backpack-form'
   | 'wearables'
   | 'wearable-form'
+  | 'payments'
+  | 'credit-packs'
+  | 'credit-pack-form'
+  | 'mall'
+  | 'mall-form'
+  | 'purchases'
   | 'settings';
 
 export type ServerConsoleStatus = {
@@ -47,6 +57,12 @@ export type ServerRoute =
   | { scene: 'backpack-form'; backpackId: string | null }
   | { scene: 'wearables' }
   | { scene: 'wearable-form'; wearableId: string | null }
+  | { scene: 'payments' }
+  | { scene: 'credit-packs' }
+  | { scene: 'credit-pack-form'; packId: string | null }
+  | { scene: 'mall' }
+  | { scene: 'mall-form'; listingId: string | null }
+  | { scene: 'purchases' }
   | { scene: 'settings' };
 
 export function routeTab(route: ServerRoute): AdminTab {
@@ -58,6 +74,8 @@ export function routeTab(route: ServerRoute): AdminTab {
   if (route.scene === 'weapon-form') return 'weapons';
   if (route.scene === 'backpack-form') return 'backpacks';
   if (route.scene === 'wearable-form') return 'wearables';
+  if (route.scene === 'credit-pack-form') return 'credit-packs';
+  if (route.scene === 'mall-form') return 'mall';
   return route.scene;
 }
 
@@ -69,6 +87,8 @@ export function routeScene(route: ServerRoute): AdminScene {
   if (route.scene === 'weapon-form') return 'weapon-form';
   if (route.scene === 'backpack-form') return 'backpack-form';
   if (route.scene === 'wearable-form') return 'wearable-form';
+  if (route.scene === 'credit-pack-form') return 'credit-pack-form';
+  if (route.scene === 'mall-form') return 'mall-form';
   if (route.scene === 'login') return 'login';
   return route.scene;
 }

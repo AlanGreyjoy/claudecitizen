@@ -117,37 +117,6 @@ export function clearNodeComponentHelpers(node: THREE.Object3D): void {
   }
 }
 
-/**
- * Re-attach node-override component helpers for one GLB node without a full
- * scene rebuild (used when adding/removing colliders from the inspector).
- */
-export function refreshNodeOverrideComponentHelpers(args: {
-  entity: EditorEntity;
-  model: THREE.Object3D;
-  nodeName: string;
-  helpers: Pick<ViewportComponentHelpers, "buildComponentHelper">;
-  sanitizeNodeName: (name: string) => string;
-}): void {
-  const { entity, model, nodeName, helpers, sanitizeNodeName } = args;
-  const targetNode = model.getObjectByName(sanitizeNodeName(nodeName));
-  if (!targetNode) return;
-  clearNodeComponentHelpers(targetNode);
-  const override = entity.glbNodeTransforms.find(
-    (entry) => entry.nodeName === nodeName,
-  );
-  if (!override || override.components.length === 0) return;
-  for (const component of override.components) {
-    const helper = helpers.buildComponentHelper(
-      component,
-      usesEntityAssetForMeshCollider(component, entity) ? targetNode : undefined,
-    );
-    if (helper) {
-      helper.userData.editorNodeComponentHelper = true;
-      targetNode.add(helper);
-    }
-  }
-}
-
 export function attachModelObjectAnimations(
   ctx: Pick<EntityModelLoadContext, "entity" | "model" | "entityRoot">,
 ): void {

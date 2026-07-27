@@ -55,9 +55,14 @@ export function createOnFootMode(
       deps.combat.currentAnimStance(),
       weaponPoseAiming,
     );
-    if (!deps.padInterest.tryEnterShipPadInterest()) {
-      ctx.world.prompt = deps.shipSystems.handleRampOutside(input.actions.interactPressed) ?? "";
-    }
+    if (deps.padInterest.tryEnterShipPadInterest()) return;
+    const boardPrompt = deps.shipSystems.handleBoardExterior(
+      input.actions.interactPressed,
+    );
+    ctx.world.prompt =
+      boardPrompt ??
+      deps.shipSystems.handleRampOutside(input.actions.interactPressed) ??
+      "";
   }
 
   return { updateOnFootMode };

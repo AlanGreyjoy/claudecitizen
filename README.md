@@ -1,5 +1,7 @@
 # ClaudeCitizen
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/qKWdSKMRCv)
+
 ![ClaudeCitizen gameplay screenshot](docs/static/img/screenshot.png)
 
 ![AsteronEngine editor screenshot](docs/static/img/editor-screenshot.png)

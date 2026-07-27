@@ -43,6 +43,8 @@ export interface SandboxTransition {
 export interface ShipSandboxSession {
   prefabId: string;
   walkable: boolean;
+  /** Boarded from the ground (no deck): F beside the hull takes the seat. */
+  exteriorEntry: boolean;
   doc: PrefabDocument | null;
   prefabApplied: boolean;
   mode: SandboxMode;

@@ -94,6 +94,8 @@ export interface ClaudeCitizenEditorDesktopBridge {
   deleteProject: (projectRoot: string) => Promise<DesktopDeleteProjectResult>;
   showProjectInFolder: (projectRoot: string) => Promise<{ ok: true }>;
   returnToProjects: () => Promise<{ ok: true }>;
+  /** Opens an http(s) URL in the system browser. Used for hosted Stripe Checkout. */
+  openExternal: (url: string) => Promise<{ ok: true }>;
 }
 
 declare global {
@@ -104,4 +106,24 @@ declare global {
 
 export function getDesktopEditorBridge(): ClaudeCitizenEditorDesktopBridge | null {
   return window.claudeCitizenEditorDesktop ?? null;
+}
+
+/**
+ * Opens a URL outside the app.
+ *
+ * In the desktop editor this hands off to the system browser through the Electron main
+ * process; on the web build it falls back to a new tab. Returns false when neither path is
+ * available, so callers can show the URL instead of silently doing nothing.
+ */
+export function openExternalUrl(url: string): boolean {
+  const bridge = getDesktopEditorBridge();
+  if (bridge) {
+    void bridge.openExternal(url).catch(() => undefined);
+    return true;
+  }
+  if (typeof window !== 'undefined' && typeof window.open === 'function') {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    return opened !== null;
+  }
+  return false;
 }

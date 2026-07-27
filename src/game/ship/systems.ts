@@ -11,7 +11,11 @@ import {
 } from "../../player/world-state";
 import { updateShipRig } from "../../player/ship-rig";
 import { getShipLayout } from "../../player/ship-layout";
-import { nearShipRampOutside } from "../../player/ship-interaction";
+import {
+  nearShipEntryPoint,
+  nearShipRampOutside,
+} from "../../player/ship-interaction";
+import { beginSitTransition } from "../../player/transitions";
 import { playShipRampToggleSfx } from "../../player/ship-articulation-sfx";
 import { MODE_IN_SHIP } from "../../player/modes";
 import type { LoopContext } from "../loop-context";
@@ -21,6 +25,11 @@ export interface ShipSystems {
   updateShipSystems: (dt: number) => void;
   /** Ramp toggle prompt/action near the outside ramp control. */
   handleRampOutside: (interactPressed: boolean) => string | null;
+  /**
+   * Board prompt/action for exterior-entry ships — stand in the board circle
+   * beside a parked hull and take the seat without walking a deck.
+   */
+  handleBoardExterior: (interactPressed: boolean) => string | null;
 }
 
 /** Per-frame ship integration (unpiloted settle, rig, shields) + ramp control. */
@@ -62,5 +71,18 @@ export function createShipSystems(
       : deps.prompts.pressInteractPrompt("lower ramp");
   }
 
-  return { updateShipSystems, handleRampOutside };
+  function handleBoardExterior(interactPressed: boolean): string | null {
+    const entry = nearShipEntryPoint(
+      ctx.world.character,
+      getActiveShipBody(ctx.world),
+    );
+    if (!entry) return null;
+    if (interactPressed) {
+      beginSitTransition(ctx.world);
+      return "";
+    }
+    return deps.prompts.pressInteractPrompt(`board ${entry.label}`);
+  }
+
+  return { updateShipSystems, handleRampOutside, handleBoardExterior };
 }

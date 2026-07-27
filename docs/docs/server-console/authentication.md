@@ -22,7 +22,7 @@ Related server settings that affect cookies:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CLIENT_ORIGIN` | `http://localhost:4173` | Allowed browser origin for CORS and cookie scope |
+| `CLIENT_ORIGIN` | _(required in prod)_ | Allowed browser origin for CORS and cookie scope. Must match the static host that serves **File → Build Web** output. Editor traffic uses the Electron proxy instead of this origin. |
 | `COOKIE_SAME_SITE` | `lax` | SameSite attribute on `cc_admin` |
 | `COOKIE_SECURE` | `false` | Set `true` in production behind HTTPS |
 

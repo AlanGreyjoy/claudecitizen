@@ -49,14 +49,14 @@ Together they turn [Domain-Driven Design](./domain-design) and [Design Principle
 
 | Command | Purpose |
 | --- | --- |
-| `npm run lint` | Check browser and utility TypeScript under `src/` and `scripts/` |
+| `npm run lint` | Check TypeScript under `src/` and `scripts/` (see ignores below) |
 | `npm run lint:fix` | Auto-fix where rules support it (e.g. type-import style) |
 
 **Plugins:** `@eslint/js`, `typescript-eslint`, `eslint-plugin-import-x`, `eslint-plugin-sonarjs`.
 
-**Ignored paths:** `dist/`, `target/`, `backend/target/`, `docs/`, `**/*.d.ts`, `vite.config.ts`, legacy `scripts/**/*.mjs`.
+**Ignored paths:** `dist/`, `target/`, `backend/target/`, `docs/`, `**/*.d.ts`, `vite.config.ts`, `scripts/**/*.mjs`.
 
-Most project-specific rules are **warnings** (complexity, duplication) so existing code can evolve gradually. **Architectural boundaries are errors** — domain layers must not import Three.js or the DOM.
+**Architectural boundaries are errors** — domain layers must not import Three.js or the DOM. Complexity and size rules are mostly **errors** too (see thresholds below); a few scopes relax cognitive complexity to warnings.
 
 ---
 
@@ -148,13 +148,13 @@ ESLint cannot prove SRP, but it **nudges** toward [Design Principles](./design-p
 
 | Rule | Threshold |
 | --- | --- |
-| `complexity` | cyclomatic complexity ≤ 15 |
-| `max-depth` | nesting depth ≤ 4 |
-| `max-params` | ≤ 5 parameters |
-| `max-lines-per-function` | ≤ 120 lines (blank lines and comments skipped) |
-| `sonarjs/cognitive-complexity` | ≤ 15 (≤ 20 in `app/`) |
+| `complexity` | cyclomatic complexity ≤ 20 (**error**) |
+| `max-depth` | nesting depth ≤ 4 (**warn**) |
+| `max-params` | ≤ 8 parameters (**error**) |
+| `max-lines-per-function` | ≤ 120 lines (**error**; blank lines and comments skipped). Temporary ceiling **400** for `render/` and `editor/` |
+| `sonarjs/cognitive-complexity` | ≤ 20 (**error** generally; **warn** in some app/script scopes) |
 
-When a function trips multiple warnings, that is a signal to extract helpers or move logic to the owning bounded context.
+When a function trips multiple rules, extract helpers or move logic to the owning bounded context.
 
 ### SOLID (what ESLint can enforce)
 

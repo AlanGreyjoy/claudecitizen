@@ -48,6 +48,7 @@ import {
   PilotSeatFields,
   RampInteractFields,
   ShipDoorFields,
+  ShipEntryFields,
 } from './Builders5';
 import {
   CanteenFields,
@@ -114,6 +115,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'pilot-seat': field(PilotSeatFields),
   bed: field(BedFields),
   'ramp-interact': field(RampInteractFields),
+  'ship-entry': field(ShipEntryFields),
   'cockpit-control': field(CockpitControlFields),
   'entertainment-system': field(EntertainmentSystemFields),
   'weapon-shop': field(WeaponShopFields),

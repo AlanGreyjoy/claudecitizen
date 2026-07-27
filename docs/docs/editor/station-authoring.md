@@ -68,6 +68,18 @@ For doors and moving platforms:
 
 The editor viewport toolbar shows per-animation toggle buttons for preview.
 
+### ladder
+
+Place an Empty at the **foot** of the climb. Local **+Y** climbs; local **+Z** is
+the step-off side at the top. See [Ladder](./components/ladder).
+
+### NPCs
+
+- [NPC spawner](./components/npc-spawner) + [NPC waypoint](./components/npc-waypoint) graph for ambient crowds, or a spawner set to `roam` when a wander disc is enough
+- [NPC placement](./components/npc-placement) for named/service characters
+
+Cosmetic only — no player collision or persistence yet.
+
 ## Lighting
 
 Station interiors benefit from authored lights:
@@ -89,15 +101,13 @@ Lights are visual only in the editor; they serialize and render in play.
 7. Place AVMS terminals near hangar access
 8. Save and press **Play**
 
-## Preview URL
+## Preview
 
-```text
-http://localhost:4173/?stationPrefab=<prefab-id>
-```
+Open the station prefab and press **F6** (or toolbar **Play**). Play wraps the
+prefab in a throwaway stage scene and runs it in the Game view — unsaved edits
+included. Stop with **F6** / **Shift+F6**.
 
-Example: `?stationPrefab=demo-station`
-
-The procedural hand-rolled station remains the default when no prefab param is set. Prefab stations replace the visual layout; some flows (terminal/hangar-bank UI) may still use procedural hooks until full cutover.
+There is no browser URL playtest workflow. Ship the game with **File → Build Web**.
 
 ## Back to editor
 

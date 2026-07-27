@@ -17,12 +17,15 @@ import {
   createPlayGameMenu,
   createPlayHaloBand,
   createPlayHud,
+  createPlayMallCallbacks,
   createPlayPersonalInventory,
   createPlayShops,
 } from './play-session-overlays-helpers';
 
 export interface PlayOverlayEconomy {
   getArcBalance: () => number | null;
+  /** AsteronCredits — the Item Mall currency. */
+  getCreditBalance: () => number;
   getInventoryState: () => InventoryState | null;
   setArcBalance: (balance: number) => void;
   setInventoryState: (inventory: InventoryState) => void;
@@ -66,16 +69,30 @@ export async function createPlayOverlayStack(options: {
   let inventoryState: InventoryState | null = bootstrap
     ? normalizeInventoryState(bootstrap.inventory)
     : null;
+  let creditBalance = bootstrap ? bootstrap.economy.creditBalance : 0;
   let haloBand: HaloBandController | null = null;
 
   const hud = createPlayHud(dom, () => networkClient, options.renderer);
   networkClient = await connectPlayNetwork(bootstrap, hud, () => haloBand);
+  // Offline / editor-preview sessions have no bootstrap, so the Mall tab stays hidden.
+  const mallCallbacks = bootstrap
+    ? createPlayMallCallbacks({
+        getCreditBalance: () => creditBalance,
+        setCreditBalance: (balance) => { creditBalance = balance; },
+        getInventory: () => inventoryState,
+        onInventoryChanged: (inventory) => {
+          inventoryState = normalizeInventoryState(inventory);
+          personalInventory.refresh();
+        },
+      })
+    : undefined;
   haloBand = createPlayHaloBand(
     dom,
     controls,
     () => networkClient,
     () => arcBalance,
     () => inventoryState,
+    mallCallbacks,
   );
 
   const gameMenu = createPlayGameMenu(dom);
@@ -116,6 +133,7 @@ export async function createPlayOverlayStack(options: {
     networkClient,
     economy: {
       getArcBalance: () => arcBalance,
+      getCreditBalance: () => creditBalance,
       getInventoryState: () => inventoryState,
       setArcBalance: (balance) => { arcBalance = balance; },
       setInventoryState: (inventory) => { inventoryState = inventory; },

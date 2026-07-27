@@ -11,7 +11,7 @@ target* produced by **File → Build Web**, not a place features are developed.
 |---------|-------|------|
 | AsteronEngine editor | `editor.html` → `src/editor-main.ts` | Projects hub, scenes, prefabs, planets, systems, base characters, menus, Server console, Build Web |
 | Game runtime | `index.html` → `src/game-main.ts` | Scene host + play loop; loaded by in-editor Play and by the shipped release |
-| Rust backend | `backend/` | Auth, catalog, persistence, authoritative cells |
+| Rust backend | `backend/` | Auth, catalog, persistence, payments, authoritative cells |
 
 ## Key facts
 
@@ -96,7 +96,7 @@ navigation must not reload the page.
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
 - **Schema** (`src/world/prefabs/schema.ts`) defines every component type and its validator. Read this first when a component's fields are unclear.
-- **Ship runtime** (`src/world/prefabs/ship-runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, ladders, colliders). Ship doors use the `ship-door` component; bunks use the `bed` component; ladders use the `ladder` component.
+- **Ship runtime** (`src/world/prefabs/ship-runtime.ts`) flattens a ship prefab into `ShipLayout` (doors, seats, beds, ladders, colliders, entry mode + board circles). Ship doors use the `ship-door` component; bunks use the `bed` component; ladders use the `ladder` component; ground-level board points use the `ship-entry` component.
 - **Station runtime** (`src/world/prefabs/station-runtime.ts`) flattens a station prefab into `StationLayoutOverride` (spawn, elevators, ladders, hangar pads, info markers, colliders). Station doors use the `animation` component (toggled via an `interaction` component with `interactionType: "animation"` and `targetAnimationId`).
 - **Game loop** (`src/game/create-game-loop.ts`) is a thin orchestrator that composes colocated feature modules under `src/game/`. Station animation blend values (`stationAnimationStates`) live in `src/game/station/animations.ts`; the F-key interaction dispatch lives in `src/game/modes/in-station.ts`.
 
@@ -115,9 +115,14 @@ navigation must not reload the page.
 
 - Ambient populations use `npc-spawner` markers connected to an undirected graph of `npc-waypoint` markers. Named/service characters use `npc-placement`.
 - `station-runtime.ts` flattens those components into station-local NPC specs. `src/world/npc.ts` validates duplicate/missing ids, cross-floor links, missing route groups, and disconnected graphs.
-- `src/npc/station-population.ts` currently runs a deterministic, cosmetic, non-colliding local population. `src/render/main/scene/station-npcs.ts` renders it through the existing character avatar pipeline with distance activation.
+- `src/npc/station-population.ts` runs a deterministic, cosmetic local population. `src/render/main/scene/station-npcs.ts` renders it through the existing character avatar pipeline with distance activation.
 - NPC definitions and weighted populations live in `src/npc/catalog.ts`; station prefabs reference ids instead of embedding appearance data.
-- Local NPCs must remain non-authoritative. Before adding dialogue outcomes, persistence, inventory, combat, or player collision, promote NPCs to real backend cell entities and snapshot them with an explicit entity kind; do not model them as fake players.
+- **Roam motion is analytic, not physics-driven.** No character controller runs per NPC — that would cost a `computeColliderMovement` per actor per frame (~1-2 ms at the 32-actor cap) to reproduce motion the wander step already produces. Instead `physics/station-npc-capsules.ts` validates each candidate target *once* when it is picked (`sampleFloorHeight` snaps it to real floor and rejects drops past the autostep allowance; `isPathClear` sweeps a capsule along the segment), so the walk itself needs no per-frame collision. Segments are re-probed every `ROAM_RECHECK_INTERVAL_SECONDS` because doors and build-mode props move after a target is chosen.
+  - The sweep capsule is **lifted `PROBE_GROUND_CLEARANCE_METERS` off the floor**. Rapier reports `time_of_impact = 0` for a shape already touching geometry at the start of a cast, so a floor-hugging probe hits the floor instantly on every candidate and the whole check silently degrades to a no-op. Same trap documented in `camera-occlusion.ts`.
+  - The spawn floor-snap **retries across frames** rather than running once at reset: station physics is built asynchronously and Rapier refreshes its broad phase during `step`, so an early sample can legitimately find nothing. A single attempt leaves the population floating, and because the step-height check measures against `position.up`, floating actors reject every target and freeze.
+- **NPC capsules are hidden from scene queries via one collision-group bit** (`NPC_CAPSULE_MEMBERSHIP` / `QUERY_GROUPS_EXCLUDE_NPCS` in `rapier-world.ts`). Statics and the player keep Rapier's default all-bits membership, so the player's character controller — which runs unfiltered — still collides with NPCs. **Any new station scene query must pass `QUERY_GROUPS_EXCLUDE_NPCS` unless it genuinely wants to hit NPCs**, or it regresses silently: weapon rays stop on an NPC and spawn a station impact in mid-air with no damage (no health model yet), and camera occlusion yanks the eye whenever an NPC crosses behind the player.
+- Local NPCs must remain non-authoritative. Player-vs-NPC **collision** is local and cosmetic, which is why the capsules above are allowed; before adding dialogue outcomes, persistence, inventory, or combat, promote NPCs to real backend cell entities and snapshot them with an explicit entity kind; do not model them as fake players.
+  - Consequence of the re-probe: roam RNG streams can now diverge between clients, because whether a segment is abandoned depends on local door state. Harmless while the population is local and cosmetic, and moot once the server owns NPC positions — but do not build shared gameplay on client NPC positions matching.
 
 ### Animation → collider → interaction wiring
 
@@ -202,7 +207,7 @@ The Electron editor (**AsteronEngine**) is the only authoring workspace. Cold st
 | `src/editor/play-in-editor.ts` | Play / Pause / Stop of the open document in the Game view |
 | `src/editor/create-prefab-from-selection.ts` | Extract a GameObject subtree into a prefab + instance |
 | `src/editor/react/panels/ProjectSettingsModal.tsx` | File → Project Settings… (`asteron.project.json`) |
-| `src/editor/react/panels/server/ServerConsolePanel.tsx` | Server tab: live `/admin/*` operator console |
+| `src/editor/react/panels/server/ServerConsolePanel.tsx` | Server tab: live `/admin/*` operator console (incl. Commerce: Payments, Credit Packs, Item Mall, Purchases) |
 | `src/editor/serialize.ts` | Convert editor state to/from `PrefabDocument` / `SceneDocument` |
 | `src/render/editor/viewport.ts` | Three.js editor viewport (imperative host) |
 | `src/world/scenes/` | Scene documents (GameObject trees), runtime resolution, bundled loader |
@@ -213,7 +218,7 @@ The Electron editor (**AsteronEngine**) is the only authoring workspace. Cold st
 
 React owns editor chrome and all panel/form UI; `EditorStore` stays framework-agnostic. Tabs: **Scene** (default), Material Manager, **Ship**, Base Characters, Planet Authoring, System Map, Menu Manager, **Server**. Ship is the one tab that shares Scene's viewport/hierarchy/inspector instead of replacing them — it only adds a bar (browse, validate, Test), so it is wired through `EditorWorkspace`, not `TabEditorHosts`. WebGL/canvas preview stages (viewport, planet terrain, system map, base-character stage, menu HUD) stay imperative behind React hosts. Component field editors live in `src/editor/react/panels/component_fields/`.
 
-**Live project/scene context for agents:** use the **AsteronEngine MCP** (`asteron-engine` in `.cursor/mcp.json`). It reads `~/.asteron/agent.json` written by a running editor and exposes session, open document, hierarchy, selection, play state, disk catalogs, and safe play/save/select/open commands. See `editor-desktop/README.md` (“AsteronEngine MCP”).
+**Live project/scene context for agents:** use the **AsteronEngine MCP** (`asteron-engine` in `.cursor/mcp.json`). It reads `~/.asteron/agent.json` written by a running editor and exposes session, open document, hierarchy, selection, play state, viewport capture (`capture_viewport`), disk catalogs, and safe play/save/select/open commands. See `editor-desktop/README.md` (“AsteronEngine MCP”).
 
 ### Play mode
 
@@ -245,6 +250,31 @@ npm run build:wasm       # compile shared prediction code for the browser
 ```
 
 Backend env template: `backend/.env.example`. JWT secrets, DB URLs, certificate paths, etc. live there.
+
+### Payments and AsteronCredits
+
+Real-money monetization lives in `backend/crates/server/src/payments/` (Stripe client, AES-256-GCM
+secret wrapping, credit ledger) and `backend/crates/server/src/mall.rs` (the Item Mall storefront).
+Operator CRUD is in `admin_payments.rs`, deliberately not in the already-large `admin.rs`.
+
+Invariants — do not work around these:
+
+- **`payments::ledger::apply_credit_delta` is the only way `Player.creditBalance` may change.**
+  Every mutation writes one `AsteronCreditLedger` row in the same transaction and carries an
+  idempotency key. Never `UPDATE "creditBalance"` directly.
+- **Credits are granted only by the Stripe webhook**, never by `create_checkout` and never by a
+  client-side success redirect. Fulfillment is keyed on the Stripe event id, so replays are no-ops.
+- The webhook handler takes `axum::body::Bytes`, not `Json` — HMAC verification needs the exact
+  raw bytes. Do not parse the body before the signature passes.
+- Stripe secrets are AES-256-GCM ciphertext in `PaymentProvider`, wrapped with
+  `PAYMENTS_ENCRYPTION_KEY`. They are never returned to any client, only a masked `sk_••••1234`.
+  `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` env vars override the stored values when set.
+- ARC and AsteronCredits are separate currencies. ARC stays the earned soft currency for station
+  shops; AC is bought or granted and spends only in the Item Mall.
+- `mall::SELLABLE_ITEM_TYPES` (consumables today) is mirrored by `MALL_SELLABLE_ITEM_TYPES` in
+  `src/editor/react/panels/server/defaults.ts` — widen both together.
+
+Docs: `docs/docs/server-console/payments.md`.
 
 ### Authoritative multiplayer
 
@@ -350,6 +380,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 ### Colliders
 - **Station**: Rapier physics. `src/physics/station-physics.ts` owns the world; `src/physics/rapier-world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
 - **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship-physics.ts` mirrors the station API; `ship-deck.ts` drives locomotion on hull/ramp/pad colliders. Doors/ramp toggle via `setEnabled` from articulation blends. Near a parked ship, on-foot enters that same world (pad + hull) and walks the open ramp continuously; leaving is freefall with no floor underfoot (off the pad) → planet/station at current feet. **Area gating**: `tryEnterShipPadInterest` only hands locomotion to the ship world when the player shares the ship's walkable area — in a station the ship must rest on a hangar pad (`sampleHangarRest`) in the player's current `stationRoomId`, and on-foot outdoors never targets a hangar-parked ship. The raw ship-local proximity box (`isNearParkedShipPad`, ±36 m) reaches through station walls/floors; do not call it ungated.
+- **Ship (exterior entry)**: `ship-controller.entry: "exterior"` marks an open-frame hull with **no walkable interior** (hovercraft, buggy, single-seat fighter). Ship-local Rapier is never created for it. Boarding is a ground-level circle test (`nearShipEntryPoint`, from `ship-entry` marker components baked into `ShipLayout.entryPoints`, falling back to the pilot seat's ground projection) → `beginSitTransition` straight from `MODE_ON_FOOT` / `MODE_IN_STATION`. Leaving the seat runs the exterior branch in `updateTransition`, which hands mode selection to `TransitionContext.onDisembarked` → `padInterest.leaveShipDeck()` so planet-vs-hangar resolution is shared with the deck path. `collectShipLayoutIssues` swaps the deck-collider/deck-spawn blockers for a mandatory pilot seat. Gate any new deck-only behaviour on `usesColliderDeck()`, not on "is a ship".
 - **Ship flight**: custom IFCS in `flight-body.ts` / `flight-aim.ts` — **do not** put flight simulation in Rapier. Rapier is for on-foot deck/station contact only.
 
 ## Common gotchas
@@ -358,6 +389,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 - **F-key does nothing for station animation doors**: `consumeActions()` (`src/input/player-controls.ts`) returns `wasKeyPressed` as a closure. It must snapshot `justPressed` before `justPressed.clear()` runs, otherwise the closure always reads an empty set. `interactPressed` is a captured boolean and is safe; only `wasKeyPressed` had this bug.
 - **"Open on spawn" works but F doesn't**: the animation init path (`stationAnimationStates` seeded from `defaultOpen`) runs without any key input, so it masks a broken key-press path. If `defaultOpen` works but F doesn't, suspect the `wasKeyPressed` closure or the `prefab-info` interaction branch.
 - **Door animates visually but player can't walk through**: the collider isn't bound to the animation (check `collider.animation` is set) or the Rapier collider isn't being toggled (check `setDoorColliderEnabled` is called in `updateStationAnimations`).
+- **Character floats above the seat / sits "on top of" the chair**: the `ship-controller.seats[]` marker is the seated character's **root**, and `character-avatar-model.ts` drops the avatar so its bounds rest on that origin — the marker belongs at deck level under the chair, not on the cushion. `bakeControllerSeat` derives `pilotEye` as marker + `seat.eye` (scene axes, default `0, 0.87, 0.25`), so first-person height is tuned with `eye`, never by raising the marker. Raising the marker moves body and camera together and breaks the sitting pose. The viewport seat gizmo draws the root as a floor disc and the eye as the sphere for exactly this reason.
 - **Door animation with no bound collider**: `ship-runtime.ts` `bindColliderAnimations` and `station-runtime.ts` `bindStationColliderAnimations` log a warning **per door/animation** that has zero colliders bound to its node(s) — the door will animate but its collider stays enabled (player can't walk through). A collider with no matching node is a normal static floor/hull collider and is intentionally **not** warned about (that was a prior false-positive flood). Check the console for "has no collider bound".
 - **Ship pitch bounces after mouse aim**: IFCS overshoot — raise `AIM_IFCS_DAMPING` in `flight-config.ts` or lower per-ship pitch torque / `maxAngularRateRadps`. See ship-flight skill.
 - **One ship too twitchy / sluggish**: tune that prefab's `ship-controller` mass/thrust/torque — do not edit `FLIGHT_CONFIG` unless every hull is wrong.

@@ -1,7 +1,9 @@
 import { createEmptyEntity, type EditorEntity, type EditorStore } from './document';
 import { showToast, type ContextMenuEntry } from './dom';
-import type { ComponentDef } from '../world/prefabs/component-registry';
+import type { ComponentCategory, ComponentDef } from '../world/prefabs/component-registry';
 import {
+  COMPONENT_CATEGORIES,
+  COMPONENT_FAVORITES,
   getComponentDef,
   getComponentsForKind,
   getComponentsForScene,
@@ -605,6 +607,15 @@ export function buildGlbAuthoringMenu(
         addEmptyAtPosition(store, entityId, position, 'Empty', nodeName ?? null);
       },
     },
+    {
+      label: 'Create',
+      children: buildCreateObjectMenu(
+        store,
+        entityId,
+        getPos() ?? undefined,
+        nodeName ?? null,
+      ),
+    },
     'sep',
     {
       label: 'Add Component to Node',
@@ -626,6 +637,78 @@ export function buildGlbAuthoringMenu(
     });
   }
   return entries;
+}
+
+/**
+ * Unity-style "create a new object that *is* this component": spawns an empty
+ * child carrying the component instead of attaching to an existing entity.
+ */
+export function createEntityWithComponent(
+  store: EditorStore,
+  parentId: string | null,
+  def: ComponentDef,
+  position?: Vec3,
+  glbAnchor?: string | null,
+): string {
+  const entity = createEmptyEntity(def.label);
+  entity.components = [createComponentForEntity(def, entity)];
+  if (position) entity.position = { ...position };
+  if (glbAnchor) entity.glbAnchor = glbAnchor;
+  const id = store.addEntity(entity, parentId);
+  store.setEntitySelection(id);
+  showToast(`Added "${def.label}".`);
+  return id;
+}
+
+/**
+ * Create submenu for the hierarchy context menu: favorites (Light, Collider,
+ * Particles) flat at the top, everything else grouped by registry category.
+ */
+export function buildCreateObjectMenu(
+  store: EditorStore,
+  parentId: string | null,
+  position?: Vec3,
+  glbAnchor?: string | null,
+): ContextMenuEntry[] {
+  const palette = componentPaletteForContext(store);
+  const create = (def: ComponentDef, label = def.label): ContextMenuEntry => ({
+    label,
+    action: () => createEntityWithComponent(store, parentId, def, position, glbAnchor),
+  });
+
+  const favoriteEntries: ContextMenuEntry[] = [];
+  const favoriteTypes = new Set<PrefabComponentType>();
+  for (const favorite of COMPONENT_FAVORITES) {
+    const def = palette.find((entry) => entry.type === favorite.type);
+    if (!def) continue;
+    favoriteTypes.add(def.type);
+    favoriteEntries.push(create(def, favorite.label));
+  }
+
+  const byCategory = new Map<ComponentCategory, ComponentDef[]>();
+  for (const def of palette) {
+    if (favoriteTypes.has(def.type)) continue;
+    const bucket = byCategory.get(def.category);
+    if (bucket) bucket.push(def);
+    else byCategory.set(def.category, [def]);
+  }
+
+  const categoryEntries: ContextMenuEntry[] = [];
+  for (const category of COMPONENT_CATEGORIES) {
+    const defs = byCategory.get(category.id);
+    if (!defs || defs.length === 0) continue;
+    categoryEntries.push({
+      label: category.label,
+      children: defs.map((def) => create(def)),
+    });
+  }
+
+  if (favoriteEntries.length === 0 && categoryEntries.length === 0) {
+    return [{ label: 'No components', disabled: true }];
+  }
+  if (favoriteEntries.length === 0) return categoryEntries;
+  if (categoryEntries.length === 0) return favoriteEntries;
+  return [...favoriteEntries, 'sep', ...categoryEntries];
 }
 
 export function buildEntityComponentsSubmenu(

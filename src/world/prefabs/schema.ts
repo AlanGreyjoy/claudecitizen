@@ -98,6 +98,15 @@ export const SHIP_SEAT_ROLES: ShipSeatRole[] = [
   "passenger",
 ];
 
+/**
+ * How the player reaches the pilot seat. `interior` is the classic ship:
+ * board the ramp, walk the deck, sit. `exterior` is an open-frame hull with
+ * no walkable interior — stand beside it on the ground and press F.
+ */
+export type ShipEntryMode = "interior" | "exterior";
+
+export const SHIP_ENTRY_MODES: ShipEntryMode[] = ["interior", "exterior"];
+
 /** Actions for cockpit look-at controls (Hold F free-look + click). */
 export type CockpitControlAction = "landing-gear" | "cargo-ramp";
 
@@ -262,6 +271,13 @@ export const PARTICLE_MAX_PARTICLES_HARD_CAP = 2048;
 
 export type NpcPlacementBehavior = "stationary" | "wander" | "patrol";
 
+/**
+ * "route" keeps the original behaviour: spawned NPCs walk the authored waypoint
+ * graph. "roam" needs no waypoints at all — NPCs pick random points inside a
+ * disc around the marker and walk between them.
+ */
+export type NpcSpawnerBehavior = "route" | "roam";
+
 export type PrefabComponent =
   | { type: "station-frame" }
   | { type: "prop-frame" }
@@ -303,13 +319,29 @@ export type PrefabComponent =
       id: string;
       /** Reusable population definition resolved by the NPC catalog. */
       populationId: string;
+      /**
+       * Optional character GLB every NPC from this spawner wears (asset browser
+       * drag). Omitted: the modular Sidekick avatar built from the definition.
+       */
+      modelUrl?: string;
       floorId: StationFloorId;
       minAlive: number;
       maxAlive: number;
-      /** Waypoint route group used by spawned NPCs. */
+      /** Waypoint route group used by spawned NPCs. Ignored when roaming. */
       routeGroup: string;
       /** Horizontal spawn jitter around the marker, in meters. */
       radius: number;
+      /** How spawned NPCs move once alive. Older documents default to "route". */
+      behavior: NpcSpawnerBehavior;
+      /**
+       * Roam only: how far from the marker NPCs may wander, in meters. There is
+       * no station navmesh, so roamers walk straight through walls and props —
+       * keep the disc inside open floor.
+       */
+      roamRadius: number;
+      /** Roam only: pause taken on reaching a roam target. */
+      roamWaitMinSeconds: number;
+      roamWaitMaxSeconds: number;
     }
   | {
       type: "npc-waypoint";
@@ -328,6 +360,11 @@ export type PrefabComponent =
       id: string;
       npcDefinitionId: string;
       displayName?: string;
+      /**
+       * Optional character GLB for this NPC (asset browser drag). Omitted: the
+       * modular Sidekick avatar built from `npcDefinitionId`.
+       */
+      modelUrl?: string;
       floorId: StationFloorId;
       behavior: NpcPlacementBehavior;
       /** Required by wander/patrol; omitted for stationary placements. */
@@ -600,6 +637,12 @@ export type PrefabComponent =
   | {
       type: "ship-controller";
       restHeight?: number;
+      /**
+       * How the player gets to the seat. `interior` walks the deck (Rapier
+       * colliders required); `exterior` boards straight from the ground, for
+       * open-frame hulls with no walkable interior. Default `interior`.
+       */
+      entry?: ShipEntryMode;
       stats?: {
         maxSpeedMps?: number;
         maxHp?: number;
@@ -814,6 +857,20 @@ export type PrefabComponent =
       /** outside: ground-level ramp toggle; deck: interior ramp panel. */
       placement: "outside" | "deck";
       radius?: number;
+    }
+  /**
+   * Ground-level board point for an exterior-entry ship. Stand inside the
+   * circle with the ship parked and press F to take the seat directly — no
+   * deck walk. Ignored unless ship-controller.entry is "exterior".
+   */
+  | {
+      type: "ship-entry";
+      /** Seat entity this entry serves; defaults to the primary pilot seat. */
+      seatEntityId?: string;
+      /** Ground-level stand reach around the marker (default 3). */
+      radius?: number;
+      /** Prompt name ("Press F — board {label}"). Default "ship". */
+      label?: string;
     }
   /**
    * Cockpit look-at control (Hold F free-look + click). Empty marker entity

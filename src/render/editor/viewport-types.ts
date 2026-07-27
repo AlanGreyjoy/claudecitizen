@@ -41,6 +41,8 @@ export interface EditorViewport {
   /** Ship kind only: articulates gear/ramp/doors on loaded models for preview. */
   setShipPreview: (state: ShipPreviewState) => void;
   focusSelection: () => void;
+  /** Orbit pivot (what the Scene view is centred on) in a parent's local space. */
+  getViewFocusPosition: (parentEntityId: string | null) => Vec3;
   getGlbNodePrefabPosition: (entityId: string, nodeUuid: string) => Vec3 | null;
   getGlbNodePrefabTransform: (
     entityId: string,

@@ -61,7 +61,7 @@ flowchart TB
 | Context | Path | Owns |
 | --- | --- | --- |
 | **World** | `src/world/` | Planet geometry, terrain sampling, lakes, prefab schema & runtime flattening |
-| **Flight** | `src/flight/` | Ship rigid-body dynamics, input mapping, radial gravity |
+| **Flight** | `src/flight/` | Ship rigid-body dynamics, IFCS aim, thruster-only altitude (no airborne gravity) |
 | **Player** | `src/player/` | Character controller, boarding, deck collision, pilot-seat FSM |
 | **NPC** | `src/npc/` | Non-player definitions, weighted populations, behavior state — may read station data and character appearance, never mutates player state |
 | **Render** | `src/render/` | Meshes, materials, LOD tiles, atmosphere, post-FX — **read-only** toward domain |
@@ -80,7 +80,9 @@ Supporting modules sit outside the core simulation boundary:
 
 ## Dependency direction
 
-Dependencies flow **inward toward domain**, never from domain into Three.js:
+Domain modules must not depend **outward** on presentation or platform APIs
+(Three.js, DOM, Electron). Composition layers (`render/`, `game/`, `app/`) may
+read domain state but must not own simulation rules:
 
 ```mermaid
 flowchart LR
@@ -111,7 +113,8 @@ See [Physical Guards](./physical-guards) for the full rule list. Summary:
 | `world/`, `flight/`, `player/`, `npc/` | `math/`, each other (sparingly) | `three`, `render/`, DOM |
 | `npc/` | Player character-appearance data (read) | Ownership or mutation of player state |
 | `render/` | `world/`, `player/`, `flight/`, `npc/` (read) | Mutating simulation state |
-| `app/` | All contexts | Inline domain logic |
+| `game/` | Domain + render (orchestration) | Owning simulation rules |
+| `app/` | Orchestration only (scene host, play session) | Inline domain logic |
 | `editor/` | `world/prefabs`, `render/editor` | Game loop hot path |
 
 **Green rule:** if you need a height sample for gameplay, call `sampleFootPlanetSurface()` in `world/` — do not raycast the mesh in `render/`.

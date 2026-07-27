@@ -141,6 +141,14 @@ export function createInStationMode(
 
     if (deps.padInterest.tryEnterShipPadInterest()) return;
 
+    const boardPrompt = deps.shipSystems.handleBoardExterior(
+      input.actions.interactPressed,
+    );
+    if (boardPrompt !== null) {
+      ctx.world.prompt = boardPrompt;
+      return;
+    }
+
     const rampPrompt = deps.shipSystems.handleRampOutside(input.actions.interactPressed);
     if (rampPrompt !== null) {
       ctx.world.prompt = rampPrompt;

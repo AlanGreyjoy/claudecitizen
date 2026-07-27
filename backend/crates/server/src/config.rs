@@ -31,6 +31,13 @@ pub struct Config {
     pub webtransport_cert_path: Option<String>,
     pub webtransport_key_path: Option<String>,
     pub run_migrations: bool,
+    /// Base64 32-byte key that wraps Stripe secrets at rest. Empty disables console storage.
+    pub payments_encryption_key: String,
+    /// Optional env override for the console-stored Stripe secret key.
+    pub stripe_secret_key: Option<String>,
+    /// Optional env override for the console-stored Stripe webhook signing secret.
+    pub stripe_webhook_secret: Option<String>,
+    pub api_public_url: String,
 }
 
 impl Config {
@@ -47,6 +54,11 @@ impl Config {
             && (jwt_access_secret.starts_with("dev-") || jwt_refresh_secret.starts_with("dev-"))
         {
             bail!("production JWT secrets must be configured");
+        }
+        let payments_encryption_key = read("PAYMENTS_ENCRYPTION_KEY", "");
+        let stripe_secret_key = optional("STRIPE_SECRET_KEY");
+        if production && stripe_secret_key.is_some() && payments_encryption_key.is_empty() {
+            bail!("PAYMENTS_ENCRYPTION_KEY must be configured when Stripe is enabled");
         }
         let cookie_same_site = match read("COOKIE_SAME_SITE", "lax").as_str() {
             "strict" => SameSite::Strict,
@@ -92,6 +104,10 @@ impl Config {
             webtransport_cert_path: optional("WEBTRANSPORT_CERT_PATH"),
             webtransport_key_path: optional("WEBTRANSPORT_KEY_PATH"),
             run_migrations: read_bool("RUN_MIGRATIONS", !production),
+            payments_encryption_key,
+            stripe_secret_key,
+            stripe_webhook_secret: optional("STRIPE_WEBHOOK_SECRET"),
+            api_public_url,
         })
     }
 }

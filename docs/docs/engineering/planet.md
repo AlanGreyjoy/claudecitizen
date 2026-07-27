@@ -128,9 +128,11 @@ $$
 \tau(h) = \max\!\left(\tau_{\min},\; \tau_0 + \mathrm{clamp}_{[0,1]}\!\left(\frac{h}{120\,000}\right) \cdot 1.8\right)
 $$
 
-Split when $\varepsilon_{\mathrm{proj}} > \tau(h)$. Below 2 km altitude, tiles within $\approx 900 + 0.35h$ meters and facing the camera force max LOD regardless.
+Split when $\varepsilon_{\mathrm{proj}} > \tau(h)$. Below 2 km altitude, nearby
+facing tiles within a **450 m** base radius (expanded slightly by split hysteresis
+and altitude) force max LOD regardless.
 
-**Dual height sampling.** Terrain noise is continuous — sample anywhere and you get a height. But the mesh only knows about a fixed grid of corner heights. At runtime we locate your `(u, v)` in that grid, bilinearly interpolate between four cached corner points on the sphere (split into two triangles), then project back onto the radial direction for height and surface normal. The mesh and foot controller must use this _same_ grid at the _same_ LOD — not the raw noise function.
+**Dual height sampling.** Terrain noise is continuous — sample anywhere and you get a height. But the mesh only knows about a fixed grid of corner heights. At runtime we locate your `(u, v)` in that grid and interpolate on the shared alternating-triangle layout (same rule as mesh generation), then project back onto the radial direction for height and surface normal. The mesh and foot controller must use this _same_ grid at the _same_ LOD — not the raw noise function.
 
 ```mermaid
 flowchart TB
@@ -138,7 +140,7 @@ flowchart TB
     N[3D noise] --> H1["Height at any point"]
   end
   subgraph discrete ["Discrete (renderable)"]
-    G["Grid corner heights"] --> B["Bilinear + 2 triangles"]
+    G["Grid corner heights"] --> B["Alternating-triangle interpolate"]
     B --> H2["Height + normal"]
   end
   H2 --> M[Mesh vertices]
@@ -170,6 +172,16 @@ h = \mathbf{p} \cdot \hat{\mathbf{d}} - R, \qquad
 $$
 
 **Layered noise (FBM + ridged).** Height stacks several octaves of 3D simplex noise at different scales: broad continents, sharp ridged mountains, regional hills, fine detail. Ridged noise (`1 − |n|`, squared) gives crisp peaks instead of smooth blobs. A separate noise field carves lake basins into the result.
+
+`world/base-elevation.ts` owns the terrain recipe through lake carving.
+`world/rivers.ts` builds one cached, spatially indexed downhill drainage graph from
+that pre-river surface; per-vertex sampling only queries the graph (acyclic
+confluences, non-increasing water levels). Do not put route solving back in the
+per-vertex hot path.
+
+Exact octave weights and amplitudes are authored / tuned in code and Planet
+Authoring — treat the equations below as illustrative of the layering idea, not
+frozen constants.
 
 ```mermaid
 flowchart TB
