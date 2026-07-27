@@ -169,6 +169,8 @@ async fn accept_session(state: AppState, incoming: IncomingSession) -> Result<()
     write_control(&mut send_stream, &ready).await?;
     let (control_sender, mut control_receiver) = mpsc::channel(64);
     tokio::spawn(read_control(recv_stream, control_sender));
+    // Logged once per session: the fallback is per-snapshot and would flood.
+    let mut oversize_logged = false;
 
     loop {
         tokio::select! {
@@ -204,8 +206,39 @@ async fn accept_session(state: AppState, incoming: IncomingSession) -> Result<()
                 let envelope = ServerEnvelope::decode(filtered.as_slice())?;
                 match envelope.payload {
                     Some(server_envelope::Payload::Snapshot(_)) | Some(server_envelope::Payload::Reconcile(_)) => {
-                        if filtered.len() <= MAX_DATAGRAM_BYTES {
-                            let _ = connection.send_datagram(filtered);
+                        // MAX_DATAGRAM_BYTES is a protocol sanity bound, not what
+                        // the path will carry: QUIC caps a datagram near the MTU,
+                        // a little over a kilobyte. Every snapshot repeats each
+                        // entity's appearance JSON, so a cell with more than one
+                        // player clears that in a hurry — and these sends used to
+                        // fail into `let _`, so every client in a populated cell
+                        // silently stopped receiving anyone. Send what fits, and
+                        // put the rest on the reliable stream.
+                        let datagram_limit = connection
+                            .max_datagram_size()
+                            .unwrap_or(0)
+                            .min(MAX_DATAGRAM_BYTES);
+                        let mut delivered = false;
+                        if filtered.len() <= datagram_limit {
+                            match connection.send_datagram(&filtered) {
+                                Ok(()) => delivered = true,
+                                Err(error) => tracing::warn!(
+                                    error = ?error,
+                                    len = filtered.len(),
+                                    limit = datagram_limit,
+                                    "snapshot datagram send failed; using the control stream",
+                                ),
+                            }
+                        } else if !oversize_logged {
+                            oversize_logged = true;
+                            tracing::info!(
+                                len = filtered.len(),
+                                limit = datagram_limit,
+                                "snapshot exceeds the datagram limit; using the control stream",
+                            );
+                        }
+                        if !delivered {
+                            write_raw_control(&mut send_stream, &filtered).await?;
                         }
                     }
                     _ => write_raw_control(&mut send_stream, &filtered).await?,
