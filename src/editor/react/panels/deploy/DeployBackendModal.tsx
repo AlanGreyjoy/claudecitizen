@@ -4,6 +4,7 @@ import {
   DeployField,
   DeployLog,
   DeployProgress,
+  DeployToggle,
   stopKeyPropagation,
 } from './DeployDialogParts';
 import { useDeployState, type DeployStateHandle } from './use-deploy-state';
@@ -133,7 +134,28 @@ function RemoteFields({ state }: { state: DeployStateHandle }): ReactElement | n
         value={config.envFile}
         placeholder="deploy/.env"
         onChange={(envFile) => patch({ envFile })}
+        detail="On the server, relative to the server path."
       />
+      <DeployToggle
+        label="Upload env file before deploying"
+        checked={config.envUpload}
+        onChange={(envUpload) => patch({ envUpload })}
+        detail={
+          config.envUpload
+            ? 'Copied over SSH at mode 600 each deploy; the previous copy is kept as .bak. Contents never reach the log.'
+            : 'Off: the deploy only checks the file exists on the server and stops early if it does not.'
+        }
+      />
+      {config.envUpload ? (
+        <DeployField
+          label="Local env file"
+          span={4}
+          value={config.envSourcePath}
+          placeholder="/home/you/secrets/claudecitizen.env"
+          onChange={(envSourcePath) => patch({ envSourcePath })}
+          detail="Only this path is stored in ~/.asteron/deploy.json — the secrets stay in the file, on this machine."
+        />
+      ) : null}
       <DeployField
         label="Health check URL"
         span={4}
@@ -230,6 +252,56 @@ function SectionTabs({
   );
 }
 
+/**
+ * Deploy is gated on more than a reachable box: an upload with no local env file
+ * would fail on the first stage, so the button says why before it is clicked.
+ */
+function BackendActions({
+  state,
+  onClose,
+}: {
+  state: DeployStateHandle;
+  onClose: () => void;
+}): ReactElement {
+  const { config, dirty, run, save, testConnection, deploy, cancel } = state;
+  const busy = run.running;
+  const connectable = Boolean(config?.host) && Boolean(config?.hasPassword || config?.privateKeyPath);
+  const envReady = !config?.envUpload || Boolean(config.envSourcePath);
+  const blocked = dirty
+    ? 'Save settings first.'
+    : envReady
+      ? undefined
+      : 'Set the local env file to upload, or turn the upload off.';
+
+  return (
+    <>
+      <button
+        type="button"
+        className="ed-btn ed-btn-accent"
+        disabled={busy || dirty || !connectable || !envReady}
+        title={blocked}
+        onClick={() => void deploy('backend')}
+      >
+        {busy ? 'Deploying…' : 'Deploy'}
+      </button>
+      <button type="button" className="ed-btn" disabled={!dirty} onClick={() => void save()}>
+        {dirty ? 'Save' : 'Saved'}
+      </button>
+      <button
+        type="button"
+        className="ed-btn"
+        disabled={busy || !connectable}
+        onClick={() => void testConnection()}
+      >
+        Test connection
+      </button>
+      <button type="button" className="ed-btn" onClick={busy ? cancel : onClose}>
+        {busy ? 'Cancel' : 'Close'}
+      </button>
+    </>
+  );
+}
+
 /** Deploy → Backend…. Pulls the branch on the box and rebuilds the Docker stack. */
 export function DeployBackendModal({
   open,
@@ -262,9 +334,7 @@ export function DeployBackendModal({
     );
   }
 
-  const { config, dirty, run, save, testConnection, deploy, cancel } = state;
-  const busy = run.running;
-  const ready = Boolean(config?.host) && Boolean(config?.hasPassword || config?.privateKeyPath);
+  const busy = state.run.running;
 
   return (
     <DeployDialogShell
@@ -273,38 +343,7 @@ export function DeployBackendModal({
       status={state.status}
       onClose={onClose}
       busy={busy}
-      actions={
-        <>
-          <button
-            type="button"
-            className="ed-btn ed-btn-accent"
-            disabled={busy || dirty || !ready}
-            title={dirty ? 'Save settings first.' : undefined}
-            onClick={() => void deploy('backend')}
-          >
-            {busy ? 'Deploying…' : 'Deploy'}
-          </button>
-          <button
-            type="button"
-            className="ed-btn"
-            disabled={!dirty}
-            onClick={() => void save()}
-          >
-            {dirty ? 'Save' : 'Saved'}
-          </button>
-          <button
-            type="button"
-            className="ed-btn"
-            disabled={busy || !ready}
-            onClick={() => void testConnection()}
-          >
-            Test connection
-          </button>
-          <button type="button" className="ed-btn" onClick={busy ? cancel : onClose}>
-            {busy ? 'Cancel' : 'Close'}
-          </button>
-        </>
-      }
+      actions={<BackendActions state={state} onClose={onClose} />}
     >
       {state.loading ? (
         <p className="ed-deploy-hint">Loading deploy settings…</p>
@@ -315,7 +354,7 @@ export function DeployBackendModal({
           {section === 'connection' ? <ConnectionFields state={state} /> : null}
           {section === 'remote' ? <RemoteFields state={state} /> : null}
           {section === 'pipeline' ? <PipelineFields state={state} /> : null}
-          <DeployProgress run={run} />
+          <DeployProgress run={state.run} />
           <DeployLog lines={state.log} />
         </>
       )}

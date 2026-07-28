@@ -214,11 +214,24 @@ export function useDeployState(active: boolean, withPreflight = false): DeploySt
       if (!result.remotePathIsRepo) {
         appendLog('WARNING: the remote path is not a git checkout — the pull step will fail.');
       }
+      // A missing env file is only a fault when the deploy is not the thing that writes it.
+      const willUpload = configRef.current?.envUpload === true;
+      appendLog(
+        result.envFileExists
+          ? `Env file present at ${result.envFilePath}.`
+          : willUpload
+            ? `No env file at ${result.envFilePath} yet — this deploy uploads it.`
+            : `WARNING: no env file at ${result.envFilePath} — it is git-ignored, so a pull never creates it.`,
+      );
+      const problems = [
+        result.remotePathIsRepo ? '' : 'the remote path is not a git checkout',
+        result.envFileExists || willUpload ? '' : 'the env file is missing',
+      ].filter(Boolean);
       setStatus(
-        result.remotePathIsRepo
-          ? 'Connected. Remote path is a git checkout.'
-          : 'Connected, but the remote path is not a git checkout.',
-        !result.remotePathIsRepo,
+        problems.length === 0
+          ? 'Connected. Remote path is a git checkout and the env file is in place.'
+          : `Connected, but ${problems.join(' and ')}.`,
+        problems.length > 0,
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Connection failed.', true);

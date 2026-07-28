@@ -52,6 +52,36 @@ export function DeployField({
   );
 }
 
+/** Checkbox laid out to sit in the same 4-column grid as {@link DeployField}. */
+export function DeployToggle({
+  label,
+  checked,
+  onChange,
+  detail,
+  span = 4,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  detail?: string;
+  span?: 1 | 2 | 3 | 4;
+}): ReactElement {
+  return (
+    <label className={`ed-deploy-field ed-deploy-toggle ed-deploy-span-${span}`}>
+      <span className="ed-deploy-toggle-row">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          onKeyDown={stopKeyPropagation}
+        />
+        <span className="ed-deploy-field-label">{label}</span>
+      </span>
+      {detail ? <span className="ed-deploy-field-detail">{detail}</span> : null}
+    </label>
+  );
+}
+
 /** Terminal-style output, pinned to the bottom as lines stream in. */
 export function DeployLog({ lines }: { lines: string[] }): ReactElement {
   const scrollRef = useRef<HTMLPreElement | null>(null);

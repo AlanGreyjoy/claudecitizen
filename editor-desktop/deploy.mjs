@@ -15,7 +15,7 @@
 import { spawn } from 'node:child_process';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix as posixPath } from 'node:path';
 
 const CONFIG_DIR = join(homedir(), '.asteron');
 const CONFIG_PATH = join(CONFIG_DIR, 'deploy.json');
@@ -82,6 +82,8 @@ const DEFAULT_CONFIG = {
   branch: 'main',
   composeFiles: ['docker-compose.yml', 'deploy/docker-compose.prod.yml'],
   envFile: 'deploy/.env',
+  envUpload: false,
+  envSourcePath: '',
   healthUrl: '',
   netlifySite: '',
   steps: DEFAULT_STEPS,
@@ -126,6 +128,8 @@ function normalizeConfig(value) {
     branch: trimmedString(source.branch, DEFAULT_CONFIG.branch),
     composeFiles: composeFiles.length > 0 ? composeFiles : [...DEFAULT_CONFIG.composeFiles],
     envFile: trimmedString(source.envFile, DEFAULT_CONFIG.envFile),
+    envUpload: source.envUpload === true,
+    envSourcePath: trimmedString(source.envSourcePath),
     healthUrl: trimmedString(source.healthUrl),
     netlifySite: trimmedString(source.netlifySite),
     steps: normalizeSteps(source.steps),
@@ -145,6 +149,18 @@ function renderCommand(command, config) {
     .replaceAll('{{branch}}', config.branch)
     .replaceAll('{{envFile}}', config.envFile)
     .replaceAll('{{compose}}', composePrefix(config));
+}
+
+/** Single-quotes a value for `sh`. Paths here come from a text field, not a literal. */
+function shellQuote(value) {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+/** Absolute path of the env file on the box; `envFile` may be relative to `remotePath`. */
+function remoteEnvPath(config) {
+  return posixPath.isAbsolute(config.envFile)
+    ? config.envFile
+    : posixPath.join(config.remotePath, config.envFile);
 }
 
 async function readStore() {
@@ -321,6 +337,87 @@ function execRemote(client, command, onLine) {
   });
 }
 
+/** Reads the local file the env stage ships, normalising it to end in a newline. */
+async function readEnvSource(config) {
+  if (!config.envSourcePath) {
+    throw new DeployError('Set the local env file to upload, or turn "Upload env file" off.');
+  }
+  let content;
+  try {
+    content = await readFile(config.envSourcePath, 'utf8');
+  } catch (error) {
+    throw new DeployError(`Could not read the local env file at ${config.envSourcePath}: ${error.message}`);
+  }
+  if (!content.trim()) {
+    throw new DeployError(`${config.envSourcePath} is empty — compose fails on the first missing variable.`);
+  }
+  return content.endsWith('\n') ? content : `${content}\n`;
+}
+
+/** Writes one file over SFTP. `ssh2` opens the channel on the session already held open. */
+function writeRemoteFile(client, path, content) {
+  return new Promise((resolveWrite, rejectWrite) => {
+    client.sftp((error, sftp) => {
+      if (error) {
+        rejectWrite(new DeployError(`Could not open an SFTP channel: ${error.message}`, 502));
+        return;
+      }
+      sftp.writeFile(path, content, { encoding: 'utf8', mode: 0o600 }, (writeError) => {
+        sftp.end();
+        if (writeError) rejectWrite(new DeployError(`Could not write ${path}: ${writeError.message}`, 502));
+        else resolveWrite();
+      });
+    });
+  });
+}
+
+/**
+ * Ships the local env file to the box before the compose steps run.
+ *
+ * The env file is git-ignored — deliberately, it holds every production secret —
+ * so `git pull` neither creates nor updates it. Without this stage a fresh box,
+ * a moved path, or a newly required variable fails minutes later inside
+ * `docker compose` with `couldn't find env file`.
+ *
+ * Uploaded to a temp path and moved into place so an interrupted transfer cannot
+ * leave a half-written env behind, and the previous copy is kept as `.bak`
+ * because overwriting it in place would destroy secrets that exist nowhere else.
+ */
+async function uploadEnvFile(client, config, log) {
+  const content = await readEnvSource(config);
+  const target = remoteEnvPath(config);
+  const temp = `${target}.asteron-upload`;
+  const prepare =
+    `mkdir -p ${shellQuote(posixPath.dirname(target))} && ` +
+    `if [ -f ${shellQuote(target)} ]; then cp -p ${shellQuote(target)} ${shellQuote(`${target}.bak`)}; fi`;
+  const prepared = await execRemote(client, prepare, log);
+  if (prepared.code !== 0) {
+    throw new DeployError(`Could not prepare ${target} for upload (exit ${prepared.code}).`, 502);
+  }
+  await writeRemoteFile(client, temp, content);
+  const install = `mv -f ${shellQuote(temp)} ${shellQuote(target)} && chmod 600 ${shellQuote(target)}`;
+  const installed = await execRemote(client, install, log);
+  if (installed.code !== 0) {
+    throw new DeployError(`Could not move the uploaded env file into ${target} (exit ${installed.code}).`, 502);
+  }
+  // Byte count only — this file's contents must never reach the log.
+  log(`Uploaded ${Buffer.byteLength(content)} bytes from ${config.envSourcePath} to ${target} (mode 600).`);
+}
+
+/** Fails before the build when the box has no env file, instead of during compose. */
+async function verifyEnvFile(client, config, log) {
+  const target = remoteEnvPath(config);
+  const probe = await execRemote(client, `test -f ${shellQuote(target)}`, () => {});
+  if (probe.code !== 0) {
+    throw new DeployError(
+      `No env file at ${target} on ${config.host}. It is git-ignored, so pulling the branch never ` +
+        'creates it — either turn on "Upload env file" in the Remote tab, or create it on the box ' +
+        'from deploy/.env.example.',
+    );
+  }
+  log(`Env file present at ${target}.`);
+}
+
 async function checkHealth(url, onLine) {
   onLine(`GET ${url}`);
   try {
@@ -388,10 +485,14 @@ export function createDeployManager({ getRepository, repositoryRoot, npmCommand,
       const collect = (line) => lines.push(line);
       await execRemote(client, 'uname -srm; docker --version; docker compose version', collect);
       const probe = await execRemote(client, `test -d ${JSON.stringify(config.remotePath)}/.git`, () => {});
+      const envPath = remoteEnvPath(config);
+      const envProbe = await execRemote(client, `test -f ${shellQuote(envPath)}`, () => {});
       return {
         ok: true,
         detail: lines.filter(Boolean).join('\n'),
         remotePathIsRepo: probe.code === 0,
+        envFilePath: envPath,
+        envFileExists: envProbe.code === 0,
       };
     } finally {
       client.end();
@@ -400,10 +501,14 @@ export function createDeployManager({ getRepository, repositoryRoot, npmCommand,
 
   async function runBackendSteps(config) {
     const steps = config.steps.filter((step) => step.enabled);
+    // The env stage always runs first, so every configured step is offset by one.
+    const envLabel = config.envUpload ? 'Upload env file' : 'Check env file';
+    const labels = [envLabel, ...steps.map((step) => step.label)];
+    if (config.healthUrl) labels.push('Health check');
     emit({
       phase: 'started',
       target: 'backend',
-      steps: steps.map((step) => step.label),
+      steps: labels,
       message: `Connecting to ${config.username}@${config.host}…`,
     });
 
@@ -411,10 +516,14 @@ export function createDeployManager({ getRepository, repositoryRoot, npmCommand,
     activeClient = client;
     log(`Connected to ${config.host}.`);
     try {
+      emit({ phase: 'step', stepIndex: 0, label: envLabel });
+      if (config.envUpload) await uploadEnvFile(client, config, log);
+      else await verifyEnvFile(client, config, log);
+
       for (const [index, step] of steps.entries()) {
         if (canceled) return { ok: false, message: 'Deploy canceled.' };
         const command = renderCommand(step.command, config);
-        emit({ phase: 'step', stepIndex: index, label: step.label });
+        emit({ phase: 'step', stepIndex: index + 1, label: step.label });
         log(`$ ${command}`);
         const result = await execRemote(client, command, log);
         if (result.code !== 0) {
@@ -422,7 +531,7 @@ export function createDeployManager({ getRepository, repositoryRoot, npmCommand,
           return {
             ok: false,
             message: `Step "${step.label}" failed with exit code ${result.code}${detail}.`,
-            failedStep: index,
+            failedStep: index + 1,
           };
         }
       }
@@ -432,7 +541,7 @@ export function createDeployManager({ getRepository, repositoryRoot, npmCommand,
     }
 
     if (config.healthUrl) {
-      emit({ phase: 'step', stepIndex: steps.length, label: 'Health check' });
+      emit({ phase: 'step', stepIndex: labels.length - 1, label: 'Health check' });
       const healthy = await checkHealth(config.healthUrl, log);
       if (!healthy) {
         return {

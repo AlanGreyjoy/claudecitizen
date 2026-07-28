@@ -56,13 +56,39 @@ transcribed from this document and every one of them is editable.
 
 Each opens its own dialog holding only the settings that half needs, a live log,
 and its own Deploy button. The backend dialog also has **Test connection**, which
-runs `uname` and `docker version` and checks the remote path is a git checkout.
+runs `uname` and `docker version`, checks the remote path is a git checkout, and
+reports whether the env file is there.
 
 Settings, **including the password**, live in `~/.asteron/deploy.json` at mode
 0600 — per machine, never in the project and never in this repo. The password is
 held in the Electron main process; the renderer only ever learns whether one is
 set. Leave the password field blank to keep the stored one, or set a private key
 path to use key auth instead.
+
+### The env file stage
+
+The env file holds every production secret, so it is git-ignored and `git pull`
+never creates or updates it. That is the one input a deploy cannot get from the
+branch, and it is why the first stage of every backend deploy is about it —
+before this stage existed, a missing file surfaced minutes later as
+`couldn't find env file` from inside `docker compose`.
+
+Under the Remote tab, **Env file** is the path on the server, relative to the
+server path. **Upload env file before deploying** decides what the stage does:
+
+| Setting | First stage |
+|---------|-------------|
+| Off | Checks the file exists on the box and stops immediately, naming the path, if it does not |
+| On | Uploads **Local env file** to that path over SSH at mode 0600 |
+
+Uploading is the flexible option and the one to use if the box is not the only
+place you keep the file: point it at your own `deploy/.env`, or anywhere else on
+this machine. Only the *path* goes into `~/.asteron/deploy.json` — the secrets
+stay in the file. Each upload keeps the previous server copy as `<env file>.bak`,
+writes through a temp file so an interrupted transfer cannot leave a half-written
+env behind, and logs a byte count rather than any contents.
+
+Leave it off when the server's env file is authoritative and edited on the box.
 
 Under the backend dialog's Pipeline tab, step commands expand `{{remotePath}}`,
 `{{branch}}`, `{{gitRemote}}`, `{{envFile}}` and `{{compose}}` (the full
@@ -200,7 +226,7 @@ stays stopped and the API goes dark. Restart it by hand:
 
 ```bash
 cd /opt/claudecitizen && docker compose -f docker-compose.yml \
-  -f deploy/docker-compose.prod.yml --env-file .env start caddy
+  -f deploy/docker-compose.prod.yml --env-file deploy/.env start caddy
 ```
 
 ## Why the overlay uses `!override`

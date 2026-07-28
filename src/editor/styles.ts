@@ -1220,6 +1220,22 @@ body.ed-resize-row * {
   font: 500 10px/1.4 var(--ed-font);
 }
 
+.ed-deploy-toggle {
+  cursor: pointer;
+}
+
+.ed-deploy-toggle-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.ed-deploy-toggle-row input {
+  accent-color: var(--ed-accent, #5b8def);
+  flex: none;
+  margin: 0;
+}
+
 .ed-deploy-span-1 { grid-column: span 1; }
 .ed-deploy-span-2 { grid-column: span 2; }
 .ed-deploy-span-3 { grid-column: span 3; }

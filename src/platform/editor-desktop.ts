@@ -98,6 +98,10 @@ export interface DeployConfig {
   branch: string;
   composeFiles: string[];
   envFile: string;
+  /** Ship `envSourcePath` to `envFile` on the box before the pipeline runs. */
+  envUpload: boolean;
+  /** Local path of the env file to upload. Only the path is stored, never its contents. */
+  envSourcePath: string;
   healthUrl: string;
   netlifySite: string;
   steps: DeployStep[];
@@ -127,6 +131,9 @@ export interface DeployConnectionResult {
   ok: boolean;
   detail: string;
   remotePathIsRepo: boolean;
+  /** Resolved absolute path of the env file on the box. */
+  envFilePath: string;
+  envFileExists: boolean;
 }
 
 export interface DeployResult {
