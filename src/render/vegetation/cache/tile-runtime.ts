@@ -15,6 +15,7 @@ import {
 import { tileKey } from '../domain/hash';
 import { collectLandingGroveData } from '../domain/landing-grove-data';
 import { collectTileVegetationData } from '../domain/tile-data';
+import { createVegetationWorkerPool } from './tile-worker-pool';
 import type { StoredVegetationInstance, StoredVegetationTile } from '../domain/storage';
 import {
   shouldShowGrassOnTile,
@@ -80,7 +81,55 @@ export interface ResolvedVegetationTile {
   tileInfo: TileInfo;
 }
 
+type ReleaseTileEntry = (key: string, entry: VegetationTileEntry) => void;
+
+function evictVegetationTiles(
+  ctx: VegetationTileRuntimeCtx,
+  keepKeys: Set<string>,
+  releaseTileEntry: ReleaseTileEntry,
+): void {
+  for (const [key, entry] of ctx.tileCache) {
+    if (keepKeys.has(key)) continue;
+    if (ctx.frameNumber - entry.lastUsedFrame > VEGETATION_CACHE_STALE_FRAMES) {
+      releaseTileEntry(key, entry);
+    }
+  }
+
+  const effectiveCacheLimit = Math.max(
+    MAX_CACHED_VEGETATION_TILES,
+    keepKeys.size + VEGETATION_CACHE_ACTIVE_HEADROOM,
+  );
+  if (ctx.tileCache.size <= effectiveCacheLimit) return;
+
+  const focus = ctx.buildFocusPosition;
+  const inactiveEntries: [string, VegetationTileEntry][] = [];
+  for (const [key, entry] of ctx.tileCache) {
+    if (keepKeys.has(key)) continue;
+    inactiveEntries.push([key, entry]);
+  }
+  // Prefer dropping far corridor tiles first so a short walk reuses nearby
+  // GPU meshes instead of thrashing LRU at the selection boundary.
+  inactiveEntries.sort((a, b) => {
+    if (!focus) return a[1].lastUsedFrame - b[1].lastUsedFrame;
+    const aCenter = a[1].tileInfo?.centerPosition;
+    const bCenter = b[1].tileInfo?.centerPosition;
+    if (!aCenter && !bCenter) return a[1].lastUsedFrame - b[1].lastUsedFrame;
+    if (!aCenter) return -1;
+    if (!bCenter) return 1;
+    const distDelta = distance(bCenter, focus) - distance(aCenter, focus);
+    if (Math.abs(distDelta) > 1) return distDelta;
+    return a[1].lastUsedFrame - b[1].lastUsedFrame;
+  });
+
+  for (const [key, entry] of inactiveEntries) {
+    if (ctx.tileCache.size <= effectiveCacheLimit) break;
+    releaseTileEntry(key, entry);
+  }
+}
+
 export function createVegetationTileRuntime(ctx: VegetationTileRuntimeCtx) {
+  let lastBuildFocus: Vec3 | null = null;
+
   function updateCachePeak(): void {
     ctx.cacheStats.peakCachedTiles = Math.max(
       ctx.cacheStats.peakCachedTiles,
@@ -126,21 +175,16 @@ export function createVegetationTileRuntime(ctx: VegetationTileRuntimeCtx) {
     );
   }
 
-  function buildAndCacheVegetation(
+  /** Everything after generation: GPU group, cache entry, disk write, stats. */
+  function installVegetationTile(
     tileInfo: TileInfo,
     key: string,
     visible: boolean,
+    data: StoredVegetationTile,
   ): VegetationRenderGroup {
     const previous = ctx.tileCache.get(key);
     if (previous) releaseVegetationGroup(ctx.vegetationGroup, previous.group);
 
-    const data = collectTileVegetationData(
-      tileInfo,
-      ctx.planet,
-      ctx.seed,
-      ctx.assets,
-      ctx.vegetationSettings,
-    );
     const renderGroup = createRenderGroupFromStored(data);
     renderGroup.group.visible = visible;
     ctx.vegetationGroup.add(renderGroup.group);
@@ -166,6 +210,36 @@ export function createVegetationTileRuntime(ctx: VegetationTileRuntimeCtx) {
     ctx.builtThisFrame += 1;
     updateCachePeak();
     return renderGroup;
+  }
+
+  function buildAndCacheVegetation(
+    tileInfo: TileInfo,
+    key: string,
+    visible: boolean,
+  ): VegetationRenderGroup {
+    const data = collectTileVegetationData(
+      tileInfo,
+      ctx.planet,
+      ctx.seed,
+      ctx.assets,
+      ctx.vegetationSettings,
+    );
+    return installVegetationTile(tileInfo, key, visible, data);
+  }
+
+  /** Refresh LOD/grass packing for a group that finished after its first frame. */
+  function refreshFinishedGroup(
+    renderGroup: VegetationRenderGroup,
+    tileInfo: TileInfo,
+    focus: Vec3,
+  ): void {
+    renderGroup.setTreesVisible(ctx.treesLayerVisible);
+    if (ctx.treesLayerVisible && shouldUpdateRenderGroupLod(renderGroup, focus)) {
+      renderGroup.updateTreeLod(focus);
+    }
+    if (ctx.grassLayerVisible && shouldShowGrassOnTile(tileInfo, focus)) {
+      renderGroup.updateGrassRadius(focus);
+    }
   }
 
   function completeVegetationDiskLoad(
@@ -415,48 +489,39 @@ export function createVegetationTileRuntime(ctx: VegetationTileRuntimeCtx) {
   }
 
   function evictVegetation(keepKeys: Set<string>): void {
-    for (const [key, entry] of ctx.tileCache) {
-      if (keepKeys.has(key)) continue;
-      if (ctx.frameNumber - entry.lastUsedFrame > VEGETATION_CACHE_STALE_FRAMES) {
-        releaseTileEntry(key, entry);
-      }
-    }
-
-    const effectiveCacheLimit = Math.max(
-      MAX_CACHED_VEGETATION_TILES,
-      keepKeys.size + VEGETATION_CACHE_ACTIVE_HEADROOM,
-    );
-    if (ctx.tileCache.size <= effectiveCacheLimit) return;
-
-    const focus = ctx.buildFocusPosition;
-    const inactiveEntries: [string, VegetationTileEntry][] = [];
-    for (const [key, entry] of ctx.tileCache) {
-      if (keepKeys.has(key)) continue;
-      inactiveEntries.push([key, entry]);
-    }
-    // Prefer dropping far corridor tiles first so a short walk reuses nearby
-    // GPU meshes instead of thrashing LRU at the selection boundary.
-    inactiveEntries.sort((a, b) => {
-      if (!focus) return a[1].lastUsedFrame - b[1].lastUsedFrame;
-      const aCenter = a[1].tileInfo?.centerPosition;
-      const bCenter = b[1].tileInfo?.centerPosition;
-      if (!aCenter && !bCenter) return a[1].lastUsedFrame - b[1].lastUsedFrame;
-      if (!aCenter) return -1;
-      if (!bCenter) return 1;
-      const distDelta =
-        distance(bCenter, focus) - distance(aCenter, focus);
-      if (Math.abs(distDelta) > 1) return distDelta;
-      return a[1].lastUsedFrame - b[1].lastUsedFrame;
-    });
-
-    for (const [key, entry] of inactiveEntries) {
-      if (ctx.tileCache.size <= effectiveCacheLimit) break;
-      releaseTileEntry(key, entry);
-    }
+    evictVegetationTiles(ctx, keepKeys, releaseTileEntry);
   }
+
+  const workerPool = createVegetationWorkerPool(ctx, {
+    claimNextJob() {
+      while (ctx.pendingBuildQueue.length > 0) {
+        const job = ctx.pendingBuildQueue.shift()!;
+        if (ctx.tileCache.get(job.key)?.status === 'pending-build') {
+          return { key: job.key, tileInfo: job.tileInfo };
+        }
+      }
+      return null;
+    },
+    install(key, tileInfo, data) {
+      const entry = ctx.tileCache.get(key);
+      if (!entry || entry.status !== 'pending-build') return;
+      const renderGroup = installVegetationTile(tileInfo, key, entry.group.visible, data);
+      if (lastBuildFocus) refreshFinishedGroup(renderGroup, tileInfo, lastBuildFocus);
+    },
+    requeue(key, tileInfo) {
+      if (ctx.tileCache.get(key)?.status !== 'pending-build') return;
+      enqueueVegetationBuild(key, tileInfo);
+    },
+  });
 
   function drainBuildQueue(bodyPosition: Vec3): void {
     if (!ctx.assetsReady) return;
+    lastBuildFocus = bodyPosition;
+    if (workerPool.hasWorkers()) {
+      workerPool.dispatch();
+      return;
+    }
+
     let budget = VEGETATION_BUILD_BUDGET_PER_FRAME;
     const deadlineMs = performance.now() + VEGETATION_BUILD_BUDGET_MS_PER_FRAME;
     while (budget > 0 && ctx.pendingBuildQueue.length > 0) {
@@ -466,27 +531,16 @@ export function createVegetationTileRuntime(ctx: VegetationTileRuntimeCtx) {
       if (!entry || entry.status !== 'pending-build') continue;
       const wasVisible = entry.group.visible;
       const renderGroup = buildAndCacheVegetation(job.tileInfo, job.key, wasVisible);
-      renderGroup.setTreesVisible(ctx.treesLayerVisible);
       // Queued builds finish after the tile's "newly visible" frame, so refresh
       // tree LOD here or nearby trees stay as low-poly imposters until the
       // player moves again.
-      if (
-        ctx.treesLayerVisible &&
-        shouldUpdateRenderGroupLod(renderGroup, bodyPosition)
-      ) {
-        renderGroup.updateTreeLod(bodyPosition);
-      }
-      if (
-        ctx.grassLayerVisible &&
-        shouldShowGrassOnTile(job.tileInfo, bodyPosition)
-      ) {
-        renderGroup.updateGrassRadius(bodyPosition);
-      }
+      refreshFinishedGroup(renderGroup, job.tileInfo, bodyPosition);
       budget -= 1;
     }
   }
 
   return {
+    disposeWorkers: workerPool.dispose,
     buildAndCacheVegetation,
     countReadyEntries,
     discardPendingBuild,

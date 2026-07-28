@@ -394,11 +394,88 @@ function createLegacyCharacterAvatarInstance(renderScale: number): CharacterAvat
   };
 }
 
+let debugCubeColor: string | null = null;
+
+/**
+ * Debug only: render every character as a literal cube.
+ *
+ * This factory is the single seam behind the local avatar, remote presence and
+ * station NPCs, so one flag covers all three. The multiplayer smoke test sets
+ * it to take GLB loading, Sidekick assembly and animation out of the variable
+ * set — a cube that moves on the other screen is unambiguous evidence.
+ */
+export function setDebugCubeAvatars(color: string | null): void {
+  debugCubeColor = color;
+}
+
+/**
+ * Minimal {@link CharacterAvatarInstance}: a box sitting on the ground with a
+ * wireframe so its facing is legible. The pose math is the legacy avatar's,
+ * verbatim, so the cube tracks exactly where a real avatar would.
+ */
+function createDebugCubeAvatarInstance(
+  renderScale: number,
+  color: string,
+): CharacterAvatarInstance {
+  const root = new THREE.Group();
+  const height = 1.8 * renderScale;
+  const geometry = new THREE.BoxGeometry(0.6 * renderScale, height, 0.6 * renderScale);
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0 }),
+  );
+  // The capsule origin is at the character's feet; the box is centre-anchored.
+  mesh.position.y = height / 2;
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometry),
+    new THREE.LineBasicMaterial({ color: '#0b0f14' }),
+  );
+  edges.position.copy(mesh.position);
+  root.add(mesh, edges);
+
+  return {
+    root,
+    dispose: () => {
+      geometry.dispose();
+      mesh.material.dispose();
+      edges.geometry.dispose();
+      edges.material.dispose();
+    },
+    getHeadBone: () => null,
+    hasLoadError: () => false,
+    isReady: () => true,
+    setAnimation: () => {
+      /* A cube has no clips — dropping animation is the point of this mode. */
+    },
+    setPose: (character, focusPosition, scale) => {
+      root.position.set(
+        (character.position.x - focusPosition.x) * scale,
+        (character.position.y - focusPosition.y) * scale,
+        (character.position.z - focusPosition.z) * scale,
+      );
+      root.up.set(character.up.x, character.up.y, character.up.z);
+      root.lookAt(
+        root.position.x + character.forward.x * 8 * scale,
+        root.position.y + character.forward.y * 8 * scale,
+        root.position.z + character.forward.z * 8 * scale,
+      );
+    },
+    updateMixer: () => {
+      /* No mixer to advance. */
+    },
+    setEquippedInventory: () => {
+      /* Debug cube has no equipment sockets. */
+    },
+    getActiveWeaponAttachment: () => null,
+  };
+}
+
 export function createCharacterAvatarInstance(
   renderScale: number,
   appearance: PlayerCharacterAppearanceV1 | null = null,
   modelUrl: string | null = null,
 ): CharacterAvatarInstance {
+  if (debugCubeColor) return createDebugCubeAvatarInstance(renderScale, debugCubeColor);
   // An authored character GLB replaces the modular Sidekick build entirely:
   // appearance variants only mean something for assembled Sidekick parts.
   if (modelUrl) return createModelCharacterAvatar(renderScale, modelUrl);

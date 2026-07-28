@@ -216,6 +216,8 @@ export function createPlanetTileManager(
       selectedTiles: requestedTiles,
       stats: {
         activeTiles: selectedKeys.size,
+        buildMsAverage: cacheStats.buildMsAverage,
+        buildMsPeak: cacheStats.buildMsPeak,
         builtThisFrame: frameStats.builtThisFrame,
         cacheLimit: MAX_CACHED_TILES,
         cachedTiles: meshCache.countEntries('ready'),

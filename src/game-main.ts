@@ -5,6 +5,10 @@ import { showCharacterCreationScreen } from './app/character-creation-screen';
 import { AUTHORING_ENABLED } from './build-mode';
 import { createSceneHost } from './app/scene-host';
 import { loadRuntimeConfig, runtimeConfig } from './net/runtime-config';
+import {
+  multiplayerDebugDescriptor,
+  prepareMultiplayerDebug,
+} from './app/multiplayer-debug-boot';
 
 /**
  * Game runtime entry (`index.html`).
@@ -88,5 +92,14 @@ function bootGame(): void {
   createSceneHost({ initialSceneId: runtimeConfig().bootScene, requireAuth: true });
 }
 
-// Resolve the backend URL before anything can issue a request.
-void loadRuntimeConfig().then(bootGame);
+// Resolve the backend URL before anything can issue a request. A multiplayer
+// debug window then provisions itself before the scene host asks for a session.
+void loadRuntimeConfig().then(async () => {
+  const descriptor = multiplayerDebugDescriptor();
+  if (descriptor) {
+    await prepareMultiplayerDebug(descriptor).catch((error: unknown) => {
+      console.error('[mp-debug] Instance preparation failed.', error);
+    });
+  }
+  bootGame();
+});

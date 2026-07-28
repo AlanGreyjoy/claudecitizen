@@ -50,6 +50,10 @@ export interface RenderableSurfaceCacheStats {
 
 export interface TileCacheStats {
   activeTiles: number;
+  /** Exponential moving average of per-tile generation cost, in milliseconds. */
+  buildMsAverage: number;
+  /** Worst single tile generation seen this session, in milliseconds. */
+  buildMsPeak: number;
   builtThisFrame: number;
   cacheLimit: number;
   cachedTiles: number;
@@ -61,6 +65,8 @@ export interface TileCacheStats {
   queuedThisFrame: number;
   totalBuilds: number;
   totalEvictions: number;
+  /** False once the pool dies and generation falls back to the main thread. */
+  workerBuildsEnabled: boolean;
 }
 
 export interface VegetationCacheStats {

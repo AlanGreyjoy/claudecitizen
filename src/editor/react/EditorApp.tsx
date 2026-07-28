@@ -21,6 +21,7 @@ import { usePrefabIsolation } from './use-prefab-isolation';
 import type { DeployTarget } from '../../platform/editor-desktop';
 import { DeployBackendModal } from './panels/deploy/DeployBackendModal';
 import { DeployFrontendModal } from './panels/deploy/DeployFrontendModal';
+import { MultiplayerDebugModal } from './panels/multiplayer_debug/MultiplayerDebugModal';
 import type { ProjectPanelHandle } from './panels/ProjectPanel';
 import type { ShipEditor } from './panels/ShipPanel';
 import type { ToolbarHandle } from './panels/Toolbar';
@@ -55,6 +56,7 @@ export function EditorApp(): ReactElement {
   const [newSceneOpen, setNewSceneOpen] = useState(false);
   /** Deploy → Front End… / Backend…. Self-contained modals; no store plumbing needed. */
   const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
+  const [multiplayerDebugOpen, setMultiplayerDebugOpen] = useState(false);
 
   const toolbarRef = useRef<ToolbarHandle | null>(null);
   const shipEditorRef = useRef<ShipEditor | null>(null);
@@ -336,6 +338,7 @@ export function EditorApp(): ReactElement {
     openProjectSettings,
     openDeployFrontend: () => setDeployTarget('client'),
     openDeployBackend: () => setDeployTarget('backend'),
+    openMultiplayerDebug: () => setMultiplayerDebugOpen(true),
     duplicateSelection,
     deleteSelection,
     exitToTitle,
@@ -444,6 +447,10 @@ export function EditorApp(): ReactElement {
     <DeployFrontendModal
       open={deployTarget === 'client'}
       onClose={() => setDeployTarget(null)}
+    />
+    <MultiplayerDebugModal
+      open={multiplayerDebugOpen}
+      onClose={() => setMultiplayerDebugOpen(false)}
     />
     </>
   );

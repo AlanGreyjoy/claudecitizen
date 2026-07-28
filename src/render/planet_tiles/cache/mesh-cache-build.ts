@@ -88,6 +88,15 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
     return distance(info.centerPosition, ctx.focusPosition) - info.level * 80;
   }
 
+  /** Smoothed so one cold tile does not dominate, peak kept so spikes show. */
+  function recordBuildMs(durationMs: number): void {
+    ctx.cacheStats.buildMsAverage =
+      ctx.cacheStats.buildMsAverage === 0
+        ? durationMs
+        : ctx.cacheStats.buildMsAverage * 0.9 + durationMs * 0.1;
+    ctx.cacheStats.buildMsPeak = Math.max(ctx.cacheStats.buildMsPeak, durationMs);
+  }
+
   function updateCachePeak(): void {
     ctx.cacheStats.peakCachedTiles = Math.max(ctx.cacheStats.peakCachedTiles, ctx.meshCache.size);
   }
@@ -215,7 +224,9 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
       return entry;
     }
 
+    const startedAt = performance.now();
     const buffers = buildTerrainTileBuffers(info, ctx.planet, ctx.seed);
+    recordBuildMs(performance.now() - startedAt);
     const mesh = createReadyMesh(info, buffers, ctx.material, ctx.tileGroup);
     entry = {
       buildId: null,
@@ -313,7 +324,8 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
           return;
         }
 
-        const { colors, normals, positions } = event.data;
+        const { buildMs, colors, normals, positions } = event.data;
+        recordBuildMs(buildMs);
         const entry = ctx.meshCache.get(key);
         if (entry && entry.buildId === buildId && entry.status === 'pending') {
           const buffers = { colors, normals, positions };

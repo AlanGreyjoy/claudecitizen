@@ -1,4 +1,4 @@
-import { add, cross, dot, normalize, scale, sub } from '../math/vec3';
+import { normalize, scale } from '../math/vec3';
 import { directionFromCubeFace, faceUvFromDirection } from './cube-sphere';
 import { sampleSurfaceHeightDetails, type SurfaceHeightDetails } from './elevation';
 import { getActivePlanetConfig, type PlanetRuntimeConfig } from './planets/runtime';
@@ -28,19 +28,35 @@ export interface VisibleSurfaceFrame {
   point: Vec3;
 }
 
-interface RenderableGridSample {
+/**
+ * One cached grid corner. The surface point is stored next to the height
+ * details so a cache hit is pure arithmetic — resolving it from the cube face
+ * again would re-run `directionFromCubeFace` (two vector allocations) on every
+ * one of the tens of thousands of probes a lush vegetation tile issues.
+ */
+interface RenderableGridEntry {
   details: SurfaceHeightDetails;
-  point: Vec3;
+  x: number;
+  y: number;
+  z: number;
 }
 
-interface RenderableGridCoordinates {
-  face: CubeFace;
-  gridX: number;
-  gridY: number;
-  level: number;
-}
+const FACE_KEY_INDEX: Record<CubeFace, number> = {
+  nx: 1,
+  ny: 3,
+  nz: 5,
+  px: 0,
+  py: 2,
+  pz: 4,
+};
 
-const renderableHeightCache = new Map<string, SurfaceHeightDetails>();
+// Grid coordinates reach 2^17 * 24 ≈ 3.15M at the finest level, so 22 bits each
+// covers them with headroom. face(3) + level(5) + x(22) + y(22) = 52 bits, which
+// stays inside the exact-integer range of a double.
+const GRID_COORDINATE_STRIDE = 4_194_304;
+const FACE_LEVEL_STRIDE = GRID_COORDINATE_STRIDE * GRID_COORDINATE_STRIDE;
+
+const renderableHeightCache = new Map<number, RenderableGridEntry>();
 const renderableHeightCacheStats: RenderableHeightCacheStatsInternal = {
   evictions: 0,
   hits: 0,
@@ -50,6 +66,10 @@ const renderableHeightCacheStats: RenderableHeightCacheStatsInternal = {
 };
 let cachedTerrainConfig: PlanetRuntimeConfig | null = null;
 let cachedTerrainRecipeKey = '';
+let cachedPlanetIdentity = '';
+let cachedGenerationPlanet: Planet | null = null;
+let cachedGenerationSeed = Number.NaN;
+let cachedGenerationConfig: PlanetRuntimeConfig | null = null;
 
 function terrainRecipeKey(): string {
   const config = getActivePlanetConfig();
@@ -70,20 +90,68 @@ function terrainRecipeKey(): string {
   return cachedTerrainRecipeKey;
 }
 
-function touchRenderableHeightEntry(key: string, details: SurfaceHeightDetails): void {
-  if (renderableHeightCache.has(key)) renderableHeightCache.delete(key);
-  renderableHeightCache.set(key, details);
-  renderableHeightCacheStats.peakEntries = Math.max(
-    renderableHeightCacheStats.peakEntries,
-    renderableHeightCache.size,
+/**
+ * The planet, seed, and terrain recipe used to be baked into every cache key,
+ * which meant building and hashing a ~70 character string four times per probe.
+ * They change only when a different planet is activated, so treat them as a
+ * cache generation instead: verify once per lookup batch and drop everything
+ * when it moves.
+ */
+function ensureCacheGeneration(planet: Planet, seed: number): void {
+  const config = getActivePlanetConfig();
+  if (
+    planet === cachedGenerationPlanet &&
+    seed === cachedGenerationSeed &&
+    config === cachedGenerationConfig
+  ) {
+    return;
+  }
+  cachedGenerationPlanet = planet;
+  cachedGenerationSeed = seed;
+  cachedGenerationConfig = config;
+  // Slow path only. A re-activated config object or a re-created Planet can
+  // still describe the same body, so compare the recipe itself before throwing
+  // away a warm cache.
+  const identity = `${terrainRecipeKey()}|${planet.name ?? 'planet'}|${planet.radiusMeters}|${planet.terrainAmplitudeMeters}|${seed}`;
+  if (identity === cachedPlanetIdentity) return;
+  cachedPlanetIdentity = identity;
+  renderableHeightCache.clear();
+}
+
+function renderableHeightKey(
+  face: CubeFace,
+  level: number,
+  gridX: number,
+  gridY: number,
+): number {
+  return (
+    (FACE_KEY_INDEX[face] * 32 + level) * FACE_LEVEL_STRIDE +
+    gridX * GRID_COORDINATE_STRIDE +
+    gridY
   );
 }
 
+function storeRenderableHeightEntry(key: number, entry: RenderableGridEntry): void {
+  renderableHeightCache.set(key, entry);
+  if (renderableHeightCache.size > renderableHeightCacheStats.peakEntries) {
+    renderableHeightCacheStats.peakEntries = renderableHeightCache.size;
+  }
+  if (renderableHeightCache.size <= MAX_RENDERABLE_HEIGHT_CACHE) return;
+  evictRenderableHeightEntries();
+}
+
+/**
+ * Insertion-order (FIFO) eviction. The previous map re-inserted on every hit to
+ * maintain true LRU, which cost three map operations per probe on the hottest
+ * path in the engine. Probes are strongly spatially coherent, so FIFO over a
+ * 180k window keeps effectively the same working set for a fraction of the
+ * traffic. Trim in one batch so a full cache does not pay eviction per insert.
+ */
 function evictRenderableHeightEntries(): void {
-  while (renderableHeightCache.size > MAX_RENDERABLE_HEIGHT_CACHE) {
-    const oldestKey = renderableHeightCache.keys().next().value;
-    if (oldestKey == null) break;
-    renderableHeightCache.delete(oldestKey);
+  const target = Math.floor(MAX_RENDERABLE_HEIGHT_CACHE * 0.95);
+  for (const key of renderableHeightCache.keys()) {
+    if (renderableHeightCache.size <= target) break;
+    renderableHeightCache.delete(key);
     renderableHeightCacheStats.evictions += 1;
   }
 }
@@ -97,25 +165,6 @@ export function getRenderableSurfaceCacheStats(): RenderableSurfaceCacheStats {
     misses: renderableHeightCacheStats.misses,
     peakEntries: renderableHeightCacheStats.peakEntries,
   };
-}
-
-function renderableHeightKey(
-  planet: Planet,
-  seed: number,
-  coordinates: RenderableGridCoordinates,
-): string {
-  const { face, gridX, gridY, level } = coordinates;
-  return [
-    terrainRecipeKey(),
-    planet.name ?? 'planet',
-    planet.radiusMeters,
-    planet.terrainAmplitudeMeters,
-    seed,
-    level,
-    face,
-    gridX,
-    gridY,
-  ].join(':');
 }
 
 function tileBounds(level: number, x: number, y: number): TileBounds {
@@ -156,45 +205,48 @@ export function renderableGridSampleSpacingMeters(
 function renderableGridPoint(
   planet: Planet,
   seed: number,
-  coordinates: RenderableGridCoordinates,
-): RenderableGridSample {
-  const { face, gridX, gridY, level } = coordinates;
+  face: CubeFace,
+  gridX: number,
+  gridY: number,
+  level: number,
+): RenderableGridEntry {
+  const key = renderableHeightKey(face, level, gridX, gridY);
+  const cached = renderableHeightCache.get(key);
+  if (cached !== undefined) {
+    renderableHeightCacheStats.hits += 1;
+    return cached;
+  }
+
+  renderableHeightCacheStats.misses += 1;
   const cellsPerFace = (2 ** level) * RENDER_SURFACE_SEGMENTS;
   const u = -1 + (gridX * 2) / cellsPerFace;
   const v = -1 + (gridY * 2) / cellsPerFace;
   const direction = directionFromCubeFace(face, u, v);
-  const key = renderableHeightKey(planet, seed, coordinates);
-  let details = renderableHeightCache.get(key);
-
-  if (details == null) {
-    renderableHeightCacheStats.misses += 1;
-    details = sampleSurfaceHeightDetails(
-      planet,
-      seed,
-      scale(direction, planet.radiusMeters),
-      {
-        sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, level),
-      },
-    );
-    touchRenderableHeightEntry(key, details);
-    evictRenderableHeightEntries();
-  } else {
-    renderableHeightCacheStats.hits += 1;
-    touchRenderableHeightEntry(key, details);
-  }
-
-  return {
+  const details = sampleSurfaceHeightDetails(
+    planet,
+    seed,
+    scale(direction, planet.radiusMeters),
+    {
+      sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, level),
+    },
+  );
+  const surfaceRadius = planet.radiusMeters + details.heightMeters;
+  const entry: RenderableGridEntry = {
     details,
-    point: scale(direction, planet.radiusMeters + details.heightMeters),
+    x: direction.x * surfaceRadius,
+    y: direction.y * surfaceRadius,
+    z: direction.z * surfaceRadius,
   };
+  storeRenderableHeightEntry(key, entry);
+  return entry;
 }
 
 function interpolateHeightDetails(
   samples: readonly [
-    RenderableGridSample,
-    RenderableGridSample,
-    RenderableGridSample,
-    RenderableGridSample,
+    RenderableGridEntry,
+    RenderableGridEntry,
+    RenderableGridEntry,
+    RenderableGridEntry,
   ],
   weights: readonly [number, number, number, number],
   heightMeters: number,
@@ -231,9 +283,47 @@ function interpolateHeightDetails(
   };
 }
 
-function orientNormal(normal: Vec3, direction: Vec3): Vec3 {
-  return dot(normal, direction) >= 0 ? normalize(normal) : scale(normalize(normal), -1);
+/** Unit-length triangle normal oriented outward, built without intermediates. */
+function orientedTriangleNormal(
+  a: RenderableGridEntry,
+  b: RenderableGridEntry,
+  c: RenderableGridEntry,
+  direction: Vec3,
+): Vec3 {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const abz = b.z - a.z;
+  const acx = c.x - a.x;
+  const acy = c.y - a.y;
+  const acz = c.z - a.z;
+  let nx = aby * acz - abz * acy;
+  let ny = abz * acx - abx * acz;
+  let nz = abx * acy - aby * acx;
+  const inverseLength = 1 / Math.max(Math.hypot(nx, ny, nz), 1e-12);
+  nx *= inverseLength;
+  ny *= inverseLength;
+  nz *= inverseLength;
+  if (nx * direction.x + ny * direction.y + nz * direction.z < 0) {
+    nx = -nx;
+    ny = -ny;
+    nz = -nz;
+  }
+  return { x: nx, y: ny, z: nz };
 }
+
+/** Reused across probes; only ever read back inside sampleRenderableSurfaceGrid. */
+const cornerScratch: [
+  RenderableGridEntry,
+  RenderableGridEntry,
+  RenderableGridEntry,
+  RenderableGridEntry,
+] = [
+  { details: null!, x: 0, y: 0, z: 0 },
+  { details: null!, x: 0, y: 0, z: 0 },
+  { details: null!, x: 0, y: 0, z: 0 },
+  { details: null!, x: 0, y: 0, z: 0 },
+];
+const weightScratch: [number, number, number, number] = [0, 0, 0, 0];
 
 function sampleRenderableSurfaceGrid(
   planet: Planet,
@@ -248,6 +338,7 @@ function sampleRenderableSurfaceGrid(
   normal: Vec3 | null;
   point: Vec3;
 } {
+  ensureCacheGeneration(planet, seed);
   const direction = normalize(position);
   const faceUv = faceUvFromDirection(direction);
   const tileCount = 2 ** level;
@@ -263,78 +354,75 @@ function sampleRenderableSurfaceGrid(
   const gridX = tileX * RENDER_SURFACE_SEGMENTS + cellX;
   const gridY = tileY * RENDER_SURFACE_SEGMENTS + cellY;
 
-  const s00 = renderableGridPoint(planet, seed, {
-    face: faceUv.face,
-    gridX,
-    gridY,
-    level,
-  });
-  const s10 = renderableGridPoint(planet, seed, {
-    face: faceUv.face,
-    gridX: gridX + 1,
-    gridY,
-    level,
-  });
-  const s01 = renderableGridPoint(planet, seed, {
-    face: faceUv.face,
-    gridX,
-    gridY: gridY + 1,
-    level,
-  });
-  const s11 = renderableGridPoint(planet, seed, {
-    face: faceUv.face,
-    gridX: gridX + 1,
-    gridY: gridY + 1,
-    level,
-  });
-  const samples = [s00, s10, s01, s11] as const;
-  const p00 = s00.point;
-  const p10 = s10.point;
-  const p01 = s01.point;
-  const p11 = s11.point;
+  const face = faceUv.face;
+  const s00 = renderableGridPoint(planet, seed, face, gridX, gridY, level);
+  const s10 = renderableGridPoint(planet, seed, face, gridX + 1, gridY, level);
+  const s01 = renderableGridPoint(planet, seed, face, gridX, gridY + 1, level);
+  const s11 = renderableGridPoint(planet, seed, face, gridX + 1, gridY + 1, level);
+  cornerScratch[0] = s00;
+  cornerScratch[1] = s10;
+  cornerScratch[2] = s01;
+  cornerScratch[3] = s11;
 
-  let point: Vec3;
-  let weights: [number, number, number, number];
+  // Barycentric blend across the active half of the cell, written as scalars.
+  // The vector-combinator form allocated nine Vec3s per probe, and this runs
+  // once per foot sample and once per vegetation placement attempt.
+  let w00 = 0;
+  let w10 = 0;
+  let w01 = 0;
+  let w11 = 0;
   let normal: Vec3 | null = null;
   const usesNorthwestSoutheastDiagonal =
     terrainCellUsesNorthwestSoutheastDiagonal(gridX, gridY);
 
   if (usesNorthwestSoutheastDiagonal && fracV <= fracU) {
-    point = add(
-      add(scale(p00, 1 - fracU), scale(p10, fracU - fracV)),
-      scale(p11, fracV),
-    );
-    weights = [1 - fracU, fracU - fracV, 0, fracV];
-    if (includeNormal) normal = cross(sub(p10, p00), sub(p11, p00));
+    w00 = 1 - fracU;
+    w10 = fracU - fracV;
+    w11 = fracV;
+    if (includeNormal) {
+      normal = orientedTriangleNormal(s00, s10, s11, direction);
+    }
   } else if (usesNorthwestSoutheastDiagonal) {
-    point = add(
-      add(scale(p00, 1 - fracV), scale(p11, fracU)),
-      scale(p01, fracV - fracU),
-    );
-    weights = [1 - fracV, 0, fracV - fracU, fracU];
-    if (includeNormal) normal = cross(sub(p11, p00), sub(p01, p00));
+    w00 = 1 - fracV;
+    w01 = fracV - fracU;
+    w11 = fracU;
+    if (includeNormal) {
+      normal = orientedTriangleNormal(s00, s11, s01, direction);
+    }
   } else if (fracU + fracV <= 1) {
-    point = add(
-      add(scale(p00, 1 - fracU - fracV), scale(p10, fracU)),
-      scale(p01, fracV),
-    );
-    weights = [1 - fracU - fracV, fracU, fracV, 0];
-    if (includeNormal) normal = cross(sub(p10, p00), sub(p01, p00));
+    w00 = 1 - fracU - fracV;
+    w10 = fracU;
+    w01 = fracV;
+    if (includeNormal) {
+      normal = orientedTriangleNormal(s00, s10, s01, direction);
+    }
   } else {
-    point = add(
-      add(scale(p10, 1 - fracV), scale(p11, fracU + fracV - 1)),
-      scale(p01, 1 - fracU),
-    );
-    weights = [0, 1 - fracV, 1 - fracU, fracU + fracV - 1];
-    if (includeNormal) normal = cross(sub(p11, p10), sub(p01, p10));
+    w10 = 1 - fracV;
+    w01 = 1 - fracU;
+    w11 = fracU + fracV - 1;
+    if (includeNormal) {
+      normal = orientedTriangleNormal(s10, s11, s01, direction);
+    }
   }
 
-  const heightMeters = dot(point, direction) - planet.radiusMeters;
+  weightScratch[0] = w00;
+  weightScratch[1] = w10;
+  weightScratch[2] = w01;
+  weightScratch[3] = w11;
+  const point: Vec3 = {
+    x: s00.x * w00 + s10.x * w10 + s01.x * w01 + s11.x * w11,
+    y: s00.y * w00 + s10.y * w10 + s01.y * w01 + s11.y * w11,
+    z: s00.z * w00 + s10.z * w10 + s01.z * w01 + s11.z * w11,
+  };
+
+  const heightMeters =
+    point.x * direction.x + point.y * direction.y + point.z * direction.z -
+    planet.radiusMeters;
   return {
     direction,
-    heightDetails: interpolateHeightDetails(samples, weights, heightMeters),
+    heightDetails: interpolateHeightDetails(cornerScratch, weightScratch, heightMeters),
     heightMeters,
-    normal: normal ? orientNormal(normal, direction) : null,
+    normal,
     point,
   };
 }

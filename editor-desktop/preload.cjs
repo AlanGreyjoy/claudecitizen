@@ -43,5 +43,10 @@ contextBridge.exposeInMainWorld(
       ipcRenderer.invoke('projects:showInFolder', projectRoot),
     returnToProjects: () => ipcRenderer.invoke('projects:returnToHub'),
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+    multiplayerDebugHealth: () => ipcRenderer.invoke('mp-debug:health'),
+    launchMultiplayerDebug: (options) => ipcRenderer.invoke('mp-debug:launch', options),
+    stopMultiplayerDebug: () => ipcRenderer.invoke('mp-debug:stop'),
+    multiplayerDebugStatus: () => ipcRenderer.invoke('mp-debug:status'),
+    onMultiplayerDebugState: (callback) => subscribe('editor:mp-debug-state', callback),
   }),
 );

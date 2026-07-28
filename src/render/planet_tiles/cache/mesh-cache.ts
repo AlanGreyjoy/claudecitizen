@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
 import type { Planet, TileInfo, Vec3 } from '../../../types';
+import { distance } from '../../../math/vec3';
 import { CUBE_FACES } from '../../../world/cube-sphere';
 import {
   MAX_CACHED_TILES,
@@ -25,6 +26,9 @@ import {
   createMeshCacheDiskOps,
   createMeshCacheResolveOps,
 } from './mesh-cache-disk-load';
+
+/** Focus travel that justifies re-scoring and re-sorting the pending queue. */
+const RESORT_FOCUS_MOVE_METERS = 120;
 
 export interface BuildBudget {
   remaining: number;
@@ -63,6 +67,8 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
 
   const meshCache = new Map<string, TileMeshEntry>();
   const cacheStats: TileCacheStatsAccumulator = {
+    buildMsAverage: 0,
+    buildMsPeak: 0,
     diskHits: 0,
     diskMisses: 0,
     peakCachedTiles: 0,
@@ -258,8 +264,14 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       buildCtx.syncBuildBudgetRemaining = SYNC_TILE_BUILD_BUDGET_PER_FRAME;
     },
     setFocusPosition(position) {
+      const previous = buildCtx.focusPosition;
       buildCtx.focusPosition = position;
-      if (pendingBuildQueue.length > 1) build.resortPendingQueue();
+      if (pendingBuildQueue.length <= 1) return;
+      // Re-prioritising is a full re-score plus a sort, and it ran every frame
+      // while flying — exactly when the queue is longest. Priority is distance
+      // based, so a sub-tile move cannot meaningfully reorder it.
+      if (previous && distance(previous, position) < RESORT_FOCUS_MOVE_METERS) return;
+      build.resortPendingQueue();
     },
     setFrameNumber(frame) {
       buildCtx.frameNumber = frame;

@@ -63,8 +63,11 @@ const IDLE_VEGETATION_STATS = {
 
 const IDLE_TERRAIN_STATS = {
   ...IDLE_VEGETATION_STATS,
+  buildMsAverage: 0,
+  buildMsPeak: 0,
   pendingTiles: 0,
   queuedThisFrame: 0,
+  workerBuildsEnabled: false,
 };
 
 /**

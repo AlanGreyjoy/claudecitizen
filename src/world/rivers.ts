@@ -1,4 +1,4 @@
-import type { Planet, Vec3 } from '../types';
+import type { CubeFace, Planet, Vec3 } from '../types';
 import { cross, dot, normalize } from '../math/vec3';
 import { samplePreRiverHeightDetails } from './base-elevation';
 import { faceUvFromDirection } from './cube-sphere';
@@ -22,7 +22,8 @@ interface RiverSegment {
 
 interface RiverNetwork {
   binResolution: number;
-  bins: Map<string, number[]>;
+  /** Key is packed face/x/y — see {@link binKey}. */
+  bins: Map<number, number[]>;
   confluences: number;
   routes: number;
   segments: RiverSegment[];
@@ -239,20 +240,52 @@ function projectedTravelTangent(from: Vec3, to: Vec3): Vec3 {
   });
 }
 
-function binCoordinates(direction: Vec3, resolution: number) {
+const BIN_FACE_INDEX: Record<CubeFace, number> = {
+  nx: 1,
+  ny: 3,
+  nz: 5,
+  px: 0,
+  py: 2,
+  pz: 4,
+};
+
+interface BinCoordinates {
+  face: CubeFace;
+  x: number;
+  y: number;
+}
+
+/**
+ * Reused by every bin query. sampleRiverField runs once per terrain vertex and
+ * once per foot probe, so returning a fresh object here was one of the largest
+ * allocation sources in the whole generator.
+ */
+const binScratch: BinCoordinates = { face: 'px', x: 0, y: 0 };
+
+function binCoordinates(direction: Vec3, resolution: number): BinCoordinates {
   const { face, u, v } = faceUvFromDirection(direction);
-  return {
-    face,
-    x: Math.max(0, Math.min(resolution - 1, Math.floor(((u + 1) * 0.5) * resolution))),
-    y: Math.max(0, Math.min(resolution - 1, Math.floor(((v + 1) * 0.5) * resolution))),
-  };
+  binScratch.face = face;
+  binScratch.x = Math.max(
+    0,
+    Math.min(resolution - 1, Math.floor(((u + 1) * 0.5) * resolution)),
+  );
+  binScratch.y = Math.max(
+    0,
+    Math.min(resolution - 1, Math.floor(((v + 1) * 0.5) * resolution)),
+  );
+  return binScratch;
 }
 
-function binKey(face: string, x: number, y: number): string {
-  return `${face}:${x}:${y}`;
+/**
+ * Pack face/x/y into one integer. Bin resolution is 64, so a face plane needs
+ * 12 bits and the whole key fits comfortably in a small int — string keys meant
+ * building and hashing a fresh string on every bin probe.
+ */
+function binKey(face: CubeFace, x: number, y: number): number {
+  return (BIN_FACE_INDEX[face] * NETWORK_BIN_RESOLUTION + y) * NETWORK_BIN_RESOLUTION + x;
 }
 
-function addSegmentReference(network: RiverNetwork, key: string, segmentIndex: number): void {
+function addSegmentReference(network: RiverNetwork, key: number, segmentIndex: number): void {
   const indices = network.bins.get(key);
   if (!indices) {
     network.bins.set(key, [segmentIndex]);
@@ -326,33 +359,41 @@ function addSegmentToIndex(network: RiverNetwork, segmentIndex: number): void {
   }
 }
 
+/**
+ * Reused by the per-vertex proximity scan. Callers must consume the result
+ * before the next call — {@link sampleRiverField} and {@link nearestRiverSegment}
+ * both copy out what they keep.
+ */
+const nearestSegmentScratch: NearestRiverSegment = {
+  distanceRadians: 0,
+  index: -1,
+  t: 0,
+};
+
 function closestPointOnSegment(direction: Vec3, segment: RiverSegment): NearestRiverSegment {
-  const ab = {
-    x: segment.end.x - segment.start.x,
-    y: segment.end.y - segment.start.y,
-    z: segment.end.z - segment.start.z,
-  };
-  const denominator = Math.max(dot(ab, ab), 1e-12);
+  const { start, end } = segment;
+  const abx = end.x - start.x;
+  const aby = end.y - start.y;
+  const abz = end.z - start.z;
+  const denominator = Math.max(abx * abx + aby * aby + abz * abz, 1e-12);
   const t = clamp01(
-    dot(
-      {
-        x: direction.x - segment.start.x,
-        y: direction.y - segment.start.y,
-        z: direction.z - segment.start.z,
-      },
-      ab,
-    ) / denominator,
+    ((direction.x - start.x) * abx +
+      (direction.y - start.y) * aby +
+      (direction.z - start.z) * abz) /
+      denominator,
   );
-  const nearest = normalize({
-    x: segment.start.x + ab.x * t,
-    y: segment.start.y + ab.y * t,
-    z: segment.start.z + ab.z * t,
-  });
-  return {
-    distanceRadians: Math.acos(Math.max(-1, Math.min(1, dot(direction, nearest)))),
-    index: -1,
-    t,
-  };
+  const nx = start.x + abx * t;
+  const ny = start.y + aby * t;
+  const nz = start.z + abz * t;
+  const inverseLength = 1 / Math.max(Math.hypot(nx, ny, nz), 1e-12);
+  const cosine =
+    (direction.x * nx + direction.y * ny + direction.z * nz) * inverseLength;
+  nearestSegmentScratch.distanceRadians = Math.acos(
+    Math.max(-1, Math.min(1, cosine)),
+  );
+  nearestSegmentScratch.index = -1;
+  nearestSegmentScratch.t = t;
+  return nearestSegmentScratch;
 }
 
 function appendUniqueSegmentIndex(index: number): void {
@@ -411,6 +452,9 @@ function nearbySegmentIndicesWithin(
   maximumDistanceRadians: number,
 ): Set<number> {
   const center = binCoordinates(direction, network.binResolution);
+  const centerFace = center.face;
+  const centerX = center.x;
+  const centerY = center.y;
   const radius = Math.max(
     1,
     Math.ceil(maximumDistanceRadians * network.binResolution) + 1,
@@ -418,10 +462,10 @@ function nearbySegmentIndicesWithin(
   const indices = new Set<number>();
   for (let dy = -radius; dy <= radius; dy += 1) {
     for (let dx = -radius; dx <= radius; dx += 1) {
-      const x = center.x + dx;
-      const y = center.y + dy;
+      const x = centerX + dx;
+      const y = centerY + dy;
       if (x < 0 || y < 0 || x >= network.binResolution || y >= network.binResolution) continue;
-      const binIndices = network.bins.get(binKey(center.face, x, y));
+      const binIndices = network.bins.get(binKey(centerFace, x, y));
       if (!binIndices) continue;
       for (const index of binIndices) indices.add(index);
     }
@@ -442,14 +486,26 @@ function nearestRiverSegment(
     maximumDistanceRadians,
   )) {
     const segment = network.segments[index];
+    // closestPointOnSegment returns shared scratch, so copy out on improvement
+    // instead of retaining the reference.
     const candidate = closestPointOnSegment(direction, segment);
-    candidate.index = index;
     if (candidate.distanceRadians > maximumDistanceRadians) continue;
     const waterLevel =
       segment.startWaterLevelNormalized +
       (segment.endWaterLevelNormalized - segment.startWaterLevelNormalized) * candidate.t;
     if (waterLevel >= maximumWaterLevelNormalized) continue;
-    if (!nearest || candidate.distanceRadians < nearest.distanceRadians) nearest = candidate;
+    if (nearest && candidate.distanceRadians >= nearest.distanceRadians) continue;
+    if (nearest) {
+      nearest.distanceRadians = candidate.distanceRadians;
+      nearest.index = index;
+      nearest.t = candidate.t;
+    } else {
+      nearest = {
+        distanceRadians: candidate.distanceRadians,
+        index,
+        t: candidate.t,
+      };
+    }
   }
   return nearest;
 }
@@ -817,21 +873,45 @@ export function getRiverNetworkDiagnostics(
   };
 }
 
+let mostRecentNetworkPlanet: Planet | null = null;
+let mostRecentNetworkSeed = Number.NaN;
+let mostRecentNetworkConfig: PlanetRuntimeConfig | null = null;
+
 function getRiverNetwork(planet: Planet, seed: number): RiverNetwork {
+  // Identity fast path. sampleRiverField runs once per terrain vertex, and
+  // riverNetworkKey builds and joins a string every time it is reached, so the
+  // string form is now only used to seed and evict the map.
+  if (
+    mostRecentNetwork &&
+    planet === mostRecentNetworkPlanet &&
+    seed === mostRecentNetworkSeed &&
+    getActivePlanetConfig() === mostRecentNetworkConfig
+  ) {
+    return mostRecentNetwork;
+  }
+
   const key = riverNetworkKey(planet, seed);
-  if (key === mostRecentNetworkKey && mostRecentNetwork) return mostRecentNetwork;
+  const rememberIdentity = (network: RiverNetwork): RiverNetwork => {
+    mostRecentNetworkPlanet = planet;
+    mostRecentNetworkSeed = seed;
+    mostRecentNetworkConfig = getActivePlanetConfig();
+    return network;
+  };
+  if (key === mostRecentNetworkKey && mostRecentNetwork) {
+    return rememberIdentity(mostRecentNetwork);
+  }
   const cached = networkCache.get(key);
   if (cached) {
     mostRecentNetworkKey = key;
     mostRecentNetwork = cached;
-    return cached;
+    return rememberIdentity(cached);
   }
   const network = buildRiverNetwork(planet, seed);
   networkCache.set(key, network);
   mostRecentNetworkKey = key;
   mostRecentNetwork = network;
   while (networkCache.size > 4) networkCache.delete(networkCache.keys().next().value!);
-  return network;
+  return rememberIdentity(network);
 }
 
 /** Build (or touch) the cached drainage graph during loading — not on first footstep. */

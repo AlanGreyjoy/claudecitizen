@@ -1,4 +1,4 @@
-import { altitudeForPosition, latLonForPosition, radialUp } from './coordinates';
+import { altitudeForPosition, radialUp } from './coordinates';
 import { oceanWaterLevelMeters } from './coastal-profile';
 import { sampleLakeSurface } from './lakes';
 import { sampleRiverSurface } from './rivers';
@@ -10,6 +10,42 @@ import { getActivePlanetConfig } from './planets/runtime';
 import type { PlanetBiomeRecipe } from './planets/schema';
 
 const FOREST_NOISE_SEED_OFFSET = 4321;
+
+// classifyBiome runs once per terrain vertex, per vegetation placement attempt,
+// and per surface-spawn probe — tens of thousands of calls per tile. Building a
+// Set from the recipe on every one of those was pure allocation churn, so key a
+// single cached Set off the recipe's own array identity (stable per document).
+let cachedEnabledSource: readonly Biome[] | null = null;
+let cachedEnabledSet = new Set<Biome>();
+
+function enabledBiomes(recipe: PlanetBiomeRecipe): Set<Biome> {
+  if (recipe.enabled !== cachedEnabledSource) {
+    cachedEnabledSource = recipe.enabled;
+    cachedEnabledSet = new Set(recipe.enabled);
+  }
+  return cachedEnabledSet;
+}
+
+interface ClimateNoiseSet {
+  forest: ReturnType<typeof getNoise3D>;
+  moisture: ReturnType<typeof getNoise3D>;
+  temperature: ReturnType<typeof getNoise3D>;
+}
+
+/** The three climate noise fields are seed-derived and never change mid-tile. */
+let cachedClimateNoiseSeed: number | null = null;
+let cachedClimateNoise: ClimateNoiseSet | null = null;
+
+function climateNoiseForSeed(seed: number): ClimateNoiseSet {
+  if (cachedClimateNoise && cachedClimateNoiseSeed === seed) return cachedClimateNoise;
+  cachedClimateNoise = {
+    forest: getNoise3D(seed + FOREST_NOISE_SEED_OFFSET),
+    moisture: getNoise3D(seed + 5678),
+    temperature: getNoise3D(seed + 1234),
+  };
+  cachedClimateNoiseSeed = seed;
+  return cachedClimateNoise;
+}
 
 export interface BiomeClassificationInput {
   /**
@@ -48,7 +84,7 @@ export function classifyBiome(
   } = input;
   // Alpine tundra / peaks: high elevation anywhere (mountain regions preferred).
   // Rock/snow biomes stay out of rolling mid-elevation hills.
-  const enabled = new Set(recipe.enabled);
+  const enabled = enabledBiomes(recipe);
   const highlandThreshold =
     mountainRegion > recipe.mountainRegionThreshold
       ? recipe.highlandNormalizedHeight
@@ -133,29 +169,29 @@ export function sampleSurfaceClimate(
   heightMeters: number,
   heightDetails?: SurfaceHeightDetails,
 ): PlanetSurfaceSample {
-  const { latRadians } = latLonForPosition(position);
-  const noise3D = getNoise3D(seed + 1234);
   const surfaceRadiusMeters = planet.radiusMeters + heightMeters;
   const altitudeMeters = altitudeForPosition(position, surfaceRadiusMeters);
   const normalizedHeight = heightMeters / planet.terrainAmplitudeMeters;
+  // One radial normalize for the whole function. latLonForPosition would
+  // normalize a second time and allocate a result object per sample.
   const unit = radialUp(position);
+  const latRadians = Math.asin(Math.max(-1, Math.min(1, unit.y)));
+  const noise = climateNoiseForSeed(seed);
 
-  const tempNoise = fbm3d(noise3D, unit.x, unit.y, unit.z, 3, 0.5, 2.0, 2.0);
+  const tempNoise = fbm3d(noise.temperature, unit.x, unit.y, unit.z, 3, 0.5, 2.0, 2.0);
   const latFactor = Math.abs(latRadians) / (Math.PI / 2);
   const altitudeFactor = Math.max(0, normalizedHeight);
   let temperature = 1.0 - latFactor - altitudeFactor * 0.5 + tempNoise * 0.2;
   temperature = clamp01(temperature);
 
-  const moistureNoise = getNoise3D(seed + 5678);
-  const mNoise = fbm3d(moistureNoise, unit.x, unit.y, unit.z, 4, 0.5, 2.0, 1.5);
+  const mNoise = fbm3d(noise.moisture, unit.x, unit.y, unit.z, 4, 0.5, 2.0, 1.5);
   let moisture = mNoise * 0.5 + 0.5;
   moisture += Math.cos(latRadians * 3) * 0.2;
   // Softened altitude penalty so mid-elevation land can still be forest.
   moisture -= Math.max(0, normalizedHeight) * 0.1;
   // Medium-scale patch noise makes forests form coherent regions instead of
   // moisture speckle at the biome threshold.
-  const forestNoise = getNoise3D(seed + FOREST_NOISE_SEED_OFFSET);
-  moisture += fbm3d(forestNoise, unit.x, unit.y, unit.z, 3, 0.5, 2.0, 3.0) * 0.25;
+  moisture += fbm3d(noise.forest, unit.x, unit.y, unit.z, 3, 0.5, 2.0, 3.0) * 0.25;
   moisture = clamp01(moisture);
 
   const mountainRegion =

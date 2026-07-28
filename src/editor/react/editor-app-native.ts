@@ -58,6 +58,7 @@ export type NativeCommandHandlers = {
   duplicate: () => void;
   deleteSelection: () => void;
   exitToTitle: () => void;
+  openMultiplayerDebug: () => void;
   reloadSidekickPack: () => void;
 };
 
@@ -87,6 +88,7 @@ export function dispatchNativeCommand(
     duplicate: handlers.duplicate,
     delete: handlers.deleteSelection,
     'exit-to-title': handlers.exitToTitle,
+    'open-multiplayer-debug': handlers.openMultiplayerDebug,
     'new-project': () => {},
     'sidekick-pack-changed': handlers.reloadSidekickPack,
   };

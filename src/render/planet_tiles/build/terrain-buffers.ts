@@ -6,7 +6,6 @@ import type {
   TileInfo,
   Vec3,
 } from '../../../types';
-import { scale } from '../../../math/vec3';
 import { directionFromCubeFace } from '../../../world/cube-sphere';
 import {
   coastTreatmentMaxHeightMeters,
@@ -70,6 +69,11 @@ function hexStringToRgb(hex: string, target: RgbColor): void {
   target[2] = (value & 255) / 255;
 }
 
+// Resolved once per tile instead of once per vertex — both readers walk back to
+// getActivePlanetConfig(), and writeSurfaceBaseColor runs 625 times per tile.
+let oceanLevelMeters = 0;
+let coastCeilingMeters = 0;
+
 function refreshPaletteColors(): void {
   const { palette } = getActivePlanetConfig();
   hexStringToRgb(palette.lake, lakeBedColor);
@@ -82,6 +86,8 @@ function refreshPaletteColors(): void {
   hexStringToRgb(palette.highlands, alpineColor);
   hexStringToRgb(palette.rock, rockColor);
   hexStringToRgb(palette.peak, snowColor);
+  oceanLevelMeters = oceanWaterLevelMeters();
+  coastCeilingMeters = coastTreatmentMaxHeightMeters();
 }
 
 function clamp01(value: number): number {
@@ -116,7 +122,7 @@ function writeSurfaceBaseColor(
   colors: Float32Array,
   offset: number,
 ): void {
-  const oceanLevel = oceanWaterLevelMeters();
+  const oceanLevel = oceanLevelMeters;
   if (surface.waterBody === 'ocean') {
     // This is seabed terrain, not the water surface. Keep it sand/rock so the
     // separate transparent water mesh reads as an actual layer instead of a
@@ -173,12 +179,7 @@ function writeSurfaceBaseColor(
     surface.riverWaterLevelMeters == null
   ) {
     const coastStrength =
-      1 -
-      smoothstep(
-        oceanLevel + 1.5,
-        coastTreatmentMaxHeightMeters(),
-        surface.heightMeters,
-      );
+      1 - smoothstep(oceanLevel + 1.5, coastCeilingMeters, surface.heightMeters);
     blendColor(scratchColor, coastColor, coastStrength);
   }
 
@@ -396,24 +397,38 @@ function writeSkirtTriangle(
   return outputVertex + 3;
 }
 
+/**
+ * Grid width is fixed by TILE_SEGMENTS, so the four edge index runs are the
+ * same for every tile. Building them per tile allocated four arrays plus four
+ * closures on a path that runs for each of the hundreds of tiles in flight.
+ */
+let cachedSkirtEdgeWidth = -1;
+let cachedSkirtEdgeIndices: Int32Array[] = [];
+
+function skirtEdgeIndices(width: number): Int32Array[] {
+  if (width === cachedSkirtEdgeWidth) return cachedSkirtEdgeIndices;
+  const north = new Int32Array(width);
+  const south = new Int32Array(width);
+  const west = new Int32Array(width);
+  const east = new Int32Array(width);
+  for (let index = 0; index < width; index += 1) {
+    north[index] = index;
+    south[index] = TILE_SEGMENTS * width + index;
+    west[index] = index * width;
+    east[index] = index * width + TILE_SEGMENTS;
+  }
+  cachedSkirtEdgeWidth = width;
+  cachedSkirtEdgeIndices = [north, south, west, east];
+  return cachedSkirtEdgeIndices;
+}
+
 function appendTerrainSkirts(
   buffers: TerrainTileBuffers,
   grid: TerrainGrid,
   info: TileInfo,
   outputVertex: number,
 ): number {
-  const edgeIndices = [
-    Array.from({ length: grid.width }, (_, index) => index),
-    Array.from(
-      { length: grid.width },
-      (_, index) => TILE_SEGMENTS * grid.width + index,
-    ),
-    Array.from({ length: grid.width }, (_, index) => index * grid.width),
-    Array.from(
-      { length: grid.width },
-      (_, index) => index * grid.width + TILE_SEGMENTS,
-    ),
-  ];
+  const edgeIndices = skirtEdgeIndices(grid.width);
   const depthMeters = terrainSkirtDepthMeters(info);
 
   for (const edge of edgeIndices) {
@@ -517,20 +532,30 @@ function buildTerrainGrid(
   const colors = new Float32Array(gridVertexCount * 3);
   const rockAffinity = new Float32Array(gridVertexCount);
   let gridVertex = 0;
+  // Every vertex in this tile shares one LOD band limit and one options object;
+  // rebuilding both per vertex cost 625 allocations and 625 pow() calls a tile.
+  const sampleOptions = {
+    sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, info.level),
+  };
+  const samplePosition: Vec3 = { x: 0, y: 0, z: 0 };
 
   for (let iy = 0; iy <= TILE_SEGMENTS; iy += 1) {
     const v = v0 + ((v1 - v0) * iy) / TILE_SEGMENTS;
     for (let ix = 0; ix <= TILE_SEGMENTS; ix += 1) {
       const u = u0 + ((u1 - u0) * ix) / TILE_SEGMENTS;
       const direction = directionFromCubeFace(info.face, u, v);
-      const samplePosition = scale(direction, planet.radiusMeters);
-      // Every vertex in this tile uses one uniform LOD band limit. The
-      // visible-frame sampler would fetch four heights to reconstruct a normal
-      // that this builder discards before calculating flat facet normals, so
-      // sample the analytic height once here.
-      const surface = sampleAnalyticPlanetSurface(planet, seed, samplePosition, {
-        sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, info.level),
-      });
+      samplePosition.x = direction.x * planet.radiusMeters;
+      samplePosition.y = direction.y * planet.radiusMeters;
+      samplePosition.z = direction.z * planet.radiusMeters;
+      // The visible-frame sampler would fetch four heights to reconstruct a
+      // normal that this builder discards before calculating flat facet
+      // normals, so sample the analytic height once here.
+      const surface = sampleAnalyticPlanetSurface(
+        planet,
+        seed,
+        samplePosition,
+        sampleOptions,
+      );
       const offset = gridVertex * 3;
 
       positions[offset] =

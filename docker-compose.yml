@@ -17,6 +17,7 @@ services:
       APP_ENV: development
       HTTP_BIND: 0.0.0.0:3000
       CLIENT_ORIGIN: http://localhost:4173
+      WEBTRANSPORT_ALLOWED_ORIGINS: http://localhost:4173,http://127.0.0.1:5173,cceditor://app,null
       API_PUBLIC_URL: http://localhost:3000
       DATABASE_URL: postgresql://claude:citizen@postgres:5432/claude_citizen
       REDIS_URL: redis://redis:6379

@@ -11,11 +11,16 @@ export function createTileBuildWorker(): Worker | null {
   }
 }
 
-/** Parallel tile builds — leave a core for the main thread / other workers. */
+/**
+ * Parallel tile builds. The old hard ceiling of four left most of a modern
+ * machine idle while the player stared at an unbuilt horizon; reserve four
+ * cores (main thread, vegetation pool, spawn worker, headroom) and use the
+ * rest. Flying is the case that wants every builder available at once.
+ */
 export function terrainWorkerPoolSize(): number {
   if (typeof navigator === 'undefined') return 2;
   const cores = navigator.hardwareConcurrency || 4;
-  return Math.max(2, Math.min(4, cores - 1));
+  return Math.min(6, Math.max(2, cores - 4));
 }
 
 export function createTileBuildWorkers(count = terrainWorkerPoolSize()): Worker[] {

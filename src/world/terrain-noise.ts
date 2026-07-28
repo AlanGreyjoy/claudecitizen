@@ -34,10 +34,14 @@ function createMulberry32(seed: number): () => number {
 }
 
 export function getNoise3D(seed: number): NoiseFunction3D {
-  if (!noiseCache.has(seed)) {
-    noiseCache.set(seed, createNoise3D(createMulberry32(seed)));
+  // Single lookup: this runs several times per surface sample, so the extra
+  // `has` probe was doubling the map traffic of every terrain vertex.
+  let noise = noiseCache.get(seed);
+  if (noise === undefined) {
+    noise = createNoise3D(createMulberry32(seed));
+    noiseCache.set(seed, noise);
   }
-  return noiseCache.get(seed)!;
+  return noise;
 }
 
 export function fbm3d(

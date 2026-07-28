@@ -17,6 +17,9 @@ export interface SurfaceHeightDetails {
   riverWaterLevelNormalized?: number | null;
 }
 
+/** Reused per sample; sampleRiverField copies what it needs before returning. */
+const riverProbeScratch: Vec3 = { x: 0, y: 0, z: 0 };
+
 export function sampleSurfaceHeightDetails(
   planet: Planet,
   seed: number,
@@ -32,14 +35,13 @@ export function sampleSurfaceHeightDetails(
   let riverWaterLevelNormalized: number | null | undefined;
   if (elevation >= hydrology.riverMinLandElevation) {
     const length = Math.max(Math.hypot(position.x, position.y, position.z), 1e-9);
+    riverProbeScratch.x = position.x / length;
+    riverProbeScratch.y = position.y / length;
+    riverProbeScratch.z = position.z / length;
     const river = sampleRiverField(
       planet,
       seed,
-      {
-        x: position.x / length,
-        y: position.y / length,
-        z: position.z / length,
-      },
+      riverProbeScratch,
       options?.sampleSpacingMeters,
     );
     riverStrength = river.riverStrength;

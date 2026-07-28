@@ -279,11 +279,28 @@ impl Session {
     }
 }
 
+/// A browser sends the page's origin on the WebTransport handshake, but a page
+/// served from a privileged custom scheme may serialize to an opaque origin and
+/// send no header at all — `null` in the allowlist opts that case in.
+fn origin_allowed(state: &AppState, origin: Option<&str>) -> bool {
+    let candidate = origin.unwrap_or("null");
+    state
+        .config
+        .webtransport_allowed_origins
+        .iter()
+        .any(|entry| entry == candidate)
+}
+
 async fn accept_session(state: AppState, incoming: IncomingSession) -> Result<()> {
     let request = incoming
         .await
         .context("read WebTransport session request")?;
-    if request.origin() != Some(state.config.client_origin.as_str()) {
+    if !origin_allowed(&state, request.origin()) {
+        tracing::warn!(
+            origin = ?request.origin(),
+            allowed = ?state.config.webtransport_allowed_origins,
+            "WebTransport origin rejected"
+        );
         request.forbidden().await;
         anyhow::bail!("WebTransport origin rejected");
     }

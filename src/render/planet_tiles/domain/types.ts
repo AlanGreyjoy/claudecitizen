@@ -26,7 +26,6 @@ export interface ResolvedTile {
 }
 
 export interface ExtendedTileCacheStats extends TileCacheStats {
-  workerBuildsEnabled: boolean;
   workerErrors: number;
 }
 
@@ -37,6 +36,10 @@ export interface TileManagerUpdateResult {
 }
 
 export interface TileCacheStatsAccumulator {
+  /** Exponential moving average of per-tile generation cost, in milliseconds. */
+  buildMsAverage: number;
+  /** Worst single tile generation seen this session, in milliseconds. */
+  buildMsPeak: number;
   diskHits: number;
   diskMisses: number;
   peakCachedTiles: number;

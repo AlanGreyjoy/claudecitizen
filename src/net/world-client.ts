@@ -416,6 +416,35 @@ async function connectClient(state: WorldClientState): Promise<void> {
   );
 }
 
+let driftLogging = false;
+let lastDriftLogAt = 0;
+
+/** Debug only: enabled by the multiplayer smoke test harness. */
+export function setPresenceDriftLogging(enabled: boolean): void {
+  driftLogging = enabled;
+  lastDriftLogAt = 0;
+}
+
+/**
+ * Reports how far what we publish has wandered from what we simulate.
+ *
+ * `handleReconcile` rewrites only `state.predictionFrame`, never
+ * `world.character.position`, and the server integrates with zero gravity and
+ * no level colliders — so the published body is an independent dead reckoning
+ * that reseeds from the real character exactly once. Peers see this delta.
+ */
+function samplePresenceDrift(nowMs: number, published: Vec3, local: Vec3): void {
+  if (!driftLogging || nowMs - lastDriftLogAt < 1000) return;
+  lastDriftLogAt = nowMs;
+  const dx = published.x - local.x;
+  const dy = published.y - local.y;
+  const dz = published.z - local.z;
+  console.warn(
+    `[mp-debug] presence drift dx=${dx.toFixed(2)} dy=${dy.toFixed(2)} `
+    + `dz=${dz.toFixed(2)} |d|=${Math.hypot(dx, dy, dz).toFixed(2)}m`,
+  );
+}
+
 function publishPresence(state: WorldClientState, world: WorldState): void {
   if (state.leftPresence || !state.prediction) return;
   const now = performance.now();
@@ -445,6 +474,7 @@ function publishPresence(state: WorldClientState, world: WorldState): void {
     nextPredictionKind,
   );
   state.predictionFrame = predicted;
+  samplePresenceDrift(now, predicted.position, world.character.position);
   state.pendingPredictions.push({
     sequence: state.sequence,
     desiredVelocity: { ...desiredVelocity },

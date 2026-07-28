@@ -13,6 +13,8 @@ export interface TileWorkerInMessage {
 }
 
 export interface TileWorkerSuccessMessage {
+  /** Wall-clock cost of generation inside the worker, for the stats panel. */
+  buildMs: number;
   buildId: number;
   key: string;
   positions: Float32Array;

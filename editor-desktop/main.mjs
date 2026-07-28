@@ -29,6 +29,7 @@ import {
 import { startDevRenderer } from './dev_renderer.mjs';
 import { createAgentServer, createRendererAgentTransport } from './agent_server.mjs';
 import { createDeployManager } from './deploy.mjs';
+import { createMultiplayerDebugManager } from './multiplayer_debug.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
 const EDITOR_HOST = 'app';
@@ -36,6 +37,14 @@ const EDITOR_ORIGIN = `${EDITOR_SCHEME}://${EDITOR_HOST}`;
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 /** Renderer path prefix forwarded to the project's configured Rust API. */
 const BACKEND_PROXY_PREFIX = '/__editor/backend/';
+/**
+ * `/__editor/mp/<n>/backend/<path>` — the same proxy, but through multiplayer
+ * debug instance `n`'s own cookie jar. The index rides in the path rather than
+ * a session partition because in `--dev` every renderer request reaches the
+ * main process through one session-less Node bridge, where a partitioned
+ * protocol handler would never be consulted.
+ */
+const MP_PROXY_PATTERN = /^\/__editor\/mp\/(\d+)\/backend(\/.*)$/;
 const editorDesktopRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = dirname(editorDesktopRoot);
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -46,6 +55,8 @@ const editorDevMode =
 let disposeDevRenderer = null;
 /** @type {ReturnType<typeof createAgentServer> | null} */
 let agentServer = null;
+/** @type {ReturnType<typeof createMultiplayerDebugManager> | null} */
+let multiplayerDebug = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -329,17 +340,18 @@ async function handleEditorApi(repository, request, url) {
  * `cc_at` / `cc_rt` / `cc_admin` cookies. Proxying through the main process
  * sidesteps both: `net.fetch` is not subject to CORS and the main session owns
  * a normal cookie jar keyed to the backend's own origin.
+ *
+ * `fetcher` is that jar. The editor passes the global `net.fetch`; multiplayer
+ * debug windows pass their own partitioned session's `fetch`, which is what
+ * lets several windows be several different signed-in players at once.
  */
-async function proxyBackendRequest(repository, request, url) {
+async function proxyBackendRequest(repository, request, backendPath, fetcher) {
   const { document: settings } = await repository.getProjectSettings();
   // Authoring talks to the editor backend, never the release stamp.
   const backendBase = settings.editorBackendUrl || settings.backendUrl;
   let target;
   try {
-    target = new URL(
-      `${url.pathname.slice(BACKEND_PROXY_PREFIX.length - 1)}${url.search}`,
-      `${backendBase}/`,
-    );
+    target = new URL(backendPath, `${backendBase}/`);
   } catch {
     return jsonResponse(400, { error: 'invalid backend request path' });
   }
@@ -355,7 +367,7 @@ async function proxyBackendRequest(repository, request, url) {
 
   const hasBody = !['GET', 'HEAD'].includes(request.method);
   try {
-    const response = await net.fetch(target.toString(), {
+    const response = await fetcher(target.toString(), {
       method: request.method,
       headers,
       ...(hasBody ? { body: await request.arrayBuffer() } : {}),
@@ -399,12 +411,34 @@ async function serveEditorRequest(getRepository, request) {
   if (url.protocol !== `${EDITOR_SCHEME}:` || url.host !== EDITOR_HOST) {
     return new Response('Not found', { status: 404 });
   }
+  const multiplayerRoute = MP_PROXY_PATTERN.exec(url.pathname);
+  if (multiplayerRoute) {
+    const repository = getRepository();
+    if (!repository) {
+      return jsonResponse(503, { error: 'No AsteronEngine project is open.' });
+    }
+    const instanceSession = multiplayerDebug?.sessionForInstance(Number(multiplayerRoute[1]));
+    if (!instanceSession) {
+      return jsonResponse(403, { error: 'Unknown multiplayer debug instance.' });
+    }
+    return proxyBackendRequest(
+      repository,
+      request,
+      `${multiplayerRoute[2]}${url.search}`,
+      (input, init) => instanceSession.fetch(input, init),
+    );
+  }
   if (url.pathname.startsWith(BACKEND_PROXY_PREFIX)) {
     const repository = getRepository();
     if (!repository) {
       return jsonResponse(503, { error: 'No AsteronEngine project is open.' });
     }
-    return proxyBackendRequest(repository, request, url);
+    return proxyBackendRequest(
+      repository,
+      request,
+      `${url.pathname.slice(BACKEND_PROXY_PREFIX.length - 1)}${url.search}`,
+      (input, init) => net.fetch(input, init),
+    );
   }
   if (url.pathname.startsWith('/__editor/')) {
     const repository = getRepository();
@@ -712,6 +746,15 @@ function installEditorApplicationMenu({
       ],
     },
     {
+      label: 'Debug',
+      submenu: [
+        {
+          label: 'Multiplayer…',
+          click: () => sendEditorCommand(getWindow, 'open-multiplayer-debug'),
+        },
+      ],
+    },
+    {
       label: 'Tools',
       submenu: [
         {
@@ -957,6 +1000,9 @@ if (!hasSingleInstanceLock) {
     configureNavigation(mainWindow, trustedOrigins);
     mainWindow.once('ready-to-show', () => mainWindow?.show());
     mainWindow.once('closed', () => {
+      // Before the transition guard: orphaned debug windows would otherwise keep
+      // `window-all-closed` from ever firing, and the hub would reopen beside them.
+      void multiplayerDebug?.stopAll();
       mainWindow = null;
       if (keepAliveForTransition) return;
       repository = null;
@@ -988,6 +1034,7 @@ if (!hasSingleInstanceLock) {
   };
 
   const returnToProjects = async () => {
+    await multiplayerDebug?.stopAll();
     await withWindowTransition(async () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.close();
@@ -1155,6 +1202,15 @@ if (!hasSingleInstanceLock) {
     onEvent: (event) => sendState(mainWindow, 'editor:deploy-state', event),
   });
 
+  // Assigned to the module-scope binding so `serveEditorRequest` can route
+  // `/__editor/mp/<n>/backend/*` through the right instance's cookie jar.
+  multiplayerDebug = createMultiplayerDebugManager({
+    getRepository: () => repository,
+    getRendererOrigin: () => rendererOrigin,
+    editorDesktopRoot,
+    onEvent: (event) => sendState(mainWindow, 'editor:mp-debug-state', event),
+  });
+
   app.on('second-instance', () => {
     const focus =
       (mainWindow && !mainWindow.isDestroyed() && mainWindow)
@@ -1317,6 +1373,22 @@ if (!hasSingleInstanceLock) {
         });
       }
 
+      /** Multiplayer debug IPC. The launched game windows must never reach these. */
+      const multiplayerChannels = {
+        'mp-debug:health': () => multiplayerDebug.checkHealth(),
+        'mp-debug:launch': (payload) => multiplayerDebug.launch(payload),
+        'mp-debug:stop': () => multiplayerDebug.stopAll(),
+        'mp-debug:status': () => multiplayerDebug.status(),
+      };
+      for (const [channel, handler] of Object.entries(multiplayerChannels)) {
+        ipcMain.handle(channel, (event, payload) => {
+          if (event.sender !== mainWindow?.webContents) {
+            throw new Error('Only the editor window may run multiplayer debug.');
+          }
+          return handler(payload);
+        });
+      }
+
       agentServer = createAgentServer({
         getRepository: () => repository,
         getEditorWindow: () =>
@@ -1353,6 +1425,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  if (multiplayerDebug) {
+    const manager = multiplayerDebug;
+    multiplayerDebug = null;
+    void manager.stopAll();
+  }
   if (agentServer) {
     const server = agentServer;
     agentServer = null;

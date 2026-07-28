@@ -250,6 +250,7 @@ export function createPlanetVegetationManager(
   tileRuntime.rebuildLandingGrove();
 
   function dispose(): void {
+    tileRuntime.disposeWorkers();
     releaseVegetationGroup(vegetationGroup, shared.landingGrove.group);
     for (const [key, entry] of tileCache) {
       tileRuntime.releaseTileEntry(key, entry, false);

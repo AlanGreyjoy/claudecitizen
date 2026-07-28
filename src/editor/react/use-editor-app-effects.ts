@@ -73,6 +73,7 @@ export type EditorAppEffectsArgs = {
   openProjectSettings: () => void;
   openDeployFrontend: () => void;
   openDeployBackend: () => void;
+  openMultiplayerDebug: () => void;
   duplicateSelection: () => void;
   deleteSelection: () => void;
   exitToTitle: () => void | Promise<void>;
@@ -110,6 +111,7 @@ export function useEditorAppEffects(args: EditorAppEffectsArgs): void {
     openProjectSettings,
     openDeployFrontend,
     openDeployBackend,
+    openMultiplayerDebug,
     duplicateSelection,
     deleteSelection,
     exitToTitle,
@@ -148,6 +150,7 @@ useEffect(() => {
       openProjectSettings: openProjectSettings,
       openDeployFrontend,
       openDeployBackend,
+      openMultiplayerDebug,
       undo: () => store.undo(),
       redo: () => store.redo(),
       duplicate: duplicateSelection,
@@ -175,6 +178,7 @@ useEffect(() => {
   openProjectSettings,
   openDeployFrontend,
   openDeployBackend,
+  openMultiplayerDebug,
   store,
   duplicateSelection,
   deleteSelection,

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 3,
+  "id": "mp-debug-arena",
+  "name": "MP Debug Arena",
+  "kind": "instance",
+  "gameObjects": [
+    {
+      "id": "ground",
+      "name": "Ground",
+      "transform": {
+        "position": { "x": 0, "y": -0.5, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "primitive": {
+        "shape": "box",
+        "size": { "x": 80, "y": 1, "z": 80 },
+        "color": "#3a4450"
+      },
+      "components": [
+        {
+          "type": "collider",
+          "shape": "box",
+          "size": { "x": 80, "y": 1, "z": 80 }
+        }
+      ]
+    },
+    {
+      "id": "wall-north",
+      "name": "Wall North",
+      "transform": {
+        "position": { "x": 0, "y": 1.5, "z": -40 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "primitive": {
+        "shape": "box",
+        "size": { "x": 80, "y": 3, "z": 1 },
+        "color": "#2a323c"
+      },
+      "components": [
+        {
+          "type": "collider",
+          "shape": "box",
+          "size": { "x": 80, "y": 3, "z": 1 }
+        }
+      ]
+    },
+    {
+      "id": "wall-south",
+      "name": "Wall South",
+      "transform": {
+        "position": { "x": 0, "y": 1.5, "z": 40 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "primitive": {
+        "shape": "box",
+        "size": { "x": 80, "y": 3, "z": 1 },
+        "color": "#2a323c"
+      },
+      "components": [
+        {
+          "type": "collider",
+          "shape": "box",
+          "size": { "x": 80, "y": 3, "z": 1 }
+        }
+      ]
+    },
+    {
+      "id": "wall-east",
+      "name": "Wall East",
+      "transform": {
+        "position": { "x": 40, "y": 1.5, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "primitive": {
+        "shape": "box",
+        "size": { "x": 1, "y": 3, "z": 80 },
+        "color": "#2a323c"
+      },
+      "components": [
+        {
+          "type": "collider",
+          "shape": "box",
+          "size": { "x": 1, "y": 3, "z": 80 }
+        }
+      ]
+    },
+    {
+      "id": "wall-west",
+      "name": "Wall West",
+      "transform": {
+        "position": { "x": -40, "y": 1.5, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "primitive": {
+        "shape": "box",
+        "size": { "x": 1, "y": 3, "z": 80 },
+        "color": "#2a323c"
+      },
+      "components": [
+        {
+          "type": "collider",
+          "shape": "box",
+          "size": { "x": 1, "y": 3, "z": 80 }
+        }
+      ]
+    },
+    {
+      "id": "origin-marker",
+      "name": "Origin Marker",
+      "transform": {
+        "position": { "x": 0, "y": 0.5, "z": 6 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "primitive": {
+        "shape": "box",
+        "size": { "x": 1, "y": 1, "z": 1 },
+        "color": "#f0a04c"
+      }
+    },
+    {
+      "id": "player-start",
+      "name": "PlayerStart",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "player-start",
+          "spawn": "station"
+        }
+      ]
+    }
+  ]
+}

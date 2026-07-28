@@ -67,6 +67,15 @@ function buildCacheReadouts(renderStats: RenderStats | null): [string, string][]
       'Height Cache',
       `${renderStats.surfaceCache.entries.toLocaleString()} / ${renderStats.surfaceCache.limit.toLocaleString()}`,
     ],
+    // The one readout that says whether a stall is scheduling or generation:
+    // a low average with workers on means the queue is the problem, a high
+    // average means the sampler is, and "sync" means the pool never started.
+    [
+      'Tile Build',
+      `${renderStats.terrain.buildMsAverage.toFixed(1)}ms avg, ${renderStats.terrain.buildMsPeak.toFixed(0)}ms peak (${
+        renderStats.terrain.workerBuildsEnabled ? 'workers' : 'sync'
+      })`,
+    ],
   ];
 }
 

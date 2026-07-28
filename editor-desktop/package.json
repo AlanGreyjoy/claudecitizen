@@ -20,10 +20,12 @@
     "files": [
       "main.mjs",
       "preload.cjs",
+      "game_preload.cjs",
       "repository.mjs",
       "project_hub.mjs",
       "dev_renderer.mjs",
       "deploy.mjs",
+      "multiplayer_debug.mjs",
       "package.json"
     ],
     "extraResources": [

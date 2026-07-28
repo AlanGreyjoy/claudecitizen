@@ -105,20 +105,33 @@ export function runtimeConfig(): RuntimeConfig {
  * single-origin CORS policy rejects and which cannot store session cookies.
  * Dev mode loads from the Vite origin instead, but still exposes the desktop
  * preload bridge — use that (or the custom protocol) to keep the proxy on.
+ *
+ * A multiplayer debug window carries neither: it runs the game preload, whose
+ * only export is the instance descriptor. Its presence is the third signal.
  */
 export function usesBackendProxy(): boolean {
   return (
     window.location.protocol === 'cceditor:'
+    || window.claudeCitizenMultiplayerDebug !== undefined
     || window.claudeCitizenEditorDesktop?.isDesktopEditor === true
   );
 }
 
-/** Resolves a backend path to either the proxy route or the direct API URL. */
+/**
+ * Resolves a backend path to either the proxy route or the direct API URL.
+ *
+ * A multiplayer debug window routes through `/__editor/mp/<n>/backend`, which
+ * the main process proxies with that instance's own cookie jar. Without the
+ * index every window would share one jar, log in as the same player, and — the
+ * cell keying entities by `player_id` — collapse into a single entity.
+ */
 export function backendRequestUrl(path: string): string {
   const suffix = path.startsWith('/') ? path : `/${path}`;
-  return usesBackendProxy()
-    ? `/__editor/backend${suffix}`
-    : `${resolved.backendUrl}${suffix}`;
+  if (!usesBackendProxy()) return `${resolved.backendUrl}${suffix}`;
+  const debug = window.claudeCitizenMultiplayerDebug;
+  return debug
+    ? `/__editor/mp/${debug.instanceIndex}/backend${suffix}`
+    : `/__editor/backend${suffix}`;
 }
 
 /** Lets the editor apply a Project Settings change without a reload. */

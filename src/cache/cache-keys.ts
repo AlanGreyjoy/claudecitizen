@@ -12,11 +12,15 @@ import { getActivePlanetConfig } from '../world/planets/runtime';
 // Low-poly tiles use a non-indexed triangle layout with baked facet colors.
 // Keep this explicit because the height fingerprint does not capture buffer
 // layout or palette-only changes.
-export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v16';
-// v21: land biomes are classified independently from generated hydrology.
-export const VEGETATION_CACHE_VERSION = 'v21';
+// v17: the renderable-surface blend and the river proximity test were rewritten
+// to scalar form. Algebraically identical, but the summation order moved, so
+// stored heights can differ in the last ULP from v16 tiles.
+export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v17';
+// v22: placement rides on the rewritten height sampler (see terrain v17), whose
+// last-ULP shifts can flip an accept/reject exactly at a density threshold.
+export const VEGETATION_CACHE_VERSION = 'v22';
 /** Bump when surface-spawn placement algorithm or stored spawn-tile schema changes. */
-export const SURFACE_SPAWN_CACHE_VERSION = 'v8-hydrology-separated';
+export const SURFACE_SPAWN_CACHE_VERSION = 'v9-scalar-height-sampler';
 
 function paletteHash(): string {
   const { oceanShallow, palette, planetId } = getActivePlanetConfig();

@@ -1354,6 +1354,90 @@ body.ed-resize-row * {
   font-family: var(--ed-mono, monospace);
 }
 
+/* ── Multiplayer debug dialog (Debug → Multiplayer…) ─────────────────────── */
+
+/* Reuses .ed-deploy-dialog, .ed-deploy-form and .ed-deploy-log wholesale; only
+   the health strip and the log filter row are new. */
+.ed-mp-debug-health {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ed-border, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.ed-mp-debug-health-pills {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ed-mp-debug-pill {
+  align-items: center;
+  color: var(--ed-muted);
+  display: inline-flex;
+  font: 700 10px/1.2 var(--ed-font);
+  gap: 6px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ed-mp-debug-pill-dot {
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+.ed-mp-debug-pill.is-ok .ed-mp-debug-pill-dot {
+  background: #5fd08a;
+}
+
+.ed-mp-debug-pill.is-down .ed-mp-debug-pill-dot {
+  background: #e5674f;
+}
+
+.ed-mp-debug-pill.is-down {
+  color: #e5674f;
+}
+
+.ed-mp-debug-health-url {
+  color: var(--ed-text-dim);
+  font-family: var(--ed-mono, monospace);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A fieldset is the cheapest way to freeze every input while windows are up. */
+.ed-mp-debug-form {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.ed-mp-debug-form:disabled {
+  opacity: 0.55;
+}
+
+.ed-mp-debug-log-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.ed-mp-debug-filter {
+  box-sizing: border-box;
+  max-width: 200px;
+}
+
 .ed-deploy-steps {
   margin: 0;
   padding-left: 20px;

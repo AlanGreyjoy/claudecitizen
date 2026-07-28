@@ -17,6 +17,7 @@ globalThis.onmessage = (event: MessageEvent<TileWorkerInMessage>) => {
       throw new Error('tile worker message missing planetDocument');
     }
     activatePlanetDocument(planetDocument);
+    const startedAt = performance.now();
     const { colors, normals, positions } = buildTerrainTileBuffers(
       info,
       planet,
@@ -24,6 +25,7 @@ globalThis.onmessage = (event: MessageEvent<TileWorkerInMessage>) => {
     );
     const message: TileWorkerOutMessage = {
       buildId,
+      buildMs: performance.now() - startedAt,
       colors,
       key,
       normals,

@@ -8,6 +8,12 @@ pub struct Config {
     pub node_id: String,
     pub http_bind: SocketAddr,
     pub client_origin: String,
+    /// Origins accepted on the WebTransport handshake. Separate from
+    /// `client_origin` (which is also the single CORS origin) because the
+    /// desktop editor's game windows dial from a custom scheme that must never
+    /// be granted CORS access to the REST API. The literal `null` entry accepts
+    /// a missing `Origin` header, which some privileged schemes send.
+    pub webtransport_allowed_origins: Vec<String>,
     pub database_url: String,
     pub redis_url: String,
     pub jwt_access_secret: String,
@@ -65,13 +71,21 @@ impl Config {
             "none" => SameSite::None,
             _ => SameSite::Lax,
         };
+        let client_origin = read("CLIENT_ORIGIN", "http://localhost:4173");
+        let webtransport_allowed_origins = read("WEBTRANSPORT_ALLOWED_ORIGINS", &client_origin)
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<String>>();
 
         Ok(Self {
             node_id: env::var("POD_NAME")
                 .or_else(|_| env::var("HOSTNAME"))
                 .unwrap_or_else(|_| uuid::Uuid::new_v4().to_string()),
             http_bind,
-            client_origin: read("CLIENT_ORIGIN", "http://localhost:4173"),
+            client_origin,
+            webtransport_allowed_origins,
             database_url: read(
                 "DATABASE_URL",
                 "postgresql://claude:citizen@localhost:5432/claude_citizen",
