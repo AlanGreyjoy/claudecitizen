@@ -4,7 +4,7 @@ import type { EditorStore } from '../document';
 import { isTypingTarget } from '../session-helpers';
 import { parsePrefabDocument } from '../../world/prefabs/schema';
 import { toPrefabDocument } from '../serialize';
-import { fetchEditorSession, fetchScene } from '../api';
+import { fetchEditorSession, fetchProjectSettings, fetchScene } from '../api';
 import { saveEditorHmrSnapshot, takeEditorHmrSnapshot } from './hmr-snapshot';
 import { dispatchNativeCommand, GIZMO_SHORTCUTS } from './editor-app-native';
 import type { ToolbarGizmoMode, ToolbarHandle } from './panels/Toolbar';
@@ -14,20 +14,29 @@ import type { EditorViewport } from '../../render/editor/viewport';
 
 const FALLBACK_BOOT_SCENE_ID = 'main-game';
 
+/**
+ * Scene the editor opens on a cold start: where you left off, else the
+ * project's own boot scene, else the scaffold default. Consulting
+ * `defaultScene` matters now that it names the document owning the game flow —
+ * opening a different scene would hide the project's entry point.
+ */
 async function resolveBootSceneId(): Promise<string> {
-  let preferred = FALLBACK_BOOT_SCENE_ID;
+  const candidates: string[] = [];
   try {
     const session = await fetchEditorSession();
-    if (session.lastOpenedSceneId) preferred = session.lastOpenedSceneId;
+    if (session.lastOpenedSceneId) candidates.push(session.lastOpenedSceneId);
   } catch {
-    // No project session yet — use the scaffold default.
+    // No project session yet — fall through to the project default.
   }
+  try {
+    const { defaultScene } = await fetchProjectSettings();
+    if (defaultScene) candidates.push(defaultScene);
+  } catch {
+    // A project without settings must not break cold start.
+  }
+  candidates.push(FALLBACK_BOOT_SCENE_ID);
 
-  const candidates =
-    preferred === FALLBACK_BOOT_SCENE_ID
-      ? [preferred]
-      : [preferred, FALLBACK_BOOT_SCENE_ID];
-  for (const id of candidates) {
+  for (const id of [...new Set(candidates)]) {
     try {
       await fetchScene(id);
       return id;
@@ -328,23 +337,22 @@ useEffect(() => {
   window.addEventListener('beforeunload', onBeforeUnload);
 
   const saveSnapshot = (): void => {
+    const state = store.getState();
+    const base = {
+      tab: tabRef.current,
+      documentType: state.documentType,
+      sceneKind: state.sceneKind,
+      dirty: store.isDirty(),
+      selectedIds: store.getSelectedIds(),
+      subSelection: store.getSubSelection(),
+    };
     try {
-      const doc = parsePrefabDocument(toPrefabDocument(store.getState()));
       saveEditorHmrSnapshot({
-        tab: tabRef.current,
-        prefabDocument: doc,
-        dirty: store.isDirty(),
-        selectedIds: store.getSelectedIds(),
-        subSelection: store.getSubSelection(),
+        ...base,
+        prefabDocument: parsePrefabDocument(toPrefabDocument(state)),
       });
     } catch {
-      saveEditorHmrSnapshot({
-        tab: tabRef.current,
-        prefabDocument: null,
-        dirty: store.isDirty(),
-        selectedIds: store.getSelectedIds(),
-        subSelection: store.getSubSelection(),
-      });
+      saveEditorHmrSnapshot({ ...base, prefabDocument: null });
     }
   };
 

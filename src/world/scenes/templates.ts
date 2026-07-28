@@ -17,7 +17,7 @@ function sceneObject(
   return { id, name, transform: identityTransform(), components };
 }
 
-export const SCENE_TEMPLATE_IDS = ['empty', 'gameplay', 'ui-screen'] as const;
+export const SCENE_TEMPLATE_IDS = ['empty', 'boot', 'gameplay', 'ui-screen'] as const;
 
 export type SceneTemplateId = (typeof SCENE_TEMPLATE_IDS)[number];
 
@@ -45,6 +45,26 @@ export const SCENE_TEMPLATES: readonly SceneTemplate[] = [
     gameObjects: () => [],
   },
   {
+    id: 'boot',
+    label: 'Boot',
+    description:
+      'The game entry point: Game Manager owns the flow (Title, Character Create, Starting Hab, Open Space), plus Planet and Player Start as the world defaults it hands down.',
+    kind: 'boot',
+    gameObjects: () => [
+      sceneObject('game-manager', 'Game Manager', [
+        {
+          type: 'game-manager',
+          systemId: 'default',
+          planetId: 'asteron',
+          spawn: 'station',
+          titleSceneId: 'title',
+        },
+      ]),
+      sceneObject('planet', 'Planet', [{ type: 'planet', planetId: 'asteron' }]),
+      sceneObject('player-start', 'Player Start', [{ type: 'player-start', spawn: 'station' }]),
+    ],
+  },
+  {
     id: 'gameplay',
     label: 'Gameplay',
     description: 'Game Manager, Planet and Player Start — playable immediately.',
@@ -70,7 +90,13 @@ export const SCENE_TEMPLATES: readonly SceneTemplate[] = [
 ];
 
 export function findSceneTemplate(id: SceneTemplateId): SceneTemplate {
-  return SCENE_TEMPLATES.find((template) => template.id === id) ?? SCENE_TEMPLATES[0];
+  // Fall back to `empty` by name, not by index: template order is a UI concern
+  // and reordering the list must not silently change what an unknown id builds.
+  return (
+    SCENE_TEMPLATES.find((template) => template.id === id)
+    ?? SCENE_TEMPLATES.find((template) => template.id === 'empty')
+    ?? SCENE_TEMPLATES[0]
+  );
 }
 
 export function createSceneDocumentFromTemplate(

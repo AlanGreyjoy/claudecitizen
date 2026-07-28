@@ -18,8 +18,14 @@ import { createShipInstance } from '../flight/ship-instance';
 import type { DeckCharacterState } from './ship-deck';
 import type { ShipRigState } from './ship-rig';
 import type { StationCharacterState } from './station-walk';
-import { MODE_IN_STATION, MODE_ON_FOOT } from './modes';
-import { createSpawnCharacter, createSpawnShip, initialCameraYaw } from './spawn';
+import { MODE_IN_SHIP, MODE_IN_STATION, MODE_ON_FOOT } from './modes';
+import {
+  createPilotSpawnCharacter,
+  createSpaceSpawnShip,
+  createSpawnCharacter,
+  createSpawnShip,
+  initialCameraYaw,
+} from './spawn';
 import { createStationSpawnCharacter, initialStationCameraYaw } from './station-walk';
 import {
   DEFAULT_SHIP_LAYOUT,
@@ -129,6 +135,12 @@ export function createWorldState(
   seed: number,
   options: {
     spawn?: 'station' | 'surface';
+    /**
+     * How the player got here. `in-ship` is a fly-through scene-exit: the
+     * session is torn down and rebuilt, so without this the pilot would be
+     * dropped on foot at the destination's Player Start mid-flight.
+     */
+    arrival?: 'default' | 'in-ship';
     planetId?: string;
     systemId?: string;
     activeStationInstanceId?: string | null;
@@ -142,22 +154,28 @@ export function createWorldState(
   clearShipWorld();
   const prefabId = options.shipPrefabId ?? DEFAULT_SHIP_PREFAB_ID;
   const layout = getShipLayoutForPrefab(prefabId) ?? DEFAULT_SHIP_LAYOUT;
-  const body = createSpawnShip(planet, seed);
+  const inShip = options.arrival === 'in-ship';
+  const body = inShip ? createSpaceSpawnShip(planet, seed) : createSpawnShip(planet, seed);
   const planetId = options.planetId ?? 'asteron';
   const instance = createShipInstance({
     id: PLAYER_SHIP_INSTANCE_ID,
     prefabId,
     layout,
     body,
-    instanceId: `planet:${planetId}`,
-    rig: { gearDown: true, rampDown: options.shipRampDownOnSpawn ?? false },
+    instanceId: inShip ? `space:${options.systemId ?? 'default'}` : `planet:${planetId}`,
+    // Gear and ramp stay stowed on a flying arrival: the player is mid-flight,
+    // not parked.
+    rig: inShip
+      ? { gearDown: false, rampDown: false }
+      : { gearDown: true, rampDown: options.shipRampDownOnSpawn ?? false },
   });
   registerShipInstance(instance);
 
-  const spawnSurface = options.spawn === 'surface';
-  const character = spawnSurface
-    ? createSpawnCharacter(planet, seed, body)
-    : createStationSpawnCharacter(planet);
+  const spawnSurface = !inShip && options.spawn === 'surface';
+  let character: CharacterState;
+  if (inShip) character = createPilotSpawnCharacter(body);
+  else if (spawnSurface) character = createSpawnCharacter(planet, seed, body);
+  else character = createStationSpawnCharacter(planet);
   return {
     cameraOrbit: {
       pitchRadians: -0.12,
@@ -167,7 +185,7 @@ export function createWorldState(
     shipCameraView: 'cockpit',
     shipCameraZoom: 1.0,
     character,
-    mode: spawnSurface ? MODE_ON_FOOT : MODE_IN_STATION,
+    mode: inShip ? MODE_IN_SHIP : (spawnSurface ? MODE_ON_FOOT : MODE_IN_STATION),
     shipExteriorWalk: false,
     prompt: '',
     activeShipId: instance.id,

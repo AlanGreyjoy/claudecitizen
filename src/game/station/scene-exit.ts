@@ -15,6 +15,12 @@ export interface SceneExitTarget {
   /** Empty when the exit only swaps the scene and stays in the current cell. */
   instanceId: string;
   roomId: string;
+  /**
+   * Pose the player arrives in. A fly-through exit is a continuous act — the
+   * session is rebuilt around them, so they must come out of it still flying
+   * rather than standing at the destination's Player Start.
+   */
+  arrival: 'default' | 'in-ship';
 }
 
 /**
@@ -56,6 +62,7 @@ export function sceneExitTarget(
     sceneId: marker.sceneId,
     instanceId: resolveSceneExitInstanceId(marker.networkInstanceId, bootstrap, systemId),
     roomId: marker.arrivalRoomId,
+    arrival: marker.trigger === 'fly-through' ? 'in-ship' : 'default',
   };
 }
 

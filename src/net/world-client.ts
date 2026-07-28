@@ -1,4 +1,4 @@
-import { createWorldSession, type GameBootstrap } from './api';
+import { createWorldSession, reportBackendUnavailable, type GameBootstrap } from './api';
 import type { WorldState } from '../player/world-state';
 import { getActiveShip, getActiveShipBody, getActiveShipRig } from '../player/world-state';
 import { getShipInstance } from '../flight/ship-world';
@@ -198,6 +198,8 @@ interface WorldClientState {
   lastPresenceAt: number;
   sequence: number;
   leftPresence: boolean;
+  /** Set before local close so transport.closed does not kick to title. */
+  closing: boolean;
 }
 
 function sendReliable(state: WorldClientState, payload: Uint8Array): void {
@@ -342,6 +344,7 @@ async function readDatagrams(state: WorldClientState, readable: ReadableStream<U
 }
 
 function closeClient(state: WorldClientState): void {
+  state.closing = true;
   leavePresence(state);
   state.controlWriter?.releaseLock();
   state.datagramWriter?.releaseLock();
@@ -398,8 +401,14 @@ async function connectClient(state: WorldClientState): Promise<void> {
     options.onStatus?.(error instanceof Error ? error.message : 'World datagram stream failed.');
   });
   void transport.closed.then(
-    () => options.onStatus?.('Disconnected from authoritative simulation.'),
-    () => options.onStatus?.('Authoritative simulation connection failed.'),
+    () => {
+      options.onStatus?.('Disconnected from authoritative simulation.');
+      if (!state.closing) reportBackendUnavailable();
+    },
+    () => {
+      options.onStatus?.('Authoritative simulation connection failed.');
+      if (!state.closing) reportBackendUnavailable();
+    },
   );
   sendReliable(
     state,
@@ -500,6 +509,7 @@ export function createWorldClient(options: WorldClientOptions): WorldClient {
     lastPresenceAt: 0,
     sequence: 0,
     leftPresence: false,
+    closing: false,
   };
 
   return {

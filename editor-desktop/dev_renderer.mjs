@@ -6,6 +6,28 @@ const VITE_HOST = '127.0.0.1';
 const VITE_PORT = 5173;
 
 /**
+ * Headers that must not be copied onto a freshly buffered Node response.
+ *
+ * Electron `net.fetch` (and undici) decompress upstream bodies but often leave
+ * `content-encoding` / the compressed `content-length` intact. Re-advertising
+ * those to Vite's http-proxy produces `Parse Error: Data after Connection:
+ * close` and an unhandled write-after-end that kills the Vite child.
+ */
+const BRIDGE_SKIP_RESPONSE_HEADERS = new Set([
+  'alt-svc',
+  'connection',
+  'content-encoding',
+  'content-length',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+]);
+
+/**
  * Dev-only renderer: Vite serves the React/TS sources with HMR, while
  * `/__editor` and project asset mounts stay on an Electron-owned HTTP bridge
  * (same handlers as the `cceditor:` protocol).
@@ -49,17 +71,22 @@ export async function startDevRenderer({
           toEditorProtocolRequest(incoming),
         );
 
+        const buffer = Buffer.from(await response.arrayBuffer());
         res.statusCode = response.status;
         response.headers.forEach((value, key) => {
-          if (key.toLowerCase() === 'transfer-encoding') return;
+          if (BRIDGE_SKIP_RESPONSE_HEADERS.has(key.toLowerCase())) return;
           res.setHeader(key, value);
         });
-        const buffer = Buffer.from(await response.arrayBuffer());
+        res.setHeader('Content-Length', String(buffer.byteLength));
         res.end(buffer);
       } catch (error) {
         console.error('[editor-dev] bridge request failed:', error);
-        if (!res.headersSent) res.statusCode = 500;
-        res.end(error instanceof Error ? error.message : 'bridge error');
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.end(error instanceof Error ? error.message : 'bridge error');
+        } else if (!res.writableEnded) {
+          res.end();
+        }
       }
     })();
   });

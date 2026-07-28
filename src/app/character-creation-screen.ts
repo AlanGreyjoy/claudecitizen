@@ -29,7 +29,9 @@ function runCharacterCreationScreen(
   const dom = buildCharacterCreationDom();
   const { root, canvas, animationSelect, status, tabPanels, actions } = dom;
   animationSelect.addEventListener('change', () => stage?.setAnimation(animationSelect.value));
-  document.body.append(root);
+  // Same as title/loading: stay inside `#editor-play-host` during in-editor Play
+  // so fixed fullscreen UI cannot cover the toolbar Stop button.
+  (document.getElementById('editor-play-host') ?? document.body).append(root);
 
   const setStatus = (message: string, error = false): void => {
     status.textContent = message;

@@ -5,16 +5,22 @@ import {
   resolveScenePlayConfig,
   type SceneEntryFlow,
 } from '../world/scenes/scene-runtime';
+import {
+  bootReturnSceneId,
+  resolveExitTargetScene,
+  runBootScene,
+} from './scene-flow';
 import type { SceneDocument } from '../world/scenes/schema';
-import type { AuthSession } from '../net/api';
-import { getSession } from '../net/api';
-import { runtimeConfig } from '../net/runtime-config';
+import type { SceneUiScreen } from '../world/prefabs/schema';
+import type { AuthSession, SessionLostReason } from '../net/api';
+import { getSession, setUnauthorizedHandler } from '../net/api';
 import type { LoadingScreenHandle } from './loading-screen';
 import {
   isPlaySessionRunning,
   setPlaySessionPaused,
   stopPlaySession,
 } from './play-session';
+import { restoreTitleScreen, setPendingLoginMessage } from './title-screen';
 import {
   impliedUiScreensForScene,
   mountSceneUiScreens,
@@ -94,11 +100,65 @@ async function startHostGameplay(
     // simulated in from disagreeing.
     onRequestScene: (target) => {
       void (async () => {
+        // `@space` and friends are Game Manager hops, not documents; resolve
+        // before the swap so a token never reaches the scene loader.
+        const sceneId = resolveExitTargetScene(target, state.getEntryFlow());
+        if (!sceneId) return;
         const resolved = session ?? (requireAuth ? await getSession() : null);
-        await state.loadScene(target.sceneId, resolved, target);
+        await state.loadScene(sceneId, resolved, { ...target, sceneId });
       })();
     },
+    onExitToTitle: () => {
+      if (state.isDisposed()) return;
+      // Tear down play without the orphan #title-screen HTML overlay, then
+      // remount the entry surface so ui-screen / auth run again.
+      stopPlaySession({ restoreTitle: false });
+      state.setResumeSceneId(null);
+      void state.loadScene(bootReturnSceneId(state.getEntryFlow()));
+    },
     networkTarget,
+  });
+}
+
+/**
+ * Mounts a scene's UI surfaces (title / loading / character create).
+ *
+ * The boot driver passes an explicit surface: a boot scene implies none of its
+ * own, so hosting the title inline is a decision the flow makes, not the kind.
+ */
+async function mountEntrySurfaces(
+  state: SceneHostState,
+  scene: SceneDocument,
+  screens: SceneUiScreen[] = impliedUiScreensForScene(scene),
+): Promise<void> {
+  await mountSceneUiScreens({
+    screens,
+    scene,
+    disposed: state.isDisposed,
+    setLoading: state.setLoading,
+    loadScene: state.loadScene,
+    startGameplay: (next, auth) => startHostGameplay(state, next, auth),
+    entryFlow: state.getEntryFlow(),
+    getEntryFlow: state.getEntryFlow,
+    resumeSceneId: state.getResumeSceneId(),
+    onResumeConsumed: () => state.setResumeSceneId(null),
+  });
+}
+
+/** Runs the authored pipeline on a `boot` scene. Never starts gameplay. */
+async function enterBootScene(
+  state: SceneHostState,
+  scene: SceneDocument,
+  flow: SceneEntryFlow,
+): Promise<void> {
+  await runBootScene({
+    scene,
+    flow,
+    loadScene: state.loadScene,
+    mountEntryUi: (next, screen) => mountEntrySurfaces(state, next, [screen]),
+    resumeSceneId: state.getResumeSceneId(),
+    onResumeConsumed: () => state.setResumeSceneId(null),
+    disposed: state.isDisposed,
   });
 }
 
@@ -111,15 +171,54 @@ async function enterGameplayScene(
   const requireAuth = state.options.requireAuth ?? false;
   const resolved = session ?? (requireAuth ? await getSession() : null);
   if (requireAuth && !resolved) {
-    // Deep link into gameplay before sign-in: park the target and open boot/title.
+    // Deep link into gameplay before sign-in: park the target and open the
+    // entry surface the flow named.
     state.setResumeSceneId(scene.id);
     state.getLoading()?.hide();
     state.setLoading(null);
-    await state.loadScene(runtimeConfig().bootScene || 'title');
+    await state.loadScene(bootReturnSceneId(state.getEntryFlow()));
     return;
   }
   await startHostGameplay(state, scene, resolved, networkTarget);
   state.scheduleAutoLinks(scene);
+}
+
+function sessionLostLoginMessage(reason: SessionLostReason): string {
+  return reason === 'unavailable'
+    ? 'Server unavailable. Please sign in again when it is back.'
+    : 'Session expired. Please sign in again.';
+}
+
+function returnToBootOnSessionLost(options: {
+  disposed: () => boolean;
+  clearPendingTransition: () => void;
+  getLoading: () => LoadingScreenHandle | null;
+  setLoading: (handle: LoadingScreenHandle | null) => void;
+  getActiveScene: () => SceneDocument | null;
+  getEntryFlow: () => SceneEntryFlow | null;
+  loadScene: (sceneId: string) => Promise<void>;
+  reason: SessionLostReason;
+}): void {
+  if (options.disposed()) return;
+  options.clearPendingTransition();
+  if (isPlaySessionRunning()) stopPlaySession({ restoreTitle: false });
+  options.getLoading()?.hide();
+  options.setLoading(null);
+  const bootSceneId = bootReturnSceneId(options.getEntryFlow());
+  const message = sessionLostLoginMessage(options.reason);
+  const active = options.getActiveScene();
+  // Already on the entry surface: show login without remounting (avoids a
+  // getSession↔reload loop).
+  if (
+    active?.id === bootSceneId
+    || active?.kind === 'title'
+    || active?.kind === 'boot'
+  ) {
+    restoreTitleScreen(null, message);
+    return;
+  }
+  setPendingLoginMessage(message);
+  void options.loadScene(bootSceneId);
 }
 
 export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
@@ -142,7 +241,12 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
     getEntryFlow: () => entryFlow,
     setEntryFlow: (flow) => { entryFlow = flow; },
     getLoading: () => loading,
-    setLoading: (handle) => { loading = handle; },
+    setLoading: (handle) => {
+      // Dropping the handle must hide the overlay — callers that only null the
+      // ref leave "Preparing Asteron..." covering the next UI (e.g. character create).
+      if (!handle) loading?.hide();
+      loading = handle;
+    },
     getResumeSceneId: () => resumeSceneId,
     setResumeSceneId: (id) => { resumeSceneId = id; },
     isDisposed: () => disposed,
@@ -173,23 +277,20 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
     const nextFlow = resolveSceneEntryFlow(scene);
     if (nextFlow) entryFlow = nextFlow;
 
+    // The boot scene is the authored pipeline, not a place: it resolves the
+    // next hop and hands off, so it must be answered before the gameplay and
+    // ui-screen branches ever see it.
+    if (scene.kind === 'boot' && entryFlow) {
+      await enterBootScene(state, scene, entryFlow);
+      return;
+    }
+
     if (GAMEPLAY_KINDS.has(scene.kind)) {
       await enterGameplayScene(state, scene, session, networkTarget);
       return;
     }
 
-    await mountSceneUiScreens({
-      screens: impliedUiScreensForScene(scene),
-      scene,
-      disposed: () => disposed,
-      setLoading: (handle) => { loading = handle; },
-      loadScene: state.loadScene,
-      startGameplay: (next, auth) => startHostGameplay(state, next, auth),
-      entryFlow,
-      getEntryFlow: () => entryFlow,
-      resumeSceneId,
-      onResumeConsumed: () => { resumeSceneId = null; },
-    });
+    await mountEntrySurfaces(state, scene);
     state.scheduleAutoLinks(scene);
   }
 
@@ -205,6 +306,22 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
   function reportBootFailure(error: unknown): void {
     console.error('AsteronEngine scene host failed to start.', error);
     loading?.setStatus('Could not start this scene. Check the console.');
+  }
+
+  // Offline editor Play skips auth APIs; only wire the kick for real sessions.
+  if (options.requireAuth) {
+    setUnauthorizedHandler((reason) => {
+      returnToBootOnSessionLost({
+        disposed: () => disposed,
+        clearPendingTransition,
+        getLoading: state.getLoading,
+        setLoading: state.setLoading,
+        getActiveScene: () => activeScene,
+        getEntryFlow: () => entryFlow,
+        loadScene: (sceneId) => state.loadScene(sceneId),
+        reason,
+      });
+    });
   }
 
   if (options.initialScene) void enterScene(options.initialScene).catch(reportBootFailure);
@@ -224,6 +341,7 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
       clearPendingTransition();
       loading?.hide();
       loading = null;
+      if (options.requireAuth) setUnauthorizedHandler(null);
       if (isPlaySessionRunning()) stopPlaySession({ restoreTitle: false });
       activeScene = null;
       entryFlow = null;

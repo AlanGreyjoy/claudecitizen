@@ -11,6 +11,8 @@ export function sceneLaunchSearch(document: SceneDocument): string {
   params.set('scene', document.id);
 
   switch (document.kind) {
+    // Both entry surfaces boot the scene host, which resolves the flow itself.
+    case 'boot':
     case 'title':
       break;
     case 'loading':

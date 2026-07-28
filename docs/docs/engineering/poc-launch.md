@@ -139,6 +139,11 @@ the login scene's authored link to `character-creation` → `main-game`. Players
 missing an appearance are still gated — `resolveSceneBootstrap` shows the
 character creator inline before the world loads.
 
+Since the boot-scene rework, the entry surface a deep link parks against is the
+flow's `titleSceneId` (falling back to the project boot scene), and the
+"resume beats the authored hop" rule is the first branch of
+`resolveSceneFlowStep` rather than a special case in the host.
+
 ## What the launch broke, and why the checks missed it
 
 Everything in the verification table above passed, and the deployment was still

@@ -20,9 +20,9 @@ type ProjectSettingsModalProps = {
 };
 
 /**
- * File → Project Settings. Owns `asteron.project.json`: the deployed backend
- * this project talks to, the scene the game boots into, and the Build Web
- * output directory.
+ * File → Project Settings. Owns `asteron.project.json`: editor vs release
+ * backend URLs, the scene the game boots into, and the Build Web output
+ * directory.
  */
 export function ProjectSettingsModal({
   open,
@@ -79,7 +79,7 @@ export function ProjectSettingsModal({
   const handleSave = async (): Promise<void> => {
     try {
       const saved = await saveProjectSettings(draft);
-      setRuntimeBackendUrl(saved.backendUrl);
+      setRuntimeBackendUrl(saved.editorBackendUrl);
       showToast('Project settings saved.');
       onClose();
     } catch (error) {
@@ -100,8 +100,9 @@ export function ProjectSettingsModal({
       <div className="ed-dialog ed-scene-settings-modal" role="dialog" aria-modal="true">
         <div className="ed-scene-settings-heading">Project Settings</div>
         <p className="ed-scene-settings-copy">
-          Applies to this project and to the release that File → Build Web produces. Players sign
-          in with their own accounts, so no key is stored here.
+          Editor Play and the Server tab use the editor backend. File → Build Web stamps the
+          release backend into the shipped game. Players sign in with their own accounts, so no
+          key is stored here.
         </p>
         <div className={`ed-system-status${statusError ? ' is-error' : ''}`}>{status}</div>
         <div className="ed-scene-settings-form">
@@ -116,7 +117,24 @@ export function ProjectSettingsModal({
             />
           </label>
           <label className="ed-scene-settings-field">
-            <span className="ed-scene-settings-label">Backend URL</span>
+            <span className="ed-scene-settings-label">Editor Backend URL</span>
+            <input
+              className="ed-input"
+              type="text"
+              value={draft.editorBackendUrl}
+              placeholder="http://localhost:3000"
+              onChange={(event) =>
+                setDraft({ ...draft, editorBackendUrl: event.target.value })
+              }
+              onKeyDown={stopKeyPropagation}
+            />
+            <span className="ed-scene-settings-detail">
+              Play, Server tab, and the editor proxy. Defaults to localhost so authoring does not
+              follow the release URL.
+            </span>
+          </label>
+          <label className="ed-scene-settings-field">
+            <span className="ed-scene-settings-label">Release Backend URL</span>
             <input
               className="ed-input"
               type="text"
@@ -126,8 +144,7 @@ export function ProjectSettingsModal({
               onKeyDown={stopKeyPropagation}
             />
             <span className="ed-scene-settings-detail">
-              Deployed Rust API. Stamped into the web release so one build can target any
-              deployment.
+              Deployed Rust API stamped into the web release (`asteron.runtime.json`).
             </span>
           </label>
           <label className="ed-scene-settings-field">

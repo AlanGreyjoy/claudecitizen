@@ -151,6 +151,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
   const resolved = resolveLoopContextOptions(options);
   const world = createWorldState(resolved.planet, resolved.seed, {
     spawn: resolved.spawn,
+    arrival: resolved.arrival,
     planetId: resolved.planetId,
     systemId: resolved.systemId,
     activeStationInstanceId: resolved.activeStationInstanceId,

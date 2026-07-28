@@ -52,15 +52,29 @@ Skip the hub with `--project-root=/path/to/project` or `CLAUDECITIZEN_EDITOR_PRO
 
 **Scenes own content.** A scene (`*.scene.json`) is a GameObject tree; components decide what it is:
 
-| Component         | Role                                          |
-| ----------------- | --------------------------------------------- |
-| `game-manager`    | System, planet, spawn mode                    |
-| `planet`          | Planet document reference                     |
-| `player-start`    | Spawn pose and mode                           |
-| `prefab-instance` | Places a reusable prefab                      |
-| `ui-screen`       | Title / login / character-create / loading UI |
-| `scene-link`      | Menu-flow transition target                   |
-| `instanced-scene` | Per-player content (habs, hangars)            |
+| Component         | Role                                                        |
+| ----------------- | ----------------------------------------------------------- |
+| `game-manager`    | System, planet, spawn mode **and the game flow** (see below) |
+| `planet`          | Planet document reference                                    |
+| `player-start`    | Spawn pose and mode                                          |
+| `prefab-instance` | Places a reusable prefab                                     |
+| `ui-screen`       | Title / login / character-create / loading UI                |
+| `scene-link`      | Menu-flow transition target                                  |
+| `instanced-scene` | Per-player content (habs, hangars)                           |
+| `scene-exit`      | In-play portal to another scene (hab → station, hangar → space) |
+
+**The boot scene owns the flow.** One scene of `kind: boot` is the entry point
+(`defaultScene` in Project Settings). It never runs gameplay — its Game Manager
+names each hop, so the pipeline is yours to configure:
+
+```
+Boot ──► Title ──► Character Create ──► Starting Hab ──► Open Space
+        (auth)     (no saved appearance)   (gameplay)    (fly a ship through
+                                                          a scene-exit)
+```
+
+Empty hops are skipped: no Character Create scene falls back to the inline
+create gate, and `Require sign-in` off makes an entirely offline game.
 
 **F6** play/stop, **F7** pause — open document in the Game view, unsaved edits included. Right-click a GameObject → **Create Prefab from Selection**.
 

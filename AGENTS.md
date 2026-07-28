@@ -54,35 +54,71 @@ an id in this order:
    (`editor-desktop/repository.mjs` `sceneDataDir()`).
 2. Otherwise the bundled fallback: a recursive `import.meta.glob` over **this
    checkout's** `src/world/scenes/data/*.scene.json`, which holds only the
-   engine-owned menu flow (`title`, `login`, `character-creation`, `loading`,
-   `main-game`).
+   engine-owned menu flow (`boot`, `title`, `login`, `character-creation`,
+   `loading`, `main-game`).
 
 So the engine's own scene data is a shipped default, not where project content
 belongs. Authoring a scene in the editor writes into the project root.
 
 | Component | Role |
 |-----------|------|
-| `game-manager` | System, planet, spawn mode; Title character-create + starting hab |
+| `game-manager` | System, planet, spawn mode **and the whole entry pipeline** (see below) |
 | `planet` | Planet document reference |
 | `player-start` | Spawn pose and mode |
 | `prefab-instance` | Places a reusable prefab |
 | `ui-screen` | Mounts title / login / character-create / loading UI |
 | `scene-link` | Menu scene transition (`auto` + `delaySeconds` for timed hops) |
 | `instanced-scene` | Per-player or shared instance content (habs, hangars) |
-| `scene-exit` | In-play F portal that loads another scene (hab → station) |
+| `scene-exit` | In-play portal that loads another scene (hab → station, hangar → open space) |
 
 `src/app/scene-host.ts` is the runtime: it loads a scene, mounts its UI screens
 or starts play from its GameObjects, and switches scenes **in-process**. Scene
 navigation must not reload the page.
 
+### The boot scene owns the game flow
+
+`kind: 'boot'` is the entry document, and the project's `defaultScene` should
+point at it. It never runs gameplay: it reads the pipeline off its
+`game-manager` and hands off.
+
+```
+boot scene ──► Title scene ──► Character Create ──► Starting Hab ──► Open Space
+ (flow +        (auth UI,       (when the player     (gameplay)      (fly-through
+  world          no Game         has no saved                         scene-exit)
+  defaults)      Manager)        appearance)
+```
+
+Every hop is a `game-manager` field, so the order is a project decision, not an
+engine constant: `titleSceneId`, `characterCreateSceneId`, `startingSceneId`,
+`openSpaceSceneId`, `loadingSceneId`, plus `requireAuth` (unset means true) and
+`skipTitleWhenSignedIn`. Leave a hop empty and it is skipped — no title scene
+means the boot scene hosts the title UI itself; no character-create scene falls
+back to the inline create gate.
+
+- `resolveSceneFlowStep` (`src/world/scenes/scene-runtime.ts`) is the **single**
+  precedence rule, pure and stage-driven. The boot scene and the post-auth
+  hand-off both call it, so they cannot drift.
+- `src/app/scene-flow.ts` is the impure driver (session + bootstrap fetch);
+  `scene-host.ts` only dispatches to it.
+- The flow travels with the session in `SceneEntryFlow` — Title and Character
+  Create deliberately author **no** `game-manager`, so it is configured in
+  exactly one place, and its `systemId` / `planetId` / `spawn` are the world
+  defaults handed down to whatever scene it launches.
+
+Do not add a second place that decides the entry order, and do not re-key it off
+`scene.kind`. A legacy project whose `title` scene still carries the
+`game-manager` keeps working; that is back-compat, not the pattern to copy.
+
 ## Project settings and backend config
 
-`asteron.project.json` at the project root holds `name`, `backendUrl`,
-`defaultScene`, and `build.outDir`. **File → Project Settings…** edits it;
-`/__editor/project-settings` reads and writes it.
+`asteron.project.json` at the project root holds `name`, `backendUrl` (release /
+Build Web stamp), `editorBackendUrl` (Play / Server / editor proxy; defaults to
+localhost), `defaultScene`, and `build.outDir`. **File → Project Settings…**
+edits it; `/__editor/project-settings` reads and writes it.
 
-- `src/net/runtime-config.ts` resolves the backend URL at startup — from project
-  settings in the editor, from `asteron.runtime.json` in a shipped release.
+- `src/net/runtime-config.ts` resolves the backend URL at startup — from
+  `editorBackendUrl` in the editor, from `asteron.runtime.json` (stamped
+  `backendUrl`) in a shipped release.
   Never reintroduce a build-time `VITE_API_BASE_URL`.
 - **There is no API key.** Players authenticate with the existing cookie session
   (`/auth/login` → `cc_at` / `cc_rt`); operators use `/admin/session`. Nothing
@@ -324,11 +360,11 @@ conflating any two of them has already cost a launch.
 - Never add a WebSocket fallback, second backend, client-authoritative outcomes, or a separate prediction implementation.
 
 **`scene-exit` is the only way a player moves between places during Play.**
-The `game-manager` decides where a session *begins*; every move after that is a
-`scene-exit` marker and nothing else. Elevators are gone — mode, ride state,
-`elevator` component and all. Do not reintroduce a second mechanism that picks a
-cell: two of them race, and the loser is a player rendering one place while
-being simulated in another.
+The boot scene's `game-manager` decides where a session *begins*; every move
+after that is a `scene-exit` marker and nothing else. Elevators are gone — mode,
+ride state, `elevator` component and all. Do not reintroduce a second mechanism
+that picks a cell: two of them race, and the loser is a player rendering one
+place while being simulated in another.
 
 - `trigger: "interact"` prompts for F on foot; `trigger: "fly-through"` fires
   when a ship crosses the marker (hangar → open space) and shows no prompt.
@@ -336,6 +372,14 @@ being simulated in another.
   `@apartment`, `@hangar`, `@space` — resolved from the session bootstrap in
   `src/game/station/scene-exit.ts`. Private instance ids are per player and
   cannot be written into a prefab document.
+- `sceneId` takes the same treatment: `"@space"` resolves through the flow's
+  `openSpaceSceneId` (`resolveSceneExitSceneId`), so a hangar prefab can name
+  the destination without knowing any project's scene ids. Unknown `@` tokens
+  resolve to nothing rather than reaching the scene loader as a literal.
+- A `fly-through` exit sets `arrival: 'in-ship'` on the target, which reaches
+  `createWorldState` and spawns the player **seated and flying** in orbit.
+  Without it the swap rebuilds the session and drops a mid-flight pilot on foot
+  at the destination's Player Start.
 - The target rides the scene swap **in memory** (`onRequestScene` carries a
   `SceneExitTarget`). Do not send the Transition on the outgoing connection: a
   scene swap tears the world session down and dials a new one, so that

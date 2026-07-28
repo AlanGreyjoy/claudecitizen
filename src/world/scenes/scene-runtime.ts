@@ -30,16 +30,26 @@ export interface ScenePlayConfig {
   /** Null when the scene authored neither `game-manager` nor `planet`. */
   planetId: string | null;
   spawn: 'station' | 'surface';
+  /** Auth surface. Null when unset — the boot scene mounts title UI itself. */
+  titleSceneId: string | null;
   /**
    * Character-creator scene when the signed-in player has no appearance.
    * Null when unset — callers may use the inline create gate.
    */
   characterCreateSceneId: string | null;
   /**
-   * Hab / gameplay scene `game-manager` sends the player to after a menu
-   * surface (Title Play). Null when unset — callers fall back to `scene-link`.
+   * Hab / gameplay scene `game-manager` sends the player to after auth.
+   * Null when unset — callers fall back to `scene-link`.
    */
   startingSceneId: string | null;
+  /** Open-space scene the `@space` scene-exit token resolves to. */
+  openSpaceSceneId: string | null;
+  /** Scene shown between hops. Null uses the built-in loading overlay. */
+  loadingSceneId: string | null;
+  /** Null when the scene never authored it — the flow defaults it to true. */
+  requireAuth: boolean | null;
+  /** Signed-in players bypass the title surface. */
+  skipTitleWhenSignedIn: boolean;
   /** First authoritative station prefab instance in the scene, if any. */
   stationPrefabId: string | null;
   /** First ship prefab instance in the scene, if any. */
@@ -88,12 +98,23 @@ function findComponent<T extends PrefabComponent['type']>(
   return null;
 }
 
-interface ScenePlayAccum {
+/** Hop fields copied verbatim from `game-manager` onto the play config. */
+const SCENE_FLOW_REF_KEYS = [
+  'titleSceneId',
+  'characterCreateSceneId',
+  'startingSceneId',
+  'openSpaceSceneId',
+  'loadingSceneId',
+] as const;
+
+type SceneFlowRefKey = (typeof SCENE_FLOW_REF_KEYS)[number];
+
+interface ScenePlayAccum extends Record<SceneFlowRefKey, string | null> {
   systemId: string | null;
   planetId: string | null;
   spawn: ScenePlayConfig['spawn'];
-  characterCreateSceneId: string | null;
-  startingSceneId: string | null;
+  requireAuth: boolean | null;
+  skipTitleWhenSignedIn: boolean;
   stationPrefabId: string | null;
   shipPrefabId: string | null;
   instanceScope: SceneInstanceScope | null;
@@ -112,10 +133,14 @@ function collectGameManagerFields(
   out.systemId = gameManager.systemId;
   out.planetId = gameManager.planetId;
   out.spawn = gameManager.spawn;
-  if (gameManager.characterCreateSceneId) {
-    out.characterCreateSceneId = gameManager.characterCreateSceneId;
+  for (const key of SCENE_FLOW_REF_KEYS) {
+    const sceneId = gameManager[key];
+    if (sceneId) out[key] = sceneId;
   }
-  if (gameManager.startingSceneId) out.startingSceneId = gameManager.startingSceneId;
+  if (gameManager.requireAuth !== undefined) out.requireAuth = gameManager.requireAuth;
+  if (gameManager.skipTitleWhenSignedIn !== undefined) {
+    out.skipTitleWhenSignedIn = gameManager.skipTitleWhenSignedIn;
+  }
   out.requiresPlanet = true;
 }
 
@@ -182,8 +207,13 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
     systemId: null,
     planetId: null,
     spawn: 'station',
+    titleSceneId: null,
     characterCreateSceneId: null,
     startingSceneId: null,
+    openSpaceSceneId: null,
+    loadingSceneId: null,
+    requireAuth: null,
+    skipTitleWhenSignedIn: false,
     stationPrefabId: null,
     shipPrefabId: null,
     instanceScope: null,
@@ -201,8 +231,13 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
     systemId: out.systemId,
     planetId: out.planetId,
     spawn: out.spawn,
+    titleSceneId: out.titleSceneId,
     characterCreateSceneId: out.characterCreateSceneId,
     startingSceneId: out.startingSceneId,
+    openSpaceSceneId: out.openSpaceSceneId,
+    loadingSceneId: out.loadingSceneId,
+    requireAuth: out.requireAuth,
+    skipTitleWhenSignedIn: out.skipTitleWhenSignedIn,
     stationPrefabId: out.stationPrefabId,
     shipPrefabId: out.shipPrefabId,
     prefabInstances: out.prefabInstances,
@@ -219,31 +254,134 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
   };
 }
 
-/** Entry hop targets + world knobs carried from Title's `game-manager`. */
+/**
+ * The authored game pipeline: every hop plus the world knobs the boot scene
+ * hands down to whatever scene it sends the player to.
+ *
+ * This travels with the session rather than being re-read per scene, because
+ * the scenes it points at (Title, Character Create) deliberately author no
+ * `game-manager` of their own — the flow is configured in exactly one place.
+ */
 export interface SceneEntryFlow {
+  titleSceneId: string | null;
   characterCreateSceneId: string | null;
   startingSceneId: string | null;
+  openSpaceSceneId: string | null;
+  loadingSceneId: string | null;
+  requireAuth: boolean;
+  skipTitleWhenSignedIn: boolean;
   systemId: string | null;
   planetId: string | null;
   spawn: 'station' | 'surface';
 }
 
-/** Snapshot Game Manager entry fields when the scene authors any of them. */
+/**
+ * Snapshot the Game Manager flow when the scene authors any hop, or whenever
+ * the scene is the boot document — a bare boot Game Manager still has to hand
+ * its system / planet / spawn down to the scene it launches.
+ */
 export function resolveSceneEntryFlow(scene: SceneDocument): SceneEntryFlow | null {
   const config = resolveScenePlayConfig(scene);
-  if (!config.characterCreateSceneId && !config.startingSceneId) return null;
+  const authorsHop = SCENE_FLOW_REF_KEYS.some((key) => config[key] !== null);
+  if (!authorsHop && scene.kind !== 'boot') return null;
   return {
+    titleSceneId: config.titleSceneId,
     characterCreateSceneId: config.characterCreateSceneId,
     startingSceneId: config.startingSceneId,
+    openSpaceSceneId: config.openSpaceSceneId,
+    loadingSceneId: config.loadingSceneId,
+    // Unset means "yes": every shipped flow so far required a player record,
+    // and an author who wants an offline game says so explicitly.
+    requireAuth: config.requireAuth ?? true,
+    skipTitleWhenSignedIn: config.skipTitleWhenSignedIn,
     systemId: config.systemId,
     planetId: config.planetId,
     spawn: config.spawn,
   };
 }
 
+/** Where the flow is being evaluated from. */
+export type SceneFlowStage = 'boot' | 'post-auth';
+
 /**
- * Next scene after a menu surface. `game-manager.startingSceneId` wins so Title
- * can pick a starting hab without also authoring a `scene-link`.
+ * What the runtime should do next. `sceneId: null` on a UI step means "mount
+ * that surface on the current scene" — the legacy shape where the entry scene
+ * is also the title surface.
+ */
+export type SceneFlowStep =
+  | { kind: 'sign-in'; sceneId: string | null }
+  | { kind: 'character-create'; sceneId: string | null }
+  | { kind: 'play'; sceneId: string }
+  | { kind: 'unconfigured'; missing: string };
+
+/**
+ * The single answer to "given this flow and this player, what happens next".
+ *
+ * Pure and stage-driven so the boot scene and the post-auth Title hand-off run
+ * the exact same precedence rules; they only differ in whether sign-in has
+ * already happened.
+ */
+export function resolveSceneFlowStep(input: {
+  flow: SceneEntryFlow;
+  stage: SceneFlowStage;
+  signedIn: boolean;
+  /** Null when bootstrap was not fetched or the request failed. */
+  hasAppearance: boolean | null;
+  resumeSceneId?: string | null;
+}): SceneFlowStep {
+  const { flow, stage, signedIn, hasAppearance } = input;
+  // A deep link the player opened before signing in outranks the authored hop:
+  // they asked for a specific place and auth was only in the way.
+  if (input.resumeSceneId) return { kind: 'play', sceneId: input.resumeSceneId };
+  if (flow.requireAuth && !signedIn) return { kind: 'sign-in', sceneId: flow.titleSceneId };
+  if (
+    stage === 'boot'
+    && flow.titleSceneId
+    && !flow.skipTitleWhenSignedIn
+  ) {
+    return { kind: 'sign-in', sceneId: flow.titleSceneId };
+  }
+  if (hasAppearance === false) {
+    return { kind: 'character-create', sceneId: flow.characterCreateSceneId };
+  }
+  if (flow.startingSceneId) return { kind: 'play', sceneId: flow.startingSceneId };
+  return { kind: 'unconfigured', missing: 'startingSceneId' };
+}
+
+/**
+ * Resolve a `scene-exit`'s authored scene id against the flow.
+ *
+ * `@space` is a token, not a scene id: the open-space document is a project
+ * decision, so an exit names the token and the Game Manager names the scene.
+ * Unknown tokens resolve to nothing rather than being passed through — a typo
+ * must not reach `loadSceneDocument` as a literal.
+ */
+export function resolveSceneExitSceneId(
+  sceneId: string,
+  flow: SceneEntryFlow | null,
+): string {
+  const authored = sceneId.trim();
+  if (!authored.startsWith('@')) return authored;
+  if (authored === '@space') {
+    const target = flow?.openSpaceSceneId ?? '';
+    if (!target) {
+      console.warn('Scene exit targets @space but no Open Space Scene is set on the Game Manager.');
+    }
+    return target;
+  }
+  console.warn(`Unknown scene-exit scene token "${authored}"; the exit goes nowhere.`);
+  return '';
+}
+
+/** True when playing this scene must resolve a signed-in player first. */
+export function sceneRequiresAuth(scene: SceneDocument): boolean {
+  if (scene.kind === 'boot' || scene.kind === 'title') return true;
+  return resolveSceneEntryFlow(scene)?.requireAuth === true;
+}
+
+/**
+ * Next scene after a menu surface. `game-manager.startingSceneId` wins so the
+ * flow can pick a starting hab without also authoring a `scene-link`.
  */
 export function resolveMenuAdvanceSceneId(scene: SceneDocument): string | null {
   const config = resolveScenePlayConfig(scene);

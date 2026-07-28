@@ -117,19 +117,81 @@ export function apiUrl(path: string): string {
   return backendRequestUrl(path);
 }
 
+/**
+ * Auth endpoints where 401 / unreachable is expected UX (bad password, probe,
+ * logout) and must not kick the player. `/auth/me` is included because callers
+ * already treat null as signed-out (title login / play gate).
+ */
+const NO_SESSION_LOST_KICK = new Set([
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/logout',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/me',
+]);
+
+/** Backend unreachable (bad gateway / overloaded) — treat like a dead session. */
+const UNAVAILABLE_STATUS = new Set([502, 503, 504]);
+
+export type SessionLostReason = 'unauthorized' | 'unavailable';
+
+type SessionLostHandler = (reason: SessionLostReason) => void;
+
+let sessionLostHandler: SessionLostHandler | null = null;
+/** Coalesce bursts into one kick; cleared on any successful API call. */
+let sessionLostNotified = false;
+
+/**
+ * Scene host registers this so unrecovered player-API auth/network failures
+ * return to the boot (title) scene. `net/` must not import `app/`.
+ */
+export function setUnauthorizedHandler(handler: SessionLostHandler | null): void {
+  sessionLostHandler = handler;
+  sessionLostNotified = false;
+}
+
+function notifySessionLost(reason: SessionLostReason): void {
+  if (sessionLostNotified) return;
+  sessionLostNotified = true;
+  sessionLostHandler?.(reason);
+}
+
+/** World transport / other net layers call this when the backend is gone. */
+export function reportBackendUnavailable(): void {
+  notifySessionLost('unavailable');
+}
+
+function shouldKickOnFailure(path: string): boolean {
+  return !NO_SESSION_LOST_KICK.has(path);
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      ...init,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch (error) {
+    if (shouldKickOnFailure(path)) notifySessionLost('unavailable');
+    throw error;
+  }
 
   if (response.status === 401 && retry && path !== '/auth/refresh') {
     const refreshed = await refreshSession().catch(() => null);
     if (refreshed) return requestJson<T>(path, init, false);
+  }
+
+  if (response.status === 401 && shouldKickOnFailure(path)) {
+    notifySessionLost('unauthorized');
+  } else if (UNAVAILABLE_STATUS.has(response.status) && shouldKickOnFailure(path)) {
+    notifySessionLost('unavailable');
   }
 
   if (!response.ok) {
@@ -143,6 +205,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}, retry = true
     throw new Error(message);
   }
 
+  sessionLostNotified = false;
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

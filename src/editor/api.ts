@@ -186,7 +186,10 @@ export async function renamePrefab(
 export interface ProjectSettingsDocument {
   schemaVersion: 1;
   name: string;
+  /** Release / File → Build Web stamp (`asteron.runtime.json`). */
   backendUrl: string;
+  /** Play, Server tab, and editor backend proxy. Defaults to localhost. */
+  editorBackendUrl: string;
   defaultScene: string;
   build: { outDir: string };
   contentPacks: {

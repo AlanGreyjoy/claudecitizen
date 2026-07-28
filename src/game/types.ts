@@ -55,6 +55,11 @@ export interface GameLoopOptions {
   seed: number;
   /** When `surface`, start on-foot at the landing site (planet authoring playtest). */
   spawn?: 'station' | 'surface';
+  /**
+   * `in-ship` arrives already flying (a fly-through scene-exit), which
+   * overrides `spawn` — the player is in the cockpit, not at a Player Start.
+   */
+  arrival?: 'default' | 'in-ship';
   planetId?: string;
   systemId?: string;
   activeStationInstanceId?: string | null;

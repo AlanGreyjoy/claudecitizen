@@ -227,7 +227,14 @@ export function createAgentServer(deps) {
       pid: process.pid,
     };
     if (!repository) {
-      return { ...base, name: null, backendUrl: null, defaultScene: null, live: null };
+      return {
+        ...base,
+        name: null,
+        backendUrl: null,
+        editorBackendUrl: null,
+        defaultScene: null,
+        live: null,
+      };
     }
     const { document: settings } = await repository.getProjectSettings();
     let live = null;
@@ -239,6 +246,7 @@ export function createAgentServer(deps) {
           ...base,
           name: settings.name,
           backendUrl: settings.backendUrl,
+          editorBackendUrl: settings.editorBackendUrl,
           defaultScene: settings.defaultScene,
           live: null,
           warning: error.message,
@@ -250,6 +258,7 @@ export function createAgentServer(deps) {
       ...base,
       name: settings.name,
       backendUrl: settings.backendUrl,
+      editorBackendUrl: settings.editorBackendUrl,
       defaultScene: settings.defaultScene,
       live,
     };

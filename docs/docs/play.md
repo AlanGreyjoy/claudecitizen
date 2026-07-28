@@ -87,15 +87,24 @@ Add a query parameter to tune render quality:
 
 ## Scenes and deep links
 
-A shipped release boots the scene named in `asteron.runtime.json` (usually
-**Title**). Title's `game-manager` owns the entry chain when configured:
+A shipped release boots the scene named in `asteron.runtime.json` — the
+project's **boot scene**. It runs no gameplay of its own; its `game-manager`
+owns the entry chain:
 
-1. Login / register on the Title UI
-2. Character Create scene when the player has no appearance
-3. Starting Hab (private `instance` scene)
+1. **Title scene** — login / register (auth UI only)
+2. **Character Create scene** — when the player has no saved appearance
+3. **Starting Hab** — private `instance` scene where play begins
 
-From the hab, a **Scene Exit** marker loads the shared station scene in-process.
-Older projects may still chain `ui-screen` + `scene-link` instead.
+From the hab, a **Scene Exit** marker loads the shared station scene in-process,
+and flying a ship through a `fly-through` exit takes you to the **Open Space**
+scene still in the cockpit.
+
+Every step is a field on the Game Manager, so the order is yours: clear
+**Title Scene** and the boot scene hosts the login UI itself, clear
+**Character Create Scene** to use the inline create gate, turn off **Require
+sign-in** for an offline game, or turn on **Skip title when signed in** so
+returning players go straight to their hab. Older projects that put the
+`game-manager` on the Title scene keep working unchanged.
 
 Authoring and playtest happen in AsteronEngine (**F6** / Ship tab **Test** /
 Planet **Test Play**). There is no browser URL playtest workflow for day-to-day

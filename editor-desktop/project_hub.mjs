@@ -270,7 +270,10 @@ export function createProjectHub({ settingsPath }) {
       schemaVersion: 1,
       name,
       backendUrl: 'http://localhost:3000',
-      defaultScene: 'title',
+      editorBackendUrl: 'http://localhost:3000',
+      // The boot scene, not the title: it owns the Game Manager that decides
+      // where a session begins.
+      defaultScene: 'main-game',
       build: { outDir: 'dist' },
       contentPacks: { syntySidekick: '' },
     });
@@ -293,12 +296,36 @@ export function createProjectHub({ settingsPath }) {
       },
     });
 
+    // The scaffold is a working pipeline, not a pile of scenes: Main Game is
+    // the boot document and its Game Manager names every hop, so a fresh
+    // project plays end to end on the first press of Play.
+    await writeJson(
+      join(projectRoot, 'src/world/scenes/data/main-game.scene.json'),
+      sceneDocument('main-game', 'Main Game', 'boot', [
+        sceneObject('game-manager', 'Game Manager', [
+          {
+            type: 'game-manager',
+            systemId: 'default',
+            planetId: 'asteron',
+            spawn: 'station',
+            titleSceneId: 'title',
+            characterCreateSceneId: 'character-creation',
+            startingSceneId: 'starting-hab',
+            openSpaceSceneId: 'open-space',
+            requireAuth: true,
+          },
+        ]),
+        sceneObject('planet', 'Planet', [{ type: 'planet', planetId: 'asteron' }]),
+        sceneObject('player-start', 'Player Start', [
+          { type: 'player-start', spawn: 'station' },
+        ]),
+      ]),
+    );
     await writeJson(
       join(projectRoot, 'src/world/scenes/data/title.scene.json'),
       sceneDocument('title', 'Title', 'title', [
         sceneObject('title-screen', 'Title Screen', [
           { type: 'ui-screen', screen: 'title' },
-          { type: 'scene-link', sceneId: 'main-game' },
         ]),
       ]),
     );
@@ -307,21 +334,23 @@ export function createProjectHub({ settingsPath }) {
       sceneDocument('character-creation', 'Character Creation', 'character-creator', [
         sceneObject('character-create-screen', 'Character Create Screen', [
           { type: 'ui-screen', screen: 'character-create' },
-          { type: 'scene-link', sceneId: 'main-game' },
         ]),
       ]),
     );
     await writeJson(
-      join(projectRoot, 'src/world/scenes/data/main-game.scene.json'),
-      sceneDocument('main-game', 'Main Game', 'main-game', [
-        sceneObject('game-manager', 'Game Manager', [
-          {
-            type: 'game-manager',
-            systemId: 'default',
-            planetId: 'asteron',
-            spawn: 'station',
-          },
+      join(projectRoot, 'src/world/scenes/data/starting-hab.scene.json'),
+      sceneDocument('starting-hab', 'Starting Hab', 'instance', [
+        sceneObject('instanced-scene', 'Instanced Scene', [
+          { type: 'instanced-scene', scope: 'player' },
         ]),
+        sceneObject('player-start', 'Player Start', [
+          { type: 'player-start', spawn: 'station' },
+        ]),
+      ]),
+    );
+    await writeJson(
+      join(projectRoot, 'src/world/scenes/data/open-space.scene.json'),
+      sceneDocument('open-space', 'Open Space', 'main-game', [
         sceneObject('planet', 'Planet', [{ type: 'planet', planetId: 'asteron' }]),
         sceneObject('player-start', 'Player Start', [
           { type: 'player-start', spawn: 'station' },

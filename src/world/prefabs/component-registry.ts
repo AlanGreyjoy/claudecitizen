@@ -748,7 +748,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       spawn: "station",
     }),
     hint:
-      "Scene gameplay config: system, planet, spawn mode, character-create scene, and starting hab after Title Play.",
+      "Scene flow: system, planet, spawn mode, plus every entry hop — Title, Character Create, Starting Hab, Open Space and Loading. On a Boot scene this is the whole game pipeline.",
   },
   {
     type: "planet",

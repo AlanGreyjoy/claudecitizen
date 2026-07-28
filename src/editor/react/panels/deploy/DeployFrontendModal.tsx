@@ -18,7 +18,7 @@ function ReleaseSummary({ settings }: { settings: ProjectSettingsDocument | null
         <dd>{settings.name}</dd>
       </div>
       <div>
-        <dt>Backend URL</dt>
+        <dt>Release Backend URL</dt>
         <dd className={insecureBackend ? 'is-warning' : undefined}>
           {settings.backendUrl || '—'}
           {insecureBackend ? ' — not HTTPS; the browser will block this as mixed content.' : ''}

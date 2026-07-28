@@ -441,15 +441,20 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
   }
 
   /**
-   * Project settings (`asteron.project.json`). `backendUrl` is the deployed
-   * Rust API this project talks to; Build Web stamps it into the release so one
-   * bundle can target any deployment. Players still authenticate normally, so
-   * no secret lives in this file.
+   * Project settings (`asteron.project.json`).
+   *
+   * - `backendUrl` — release / File → Build Web stamp (`asteron.runtime.json`).
+   * - `editorBackendUrl` — Play, Server tab, and `/__editor/backend/*` proxy.
+   *   Defaults to localhost so authoring never silently follows a prod release URL.
    */
+  function normalizeBackendUrlField(value) {
+    return typeof value === 'string' ? value.trim().replace(/\/$/, '') : '';
+  }
+
   function normalizeProjectSettings(value) {
     const source = typeof value === 'object' && value !== null ? value : {};
-    const backendUrl =
-      typeof source.backendUrl === 'string' ? source.backendUrl.trim().replace(/\/$/, '') : '';
+    const backendUrl = normalizeBackendUrlField(source.backendUrl);
+    const editorBackendUrl = normalizeBackendUrlField(source.editorBackendUrl);
     const build =
       typeof source.build === 'object' && source.build !== null ? source.build : {};
     const contentPacks =
@@ -475,6 +480,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
         ? source.name.trim()
         : basename(projectRoot),
       backendUrl: backendUrl || DEFAULT_BACKEND_URL,
+      editorBackendUrl: editorBackendUrl || DEFAULT_BACKEND_URL,
       defaultScene: requireSlugId(
         typeof source.defaultScene === 'string' && source.defaultScene ? source.defaultScene : 'title',
         'defaultScene',
@@ -502,6 +508,9 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     const document = normalizeProjectSettings(requireDocument(value));
     if (!/^https?:\/\/[^\s]+$/.test(document.backendUrl)) {
       throw new EditorRepositoryError('backendUrl must be an http(s) URL');
+    }
+    if (!/^https?:\/\/[^\s]+$/.test(document.editorBackendUrl)) {
+      throw new EditorRepositoryError('editorBackendUrl must be an http(s) URL');
     }
     const path = await writeJson(projectRoot, projectSettingsPath(), document);
     return { saved: true, path, document };
@@ -681,16 +690,27 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
   }
 
   /**
-   * True when a JSON tree holds `sceneId` / `startingSceneId` equal to `id`.
-   * Keyed on field names so a scene id that collides with a label is not a hit.
+   * Every field that names another scene: `scene-link` / `scene-exit` targets
+   * plus all five Game Manager flow hops. Keyed on field names so a scene id
+   * that collides with a label is not a hit.
    */
+  const SCENE_REFERENCE_KEYS = new Set([
+    'sceneId',
+    'titleSceneId',
+    'characterCreateSceneId',
+    'startingSceneId',
+    'openSpaceSceneId',
+    'loadingSceneId',
+  ]);
+
+  /** True when a JSON tree points any scene-reference field at `id`. */
   function documentReferencesSceneId(value, id) {
     if (!value || typeof value !== 'object') return false;
     if (Array.isArray(value)) {
       return value.some((item) => documentReferencesSceneId(item, id));
     }
     for (const [key, item] of Object.entries(value)) {
-      if ((key === 'sceneId' || key === 'startingSceneId') && item === id) return true;
+      if (SCENE_REFERENCE_KEYS.has(key) && item === id) return true;
       if (documentReferencesSceneId(item, id)) return true;
     }
     return false;

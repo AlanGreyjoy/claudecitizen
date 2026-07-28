@@ -126,8 +126,22 @@ concourse is another (`blackmarket`):
 | Hab | `instance` | `instanced-scene` `scope: "player"`, `spawn-point`, `scene-exit` → station id |
 | Station | `instance` (shared) or `main-game` | Station layout / prefab; omit player-scoped `instanced-scene` so players share a cell |
 
-Title Game Manager **Starting Hab** points at the hab scene; the hab's Scene Exit
-points back at the station.
+The boot scene's Game Manager **Starting Hab** points at the hab scene; the hab's
+Scene Exit points back at the station. See [Game flow](./game-flow).
+
+### Hangar → open space
+
+A hangar leaves for space by ship, not on foot:
+
+1. Place a **Scene Exit** at the hangar mouth, sized to cover the opening
+2. Set `trigger: "fly-through"` — it fires on crossing, with no prompt
+3. Set its target scene to **Open Space (Game Manager)**, which stores the
+   `@space` token and resolves through the boot scene's **Open Space Scene**
+4. Set `networkInstanceId` to `@space` so the cell follows the scene
+
+Flying through swaps the scene and drops you into `space:<systemId>` still at the
+controls. Because the target is a token, the same hangar prefab works in any
+project that names an Open Space Scene.
 
 ## Preview
 

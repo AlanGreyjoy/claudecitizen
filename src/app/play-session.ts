@@ -192,6 +192,8 @@ export interface StartPlaySessionOptions {
    * the swap. Null on a fresh login, where the game-manager scene decides.
    */
   networkTarget?: SceneExitTarget | null;
+  /** Esc menu exit — scene host should load the boot/title scene. */
+  onExitToTitle?: () => void;
 }
 
 async function warmPlaySpawnSurface(
@@ -240,6 +242,8 @@ function createPlayGameLoop(options: {
   physics: StationPhysics | null;
   vitalsSession: PlayerVitalsSessionController;
   onRequestScene?: (target: SceneExitTarget) => void;
+  /** Set by the scene-exit that caused this session, if any. */
+  arrival?: 'default' | 'in-ship';
 }) {
   const {
     world,
@@ -259,6 +263,7 @@ function createPlayGameLoop(options: {
     planet: world.planet,
     seed: world.seed,
     spawn: world.params.spawnSurface ? 'surface' : 'station',
+    arrival: options.arrival ?? 'default',
     planetId: world.planetDocument.id,
     systemId: world.systemDocument?.id ?? world.params.systemId,
     activeStationInstanceId: world.primaryStation?.id ?? null,
@@ -486,6 +491,44 @@ async function finalizePlaySessionStart(options: {
   );
 }
 
+/**
+ * Mounts the play chrome and renderer for a session.
+ *
+ * Split out of `startPlaySession` purely for size: this block is the "put
+ * pixels on screen" half, and nothing after it depends on the DOM work beyond
+ * the handles returned here.
+ */
+async function mountPlaySurface(
+  loading: LoadingScreenHandle | undefined,
+  world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
+  bootstrap: GameBootstrap | null,
+): Promise<{
+  dom: ReturnType<typeof collectPlaySessionDom>;
+  renderer: SpikeRenderer | null;
+  rendererError: unknown;
+  characterAppearance: PlayerCharacterAppearanceV1 | null;
+}> {
+  // Editor Play hosts chrome in `#editor-play-host`. Remounting onto `document.body`
+  // leaves that host as an empty black overlay (z-index 40) on top of the canvas.
+  const playChromeParent = document.getElementById('editor-play-host') ?? document.body;
+  const chrome = mountPlayChrome(playChromeParent);
+  chrome.classList.remove('is-hidden');
+  const dom = collectPlaySessionDom(chrome);
+  const characterAppearance = resolvePlayCharacterAppearance(
+    bootstrap,
+    world.params.fromEditor,
+  );
+
+  const { renderer, rendererError } = await createPlayRenderer(dom, world, characterAppearance);
+  loading?.setProgress(0.45);
+  renderer?.setVegetationSettings(normalizeVegetationSettings(world.planetDocument.vegetation));
+  renderer?.setSurfaceSpawnCatalog(world.planetDocument.spawning);
+  if (world.params.fromEditor || new URLSearchParams(window.location.search).get('debug') === '1') {
+    dom.statsPanelEl.classList.remove('is-hidden');
+  }
+  return { dom, renderer, rendererError, characterAppearance };
+}
+
 export async function startPlaySession(
   loading?: LoadingScreenHandle,
   options: StartPlaySessionOptions = {},
@@ -504,29 +547,11 @@ export async function startPlaySession(
   // Scenes that place no ship never load a hull. The player ship stays an
   // unrendered data stub so mode transitions keep a body to read.
   if (world.params.content.ship) await applyScenePlayShipPrefab(world.params);
-  // Editor Play hosts chrome in `#editor-play-host`. Remounting onto `document.body`
-  // leaves that host as an empty black overlay (z-index 40) on top of the canvas.
-  const playChromeParent =
-    document.getElementById('editor-play-host') ?? document.body;
-  const chrome = mountPlayChrome(playChromeParent);
-  chrome.classList.remove('is-hidden');
-  const dom = collectPlaySessionDom(chrome);
-  const characterAppearance = resolvePlayCharacterAppearance(
-    bootstrap,
-    world.params.fromEditor,
-  );
-
-  const { renderer, rendererError } = await createPlayRenderer(
-    dom,
+  const { dom, renderer, rendererError, characterAppearance } = await mountPlaySurface(
+    loading,
     world,
-    characterAppearance,
+    bootstrap,
   );
-  loading?.setProgress(0.45);
-  renderer?.setVegetationSettings(normalizeVegetationSettings(world.planetDocument.vegetation));
-  renderer?.setSurfaceSpawnCatalog(world.planetDocument.spawning);
-  if (world.params.fromEditor || new URLSearchParams(window.location.search).get('debug') === '1') {
-    dom.statsPanelEl.classList.remove('is-hidden');
-  }
 
   await warmPlaySpawnSurface(loading, world, renderer);
   loading?.setProgress(0.72);
@@ -545,6 +570,7 @@ export async function startPlaySession(
     characterAppearance,
     scene: world.params.scene,
     networkTarget: options.networkTarget,
+    onExitToTitle: options.onExitToTitle,
   });
 
   const buildSystems = initializePlayBuildPhase({
@@ -577,6 +603,7 @@ export async function startPlaySession(
     physics,
     vitalsSession,
     onRequestScene: options.onRequestScene,
+    arrival: options.networkTarget?.arrival ?? 'default',
   });
 
   loopRef.loop = gameLoop;

@@ -15,8 +15,11 @@ import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from '../world
 import type { CharacterState, FlightBody, Planet, Vec3 } from '../types';
 
 import { getShipRestHeightMeters } from './ship-layout';
+import { getPilotSeatAnchor } from './ship-interaction';
 
 const CHARACTER_SPAWN_SIDE_METERS = 12;
+/** Open-space spawn altitude, as a multiple of the planet's atmosphere height. */
+const SPACE_SPAWN_ATMOSPHERE_MULTIPLE = 1.5;
 
 function yawFromForward(position: Vec3, forward: Vec3): number {
   const up = radialUp(position);
@@ -37,6 +40,37 @@ export function createSpawnShip(planet: Planet, seed: number): FlightBody {
     planet.radiusMeters,
   );
   return createFlightBody(position, eastVector(position), surface.normal ?? radialUp(position));
+}
+
+/**
+ * Ship pose for an open-space arrival.
+ *
+ * Flying out of a hangar hands the session to another scene, so the hull has to
+ * be re-created somewhere that reads as space rather than at the parked landing
+ * site. Altitude comes off the planet's own atmosphere height so a small moon
+ * and a gas giant both spawn you *above* the sky rather than inside it.
+ */
+export function createSpaceSpawnShip(planet: Planet, seed: number): FlightBody {
+  const { latRadians, lonRadians } = resolveLandingSite(planet, seed);
+  const position = cartesianFromLatLonAlt(
+    latRadians,
+    lonRadians,
+    planet.atmosphereHeightMeters * SPACE_SPAWN_ATMOSPHERE_MULTIPLE,
+    planet.radiusMeters,
+  );
+  // Facing along the orbit track, upright relative to the planet below.
+  return createFlightBody(position, eastVector(position), radialUp(position));
+}
+
+/** Character already seated at the controls, for an arrival that is mid-flight. */
+export function createPilotSpawnCharacter(ship: FlightBody): CharacterState {
+  const seat = getPilotSeatAnchor(ship);
+  return {
+    ...createCharacterState(seat.position, seat.forward),
+    animation: 'Sitting_Idle',
+    forward: seat.forward,
+    up: seat.up,
+  };
 }
 
 export function createSpawnCharacter(

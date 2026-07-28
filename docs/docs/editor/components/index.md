@@ -52,7 +52,7 @@ These components only appear on scene documents, and they decide what the scene
 
 | Component | Summary |
 | --- | --- |
-| [game-manager](../scene-components#game-manager) | System, planet, spawn mode; Title character-create + starting hab |
+| [game-manager](../scene-components#game-manager) | System, planet, spawn mode, and the entry pipeline (Title → Character Create → Starting Hab, plus Open Space and Loading) |
 | [planet](../scene-components#planet) | Planet document reference |
 | [player-start](../scene-components#player-start) | Spawn pose and mode |
 | [prefab-instance](../scene-components#prefab-instance) | Places a reusable prefab in the scene |

@@ -332,16 +332,18 @@ async function handleEditorApi(repository, request, url) {
  */
 async function proxyBackendRequest(repository, request, url) {
   const { document: settings } = await repository.getProjectSettings();
+  // Authoring talks to the editor backend, never the release stamp.
+  const backendBase = settings.editorBackendUrl || settings.backendUrl;
   let target;
   try {
     target = new URL(
       `${url.pathname.slice(BACKEND_PROXY_PREFIX.length - 1)}${url.search}`,
-      `${settings.backendUrl}/`,
+      `${backendBase}/`,
     );
   } catch {
     return jsonResponse(400, { error: 'invalid backend request path' });
   }
-  if (!target.href.startsWith(`${settings.backendUrl}/`)) {
+  if (!target.href.startsWith(`${backendBase}/`)) {
     return jsonResponse(403, { error: 'backend request escapes the configured host' });
   }
 
@@ -361,10 +363,26 @@ async function proxyBackendRequest(repository, request, url) {
     });
     // Strip Set-Cookie: the main session already stored it, and the renderer
     // origin cannot hold backend cookies anyway.
+    // Also drop framing / encoding headers: net.fetch may decompress the body
+    // while leaving content-encoding + the compressed content-length in place
+    // (common when backendUrl goes through Caddy). Re-advertising those breaks
+    // the editor-dev Node HTTP bridge → Vite proxy.
     const forwarded = new Headers(response.headers);
-    forwarded.delete('set-cookie');
-    forwarded.delete('access-control-allow-origin');
-    return new Response(response.body, {
+    for (const name of [
+      'set-cookie',
+      'access-control-allow-origin',
+      'content-encoding',
+      'content-length',
+      'transfer-encoding',
+      'connection',
+      'keep-alive',
+      'alt-svc',
+    ]) {
+      forwarded.delete(name);
+    }
+    const body = Buffer.from(await response.arrayBuffer());
+    forwarded.set('content-length', String(body.byteLength));
+    return new Response(body, {
       status: response.status,
       statusText: response.statusText,
       headers: forwarded,

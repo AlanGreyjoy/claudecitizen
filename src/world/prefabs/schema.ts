@@ -1051,14 +1051,21 @@ export type PrefabComponent =
       screenHeight?: number;
     }
   /**
-   * Scene root gameplay config (Unity GameManager-style). Prefer this over
-   * SceneDocument.settings once scene_runtime fully consumes components.
+   * Scene root gameplay config (Unity GameManager-style) *and* the authored
+   * entry pipeline. On a `boot` scene these ids are the whole game flow —
+   * nothing about the hop order lives in the engine, so a project can drop
+   * character create, skip the title, or point any hop at its own document.
    */
   | {
       type: "game-manager";
       systemId: string;
       planetId: string;
       spawn: "station" | "surface";
+      /**
+       * Auth surface. Empty means unset — the boot scene mounts the title UI
+       * itself instead of hopping.
+       */
+      titleSceneId?: string;
       /**
        * Character-creator scene for players with no saved appearance.
        * Empty means unset — fall back to the inline create gate.
@@ -1069,6 +1076,21 @@ export type PrefabComponent =
        * `instance`. Empty means unset — fall back to an authored `scene-link`.
        */
       startingSceneId?: string;
+      /**
+       * Open-space scene a `fly-through` `scene-exit` reaches through the
+       * `@space` token. Empty means the project has no open space.
+       */
+      openSpaceSceneId?: string;
+      /**
+       * Scene shown while the next hop loads. Empty means unset — the built-in
+       * loading overlay is used. A loading scene named here must not author an
+       * `auto` `scene-link`; the flow owns the advance.
+       */
+      loadingSceneId?: string;
+      /** Unset means true: the flow requires a signed-in player. */
+      requireAuth?: boolean;
+      /** Returning players with a live session bypass the title surface. */
+      skipTitleWhenSignedIn?: boolean;
     }
   /** Planet document reference for the open scene. */
   | {

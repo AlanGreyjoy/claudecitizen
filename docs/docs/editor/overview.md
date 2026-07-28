@@ -36,7 +36,7 @@ reached through ESM imports, not the Project panel.
 
 | Layer | What you do |
 | --- | --- |
-| **Scenes** | Create launchable title, loading, character-create, main-game, test, and instance scenes as GameObject trees |
+| **Scenes** | Create launchable boot, title, loading, character-creator, main-game, and instance scenes as GameObject trees |
 | **Scene building** | Drag GLBs into the viewport, add boxes and empties, parent and transform entities, edit GLB sub-meshes, tune materials, place lights |
 | **Prefab authoring** | Pick a **prefab kind** (station, ship, site, prop, item), attach **gameplay components** (spawn points, doors, colliders, interactions), save to `<any assets folder>/<id>.prefab.json` |
 
@@ -52,7 +52,7 @@ documents migrate forward automatically on read.
 
 | Component | Role |
 | --- | --- |
-| `game-manager` | System, planet, spawn mode; Title entry hops (character create + starting hab) |
+| `game-manager` | System, planet, spawn mode **and the entry pipeline** — Title, Character Create, Starting Hab, Open Space, Loading |
 | `planet` | Planet document reference |
 | `player-start` | Spawn pose and mode |
 | `prefab-instance` | Places a reusable prefab |
@@ -63,9 +63,11 @@ documents migrate forward automatically on read.
 
 At runtime, `src/app/scene-host.ts` loads a scene, mounts its UI screens or starts
 play from its GameObjects, and switches scenes **in-process** — never by reloading
-the page. Title with a configured Game Manager runs auth → character create (when
-needed) → starting hab. Private habs use `scene-exit` to enter a shared station
-scene.
+the page. A `boot` scene runs no gameplay: its Game Manager names each hop, and
+the runtime follows that pipeline (sign in → character create when needed →
+starting hab). Private habs use `scene-exit` to enter a shared station scene; a
+`fly-through` exit takes a ship out to open space. See
+[Game flow](./game-flow).
 
 ## Prefab kinds at a glance
 

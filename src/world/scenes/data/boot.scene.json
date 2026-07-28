@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 3,
+  "id": "boot",
+  "name": "Boot",
+  "kind": "boot",
+  "gameObjects": [
+    {
+      "id": "game-manager",
+      "name": "Game Manager",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [
+        {
+          "type": "game-manager",
+          "systemId": "default",
+          "planetId": "asteron",
+          "spawn": "station",
+          "titleSceneId": "title",
+          "characterCreateSceneId": "character-creation",
+          "startingSceneId": "main-game",
+          "requireAuth": true
+        }
+      ]
+    },
+    {
+      "id": "planet",
+      "name": "Planet Asteron",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [{ "type": "planet", "planetId": "asteron" }]
+    },
+    {
+      "id": "player-start",
+      "name": "Player Start",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "components": [{ "type": "player-start", "spawn": "station" }]
+    }
+  ]
+}

@@ -11,7 +11,14 @@ export function restoreSnapshot(
 ): SceneEditorTab {
   if (!snapshot) return 'scene';
   if (snapshot.prefabDocument) {
-    store.loadDocument(fromPrefabDocument(snapshot.prefabDocument));
+    // The snapshot body is always a prefab document; scene identity comes back
+    // from the fields beside it, or Play would stage the scene as a prefab.
+    const restored = fromPrefabDocument(snapshot.prefabDocument);
+    store.loadDocument({
+      ...restored,
+      documentType: snapshot.documentType ?? restored.documentType,
+      sceneKind: snapshot.sceneKind ?? restored.sceneKind,
+    });
     if (!snapshot.dirty) store.markSaved();
   }
   if (snapshot.selectedIds.length > 0) {

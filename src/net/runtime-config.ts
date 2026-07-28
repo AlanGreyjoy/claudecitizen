@@ -6,8 +6,9 @@ import { AUTHORING_ENABLED } from '../build-mode';
  * The backend URL is a deployment concern, not a build-time constant, so it is
  * resolved once at startup instead of being baked in by Vite:
  *
- *   - Editor: read from the open project's `asteron.project.json` through the
- *     `/__editor/project-settings` API.
+ *   - Editor: read `editorBackendUrl` from the open project's
+ *     `asteron.project.json` (defaults to localhost). Release `backendUrl` is
+ *     only for File → Build Web.
  *   - Shipped web build: read from `asteron.runtime.json`, which File → Build
  *     Web writes next to `index.html`.
  *
@@ -53,9 +54,17 @@ async function readEditorProjectSettings(): Promise<void> {
     const response = await fetch('/__editor/project-settings');
     if (!response.ok) return;
     const payload = (await response.json()) as {
-      document?: { backendUrl?: unknown; defaultScene?: unknown };
+      document?: {
+        backendUrl?: unknown;
+        editorBackendUrl?: unknown;
+        defaultScene?: unknown;
+      };
     };
-    merge(payload.document?.backendUrl, payload.document?.defaultScene);
+    // Authoring never follows the release stamp — that was the prod footgun.
+    merge(
+      payload.document?.editorBackendUrl ?? DEFAULTS.backendUrl,
+      payload.document?.defaultScene,
+    );
   } catch {
     // Defaults stay in place when no project is bound.
   }

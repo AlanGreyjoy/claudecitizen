@@ -17,6 +17,7 @@ const MIGRATABLE_VERSIONS = new Set([1, 2, SCENE_SCHEMA_VERSION]);
 
 export const SCENE_KINDS = [
   'title',
+  'boot',
   'loading',
   'character-creator',
   'main-game',
@@ -33,6 +34,11 @@ export type ScenePrefabKind = 'station' | 'ship';
  * the runtime needs: `game-manager` for system/planet/spawn, `planet` for the
  * planet document, `player-start` for the spawn pose, `prefab-instance` for
  * placed content, and `ui-screen` / `scene-link` for menu flow.
+ *
+ * `kind: 'boot'` is the entry document: it never runs gameplay. Its
+ * `game-manager` names every hop (Title, Character Create, Starting Hab, Open
+ * Space, Loading) and the scene host follows that authored pipeline, so the
+ * order of the menu flow is a project decision rather than an engine constant.
  */
 export interface SceneDocument {
   schemaVersion: typeof SCENE_SCHEMA_VERSION;

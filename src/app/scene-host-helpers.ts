@@ -1,6 +1,7 @@
 import {
   resolveMenuAdvanceSceneId,
   resolveSceneEntryFlow,
+  resolveSceneFlowStep,
   resolveScenePlayConfig,
   type SceneEntryFlow,
 } from '../world/scenes/scene-runtime';
@@ -29,6 +30,9 @@ import { playWorldParamsFromScene } from './play-session-world';
 export function impliedUiScreensForScene(scene: SceneDocument): SceneUiScreen[] {
   const authored = resolveScenePlayConfig(scene).uiScreens.map((entry) => entry.screen);
   if (authored.length > 0) return authored;
+  // A boot scene mounts nothing on its own — the flow driver decides which
+  // surface (if any) it hosts, so implying one here would race that decision.
+  if (scene.kind === 'boot') return [];
   if (scene.kind === 'title') return ['title'];
   if (scene.kind === 'loading') return ['loading'];
   if (scene.kind === 'character-creator') return ['character-create'];
@@ -48,8 +52,11 @@ export function playOverridesFromEntryFlow(
 }
 
 /**
- * After Title auth: character-create scene when needed, else starting hab,
- * else scene-link / resume deep-link.
+ * Where sign-in hands off: the character-create scene when the player has no
+ * appearance, else the starting hab, else an authored `scene-link`.
+ *
+ * The precedence lives in `resolveSceneFlowStep` so the boot scene and this
+ * post-auth hop can never drift apart; only the stage differs.
  */
 export async function resolvePostAuthSceneId(options: {
   scene: SceneDocument;
@@ -58,18 +65,28 @@ export async function resolvePostAuthSceneId(options: {
 }): Promise<string | null> {
   if (options.resumeSceneId) return options.resumeSceneId;
   const flow = options.entryFlow ?? resolveSceneEntryFlow(options.scene);
-  if (flow?.characterCreateSceneId || flow?.startingSceneId) {
+  if (!flow) return resolveMenuAdvanceSceneId(options.scene);
+
+  let hasAppearance: boolean | null = null;
+  if (flow.characterCreateSceneId || flow.startingSceneId) {
     try {
       const bootstrap = await fetchGameBootstrap();
-      if (!bootstrap.player.characterAppearance && flow.characterCreateSceneId) {
-        return flow.characterCreateSceneId;
-      }
-      if (flow.startingSceneId) return flow.startingSceneId;
+      hasAppearance = bootstrap.player.characterAppearance !== null;
     } catch (error) {
+      // Unreachable backend falls through to the starting scene rather than
+      // stranding a signed-in player on the title surface.
       console.warn('AsteronEngine could not load citizen record for entry flow.', error);
-      if (flow.startingSceneId) return flow.startingSceneId;
     }
   }
+
+  const step = resolveSceneFlowStep({
+    flow,
+    stage: 'post-auth',
+    signedIn: true,
+    hasAppearance,
+  });
+  if (step.kind === 'character-create' && step.sceneId) return step.sceneId;
+  if (step.kind === 'play') return step.sceneId;
   return resolveMenuAdvanceSceneId(options.scene);
 }
 
@@ -137,6 +154,9 @@ export async function mountSceneUiScreens(options: {
       continue;
     }
     if (screen === 'character-create') {
+      // Title auth leaves the loading overlay up while awaiting this scene;
+      // clear it before mounting create UI (z-index sits under loading).
+      options.setLoading(null);
       const appearance = await showCharacterCreationScreen();
       if (appearance) advanceFromCreate();
       continue;
@@ -188,6 +208,7 @@ export async function startSceneGameplay(options: {
   setLoading: (handle: LoadingScreenHandle | null) => void;
   onRedirectCharacterCreate: (session: AuthSession) => void;
   onRequestScene: (target: SceneExitTarget) => void;
+  onExitToTitle: () => void;
   networkTarget?: SceneExitTarget | null;
 }): Promise<void> {
   if (isPlaySessionRunning()) stopPlaySession({ restoreTitle: false });
@@ -226,6 +247,7 @@ export async function startSceneGameplay(options: {
         ...playOverridesFromEntryFlow(options.entryFlow),
       }),
       onRequestScene: options.onRequestScene,
+      onExitToTitle: options.onExitToTitle,
       networkTarget: options.networkTarget ?? null,
     });
   } finally {

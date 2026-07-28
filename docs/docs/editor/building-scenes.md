@@ -19,22 +19,25 @@ There is no separate settings screen for scene contents.
 
 | Goal | Add this |
 | --- | --- |
-| Pick the system, planet, spawn mode, character-create scene, and starting hab | `game-manager` |
+| Own the game flow: system, planet, spawn mode, and every entry hop | `game-manager` (on the **boot** scene) |
 | Reference a planet document | `planet` |
 | Set where the player appears | `player-start` |
 | Place a station, ship, or prop you authored | `prefab-instance` |
 | Show title / login / character-create / loading UI | `ui-screen` |
-| Hand off to another scene | `scene-link`, or Title `game-manager` Character Create + Starting Hab |
+| Hand off to another scene | The boot `game-manager` hops, or `scene-link` for menu chains |
 | Give each player their own copy (habs, hangars) | `instanced-scene` (`scope: "player"` for private habs) |
 | Exit a private hab into a station scene | `scene-exit` |
+| Fly out to open space | `scene-exit` with `trigger: "fly-through"` |
 
-A Title scene with `game-manager` owns the shipped entry chain: auth on Title →
-Character Create Scene (when needed) → Starting Hab (for example
-`blackmarkethab`). Private habs are `kind: "instance"` with `instanced-scene`
-`scope: "player"`, a `spawn-point`, and a `scene-exit` toward the shared station
-scene. Older projects can still use `ui-screen` + `scene-link`. A playable scene
-usually needs a `game-manager`, a `planet`, a `player-start`, and one or more
-`prefab-instance` GameObjects.
+Start a project with **New Scene → Boot**: that scene's `game-manager` owns the
+entry chain (Title → Character Create when needed → Starting Hab) and the scenes
+it points at author no Game Manager of their own. Private habs are
+`kind: "instance"` with `instanced-scene` `scope: "player"`, a `spawn-point`, and
+a `scene-exit` toward the shared station scene. A playable scene usually needs a
+`planet`, a `player-start`, and one or more `prefab-instance` GameObjects — the
+world defaults come down from the boot scene when it names none.
+
+Full walkthrough: [Game flow](./game-flow).
 
 Field-level reference: [Scene components](./scene-components).
 

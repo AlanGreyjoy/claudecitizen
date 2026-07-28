@@ -17,30 +17,47 @@ also appears on station/site prefabs as a gameplay marker.
 
 | Goal | Components |
 | --- | --- |
-| Title entry (auth + hops) | `game-manager` with Character Create + Starting Hab |
-| Title / login / character-create / loading (legacy) | `ui-screen` (+ optional `scene-link`) |
+| Game entry point | `kind: "boot"` + `game-manager` with the hops filled in |
+| Auth surface | `kind: "title"` + `ui-screen` `title` — **no** `game-manager` |
 | Timed hop between menu scenes | `scene-link` with `auto` + `delaySeconds` |
-| Playable world | `game-manager` + `planet` + `player-start` + `prefab-instance`(s) |
+| Playable world | `planet` + `player-start` + `prefab-instance`(s) |
 | Per-player hab / hangar | `kind: "instance"` + `instanced-scene` `scope: "player"` + `spawn-point` |
 | Exit private hab to station scene | `scene-exit` (target scene id) |
+| Fly out to open space | `scene-exit`, `trigger: "fly-through"`, target **Open Space (Game Manager)** |
 
 ## `game-manager`
 
-System, planet, spawn mode, and Title entry hops (character create → starting
-hab). Auth / register stays on the Title UI surface itself.
+The scene flow *and* the world defaults. On a **Boot** scene this component is
+the entire game pipeline; nothing about the hop order is baked into the engine.
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `systemId` | string | System Map document id |
 | `planetId` | string | Active planet terrain |
 | `spawn` | `"station"` \| `"surface"` | Where play starts |
-| `characterCreateSceneId` | string? | Character-creator scene when the player has no saved appearance |
+| `titleSceneId` | string? | Auth surface. Empty: the boot scene hosts the title UI itself |
+| `characterCreateSceneId` | string? | Character-creator scene when the player has no saved appearance. Empty: inline create gate |
 | `startingSceneId` | string? | Hab / gameplay scene after auth (+ create). Wins over `scene-link` when set |
+| `openSpaceSceneId` | string? | Scene a `@space` `scene-exit` opens |
+| `loadingSceneId` | string? | Scene shown between hops. Empty: built-in loading overlay |
+| `requireAuth` | boolean? | Unset means `true`. Off makes an offline / single-player flow |
+| `skipTitleWhenSignedIn` | boolean? | Returning players with a live session bypass the title surface |
 
-**Entry flow on Title:** login/register → if no appearance, load Character Create
-Scene → then Starting Hab. Players who already have an appearance skip create.
-World knobs (`systemId` / `planetId` / `spawn`) carry into the hab when that
-scene has no Game Manager of its own.
+**The flow:** boot → Title (sign in) → Character Create when the player has no
+appearance → Starting Hab. Every hop is optional; an empty field is skipped
+rather than blocking. World knobs (`systemId` / `planetId` / `spawn`) carry into
+the destination when that scene has no Game Manager of its own — which is why
+Title and Character Create should author none.
+
+Only one Game Manager should exist in a project's flow, on the boot scene. A
+legacy project that put it on the Title scene still works, but new work should
+move it.
+
+:::caution
+A boot scene with no `startingSceneId`, no `titleSceneId`, and no `scene-link`
+has nowhere to go and logs an error naming the missing field. If Play shows a
+black screen, check the console first.
+:::
 
 Private habs should be `kind: "instance"` with `instanced-scene` `scope: "player"`
 so each citizen stays in their `apartment:` cell.

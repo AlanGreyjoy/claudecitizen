@@ -60,6 +60,8 @@ export async function createPlayOverlayStack(options: {
   scene: SceneDocument | null;
   /** Cell handed over by the scene-exit that caused this swap, if any. */
   networkTarget?: SceneExitTarget | null;
+  /** Esc menu "Exit to Title Screen" — scene host reloads the boot scene. */
+  onExitToTitle?: () => void;
 }): Promise<PlayOverlayStack> {
   const {
     dom,
@@ -107,7 +109,7 @@ export async function createPlayOverlayStack(options: {
     mallCallbacks,
   );
 
-  const gameMenu = createPlayGameMenu(dom);
+  const gameMenu = createPlayGameMenu(dom, { onExitToTitle: options.onExitToTitle });
   const avmsTerminal = createPlayAvmsTerminal(dom);
   const entertainmentSystem = createPlayEntertainmentSystem();
 

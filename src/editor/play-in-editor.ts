@@ -3,6 +3,7 @@ import { mountPlayChrome, unmountPlayChrome } from '../app/play-chrome';
 import type { PrefabComponent } from '../world/prefabs/schema';
 import type { SceneDocument } from '../world/scenes/schema';
 import { SCENE_SCHEMA_VERSION } from '../world/scenes/schema';
+import { sceneRequiresAuth } from '../world/scenes/scene-runtime';
 import type { EditorStore } from './document';
 import { createEditorPlayHost } from './play-host';
 import { toSceneDocument } from './serialize';
@@ -92,9 +93,10 @@ export function startEditorPlay(
 
   let sceneHost: SceneHostHandle | null = createSceneHost({
     initialScene: scene,
-    // Title entry flow needs a real session so auth → character create → hab
-    // matches the shipped game. Prefab stages and direct gameplay stay offline.
-    requireAuth: scene.kind === 'title',
+    // A scene that authors the entry flow needs a real session so
+    // auth → character create → hab matches the shipped game. Prefab stages and
+    // direct gameplay plays stay offline.
+    requireAuth: sceneRequiresAuth(scene),
     fromEditor: true,
   });
   let paused = false;

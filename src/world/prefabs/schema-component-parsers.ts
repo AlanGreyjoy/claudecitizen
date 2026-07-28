@@ -1539,27 +1539,50 @@ function parseEntertainmentSystemComponent(
         };
 }
 
+/** Every hop the `game-manager` can name, in flow order. */
+const GAME_MANAGER_SCENE_REFS = [
+  "titleSceneId",
+  "characterCreateSceneId",
+  "startingSceneId",
+  "openSpaceSceneId",
+  "loadingSceneId",
+] as const;
+
+/**
+ * Optional scene references. An empty string is dropped rather than stored, so
+ * "unset" and "set to nothing" stay the same state for the flow resolver.
+ */
+function parseGameManagerSceneRefs(
+  value: Record<string, unknown>,
+  path: string,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of GAME_MANAGER_SCENE_REFS) {
+    const id = parseString(value[key] ?? "", `${path}.${key}`, 64).trim();
+    if (id) out[key] = id;
+  }
+  return out;
+}
+
 function parseGameManagerComponent(
   value: Record<string, unknown>,
   path: string,
 ): PrefabComponent {
-  const characterCreateSceneId = parseString(
-    value.characterCreateSceneId ?? "",
-    `${path}.characterCreateSceneId`,
-    64,
-  ).trim();
-  const startingSceneId = parseString(
-    value.startingSceneId ?? "",
-    `${path}.startingSceneId`,
-    64,
-  ).trim();
+  const sceneRefs = parseGameManagerSceneRefs(value, path);
   return {
     type: "game-manager",
     systemId: parseString(value.systemId ?? "default", `${path}.systemId`, 64),
     planetId: parseString(value.planetId ?? "asteron", `${path}.planetId`, 64),
     spawn: value.spawn === "surface" ? "surface" : "station",
-    ...(characterCreateSceneId ? { characterCreateSceneId } : {}),
-    ...(startingSceneId ? { startingSceneId } : {}),
+    ...sceneRefs,
+    // Left undefined when absent: the flow resolver decides the default, so a
+    // legacy document keeps requiring auth without the parser asserting it.
+    ...(value.requireAuth === undefined
+      ? {}
+      : { requireAuth: value.requireAuth === true }),
+    ...(value.skipTitleWhenSignedIn === undefined
+      ? {}
+      : { skipTitleWhenSignedIn: value.skipTitleWhenSignedIn === true }),
   };
 }
 

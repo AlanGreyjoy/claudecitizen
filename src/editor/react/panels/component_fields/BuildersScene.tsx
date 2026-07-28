@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
 import {
   SCENE_INSTANCE_SCOPES,
   SCENE_UI_SCREENS,
@@ -6,60 +6,109 @@ import {
   type SceneInstanceScope,
   type SceneUiScreen,
 } from '../../../../world/prefabs/schema';
-import { fetchSceneList, type SceneListEntry } from '../../../api';
 import type { ComponentFieldsProps } from './context';
-import { FieldRow, NumberField, SelectField, TextField } from '../InspectorForm';
+import {
+  CheckboxRow,
+  FieldRow,
+  NumberField,
+  SelectField,
+  TextField,
+} from '../InspectorForm';
+import { SceneRefField } from './SceneRefField';
 
 const SPAWN_OPTIONS = ['station', 'surface'];
 const PREFAB_KIND_OPTIONS = ['station', 'ship', 'site', 'prop', 'item'];
 const AUTO_OPTIONS = ['on activate', 'automatic'];
 const NONE_SCENE = '';
 
+type GameManagerComponent = Extract<PrefabComponent, { type: 'game-manager' }>;
+
+/** Hop fields, in flow order, with the label and the "unset" copy for each. */
+const GAME_MANAGER_HOPS: Array<{
+  key: 'titleSceneId' | 'characterCreateSceneId' | 'startingSceneId'
+    | 'openSpaceSceneId' | 'loadingSceneId';
+  label: string;
+  emptyLabel: string;
+}> = [
+  {
+    key: 'titleSceneId',
+    label: 'Title Scene',
+    emptyLabel: '(none — host the title here)',
+  },
+  {
+    key: 'characterCreateSceneId',
+    label: 'Character Create Scene',
+    emptyLabel: '(none — inline create gate)',
+  },
+  {
+    key: 'startingSceneId',
+    label: 'Starting Hab',
+    emptyLabel: '(none — use scene-link)',
+  },
+  {
+    key: 'openSpaceSceneId',
+    label: 'Open Space Scene',
+    emptyLabel: '(none — no @space exits)',
+  },
+  {
+    key: 'loadingSceneId',
+    label: 'Loading Scene',
+    emptyLabel: '(none — built-in overlay)',
+  },
+];
+
+/** The authored pipeline: every hop plus the two auth switches. */
+function GameManagerFlowFields({
+  component,
+  currentSceneId,
+  commit,
+}: {
+  component: GameManagerComponent;
+  currentSceneId: string;
+  commit: (patch: Partial<GameManagerComponent>) => void;
+}): ReactElement {
+  return (
+    <>
+      {GAME_MANAGER_HOPS.map(({ key, label, emptyLabel }) => (
+        <FieldRow key={key} label={label} wide>
+          <SceneRefField
+            value={component[key] ?? NONE_SCENE}
+            emptyLabel={emptyLabel}
+            excludeSceneId={currentSceneId}
+            onCommit={(sceneId) => commit({ [key]: sceneId })}
+          />
+        </FieldRow>
+      ))}
+      <CheckboxRow
+        label="Require sign-in"
+        checked={component.requireAuth ?? true}
+        onChange={(requireAuth) => commit({ requireAuth })}
+      />
+      <CheckboxRow
+        label="Skip title when signed in"
+        checked={component.skipTitleWhenSignedIn ?? false}
+        onChange={(skipTitleWhenSignedIn) => commit({ skipTitleWhenSignedIn })}
+      />
+    </>
+  );
+}
+
 export function GameManagerFields({
   ctx,
   component,
-}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'game-manager' }>>): ReactElement {
+}: ComponentFieldsProps<GameManagerComponent>): ReactElement {
   const { update, store } = ctx;
-  const [scenes, setScenes] = useState<SceneListEntry[]>([]);
   const currentSceneId = store.getState().prefabId;
 
-  useEffect(() => {
-    let cancelled = false;
-    void fetchSceneList()
-      .then((list) => {
-        if (!cancelled) setScenes(list);
-      })
-      .catch(() => {
-        if (!cancelled) setScenes([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const starting = component.startingSceneId ?? NONE_SCENE;
-  const characterCreate = component.characterCreateSceneId ?? NONE_SCENE;
-  const sceneEntries = scenes.filter((entry) => entry.id !== currentSceneId);
-  for (const id of [starting, characterCreate]) {
-    if (id && !sceneEntries.some((entry) => entry.id === id)) {
-      sceneEntries.unshift({ id, name: id });
+  function commitGameManager(patch: Partial<GameManagerComponent>): void {
+    // Spread the merged component rather than rebuilding from a key list: an
+    // explicit rebuild silently drops every field it forgets, which is how a
+    // newly added hop would get erased the next time Spawn is touched.
+    const next = { ...component, ...patch, type: 'game-manager' as const };
+    for (const { key } of GAME_MANAGER_HOPS) {
+      if (!(next[key] ?? '').trim()) delete next[key];
     }
-  }
-
-  function commitGameManager(
-    patch: Partial<Extract<PrefabComponent, { type: 'game-manager' }>>,
-  ): void {
-    const next = { ...component, ...patch };
-    const characterCreateSceneId = (next.characterCreateSceneId ?? '').trim();
-    const startingSceneId = (next.startingSceneId ?? '').trim();
-    update({
-      type: 'game-manager',
-      systemId: next.systemId,
-      planetId: next.planetId,
-      spawn: next.spawn,
-      ...(characterCreateSceneId ? { characterCreateSceneId } : {}),
-      ...(startingSceneId ? { startingSceneId } : {}),
-    });
+    update(next);
   }
 
   return (
@@ -87,42 +136,11 @@ export function GameManagerFields({
           }
         />
       </FieldRow>
-      <FieldRow label="Character Create Scene" wide>
-        <select
-          className="ed-select"
-          value={characterCreate}
-          onChange={(event) =>
-            commitGameManager({
-              characterCreateSceneId: event.currentTarget.value.trim(),
-            })
-          }
-        >
-          <option value={NONE_SCENE}>(none — inline create gate)</option>
-          {sceneEntries.map(({ id, name }) => (
-            <option key={`create-${id}`} value={id}>
-              {name} ({id})
-            </option>
-          ))}
-        </select>
-      </FieldRow>
-      <FieldRow label="Starting Hab" wide>
-        <select
-          className="ed-select"
-          value={starting}
-          onChange={(event) =>
-            commitGameManager({
-              startingSceneId: event.currentTarget.value.trim(),
-            })
-          }
-        >
-          <option value={NONE_SCENE}>(none — use scene-link)</option>
-          {sceneEntries.map(({ id, name }) => (
-            <option key={`start-${id}`} value={id}>
-              {name} ({id})
-            </option>
-          ))}
-        </select>
-      </FieldRow>
+      <GameManagerFlowFields
+        component={component}
+        currentSceneId={currentSceneId}
+        commit={commitGameManager}
+      />
     </>
   );
 }
@@ -231,12 +249,14 @@ export function SceneLinkFields({
   ctx,
   component,
 }: ComponentFieldsProps<Extract<PrefabComponent, { type: 'scene-link' }>>): ReactElement {
-  const { update } = ctx;
+  const { update, store } = ctx;
   return (
     <>
-      <FieldRow label="Scene ID" wide>
-        <TextField
+      <FieldRow label="Scene" wide>
+        <SceneRefField
           value={component.sceneId}
+          emptyLabel="(pick a scene)"
+          excludeSceneId={store.getState().prefabId}
           onCommit={(sceneId) => update({ ...component, sceneId })}
         />
       </FieldRow>

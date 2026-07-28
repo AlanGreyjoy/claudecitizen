@@ -108,9 +108,11 @@ export function loginInstanceForScene(
   // the cell they left rather than the one this scene depicts.
   if (scope === 'player') {
     const apartment = bootstrap?.spawn.apartmentInstanceId;
-    return apartment ? { sceneId: scene.id, instanceId: apartment, roomId: 'hab-room' } : null;
+    return apartment
+      ? { sceneId: scene.id, instanceId: apartment, roomId: 'hab-room', arrival: 'default' }
+      : null;
   }
-  return { sceneId: scene.id, instanceId: `scene:${scene.id}`, roomId: '' };
+  return { sceneId: scene.id, instanceId: `scene:${scene.id}`, roomId: '', arrival: 'default' };
 }
 
 export async function connectPlayNetwork(
@@ -217,7 +219,10 @@ export function createPlayMallCallbacks(options: {
   };
 }
 
-export function createPlayGameMenu(dom: PlaySessionDom): ReturnType<typeof createGameMenu> {
+export function createPlayGameMenu(
+  dom: PlaySessionDom,
+  options: { onExitToTitle?: () => void } = {},
+): ReturnType<typeof createGameMenu> {
   return createGameMenu(
     {
       rootEl: dom.gameMenuEl,
@@ -231,7 +236,17 @@ export function createPlayGameMenu(dom: PlaySessionDom): ReturnType<typeof creat
       sfxValueEl: dom.gameMenuSfxValue,
       musicValueEl: dom.gameMenuMusicValue,
     },
-    { onExitGame: () => stopPlaySession() },
+    {
+      // Prefer scene-host boot reload. Bare stopPlaySession() only unhides the
+      // static #title-screen HTML (Play button) and never remounts the title scene.
+      onExitGame: () => {
+        if (options.onExitToTitle) {
+          options.onExitToTitle();
+          return;
+        }
+        stopPlaySession();
+      },
+    },
   );
 }
 

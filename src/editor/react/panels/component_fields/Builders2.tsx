@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
 import type { PrefabComponent, SceneExitTrigger } from '../../../../world/prefabs/schema';
 import { SCENE_EXIT_TRIGGERS } from '../../../../world/prefabs/schema';
 import type { StationFloorId } from '../../../../world/station';
@@ -8,8 +8,8 @@ import {
   LADDER_DEFAULT_LABEL,
   LADDER_DEFAULT_RADIUS,
 } from '../../../../world/ladders';
-import { fetchSceneList, type SceneListEntry } from '../../../api';
 import type { ComponentFieldsProps } from './context';
+import { SceneRefField } from './SceneRefField';
 import {
   AssetUrlField,
   CheckboxRow,
@@ -26,50 +26,27 @@ import {
 /** Press F on foot, or cross it in a ship (a hangar mouth is not a door). */
 const SCENE_EXIT_TRIGGER_OPTIONS = [...SCENE_EXIT_TRIGGERS];
 
+/**
+ * `@space` is a Game Manager hop, not a document: a hangar prefab can be reused
+ * across projects only if it names the token instead of somebody's scene id.
+ */
+const SPACE_EXIT_OPTION = [{ id: '@space', name: 'Open Space (Game Manager)' }];
+
 export function SceneExitFields({
   ctx,
   component,
 }: ComponentFieldsProps<Extract<PrefabComponent, { type: 'scene-exit' }>>): ReactElement {
   const { update } = ctx;
-  const [scenes, setScenes] = useState<SceneListEntry[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchSceneList()
-      .then((list) => {
-        if (!cancelled) setScenes(list);
-      })
-      .catch(() => {
-        if (!cancelled) setScenes([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const sceneId = component.sceneId ?? '';
-  const sceneEntries = [...scenes];
-  if (sceneId && !sceneEntries.some((entry) => entry.id === sceneId)) {
-    sceneEntries.unshift({ id: sceneId, name: sceneId });
-  }
 
   return (
     <>
       <FieldRow label="Target Scene" wide>
-        <select
-          className="ed-select"
-          value={sceneId}
-          onChange={(event) =>
-            update({ ...component, sceneId: event.currentTarget.value.trim() })
-          }
-        >
-          <option value="">(pick a scene)</option>
-          {sceneEntries.map(({ id, name }) => (
-            <option key={id} value={id}>
-              {name} ({id})
-            </option>
-          ))}
-        </select>
+        <SceneRefField
+          value={component.sceneId ?? ''}
+          emptyLabel="(pick a scene)"
+          extraOptions={SPACE_EXIT_OPTION}
+          onCommit={(sceneId) => update({ ...component, sceneId })}
+        />
       </FieldRow>
       <FieldRow label="Trigger" wide>
         <SelectField

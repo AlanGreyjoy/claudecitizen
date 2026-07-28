@@ -6,6 +6,7 @@ export type ResolvedLoopContextOptions = Required<
     | "planet"
     | "seed"
     | "spawn"
+    | "arrival"
     | "planetId"
     | "systemId"
     | "activeStationInstanceId"
@@ -60,6 +61,7 @@ function resolveIdentityOptions(options: GameLoopOptions) {
 function resolveSpawnOptions(options: GameLoopOptions) {
   return {
     spawn: options.spawn ?? ("station" as const),
+    arrival: options.arrival ?? ("default" as const),
     planetId: options.planetId ?? "asteron",
     systemId: options.systemId ?? "default",
     activeStationInstanceId: options.activeStationInstanceId ?? null,

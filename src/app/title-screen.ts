@@ -20,8 +20,23 @@ interface TitleScreenController {
 }
 
 let titleScreenController: TitleScreenController | null = null;
+/** Shown once on next login render after a mid-play session kick. */
+let pendingLoginMessage: string | undefined;
 
-export function restoreTitleScreen(session?: AuthSession | null): void {
+export function setPendingLoginMessage(message: string): void {
+  pendingLoginMessage = message;
+}
+
+function takePendingLoginMessage(): string | undefined {
+  const message = pendingLoginMessage;
+  pendingLoginMessage = undefined;
+  return message;
+}
+
+export function restoreTitleScreen(
+  session?: AuthSession | null,
+  loginMessage?: string,
+): void {
   document.getElementById('app')?.classList.add('is-hidden');
   ensureTitleScreenMarkup().classList.remove('is-hidden');
   if (!titleScreenController) return;
@@ -29,7 +44,7 @@ export function restoreTitleScreen(session?: AuthSession | null): void {
     titleScreenController.renderSignedIn(session);
     return;
   }
-  titleScreenController.renderLogin();
+  titleScreenController.renderLogin(loginMessage ?? takePendingLoginMessage());
 }
 
 function bootTitleAuthSession(
@@ -60,10 +75,12 @@ function bootTitleAuthSession(
         auth.renderLogin(params.get('reason') ?? 'Discord login failed.');
         return;
       }
-      auth.renderLogin();
+      auth.renderLogin(takePendingLoginMessage());
     })
     .catch(() => {
-      if (auth.getCurrentScene() === null && auth.getLastSession() === null) auth.renderLogin();
+      if (auth.getCurrentScene() === null && auth.getLastSession() === null) {
+        auth.renderLogin(takePendingLoginMessage());
+      }
     });
 }
 
