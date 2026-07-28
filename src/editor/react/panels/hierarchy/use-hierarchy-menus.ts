@@ -14,7 +14,7 @@ import {
   type GlbNodeColliderTarget,
 } from '../../../component-actions';
 import type { EditorEntity, EditorStore, GlbNodeRef } from '../../../document';
-import type { ContextMenuEntry } from '../../../dom';
+import { showToast, type ContextMenuEntry } from '../../../dom';
 import { PREFAB_KINDS, type PrefabKind } from '../../../../world/prefabs/schema';
 import {
   collectEntitySubtreeIds,
@@ -22,6 +22,13 @@ import {
 } from '../../../panels/hierarchy-logic';
 import type { Vec3 } from '../../../../types';
 import type { HierarchyPanelOptions } from '../../../panels/hierarchy-logic';
+
+function copyNameToClipboard(name: string): void {
+  void navigator.clipboard.writeText(name).then(
+    () => showToast(`Copied "${name}"`),
+    () => showToast('Could not copy to clipboard', true),
+  );
+}
 
 export type HierarchyMenusArgs = {
   store: EditorStore;
@@ -109,6 +116,10 @@ const entityMenuEntries = useCallback(
           ),
         },
         { label: 'Filter', action: () => filterByItemName(entity.name) },
+        {
+          label: 'Copy Name',
+          action: () => copyNameToClipboard(entity.name),
+        },
         'sep',
         { label: 'Duplicate', action: () => store.duplicateEntities(selectedIds) },
         {
@@ -151,6 +162,10 @@ const entityMenuEntries = useCallback(
         })),
       },
       { label: 'Filter', action: () => filterByItemName(entity.name) },
+      {
+        label: 'Copy Name',
+        action: () => copyNameToClipboard(entity.name),
+      },
       { label: 'Rename', action: () => beginRename(entity.id) },
       { label: 'Duplicate', action: () => store.duplicateEntity(entity.id) },
       {

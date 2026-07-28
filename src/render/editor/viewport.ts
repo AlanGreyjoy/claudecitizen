@@ -186,6 +186,7 @@ export function createEditorViewport(
     selection.boxes.forEach((box) => box.update());
     graph.updateNpcRoutes();
     particles.update(dt, camera);
+    viewportScene.updateSky(dt);
     if (!selection.isDraggingSelection()) {
       entityRoot.userData.updateObjectAnimations?.(dt);
     }
@@ -206,6 +207,7 @@ export function createEditorViewport(
     },
     setSnap: snap.setSnap,
     setEnvironmentLights: viewportScene.setEnvironmentLights,
+    setProceduralSky: viewportScene.setProceduralSky,
     setPlayMode(playing: boolean) {
       playMode = playing;
       container.classList.toggle("is-playing", playing);

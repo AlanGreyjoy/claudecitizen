@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { setupUpdateObjectAnimations } from "../prefabs/object-animation";
+import { createViewportProceduralSky } from "./viewport-procedural-sky";
 
 export interface ViewportScene {
   canvas: HTMLCanvasElement;
@@ -13,6 +14,10 @@ export interface ViewportScene {
   gizmo: TransformControls;
   /** Editor fill lighting (hemi + sun + fill). Off = authored local lights only. */
   setEnvironmentLights: (enabled: boolean) => void;
+  /** Unreal-style procedural sky dome + sun disk (tracks env sun). */
+  setProceduralSky: (enabled: boolean) => void;
+  /** Advance the procedural sky's cloud drift. No-op while the sky is off. */
+  updateSky: (dt: number) => void;
   resize: () => void;
   dispose: () => void;
 }
@@ -60,9 +65,14 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   envLights.add(fill);
   scene.add(envLights);
 
-  const grid = new THREE.GridHelper(400, 400, 0x33507a, 0x18243c);
-  (grid.material as THREE.Material).transparent = true;
-  (grid.material as THREE.Material).opacity = 0.6;
+  const proceduralSky = createViewportProceduralSky(scene, renderer, sun);
+
+  // Studio: dark lines on dark bg. Daylight sky: mid blue-gray so lines
+  // stay visible against a bright Preetham horizon without silhouetting.
+  const GRID_STUDIO = { center: 0x33507a, grid: 0x18243c, opacity: 0.6 } as const;
+  const GRID_SKY = { center: 0x4a5f78, grid: 0x8a9bb0, opacity: 0.55 } as const;
+
+  let grid = createEditorGrid(GRID_STUDIO);
   scene.add(grid);
   scene.add(new THREE.AxesHelper(3));
 
@@ -104,8 +114,19 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
     setEnvironmentLights(enabled: boolean) {
       envLights.visible = enabled;
     },
+    setProceduralSky(enabled: boolean) {
+      proceduralSky.setEnabled(enabled);
+      const next = createEditorGrid(enabled ? GRID_SKY : GRID_STUDIO);
+      scene.remove(grid);
+      disposeEditorGrid(grid);
+      grid = next;
+      scene.add(grid);
+    },
+    updateSky: proceduralSky.update,
     resize,
     dispose() {
+      proceduralSky.dispose();
+      disposeEditorGrid(grid);
       gizmo.detach();
       gizmo.dispose();
       orbit.dispose();
@@ -113,4 +134,28 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
       canvas.remove();
     },
   };
+}
+
+function createEditorGrid(theme: {
+  center: number;
+  grid: number;
+  opacity: number;
+}): THREE.GridHelper {
+  const grid = new THREE.GridHelper(400, 400, theme.center, theme.grid);
+  const material = grid.material as THREE.Material;
+  material.transparent = true;
+  material.opacity = theme.opacity;
+  // Keep lines readable over bright sky without depth fighting the floor.
+  material.depthWrite = false;
+  return grid;
+}
+
+function disposeEditorGrid(grid: THREE.GridHelper): void {
+  grid.geometry.dispose();
+  const material = grid.material;
+  if (Array.isArray(material)) {
+    for (const entry of material) entry.dispose();
+  } else {
+    material.dispose();
+  }
 }

@@ -42,6 +42,7 @@ export interface ToolbarActions {
   onGizmoSpace: (space: 'local' | 'world') => void;
   onSnapChange: (enabled: boolean, translateStep: number, rotateStepDegrees: number) => void;
   onEnvironmentLightsChange: (enabled: boolean) => void;
+  onProceduralSkyChange: (enabled: boolean) => void;
   onFocusSelection: () => void;
   onAddBox: () => void;
   onAddEmpty: () => void;
@@ -765,6 +766,7 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
   const [gizmoSpace, setGizmoSpace] = useState<'local' | 'world'>('world');
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [environmentLights, setEnvironmentLights] = useState(true);
+  const [proceduralSky, setProceduralSky] = useState(false);
   const [snapTranslate] = useState('0.25');
   const [snapRotate] = useState('15');
   const [prefabOptions, setPrefabOptions] = useState<PrefabListEntry[]>([]);
@@ -969,6 +971,12 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
     actions.onEnvironmentLightsChange(next);
   };
 
+  const toggleProceduralSky = (): void => {
+    const next = !proceduralSky;
+    setProceduralSky(next);
+    actions.onProceduralSkyChange(next);
+  };
+
   return (
     <>
       <div className="ed-toolbar">
@@ -1012,6 +1020,16 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
               }
               active={environmentLights}
               onClick={toggleEnvironmentLights}
+            />
+            <ToolIconButton
+              icon={UiIcons.cloudSun}
+              title={
+                proceduralSky
+                  ? 'Procedural sky on (click to restore solid backdrop)'
+                  : 'Procedural sky off — Unreal-style sky + sun (click to enable)'
+              }
+              active={proceduralSky}
+              onClick={toggleProceduralSky}
             />
           </div>
 

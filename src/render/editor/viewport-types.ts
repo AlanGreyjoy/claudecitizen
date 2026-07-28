@@ -38,6 +38,8 @@ export interface EditorViewport {
   ) => void;
   /** Toggle editor hemi/sun/fill so authored point/spot/area lights read clearly. */
   setEnvironmentLights: (enabled: boolean) => void;
+  /** Toggle Unreal-style procedural sky dome + sun disk (tracks env sun). */
+  setProceduralSky: (enabled: boolean) => void;
   /**
    * Unity-style in-editor Play: Scene view becomes Play view in place.
    * Disables edit picking/gizmos; flythrough camera remains available.

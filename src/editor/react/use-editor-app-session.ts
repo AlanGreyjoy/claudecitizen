@@ -212,6 +212,8 @@ const toolbarActions = useMemo(
       viewportRef.current?.setSnap(enabled, translate, rotate),
     onEnvironmentLightsChange: (enabled: boolean) =>
       viewportRef.current?.setEnvironmentLights(enabled),
+    onProceduralSkyChange: (enabled: boolean) =>
+      viewportRef.current?.setProceduralSky(enabled),
     onFocusSelection: () => viewportRef.current?.focusSelection(),
     onAddBox: () => addBox(store),
     onAddEmpty: () => addEmpty(store),
