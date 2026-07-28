@@ -547,16 +547,25 @@ export default defineConfig(({ mode }) => ({
   // stars), reached only through ESM imports that Vite must own. All project
   // content lives under the open project's `assets/` and is served via the
   // bridge at `/assets/...`.
-  server: editorBridgeTarget
-    ? {
-        host: '127.0.0.1',
-        proxy: {
-          '/__editor': editorBridgeTarget,
-          '/assets': editorBridgeTarget,
-          '/asteron/content': editorBridgeTarget,
-        },
-      }
-    : undefined,
+  //
+  // `.asteron-build/` is watched out explicitly. `build:project-web` stages a
+  // hardlinked copy of `src/` and `public/` there, inside this very root, then
+  // deletes it — thousands of events the dev server would otherwise read as
+  // source edits. Git ignores the directory; chokidar does not, and the reload
+  // it triggers lands in the middle of a Build Web or a Deploy.
+  server: {
+    watch: { ignored: ['**/.asteron-build/**'] },
+    ...(editorBridgeTarget
+      ? {
+          host: '127.0.0.1',
+          proxy: {
+            '/__editor': editorBridgeTarget,
+            '/assets': editorBridgeTarget,
+            '/asteron/content': editorBridgeTarget,
+          },
+        }
+      : {}),
+  },
   // Keep a single React copy (docs/takram also pull react) so Vite's
   // rolldown prebundle of react-dom/client doesn't import a mismatched chunk.
   resolve: {
