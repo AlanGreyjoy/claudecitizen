@@ -82,9 +82,14 @@ server path. **Upload env file before deploying** decides what the stage does:
 | On | Uploads **Local env file** to that path over SSH at mode 0600 |
 
 Uploading is the flexible option and the one to use if the box is not the only
-place you keep the file: point it at your own `deploy/.env`, or anywhere else on
-this machine. Only the *path* goes into `~/.asteron/deploy.json` — the secrets
-stay in the file. Each upload keeps the previous server copy as `<env file>.bak`,
+place you keep the file. **Local env file** left blank means this checkout's
+`deploy/.env` — the same relative path the server uses, git-ignored on both
+ends — so filling that in and turning the toggle on is the whole setup. Set the
+field to keep production secrets somewhere else entirely. Only the *path* goes
+into `~/.asteron/deploy.json`; the secrets stay in the file. Note this is the
+*engine* checkout's `deploy/.env`, not the open project's, and it is a different
+file from `backend/.env`, which configures local development and would break
+production if shipped. Each upload keeps the previous server copy as `<env file>.bak`,
 writes through a temp file so an interrupted transfer cannot leave a half-written
 env behind, and logs a byte count rather than any contents.
 

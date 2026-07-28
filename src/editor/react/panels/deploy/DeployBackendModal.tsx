@@ -151,9 +151,9 @@ function RemoteFields({ state }: { state: DeployStateHandle }): ReactElement | n
           label="Local env file"
           span={4}
           value={config.envSourcePath}
-          placeholder="/home/you/secrets/claudecitizen.env"
+          placeholder="blank — this checkout's deploy/.env"
           onChange={(envSourcePath) => patch({ envSourcePath })}
-          detail="Only this path is stored in ~/.asteron/deploy.json — the secrets stay in the file, on this machine."
+          detail="Leave blank to ship deploy/.env from this checkout. Only the path is stored in ~/.asteron/deploy.json — the secrets stay in the file, on this machine."
         />
       ) : null}
       <DeployField
@@ -252,10 +252,6 @@ function SectionTabs({
   );
 }
 
-/**
- * Deploy is gated on more than a reachable box: an upload with no local env file
- * would fail on the first stage, so the button says why before it is clicked.
- */
 function BackendActions({
   state,
   onClose,
@@ -266,20 +262,14 @@ function BackendActions({
   const { config, dirty, run, save, testConnection, deploy, cancel } = state;
   const busy = run.running;
   const connectable = Boolean(config?.host) && Boolean(config?.hasPassword || config?.privateKeyPath);
-  const envReady = !config?.envUpload || Boolean(config.envSourcePath);
-  const blocked = dirty
-    ? 'Save settings first.'
-    : envReady
-      ? undefined
-      : 'Set the local env file to upload, or turn the upload off.';
 
   return (
     <>
       <button
         type="button"
         className="ed-btn ed-btn-accent"
-        disabled={busy || dirty || !connectable || !envReady}
-        title={blocked}
+        disabled={busy || dirty || !connectable}
+        title={dirty ? 'Save settings first.' : undefined}
         onClick={() => void deploy('backend')}
       >
         {busy ? 'Deploying…' : 'Deploy'}

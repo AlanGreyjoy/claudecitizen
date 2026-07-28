@@ -337,19 +337,27 @@ function execRemote(client, command, onLine) {
   });
 }
 
+/**
+ * Which local file the env stage ships.
+ *
+ * Blank means this checkout's `deploy/.env` — the same relative path the box
+ * uses, git-ignored on both ends, so the common case needs no configuration.
+ * Set the field to keep production secrets somewhere else entirely.
+ */
+function resolveEnvSource(config, repositoryRoot) {
+  return config.envSourcePath || join(repositoryRoot, 'deploy', '.env');
+}
+
 /** Reads the local file the env stage ships, normalising it to end in a newline. */
-async function readEnvSource(config) {
-  if (!config.envSourcePath) {
-    throw new DeployError('Set the local env file to upload, or turn "Upload env file" off.');
-  }
+async function readEnvSource(path) {
   let content;
   try {
-    content = await readFile(config.envSourcePath, 'utf8');
+    content = await readFile(path, 'utf8');
   } catch (error) {
-    throw new DeployError(`Could not read the local env file at ${config.envSourcePath}: ${error.message}`);
+    throw new DeployError(`Could not read the local env file at ${path}: ${error.message}`);
   }
   if (!content.trim()) {
-    throw new DeployError(`${config.envSourcePath} is empty — compose fails on the first missing variable.`);
+    throw new DeployError(`${path} is empty — compose fails on the first missing variable.`);
   }
   return content.endsWith('\n') ? content : `${content}\n`;
 }
@@ -383,8 +391,9 @@ function writeRemoteFile(client, path, content) {
  * leave a half-written env behind, and the previous copy is kept as `.bak`
  * because overwriting it in place would destroy secrets that exist nowhere else.
  */
-async function uploadEnvFile(client, config, log) {
-  const content = await readEnvSource(config);
+async function uploadEnvFile(client, config, repositoryRoot, log) {
+  const source = resolveEnvSource(config, repositoryRoot);
+  const content = await readEnvSource(source);
   const target = remoteEnvPath(config);
   const temp = `${target}.asteron-upload`;
   const prepare =
@@ -401,7 +410,7 @@ async function uploadEnvFile(client, config, log) {
     throw new DeployError(`Could not move the uploaded env file into ${target} (exit ${installed.code}).`, 502);
   }
   // Byte count only — this file's contents must never reach the log.
-  log(`Uploaded ${Buffer.byteLength(content)} bytes from ${config.envSourcePath} to ${target} (mode 600).`);
+  log(`Uploaded ${Buffer.byteLength(content)} bytes from ${source} to ${target} (mode 600).`);
 }
 
 /** Fails before the build when the box has no env file, instead of during compose. */
@@ -517,7 +526,7 @@ export function createDeployManager({ getRepository, repositoryRoot, npmCommand,
     log(`Connected to ${config.host}.`);
     try {
       emit({ phase: 'step', stepIndex: 0, label: envLabel });
-      if (config.envUpload) await uploadEnvFile(client, config, log);
+      if (config.envUpload) await uploadEnvFile(client, config, repositoryRoot, log);
       else await verifyEnvFile(client, config, log);
 
       for (const [index, step] of steps.entries()) {
