@@ -152,6 +152,8 @@ export interface InspectorPanelOptions {
   onPlayShipRampPreview?: () => void;
   /** Play the cockpit canopy open / close in the viewport. */
   onPlayShipCanopyPreview?: () => void;
+  /** Jump to a material row in the Material Manager tab. */
+  onOpenMaterial?: (target: { entityId: string; material: string }) => void;
 }
 
 export type TransformFieldKey = 'position' | 'rotation' | 'scale';

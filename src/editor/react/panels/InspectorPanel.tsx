@@ -318,7 +318,13 @@ function PrimitiveSizeInput({
   );
 }
 
-function MaterialSummaryRow({ row }: { row: MaterialRow }): ReactElement {
+function MaterialSummaryRow({
+  row,
+  onOpen,
+}: {
+  row: MaterialRow;
+  onOpen?: () => void;
+}): ReactElement {
   const values = [
     `M ${formatMaterialNumber(row.values.metalness)}`,
     `R ${formatMaterialNumber(row.values.roughness)}`,
@@ -328,7 +334,13 @@ function MaterialSummaryRow({ row }: { row: MaterialRow }): ReactElement {
     values.push(`E ${formatMaterialNumber(row.values.emissiveIntensity)}`);
   }
   return (
-    <div className="ed-inspector-material-row">
+    <button
+      type="button"
+      className="ed-inspector-material-row"
+      title="Open in Material Manager"
+      disabled={!onOpen}
+      onClick={onOpen}
+    >
       <span
         className="ed-inspector-material-swatch"
         title={row.values.color}
@@ -344,16 +356,18 @@ function MaterialSummaryRow({ row }: { row: MaterialRow }): ReactElement {
         </span>
       </div>
       <span className="ed-inspector-material-values">{values.join(' · ')}</span>
-    </div>
+    </button>
   );
 }
 
 function MaterialsSection({
   store,
   entity,
+  onOpenMaterial,
 }: {
   store: EditorStore;
   entity: EditorEntity;
+  onOpenMaterial?: (target: { entityId: string; material: string }) => void;
 }): ReactElement {
   const [collapsed, setCollapsed] = useState(true);
   const [rows, setRows] = useState<MaterialRow[] | null>(null);
@@ -429,6 +443,15 @@ function MaterialsSection({
               <MaterialSummaryRow
                 key={`${row.entity.id}:${row.material}:${row.displayName}`}
                 row={row}
+                onOpen={
+                  onOpenMaterial
+                    ? () =>
+                        onOpenMaterial({
+                          entityId: row.entity.id,
+                          material: row.material,
+                        })
+                    : undefined
+                }
               />
             ))
           )}
@@ -651,7 +674,11 @@ function InspectorBody({
         />
       ) : null}
       <VisualSection store={store} entity={entity} />
-      <MaterialsSection store={store} entity={entity} />
+      <MaterialsSection
+        store={store}
+        entity={entity}
+        onOpenMaterial={options.onOpenMaterial}
+      />
       <ComponentsSection store={store} entity={entity} options={options} />
     </>
   );

@@ -1,6 +1,7 @@
 import type { BuildAreaRuntime } from '../game/types';
 import type { BuildArea, GameBootstrap } from '../net/api';
 import { createHangarBuildController } from '../player/hangar_build/build-controller';
+import { createBuildPlacementFrame } from '../player/hangar_build/placement-frame';
 import {
   createBuildPropColliderRuntime,
   type BuildPropColliderRuntime,
@@ -35,7 +36,11 @@ export function createPlayBuildSystems(options: {
     initialState: GameBootstrap['hangar'],
   ): BuildAreaRuntime => {
     let propRenderer: HangarPropRenderer | null = null;
-    const propColliders = createBuildPropColliderRuntime();
+    const placementFrame = createBuildPlacementFrame(
+      area,
+      initialState.assignedHangar,
+    );
+    const propColliders = createBuildPropColliderRuntime({ placementFrame });
     const controller = createHangarBuildController({
       initialState,
       arcBalance: bootstrap.economy.arcBalance,
@@ -50,8 +55,9 @@ export function createPlayBuildSystems(options: {
     propRenderer = createHangarPropRenderer({
       rootName,
       stationRoot: renderer.getStationRoot(),
+      placementFrame,
     });
-    const runtime = { controller, propRenderer, propColliders };
+    const runtime = { controller, placementFrame, propRenderer, propColliders };
     buildAreas[area] = runtime;
     buildPropRenderers.push(propRenderer);
     buildPropColliders.push(propColliders);

@@ -14,8 +14,9 @@ This script:
 
 1. Copies PBR texture slots from PolygonScifiWorlds_Mat_01_A onto
    PolygonScifiWorlds_Mat_01_A_Triplanar (platforms / stairs / barriers).
-2. Injects Dirt_Tex.png and wires Env_Triplanar_Core / _Corp to that albedo
-   plus the existing BaseGrass_normals map.
+2. Bakes the Env_Triplanar_Core / _Corp atlas, mask, color, and average
+   world-noise layers into ordinary PBR albedo textures. It also restores
+   their atlas normal and emissive maps.
 3. Injects Rocks_Masked_* textures, adds Asteroid_Rock_Baked, reassigns
    asteroid/blob meshes to it, and rewrites TEXCOORD_0 with dominant-axis
    box mapping from POSITION + NORMAL.
@@ -32,10 +33,19 @@ from __future__ import annotations
 import json
 import struct
 import sys
+from io import BytesIO
 from pathlib import Path
 
+try:
+    from PIL import Image, ImageStat
+except ImportError as exc:
+    raise SystemExit(
+        "Pillow is required to bake Black Market triplanar materials "
+        "(python3 -m pip install Pillow)"
+    ) from exc
+
 DEFAULT_GLB_PATH = Path(
-    "/home/alan/Documents/AsteronEngine/ClaudeEngine/ClaudeEngine"
+    "/home/alan/Documents/AsteronEngine/Asteron"
     "/assets/Synty/Stations/BlackMarket/BlackMarket.glb"
 )
 
@@ -43,21 +53,39 @@ UNITY_DIR = Path(
     "/home/alan/Documents/Dev/unity/ClaudeCitizen/Assets/PolygonSciFiWorlds"
 )
 
-DIRT_TEX = UNITY_DIR / "Textures/Misc/Dirt_Tex.png"
+ENV_MAIN_ALBEDO = UNITY_DIR / "Textures/Alts/PolygonScifiWorlds_Texture_01_A.png"
+ENV_GROUND_MASK = (
+    UNITY_DIR / "Shaders/Masks/PolygonScifiWorlds_Ground_Colour_Mask.png"
+)
+ENV_NOISE = UNITY_DIR / "Textures/FX/Noise.png"
 ROCK_ALBEDO = UNITY_DIR / "Shaders/Masks/Rocks_Masked_baseTexBaked.png"
 ROCK_NORMAL = UNITY_DIR / "Shaders/Masks/Rocks_Masked_normals.png"
 
 SOURCE_MATERIAL = "PolygonScifiWorlds_Mat_01_A"
 PLATFORM_TRIPLANAR = "PolygonScifiWorlds_Mat_01_A_Triplanar"
-ENV_MATERIALS = (
-    "PolygonSciFiWorlds_Env_Triplanar_Core",
-    "PolygonSciFiWorlds_Env_Triplanar_Corp",
-)
+ENV_MATERIALS = {
+    "PolygonSciFiWorlds_Env_Triplanar_Core": {
+        "image_name": "Env_Triplanar_Core_Baked.png",
+        "ground": (0.21226582, 0.20112453, 0.2205882),
+        "rock": (0.2784314, 0.25490198, 0.29411766),
+        "road": (0.3161765, 0.2836289, 0.2836289),
+        "metallic": 0.254,
+        "roughness": 1.0,
+    },
+    "PolygonSciFiWorlds_Env_Triplanar_Corp": {
+        "image_name": "Env_Triplanar_Corp_Baked.png",
+        "ground": (0.8602941, 0.8602941, 0.8602941),
+        "rock": (0.056228366, 0.05482265, 0.09558821),
+        "road": (1.0, 1.0, 1.0),
+        "metallic": 0.01,
+        "roughness": 0.932,
+    },
+}
 ASTEROID_MATERIAL = "Asteroid_Rock_Baked"
 ASTEROID_NODE_PREFIXES = ("SM_Env_Asteroid_", "SM_Env_Blob_04")
 
-ENV_NORMAL_IMAGE_NAME = "BaseGrass_normals.png"
-ENV_BASE_COLOR_FACTOR = [0.38235295, 0.35319176, 0.33737025, 1.0]
+ENV_NORMAL_IMAGE_NAME = "PolygonScifiWorlds_Texture_A_01_Normal.png"
+ENV_EMISSIVE_IMAGE_NAME = "Emissive_01.jpg"
 
 # Meters of mesh space per UV tile on asteroids / blobs.
 ASTEROID_UV_METERS = 4.0
@@ -170,6 +198,126 @@ def ensure_png_texture(
     return len(gltf["textures"]) - 1
 
 
+def ensure_png_bytes_texture(
+    gltf: dict,
+    binary: bytearray,
+    png: bytes,
+    *,
+    name: str,
+    sampler_index: int,
+) -> int:
+    image_index = find_image_index(gltf, name)
+    if image_index is not None:
+        image = gltf["images"][image_index]
+        buffer_view_index = image.get("bufferView")
+        if buffer_view_index is not None:
+            view = gltf["bufferViews"][buffer_view_index]
+            offset = view.get("byteOffset", 0)
+            length = view["byteLength"]
+            if bytes(binary[offset : offset + length]) != png:
+                align4(binary, b"\x00")
+                offset = len(binary)
+                binary.extend(png)
+                gltf["bufferViews"].append(
+                    {"buffer": 0, "byteOffset": offset, "byteLength": len(png)}
+                )
+                image["bufferView"] = len(gltf["bufferViews"]) - 1
+        image["mimeType"] = "image/png"
+        for ti, texture in enumerate(gltf.get("textures") or []):
+            if texture.get("source") == image_index:
+                texture["sampler"] = sampler_index
+                return ti
+        gltf.setdefault("textures", []).append(
+            {"source": image_index, "sampler": sampler_index}
+        )
+        return len(gltf["textures"]) - 1
+
+    align4(binary, b"\x00")
+    offset = len(binary)
+    binary.extend(png)
+    gltf["bufferViews"].append(
+        {"buffer": 0, "byteOffset": offset, "byteLength": len(png)}
+    )
+    gltf.setdefault("images", []).append(
+        {
+            "name": name,
+            "mimeType": "image/png",
+            "bufferView": len(gltf["bufferViews"]) - 1,
+        }
+    )
+    gltf.setdefault("textures", []).append(
+        {"source": len(gltf["images"]) - 1, "sampler": sampler_index}
+    )
+    return len(gltf["textures"]) - 1
+
+
+def srgb_to_linear(value: float) -> float:
+    if value <= 0.04045:
+        return value / 12.92
+    return ((value + 0.055) / 1.055) ** 2.4
+
+
+def linear_to_srgb(value: float) -> float:
+    if value <= 0.0031308:
+        return value * 12.92
+    return 1.055 * (value ** (1.0 / 2.4)) - 0.055
+
+
+def solid_linear_image(
+    size: tuple[int, int], color: tuple[float, float, float]
+) -> Image.Image:
+    rgb = tuple(round(max(0.0, min(1.0, channel)) * 255) for channel in color)
+    return Image.new("RGB", size, rgb)
+
+
+def bake_env_albedo(
+    *,
+    main_albedo: Image.Image,
+    ground_mask: Image.Image,
+    average_noise: float,
+    ground: tuple[float, float, float],
+    rock: tuple[float, float, float],
+    road: tuple[float, float, float],
+) -> bytes:
+    """Approximate Unity's world-triplanar blend in the existing atlas UVs."""
+    decode_lut = [
+        round(srgb_to_linear(channel / 255.0) * 255) for channel in range(256)
+    ]
+    encode_lut = [
+        round(linear_to_srgb(channel / 255.0) * 255) for channel in range(256)
+    ]
+
+    main_linear = main_albedo.convert("RGB").point(decode_lut * 3)
+    mask = ground_mask.convert("RGB")
+    if mask.size != main_linear.size:
+        mask = mask.resize(main_linear.size, Image.Resampling.NEAREST)
+    mask_r, mask_g, mask_b = mask.split()
+
+    ground_layer = solid_linear_image(main_linear.size, ground)
+    rock_layer = solid_linear_image(main_linear.size, rock)
+    road_layer = solid_linear_image(main_linear.size, road)
+
+    atlas_rock = Image.composite(rock_layer, main_linear, mask_r)
+    atlas_branch = Image.composite(road_layer, atlas_rock, mask_b)
+    ground_branch = Image.composite(
+        road_layer,
+        ground_layer,
+        mask_b,
+    )
+
+    noise_floor = max(0.0, min(1.0, average_noise))
+    blend_mask = mask_g.point(
+        lambda value: round(
+            (noise_floor + (1.0 - noise_floor) * value / 255.0) * 255
+        )
+    )
+    baked_linear = Image.composite(ground_branch, atlas_branch, blend_mask)
+    baked_srgb = baked_linear.point(encode_lut * 3)
+    output = BytesIO()
+    baked_srgb.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
 def read_f32(binary: bytearray, offset: int) -> float:
     return struct.unpack_from("<f", binary, offset)[0]
 
@@ -243,7 +391,13 @@ def asteroid_mesh_indices(gltf: dict) -> list[int]:
 
 def main() -> None:
     glb_path = Path(sys.argv[1]).expanduser().resolve() if len(sys.argv) > 1 else DEFAULT_GLB_PATH
-    for path in (DIRT_TEX, ROCK_ALBEDO, ROCK_NORMAL):
+    for path in (
+        ENV_MAIN_ALBEDO,
+        ENV_GROUND_MASK,
+        ENV_NOISE,
+        ROCK_ALBEDO,
+        ROCK_NORMAL,
+    ):
         if not path.is_file():
             raise SystemExit(f"Unity texture not found: {path}")
     if not glb_path.is_file():
@@ -265,21 +419,45 @@ def main() -> None:
     copy_material_textures(source, platform)
 
     sampler_index = ensure_repeat_sampler(gltf)
-    dirt_tex_index = ensure_png_texture(
-        gltf, binary, DIRT_TEX, name="Dirt_Tex.png", sampler_index=sampler_index
-    )
     env_normal_index = find_texture_index_by_image_name(gltf, ENV_NORMAL_IMAGE_NAME)
+    env_emissive_index = find_texture_index_by_image_name(
+        gltf, ENV_EMISSIVE_IMAGE_NAME
+    )
+    main_albedo = Image.open(ENV_MAIN_ALBEDO)
+    ground_mask = Image.open(ENV_GROUND_MASK)
+    noise_linear = Image.open(ENV_NOISE).convert("L").point(
+        [
+            round(srgb_to_linear(channel / 255.0) * 255)
+            for channel in range(256)
+        ]
+    )
+    average_noise = ImageStat.Stat(noise_linear).mean[0] / 255.0
 
-    for name in ENV_MATERIALS:
+    for name, settings in ENV_MATERIALS.items():
+        baked = bake_env_albedo(
+            main_albedo=main_albedo,
+            ground_mask=ground_mask,
+            average_noise=average_noise,
+            ground=settings["ground"],
+            rock=settings["rock"],
+            road=settings["road"],
+        )
+        albedo_index = ensure_png_bytes_texture(
+            gltf,
+            binary,
+            baked,
+            name=settings["image_name"],
+            sampler_index=sampler_index,
+        )
         material = require_material(gltf, name)
         pbr = material.setdefault("pbrMetallicRoughness", {})
-        pbr["baseColorTexture"] = {"index": dirt_tex_index}
-        pbr["baseColorFactor"] = list(ENV_BASE_COLOR_FACTOR)
-        pbr["metallicFactor"] = 0.0
-        pbr["roughnessFactor"] = 0.95
+        pbr["baseColorTexture"] = {"index": albedo_index}
+        pbr.pop("baseColorFactor", None)
+        pbr["metallicFactor"] = settings["metallic"]
+        pbr["roughnessFactor"] = settings["roughness"]
         material["normalTexture"] = {"index": env_normal_index}
-        material.pop("emissiveTexture", None)
-        material.pop("emissiveFactor", None)
+        material["emissiveTexture"] = {"index": env_emissive_index}
+        material["emissiveFactor"] = [1.0, 1.0, 1.0]
 
     rock_albedo_index = ensure_png_texture(
         gltf,
@@ -335,7 +513,8 @@ def main() -> None:
     print(f"Wrote {glb_path}")
     print(f"Patched {PLATFORM_TRIPLANAR} ← {SOURCE_MATERIAL}")
     print(
-        f"Patched {', '.join(ENV_MATERIALS)} ← Dirt_Tex.png + {ENV_NORMAL_IMAGE_NAME}"
+        f"Patched {', '.join(ENV_MATERIALS)} ← baked Unity atlas/mask/colors "
+        f"+ {ENV_NORMAL_IMAGE_NAME} + {ENV_EMISSIVE_IMAGE_NAME}"
     )
     print(
         f"Patched {ASTEROID_MATERIAL} on {len(mesh_ids)} meshes "

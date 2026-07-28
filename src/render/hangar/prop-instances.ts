@@ -5,6 +5,7 @@ import {
   HANGAR_FLOOR_UP,
   type PlacementTransform,
 } from '../../player/hangar_build/validation';
+import type { BuildPlacementFrame } from '../../player/hangar_build/placement-frame';
 import {
   cloneObjectMaterials,
   createPropInstanceGroup,
@@ -14,6 +15,7 @@ import {
 export interface HangarPropRendererOptions {
   stationRoot: THREE.Object3D;
   rootName?: string;
+  placementFrame?: BuildPlacementFrame;
 }
 
 export interface HangarPropGhost {
@@ -56,9 +58,10 @@ export function createHangarPropRenderer(options: HangarPropRendererOptions) {
   }
 
   function applyTransform(object: THREE.Object3D, transform: PlacementTransform): void {
-    const position = stationLocalToGroupPosition(transform);
+    const runtimeTransform = options.placementFrame?.toRuntime(transform) ?? transform;
+    const position = stationLocalToGroupPosition(runtimeTransform);
     object.position.copy(position);
-    object.rotation.set(0, transform.rotationY, 0);
+    object.rotation.set(0, runtimeTransform.rotationY, 0);
   }
 
   async function setPlacements(placements: HangarPlacementEntry[]): Promise<void> {

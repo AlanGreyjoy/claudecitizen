@@ -553,6 +553,70 @@ function copyReferencedGameAssets(): Plugin {
   };
 }
 
+/**
+ * Vendor buckets, most-specific first. Without these Rollup collapses every
+ * module reachable from two entry points into one anonymous shared chunk — a
+ * 1.7 MB blob that had to download whole before the first frame, and that got
+ * named after an arbitrary member module (`entertainment-system-<hash>.js`),
+ * which made every production stack trace point at the wrong subsystem.
+ *
+ * Split by package, not by feature: these change only when a dependency is
+ * upgraded, so their content hashes stay put across engine edits and a returning
+ * player re-downloads only the code that actually moved.
+ */
+const VENDOR_CHUNKS: { name: string; packages: string[] }[] = [
+  // three-mesh-bvh before three: `three-mesh-bvh` contains `three` as a prefix.
+  { name: 'vendor-three', packages: ['three-mesh-bvh', 'three'] },
+  {
+    name: 'vendor-postfx',
+    packages: [
+      'postprocessing',
+      'n8ao',
+      '@takram/three-atmosphere',
+      '@takram/three-clouds',
+      '@takram/three-geospatial',
+    ],
+  },
+  { name: 'vendor-rapier', packages: ['@dimforge/rapier3d'] },
+  { name: 'vendor-react', packages: ['react-dom', 'react', 'scheduler'] },
+];
+
+/** Package name a node_modules path belongs to, or '' for first-party source. */
+function nodeModulesPackage(moduleId: string): string {
+  const normalized = moduleId.replace(/\\/g, '/');
+  const index = normalized.lastIndexOf('/node_modules/');
+  if (index === -1) return '';
+  const segments = normalized.slice(index + '/node_modules/'.length).split('/');
+  if (!segments[0]) return '';
+  return segments[0].startsWith('@') ? `${segments[0]}/${segments[1] ?? ''}` : segments[0];
+}
+
+/**
+ * Only node_modules is bucketed. First-party source is left to Rollup: it
+ * already splits per dynamic import, so a scene, a prefab, or the ship session
+ * loads on demand. Naming a chunk for `src/**` here would undo that and pull
+ * the whole engine back into one file.
+ */
+function manualChunks(moduleId: string): string | undefined {
+  const packageName = nodeModulesPackage(moduleId);
+  if (!packageName) return undefined;
+  for (const bucket of VENDOR_CHUNKS) {
+    if (bucket.packages.some((name) => packageName === name)) return bucket.name;
+  }
+  return 'vendor';
+}
+
+/**
+ * Rollup names a chunk with no facade module after an arbitrary module inside
+ * it. That is where `entertainment-system-<hash>.js` came from. Vendor buckets
+ * carry an explicit name; anything else facadeless is genuinely shared engine
+ * code, so label it as such instead of blaming one random module.
+ */
+function chunkFileNames(chunk: { facadeModuleId: string | null; name: string }): string {
+  if (chunk.facadeModuleId || chunk.name.startsWith('vendor')) return 'assets/[name]-[hash].js';
+  return 'assets/shared-[hash].js';
+}
+
 const editorBridgePort = process.env.CLAUDECITIZEN_EDITOR_BRIDGE_PORT?.trim();
 const editorBridgeTarget = editorBridgePort
   ? `http://127.0.0.1:${editorBridgePort}`
@@ -561,7 +625,13 @@ const editorBridgeTarget = editorBridgePort
 export default defineConfig(({ mode }) => ({
   plugins: [react(), copyReferencedGameAssets()],
   build: {
+    // The engine is open source, so shipping maps leaks nothing, and a release
+    // stack trace that reads `prefab-renderer.ts:214` instead of `RH @ index.js`
+    // is worth the extra files. Netlify serves a `.map` only when DevTools asks
+    // for one, so players never download them.
+    sourcemap: true,
     rollupOptions: {
+      output: { manualChunks, chunkFileNames },
       // `index.html` is the shipped game; `editor.html` is the AsteronEngine
       // renderer that Electron loads. The editor bundle ships both so in-editor
       // Play can open the game entry from the same origin. A public release

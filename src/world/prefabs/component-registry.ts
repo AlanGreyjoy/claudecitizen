@@ -371,7 +371,8 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "weapon-shop",
     label: "Weapon Shop",
     category: "vendor",
-    kinds: ["station"],
+    kinds: ALL_KINDS,
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "weapon-shop",
@@ -389,7 +390,8 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "outfitters",
     label: "Outfitters",
     category: "vendor",
-    kinds: ["station"],
+    kinds: ALL_KINDS,
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "outfitters",
@@ -407,7 +409,8 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "food-shop",
     label: "Food Shop",
     category: "vendor",
-    kinds: ["station"],
+    kinds: ALL_KINDS,
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "food-shop",
@@ -425,7 +428,8 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "drinks-shop",
     label: "Drinks Shop",
     category: "vendor",
-    kinds: ["station"],
+    kinds: ALL_KINDS,
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "drinks-shop",
@@ -443,7 +447,8 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "canteen",
     label: "Canteen",
     category: "vendor",
-    kinds: ["station"],
+    kinds: ALL_KINDS,
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "canteen",

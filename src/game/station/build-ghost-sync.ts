@@ -1,5 +1,4 @@
 import { syncDynamicColliders } from "../../physics/station-physics";
-import { buildRoomForArea } from "../../player/hangar_build/validation";
 import { pickStationFloorPoint } from "../../render/hangar/prop-instances";
 import type { BuildAreaRuntime } from "../types";
 import type { LoopContext } from "../loop-context";
@@ -46,14 +45,13 @@ function pickBuildFloorFromPointer(
   runtime: BuildAreaRuntime,
 ): { right: number; up: number; forward: number } | null {
   if (!ctx.renderer) return null;
-  const context = runtime.controller.getContext();
-  const room = buildRoomForArea(context.state.area, context.state.assignedHangar);
-  return pickStationFloorPoint(
+  const runtimePoint = pickStationFloorPoint(
     ctx.renderer.getCamera(),
     runtime.controller.getPointerNdc(),
     ctx.renderer.getStationRoot(),
-    room.floorUp,
+    runtime.placementFrame.runtimeFloorUp,
   );
+  return runtimePoint ? runtime.placementFrame.toStorage(runtimePoint) : null;
 }
 
 function ensurePlaceGhost(runtime: BuildAreaRuntime): boolean {

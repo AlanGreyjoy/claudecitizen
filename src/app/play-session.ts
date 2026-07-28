@@ -19,7 +19,6 @@ import {
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { warmPlanetSpawnCaches } from '../world/spawn-warm';
 import { normalizeVegetationSettings } from '../render/vegetation/settings';
-import { buildRoomForArea } from '../player/hangar_build/validation';
 import { activateShipPrefab, applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
 import {
   getStationColliders,
@@ -361,14 +360,15 @@ function wireBuildCanvas(
     if (event.button !== 0 || !runtime || !renderer) return;
     const pointer = pointerNdcForBuildEvent(event);
     runtime.controller.setPointerNdc(pointer.x, pointer.y);
-    const context = runtime.controller.getContext();
-    const room = buildRoomForArea(context.state.area, context.state.assignedHangar);
-    const floorPoint = pickStationFloorPoint(
+    const runtimePoint = pickStationFloorPoint(
       renderer.getCamera(),
       runtime.controller.getPointerNdc(),
       renderer.getStationRoot(),
-      room.floorUp,
+      runtime.placementFrame.runtimeFloorUp,
     );
+    const floorPoint = runtimePoint
+      ? runtime.placementFrame.toStorage(runtimePoint)
+      : null;
     void runtime.controller
       .handlePrimaryAction(floorPoint)
       .then(async () => {

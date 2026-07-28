@@ -93,9 +93,10 @@ export function startEditorPlay(
 
   let sceneHost: SceneHostHandle | null = createSceneHost({
     initialScene: scene,
-    // A scene that authors the entry flow needs a real session so
-    // auth → character create → hab matches the shipped game. Prefab stages and
-    // direct gameplay plays stay offline.
+    // Entry-flow scenes and player-scoped instances need a real session.
+    // The latter supplies the authoritative apartment catalog and placements
+    // so a directly played hab can exercise its build mode. Prefab stages and
+    // other direct gameplay plays stay offline.
     requireAuth: sceneRequiresAuth(scene),
     fromEditor: true,
   });

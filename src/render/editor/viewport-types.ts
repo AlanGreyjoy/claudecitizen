@@ -1,5 +1,6 @@
 import type { EntityTransform } from "../../editor/document";
 import type { ParticlePreviewControls } from '../../editor/panels/particle-preview';
+import type { PrefabMaterialOverride } from "../../world/prefabs/schema";
 import type { Vec3 } from "../../types";
 
 export type GizmoMode = "translate" | "rotate" | "scale";
@@ -63,6 +64,16 @@ export interface EditorViewport {
     entityId: string,
     nodeUuid: string,
     transform: Partial<EntityTransform>,
+  ) => void;
+  /**
+   * Uncommitted material scrub for the Material inspector: repaints the live
+   * entity every frame while a slider is dragged, without writing to the
+   * document. Pass `null` to restore the committed materials.
+   */
+  setMaterialPreview: (
+    entityId: string,
+    material: string,
+    override: PrefabMaterialOverride | null,
   ) => void;
   /** True while the RMB flythrough owns the camera (WASD is flying, not tool shortcuts). */
   isFlying: () => boolean;

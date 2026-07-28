@@ -1,5 +1,6 @@
 import type { createPlayerControls } from "../input/player-controls";
 import type { HangarBuildController } from "../player/hangar_build/build-controller";
+import type { BuildPlacementFrame } from "../player/hangar_build/placement-frame";
 import type { BuildPropColliderRuntime } from "../player/hangar_build/prop-colliders";
 import type { HangarPropRenderer } from "../render/hangar/prop-instances";
 import type { BuildTerminalController } from "../render/effects/hud/build-terminal";
@@ -41,6 +42,7 @@ export interface WalkModeInput {
 
 export interface BuildAreaRuntime {
   controller: HangarBuildController;
+  placementFrame: BuildPlacementFrame;
   propRenderer: HangarPropRenderer;
   propColliders: BuildPropColliderRuntime;
 }

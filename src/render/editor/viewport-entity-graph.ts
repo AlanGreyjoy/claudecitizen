@@ -12,7 +12,10 @@ import {
   type ParticleSystemHandle,
 } from "../particles";
 import type { EditorEntity, EditorStore, EntityTransform } from "../../editor/document";
-import type { PrefabComponent } from "../../world/prefabs/schema";
+import type {
+  PrefabComponent,
+  PrefabMaterialOverride,
+} from "../../world/prefabs/schema";
 import { loadPrefabDocument } from "../../world/prefabs/loader";
 import {
   createViewportComponentHelpers,
@@ -27,6 +30,7 @@ import {
   finalizeLoadedEntityModel,
   refreshEntityModelComponentHelpers,
 } from "./viewport-entity-model";
+import { createViewportMaterialPreview } from "./viewport-material-preview";
 import { createViewportNpcRoutes } from "./viewport-npc-routes";
 import {
   applyEntityTransformToObject,
@@ -84,6 +88,15 @@ export interface ViewportEntityGraph {
   applyHiddenNodesForEntity: (entityId: string) => void;
   refreshGlbNodeComponents: (
     edits: ReadonlyArray<{ entityId: string; nodeName: string }>,
+  ) => void;
+  /**
+   * Uncommitted material scrub — repaints the live entity without touching the
+   * document. `null` restores the committed materials.
+   */
+  setMaterialPreview: (
+    entityId: string,
+    material: string,
+    override: PrefabMaterialOverride | null,
   ) => void;
   disposeTracked: () => void;
 }
@@ -203,6 +216,7 @@ export function createViewportEntityGraph(
     applyShipPreview({ quiet: false });
   }
 
+  const materialPreview = createViewportMaterialPreview(objectsById);
   const npcRoutes = createViewportNpcRoutes(store, entityRoot, objectsById);
 
   const {
@@ -453,6 +467,7 @@ export function createViewportEntityGraph(
     disposeParticleHandles();
     npcRoutes.clear();
     setupUpdateObjectAnimations(entityRoot);
+    materialPreview.clearAll();
     disposeAllTracked();
 
     for (const entity of store.getState().roots) {
@@ -471,6 +486,10 @@ export function createViewportEntityGraph(
    * Falls back to rebuildAll when the visual identity of the entity changed.
    */
   function refreshEntity(entityId: string): void {
+    // Drop scrub clones first: the committed override is re-derived from the
+    // model's own materials, so a preview clone left in place would become the
+    // new base and a "reset override" could never get back to the asset values.
+    materialPreview.clearEntity(entityId);
     const entity = store.locate(entityId)?.entity;
     const group = objectsById.get(entityId);
     if (!entity || !group) {
@@ -565,6 +584,10 @@ export function createViewportEntityGraph(
     applyGlbOverrideToNode,
     applyHiddenNodesForEntity,
     refreshGlbNodeComponents,
-    disposeTracked: disposeAllTracked,
+    setMaterialPreview: materialPreview.set,
+    disposeTracked() {
+      materialPreview.clearAll();
+      disposeAllTracked();
+    },
   };
 }

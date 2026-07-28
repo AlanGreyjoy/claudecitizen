@@ -5,6 +5,7 @@ import type {
   RefObject,
   SetStateAction,
 } from 'react';
+import { useState } from 'react';
 import type { EditorAudioPreviewController } from '../audio-preview';
 import type { EditorStore } from '../document';
 import { addAssetEntity, addPrefabInstanceEntity } from '../session-helpers';
@@ -14,7 +15,11 @@ import type { Vec3 } from '../../types';
 import type { SceneTemplateId } from '../../world/scenes/templates';
 import { HierarchyPanel } from './panels/HierarchyPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
-import { MaterialManagerPanel } from './panels/MaterialManagerPanel';
+import {
+  MaterialManagerPanel,
+  type MaterialFocusTarget,
+} from './panels/MaterialManagerPanel';
+import { MaterialInspectorPanel } from './panels/MaterialInspectorPanel';
 import { ProjectPanel, type ProjectPanelHandle } from './panels/ProjectPanel';
 import { NewSceneModal } from './panels/NewSceneModal';
 import { ProjectSettingsModal } from './panels/ProjectSettingsModal';
@@ -108,6 +113,15 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
     projectSettingsOpen,
     setProjectSettingsOpen,
   } = props;
+
+  const [materialFocus, setMaterialFocus] = useState<MaterialFocusTarget | null>(
+    null,
+  );
+
+  const selectMaterial = (target: MaterialFocusTarget): void => {
+    setMaterialFocus(target);
+    store.setSelection(target.entityId);
+  };
 
   return (
     <>
@@ -222,7 +236,11 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
                 tab !== 'material-manager' ? ' is-hidden' : ''
               }`}
             >
-              <MaterialManagerPanel store={store} />
+              <MaterialManagerPanel
+                store={store}
+                selected={materialFocus}
+                onSelectMaterial={selectMaterial}
+              />
             </div>
             <TabEditorHosts tab={tab} onHandles={onTabHandles} />
           </div>
@@ -235,7 +253,9 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
         <div ref={inspectorPanelRef} className="ed-panel ed-inspector-panel">
           <div
             className={`ed-panel-swap${
-              tab === 'base-characters' ? ' is-hidden' : ''
+              tab === 'base-characters' || tab === 'material-manager'
+                ? ' is-hidden'
+                : ''
             }`}
           >
             {viewport ? (
@@ -261,9 +281,22 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
                 onPlayShipCanopyPreview={() =>
                   toolbarRef.current?.playCanopyPreview()
                 }
+                onOpenMaterial={(target) => {
+                  selectMaterial({ ...target, nonce: Date.now() });
+                  setTab('material-manager');
+                }}
               />
             ) : null}
           </div>
+          {tab === 'material-manager' ? (
+            <div className="ed-panel-swap">
+              <MaterialInspectorPanel
+                store={store}
+                selection={materialFocus}
+                viewport={viewport}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div

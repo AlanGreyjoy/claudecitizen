@@ -114,46 +114,47 @@ export interface BaseCharacterUiApiContext {
   get defaultDefinition(): import('../../player/character_creator/sidekick-definition').SidekickCharacterDefinitionV2 | null;
 }
 
+function markTransformDirty(ctx: BaseCharacterUiApiContext): void {
+  const target = ctx.currentTransformTarget();
+  if (target?.source === 'backpack-socket' && target.prefabId) {
+    ctx.markBackpackPrefabDirty(target.prefabId);
+  } else if (target?.source === 'weapon-grip' && target.prefabId) {
+    ctx.markWeaponPrefabDirty(target.prefabId);
+  } else {
+    ctx.markDirty();
+  }
+}
+
+function enterDrawnAuthoring(
+  ctx: BaseCharacterUiApiContext,
+  slot: CharacterEquipmentSlotV1,
+  mode: 'drawn' | 'weapon-grip',
+): void {
+  ctx.state.mountEditMode = mode;
+  ctx.state.selectedStanceId = stanceIdForWeaponSlot(slot.id);
+  ctx.state.simulateDrawnSlotId = slot.id;
+  if (!ctx.currentDrawnMount() && ctx.state.documentState) {
+    const variant = ctx.state.documentState.variants[String(ctx.state.selectedType) as '1' | '2'];
+    variant.drawnMounts ??= {};
+    variant.drawnMounts[slot.id] = identityCharacterMount(DEFAULT_DRAWN_WEAPON_BONE);
+    ctx.markDirty();
+  }
+  const assignment = ctx.state.assignments.get(slot.id);
+  if (mode === 'weapon-grip' && assignment?.prefabId) {
+    void ctx.loadWeaponPrefabDraft(assignment.prefabId).then((draft) => {
+      if (draft) {
+        const hadGrip = Boolean(collectDrawnGrip(draft));
+        ctx.ensureDrawnGripEntity(draft);
+        if (!hadGrip) ctx.markWeaponPrefabDirty(draft.id);
+      }
+      void ctx.rebuildEquipmentPreview().then(() => void ctx.previewControllerState());
+    });
+    return;
+  }
+  void ctx.rebuildEquipmentPreview().then(() => void ctx.previewControllerState());
+}
+
 export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): BaseCharacterEditorUiApi {
-  const markTransformDirty = (): void => {
-    const target = ctx.currentTransformTarget();
-    if (target?.source === 'backpack-socket' && target.prefabId) {
-      ctx.markBackpackPrefabDirty(target.prefabId);
-    } else if (target?.source === 'weapon-grip' && target.prefabId) {
-      ctx.markWeaponPrefabDirty(target.prefabId);
-    } else {
-      ctx.markDirty();
-    }
-  };
-
-  const enterDrawnAuthoring = (
-    slot: CharacterEquipmentSlotV1,
-    mode: 'drawn' | 'weapon-grip',
-  ): void => {
-    ctx.state.mountEditMode = mode;
-    ctx.state.selectedStanceId = stanceIdForWeaponSlot(slot.id);
-    ctx.state.simulateDrawnSlotId = slot.id;
-    if (!ctx.currentDrawnMount() && ctx.state.documentState) {
-      const variant = ctx.state.documentState.variants[String(ctx.state.selectedType) as '1' | '2'];
-      variant.drawnMounts ??= {};
-      variant.drawnMounts[slot.id] = identityCharacterMount(DEFAULT_DRAWN_WEAPON_BONE);
-      ctx.markDirty();
-    }
-    const assignment = ctx.state.assignments.get(slot.id);
-    if (mode === 'weapon-grip' && assignment?.prefabId) {
-      void ctx.loadWeaponPrefabDraft(assignment.prefabId).then((draft) => {
-        if (draft) {
-          const hadGrip = Boolean(collectDrawnGrip(draft));
-          ctx.ensureDrawnGripEntity(draft);
-          if (!hadGrip) ctx.markWeaponPrefabDirty(draft.id);
-        }
-        void ctx.rebuildEquipmentPreview().then(() => void ctx.previewControllerState());
-      });
-      return;
-    }
-    void ctx.rebuildEquipmentPreview().then(() => void ctx.previewControllerState());
-  };
-
   return {
     getSnapshot: (): BaseCharacterUiSnapshot => ({
       hasUnsavedChanges: ctx.hasUnsavedChanges(),
@@ -300,7 +301,7 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
       ctx.markDirty();
       void ctx.rebuildEquipmentPreview();
     },
-    enterDrawnAuthoring,
+    enterDrawnAuthoring: (slot, mode) => enterDrawnAuthoring(ctx, slot, mode),
     addHandBoneMount: () => {
       if (!ctx.state.documentState) return;
       const slot = ctx.currentSlot();
@@ -331,7 +332,7 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
       if (!Number.isFinite(number) || !transformTarget) return;
       transformTarget.transform[targetKind][key] = number;
       ctx.applyTransform(transformTarget.object, transformTarget.transform);
-      markTransformDirty();
+      markTransformDirty(ctx);
     },
     updateTransformRotation: (key, value) => {
       const transformTarget = ctx.currentTransformTarget();
@@ -341,7 +342,7 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
       nextDegrees[key] = number;
       ctx.setTransformEulerDegrees(transformTarget.transform, nextDegrees);
       ctx.applyTransform(transformTarget.object, transformTarget.transform);
-      markTransformDirty();
+      markTransformDirty(ctx);
       ctx.notifyUiChange();
     },
     updateMountBone: (bone) => {

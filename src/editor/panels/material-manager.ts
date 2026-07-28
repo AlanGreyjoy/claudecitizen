@@ -24,6 +24,32 @@ export interface MaterialRow {
   base: MaterialValues;
   values: MaterialValues;
   overridden: boolean;
+  /**
+   * The asset's own material, straight off the shared GLB cache. The preview
+   * clones it so authored texture maps show up — never mutate it, every
+   * instance of that model points at the same object.
+   */
+  sample: THREE.Material | null;
+  /** Which texture maps the asset material carries, for the inspector badges. */
+  maps: readonly string[];
+}
+
+const MAP_LABELS: ReadonlyArray<[keyof THREE.MeshStandardMaterial, string]> = [
+  ['map', 'Base'],
+  ['normalMap', 'Normal'],
+  ['roughnessMap', 'Rough'],
+  ['metalnessMap', 'Metal'],
+  ['aoMap', 'AO'],
+  ['emissiveMap', 'Emissive'],
+  ['alphaMap', 'Alpha'],
+];
+
+function describeMaterialMaps(material: THREE.Material | null): string[] {
+  if (!material) return [];
+  const standard = material as THREE.MeshStandardMaterial;
+  return MAP_LABELS.filter(([key]) => Boolean(standard[key])).map(
+    ([, label]) => label,
+  );
 }
 
 const DEFAULT_VALUES: MaterialValues = {
@@ -150,6 +176,8 @@ export async function collectMaterialRowsForEntity(
       base,
       values: applyOverride(base, override),
       overridden: Boolean(override),
+      sample: null,
+      maps: [],
     });
   }
 
@@ -177,6 +205,8 @@ export async function collectMaterialRowsForEntity(
         base,
         values: applyOverride(base, override),
         overridden: Boolean(override),
+        sample,
+        maps: describeMaterialMaps(sample),
       });
     }
   } catch {
@@ -188,6 +218,8 @@ export async function collectMaterialRowsForEntity(
       base: { ...DEFAULT_VALUES },
       values: { ...DEFAULT_VALUES },
       overridden: false,
+      sample: null,
+      maps: [],
     });
   }
 

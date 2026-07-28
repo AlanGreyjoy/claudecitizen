@@ -3,6 +3,30 @@ import { UiIcons } from '../../../../ui/icons';
 import { UiIcon } from '../../UiIcon';
 import type { ShipIssueList } from './types';
 
+function issueSummary(
+  state: ShipIssueList,
+  blockerCount: number,
+  warningCount: number,
+): string {
+  if (state.building) return 'Checking…';
+  if (state.error) return state.error;
+  if (!state.checkedPrefabId) return 'Not checked';
+  if (blockerCount + warningCount === 0) return 'Ready to test';
+  return `${blockerCount} blocking · ${warningCount} warning`;
+}
+
+function issueTone(state: ShipIssueList, blockerCount: number, hasList: boolean): string {
+  if (state.error || blockerCount > 0) return ' is-error';
+  return hasList ? ' is-warn' : '';
+}
+
+function issueTitle(hasList: boolean, open: boolean): string {
+  if (!hasList) return "Rebuild this ship's layout and re-check it";
+  return open
+    ? 'Hide issues (right-click to re-check)'
+    : 'Show issues (opens with a fresh check)';
+}
+
 /**
  * Ship authoring problems, worst first. Summary stays in the bar; the list is a
  * dropdown so a long alert stack never permanently eats chrome. Empty is the
@@ -25,21 +49,8 @@ export function ShipIssues({
     if (!hasList) setOpen(false);
   }, [hasList]);
 
-  const summary = state.building
-    ? 'Checking…'
-    : state.error
-      ? state.error
-      : !state.checkedPrefabId
-        ? 'Not checked'
-        : !hasList
-          ? 'Ready to test'
-          : `${blockers.length} blocking · ${warnings.length} warning`;
-
-  const tone = state.error || blockers.length > 0
-    ? ' is-error'
-    : hasList
-      ? ' is-warn'
-      : '';
+  const summary = issueSummary(state, blockers.length, warnings.length);
+  const tone = issueTone(state, blockers.length, hasList);
 
   return (
     <div className={`ed-ship-issues${open && hasList ? ' is-open' : ''}`}>
@@ -63,13 +74,7 @@ export function ShipIssues({
           event.preventDefault();
           onRefresh();
         }}
-        title={
-          hasList
-            ? open
-              ? 'Hide issues (right-click to re-check)'
-              : 'Show issues (opens with a fresh check)'
-            : "Rebuild this ship's layout and re-check it"
-        }
+        title={issueTitle(hasList, open)}
       >
         {summary}
         {hasList ? (

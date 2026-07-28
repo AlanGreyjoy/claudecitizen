@@ -225,6 +225,7 @@ export function createEditorViewport(
     getGlbNodeBounds: glbQueries.getGlbNodeBounds,
     getGlbNodeLocalTransform: glbQueries.getGlbNodeLocalTransform,
     setGlbNodeLocalTransform: glbQueries.setGlbNodeLocalTransform,
+    setMaterialPreview: graph.setMaterialPreview,
     isFlying: flythrough.isFlying,
     particlePreview: particles.preview,
     dispose() {

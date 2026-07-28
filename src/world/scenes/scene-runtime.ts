@@ -373,10 +373,18 @@ export function resolveSceneExitSceneId(
   return '';
 }
 
-/** True when playing this scene must resolve a signed-in player first. */
+/**
+ * True when playing this scene must resolve a signed-in player first.
+ *
+ * Player-scoped instances need the player's authoritative instance id and
+ * bootstrap-backed systems such as apartment building even when the scene is
+ * launched directly from Editor Play instead of through the boot flow.
+ */
 export function sceneRequiresAuth(scene: SceneDocument): boolean {
   if (scene.kind === 'boot' || scene.kind === 'title') return true;
-  return resolveSceneEntryFlow(scene)?.requireAuth === true;
+  const config = resolveScenePlayConfig(scene);
+  return config.instanceScope === 'player'
+    || resolveSceneEntryFlow(scene)?.requireAuth === true;
 }
 
 /**

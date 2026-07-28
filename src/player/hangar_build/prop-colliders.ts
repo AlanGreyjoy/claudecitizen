@@ -6,8 +6,11 @@ import {
 import type { HangarPlacementEntry } from "../../net/api";
 import { loadPrefabDocument } from "../../world/prefabs/loader";
 import { buildPrefabColliders } from "../../physics/prefab-colliders";
+import type { BuildPlacementFrame } from "./placement-frame";
 
-export function createBuildPropColliderRuntime() {
+export function createBuildPropColliderRuntime(options: {
+  placementFrame?: BuildPlacementFrame;
+} = {}) {
   const prefabColliders = new Map<string, Promise<GameplayCollider[]>>();
   let colliders: GameplayCollider[] = [];
   let generation = 0;
@@ -30,7 +33,9 @@ export function createBuildPropColliderRuntime() {
     await Promise.all(
       placements.map(async (placement) => {
         const source = await loadPrefabColliders(placement.prefabId);
-        const matrix = placementMatrix(placement);
+        const runtimePlacement =
+          options.placementFrame?.toRuntime(placement) ?? placement;
+        const matrix = placementMatrix(runtimePlacement);
         for (const collider of source) {
           next.push(cloneColliderWithTransform(collider, matrix, placement.id));
         }

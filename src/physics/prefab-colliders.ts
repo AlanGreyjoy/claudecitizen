@@ -69,6 +69,16 @@ export interface PrefabColliderOptions {
   articulatedNodes?: readonly string[];
 }
 
+/**
+ * `hiddenNodes` is the editor's "delete this GLB node" — the renderer stops
+ * drawing it, so the bake has to drop it too or the deleted geometry survives
+ * as an invisible wall. Feeding the names through `excludeNodes` covers the
+ * whole subtree: `colliders.ts` walks a mesh's ancestors when matching.
+ */
+function hiddenNodesOf(entity: PrefabEntity): readonly string[] {
+  return entity.hiddenNodes ?? [];
+}
+
 function bakeCollider(
   component: Extract<PrefabComponent, { type: "collider" }>,
   entity: PrefabEntity,
@@ -129,18 +139,25 @@ async function collectEntityColliders(
   const isShipHull =
     entity.components?.some((component) => component.type === "ship-controller") ??
     false;
+  const hiddenNodes = hiddenNodesOf(entity);
+  const hidden = new Set(hiddenNodes);
   for (const component of entity.components ?? []) {
     if (component.type !== "collider") continue;
+    // Index stays tied to the component slot so collider ids survive a delete.
+    const id = `${entity.id}:collider-${colliderIndex}`;
+    colliderIndex += 1;
+    const targetNode = component.node ?? entity.asset?.node;
+    // The collider's own node is gone — nothing left for it to stand in for.
+    if (targetNode && hidden.has(targetNode)) continue;
     const collider = bakeCollider(
       component,
       entity,
       hullColliderSceneMatrix,
-      `${entity.id}:collider-${colliderIndex}`,
+      id,
       undefined,
       isShipHull,
-      articulatedNodes,
+      [...articulatedNodes, ...hiddenNodes],
     );
-    colliderIndex += 1;
     if (collider) out.push(collider);
   }
 }
@@ -152,13 +169,17 @@ async function collectNodeOverrideColliders(
   articulatedNodes: readonly string[],
 ): Promise<void> {
   if (!entity.asset?.url) return;
+  const hiddenNodes = hiddenNodesOf(entity);
+  const hidden = new Set(hiddenNodes);
   const nodesWithColliders = (entity.nodeOverrides ?? []).filter(
-    (o) => o.components?.some((c) => c.type === "collider"),
+    (o) => !hidden.has(o.node) && o.components?.some((c) => c.type === "collider"),
   );
   const authoredNodes = new Set(nodesWithColliders.map((o) => o.node));
   // An articulated node the author never gave a collider gets one baked from
   // its own geometry, so a door blocks while closed and clears while open.
-  const generatedNodes = articulatedNodes.filter((node) => !authoredNodes.has(node));
+  const generatedNodes = articulatedNodes.filter(
+    (node) => !authoredNodes.has(node) && !hidden.has(node),
+  );
   if (nodesWithColliders.length === 0 && generatedNodes.length === 0) return;
 
   const isShipHull =
@@ -189,6 +210,7 @@ async function collectNodeOverrideColliders(
     matrices,
     nodeSceneMatrixFor,
     isShipHull,
+    hiddenNodes,
     out,
   });
   bakeAuthoredNodeColliders({
@@ -197,6 +219,7 @@ async function collectNodeOverrideColliders(
     matrices,
     nodeSceneMatrixFor,
     isShipHull,
+    hiddenNodes,
     out,
   });
 }
@@ -206,13 +229,16 @@ interface NodeColliderBakeContext {
   matrices: Map<string, THREE.Matrix4>;
   nodeSceneMatrixFor: (nodeWorldMatrix: THREE.Matrix4) => THREE.Matrix4;
   isShipHull: boolean;
+  /** Deleted GLB nodes — kept out of every mesh bake under this entity. */
+  hiddenNodes: readonly string[];
   out: GameplayCollider[];
 }
 
 function bakeArticulatedNodeColliders(
   context: NodeColliderBakeContext & { generatedNodes: readonly string[] },
 ): void {
-  const { entity, generatedNodes, matrices, nodeSceneMatrixFor, isShipHull, out } = context;
+  const { entity, generatedNodes, matrices, nodeSceneMatrixFor, isShipHull, hiddenNodes, out } =
+    context;
   for (const node of generatedNodes) {
     const nodeWorldMatrix = matrices.get(node);
     // Silent: a prefab's other GLBs simply do not contain this node. A node
@@ -226,6 +252,7 @@ function bakeArticulatedNodeColliders(
       `${entity.id}:${node}:collider-articulated`,
       node,
       isShipHull,
+      hiddenNodes,
     );
     if (collider) out.push(collider);
   }
@@ -234,7 +261,8 @@ function bakeArticulatedNodeColliders(
 function bakeAuthoredNodeColliders(
   context: NodeColliderBakeContext & { nodesWithColliders: readonly PrefabNodeOverride[] },
 ): void {
-  const { entity, nodesWithColliders, matrices, nodeSceneMatrixFor, isShipHull, out } = context;
+  const { entity, nodesWithColliders, matrices, nodeSceneMatrixFor, isShipHull, hiddenNodes, out } =
+    context;
   for (const override of nodesWithColliders) {
     const nodeWorldMatrix = matrices.get(override.node);
     if (!nodeWorldMatrix) {
@@ -254,6 +282,7 @@ function bakeAuthoredNodeColliders(
         `${entity.id}:${override.node}:collider-${nodeColliderIndex}`,
         override.node,
         isShipHull,
+        hiddenNodes,
       );
       nodeColliderIndex += 1;
       if (collider) out.push(collider);

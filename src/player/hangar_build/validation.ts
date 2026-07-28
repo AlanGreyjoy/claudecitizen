@@ -2,8 +2,6 @@ import {
   HANGAR_FLOOR_UP,
   HANGAR_PAD_HALF_METERS,
   HANGARS,
-  getStationHangars,
-  getStationRoom,
   STATION_ROOMS,
   type StationRoom,
 } from '../../world/station';
@@ -25,8 +23,7 @@ const PAD_CLEARANCE_MARGIN = 0.5;
 const APARTMENT_ROOM_ID = 'hab-room';
 
 function defaultHangarIndex(): number {
-  const hangars = getStationHangars();
-  return hangars.length > 0 ? hangars[0]!.index : 2;
+  return 2;
 }
 
 export function hangarRoomForIndex(index: number | null | undefined): StationRoom {
@@ -40,7 +37,7 @@ export function buildRoomForArea(
   hangarIndex: number | null | undefined,
 ): StationRoom {
   if (area === 'apartment') {
-    return getStationRoom(APARTMENT_ROOM_ID) ?? STATION_ROOMS[0]!;
+    return STATION_ROOMS.find((room) => room.id === APARTMENT_ROOM_ID) ?? STATION_ROOMS[0]!;
   }
   return hangarRoomForIndex(hangarIndex);
 }

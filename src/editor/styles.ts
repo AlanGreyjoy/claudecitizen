@@ -2733,10 +2733,27 @@ body.ed-resize-row * {
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-width: 0;
+  margin: 0;
   padding: 6px;
   border: 1px solid var(--ed-line-soft);
   background: var(--ed-raised);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-inspector-material-row:hover:not(:disabled),
+.ed-inspector-material-row:focus-visible:not(:disabled) {
+  border-color: var(--ed-focus);
+  background: var(--ed-select);
+  outline: none;
+}
+
+.ed-inspector-material-row:disabled {
+  cursor: default;
 }
 
 .ed-inspector-material-swatch {
@@ -3442,23 +3459,51 @@ body.ed-resize-row * {
 
 .ed-material-row {
   display: grid;
-  grid-template-columns:
-    minmax(180px, 1.6fr)
-    minmax(72px, 0.55fr)
-    minmax(72px, 0.55fr)
-    minmax(72px, 0.55fr)
-    minmax(72px, 0.55fr)
-    minmax(72px, 0.55fr)
-    minmax(72px, 0.55fr)
-    auto;
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
   padding: 8px 10px;
+  border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .ed-material-row:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+.ed-material-row.is-focused {
+  background: var(--ed-select);
+  box-shadow: inset 2px 0 0 var(--ed-focus);
+}
+
+.ed-material-swatch {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+
+/* Textured materials are almost always white-tinted; without this marker every
+   swatch in the list looks identical. */
+.ed-material-swatch-tex {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(
+    135deg,
+    transparent 0 50%,
+    var(--ed-focus) 50% 100%
+  );
 }
 
 .ed-material-name {
@@ -3483,45 +3528,221 @@ body.ed-resize-row * {
   font: 600 10px/1.1 var(--ed-mono);
 }
 
-.ed-material-field {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-  color: var(--ed-muted);
-  font: 700 9px/1 var(--ed-font);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ed-material-number {
-  width: 100%;
-  padding: 5px 6px;
-}
-
-.ed-material-color {
-  width: 100%;
-  height: 28px;
-  padding: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: var(--ed-input);
-  cursor: pointer;
-}
-
-.ed-material-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.ed-material-reset {
-  padding: 6px 8px;
-}
-
 .ed-material-empty {
   padding: 24px;
   color: var(--ed-muted);
   font: 600 12px/1.2 var(--ed-font);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* Owns the scroll: the stage is a fixed-height block, the property list below
+   it is what grows. */
+.ed-material-inspector {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ed-material-stage {
+  display: grid;
+  gap: 6px;
+  padding: 8px 8px 10px;
+  border-bottom: 1px solid var(--ed-line-soft);
+  background: var(--ed-inset);
+}
+
+.ed-material-stage-canvas {
+  width: 100%;
+  height: 240px;
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #0b0f14;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.ed-material-stage-canvas:active {
+  cursor: grabbing;
+}
+
+.ed-material-stage-canvas.is-drop-target {
+  border-color: var(--ed-focus);
+  box-shadow: inset 0 0 0 1px var(--ed-focus);
+}
+
+.ed-material-chip-mesh {
+  flex: 0 1 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-material-stage-error {
+  color: var(--ed-danger);
+  font: 600 10px/1.2 var(--ed-mono);
+}
+
+.ed-material-inspector-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ed-material-stage-bar {
+  display: grid;
+  gap: 4px;
+}
+
+.ed-material-chipset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.ed-material-chip {
+  flex: 1 1 auto;
+  padding: 4px 6px;
+  border: 1px solid var(--ed-line);
+  background: var(--ed-btn);
+  color: var(--ed-muted);
+  font: 700 9px/1 var(--ed-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ed-material-chip:hover {
+  background: var(--ed-btn-hover);
+  color: var(--ed-text);
+}
+
+.ed-material-chip.is-active {
+  border-color: var(--ed-focus);
+  background: var(--ed-select);
+  color: var(--ed-text-strong);
+}
+
+.ed-material-maps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.ed-material-map {
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(125, 200, 255, 0.1);
+  color: #9ecbff;
+  font: 700 9px/1.3 var(--ed-mono);
+  letter-spacing: 0.06em;
+}
+
+.ed-material-map.is-empty {
+  background: transparent;
+  color: var(--ed-muted);
+}
+
+.ed-material-head {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-bottom: 1px solid var(--ed-line-soft);
+}
+
+.ed-material-head-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ed-text-strong);
+  font: 700 13px/1.2 var(--ed-font);
+}
+
+.ed-material-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ed-muted);
+  font: 600 10px/1.2 var(--ed-mono);
+}
+
+.ed-material-head-meta > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-material-dot {
+  opacity: 0.6;
+}
+
+.ed-material-badge {
+  padding: 1px 5px;
+  border: 1px solid var(--ed-focus);
+  color: var(--ed-text);
+  font: 700 9px/1.4 var(--ed-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ed-material-field {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.ed-material-field-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ed-muted);
+  font: 700 10px/1.2 var(--ed-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ed-material-slider {
+  width: 100%;
+  min-width: 0;
+  height: 18px;
+  accent-color: var(--ed-focus);
+  cursor: ew-resize;
+}
+
+.ed-material-number {
+  width: 100%;
+  padding: 4px 5px;
+  text-align: right;
+}
+
+.ed-material-color {
+  width: 100%;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--ed-line);
+  background: var(--ed-input);
+  cursor: pointer;
+}
+
+.ed-material-hex {
+  width: 100%;
+  padding: 4px 5px;
+  font-size: 10px;
+}
+
+.ed-material-inspector-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
 }
 
 .ed-toast {

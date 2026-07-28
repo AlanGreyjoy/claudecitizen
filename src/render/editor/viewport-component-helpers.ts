@@ -189,6 +189,16 @@ export function createViewportComponentHelpers(
     }
   }
 
+  /** True when the mesh or any ancestor up to `target` is hidden. */
+  function meshHiddenUnder(mesh: THREE.Object3D, target: THREE.Object3D): boolean {
+    let node: THREE.Object3D | null = mesh;
+    while (node && node !== target) {
+      if (!node.visible) return true;
+      node = node.parent;
+    }
+    return false;
+  }
+
   function makeMeshColliderHelper(
     target: THREE.Object3D,
     component: Extract<PrefabComponent, { type: "collider"; shape: "mesh" }>,
@@ -210,6 +220,10 @@ export function createViewportComponentHelpers(
         return;
       }
       if (meshUnderExcludedNode(child, target, excluded)) return;
+      // Nodes deleted in the hierarchy are hidden, not removed, and the bake
+      // now drops them via `hiddenNodes` — mirror that or the preview keeps
+      // drawing a wireframe for geometry that no longer collides.
+      if (meshHiddenUnder(child, target)) return;
       const toTargetLocal = targetWorldInverse.clone().multiply(child.matrixWorld);
       const geometry = child.geometry.clone().applyMatrix4(toTargetLocal);
       const helper = makeHelperMesh(

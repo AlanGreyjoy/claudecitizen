@@ -1,147 +1,76 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { EditorStore } from '../../document';
-import {
-  clampMaterialNumber,
-  collectRows,
-  formatMaterialNumber,
-  valuesToOverride,
-  type MaterialRow,
-  type MaterialValues,
-} from '../../panels/material-manager';
+import { collectRows, type MaterialRow } from '../../panels/material-manager';
 import { useEditorStore } from '../hooks';
+
+export type MaterialFocusTarget = {
+  entityId: string;
+  material: string;
+  /** Bumps so re-clicking the same material re-scrolls. */
+  nonce: number;
+};
 
 type MaterialManagerPanelProps = {
   store: EditorStore;
+  selected?: MaterialFocusTarget | null;
+  onSelectMaterial?: (target: MaterialFocusTarget) => void;
 };
 
-type NumberKey = 'metalness' | 'roughness' | 'opacity' | 'emissiveIntensity';
-type ColorKey = 'color' | 'emissive';
-
-function commitRow(store: EditorStore, row: MaterialRow, values: MaterialValues): void {
-  store.setMaterialOverride(
-    row.entity.id,
-    row.material,
-    valuesToOverride(row.material, values),
-  );
-}
-
-function MaterialColorField({
-  store,
-  row,
-  fieldKey,
-}: {
-  store: EditorStore;
-  row: MaterialRow;
-  fieldKey: ColorKey;
-}): ReactElement {
-  return (
-    <input
-      className="ed-material-color"
-      type="color"
-      value={row.values[fieldKey]}
-      onChange={(event) => {
-        commitRow(store, row, { ...row.values, [fieldKey]: event.currentTarget.value });
-      }}
-    />
-  );
-}
-
-function MaterialNumberField({
-  store,
-  row,
-  fieldKey,
-  max,
-}: {
-  store: EditorStore;
-  row: MaterialRow;
-  fieldKey: NumberKey;
-  max: number;
-}): ReactElement {
-  const commit = (raw: string): void => {
-    commitRow(store, row, {
-      ...row.values,
-      [fieldKey]: clampMaterialNumber(Number(raw), 0, max),
-    });
-  };
-
-  return (
-    <input
-      className="ed-input ed-material-number"
-      type="number"
-      min={0}
-      max={max}
-      step={0.01}
-      defaultValue={formatMaterialNumber(row.values[fieldKey])}
-      key={`${row.entity.id}:${row.material}:${fieldKey}:${formatMaterialNumber(row.values[fieldKey])}`}
-      onBlur={(event) => commit(event.currentTarget.value)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.currentTarget.blur();
-        }
-      }}
-    />
-  );
+function materialRowKey(entityId: string, material: string): string {
+  return `${entityId}:${material}`;
 }
 
 function MaterialRowView({
-  store,
   row,
+  selected,
+  rowRef,
+  onSelect,
 }: {
-  store: EditorStore;
   row: MaterialRow;
+  selected: boolean;
+  rowRef?: (node: HTMLButtonElement | null) => void;
+  onSelect: () => void;
 }): ReactElement {
   return (
-    <div className="ed-material-row">
+    <button
+      type="button"
+      ref={rowRef}
+      className={`ed-material-row${selected ? ' is-focused' : ''}`}
+      data-material-key={materialRowKey(row.entity.id, row.material)}
+      onClick={onSelect}
+    >
+      <span
+        className="ed-material-swatch"
+        title={`${row.values.color} · metal ${row.values.metalness} · rough ${row.values.roughness}`}
+        style={{ background: row.values.color }}
+      >
+        {row.maps.length > 0 ? (
+          <span className="ed-material-swatch-tex" title="Has texture maps" />
+        ) : null}
+      </span>
       <div className="ed-material-name">
         <span className="ed-material-title">{row.displayName}</span>
         <span className="ed-material-subtitle">
           {row.entity.name} · {row.source}
+          {row.overridden ? ' · override' : ''}
         </span>
       </div>
-      <label className="ed-material-field">
-        <span>Color</span>
-        <MaterialColorField store={store} row={row} fieldKey="color" />
-      </label>
-      <label className="ed-material-field">
-        <span>Metal</span>
-        <MaterialNumberField store={store} row={row} fieldKey="metalness" max={1} />
-      </label>
-      <label className="ed-material-field">
-        <span>Rough</span>
-        <MaterialNumberField store={store} row={row} fieldKey="roughness" max={1} />
-      </label>
-      <label className="ed-material-field">
-        <span>Alpha</span>
-        <MaterialNumberField store={store} row={row} fieldKey="opacity" max={1} />
-      </label>
-      <label className="ed-material-field">
-        <span>Glow</span>
-        <MaterialColorField store={store} row={row} fieldKey="emissive" />
-      </label>
-      <label className="ed-material-field">
-        <span>Power</span>
-        <MaterialNumberField store={store} row={row} fieldKey="emissiveIntensity" max={20} />
-      </label>
-      <div className="ed-material-actions">
-        <button
-          type="button"
-          className="ed-btn ed-material-reset"
-          disabled={!row.overridden}
-          onClick={() => store.setMaterialOverride(row.entity.id, row.material, null)}
-        >
-          Reset
-        </button>
-      </div>
-    </div>
+    </button>
   );
 }
 
 export function MaterialManagerPanel({
   store,
+  selected = null,
+  onSelectMaterial,
 }: MaterialManagerPanelProps): ReactElement {
   const version = useEditorStore(store, ['document', 'structure', 'entity']);
   const [rows, setRows] = useState<MaterialRow[] | null>(null);
   const generationRef = useRef(0);
+  const selectedRowRef = useRef<HTMLButtonElement | null>(null);
+  const selectedKey = selected
+    ? materialRowKey(selected.entityId, selected.material)
+    : null;
 
   useEffect(() => {
     const current = ++generationRef.current;
@@ -151,6 +80,14 @@ export function MaterialManagerPanel({
       setRows(next);
     });
   }, [store, version]);
+
+  useEffect(() => {
+    if (!selectedKey) return;
+    selectedRowRef.current?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [selectedKey, selected?.nonce, rows]);
 
   const status =
     rows === null
@@ -167,13 +104,31 @@ export function MaterialManagerPanel({
         {rows === null ? null : rows.length === 0 ? (
           <div className="ed-material-empty">No materials</div>
         ) : (
-          rows.map((row) => (
-            <MaterialRowView
-              key={`${row.entity.id}:${row.material}:${row.source}`}
-              store={store}
-              row={row}
-            />
-          ))
+          rows.map((row) => {
+            const key = materialRowKey(row.entity.id, row.material);
+            const isSelected = selectedKey === key;
+            return (
+              <MaterialRowView
+                key={`${key}:${row.source}`}
+                row={row}
+                selected={isSelected}
+                rowRef={
+                  isSelected
+                    ? (node) => {
+                        selectedRowRef.current = node;
+                      }
+                    : undefined
+                }
+                onSelect={() =>
+                  onSelectMaterial?.({
+                    entityId: row.entity.id,
+                    material: row.material,
+                    nonce: Date.now(),
+                  })
+                }
+              />
+            );
+          })
         )}
       </div>
     </>
