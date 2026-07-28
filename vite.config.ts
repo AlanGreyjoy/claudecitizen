@@ -8,6 +8,20 @@ const PROJECT_ASSET_ROOT = 'assets';
 const PROJECT_ASSET_URL_PREFIX = '/assets/';
 /** Asset root searched for `*.prefab.json`. Mirrors PROJECT_ASSET_ROOTS in editor-desktop/repository.mjs. */
 const PREFAB_SEARCH_ROOTS = ['assets'];
+/**
+ * Document trees under the Vite root that can name a runtime asset. Scenes were
+ * the gap: an entity can carry a mesh/collider `asset.url` with no prefab in
+ * between, so a prefab-only scan shipped a scene whose colliders 404 and whose
+ * player falls through the floor. `src/world/prefabs/data` is here too — a
+ * project may author prefabs there rather than under `assets/`.
+ */
+const DOCUMENT_SEARCH_ROOTS = [
+  'src/world/scenes/data',
+  'src/world/prefabs/data',
+  'src/world/planets/data',
+  'src/world/systems/data',
+];
+const DOCUMENT_SUFFIXES = ['.scene.json', '.prefab.json', '.planet.json', '.system.json'];
 /** Stable runtime URL for the configured Sidekick pack. */
 const SIDEKICK_VIRTUAL_URL_PREFIX = '/asteron/content/synty-sidekick/';
 /**
@@ -187,12 +201,18 @@ function collectPrefabAssetUrls(value: unknown, urls: Set<string>): void {
 }
 
 /**
- * Prefabs live in any folder under the project asset roots, so the release
- * build has to walk those trees to learn which GLBs/textures/audio to copy.
+ * Walks `searchRoots` under the Vite root and collects every asset URL named by
+ * a JSON document whose filename ends in one of `suffixes`. Prefabs live in any
+ * folder under the project asset roots and scenes live under `src/world`, so
+ * the release build has to read both to learn which GLBs/textures/audio to copy.
  */
-async function listPrefabAssetUrls(projectRoot: string): Promise<string[]> {
+async function listDocumentAssetUrls(
+  projectRoot: string,
+  searchRoots: readonly string[],
+  suffixes: readonly string[],
+): Promise<string[]> {
   const urls = new Set<string>();
-  for (const root of PREFAB_SEARCH_ROOTS) {
+  for (const root of searchRoots) {
     const queue = [resolve(projectRoot, root)];
     while (queue.length > 0) {
       const dir = queue.shift()!;
@@ -209,7 +229,7 @@ async function listPrefabAssetUrls(projectRoot: string): Promise<string[]> {
           queue.push(absolute);
           continue;
         }
-        if (!dirent.isFile() || !dirent.name.endsWith('.prefab.json')) continue;
+        if (!dirent.isFile() || !suffixes.some((suffix) => dirent.name.endsWith(suffix))) continue;
         try {
           collectPrefabAssetUrls(JSON.parse(await readFile(absolute, 'utf8')), urls);
         } catch (error) {
@@ -455,8 +475,15 @@ function copyReferencedGameAssets(): Plugin {
       const unresolvedAnimationUrls = animationUrls.filter(
         (url) => resolveAssetUrl(root, outDir, url) === null,
       );
+      const documentUrls = [
+        ...(await listDocumentAssetUrls(root, PREFAB_SEARCH_ROOTS, ['.prefab.json'])),
+        ...(await listDocumentAssetUrls(root, DOCUMENT_SEARCH_ROOTS, DOCUMENT_SUFFIXES)),
+      ];
+      const unresolvedDocumentUrls = [...new Set(documentUrls)].filter(
+        (url) => resolveAssetUrl(root, outDir, url) === null,
+      );
       const queue = [
-        ...[...(await listPrefabAssetUrls(root)), ...animationUrls]
+        ...[...documentUrls, ...animationUrls]
           .map((url) => resolveAssetUrl(root, outDir, url))
           .filter((asset): asset is ResolvedAsset => asset !== null),
         ...(await listExistingOptionalAssets(root, outDir)),
@@ -488,6 +515,14 @@ function copyReferencedGameAssets(): Plugin {
 
       if (copied.size > 0) {
         console.log(`[claudecitizen-assets] copied ${copied.size} referenced asset file(s).`);
+      }
+      if (unresolvedDocumentUrls.length > 0) {
+        // A scene/prefab names an asset the project does not have. Colliders
+        // baked from it fail at runtime, so this is worth shouting about.
+        console.warn(
+          `[claudecitizen-assets] ${unresolvedDocumentUrls.length} document asset URL(s) do not ` +
+            `resolve to a file: ${unresolvedDocumentUrls.slice(0, 8).join(', ')}`,
+        );
       }
       if (unresolvedAnimationUrls.length > 0) {
         // Clips the controller points at but the project does not have. The
