@@ -450,6 +450,11 @@ fn apply_presence(
     tick: u64,
 ) {
     let in_ship = intent.mode == "in-ship";
+    // A player standing on a ship deck walks at character speed but *moves* at
+    // the ship's: presence positions are world-space, so the deck carries them.
+    // Judging that motion by the on-foot limits rejects every intent a
+    // passenger sends, which is its own "player cannot see player".
+    let carried = !intent.ship_zone_id.is_empty();
     let desired_body = if in_ship {
         intent.ship.as_ref().and_then(|ship| ship.body.as_ref())
     } else {
@@ -466,7 +471,7 @@ fn apply_presence(
         .as_ref()
         .map(vector)
         .unwrap_or_default();
-    if !finite_velocity(desired_velocity, in_ship) {
+    if !finite_velocity(desired_velocity, in_ship || carried) {
         return;
     }
     let entity = entities
@@ -492,6 +497,7 @@ fn apply_presence(
     if intent.sequence <= entity.accepted_sequence {
         return;
     }
+    let idle_ticks = tick.saturating_sub(entity.last_seen_tick);
     entity.accepted_sequence = intent.sequence;
     entity.last_seen_tick = tick;
     entity.mode = intent.mode.clone();
@@ -509,10 +515,25 @@ fn apply_presence(
         .as_ref()
         .map(vector)
         .unwrap_or_default();
-    let current_position = current_body
+    let server_position = current_body
         .and_then(|body| body.position.as_ref())
         .map(vector)
         .unwrap_or(initial_position);
+    // On foot the client owns collision: this authority world holds player
+    // capsules and nothing else — no station geometry, no terrain, no gravity —
+    // so its dead reckoning walks through walls and never converges on the
+    // client's Rapier result. Follow the reported position instead, but no
+    // faster than a character can move, so the clamp still rejects a teleport.
+    let current_position = if in_ship {
+        server_position
+    } else {
+        let reach = if carried {
+            DEFAULT_SHIP_MAX_SPEED_MPS
+        } else {
+            DEFAULT_CHARACTER_MAX_SPEED_MPS
+        };
+        anchor_on_foot(server_position, initial_position, idle_ticks, reach)
+    };
     let current_velocity = current_body
         .and_then(|body| body.velocity.as_ref())
         .map(vector)
@@ -741,6 +762,35 @@ fn proto_vector(value: Vector3) -> Vec3 {
         x: value.x as f64,
         y: value.y as f64,
         z: value.z as f64,
+    }
+}
+
+/// Moves the authoritative on-foot anchor towards the position the client
+/// reports, by at most what that player could have covered since the last
+/// accepted intent — `reach` is their top speed, which is the ship's when a
+/// deck is carrying them. A correction inside that budget is taken verbatim; a
+/// larger one is truncated, so a client that lies about where it stands
+/// converges at walking pace rather than jumping.
+fn anchor_on_foot(server: Vector3, reported: Vector3, idle_ticks: u64, reach: f32) -> Vector3 {
+    // One tick of slack covers the usual case where an intent arrives in the
+    // same tick as the last one, and absorbs float noise in a standing player.
+    let elapsed = (idle_ticks.max(1) as f32 * FIXED_DT_SECONDS).min(1.0);
+    let budget = reach * elapsed;
+    let dx = reported.x - server.x;
+    let dy = reported.y - server.y;
+    let dz = reported.z - server.z;
+    let distance = (dx * dx + dy * dy + dz * dz).sqrt();
+    if !distance.is_finite() {
+        return server;
+    }
+    if distance <= budget {
+        return reported;
+    }
+    let scale = budget / distance;
+    Vector3 {
+        x: server.x + dx * scale,
+        y: server.y + dy * scale,
+        z: server.z + dz * scale,
     }
 }
 

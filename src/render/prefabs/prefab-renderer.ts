@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader } from '../assets/ktx2';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import {
   MAIN_SURFACE_MATERIAL,
@@ -24,7 +25,14 @@ import {
   setupUpdateObjectAnimations,
 } from './object-animation';
 import { applyDefaultFrustumCulling } from '../frustum-policy';
-import { deduplicateObjectTextures } from '../assets/texture-dedup';
+import { deduplicateObjectTextures, releaseTextureOwner } from '../assets/texture-dedup';
+import {
+  createOwnedGpuResources,
+  disposeCacheTemplate,
+  type OwnedGpuResources,
+} from '../assets/gpu-dispose';
+import { queueSourceRelease } from '../assets/texture-upload';
+import { pinAsset, registerAssetCache, touchAsset } from '../../cache/asset-residency';
 
 /**
  * Builds Three.js scene graphs from prefab documents. Shared by the runtime
@@ -32,7 +40,7 @@ import { deduplicateObjectTextures } from '../assets/texture-dedup';
  * the editor viewport (per-entity instancing).
  */
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = attachKtx2Loader(new GLTFLoader());
 const modelCache = new Map<string, Promise<THREE.Group>>();
 let rectAreaLightsInitialized = false;
 const SCALED_POINT_LIGHT_INTENSITY_MULTIPLIER = 0.22;
@@ -42,7 +50,14 @@ interface BuildEntityOptions {
   localLightShadowMapSize: number;
   localLightShadowsEnabled: boolean;
   rootGroup?: THREE.Group;
+  /** Collects per-instance allocations so the group can free them without touching the shared template. */
+  owned?: OwnedGpuResources;
+  /** Authoring surfaces hold clones outside any play session — exempt their templates from the sweep. */
+  pinModels?: boolean;
 }
+
+/** Cache name used with the asset-residency sweep. */
+export const PREFAB_MODEL_CACHE = 'prefabModels';
 
 interface BoundAnimationNode {
   object: THREE.Object3D;
@@ -283,7 +298,10 @@ function prepareModelMaterials(root: THREE.Object3D): void {
   });
 }
 
-export function cloneObjectMaterials(root: THREE.Object3D): THREE.Material[] {
+export function cloneObjectMaterials(
+  root: THREE.Object3D,
+  owned?: OwnedGpuResources,
+): THREE.Material[] {
   const cloned: THREE.Material[] = [];
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
@@ -291,6 +309,7 @@ export function cloneObjectMaterials(root: THREE.Object3D): THREE.Material[] {
       object.material = object.material.map((material) => {
         const copy = material.clone();
         cloned.push(copy);
+        owned?.materials.add(copy);
         return copy;
       });
       return;
@@ -298,6 +317,7 @@ export function cloneObjectMaterials(root: THREE.Object3D): THREE.Material[] {
     const copy = object.material.clone();
     object.material = copy;
     cloned.push(copy);
+    owned?.materials.add(copy);
   });
   return cloned;
 }
@@ -305,6 +325,7 @@ export function cloneObjectMaterials(root: THREE.Object3D): THREE.Material[] {
 export function applyPrefabMaterialOverrides(
   root: THREE.Object3D,
   overrides: readonly PrefabMaterialOverride[] | undefined,
+  owned?: OwnedGpuResources,
 ): THREE.Material[] {
   if (!overrides || overrides.length === 0) return [];
   const byName = new Map(overrides.map((override) => [override.material, override]));
@@ -317,6 +338,7 @@ export function applyPrefabMaterialOverrides(
       const copy = material.clone();
       applyMaterialOverride(copy, override);
       cloned.push(copy);
+      owned?.materials.add(copy);
       return copy;
     };
     object.material = Array.isArray(object.material)
@@ -326,13 +348,37 @@ export function applyPrefabMaterialOverrides(
   return cloned;
 }
 
-/** Loads a GLB/GLTF once per url and hands out clones (shared geometry/materials). */
-export async function loadPrefabModel(url: string): Promise<THREE.Object3D> {
+registerAssetCache(PREFAB_MODEL_CACHE, (url) => {
+  const pending = modelCache.get(url);
+  modelCache.delete(url);
+  if (!pending) return;
+  void pending
+    .then((template) => {
+      disposeCacheTemplate(template);
+      releaseTextureOwner(url);
+    })
+    .catch(() => undefined);
+});
+
+/**
+ * Loads a GLB/GLTF once per url and hands out clones (shared geometry/materials).
+ *
+ * Pass `pin` from authoring surfaces: the editor viewport keeps live clones of
+ * these templates outside any play session, so a scene sweep triggered by Play
+ * would otherwise tear down geometry the viewport is still rendering.
+ */
+export async function loadPrefabModel(
+  url: string,
+  options?: { pin?: boolean },
+): Promise<THREE.Object3D> {
+  if (options?.pin) pinAsset(PREFAB_MODEL_CACHE, url);
+  touchAsset(PREFAB_MODEL_CACHE, url);
   let pending = modelCache.get(url);
   if (!pending) {
     pending = gltfLoader.loadAsync(url).then((gltf) => {
       prepareModelMaterials(gltf.scene);
-      deduplicateObjectTextures(gltf.scene);
+      deduplicateObjectTextures(gltf.scene, { owner: url });
+      queueSourceRelease(gltf.scene);
       return gltf.scene;
     });
     pending.catch(() => modelCache.delete(url));
@@ -345,6 +391,7 @@ export async function loadPrefabModel(url: string): Promise<THREE.Object3D> {
 export function createPrimitiveMesh(
   primitive: PrefabPrimitive,
   materialOverrides: readonly PrefabMaterialOverride[] = [],
+  owned?: OwnedGpuResources,
 ): THREE.Mesh {
   const geometry = new THREE.BoxGeometry(primitive.size.x, primitive.size.y, primitive.size.z);
   const material = new THREE.MeshStandardMaterial({
@@ -360,6 +407,8 @@ export function createPrimitiveMesh(
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   geometry.computeBoundingSphere();
+  owned?.geometries.add(geometry);
+  owned?.materials.add(material);
   return mesh;
 }
 
@@ -603,7 +652,7 @@ function attachLoadedAsset(
       object.castShadow = false;
     });
   }
-  applyPrefabMaterialOverrides(model, entity.materialOverrides);
+  applyPrefabMaterialOverrides(model, entity.materialOverrides, options.owned);
   applyNodeOverrides(model, entity.nodeOverrides);
   applyHiddenNodes(model, entity.hiddenNodes);
   scaleModelLights(model, options.lightScale);
@@ -682,12 +731,12 @@ function buildEntity(
   const pending: Promise<void>[] = [];
 
   if (entity.primitive) {
-    group.add(createPrimitiveMesh(entity.primitive, entity.materialOverrides));
+    group.add(createPrimitiveMesh(entity.primitive, entity.materialOverrides, options.owned));
   }
   if (entity.asset) {
     const asset = entity.asset;
     pending.push(
-      loadPrefabModel(asset.url)
+      loadPrefabModel(asset.url, { pin: options.pinModels })
         .then((model) => {
           attachLoadedAsset(group, model, entity, options);
         })
@@ -724,6 +773,8 @@ export function createPrefabStationGroup(
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = `prefab:${doc.id}`;
+  const owned = createOwnedGpuResources();
+  group.userData.ownedGpu = owned;
   setupUpdateAnimations(group);
   setupUpdateParticles(group);
   setupUpdateObjectAnimations(group);
@@ -731,6 +782,7 @@ export function createPrefabStationGroup(
     lightScale: renderScale,
     localLightShadowMapSize: options.localLightShadowMapSize ?? 0,
     localLightShadowsEnabled: options.localLightShadowsEnabled ?? false,
+    owned,
     rootGroup: group,
   }).group);
   group.scale.setScalar(renderScale);
@@ -739,9 +791,14 @@ export function createPrefabStationGroup(
 }
 
 /** Builds a single prop prefab instance (not scaled — caller sets transform). */
-export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
+export function createPropInstanceGroup(
+  doc: PrefabDocument,
+  options: { pinModels?: boolean } = {},
+): THREE.Group {
   const group = new THREE.Group();
   group.name = `prop:${doc.id}`;
+  const owned = createOwnedGpuResources();
+  group.userData.ownedGpu = owned;
   setupUpdateAnimations(group);
   setupUpdateParticles(group);
   setupUpdateObjectAnimations(group);
@@ -749,6 +806,8 @@ export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
     lightScale: 1,
     localLightShadowMapSize: 256,
     localLightShadowsEnabled: true,
+    owned,
+    pinModels: options.pinModels,
     rootGroup: group,
   }).group);
   applyDefaultFrustumCulling(group);
@@ -761,9 +820,12 @@ export function createPropInstanceGroup(doc: PrefabDocument): THREE.Group {
  */
 export async function createPropInstanceGroupAsync(
   doc: PrefabDocument,
+  options: { pinModels?: boolean } = {},
 ): Promise<THREE.Group> {
   const group = new THREE.Group();
   group.name = `prop:${doc.id}`;
+  const owned = createOwnedGpuResources();
+  group.userData.ownedGpu = owned;
   setupUpdateAnimations(group);
   setupUpdateParticles(group);
   setupUpdateObjectAnimations(group);
@@ -771,6 +833,8 @@ export async function createPropInstanceGroupAsync(
     lightScale: 1,
     localLightShadowMapSize: 256,
     localLightShadowsEnabled: true,
+    owned,
+    pinModels: options.pinModels,
     rootGroup: group,
   });
   group.add(built.group);

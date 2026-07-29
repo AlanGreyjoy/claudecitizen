@@ -183,7 +183,7 @@ export async function collectMaterialRowsForEntity(
 
   if (!entity.asset) return rows;
   try {
-    const model = await loadPrefabModel(entity.asset.url);
+    const model = await loadPrefabModel(entity.asset.url, { pin: true });
     const materialRoot = nodeName ? model.getObjectByName(nodeName) : model;
     if (!materialRoot) return rows;
     const byMaterial = new Map<string, THREE.Material>();

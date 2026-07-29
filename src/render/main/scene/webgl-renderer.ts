@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { RendererMode } from '../domain/types';
 import { resolveRenderQuality } from '../domain/render-quality';
+import { setKtx2SupportRenderer } from '../../assets/ktx2';
 
 export interface WebGlRendererContext {
   rendererMode: RendererMode;
@@ -43,6 +44,10 @@ export function createWebGlRenderer(canvas: HTMLCanvasElement): WebGlRendererCon
   renderer.toneMappingExposure = 1.35;
   renderer.shadowMap.enabled = renderQuality.shadowMapSize > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  // The KTX2 transcoder picks its output format from this context's extension
+  // list, so register before any GLB loads.
+  setKtx2SupportRenderer(renderer);
 
   return { rendererMode, renderer };
 }

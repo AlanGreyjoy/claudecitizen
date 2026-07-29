@@ -478,6 +478,67 @@ IndexedDB keys live in `src/cache/cache-keys.ts` (`TERRAIN_CACHE_VERSION`, `VEGE
 
 When unsure whether probes catch a code change, bump. Stale veg tiles with wrong instance counts tank FPS; stale terrain tiles desync feet from mesh.
 
+## Texture memory: derived KTX2 assets and the residency sweep
+
+Synty GLBs embed 4k/8k PNG atlases. Decoded to RGBA8 with mips, one station
+scene costs gigabytes, and nothing used to free it across a scene switch. Two
+mechanisms now bound that; both are invisible until you break them.
+
+**Derived assets (`<project>/.asteron/derived/`).** `npm run transcode:textures
+-- --project <dir>` writes KTX2 (Basis) twins of every project GLB at the same
+relative path. Source GLBs are never mutated, because `scripts/bake_*.py` parse
+the embedded PNG/JPEG with Pillow and must keep working — **run the bake scripts
+first, then transcode.** Requires KTX-Software's `ktx` binary on PATH.
+
+`scripts/derived-assets.mjs` is the single resolution rule, imported by both
+`editor-desktop/repository.mjs` (`resolveAssetReadPath`, used by every editor
+asset request) and `vite.config.ts` (`preferDerivedAsset`, used by the release
+copy). It prefers the twin when present and not older than its source, and falls
+back to the source on any doubt — so with no derived tree the engine behaves
+exactly as before. Rules that are easy to violate:
+
+- Never route a **write** path (save/upload/move/delete) through the derived
+  resolver — a rename would move the twin over its own source. That is why
+  `resolveAssetPath` and `resolveAssetReadPath` are separate functions.
+- In `vite.config.ts`, `sourceRoot` must move with `sourcePath`.
+  `enqueueGltfDependencies` validates a `.gltf`'s sibling `.bin` with
+  `isInsidePath(..., sourceRoot)`; leaving the root behind ships a data-less glTF.
+- The transcode script **refuses to write a file whose textures lost their
+  names.** `GLTFLoader` names a texture from `textures[].name || images[].name`,
+  and a KTX2 image is a bufferView with no URI fallback. Nameless textures make
+  `canonicalTextureKey` return null, runtime dedup stops entirely, and the result
+  is worse than no compression.
+
+All ten `new GLTFLoader()` sites call `attachKtx2Loader` (`src/render/assets/ktx2.ts`),
+including `src/physics/colliders.ts` — the extension is written as *required*, so
+a loader without it throws. One shared `KTX2Loader` app-wide; its worker pool is
+never disposed on a scene switch. The transcoder is vendored at `public/basis/`.
+
+**Residency sweep (`src/cache/asset-residency.ts`).** Module-level asset caches
+register an evict callback and stamp `touchAsset` on every read.
+`beginAssetGeneration()` runs at the top of `startPlaySession`, `sweepUnusedAssets()`
+*after* the new scene is published — so an asset both scenes use is already
+stamped and survives, and reuse costs no reload. Mark-and-sweep, not refcounting:
+loads are fire-and-forget with no owner handle, and a missed stamp costs one
+reload while a missed decrement would pin gigabytes.
+
+- `loadPrefabModel` hands out `template.clone(true)`. Clones **share** geometry
+  and materials. Use `disposeOwnedGpuResources` on an instance (frees only what
+  `userData.ownedGpu` collected) and `disposeCacheTemplate` only on a cache
+  template. `disposeCacheTemplate` skips canonical textures; those are refcounted
+  by `releaseTextureOwner` in `src/render/assets/texture-dedup.ts`.
+- Authoring surfaces that hold clones outside a play session must pass
+  `{ pin: true }` / `{ pinModels: true }` — editor viewport, material panels,
+  equipment preview. Without the pin, a sweep triggered by Play tears down
+  geometry their own WebGL context is still rendering.
+- `src/render/assets/texture-upload.ts` closes decoded ImageBitmaps after upload,
+  and is **disabled under `AUTHORING_ENABLED`**: the editor runs several WebGL
+  contexts over the same templates, and a bitmap closed after uploading to one
+  can never reach the others.
+
+The HUD stats panel reports `GPU`, `Tex Mem`, and `Assets` rows. If `GPU tex`
+jumps after a transcode, texture names were lost.
+
 ## Protected assets security
 
 - Project authoring packs live under the open project's `assets/protected/`.
@@ -588,6 +649,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `scripts/validate_terrain_system.ts` | Validate terrain LOD, seams, mesh/foot fidelity, and routed hydrology |
 | `scripts/spike-demo.ts` | Headless scripted takeoff/orbit/landing (`npm run demo`) |
 | `scripts/bake_ship_textures.py` | Fix Unity trim-sheet materials for Three.js PBR |
+| `scripts/transcode_project_textures.mjs` | Write KTX2 twins to `<project>/.asteron/derived/` (`npm run transcode:textures -- --project <dir>`). Needs `ktx` on PATH. Run after the bake scripts |
+| `scripts/derived-assets.mjs` | Shared source-vs-derived resolution rule; imported by `vite.config.ts` and `editor-desktop/repository.mjs` |
 | `scripts/check_page.mjs` | Page validation |
 
 ## Other conventions

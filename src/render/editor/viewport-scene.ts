@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { setupUpdateObjectAnimations } from "../prefabs/object-animation";
 import { createViewportProceduralSky } from "./viewport-procedural-sky";
+import { setKtx2SupportRenderer } from "../assets/ktx2";
 
 export interface ViewportScene {
   canvas: HTMLCanvasElement;
@@ -29,6 +30,9 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   container.appendChild(canvas);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  // The viewport is usually the first live context in the editor, so it also
+  // seeds KTX2 format detection for loads that happen before Play.
+  setKtx2SupportRenderer(renderer);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.AgXToneMapping;

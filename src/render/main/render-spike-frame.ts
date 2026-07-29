@@ -17,6 +17,12 @@ import type { RenderMode } from './domain/types';
 import type { StationFrame } from '../../world/station';
 import { getShipLayout } from '../../player/ship-layout';
 import { updateLocalLightShadowCull } from '../prefabs/prefab-renderer';
+import { getTextureDedupSnapshot } from '../assets/texture-dedup';
+import { drainSourceReleases, getPendingSourceReleaseCount } from '../assets/texture-upload';
+import { getAssetResidencySnapshot } from '../../cache/asset-residency';
+
+/** Textures released per frame. Small enough that a fresh scene cannot stall a frame. */
+const SOURCE_RELEASE_BUDGET_PER_FRAME = 8;
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import { updateCameraRig, updateSpeedBlur } from './update/camera-rig';
 import { updateEnvironment } from './update/environment';
@@ -728,7 +734,26 @@ export function executeSpikeRenderFrame(
   updateNormalPlayPresentation(deps, focus, lighting, world, tileState);
   configureComposerPasses(deps, focus, lighting, state);
   presentRenderOutput(deps, focus, activeShipGroup);
+  // After present: uploads are settled for this frame, so freeing the decoded
+  // CPU bitmaps is safe. Budgeted so a freshly loaded scene cannot stall a frame.
+  drainSourceReleases(deps.renderer, SOURCE_RELEASE_BUDGET_PER_FRAME);
+  const dedup = getTextureDedupSnapshot();
+  const residency = getAssetResidencySnapshot();
   const renderStats: RenderStats = {
+    assets: {
+      canonicalTextures: dedup.entries,
+      dedupExamined: dedup.examined,
+      dedupReused: dedup.reused,
+      entries: residency.entries,
+      generation: residency.generation,
+    },
+    gpu: {
+      estimatedTextureBytes: dedup.estimatedBytes,
+      geometries: deps.renderer.info.memory.geometries,
+      pendingSourceReleases: getPendingSourceReleaseCount(),
+      programs: deps.renderer.info.programs?.length ?? 0,
+      textures: deps.renderer.info.memory.textures,
+    },
     surfaceCache: getRenderableSurfaceCacheStats(),
     terrain: tileState?.stats ?? IDLE_TERRAIN_STATS,
     vegetation: vegetationStats,

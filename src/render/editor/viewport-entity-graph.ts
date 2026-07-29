@@ -341,7 +341,9 @@ export function createViewportEntityGraph(
       // The game recenters the flyable hull on its bounding-box center
       // (ship_model.ts), so mirror that here or zones drift from the mesh.
       pendingModelLoads += 1;
-      void loadPrefabModel(url)
+      // Pinned: the viewport keeps this clone alive across a Play/Stop cycle,
+      // whose scene sweep would otherwise evict the template it shares.
+      void loadPrefabModel(url, { pin: true })
         .then((model) => {
           withEntityTrack(entity.id, () =>
             finalizeLoadedEntityModel({
@@ -409,7 +411,7 @@ export function createViewportEntityGraph(
       void loadPrefabDocument(prefabId)
         .then(async (doc) => {
           if (generation !== buildGeneration || !doc) return;
-          const instanceGroup = await createPropInstanceGroupAsync(doc);
+          const instanceGroup = await createPropInstanceGroupAsync(doc, { pinModels: true });
           if (generation !== buildGeneration) return;
           attachPrefabInstanceColliderHelpers({
             instanceRoot: instanceGroup,

@@ -22,6 +22,7 @@
     "backend:migrate": "cargo run --locked --manifest-path backend/Cargo.toml -p cc-server -- migrate",
     "demo": "tsx scripts/spike-demo.ts",
     "pack:anims": "node scripts/pack_animation_glbs.mjs",
+    "transcode:textures": "node scripts/transcode_project_textures.mjs",
     "typecheck": "tsc --noEmit",
     "terrain:validate": "tsx scripts/validate_terrain_system.ts",
     "bake:spawn-tiles": "tsx scripts/bake_spawn_tiles.ts",
@@ -29,10 +30,15 @@
     "lint:fix": "eslint . --fix",
     "mcp:asteron": "node tools/asteron-mcp/src/index.mjs",
     "docs:dev": "npm run start -w docs",
-    "docs:build": "npm run build -w docs"
+    "docs:build": "npm run build -w docs",
+    "prepare": "husky",
+    "secrets:check": "./scripts/check-secrets.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
@@ -46,6 +52,7 @@
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-sonarjs": "^4.1.0",
     "globals": "^17.7.0",
+    "husky": "^9.1.7",
     "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.63.0"

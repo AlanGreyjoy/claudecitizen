@@ -52,9 +52,35 @@ function buildVitalsReadouts(world: WorldState): [string, string][] {
   ];
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(2)} GB`;
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)} MB`;
+  if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+function buildMemoryReadouts(renderStats: RenderStats): [string, string][] {
+  const { assets, gpu } = renderStats;
+  const cacheEntries = Object.entries(assets.entries)
+    .map(([name, count]) => `${name} ${count}`)
+    .join(' / ');
+  return [
+    ['GPU', `geo ${gpu.geometries} / tex ${gpu.textures} / prog ${gpu.programs}`],
+    [
+      'Tex Mem',
+      `${formatBytes(gpu.estimatedTextureBytes)} est (>=1k atlases), ${gpu.pendingSourceReleases} pending`,
+    ],
+    [
+      'Assets',
+      `${cacheEntries || 'none'} · canon ${assets.canonicalTextures} · dedup ${assets.dedupExamined}->${assets.dedupReused} · gen ${assets.generation}`,
+    ],
+  ];
+}
+
 function buildCacheReadouts(renderStats: RenderStats | null): [string, string][] {
   if (!renderStats) return [];
   return [
+    ...buildMemoryReadouts(renderStats),
     [
       'Terrain Cache',
       `${renderStats.terrain.activeTiles}/${renderStats.terrain.cachedTiles} q${renderStats.terrain.pendingTiles} (+${renderStats.terrain.builtThisFrame}|${renderStats.terrain.queuedThisFrame} -${renderStats.terrain.evictedThisFrame} idb${renderStats.terrain.diskHits}/${renderStats.terrain.diskMisses})`,

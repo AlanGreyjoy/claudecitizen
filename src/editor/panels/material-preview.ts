@@ -363,7 +363,7 @@ export function createMaterialPreview(host: HTMLElement): MaterialPreviewHandle 
       const token = ++customToken;
       clearCustomMesh();
       if (!url) return;
-      const model = await loadPrefabModel(url);
+      const model = await loadPrefabModel(url, { pin: true });
       if (disposed || token !== customToken) return;
       const wrapper = new THREE.Group();
       frameCustomModel(model);

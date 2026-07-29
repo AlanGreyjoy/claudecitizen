@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Second line: catches commits made with --no-verify before they hit remote.
+./scripts/check-secrets.sh --pre-push

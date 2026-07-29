@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { resolvePreferredAssetPath } from '../scripts/derived-assets.mjs';
 
 /**
  * The single project asset library, resolved under the open project root and
@@ -198,6 +199,18 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
       throw new EditorRepositoryError('asset path escapes its allowed root', 403);
     }
     return candidate;
+  }
+
+  /**
+   * Read-only asset resolution, preferring the build-optimized twin under
+   * `.asteron/derived/` when one is present and current.
+   *
+   * Kept separate from `resolveAssetPath` on purpose: that one also backs save,
+   * upload, move, and delete, and preferring the derived copy there would let a
+   * rename move a derived file over its own source.
+   */
+  function resolveAssetReadPath(root, relativePath) {
+    return resolvePreferredAssetPath(projectRoot, resolveAssetPath(root, relativePath));
   }
 
   /**
@@ -999,6 +1012,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     projectRoot,
     engineRoot,
     resolveAssetPath,
+    resolveAssetReadPath,
     listAssets: async (root) => ({
       root,
       entries: await listAssetsRecursive(resolveAssetRoot(root)),

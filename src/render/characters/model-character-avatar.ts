@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader } from '../assets/ktx2';
 import { clone as cloneSkinnedScene } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CHARACTER_GROUND_OFFSET_METERS } from '../../player/character-controller';
 import {
@@ -8,6 +9,10 @@ import {
 } from '../../player/animation';
 import type { CharacterRenderState, CharacterUpperBodyAim, Vec3 } from '../../types';
 import { applyDefaultFrustumCulling } from '../frustum-policy';
+import { deduplicateObjectTextures, releaseTextureOwner } from '../assets/texture-dedup';
+import { disposeCacheTemplate } from '../assets/gpu-dispose';
+import { queueSourceRelease } from '../assets/texture-upload';
+import { registerAssetCache, touchAsset } from '../../cache/asset-residency';
 import { avatarGeometryBounds } from './avatar-bounds';
 import type { CharacterAvatarInstance } from '../main/scene/character-avatar-model';
 import {
@@ -23,8 +28,23 @@ const MODEL_ANIMATION_TIME_SCALE = 1;
 /** The only clips station NPC locomotion ever asks for. */
 const NPC_CLIP_NAMES = ['Idle_Loop', 'Walk_Loop'] as const;
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = attachKtx2Loader(new GLTFLoader());
 const templateCache = new Map<string, Promise<THREE.Object3D>>();
+
+/** Cache name used with the asset-residency sweep. */
+export const CHARACTER_TEMPLATE_CACHE = 'characterTemplates';
+
+registerAssetCache(CHARACTER_TEMPLATE_CACHE, (url) => {
+  const pending = templateCache.get(url);
+  templateCache.delete(url);
+  if (!pending) return;
+  void pending
+    .then((template) => {
+      disposeCacheTemplate(template);
+      releaseTextureOwner(url);
+    })
+    .catch(() => undefined);
+});
 
 /**
  * One parsed GLB per url, shared by every avatar wearing it. Instances take a
@@ -32,10 +52,13 @@ const templateCache = new Map<string, Promise<THREE.Object3D>>();
  * skeleton and they would all animate as one body.
  */
 export function loadCharacterModelTemplate(url: string): Promise<THREE.Object3D> {
+  touchAsset(CHARACTER_TEMPLATE_CACHE, url);
   let pending = templateCache.get(url);
   if (!pending) {
     pending = gltfLoader.loadAsync(url).then((gltf) => {
       applyDefaultFrustumCulling(gltf.scene);
+      deduplicateObjectTextures(gltf.scene, { owner: url });
+      queueSourceRelease(gltf.scene);
       gltf.scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.castShadow = true;

@@ -91,6 +91,8 @@ export default tseslint.config(
       '**/*.d.ts',
       'scripts/**/*.mjs',
       'vite.config.ts',
+      // Vendored from three/examples/jsm/libs/basis — emscripten output, not ours.
+      'public/basis/**',
     ],
   },
 

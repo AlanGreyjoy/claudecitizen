@@ -30,6 +30,7 @@ import { startDevRenderer } from './dev_renderer.mjs';
 import { createAgentServer, createRendererAgentTransport } from './agent_server.mjs';
 import { createDeployManager } from './deploy.mjs';
 import { createMultiplayerDebugManager } from './multiplayer_debug.mjs';
+import { resolvePreferredAssetPath } from '../scripts/derived-assets.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
 const EDITOR_HOST = 'app';
@@ -118,7 +119,8 @@ function resolveProjectAsset(repository, pathname) {
   if (!pathname.startsWith(prefix)) return null;
   const relativePath = decodeRelativePath(pathname, prefix);
   if (relativePath === null || relativePath.includes('\0')) return null;
-  return repository.resolveAssetPath('assets', relativePath);
+  // Read path: prefers the KTX2-compressed twin under `.asteron/derived/`.
+  return repository.resolveAssetReadPath('assets', relativePath);
 }
 
 async function serveFile(request, path) {
@@ -457,7 +459,12 @@ async function serveEditorRequest(getRepository, request) {
           settings.contentPacks.syntySidekick,
           url.pathname,
         );
-        if (absolute) return serveFile(request, absolute);
+        if (absolute) {
+          return serveFile(
+            request,
+            resolvePreferredAssetPath(repository.projectRoot, absolute),
+          );
+        }
       } catch (error) {
         const status = error instanceof EditorRepositoryError ? error.status : 500;
         return jsonResponse(status, {

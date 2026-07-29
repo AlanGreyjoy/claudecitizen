@@ -1,9 +1,12 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { attachKtx2Loader, ensureKtx2Support } from '../render/assets/ktx2';
 import { ConvexHull } from "three/examples/jsm/math/ConvexHull.js";
 import { MeshBVH, type HitPointInfo } from "three-mesh-bvh";
 import type { Vec3 } from "../types";
 import type { PrefabNodeOverride } from "../world/prefabs/schema";
+import { disposeCacheTemplate } from "../render/assets/gpu-dispose";
+import { registerAssetCache, touchAsset } from "../cache/asset-residency";
 
 export const CHARACTER_COLLIDER_RADIUS_METERS = 0.42;
 
@@ -18,9 +21,20 @@ export const DOOR_OPEN_COLLIDER_DISABLE_THRESHOLD = 0.85;
 
 const CAPSULE_SAMPLE_HEIGHTS = [0.25, 0.95, 1.55] as const;
 const SCENE_TO_GAMEPLAY = new THREE.Matrix4().makeScale(-1, 1, 1);
-const gltfLoader = new GLTFLoader();
+const gltfLoader = attachKtx2Loader(new GLTFLoader());
 const meshAssetCache = new Map<string, Promise<MeshColliderAsset | null>>();
 const meshAssetReady = new Map<string, MeshColliderAsset | null>();
+
+/** Cache names used with the asset-residency sweep. */
+export const COLLIDER_MESH_ASSET_CACHE = "colliderMeshAssets";
+export const COLLIDER_PREPARED_SCENE_CACHE = "colliderPreparedScenes";
+
+registerAssetCache(COLLIDER_MESH_ASSET_CACHE, (key) => {
+  // Baked BVH data is plain typed arrays with no GPU handle — dropping the
+  // reference is the whole eviction.
+  meshAssetCache.delete(key);
+  meshAssetReady.delete(key);
+});
 
 export type ColliderAnimationBinding =
   | {
@@ -343,6 +357,18 @@ export function prepareShipHullGltf(
 
 const preparedSceneCache = new Map<string, Promise<THREE.Object3D | null>>();
 
+registerAssetCache(COLLIDER_PREPARED_SCENE_CACHE, (key) => {
+  const pending = preparedSceneCache.get(key);
+  preparedSceneCache.delete(key);
+  if (!pending) return;
+  void pending
+    .then((scene) => {
+      // Collider parses never run texture dedup, so nothing here is shared.
+      if (scene) disposeCacheTemplate(scene);
+    })
+    .catch(() => undefined);
+});
+
 function preparedSceneKey(
   assetUrl: string,
   overrides: readonly PrefabNodeOverride[] | undefined,
@@ -369,6 +395,10 @@ function loadPreparedScene(
   recenterHull: boolean,
 ): Promise<THREE.Object3D | null> {
   const key = preparedSceneKey(assetUrl, overrides, recenterHull);
+  // Collider baking can run with no renderer alive (editor prefab open, no Play).
+  // KTX2Loader.parse throws unless detectSupport has run, so force it here.
+  ensureKtx2Support();
+  touchAsset(COLLIDER_PREPARED_SCENE_CACHE, key);
   let pending = preparedSceneCache.get(key);
   if (!pending) {
     pending = gltfLoader
@@ -436,6 +466,10 @@ export async function loadMeshAsset(collider: MeshGameplayCollider): Promise<Mes
     collider.recenterHull ?? false,
     collider.excludeNodes,
   );
+  // Marks residency for the current scene generation. `preloadMeshColliders`
+  // re-runs for every scene, so a collider the new scene still needs is stamped
+  // even when the cached promise is returned unchanged.
+  touchAsset(COLLIDER_MESH_ASSET_CACHE, key);
   let pending = meshAssetCache.get(key);
   if (!pending) {
     pending = loadPreparedScene(

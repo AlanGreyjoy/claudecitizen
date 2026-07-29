@@ -37,7 +37,7 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       WEBTRANSPORT_BIND: 0.0.0.0:4433
-      WEBTRANSPORT_PUBLIC_URL: https://localhost:4433/world
+      WEBTRANSPORT_PUBLIC_URL: https://127.0.0.1:4433/world
     ports:
       - "${BACKEND_PORT:-3000}:3000/tcp"
       - "${WEBTRANSPORT_PORT:-4433}:4433/udp"

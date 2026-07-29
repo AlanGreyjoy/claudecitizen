@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { RenderShipInstance } from '../../../types';
 import { getShipLayoutForPrefab } from '../../../player/ship-layout';
 import { createShipModel, type ShipModelHandle } from './ship-model';
+import { disposeCacheTemplate } from '../../assets/gpu-dispose';
 import { updateShipPlacement } from '../update/sun-system';
 
 export interface ShipRenderPool {
@@ -62,6 +63,11 @@ export function createShipRenderPool(scene: THREE.Scene, renderScale: number): S
       for (const [id, handle] of models) {
         if (!seen.has(id)) {
           scene.remove(handle.group);
+          if (handle.group === activeGroup) activeGroup = null;
+          // Each hull is its own GLB parse, so its geometry and materials are
+          // uniquely owned. Shared canonical textures are skipped and stay
+          // refcounted by texture-dedup.
+          disposeCacheTemplate(handle.group);
           models.delete(id);
         }
       }
@@ -82,9 +88,13 @@ export function createShipRenderPool(scene: THREE.Scene, renderScale: number): S
     dispose() {
       for (const handle of models.values()) {
         scene.remove(handle.group);
+        disposeCacheTemplate(handle.group);
       }
       models.clear();
-      activeGroup = null;
+      if (activeGroup) {
+        scene.remove(activeGroup);
+        activeGroup = null;
+      }
     },
   };
 }

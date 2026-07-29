@@ -82,10 +82,31 @@ export interface VegetationCacheStats {
   totalEvictions: number;
 }
 
+export interface GpuMemoryStats {
+  geometries: number;
+  programs: number;
+  textures: number;
+  /** Covers dedup-eligible (>= 1024px) atlases only — not the whole texture set. */
+  estimatedTextureBytes: number;
+  /** Decoded CPU-side bitmaps still waiting to be uploaded and closed. */
+  pendingSourceReleases: number;
+}
+
+export interface AssetCacheStats {
+  /** Live entry count per registered asset cache. */
+  entries: Record<string, number>;
+  canonicalTextures: number;
+  dedupExamined: number;
+  dedupReused: number;
+  generation: number;
+}
+
 export interface RenderStats {
   surfaceCache: RenderableSurfaceCacheStats;
   terrain: TileCacheStats;
   vegetation: VegetationCacheStats;
+  gpu: GpuMemoryStats;
+  assets: AssetCacheStats;
 }
 
 export interface NetworkShipRig {

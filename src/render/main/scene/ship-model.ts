@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader } from '../../assets/ktx2';
 import { prepareShipHullGltf } from '../../../physics/colliders';
 import { configureShipMaterial } from '../../materials/ship-material';
 import {
@@ -11,7 +12,20 @@ import {
 } from '../../../player/ship-layout';
 import type { PrefabNodeOverride } from '../../../world/prefabs/schema';
 import { applyDefaultFrustumCulling } from '../../frustum-policy';
-import { deduplicateObjectTextures } from '../../assets/texture-dedup';
+import { deduplicateObjectTextures, releaseTextureOwner } from '../../assets/texture-dedup';
+import { queueSourceRelease } from '../../assets/texture-upload';
+import { registerAssetCache, touchAsset } from '../../../cache/asset-residency';
+
+/**
+ * Cache name used with the asset-residency sweep. Ship hulls are not cached as
+ * templates — the render pool owns each instance — so eviction only drops the
+ * shared canonical textures a hull contributed.
+ */
+export const SHIP_MODEL_CACHE = 'shipModels';
+
+registerAssetCache(SHIP_MODEL_CACHE, (url) => {
+  releaseTextureOwner(url);
+});
 
 const PROTECTED_SHIP_URL =
   '/assets/protected/ships/Phobos_Starhopper_Basic.glb?v=starhopper-20260703';
@@ -164,7 +178,7 @@ export function createShipModel(
 ): ShipModelHandle {
   const group = new THREE.Group();
 
-  const loader = new GLTFLoader();
+  const loader = attachKtx2Loader(new GLTFLoader());
   const hullNodeOverrides = options?.hullNodeOverrides;
   const doorBindings = options?.doors ?? DEFAULT_SHIP_DOOR_BINDINGS;
   const gearSpecs = options?.gearHinges ?? DEFAULT_STARHOPPER_GEAR_HINGES;
@@ -273,7 +287,9 @@ export function createShipModel(
             object.receiveShadow = true;
           }
         });
-        deduplicateObjectTextures(sceneRoot);
+        touchAsset(SHIP_MODEL_CACHE, url);
+        deduplicateObjectTextures(sceneRoot, { owner: url });
+        queueSourceRelease(sceneRoot);
         prepareShipHullGltf(sceneRoot, hullNodeOverrides, true);
         group.add(sceneRoot);
 

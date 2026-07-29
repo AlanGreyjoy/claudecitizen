@@ -20,6 +20,9 @@
       "three/examples/jsm/loaders/GLTFLoader": [
         "./node_modules/@types/three/examples/jsm/loaders/GLTFLoader.d.ts"
       ],
+      "three/examples/jsm/loaders/KTX2Loader": [
+        "./node_modules/@types/three/examples/jsm/loaders/KTX2Loader.d.ts"
+      ],
       "three/examples/jsm/utils/BufferGeometryUtils": [
         "./node_modules/@types/three/examples/jsm/utils/BufferGeometryUtils.d.ts"
       ],

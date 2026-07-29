@@ -22,6 +22,10 @@ import {
   createPrefabStationGroup,
 } from '../prefabs/prefab-renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
+import {
+  disposeOwnedGpuResources,
+  disposeSubtreeShadowMaps,
+} from '../assets/gpu-dispose';
 import { buildAtmosphereMesh } from './scene/atmosphere-mesh';
 import { createComposerStack } from './scene/composer-stack';
 import { createShipRenderPool } from './scene/ship-render-pool';
@@ -520,8 +524,28 @@ export function createSpikeRenderer(
       hitDecalRenderer.dispose();
       tracerRenderer.dispose();
       shipRenderPool.dispose();
+      // Station groups were added to the scene and never removed. Their clones
+      // share geometry and materials with the prefab model cache, so only the
+      // per-instance allocations (override material clones, primitives) and the
+      // lazily-allocated shadow maps are freed here; the shared templates are
+      // released by the asset-residency sweep.
+      for (const entry of additionalStationMeshes) {
+        if (!entry.mesh) continue;
+        scene.remove(entry.mesh);
+        disposeOwnedGpuResources(entry.mesh);
+        entry.mesh = null;
+      }
+      scene.remove(stationMesh);
+      disposeOwnedGpuResources(stationMesh);
+      disposeSubtreeShadowMaps(scene);
       composerStack.dispose();
       renderer.dispose();
+      scene.clear();
+      // The diagnostic globals set during construction are strong refs. Scene
+      // teardown runs before the next scene loads, so leaving them set keeps the
+      // outgoing graph alive across the whole switch — exactly the memory peak.
+      window.__spikeScene = null;
+      window.__claudecitizenShipModel = null;
     },
     getStationRoot() {
       return stationMesh;

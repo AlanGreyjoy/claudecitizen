@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader } from '../../assets/ktx2';
 import { buildBoneNameMap, findSkinnedMeshes, findSkeletonRootBone } from './skeleton-map';
 
-const loader = new GLTFLoader();
+const loader = attachKtx2Loader(new GLTFLoader());
 
 let patchedNormalizeSkinWeights = false;
 

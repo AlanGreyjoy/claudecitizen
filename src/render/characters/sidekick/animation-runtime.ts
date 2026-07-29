@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader } from '../../assets/ktx2';
 import { clone as cloneSkinnedScene } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import {
   canRetargetUalToUnityHumanoid,
@@ -52,7 +53,7 @@ export interface SidekickAnimationRuntime {
 }
 
 let animationLibraryPromise: Promise<AnimationLibraryAsset> | null = null;
-const gltfLoader = new GLTFLoader();
+const gltfLoader = attachKtx2Loader(new GLTFLoader());
 
 function loadAnimationLibrary(): Promise<AnimationLibraryAsset> {
   if (!animationLibraryPromise) {

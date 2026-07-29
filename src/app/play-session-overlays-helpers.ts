@@ -142,7 +142,14 @@ export async function connectPlayNetwork(
     if (target?.instanceId) networkClient.transition(target.instanceId, target.roomId);
     return networkClient;
   } catch (error) {
-    console.warn('ClaudeCitizen world socket failed to connect.', error);
+    // Spelled into the message rather than passed as an argument: a debug
+    // window forwards console output as text, where an Error argument collapses
+    // to `[object WebTransportError]`.
+    console.warn(
+      `ClaudeCitizen world socket failed to connect. ${
+        error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      }`,
+    );
     hud.appendChatMessage('NET', 'Relay unavailable. Continuing local simulation.');
     return null;
   }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader } from '../../assets/ktx2';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkinnedScene } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CHARACTER_GROUND_OFFSET_METERS } from '../../../player/character-controller';
@@ -153,7 +154,7 @@ function clamp01(value: number): number {
 
 function loadGltfUrl(url: string): Promise<GLTF> {
   return new Promise((resolve, reject) => {
-    const loader = new GLTFLoader();
+    const loader = attachKtx2Loader(new GLTFLoader());
     loader.load(url, resolve, undefined, reject);
   });
 }

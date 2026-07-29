@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader } from '../../assets/ktx2';
 import type { VegetationAssetCatalog } from '../domain/asset-catalog';
 import {
   createGrassBillboardAssets,
@@ -7,7 +8,24 @@ import {
 } from './grass-billboard';
 import { DEFAULT_GRASS_COLOR } from '../settings';
 import { applyWindToMaterial } from './wind';
-import { deduplicateObjectTextures } from '../../assets/texture-dedup';
+import {
+  deduplicateObjectTextures,
+  isCanonicalTexture,
+  releaseTextureOwner,
+} from '../../assets/texture-dedup';
+import { queueSourceRelease } from '../../assets/texture-upload';
+import { registerAssetCache, touchAsset } from '../../../cache/asset-residency';
+
+/**
+ * Cache name used with the asset-residency sweep. The catalog's geometry and
+ * materials are owned by the vegetation manager and freed in its dispose; only
+ * the shared canonical textures are refcounted here.
+ */
+export const VEGETATION_ASSET_CACHE = 'vegetationAssets';
+
+registerAssetCache(VEGETATION_ASSET_CACHE, (url) => {
+  releaseTextureOwner(url);
+});
 
 function isGrassImageUrl(url: string): boolean {
   return /\.(png|jpe?g|webp)(\?|$)/i.test(url);
@@ -135,11 +153,19 @@ function disposeMaterial(
   }
   if (!material) return;
   const meshMaterial = material as THREE.MeshStandardMaterial;
-  meshMaterial.map?.dispose();
-  meshMaterial.normalMap?.dispose();
-  meshMaterial.roughnessMap?.dispose();
-  meshMaterial.metalnessMap?.dispose();
-  meshMaterial.alphaMap?.dispose();
+  // `configureMaterial` clones the material but keeps the GLB's texture objects,
+  // which texture-dedup may have made canonical across several assets. Disposing
+  // one of those here would blank every other asset that converged on it — the
+  // refcount in `releaseTextureOwner` owns their lifetime instead.
+  for (const texture of [
+    meshMaterial.map,
+    meshMaterial.normalMap,
+    meshMaterial.roughnessMap,
+    meshMaterial.metalnessMap,
+    meshMaterial.alphaMap,
+  ]) {
+    if (texture && !isCanonicalTexture(texture)) texture.dispose();
+  }
   meshMaterial.dispose?.();
 }
 
@@ -174,7 +200,7 @@ export function loadInstancedAssetCatalog(
   onError?: (path: string, label: string, error: unknown) => void,
 ): void {
   const catalog = createEmptyAssetCatalog();
-  const gltfLoader = new GLTFLoader();
+  const gltfLoader = attachKtx2Loader(new GLTFLoader());
   const textureLoader = new THREE.TextureLoader();
   const grassUrls = urls.grassUrls.filter((url) => url.length > 0);
   const treeUrls = urls.treeUrls.filter((url) => url.length > 0);
@@ -230,7 +256,9 @@ export function loadInstancedAssetCatalog(
     gltfLoader.load(
       job.url,
       (gltf) => {
-        deduplicateObjectTextures(gltf.scene);
+        touchAsset(VEGETATION_ASSET_CACHE, job.url);
+        deduplicateObjectTextures(gltf.scene, { owner: job.url });
+        queueSourceRelease(gltf.scene);
         const asset = extractInstancedAsset(gltf, 'tree');
         if (asset.parts.length > 0) catalog.trees.push(asset);
         markAssetLoaded();

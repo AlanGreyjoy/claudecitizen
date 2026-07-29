@@ -109,7 +109,9 @@ async function loadBackpackPrefabPreview(
     return { backpackRoot: null, backpackSockets };
   }
   state.activeBackpackPrefabId = prefab.id;
-  const backpackRoot = createPropInstanceGroup(prefab);
+  // Pinned: this preview stage owns its own WebGL context and keeps these
+  // clones across a Play/Stop cycle, whose sweep would evict the templates.
+  const backpackRoot = createPropInstanceGroup(prefab, { pinModels: true });
   state.mountPivots.get("backpack")?.add(backpackRoot);
   for (const socket of collectEquipmentSockets(prefab)) {
     const object = ctx.findEntityObject(backpackRoot, socket.entityId);
@@ -157,7 +159,7 @@ async function attachWeaponPreviewForSlot(
   const draft = await ctx.loadWeaponPrefabDraft(definition.prefabId);
   if (!draft) return;
   const gripEntity = ctx.ensureDrawnGripEntity(draft);
-  const item = createPropInstanceGroup(draft);
+  const item = createPropInstanceGroup(draft, { pinModels: true });
   state.weaponPreviewRoots.set(slot.id, item);
   state.weaponGripEntities.set(slot.id, gripEntity);
   const drawnSlotId = ctx.playTestActive ? ctx.playTestWeaponSlotId : ctx.simulateDrawnSlotId;

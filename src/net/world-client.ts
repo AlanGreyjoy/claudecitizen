@@ -354,6 +354,36 @@ function closeClient(state: WorldClientState): void {
   state.transport = null;
 }
 
+/**
+ * `transport.ready` rejects with a bare `WebTransportError`, which renders as
+ * `[object WebTransportError]` in a forwarded console — useless when the dial
+ * fails inside a multiplayer debug window. Restate it with everything that
+ * decides whether a dial is accepted: the target, the handshake origin the
+ * server's allowlist checks, and whether a certificate hash was pinned.
+ *
+ * The ticket stays out of the message; it is a bearer credential.
+ */
+async function awaitTransportReady(
+  transport: WebTransport,
+  url: URL,
+  pinnedCertificate: boolean,
+): Promise<void> {
+  try {
+    await transport.ready;
+  } catch (error) {
+    const detail = error instanceof Error
+      ? `${error.name}: ${error.message || '(no message)'}`
+      : String(error);
+    const source = (error as { source?: unknown })?.source;
+    throw new Error(
+      `WebTransport dial to ${url.origin}${url.pathname} failed `
+      + `(origin ${window.location.origin}, `
+      + `certificateHash ${pinnedCertificate ? 'pinned' : 'none'}): ${detail}`
+      + (typeof source === 'string' ? ` [source=${source}]` : ''),
+    );
+  }
+}
+
 async function connectClient(state: WorldClientState): Promise<void> {
   const { options } = state;
   if (typeof WebTransport === 'undefined') {
@@ -389,7 +419,7 @@ async function connectClient(state: WorldClientState): Promise<void> {
     ...(certificateHashes ? { serverCertificateHashes: certificateHashes } : {}),
   });
   state.transport = transport;
-  await transport.ready;
+  await awaitTransportReady(transport, sessionUrl, certificateHashes !== undefined);
   const control = await transport.createBidirectionalStream();
   state.controlWriter = control.writable.getWriter();
   state.datagramWriter = transport.datagrams.writable.getWriter();
@@ -428,10 +458,11 @@ export function setPresenceDriftLogging(enabled: boolean): void {
 /**
  * Reports how far what we publish has wandered from what we simulate.
  *
- * `handleReconcile` rewrites only `state.predictionFrame`, never
- * `world.character.position`, and the server integrates with zero gravity and
- * no level colliders — so the published body is an independent dead reckoning
- * that reseeds from the real character exactly once. Peers see this delta.
+ * On foot this should now read as noise around zero: presence publishes
+ * `world.character.position` directly. A number that grows means the character
+ * anchor regressed to a dead reckoning again — the failure this exists to
+ * catch, which once parked every avatar 341 km from its player. In a ship the
+ * delta is expected and meaningless: the ship body is what gets published.
  */
 function samplePresenceDrift(nowMs: number, published: Vec3, local: Vec3): void {
   if (!driftLogging || nowMs - lastDriftLogAt < 1000) return;
@@ -445,6 +476,51 @@ function samplePresenceDrift(nowMs: number, published: Vec3, local: Vec3): void 
   );
 }
 
+/**
+ * The ship body when the player is flying it, and nothing otherwise.
+ *
+ * Mode decides which body a presence frame is about — not the mere existence of
+ * a ship. Every player owns one, so keying this off `getShipInstance` alone
+ * published the parked ship's position as the walking character's position:
+ * peers saw each avatar pinned to its owner's hangar, motionless, no matter how
+ * far that player actually walked.
+ */
+function presenceShipBody(
+  world: WorldState,
+  shipInstance: ReturnType<typeof getShipInstance>,
+): ReturnType<typeof getActiveShipBody> | null {
+  if (world.mode !== MODE_IN_SHIP || !shipInstance) return null;
+  return getActiveShipBody(world);
+}
+
+/**
+ * Decides the body this client publishes for one presence frame.
+ *
+ * On foot the local Rapier station/ship sim has already produced the only
+ * position that respects colliders and gravity, so that position is published
+ * verbatim and the dead reckoning is re-anchored to it. Seeding the anchor once
+ * — which is what happened before — let a reconcile, or a first publish that
+ * landed before the scene placed the character, pin every peer's avatar to a
+ * spot the player had long since left. A ship still integrates: its prediction
+ * is the thing server reconciles replay against.
+ */
+function advancePresenceFrame(
+  prediction: PredictionEngine,
+  current: PredictionFrame,
+  local: { position: Vec3; desiredVelocity: Vec3 },
+  kind: 'character' | 'ship',
+): PredictionFrame {
+  if (kind === 'character') {
+    return { position: { ...local.position }, velocity: { ...local.desiredVelocity } };
+  }
+  return prediction.advance(
+    current.position,
+    current.velocity,
+    local.desiredVelocity,
+    kind,
+  );
+}
+
 function publishPresence(state: WorldClientState, world: WorldState): void {
   if (state.leftPresence || !state.prediction) return;
   const now = performance.now();
@@ -453,7 +529,7 @@ function publishPresence(state: WorldClientState, world: WorldState): void {
   state.lastPresenceAt = now;
   state.sequence += 1;
   const shipInstance = getShipInstance(world.activeShipId);
-  const activeShipBody = shipInstance ? getActiveShipBody(world) : null;
+  const activeShipBody = presenceShipBody(world, shipInstance);
   const nextPredictionKind = activeShipBody ? 'ship' : 'character';
   ensurePredictionKind(state, nextPredictionKind);
   const rawPosition = activeShipBody?.position ?? world.character.position;
@@ -467,10 +543,10 @@ function publishPresence(state: WorldClientState, world: WorldState): void {
     position: { ...rawPosition },
     velocity: { ...desiredVelocity },
   };
-  const predicted = state.prediction.advance(
-    current.position,
-    current.velocity,
-    desiredVelocity,
+  const predicted = advancePresenceFrame(
+    state.prediction,
+    current,
+    { position: rawPosition, desiredVelocity },
     nextPredictionKind,
   );
   state.predictionFrame = predicted;
@@ -491,6 +567,9 @@ function publishPresence(state: WorldClientState, world: WorldState): void {
           position: predicted.position,
           up: world.character.up,
         };
+  // `predicted` describes whichever body the mode selected, so the ship payload
+  // may only be built when that body is the ship. On foot the cell drops the
+  // ship payload anyway — one replicated body per entity, chosen by mode.
   const ship = shipInstance && activeShipBody
     ? buildPresenceShipPayload(world, activeShipBody, predicted)
     : null;

@@ -1,0 +1,11 @@
+# Free MIT scanner: https://github.com/gitleaks/gitleaks
+title = "ClaudeCitizen"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Tracked *.env.example files are placeholders, not live secrets"
+paths = [
+  '''(?i)^(.*[/\\])?\.env\.example$''',
+]

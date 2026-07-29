@@ -17,6 +17,7 @@ import {
   type PlayerCharacterAppearanceV1,
 } from '../player/character_creator/player-character-appearance';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
+import { beginAssetGeneration, sweepUnusedAssets } from '../cache/asset-residency';
 import { warmPlanetSpawnCaches } from '../world/spawn-warm';
 import { normalizeVegetationSettings } from '../render/vegetation/settings';
 import { activateShipPrefab, applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
@@ -538,6 +539,9 @@ export async function startPlaySession(
   const { session, bootstrap } = await resolvePlaySessionBootstrap(loading, options);
   started = true;
   const generation = startGeneration;
+  // Opens a new asset generation. Everything this scene loads is stamped with
+  // it; the sweep after publish evicts whatever the previous scene left behind.
+  beginAssetGeneration();
 
   await Promise.all([loadCurrentCharacterSettings(), loadCurrentDefaultAnimationController()]);
   loading?.setProgress(0.15);
@@ -646,6 +650,10 @@ export async function startPlaySession(
   };
 
   if (!publishPlaySession(cleanup, generation, loading)) return;
+
+  // Runs only once the new scene is live, so an asset both scenes use was
+  // already stamped this generation and survives — reuse costs no reload.
+  sweepUnusedAssets();
 
   if (loading) {
     await loading.complete();

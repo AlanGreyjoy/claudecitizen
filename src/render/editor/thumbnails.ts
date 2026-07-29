@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { attachKtx2Loader, setKtx2SupportRenderer } from '../assets/ktx2';
 import {
   getCachedModelThumbnail,
   putCachedModelThumbnail,
 } from '../../editor/model-thumbnail-cache';
+import { disposeCacheTemplate } from '../assets/gpu-dispose';
 
 /**
  * Lazy model thumbnails for the asset browser / inventory icons.
@@ -16,7 +18,7 @@ const MAX_CACHED_THUMBS = 96;
 const CLEAR_COLOR = 0x12161c;
 const PERSISTENT_CACHE_EPOCH = 'model-thumbnail-v1';
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = attachKtx2Loader(new GLTFLoader());
 /** Resolved thumbnail data-URLs (insertion order = LRU). */
 const resolved = new Map<string, string>();
 /** In-flight renders keyed by url. */
@@ -56,25 +58,12 @@ function ensureShared() {
   const stage = new THREE.Group();
   scene.add(stage);
 
+  // The asset browser can render thumbnails before the play renderer exists,
+  // so this offscreen context doubles as the KTX2 format probe.
+  setKtx2SupportRenderer(renderer);
+
   shared = { renderer, scene, camera, stage };
   return shared;
-}
-
-function disposeObjectTree(root: THREE.Object3D): void {
-  const textures = new Set<THREE.Texture>();
-  root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return;
-    object.geometry?.dispose();
-    const materials = Array.isArray(object.material) ? object.material : [object.material];
-    for (const material of materials) {
-      if (!material) continue;
-      for (const value of Object.values(material)) {
-        if (value instanceof THREE.Texture) textures.add(value);
-      }
-      material.dispose();
-    }
-  });
-  for (const texture of textures) texture.dispose();
 }
 
 function encodeThumbnail(canvas: HTMLCanvasElement): string {
@@ -117,7 +106,7 @@ async function renderThumbnail(url: string): Promise<string> {
     return encodeThumbnail(renderer.domElement);
   } finally {
     stage.remove(model);
-    disposeObjectTree(model);
+    disposeCacheTemplate(model);
   }
 }
 

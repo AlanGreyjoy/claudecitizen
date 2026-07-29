@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { DERIVED_ROOT_RELATIVE, resolvePreferredAssetPath } from './scripts/derived-assets.mjs';
 
 const PROJECT_ASSET_ROOT = 'assets';
 const PROJECT_ASSET_URL_PREFIX = '/assets/';
@@ -80,6 +81,30 @@ function isInsidePath(child: string, parent: string): boolean {
   return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path));
 }
 
+/**
+ * Redirects a resolved asset at the KTX2-compressed twin under
+ * `.asteron/derived/`, when the transcode script has produced a current one.
+ * The output path never moves: derived bytes ship at the source URL, so no
+ * scene or prefab document has to be rewritten.
+ *
+ * `sourceRoot` must move with `sourcePath`. `enqueueGltfDependencies` resolves
+ * a `.gltf`'s sibling buffers and images against `dirname(sourcePath)` and then
+ * validates them with `isInsidePath(..., sourceRoot)` — leaving `sourceRoot`
+ * behind in the original tree makes every sibling `.bin` fail that check, and
+ * the release ships a `.gltf` with no data.
+ */
+function preferDerivedAsset(projectRoot: string, asset: ResolvedAsset): ResolvedAsset {
+  const preferred = resolvePreferredAssetPath(projectRoot, asset.sourcePath);
+  if (preferred === asset.sourcePath) return asset;
+  const derivedRoot = resolve(projectRoot, DERIVED_ROOT_RELATIVE);
+  const relativeRoot = relative(resolve(projectRoot), asset.sourceRoot);
+  return {
+    ...asset,
+    sourcePath: preferred,
+    sourceRoot: resolve(derivedRoot, relativeRoot),
+  };
+}
+
 function normalizeContentPackRelativePath(value: unknown): string {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -122,12 +147,12 @@ function resolveSidekickVirtualAsset(
   if (!isInsidePath(sourcePath, packSourceRoot) || !isInsidePath(outputPath, packOutputRoot)) {
     return null;
   }
-  return {
+  return preferDerivedAsset(projectRoot, {
     sourcePath,
     outputPath,
     sourceRoot: packSourceRoot,
     outputRoot: packOutputRoot,
-  };
+  });
 }
 
 function decodePathComponent(path: string): string | null {
@@ -166,7 +191,12 @@ function resolveAssetUrl(projectRoot: string, outDir: string, rawUrl: string): R
     }
     // Prefer project `assets/` over legacy `public/assets/` when both claim `/assets/`.
     if (!existsSync(sourcePath)) continue;
-    return { sourcePath, outputPath, sourceRoot, outputRoot };
+    return preferDerivedAsset(projectRoot, {
+      sourcePath,
+      outputPath,
+      sourceRoot,
+      outputRoot,
+    });
   }
   return null;
 }

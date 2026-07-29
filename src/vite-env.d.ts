@@ -4,7 +4,7 @@ declare global {
   interface Window {
     __claudecitizenRenderStats: import('./types').RenderStats | null;
     __claudecitizenWorld?: import('./player/world-state').WorldState;
-    __claudecitizenShipModel?: import('./render/main/scene/ship-model').ShipModelHandle;
+    __claudecitizenShipModel?: import('./render/main/scene/ship-model').ShipModelHandle | null;
     __claudecitizenDev?: {
       callShip: () => Promise<number>;
       teleportToHangar: (index: number) => void;
@@ -40,7 +40,7 @@ declare global {
         sample: unknown[];
       };
     };
-    __spikeScene?: import('three').Scene;
+    __spikeScene?: import('three').Scene | null;
     __claudeCitizenCloudDebug?: unknown;
   }
 }

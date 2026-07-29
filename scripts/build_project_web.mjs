@@ -27,6 +27,7 @@ import { existsSync } from 'node:fs';
 import { cp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DERIVED_ROOT_RELATIVE } from './derived-assets.mjs';
 
 const engineRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -34,6 +35,8 @@ const engineRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ENGINE_ROOT_FILES = ['index.html', 'editor.html', 'vite.config.ts', 'tsconfig.json', 'package.json'];
 /** Engine directories hardlinked wholesale into the stage. */
 const ENGINE_TREES = ['src', 'public'];
+/** Build-time helpers `vite.config.ts` imports; staged individually. */
+const ENGINE_SCRIPT_FILES = ['derived-assets.mjs'];
 
 function parseArguments(argv) {
   const options = {
@@ -167,6 +170,13 @@ async function stageEngine(stageDir) {
     if (!existsSync(source)) continue;
     await cp(source, join(stageDir, file));
   }
+  // vite.config.ts imports this helper to decide between a source asset and its
+  // KTX2-compressed twin. Copied file-by-file rather than adding `scripts` to
+  // ENGINE_TREES, which would drag __pycache__ and every .py/.ts into the root.
+  await mkdir(join(stageDir, 'scripts'), { recursive: true });
+  for (const file of ENGINE_SCRIPT_FILES) {
+    await cp(join(engineRoot, 'scripts', file), join(stageDir, 'scripts', file));
+  }
   // Symlinked rather than copied: Vite must resolve the same dependency graph
   // the engine installed, and a 1GB copy per build is not worth it.
   await symlink(join(engineRoot, 'node_modules'), join(stageDir, 'node_modules'), 'dir');
@@ -251,6 +261,19 @@ async function main() {
     await hardlinkTree(projectAssets, join(stageDir, 'assets'));
   } else {
     console.warn('[build-web] project has no assets/ — prefabs and models will be missing.');
+  }
+
+  // Derived (KTX2) twins. Resolution is project-root-relative, so the tree has
+  // to sit at the same relative path inside the stage. Hardlinks make it free.
+  const derivedRoot = join(options.projectRoot, DERIVED_ROOT_RELATIVE);
+  if (existsSync(derivedRoot)) {
+    await mkdir(dirname(join(stageDir, DERIVED_ROOT_RELATIVE)), { recursive: true });
+    await hardlinkTree(derivedRoot, join(stageDir, DERIVED_ROOT_RELATIVE));
+    console.log('[build-web] staged derived assets');
+  } else {
+    console.warn(
+      '[build-web] no .asteron/derived — shipping uncompressed textures. Run npm run transcode:textures.',
+    );
   }
   // The asset-copy plugin reads contentPacks.syntySidekick from this file.
   await cp(join(options.projectRoot, 'asteron.project.json'), join(stageDir, 'asteron.project.json'));

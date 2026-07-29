@@ -111,9 +111,14 @@ impl Config {
             smtp_pass: read("SMTP_PASS", ""),
             smtp_from: read("SMTP_FROM", "ClaudeCitizen <noreply@localhost>"),
             webtransport_bind,
+            // An IP literal, not `localhost`. Chromium's resolver maps
+            // localhost to ::1 ahead of 127.0.0.1 regardless of /etc/hosts,
+            // and `WEBTRANSPORT_BIND` defaults to IPv4 — a `localhost` dial
+            // therefore reaches nothing and surfaces in the browser as the
+            // opaque `WebTransportError: Opening handshake failed.`
             webtransport_public_url: read(
                 "WEBTRANSPORT_PUBLIC_URL",
-                "https://localhost:4433/world",
+                "https://127.0.0.1:4433/world",
             ),
             webtransport_cert_path: optional("WEBTRANSPORT_CERT_PATH"),
             webtransport_key_path: optional("WEBTRANSPORT_KEY_PATH"),

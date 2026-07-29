@@ -11,6 +11,10 @@ import {
   createPropInstanceGroup,
   loadPrefabModel,
 } from '../prefabs/prefab-renderer';
+import {
+  disposeOwnedGpuResources,
+  type OwnedGpuResources,
+} from '../assets/gpu-dispose';
 
 export interface HangarPropRendererOptions {
   stationRoot: THREE.Object3D;
@@ -69,6 +73,9 @@ export function createHangarPropRenderer(options: HangarPropRendererOptions) {
     for (const [id, group] of instanceGroups.entries()) {
       if (nextIds.has(id)) continue;
       root.remove(group);
+      // Frees this instance's own material clones and primitives. Geometry and
+      // materials shared with the prefab model cache are left alone.
+      disposeOwnedGpuResources(group);
       instanceGroups.delete(id);
     }
 
@@ -82,6 +89,7 @@ export function createHangarPropRenderer(options: HangarPropRendererOptions) {
 
   async function setGhost(ghost: HangarPropGhost | null): Promise<void> {
     ghostEntry = ghost;
+    for (const child of [...ghostGroup.children]) disposeOwnedGpuResources(child);
     ghostGroup.clear();
     ghostGroup.visible = ghost !== null;
     if (!ghost) return;
@@ -90,7 +98,7 @@ export function createHangarPropRenderer(options: HangarPropRendererOptions) {
     if (!doc) return;
 
     const group = createPropInstanceGroup(doc);
-    cloneObjectMaterials(group);
+    cloneObjectMaterials(group, group.userData.ownedGpu as OwnedGpuResources | undefined);
     group.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
