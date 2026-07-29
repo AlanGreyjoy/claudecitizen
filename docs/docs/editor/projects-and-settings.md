@@ -63,5 +63,6 @@ Do not call the Rust API directly from the editor renderer.
 
 - [Getting started](./getting-started)
 - [Build Web](./build-web)
+- [Packages and textures](./packages-and-textures)
 - [Server console](/server-console)
 - [Assets](/assets)

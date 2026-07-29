@@ -74,6 +74,8 @@ export type EditorAppEffectsArgs = {
   openDeployFrontend: () => void;
   openDeployBackend: () => void;
   openMultiplayerDebug: () => void;
+  openPackages: () => void;
+  transcodeTextures: () => void | Promise<void>;
   duplicateSelection: () => void;
   deleteSelection: () => void;
   exitToTitle: () => void | Promise<void>;
@@ -112,6 +114,8 @@ export function useEditorAppEffects(args: EditorAppEffectsArgs): void {
     openDeployFrontend,
     openDeployBackend,
     openMultiplayerDebug,
+    openPackages,
+    transcodeTextures,
     duplicateSelection,
     deleteSelection,
     exitToTitle,
@@ -151,6 +155,8 @@ useEffect(() => {
       openDeployFrontend,
       openDeployBackend,
       openMultiplayerDebug,
+      openPackages,
+      transcodeTextures: () => void transcodeTextures(),
       undo: () => store.undo(),
       redo: () => store.redo(),
       duplicate: duplicateSelection,
@@ -179,6 +185,8 @@ useEffect(() => {
   openDeployFrontend,
   openDeployBackend,
   openMultiplayerDebug,
+  openPackages,
+  transcodeTextures,
   store,
   duplicateSelection,
   deleteSelection,

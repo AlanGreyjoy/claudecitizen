@@ -25,7 +25,10 @@ If it is missing, the game falls back to the tracked placeholder ship.
 
 **File → Build Web** scans saved prefab JSON and copies only referenced files
 from the project's `assets/` into the release `dist/assets/`. Unused library
-files stay out of the deploy.
+files stay out of the deploy. When the project has
+`.asteron/derived/` KTX2 twins (from **Tools → Transcode Project Textures…**),
+the build prefers those compressed textures — see
+[Packages and textures](/editor/packages-and-textures).
 
 Prefab JSON only references asset paths, so prefabs are safe to commit even when
 they point at protected files; checkouts without those packs see missing-model
@@ -36,7 +39,8 @@ placeholders.
 1. Export the modular pieces you want from Unity as FBX, then convert to GLB — Blender (`File → Export → glTF 2.0`) or [`gltf-transform`](https://gltf-transform.dev/) both work. One piece per file keeps snapping simple.
 2. Drop the GLBs under the open project's `assets/protected/synty/sci-fi-worlds/{Buildings,Props,Environment,...}/`.
 3. Verify a file with `node scripts/inspect_glb.mjs <path>` if materials or hierarchy look off; the bake approach in `scripts/bake_ship_textures.py` is the template for fixing Unity trim-sheet materials that do not translate to Three.js PBR. For BlackMarket’s Synty triplanar materials, re-run `python3 scripts/bake_blackmarket_textures.py [path/to/BlackMarket.glb]` after a fresh export.
-4. Refresh the editor's Project panel — the files appear under the `assets` root with generated thumbnails, ready to drag into a scene.
+4. Install **KTX-Software** via **Tools → Packages…**, then **Tools → Transcode Project Textures…** (or `npm run transcode:textures -- --project <dir>`) so Build Web can ship Basis/KTX2 twins. See [Packages and textures](/editor/packages-and-textures).
+5. Refresh the editor's Project panel — the files appear under the `assets` root with generated thumbnails, ready to drag into a scene.
 
 ## Runtime character avatars
 

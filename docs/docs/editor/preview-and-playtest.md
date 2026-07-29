@@ -107,7 +107,10 @@ sequenceDiagram
 ## Build Web
 
 When a build is worth sharing, **File → Build Web** (`Ctrl+B`) saves the active
-document and produces the browser release. See [Build Web](./build-web).
+document and produces the browser release. For smaller GPU texture memory,
+install KTX-Software via **Tools → Packages…** and run **Tools → Transcode
+Project Textures…** before building. See [Build Web](./build-web) and
+[Packages and textures](./packages-and-textures).
 
 ## Catalog integration
 

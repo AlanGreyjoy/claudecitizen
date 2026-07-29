@@ -30,6 +30,13 @@ import { startDevRenderer } from './dev_renderer.mjs';
 import { createAgentServer, createRendererAgentTransport } from './agent_server.mjs';
 import { createDeployManager } from './deploy.mjs';
 import { createMultiplayerDebugManager } from './multiplayer_debug.mjs';
+import {
+  EngineToolsError,
+  installKtxPackage,
+  listEnginePackages,
+  resolveKtxBinary,
+  uninstallKtxPackage,
+} from './engine_tools.mjs';
 import { resolvePreferredAssetPath } from '../scripts/derived-assets.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
@@ -322,11 +329,16 @@ async function handleEditorApi(repository, request, url) {
         });
         return jsonResponse(200, { document: saved.document, status });
       }
+      case 'GET /__editor/packages':
+        return jsonResponse(200, await listEnginePackages());
       default:
         return jsonResponse(404, { error: `unknown editor API route: ${route}` });
     }
   } catch (error) {
-    const status = error instanceof EditorRepositoryError ? error.status : 500;
+    const status =
+      error instanceof EditorRepositoryError || error instanceof EngineToolsError
+        ? (error.status ?? 400)
+        : 500;
     if (status === 500) console.error(`[editor-api] ${route} failed:`, error);
     return jsonResponse(status, {
       error: error instanceof Error ? error.message : 'internal editor error',
@@ -765,6 +777,15 @@ function installEditorApplicationMenu({
       label: 'Tools',
       submenu: [
         {
+          label: 'Packages…',
+          click: () => sendEditorCommand(getWindow, 'open-packages'),
+        },
+        {
+          label: 'Transcode Project Textures…',
+          click: () => sendEditorCommand(getWindow, 'transcode-textures'),
+        },
+        { type: 'separator' },
+        {
           label: 'Locate Synty Sidekick Pack…',
           click: () => void onLocateSidekickPack(),
         },
@@ -813,6 +834,8 @@ if (!hasSingleInstanceLock) {
   let mainWindow = null;
   let repository = null;
   let buildProcess = null;
+  let transcodeProcess = null;
+  let packageInstallBusy = false;
   let rendererOrigin = EDITOR_ORIGIN;
   const trustedOrigins = new Set();
 
@@ -1200,6 +1223,166 @@ if (!hasSingleInstanceLock) {
     return result;
   };
 
+  const installManagedKtx = async () => {
+    if (packageInstallBusy) {
+      const result = { ok: false, message: 'A package install is already running.' };
+      sendState(mainWindow, 'editor:package-state', { phase: 'error', ...result });
+      return result;
+    }
+    packageInstallBusy = true;
+    sendState(mainWindow, 'editor:package-state', {
+      phase: 'installing',
+      message: 'Installing KTX-Software…',
+    });
+    try {
+      const result = await installKtxPackage({
+        onProgress: (event) => sendState(mainWindow, 'editor:package-state', event),
+      });
+      sendState(mainWindow, 'editor:package-state', {
+        phase: 'success',
+        message: result.message,
+        package: result.package,
+      });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      sendState(mainWindow, 'editor:package-state', { phase: 'error', message });
+      return { ok: false, message };
+    } finally {
+      packageInstallBusy = false;
+    }
+  };
+
+  const uninstallManagedKtx = async () => {
+    try {
+      const result = await uninstallKtxPackage();
+      sendState(mainWindow, 'editor:package-state', {
+        phase: 'success',
+        message: result.message,
+        package: result.package,
+      });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      sendState(mainWindow, 'editor:package-state', { phase: 'error', message });
+      return { ok: false, message };
+    }
+  };
+
+  const transcodeTextures = async ({ showResultDialog = false } = {}) => {
+    if (!repository) throw new Error('No AsteronEngine project is open.');
+    if (transcodeProcess) {
+      const result = { ok: false, message: 'Texture transcode is already running.' };
+      sendState(mainWindow, 'editor:transcode-state', { phase: 'error', ...result });
+      return result;
+    }
+
+    const resolved = resolveKtxBinary();
+    if (!resolved) {
+      const result = {
+        ok: false,
+        message:
+          'KTX-Software is not installed. Open Tools → Packages… to install it, then try again.',
+      };
+      sendState(mainWindow, 'editor:transcode-state', { phase: 'error', ...result });
+      if (showResultDialog && mainWindow && !mainWindow.isDestroyed()) {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          title: 'Transcode Failed',
+          message: result.message,
+        });
+      }
+      return result;
+    }
+
+    const projectRoot = repository.projectRoot;
+    let outputTail = '';
+    sendState(mainWindow, 'editor:transcode-state', {
+      phase: 'running',
+      message: 'Transcoding project textures to KTX2…',
+    });
+
+    const result = await new Promise((resolveResult) => {
+      const child = spawn(
+        npmCommand,
+        ['run', 'transcode:textures', '--', '--project', projectRoot],
+        {
+          cwd: repositoryRoot,
+          env: { ...process.env, ASTERON_KTX: resolved.path },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      transcodeProcess = child;
+      const collectOutput = (chunk) => {
+        outputTail = `${outputTail}${chunk.toString()}`.slice(-24_000);
+        const text = chunk.toString();
+        for (const line of text.split(/\r?\n/)) {
+          if (line.trim()) {
+            sendState(mainWindow, 'editor:transcode-state', {
+              phase: 'log',
+              line,
+            });
+          }
+        }
+      };
+      child.stdout?.on('data', collectOutput);
+      child.stderr?.on('data', collectOutput);
+      child.once('error', (error) => {
+        transcodeProcess = null;
+        resolveResult({
+          ok: false,
+          message: `Could not start texture transcode: ${error.message}`,
+          output: outputTail,
+        });
+      });
+      child.once('close', (code) => {
+        transcodeProcess = null;
+        resolveResult(
+          code === 0
+            ? {
+                ok: true,
+                message: 'Project textures transcoded successfully.',
+                outputDir: join(projectRoot, '.asteron', 'derived'),
+              }
+            : {
+                ok: false,
+                message: `Texture transcode failed with exit code ${code ?? 'unknown'}.`,
+                output: outputTail,
+              },
+        );
+      });
+    });
+
+    sendState(mainWindow, 'editor:transcode-state', {
+      phase: result.ok ? 'success' : 'error',
+      ...result,
+    });
+
+    if (showResultDialog && mainWindow && !mainWindow.isDestroyed()) {
+      if (result.ok) {
+        const response = await dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'Transcode Complete',
+          message: result.message,
+          detail: result.outputDir,
+          buttons: ['OK', 'Show Derived Folder'],
+          defaultId: 0,
+        });
+        if (response.response === 1 && result.outputDir) {
+          void shell.openPath(result.outputDir);
+        }
+      } else {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          title: 'Transcode Failed',
+          message: result.message,
+          detail: result.output?.slice(-4_000) || 'No transcode output was captured.',
+        });
+      }
+    }
+    return result;
+  };
+
   // SSH and the local release build both need Node, so deployment lives here and
   // streams progress to the Deploy tab over `editor:deploy-state`.
   const deployManager = createDeployManager({
@@ -1359,6 +1542,24 @@ if (!hasSingleInstanceLock) {
           throw new Error('Only the editor window may build the project.');
         }
         return buildWeb();
+      });
+      ipcMain.handle('editor:packages-install-ktx', (event) => {
+        if (event.sender !== mainWindow?.webContents) {
+          throw new Error('Only the editor window may install packages.');
+        }
+        return installManagedKtx();
+      });
+      ipcMain.handle('editor:packages-uninstall-ktx', (event) => {
+        if (event.sender !== mainWindow?.webContents) {
+          throw new Error('Only the editor window may uninstall packages.');
+        }
+        return uninstallManagedKtx();
+      });
+      ipcMain.handle('editor:transcode-textures', (event) => {
+        if (event.sender !== mainWindow?.webContents) {
+          throw new Error('Only the editor window may transcode textures.');
+        }
+        return transcodeTextures();
       });
 
       /** Deploy IPC. Every channel is editor-window only — these reach a live server. */

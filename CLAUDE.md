@@ -37,6 +37,7 @@ npm run backend:migrate   # apply committed SQLx migrations
 npm run terrain:validate  # terrain LOD / seam / mesh-vs-foot validation
 npm run demo              # headless scripted takeoff/orbit/landing
 npm run docs:dev          # Docusaurus docs on :3000
+npm run transcode:textures -- --project <dir>  # KTX2 twins (needs Tools → Packages / ktx)
 node scripts/inspect_glb.mjs path/to/model.glb   # dump GLB node names
 ```
 

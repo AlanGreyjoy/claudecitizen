@@ -105,6 +105,11 @@ and boot scene from **File → Project Settings…**. Deploy that directory to a
 static host; re-stamp the runtime file to point the same bundle at a different
 backend.
 
+For large GLB texture atlases, install **KTX-Software** via **Tools →
+Packages…**, then **Tools → Transcode Project Textures…** before building so
+the release can prefer KTX2 twins under `.asteron/derived/`. See
+[Packages and textures](/editor/packages-and-textures).
+
 The backend URL is resolved at **runtime**, not baked in at build time — there is
 no `VITE_API_BASE_URL`. There is also no client API key: players sign in with a
 cookie session and operators use a separate admin session.

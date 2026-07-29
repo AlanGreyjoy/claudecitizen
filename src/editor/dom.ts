@@ -66,7 +66,7 @@ export function clearChildren(element: HTMLElement): void {
 let toastElement: HTMLElement | null = null;
 let toastTimer: number | null = null;
 
-export function showToast(message: string, isError = false): void {
+export function showToast(message: string, isError = false, durationMs = 2600): void {
   if (!toastElement) {
     toastElement = el('div', { className: 'ed-toast' });
     document.body.appendChild(toastElement);
@@ -75,9 +75,11 @@ export function showToast(message: string, isError = false): void {
   toastElement.classList.toggle('is-error', isError);
   toastElement.classList.add('is-visible');
   if (toastTimer !== null) window.clearTimeout(toastTimer);
+  toastTimer = null;
+  if (durationMs <= 0) return;
   toastTimer = window.setTimeout(() => {
     toastElement?.classList.remove('is-visible');
-  }, 2600);
+  }, durationMs);
 }
 
 export interface ContextMenuItem {

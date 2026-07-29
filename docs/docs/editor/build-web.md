@@ -28,6 +28,20 @@ point the same bundle at a different backend without rebuilding.
 The editor is never part of a public release — `editor.html` is only built in
 editor mode.
 
+## Derived textures (KTX2)
+
+Synty GLBs often embed multi-megabyte PNG atlases. Compress them before a
+release build:
+
+1. **Tools → Packages…** — install **KTX-Software** (or put `ktx` on PATH).
+2. **Tools → Transcode Project Textures…** — writes
+   `<project>/.asteron/derived/` twins (or
+   `npm run transcode:textures -- --project <dir>`).
+3. **File → Build Web** — stages derived twins when present; does **not** run
+   the transcoder itself.
+
+See [Packages and textures](./packages-and-textures).
+
 ## Running it outside the editor
 
 Build Web shells out to `scripts/build_project_web.mjs` in the engine checkout.
@@ -63,6 +77,7 @@ allowed to ship. See [Assets](/assets).
 
 ## Related
 
+- [Packages and textures](./packages-and-textures) — KTX-Software + derived KTX2
 - [Projects and settings](./projects-and-settings)
 - [Preview and playtest](./preview-and-playtest)
 - [Quick start](/quick-start#shipping-the-game)

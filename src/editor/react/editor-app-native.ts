@@ -59,6 +59,8 @@ export type NativeCommandHandlers = {
   deleteSelection: () => void;
   exitToTitle: () => void;
   openMultiplayerDebug: () => void;
+  openPackages: () => void;
+  transcodeTextures: () => void;
   reloadSidekickPack: () => void;
 };
 
@@ -89,6 +91,8 @@ export function dispatchNativeCommand(
     delete: handlers.deleteSelection,
     'exit-to-title': handlers.exitToTitle,
     'open-multiplayer-debug': handlers.openMultiplayerDebug,
+    'open-packages': handlers.openPackages,
+    'transcode-textures': handlers.transcodeTextures,
     'new-project': () => {},
     'sidekick-pack-changed': handlers.reloadSidekickPack,
   };

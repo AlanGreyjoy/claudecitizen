@@ -1184,6 +1184,66 @@ body.ed-resize-row * {
   padding-right: 4px;
 }
 
+.ed-packages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ed-packages-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--ed-border, #2a3440);
+  background: var(--ed-panel-alt, #121820);
+}
+
+.ed-packages-row-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ed-packages-name {
+  font-weight: 600;
+  color: var(--ed-text, #e8eef5);
+}
+
+.ed-packages-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ed-muted, #9aa7b5);
+}
+
+.ed-packages-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ed-muted, #9aa7b5);
+}
+
+.ed-packages-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.ed-transcode-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ed-transcode-dialog .ed-deploy-log {
+  min-height: 220px;
+  flex: 1 1 auto;
+}
+
 /* Four equal columns; each field declares how many it takes, so a port sits
    beside its host instead of claiming a row of its own. */
 .ed-deploy-form {

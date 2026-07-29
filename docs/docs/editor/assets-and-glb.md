@@ -96,17 +96,22 @@ Returns `{ entries: [{ path, kind, size? }] }`. The only project asset root is
 
 ## Build pipeline
 
-On **File → Build Web** / `npm run build:web`:
+On **File → Build Web** / `npm run build:project-web`:
 
 1. Prefab JSON is bundled via `import.meta.glob`
 2. Referenced asset URLs are traced
 3. Only referenced files copy from the project's `assets/` into the release output's `assets/`
-4. Unreferenced protected library files stay out of the deploy
+4. When `<project>/.asteron/derived/` exists, KTX2 twins are staged so the
+   release prefers compressed textures (see
+   [Packages and textures](./packages-and-textures))
+5. Unreferenced protected library files stay out of the deploy
 
 The output directory comes from `build.outDir` in **File → Project Settings…**.
 
 ## Related docs
 
 - [Assets](/assets) — Synty packs, character avatars, deployment rules
+- [Packages and textures](./packages-and-textures) — KTX-Software install and transcode
 - [Building scenes](./building-scenes) — drag-drop and hierarchy
 - [Prefab kinds](./prefab-kinds) — ship / station / prop authoring
+- [Build Web](./build-web) — release builds

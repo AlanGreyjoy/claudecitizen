@@ -537,7 +537,10 @@ mechanisms now bound that; both are invisible until you break them.
 -- --project <dir>` writes KTX2 (Basis) twins of every project GLB at the same
 relative path. Source GLBs are never mutated, because `scripts/bake_*.py` parse
 the embedded PNG/JPEG with Pillow and must keep working — **run the bake scripts
-first, then transcode.** Requires KTX-Software's `ktx` binary on PATH.
+first, then transcode.** Requires KTX-Software's `ktx` binary: install via
+AsteronEngine **Tools → Packages…** (managed under `~/.asteron/tools/`), or set
+`ASTERON_KTX`, or put `ktx` on PATH. **Tools → Transcode Project Textures…**
+runs the same script from the editor.
 
 `scripts/derived-assets.mjs` is the single resolution rule, imported by both
 `editor-desktop/repository.mjs` (`resolveAssetReadPath`, used by every editor
@@ -700,7 +703,9 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `scripts/validate_terrain_system.ts` | Validate terrain LOD, seams, mesh/foot fidelity, and routed hydrology |
 | `scripts/spike-demo.ts` | Headless scripted takeoff/orbit/landing (`npm run demo`) |
 | `scripts/bake_ship_textures.py` | Fix Unity trim-sheet materials for Three.js PBR |
-| `scripts/transcode_project_textures.mjs` | Write KTX2 twins to `<project>/.asteron/derived/` (`npm run transcode:textures -- --project <dir>`). Needs `ktx` on PATH. Run after the bake scripts |
+| `scripts/transcode_project_textures.mjs` | Write KTX2 twins to `<project>/.asteron/derived/` (`npm run transcode:textures -- --project <dir>`, or Tools → Transcode Project Textures…). Needs `ktx` via Tools → Packages, `ASTERON_KTX`, or PATH. Run after the bake scripts |
+| `scripts/resolve_ktx.mjs` | Resolve managed / env / PATH `ktx` binary |
+| `editor-desktop/engine_tools.mjs` | Tools → Packages: download/install KTX-Software under `~/.asteron/tools/` |
 | `scripts/derived-assets.mjs` | Shared source-vs-derived resolution rule; imported by `vite.config.ts` and `editor-desktop/repository.mjs` |
 | `scripts/check_page.mjs` | Page validation |
 

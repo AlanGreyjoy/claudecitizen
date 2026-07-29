@@ -16,7 +16,7 @@
  *                                                 packed ORM maps
  *   baseColor / emissive                       -> ETC1S  (~0.5 byte/texel)
  *
- * Requires KTX-Software's `ktx` binary on PATH.
+ * Requires KTX-Software's `ktx` binary (Tools → Packages…, ASTERON_KTX, or PATH).
  *
  * Usage:
  *   node scripts/transcode_project_textures.mjs --project <dir> [options]
@@ -34,13 +34,23 @@ import { ALL_EXTENSIONS, KHRTextureBasisu } from '@gltf-transform/extensions';
 import { listTextureSlots } from '@gltf-transform/functions';
 
 import { DERIVED_ROOT_RELATIVE } from './derived-assets.mjs';
+import {
+  KTX_RELEASES_URL,
+  probeKtxVersion,
+  resolveKtxBinary,
+} from './resolve_ktx.mjs';
 
 const MANIFEST_NAME = 'manifest.json';
 const MANIFEST_SCHEMA_VERSION = 1;
 const MODEL_EXTENSIONS = new Set(['.glb', '.gltf']);
-const KTX_INSTALL_URL = 'https://github.com/KhronosGroup/KTX-Software/releases';
 
-const UASTC_SLOTS = new Set(['occlusionTexture', 'metallicRoughnessTexture']);
+const UASTC_SLOTS = new Set([
+  'occlusionTexture',
+  'metallicRoughnessTexture',
+  // Sparse emissive atlases trip a BasisLZ SSE assert in KTX-Software 4.4.x
+  // (`early_out_err >= 0`). UASTC encodes them reliably.
+  'emissiveTexture',
+]);
 const SRGB_SLOTS = new Set(['baseColorTexture', 'emissiveTexture']);
 
 function parseArguments(argv) {
@@ -81,13 +91,20 @@ function parseArguments(argv) {
 }
 
 function requireKtxBinary() {
-  const probe = spawnSync('ktx', ['--version'], { encoding: 'utf8' });
-  if (probe.error || probe.status !== 0) {
+  const resolved = resolveKtxBinary();
+  if (!resolved) {
     throw new Error(
-      `KTX-Software not found. Install it and ensure \`ktx\` is on PATH:\n  ${KTX_INSTALL_URL}`,
+      'KTX-Software not found. Install via AsteronEngine Tools → Packages…, '
+        + `or put \`ktx\` on PATH / set ASTERON_KTX:\n  ${KTX_RELEASES_URL}`,
     );
   }
-  return (probe.stdout || probe.stderr || '').trim().split('\n')[0];
+  const version = probeKtxVersion(resolved.path);
+  if (!version) {
+    throw new Error(
+      `KTX binary at ${resolved.path} failed \`ktx --version\`. Reinstall via Tools → Packages….`,
+    );
+  }
+  return { path: resolved.path, source: resolved.source, version };
 }
 
 function normalizeContentPackRelativePath(value) {
@@ -138,27 +155,37 @@ async function listModelFiles(root) {
  */
 function codecFor(texture, ormCodec) {
   const slots = listTextureSlots(texture);
-  if (slots.includes('normalTexture')) return { codec: 'uastc', oetf: 'linear', normal: true };
+  const name = texture.getName() ?? '';
+  if (slots.includes('normalTexture') || /_normal/i.test(name)) {
+    return { codec: 'uastc', oetf: 'linear', normal: true };
+  }
+  if (slots.includes('emissiveTexture') || /emissive/i.test(name)) {
+    return { codec: 'uastc', oetf: 'srgb', normal: false };
+  }
   if (slots.some((slot) => UASTC_SLOTS.has(slot))) {
     return { codec: ormCodec, oetf: 'linear', normal: false };
   }
   if (slots.some((slot) => SRGB_SLOTS.has(slot))) {
     return { codec: 'etc1s', oetf: 'srgb', normal: false };
   }
-  return /_normal/i.test(texture.getName() ?? '')
-    ? { codec: 'uastc', oetf: 'linear', normal: true }
-    : { codec: 'etc1s', oetf: 'srgb', normal: false };
+  return { codec: 'etc1s', oetf: 'srgb', normal: false };
 }
 
 function ktxArgsFor({ codec, oetf, normal }, inputPath, outputPath) {
   const args = ['create', '--generate-mipmap'];
+  // sRGB color data must keep the SRGB vkFormat; linear data stays UNORM.
+  if (oetf === 'srgb') {
+    args.push('--format', 'R8G8B8A8_SRGB', '--assign-tf', 'srgb');
+  } else {
+    args.push('--format', 'R8G8B8A8_UNORM', '--assign-tf', 'linear');
+  }
   if (codec === 'uastc') {
-    args.push('--format', 'R8G8B8A8_UNORM', '--assign-oetf', oetf);
     args.push('--encode', 'uastc', '--uastc-quality', '2', '--zstd', '18');
     if (normal) args.push('--normal-mode');
   } else {
-    args.push('--format', 'R8G8B8A8_SRGB', '--assign-oetf', oetf);
-    args.push('--encode', 'basis-lz', '--clevel', '3', '--qlevel', '128');
+    // --threads 1 avoids a KTX-Software 4.4.x BasisLZ SSE assert on some
+    // atlases; still fall back to UASTC in encodeTexture if it aborts.
+    args.push('--encode', 'basis-lz', '--clevel', '3', '--qlevel', '128', '--threads', '1');
   }
   args.push(inputPath, outputPath);
   return args;
@@ -166,11 +193,45 @@ function ktxArgsFor({ codec, oetf, normal }, inputPath, outputPath) {
 
 function settingsSignature(options) {
   return [
-    'ktx2-v1',
-    'etc1s:basis-lz/c3/q128',
+    'ktx2-v2',
+    'etc1s:basis-lz/c3/q128/t1',
     'uastc:q2/zstd18',
+    'emissive:uastc',
     `orm:${options.ormCodec}`,
   ].join('|');
+}
+
+function ktxFailed(result) {
+  return Boolean(result.error) || result.status !== 0 || Boolean(result.signal);
+}
+
+function formatKtxFailure(result) {
+  return (result.stderr || result.stdout || result.error?.message || result.signal || '').trim();
+}
+
+/**
+ * Encode one texture. ETC1S can SIGABRT inside BasisLZ SSE kernels on some
+ * Synty emissive/atlas content — retry once as UASTC so one bad encode does
+ * not leave the whole GLB underived.
+ */
+function encodeTexture(ktxPath, choice, inputPath, outputPath) {
+  const primary = spawnSync(ktxPath, ktxArgsFor(choice, inputPath, outputPath), {
+    encoding: 'utf8',
+  });
+  if (!ktxFailed(primary)) {
+    return { codec: choice.codec, result: primary };
+  }
+  if (choice.codec === 'uastc') {
+    return { codec: choice.codec, result: primary, failed: true };
+  }
+  const fallback = { ...choice, codec: 'uastc' };
+  const secondary = spawnSync(ktxPath, ktxArgsFor(fallback, inputPath, outputPath), {
+    encoding: 'utf8',
+  });
+  if (!ktxFailed(secondary)) {
+    return { codec: 'uastc', result: secondary, fellBack: true };
+  }
+  return { codec: choice.codec, result: primary, failed: true };
 }
 
 async function readManifest(derivedRoot) {
@@ -227,7 +288,7 @@ function assertTextureNames(document, label) {
   }
 }
 
-async function transcodeDocument(io, sourcePath, outputPath, options, tempRoot, label) {
+async function transcodeDocument(io, sourcePath, outputPath, options, tempRoot, label, ktxPath) {
   const document = await io.read(sourcePath);
   assertTextureNames(document, label);
 
@@ -249,17 +310,16 @@ async function transcodeDocument(io, sourcePath, outputPath, options, tempRoot, 
     const ktx2Path = join(tempRoot, `tex-${index}.ktx2`);
     await writeFile(inputPath, Buffer.from(image));
 
-    const args = ktxArgsFor(choice, inputPath, ktx2Path);
-    const result = spawnSync('ktx', args, { encoding: 'utf8' });
-    if (result.status !== 0) {
+    const encoded = encodeTexture(ktxPath, choice, inputPath, ktx2Path);
+    if (encoded.failed) {
       throw new Error(
-        `${label}: ktx failed for texture "${texture.getName()}"\n  ktx ${args.join(' ')}\n  ${
-          (result.stderr || result.stdout || '').trim()
-        }`,
+        `${label}: ktx failed for texture "${texture.getName()}"\n  ${ktxPath} ${
+          ktxArgsFor(choice, inputPath, ktx2Path).join(' ')
+        }\n  ${formatKtxFailure(encoded.result)}`,
       );
     }
     texture.setImage(new Uint8Array(await readFile(ktx2Path))).setMimeType('image/ktx2');
-    counts[choice.codec] += 1;
+    counts[encoded.codec] += 1;
   }
 
   if (counts.etc1s + counts.uastc > 0) {
@@ -284,8 +344,8 @@ async function main() {
     return;
   }
 
-  const ktxVersion = requireKtxBinary();
-  console.log(`[transcode] using ${ktxVersion}`);
+  const ktx = requireKtxBinary();
+  console.log(`[transcode] using ${ktx.version} (${ktx.source}: ${ktx.path})`);
 
   const settings = await readProjectSettings(options.project);
   const roots = [join(options.project, 'assets')];
@@ -342,7 +402,15 @@ async function main() {
 
     const tempRoot = await mkdtemp(join(tmpdir(), 'asteron-ktx2-'));
     try {
-      const counts = await transcodeDocument(io, sourcePath, outputPath, options, tempRoot, relativePath);
+      const counts = await transcodeDocument(
+        io,
+        sourcePath,
+        outputPath,
+        options,
+        tempRoot,
+        relativePath,
+        ktx.path,
+      );
       const outputStat = statSync(outputPath);
       manifest.entries[relativePath] = {
         sourceSizeBytes: sourceStat.size,

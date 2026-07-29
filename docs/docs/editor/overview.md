@@ -157,4 +157,5 @@ editor writes document data; it does not own gameplay logic.
 - [Menu Manager](./menu-manager)
 - [Assets and GLB](./assets-and-glb)
 - [Preview and playtest](./preview-and-playtest)
+- [Packages and textures](./packages-and-textures) — KTX-Software + derived KTX2
 - [Build Web](./build-web) — release browser builds

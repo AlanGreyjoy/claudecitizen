@@ -22,6 +22,8 @@ import type { DeployTarget } from '../../platform/editor-desktop';
 import { DeployBackendModal } from './panels/deploy/DeployBackendModal';
 import { DeployFrontendModal } from './panels/deploy/DeployFrontendModal';
 import { MultiplayerDebugModal } from './panels/multiplayer_debug/MultiplayerDebugModal';
+import { PackagesModal } from './panels/PackagesModal';
+import { TranscodeTexturesModal } from './panels/TranscodeTexturesModal';
 import type { ProjectPanelHandle } from './panels/ProjectPanel';
 import type { ShipEditor } from './panels/ShipPanel';
 import type { ToolbarHandle } from './panels/Toolbar';
@@ -57,6 +59,9 @@ export function EditorApp(): ReactElement {
   /** Deploy → Front End… / Backend…. Self-contained modals; no store plumbing needed. */
   const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
   const [multiplayerDebugOpen, setMultiplayerDebugOpen] = useState(false);
+  const [packagesOpen, setPackagesOpen] = useState(false);
+  const [transcodeOpen, setTranscodeOpen] = useState(false);
+  const [transcodeAutoStart, setTranscodeAutoStart] = useState(false);
 
   const toolbarRef = useRef<ToolbarHandle | null>(null);
   const shipEditorRef = useRef<ShipEditor | null>(null);
@@ -339,6 +344,11 @@ export function EditorApp(): ReactElement {
     openDeployFrontend: () => setDeployTarget('client'),
     openDeployBackend: () => setDeployTarget('backend'),
     openMultiplayerDebug: () => setMultiplayerDebugOpen(true),
+    openPackages: () => setPackagesOpen(true),
+    transcodeTextures: () => {
+      setTranscodeAutoStart(true);
+      setTranscodeOpen(true);
+    },
     duplicateSelection,
     deleteSelection,
     exitToTitle,
@@ -451,6 +461,19 @@ export function EditorApp(): ReactElement {
     <MultiplayerDebugModal
       open={multiplayerDebugOpen}
       onClose={() => setMultiplayerDebugOpen(false)}
+    />
+    <PackagesModal
+      open={packagesOpen}
+      onClose={() => setPackagesOpen(false)}
+    />
+    <TranscodeTexturesModal
+      open={transcodeOpen}
+      autoStart={transcodeAutoStart}
+      onAutoStartConsumed={() => setTranscodeAutoStart(false)}
+      onClose={() => {
+        setTranscodeOpen(false);
+        setTranscodeAutoStart(false);
+      }}
     />
     </>
   );

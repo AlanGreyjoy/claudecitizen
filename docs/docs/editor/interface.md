@@ -169,6 +169,16 @@ one place that edits **persistent server data** in PostgreSQL.
 `asteron.project.json` — project name, backend URL, default scene, and build
 output directory.
 
+## Tools menu
+
+| Item | Purpose |
+| --- | --- |
+| **Packages…** | Install engine tools (KTX-Software) under `~/.asteron/tools/` |
+| **Transcode Project Textures…** | Encode KTX2 twins into `<project>/.asteron/derived/` |
+| Locate / Validate / Reveal Sidekick Pack | Synty Sidekick content pack for Base Characters |
+
+See [Packages and textures](./packages-and-textures).
+
 ## Keyboard shortcuts
 
 Shortcuts are ignored while typing in inputs or during RMB flythrough.

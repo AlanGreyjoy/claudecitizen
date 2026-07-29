@@ -471,6 +471,25 @@ export async function fetchSidekickPackStatus(): Promise<SidekickPackStatus> {
   return requestJson<SidekickPackStatus>('/__editor/sidekick-pack');
 }
 
+export type EnginePackageState = 'missing' | 'installed' | 'outdated';
+
+export interface EnginePackageInfo {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  state: EnginePackageState;
+  binaryPath: string | null;
+  versionLabel: string | null;
+  pathSource: 'env' | 'managed' | 'path' | null;
+  releasesUrl: string;
+}
+
+export async function fetchEnginePackages(): Promise<EnginePackageInfo[]> {
+  const payload = await requestJson<{ packages: EnginePackageInfo[] }>('/__editor/packages');
+  return payload.packages;
+}
+
 /** Maps an asset-browser entry to the url the dev server serves it from. */
 export function assetUrlFor(root: AssetRoot, path: string): string {
   const encoded = path.split('/').map(encodeURIComponent).join('/');

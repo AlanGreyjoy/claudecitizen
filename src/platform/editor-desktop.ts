@@ -9,6 +9,41 @@ export interface DesktopBuildState extends DesktopBuildResult {
   phase: 'building' | 'success' | 'error';
 }
 
+export type EnginePackageState = 'missing' | 'installed' | 'outdated';
+
+export interface EnginePackageInfo {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  state: EnginePackageState;
+  binaryPath: string | null;
+  versionLabel: string | null;
+  pathSource: 'env' | 'managed' | 'path' | null;
+  releasesUrl: string;
+}
+
+export interface DesktopPackageResult {
+  ok: boolean;
+  message: string;
+  package?: EnginePackageInfo;
+}
+
+export type DesktopPackageState =
+  | { phase: 'installing' | 'downloading' | 'verifying' | 'extracting' | 'success' | 'error'; message: string; package?: EnginePackageInfo }
+  | { phase: string; message: string; package?: EnginePackageInfo };
+
+export interface DesktopTranscodeResult {
+  ok: boolean;
+  message: string;
+  outputDir?: string;
+  output?: string;
+}
+
+export type DesktopTranscodeState =
+  | { phase: 'running' | 'success' | 'error'; message: string; outputDir?: string; output?: string }
+  | { phase: 'log'; line: string };
+
 export type DesktopNativeCommandType =
   | 'play'
   | 'pause-play'
@@ -33,6 +68,8 @@ export type DesktopNativeCommandType =
   | 'exit-to-title'
   | 'new-project'
   | 'open-multiplayer-debug'
+  | 'open-packages'
+  | 'transcode-textures'
   | 'sidekick-pack-changed';
 
 export interface DesktopNativeCommand {
@@ -223,6 +260,11 @@ export interface ClaudeCitizenEditorDesktopBridge {
   readonly platform: string;
   buildWeb: () => Promise<DesktopBuildResult>;
   onBuildState: (callback: (state: DesktopBuildState) => void) => () => void;
+  installKtxPackage: () => Promise<DesktopPackageResult>;
+  uninstallKtxPackage: () => Promise<DesktopPackageResult>;
+  onPackageState: (callback: (state: DesktopPackageState) => void) => () => void;
+  transcodeTextures: () => Promise<DesktopTranscodeResult>;
+  onTranscodeState: (callback: (state: DesktopTranscodeState) => void) => () => void;
   getDeployConfig: () => Promise<DeployConfigResult>;
   saveDeployConfig: (config: DeployConfigInput) => Promise<{ saved: true; config: DeployConfig; path: string }>;
   deployPreflight: () => Promise<DeployPreflight>;

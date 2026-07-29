@@ -71,6 +71,9 @@ API and serves project assets from the open project's `assets/` tree.
   scene, and build output directory.
 - **File → Build Web** / `Ctrl+B` runs the release web build and writes
   `asteron.runtime.json` beside it so the bundle knows which backend to call.
+- **Tools → Packages…** installs engine-managed tools (KTX-Software) under
+  `~/.asteron/tools/`. **Tools → Transcode Project Textures…** writes KTX2
+  twins to `<project>/.asteron/derived/` for smaller GPU memory at Play / ship.
 - The **Server** tab is a live operator console over the backend's `/admin/*`
   routes for players, catalog definitions, and game settings.
 
