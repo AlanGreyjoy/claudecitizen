@@ -29,8 +29,9 @@ A valid project folder has `package.json` and an `assets/` library. Display name
 backend URL, default scene, and build output live in `asteron.project.json`
 (**File → Project Settings…**). Authoring assets live in the project's single
 library root `assets/` — not in the engine repository. The engine checkout's
-`src/assets/` is engine-owned only (atmosphere LUTs, skybox, brand art) and is
-reached through ESM imports, not the Project panel.
+`src/assets/` is engine-owned only (skybox, brand art) and is
+reached through ESM imports, not the Project panel. Atmosphere LUT EXRs live
+under `public/atmosphere/` (served at `/atmosphere/`).
 
 ## Three layers
 

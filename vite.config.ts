@@ -677,11 +677,10 @@ export default defineConfig(({ mode }) => ({
     },
   },
   // Electron `--dev` starts Vite and proxies editor APIs + project asset mounts
-  // through a main-process HTTP bridge. `/src/assets` is never proxied: it is
-  // the engine checkout's own bundled assets (brand logo, atmosphere LUTs,
-  // stars), reached only through ESM imports that Vite must own. All project
-  // content lives under the open project's `assets/` and is served via the
-  // bridge at `/assets/...`.
+  // through a main-process HTTP bridge. Engine-owned static files live under
+  // `public/` (atmosphere LUTs at `/atmosphere/`, wasm, basis) and are served by
+  // Vite directly. `/assets` is the open project's library only — never put
+  // engine LUTs there or the proxy will 404 them in editor Play.
   //
   // `.asteron-build/` is watched out explicitly. `build:project-web` stages a
   // hardlinked copy of `src/` and `public/` there, inside this very root, then

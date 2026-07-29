@@ -36,9 +36,11 @@ target* produced by **File → Build Web**, not a place features are developed.
 
 Authoring assets live **inside the open AsteronEngine project**, in the single
 asset library `<project>/assets/` served at `/assets/`, not at the engine repo
-root. The engine checkout's own `src/assets/` holds engine-owned assets only
-(atmosphere LUTs, skybox, star catalog, brand art), is reached exclusively
-through ESM imports, and is **not** a project asset root.
+root. The engine checkout's own `src/assets/` holds engine-owned assets
+(skybox, star catalog, brand art), reached through ESM imports, and is **not**
+a project asset root. Atmosphere LUT EXRs live under `public/atmosphere/` so
+Vite ships them at the stable `/atmosphere/` URL in both editor Play and
+release builds.
 
 ## Scenes own everything
 

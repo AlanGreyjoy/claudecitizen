@@ -206,6 +206,11 @@ const NETLIFY_HEADERS = `# Emitted by scripts/build_project_web.mjs — do not e
 /assets/*
   Cache-Control: public, max-age=300, must-revalidate
 
+# Atmosphere LUTs: stable filenames under /atmosphere/, same trap as /assets —
+# a prior 404 must not be pinned.
+/atmosphere/*
+  Cache-Control: public, max-age=300, must-revalidate
+
 # Entry document: always revalidate so a new build is picked up immediately.
 /index.html
   Cache-Control: no-cache

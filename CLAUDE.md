@@ -106,7 +106,7 @@ Export **factories and pure functions** from domain modules, not classes.
 
 ### Projects are external to this repo
 
-Authoring assets live in the **open project** at `<project>/assets/`, served as `/assets/`. `src/assets/` in this checkout is engine-owned only (atmosphere LUTs, skybox, star catalog, brand art) and is reached exclusively through ESM imports.
+Authoring assets live in the **open project** at `<project>/assets/`, served as `/assets/`. `src/assets/` in this checkout is engine-owned only (skybox, star catalog, brand art) and is reached through ESM imports. Atmosphere LUT EXRs live under `public/atmosphere/` (stable `/atmosphere/` URL) so release builds ship all four siblings without Vite content-hashing only one of them.
 
 `asteron.project.json` at the project root holds `name`, `backendUrl` (release), `editorBackendUrl` (editor Play/Server; defaults localhost), `defaultScene`, `build.outDir`. `src/net/runtime-config.ts` resolves the backend URL at runtime — from `editorBackendUrl` in the editor, from `asteron.runtime.json` in a shipped release. **Never reintroduce a build-time `VITE_API_BASE_URL`.** There is no client API key: players use cookie sessions (`cc_at`/`cc_rt`), operators use `/admin/session`.
 
