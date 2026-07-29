@@ -150,7 +150,7 @@ the question being measured, and TSL codegen would have obscured it.
 
 ## Progress
 
-Current state: **Stage 1 first increment verified. Stage 2 applied to the viewport.
+Current state: **Stage 1 first increment and Stage 2 both verified on the WebGPU backend.
 WebGPU enforcement landed. Stages 3-6 not started.**
 
 The editor viewport runs on the **WebGPU backend** with the WebGL fallback stripped. Every
@@ -169,8 +169,9 @@ currently covers the editor viewport only. The game gets it at Stage 6.
     rejection
   - `src/render/assets/ktx2.ts` — accepts either renderer; detection moved after `init()`
   - `editor-desktop/main.mjs` — the Stage 0 switches
-- **Stage 2 — viewport only.** `forceWebGL` removed. Not yet looked at by anyone.
-- **Enforcement — done.** `src/render/webgpu-required.ts`, new.
+- **Stage 2 — viewport only, verified.** `forceWebGL` removed; viewport confirmed rendering.
+- **Enforcement — done.** `src/render/webgpu-required.ts`, new. Success path exercised; failure
+  paths never have been (see below).
 
   `npm run typecheck` 0 errors repo-wide. `npm run lint` clean on all touched files.
 
@@ -198,22 +199,40 @@ beats shipping a WebGL2 build believed to be WebGPU. Re-check it on every three 
 
 ### Verified by the owner
 
-On the WebGL2 backend (`forceWebGL: true`, before Stage 2): **viewport renders correctly and
-the procedural sky toggles on and off cleanly.** That confirms, together:
+Twice, in two configurations.
 
-- the `ShaderMaterial` → TSL `NodeMaterial` port
+**On the WebGL2 backend** (`forceWebGL: true`, before Stage 2): viewport rendered and the
+procedural sky toggled cleanly.
+
+**On the WebGPU backend** (after Stage 2, fallback stripped): scene view renders, and both the
+light and sky toggles work.
+
+The second run is the stronger evidence, and it is load-bearing: because `webgpu-required.ts`
+strips three's automatic WebGL2 fallback, a WebGPU failure can only produce a rejected `ready`
+promise — blank viewport plus `[viewport] WebGPU unavailable` in the console. **It rendered,
+therefore it is genuinely on WebGPU.** No silent-degrade ambiguity is possible.
+
+Together that confirms:
+
+- the `ShaderMaterial` → TSL `NodeMaterial` port, on both backends
 - the `three/webgpu` `PMREMGenerator` env bake
 - `RectAreaLightNode.setLTC()` covering the node lighting path
-- `WebGPURenderer` driving a real editor scene with real project content
+- `disableWebGlFallback` not breaking the success path (the `_getFallback` private-field poke
+  works against three 0.180)
+- `WebGPURenderer` driving a real editor scene with real project content, on Vulkan via Dawn
 
-Two crashes preceded that result — `LTC_FLOAT_1` on null, then PMREM `reading 'buffers'` —
+Two crashes preceded the first result — `LTC_FLOAT_1` on null, then PMREM `reading 'buffers'` —
 both found by the owner running the editor and reporting the stack trace. Both are written up
 under Gotchas.
 
 ### Still not verified
 
-- **Stage 2 itself.** `forceWebGL` was just removed; the WebGPU backend has not been looked at
-  yet. This is the next thing needing eyes.
+- **Every enforcement failure path.** Nobody has seen `WebGpuUnavailableError` fire. It cannot
+  be triggered on the owner's machine, where WebGPU works. `no-api`, `no-adapter`,
+  `software-adapter`, and `device-init-failed` are all untested, as is the guard that throws if
+  three renames `_getFallback`. Cheapest way to exercise them: temporarily launch the editor
+  *without* the Stage 0 Chromium switches and confirm a clean `no-adapter` error instead of a
+  crash or a silent WebGL2 fallback.
 - A full `vite build --mode editor`. Only dev-server builds have ever run.
 - Whether the cloud *pattern* matches the original. The fbm domain-warp matrix was rewritten
   from a column-major GLSL `mat2` literal into explicit `vec2` math; a transposed rotation
@@ -227,19 +246,28 @@ Remaining Stage 1 surfaces — `thumbnails.ts`, `material-preview.ts`,
 
 ### Next action
 
-Look at the viewport on the WebGPU backend. Deliberately sequenced before porting the eight
-remaining Stage 1 surfaces: a backend-level problem found now is far cheaper than one found
-after eight more ports.
+The risky part is done: one surface is fully migrated, verified on the real backend, with
+enforcement in place. Everything after this is repetition of a proven pattern.
 
-Enforcement removes the ambiguity that used to sit here. Three's
-`"WebGPU is not available, running under WebGL2 backend"` warning can no longer appear — the
-fallback is stripped, so an unsupported machine gets `WebGpuUnavailableError` and a blank
-viewport with `[viewport] WebGPU unavailable` in the console. If the viewport renders at all,
-it is genuinely on WebGPU.
+Pick up with the **eight remaining Stage 1 surfaces** — `thumbnails.ts`,
+`material-preview.ts`, `planet-preview-controller.ts`, `base-character-equipment-stage.ts`,
+`characters/sidekick/preview-stage.ts`, `item-prefab-screenshot.ts`, `BaseCharactersPanel.tsx`,
+`render-spike-frame.ts`. All composer-free, all independent. For each: swap to
+`WebGPURenderer`, route through `initRequiredWebGpu`, thread the async init, and port any
+`ShaderMaterial` it renders in the same increment (never ahead of it).
 
-So what is left to watch for is real backend differences: shadow acne or missing shadows
-(`PCFSoftShadowMap` maps differently across backends), depth-precision artifacts on the
-400-unit grid, and whether the sky's `depthTest: false` backdrop still composites correctly.
+`viewport-scene.ts` is the worked reference — copy its shape rather than re-deriving it.
+
+Two things worth doing before grinding through all eight:
+
+1. **Exercise one enforcement failure path** (see "Still not verified"). It is the only
+   completely untested code in the migration, and it is the thing that decides whether an
+   unsupported machine gets a clear message or a mystery.
+2. **The user-facing boot gate** (see Follow-up). Needed before any external playtest.
+
+Residual backend differences to keep an eye on as more surfaces move: shadow acne or missing
+shadows (`PCFSoftShadowMap` maps differently across backends), depth-precision artifacts on the
+400-unit grid, and `depthTest: false` backdrops compositing correctly.
 
 ## Stages
 
