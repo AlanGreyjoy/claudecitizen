@@ -28,6 +28,29 @@ fallback and no second prediction implementation.
 Session bootstrap goes through HTTP (`/world/session` and related routes); the
 client then dials `WEBTRANSPORT_PUBLIC_URL`.
 
+The handshake checks its own origin allowlist, `WEBTRANSPORT_ALLOWED_ORIGINS` —
+**not** the CORS origin. It must contain `CLIENT_ORIGIN`, or every world session
+is rejected while the REST API answers normally: the game loads, players log in,
+chat echoes their own messages back, and nobody sees anybody. The browser
+reports only `WebTransportError: Opening handshake failed` for this, for a
+blocked UDP port, and for a bad certificate alike, so diagnose it server-side —
+the listener logs `WebTransport origin rejected` with both the offending origin
+and the list it checked.
+
+## Presence
+
+An intent describes exactly one body, chosen by `world.mode`: the character on
+foot, the ship while flying. Never choose it by whether the player *has* a ship —
+they always do, and publishing the parked ship's position as the character's
+pins every avatar to its owner's hangar.
+
+On foot the client's position is authoritative-by-report and clamped server-side.
+The authority world has no station or terrain geometry, so it cannot derive a
+position that respects collision; it instead follows the reported one by at most
+`top speed × elapsed`, which bounds a lying client to walking pace. A player
+carried by a moving ship deck is judged at ship speed, since presence positions
+are world-space and the deck moves them. Ship flight remains fully server-simulated.
+
 ## Shared prediction
 
 `backend/crates/sim-core/` is compiled:

@@ -297,6 +297,22 @@ the opaque editor chrome and looks like a blank blue screen. Pause feeds
 `ctx.isPaused()` in `src/game/create-game-loop.ts`. There is no external Play
 Mode window — do not reintroduce one.
 
+### Debug → Multiplayer
+
+Launches N game windows against the running backend, each in its own Electron
+`session` partition (`editor-desktop/multiplayer_debug.mjs`) so each holds its
+own cookie jar and signs in as its own throwaway account — a shared jar would
+log every window in as the same player and the cell, keyed by `player_id`, would
+collapse them into one entity. Backend calls route through
+`/__editor/mp/<n>/backend` for the same reason. Options include cube avatars
+(replaces the character model, so a missing appearance cannot be mistaken for a
+missing peer) and `setPresenceDriftLogging`, which prints published position
+minus simulated position once a second. On foot that number is the invariant
+worth watching: it should be noise around zero, and a large constant value means
+presence is publishing some *other* body — which is exactly how the parked-ship
+bug was found. This is the only harness that reproduces peer visibility without
+a deploy; reach for it before debugging multiplayer against production.
+
 ### GLB node overrides and deletions
 
 Editor-side transform overrides (`glbNodeTransforms`) and deleted nodes (`glbNodeHidden`) are persisted by **GLB node name**, not by Three.js UUID. This means:
@@ -357,7 +373,38 @@ conflating any two of them has already cost a launch.
 - `backend/crates/sim-core/` is shared by native Rapier authority and browser WASM prediction.
 - `proto/world.proto` is the canonical realtime contract.
 - PostgreSQL stores durable accounts, catalog, inventory, and cell checkpoints; Redis stores ephemeral tickets, leases, routing streams, and snapshot fan-out.
-- Never add a WebSocket fallback, second backend, client-authoritative outcomes, or a separate prediction implementation.
+- Never add a WebSocket fallback, second backend, client-authoritative outcomes, or a separate prediction implementation. One documented exception, below: the on-foot **position** is client-reported and server-clamped, because no server-side collision geometry exists for it to be authoritative against.
+
+**`world.mode` decides which body a presence intent describes — never the
+existence of a ship.** Every player owns an active ship, so keying
+`publishPresence` off `getShipInstance` alone published the parked ship's
+position as the walking character's: every avatar pinned to its owner's hangar,
+motionless, no matter where the player walked. The player is next to it, so it
+looks like a frozen peer; in production the hangar is far away, so it looks like
+nobody is online at all. `presenceShipBody` in `src/net/world-client.ts` is the
+one place that decision is made.
+
+**On foot, the client's position is the truth and the server clamps it.** The
+authority world (`sim-core/authority.rs`) holds player capsules and nothing
+else — no station geometry, no terrain, zero gravity — so its dead reckoning
+walks through walls and can never converge on the client's Rapier result. So:
+presence publishes `world.character.position` verbatim, and `anchor_on_foot` in
+`cell.rs` moves the authoritative anchor towards it by at most `top speed ×
+elapsed`. That clamp is what keeps it from being a teleport primitive; do not
+remove it, and do not "restore" server-side dead reckoning of on-foot position.
+A player standing on a moving ship deck (`shipZoneId` set) is *carried*, so both
+the velocity validation and the clamp switch to ship speed — judging deck motion
+by on-foot limits rejects every intent a passenger sends, which is its own
+invisible-player bug. Ship flight keeps full server authority.
+
+**Two origin lists, and only one of them is CORS.** `CLIENT_ORIGIN` is the
+single CORS origin; `WEBTRANSPORT_ALLOWED_ORIGINS` is checked separately on the
+QUIC handshake and must contain it. They are separate because the desktop
+editor dials from `cceditor://app`, which must never hold REST session cookies.
+Getting the second one wrong is invisible from the outside — the site loads,
+players authenticate, chat echoes back, and no player ever sees another. See
+`deploy/README.md`; production deploys merge two compose files, and the base
+file's development allowlist wins unless the overlay restates it.
 
 **`scene-exit` is the only way a player moves between places during Play.**
 The boot scene's `game-manager` decides where a session *begins*; every move
@@ -587,6 +634,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 - **Ship pitch bounces after mouse aim**: IFCS overshoot — raise `AIM_IFCS_DAMPING` in `flight-config.ts` or lower per-ship pitch torque / `maxAngularRateRadps`. See ship-flight skill.
 - **One ship too twitchy / sluggish**: tune that prefab's `ship-controller` mass/thrust/torque — do not edit `FLIGHT_CONFIG` unless every hull is wrong.
 - **Preview pilot won't exit**: Hold Y should always leave the seat (same as main play). If the hold doesn't fire, check `exitSeat` binding / `updateExitSeatHold` in `player-controls.ts`.
+- **Players cannot see each other**: three unrelated causes wear the same face, so identify the layer before changing code. (1) *No world session at all* — the console shows `WebTransport dial to … failed`; check `WEBTRANSPORT_ALLOWED_ORIGINS`, then UDP 4433, then the certificate (`deploy/README.md` § Diagnosing a failed dial). (2) *Session is up, peers are frozen or absent* — presence is publishing the wrong body; run Debug → Multiplayer with drift logging and read the number. (3) *Peers appear, then stop* — replication sizing or interest radius, covered under Authoritative multiplayer. Chat proves nothing about any of them: the server echoes your own messages back, so an empty cell looks identical to a working one.
+- **`WebTransportError: Opening handshake failed` in a debug window but not the editor**: the game windows dial from the Vite dev origin (`http://127.0.0.1:5173`) or `cceditor://app`, not from `CLIENT_ORIGIN`. Both belong in `WEBTRANSPORT_ALLOWED_ORIGINS` in `backend/.env`. Also keep `WEBTRANSPORT_PUBLIC_URL` on an IP literal locally: Chromium resolves `localhost` to `::1` first, and the listener binds IPv4.
 
 ## Key files
 

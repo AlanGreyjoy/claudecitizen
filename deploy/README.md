@@ -172,6 +172,27 @@ curl https://api.example.com/readyz                     # {"status":"ready"}
 docker compose ... logs backend | grep -i webtransport  # listening on 0.0.0.0:4433
 ```
 
+### Diagnosing a failed dial
+
+The browser collapses every world-session failure into one message —
+`WebTransportError: Opening handshake failed` — whether the port is blocked, the
+certificate is wrong, the origin was refused, or the ticket had expired. The
+server log separates them (`WebTransport origin rejected` names both the origin
+and the list it checked; `world ticket is invalid or expired` is the next gate),
+so read it first.
+
+Without shell access on the box, the gates are still distinguishable from
+outside, because they fail differently. Dial `/world` with **no** `?ticket=`:
+
+- `connection closed by peer` — the origin was accepted and the dial died at the
+  missing ticket, which is as far as an unauthenticated probe can get. Origin,
+  UDP, and certificate are all fine.
+- an explicit rejection — the origin gate refused it, before any ticket is read.
+- a timeout — nothing is listening on UDP 4433, or a firewall is dropping it.
+- a certificate error — the listener fell back to self-signed, or the mounted
+  PEM is stale. `sync-certs.sh` copies renewals, but the listener reads them
+  only at startup, so a renewal without a restart serves the old certificate.
+
 ## 3. Client: build and deploy
 
 Set the backend URL first — in the editor under Project Settings, or directly in

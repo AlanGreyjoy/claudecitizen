@@ -33,6 +33,7 @@ Copy `backend/.env.example`. Minimum production concerns:
 | `REDIS_URL` | Redis |
 | `RUN_MIGRATIONS` | Apply SQLx migrations on boot when `true` |
 | `JWT_*` / `ADMIN_*` | Auth secrets — use long random values in production |
+| `WEBTRANSPORT_ALLOWED_ORIGINS` | Origins accepted on the QUIC handshake, comma-separated. Defaults to `CLIENT_ORIGIN`, and **must** contain it — a wrong value rejects every world session while the REST API keeps answering, so multiplayer dies silently |
 | `WEBTRANSPORT_BIND` | QUIC listen (default `0.0.0.0:4433`) |
 | `WEBTRANSPORT_PUBLIC_URL` | Public WebTransport URL clients dial |
 | `WEBTRANSPORT_CERT_PATH` / `KEY_PATH` | Trusted PEM in production; self-signed ok for local |
