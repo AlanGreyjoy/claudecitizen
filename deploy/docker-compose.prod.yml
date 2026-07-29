@@ -12,6 +12,13 @@ services:
       # must match the Netlify site the players actually load — including
       # scheme, and excluding any trailing slash.
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:?set CLIENT_ORIGIN in deploy/.env}
+      # Must be re-stated, and this one fails silently when it is not: the base
+      # file sets a development allowlist, compose merges environment maps per
+      # key, so production would enforce `localhost` and `cceditor://app` and
+      # reject every real player at the WebTransport handshake. CORS reads
+      # CLIENT_ORIGIN and keeps working, which hides the fault completely — the
+      # game loads, chat echoes, and nobody ever sees anybody.
+      WEBTRANSPORT_ALLOWED_ORIGINS: ${WEBTRANSPORT_ALLOWED_ORIGINS:?set WEBTRANSPORT_ALLOWED_ORIGINS in deploy/.env}
       API_PUBLIC_URL: ${API_PUBLIC_URL:?set API_PUBLIC_URL in deploy/.env}
       # Must be re-stated: the base file hardcodes the development password.
       DATABASE_URL: postgresql://claude:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/claude_citizen

@@ -153,6 +153,13 @@ $EDITOR deploy/.env
 The backend allows a single origin, so Netlify deploy-preview and branch URLs
 are rejected — deploy to production, or attach a custom domain.
 
+`WEBTRANSPORT_ALLOWED_ORIGINS` is a **second** list, enforced by the UDP
+listener instead of by CORS, and it must contain that same origin. The two are
+separate because the desktop editor dials from a custom scheme that must never
+be granted CORS access to the REST API. Getting this wrong is invisible from
+the outside: the site loads, players log in, chat echoes back, and no player
+ever sees another, because only the world session is rejected.
+
 ```bash
 docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml \
   --env-file deploy/.env up -d --build
@@ -248,7 +255,7 @@ dies with `address already in use`. `!override` replaces the base list;
 | Every API call fails CORS | `CLIENT_ORIGIN` does not byte-match the browser's origin, or has a trailing slash |
 | Login appears to succeed, next request is anonymous | `COOKIE_SAME_SITE` is not `none`, or `COOKIE_SECURE` is not `true` |
 | Every character stands in T-pose | Animation clip GLBs are missing from the release. Load the game and check the network panel for a 404 on `/assets/animations/…`. Stance packs are `ProRifle/locomotion.glb` / `HandgunLocomotions/locomotion.glb` (build with `npm run pack:anims -- --project <root>`). The clips are referenced by the animation controller, not by any prefab, so the release build copies them from `src/player/animation/data/*.controller.json`; the build warns for each source the project's asset library does not have. |
-| Game loads, players never see each other | Check chat first — the server echoes your own messages back, so "chat works" is satisfied by an empty cell. If you can see *each other's* messages you share a cell and the fault is downstream; if you only see your own you are in different cells (see below). Other causes: UDP 4433 blocked, or the WebTransport listener fell back to self-signed because it could not read `/certs/privkey.pem` |
+| Game loads, players never see each other | Check the browser console for `WebTransport dial to … failed`. If it is there, no world session exists at all: check `WEBTRANSPORT_ALLOWED_ORIGINS` contains `CLIENT_ORIGIN` (the base compose file's development list wins over the production overlay unless the overlay restates it), then that UDP 4433 is open, then that the listener did not fall back to self-signed because it could not read `/certs/privkey.pem`. If the dial *succeeds*, check chat — the server echoes your own messages back, so "chat works" is satisfied by an empty cell. Seeing *each other's* messages means you share a cell and the fault is downstream; seeing only your own means you are in different cells (see below) |
 | Players see each other, then stop | Backend predates the replication rewrite (protocol v2). Snapshots were sized against `MAX_DATAGRAM_BYTES` rather than the path MTU, so any cell holding two players silently stopped replicating everyone while chat kept working over the reliable stream. `git pull && docker compose … up -d --build` |
 | A remote player is present but invisible | Their appearance never arrived, so the renderer fell back to a mannequin GLB that 404s. Check the network panel for `/assets/protected/animations/universal-animation-library/`. Protocol v2 holds an entity out of view until its profile lands, so this should now present as "briefly absent", not "invisible forever" |
 | `WebTransport` connect fails after ~14 days | Running on a self-signed certificate; browsers cap hashed certs at 14 days |
