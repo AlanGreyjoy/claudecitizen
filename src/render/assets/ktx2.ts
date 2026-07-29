@@ -1,6 +1,15 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import type { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader';
+
+/**
+ * Either renderer works: `KTX2Loader.detectSupport` branches on
+ * `renderer.isWebGPURenderer` and reads GPU features rather than GL extensions.
+ * Type-only import, so this does not pull the 1.8 MB `three/webgpu` bundle into
+ * this module's runtime graph.
+ */
+type SupportRenderer = THREE.WebGLRenderer | WebGPURenderer;
 
 /**
  * Shared KTX2 / Basis Universal decoding for every GLTFLoader in the app.
@@ -21,7 +30,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader';
 const TRANSCODER_PATH = '/basis/';
 
 let sharedLoader: KTX2Loader | null = null;
-let supportRenderer: THREE.WebGLRenderer | null = null;
+let supportRenderer: SupportRenderer | null = null;
 let supportDetected = false;
 let supportLogged = false;
 
@@ -39,11 +48,16 @@ function getKtx2Loader(): KTX2Loader {
  * Registers the app's main renderer as the source of truth for compressed
  * format support. Called from `createWebGlRenderer`, which runs before any
  * scene content loads.
+ *
+ * **Call this only after the renderer's backend is live.** On a `WebGPURenderer`,
+ * `detectSupport` uses the synchronous `renderer.hasFeature(...)`, which needs an
+ * initialized backend — so callers must `await renderer.init()` first. A
+ * `WebGLRenderer` has no such ordering requirement.
  */
-export function setKtx2SupportRenderer(renderer: THREE.WebGLRenderer): void {
+export function setKtx2SupportRenderer(renderer: SupportRenderer): void {
   supportRenderer = renderer;
   if (supportDetected) return;
-  getKtx2Loader().detectSupport(renderer);
+  getKtx2Loader().detectSupport(renderer as THREE.WebGLRenderer);
   supportDetected = true;
   logSupportOnce();
 }
@@ -52,6 +66,11 @@ export function setKtx2SupportRenderer(renderer: THREE.WebGLRenderer): void {
  * Creates a throwaway 1x1 context purely to read the extension list.
  * `detectSupport` only inspects `renderer.extensions`, so a probe on the same
  * GPU reports the same formats the real renderer would.
+ *
+ * Stays a `WebGLRenderer` even once the app renders through WebGPU: this is a
+ * fallback for load paths that run before any real renderer exists, it needs to
+ * be synchronous, and BC/ASTC/ETC availability is a property of the GPU rather
+ * than of the API used to ask.
  */
 function detectSupportWithProbeRenderer(): void {
   if (typeof document === 'undefined') return;
@@ -79,7 +98,7 @@ function detectSupportWithProbeRenderer(): void {
 export function ensureKtx2Support(): void {
   if (supportDetected) return;
   if (supportRenderer) {
-    getKtx2Loader().detectSupport(supportRenderer);
+    getKtx2Loader().detectSupport(supportRenderer as THREE.WebGLRenderer);
     supportDetected = true;
   } else {
     detectSupportWithProbeRenderer();

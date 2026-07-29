@@ -174,10 +174,27 @@ export function createEditorViewport(
   viewportScene.resize();
 
   let disposed = false;
+  // WebGPURenderer initializes its backend asynchronously. Calling render()
+  // before that lands still draws (it forwards to renderAsync), but warns on
+  // every frame, so hold off until the backend is up.
+  let backendReady = false;
+  void viewportScene.ready.then(
+    () => {
+      backendReady = true;
+    },
+    (error: unknown) => {
+      // WebGPU is a hard requirement — there is no WebGL fallback to drop to, so
+      // the viewport stays blank on purpose rather than rendering something that
+      // hides the problem. A user-facing boot gate belongs at the app layer, not
+      // here; this keeps the cause loud in the meantime.
+      console.error('[viewport] WebGPU unavailable — viewport disabled.', error);
+    },
+  );
   const frameClock = new THREE.Clock();
   function animate(): void {
     if (disposed) return;
     requestAnimationFrame(animate);
+    if (!backendReady) return;
     const dt = Math.min(frameClock.getDelta(), 0.1);
     // OrbitControls.update() re-seats the camera from its own spherical state,
     // so it must not run while the flythrough owns the camera.

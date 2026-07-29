@@ -55,6 +55,13 @@ const BACKEND_PROXY_PREFIX = '/__editor/backend/';
 const MP_PROXY_PATTERN = /^\/__editor\/mp\/(\d+)\/backend(\/.*)$/;
 const editorDesktopRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = dirname(editorDesktopRoot);
+
+// Chromium gates WebGPU on Linux behind Vulkan, and `chrome://flags` does not
+// carry into Electron — without these, `requestAdapter()` returns null and the
+// renderer silently has no GPU device. Must run before `app.whenReady()`;
+// switches applied after the GPU process spawns are ignored.
+app.commandLine.appendSwitch('enable-unsafe-webgpu');
+app.commandLine.appendSwitch('enable-features', 'Vulkan');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const editorDevMode =
   process.argv.includes('--dev')

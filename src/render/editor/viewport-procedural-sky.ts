@@ -1,4 +1,34 @@
 import * as THREE from 'three';
+import { NodeMaterial, PMREMGenerator, type WebGPURenderer } from 'three/webgpu';
+import {
+  Fn,
+  If,
+  Loop,
+  dot,
+  float,
+  floor,
+  fract,
+  mix,
+  smoothstep,
+  uniform,
+  vec2,
+  vec3,
+  vec4,
+  cameraPosition,
+  positionWorld,
+} from 'three/tsl';
+import type TslBaseNode from 'three/src/nodes/core/Node.js';
+import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js';
+
+/**
+ * A TSL value with the operator-chaining methods attached.
+ *
+ * `Fn`'s tuple overload cannot infer its parameter types from a bare destructure
+ * — without an explicit generic TypeScript picks the `(builder: NodeBuilder)`
+ * overload instead and the destructure fails to compile. So every `Fn` below
+ * names its parameter tuple.
+ */
+type Tsl = ShaderNodeObject<TslBaseNode>;
 
 /**
  * Unreal-style procedural sky for the editor viewport.
@@ -12,6 +42,19 @@ import * as THREE from 'three';
  *
  * The dome is a small sphere pinned to the camera with depth off, so it costs
  * no depth precision and needs no far-plane stretch.
+ *
+ * Written in TSL rather than GLSL because `WebGPURenderer` only consumes node
+ * materials. Two notes on the port from the previous `ShaderMaterial`:
+ *
+ * - The old fragment shader ended with `#include <tonemapping_fragment>` and
+ *   `#include <colorspace_fragment>`. Those are `WebGLRenderer` chunks. Under
+ *   `WebGPURenderer` tone mapping and color space conversion run as a separate
+ *   output pass, so re-applying them here would double-grade the sky.
+ * - Base `NodeMaterial` with `fragmentNode` rather than `MeshBasicNodeMaterial`:
+ *   it bypasses the lighting and environment pipeline outright. That matches the
+ *   old unlit `ShaderMaterial`, and it matters here specifically because this
+ *   module writes `scene.environment` from its own PMREM bake of this very dome —
+ *   an env-sampling sky material would feed back into itself.
  */
 export interface ViewportProceduralSky {
   setEnabled: (enabled: boolean) => void;
@@ -66,149 +109,166 @@ const NIGHT: SkyPalette = {
 const SUN_TINT_DAY = 0xfff4e0;
 const SUN_TINT_DUSK = 0xff8a3c;
 
-const vertexShader = /* glsl */ `
-varying vec3 vWorldPosition;
+/** Rec. 709 luma weights, for the pre-AgX chroma compensation. */
+const LUMA = vec3(0.2126, 0.7152, 0.0722);
 
-void main() {
-  vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
+const hash21 = Fn<[Tsl]>(([source]) => {
+  const p = fract(source.mul(vec2(123.34, 456.21))).toVar();
+  p.addAssign(dot(p, p.add(45.32)));
+  return fract(p.x.mul(p.y));
+});
 
-const fragmentShader = /* glsl */ `
-uniform vec3 sunDirection;
-uniform vec3 zenithColor;
-uniform vec3 horizonColor;
-uniform vec3 groundColor;
-uniform vec3 sunColor;
-uniform vec3 cloudLitColor;
-uniform vec3 cloudShadowColor;
-uniform float horizonFalloff;
-uniform float sunIntensity;
-uniform float sunGlowIntensity;
-uniform float sunAngularCos;
-uniform float cloudCoverage;
-uniform float cloudOpacity;
-uniform float cloudTime;
-uniform float saturation;
-
-varying vec3 vWorldPosition;
-
-float hash21(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-float valueNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  float a = hash21(i);
-  float b = hash21(i + vec2(1.0, 0.0));
-  float c = hash21(i + vec2(0.0, 1.0));
-  float d = hash21(i + vec2(1.0, 1.0));
+const valueNoise = Fn<[Tsl]>(([p]) => {
+  const cell = floor(p).toVar();
+  const f = fract(p).toVar();
+  // Smoothstep weights: f * f * (3 - 2f).
+  const u = f.mul(f).mul(float(3).sub(f.mul(2))).toVar();
+  const a = hash21(cell);
+  const b = hash21(cell.add(vec2(1, 0)));
+  const c = hash21(cell.add(vec2(0, 1)));
+  const d = hash21(cell.add(vec2(1, 1)));
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
+});
 
-float fbm(vec2 p) {
-  mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
-  float value = 0.0;
-  float amplitude = 0.5;
-  for (int i = 0; i < 4; i++) {
-    value += amplitude * valueNoise(p);
-    p = rot * p * 2.03;
-    amplitude *= 0.5;
-  }
+const fbm = Fn<[Tsl]>(([source]) => {
+  const p = source.toVar();
+  const value = float(0).toVar();
+  const amplitude = float(0.5).toVar();
+  Loop(4, () => {
+    value.addAssign(amplitude.mul(valueNoise(p)));
+    // GLSL was `p = mat2(0.80, 0.60, -0.60, 0.80) * p * 2.03`. That literal is
+    // column-major, so the rows are (0.80, -0.60) and (0.60, 0.80). Written out
+    // by hand because TSL's `mat2()` accepts a Matrix2 or a Node, never four
+    // scalars — and spelling it out removes any doubt about which way it rotates.
+    p.assign(
+      vec2(
+        p.x.mul(0.8).sub(p.y.mul(0.6)),
+        p.x.mul(0.6).add(p.y.mul(0.8)),
+      ).mul(2.03),
+    );
+    amplitude.mulAssign(0.5);
+  });
   return value;
-}
+});
 
-void main() {
-  vec3 dir = normalize(vWorldPosition - cameraPosition);
-  vec2 flatDir = normalize(dir.xz + 1e-5);
-  vec2 flatSun = normalize(sunDirection.xz + 1e-5);
-  float cosSun = dot(dir, sunDirection);
-
-  // Unreal's gradient: pow(1 - saturate(height), HorizonFalloff), zenith -> horizon.
-  float gradient = pow(1.0 - clamp(dir.y, 0.0, 1.0), horizonFalloff);
-  vec3 color = mix(zenithColor, horizonColor, gradient);
-
-  // Horizon warms toward the sun's azimuth, strongest at low sun.
-  color += sunColor * gradient * pow(max(dot(flatDir, flatSun), 0.0), 3.0) * 0.22 * sunGlowIntensity;
-
-  // Two-lobe Mie halo, then the disk itself. Both sit under the cloud layer.
-  float towardSun = max(cosSun, 0.0);
-  color += sunColor * (pow(towardSun, 20.0) * 0.5 + pow(towardSun, 400.0) * 1.6) * sunGlowIntensity;
-  float disk = smoothstep(sunAngularCos, mix(sunAngularCos, 1.0, 0.4), cosSun);
-  color += sunColor * disk * sunIntensity;
-
-  if (cloudOpacity > 0.001 && dir.y > 0.005) {
-    // Project onto a flat cloud deck so layers converge at the horizon.
-    vec2 deck = dir.xz / max(dir.y, 0.02) * 0.55 + vec2(cloudTime, cloudTime * 0.4);
-    float density = fbm(deck);
-    float cover = smoothstep(cloudCoverage, cloudCoverage + 0.28, density);
-    // Cheap self-shadowing: compare against a sample stepped toward the sun.
-    float lit = fbm(deck + flatSun * 0.35);
-    float shade = clamp((density - lit) * 2.2 + 0.55, 0.0, 1.0);
-    vec3 cloud = mix(cloudShadowColor, cloudLitColor, shade);
-    cloud += sunColor * pow(towardSun, 8.0) * (1.0 - shade) * 0.35 * sunGlowIntensity;
-    color = mix(color, cloud, cover * cloudOpacity * smoothstep(0.02, 0.22, dir.y));
-  }
-
-  // Flat ground half with a short blend so the horizon line stays crisp.
-  // (GLSL smoothstep is undefined when edge0 > edge1, so invert rather than flip.)
-  vec3 ground = mix(horizonColor * 0.55, groundColor, 1.0 - smoothstep(-0.25, 0.0, dir.y));
-  color = mix(color, ground, 1.0 - smoothstep(-0.04, 0.0, dir.y));
-
-  // AgX pulls a lot of chroma out of the blues; pre-compensate before grading.
-  float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-  color = max(mix(vec3(luminance), color, saturation), 0.0);
-
-  gl_FragColor = vec4(color, 1.0);
-
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-}
-`;
-
-function smoothstep(edge0: number, edge1: number, x: number): number {
+function smoothstepScalar(edge0: number, edge1: number, x: number): number {
   const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
   return t * t * (3 - 2 * t);
 }
 
 export function createViewportProceduralSky(
   scene: THREE.Scene,
-  renderer: THREE.WebGLRenderer,
+  renderer: WebGPURenderer,
   sunLight: THREE.DirectionalLight,
 ): ViewportProceduralSky {
+  // Same shape and property names as the old `ShaderMaterial` uniforms object, so
+  // the grading code below is unchanged — TSL uniform nodes also expose `.value`.
   const uniforms = {
-    sunDirection: { value: new THREE.Vector3(0.4, 0.85, 0.3).normalize() },
-    zenithColor: { value: new THREE.Color() },
-    horizonColor: { value: new THREE.Color() },
-    groundColor: { value: new THREE.Color() },
-    sunColor: { value: new THREE.Color() },
-    cloudLitColor: { value: new THREE.Color() },
-    cloudShadowColor: { value: new THREE.Color() },
-    horizonFalloff: { value: 3 },
-    sunIntensity: { value: 14 },
-    sunGlowIntensity: { value: 1 },
+    sunDirection: uniform(new THREE.Vector3(0.4, 0.85, 0.3).normalize()),
+    zenithColor: uniform(new THREE.Color()),
+    horizonColor: uniform(new THREE.Color()),
+    groundColor: uniform(new THREE.Color()),
+    sunColor: uniform(new THREE.Color()),
+    cloudLitColor: uniform(new THREE.Color()),
+    cloudShadowColor: uniform(new THREE.Color()),
+    horizonFalloff: uniform(3),
+    sunIntensity: uniform(14),
+    sunGlowIntensity: uniform(1),
     // ~1.2 deg angular radius: physically fat, but readable like Unreal's.
-    sunAngularCos: { value: Math.cos(THREE.MathUtils.degToRad(1.2)) },
-    cloudCoverage: { value: 0.52 },
-    cloudOpacity: { value: 0.85 },
-    cloudTime: { value: 0 },
-    saturation: { value: 1.45 },
+    sunAngularCos: uniform(Math.cos(THREE.MathUtils.degToRad(1.2))),
+    cloudCoverage: uniform(0.52),
+    cloudOpacity: uniform(0.85),
+    cloudTime: uniform(0),
+    skySaturation: uniform(1.45),
   };
 
-  const material = new THREE.ShaderMaterial({
-    uniforms,
-    vertexShader,
-    fragmentShader,
-    side: THREE.BackSide,
-    depthTest: false,
-    depthWrite: false,
-    fog: false,
+  const skyColor = Fn(() => {
+    const dir = positionWorld.sub(cameraPosition).normalize().toVar();
+    const flatDir = dir.xz.add(1e-5).normalize().toVar();
+    const flatSun = uniforms.sunDirection.xz.add(1e-5).normalize().toVar();
+    const cosSun = dot(dir, uniforms.sunDirection).toVar();
+
+    // Unreal's gradient: pow(1 - saturate(height), HorizonFalloff), zenith -> horizon.
+    const gradient = dir.y.saturate().oneMinus().pow(uniforms.horizonFalloff).toVar();
+    const color = mix(uniforms.zenithColor, uniforms.horizonColor, gradient).toVar();
+
+    // Horizon warms toward the sun's azimuth, strongest at low sun.
+    color.addAssign(
+      uniforms.sunColor
+        .mul(gradient)
+        .mul(dot(flatDir, flatSun).max(0).pow(3))
+        .mul(0.22)
+        .mul(uniforms.sunGlowIntensity),
+    );
+
+    // Two-lobe Mie halo, then the disk itself. Both sit under the cloud layer.
+    const towardSun = cosSun.max(0).toVar();
+    color.addAssign(
+      uniforms.sunColor
+        .mul(towardSun.pow(20).mul(0.5).add(towardSun.pow(400).mul(1.6)))
+        .mul(uniforms.sunGlowIntensity),
+    );
+    const disk = smoothstep(
+      uniforms.sunAngularCos,
+      mix(uniforms.sunAngularCos, 1.0, 0.4),
+      cosSun,
+    ).toVar();
+    color.addAssign(uniforms.sunColor.mul(disk).mul(uniforms.sunIntensity));
+
+    If(uniforms.cloudOpacity.greaterThan(0.001).and(dir.y.greaterThan(0.005)), () => {
+      // Project onto a flat cloud deck so layers converge at the horizon.
+      const deck = dir.xz
+        .div(dir.y.max(0.02))
+        .mul(0.55)
+        .add(vec2(uniforms.cloudTime, uniforms.cloudTime.mul(0.4)))
+        .toVar();
+      const density = fbm(deck).toVar();
+      const cover = smoothstep(
+        uniforms.cloudCoverage,
+        uniforms.cloudCoverage.add(0.28),
+        density,
+      ).toVar();
+      // Cheap self-shadowing: compare against a sample stepped toward the sun.
+      const lit = fbm(deck.add(flatSun.mul(0.35))).toVar();
+      const shade = density.sub(lit).mul(2.2).add(0.55).saturate().toVar();
+      const cloud = mix(uniforms.cloudShadowColor, uniforms.cloudLitColor, shade).toVar();
+      cloud.addAssign(
+        uniforms.sunColor
+          .mul(towardSun.pow(8))
+          .mul(shade.oneMinus())
+          .mul(0.35)
+          .mul(uniforms.sunGlowIntensity),
+      );
+      color.assign(
+        mix(
+          color,
+          cloud,
+          cover.mul(uniforms.cloudOpacity).mul(smoothstep(0.02, 0.22, dir.y)),
+        ),
+      );
+    });
+
+    // Flat ground half with a short blend so the horizon line stays crisp.
+    const ground = mix(
+      uniforms.horizonColor.mul(0.55),
+      uniforms.groundColor,
+      smoothstep(-0.25, 0.0, dir.y).oneMinus(),
+    ).toVar();
+    color.assign(mix(color, ground, smoothstep(-0.04, 0.0, dir.y).oneMinus()));
+
+    // AgX pulls a lot of chroma out of the blues; pre-compensate before grading.
+    const luma = dot(color, LUMA).toVar();
+    color.assign(mix(vec3(luma), color, uniforms.skySaturation).max(0));
+
+    return vec4(color, 1.0);
   });
+
+  const material = new NodeMaterial();
+  material.fragmentNode = skyColor();
+  material.side = THREE.BackSide;
+  material.depthTest = false;
+  material.depthWrite = false;
+  material.fog = false;
 
   const sky = new THREE.Mesh(new THREE.SphereGeometry(SKY_RADIUS, 48, 32), material);
   sky.name = 'editor-procedural-sky';
@@ -223,13 +283,18 @@ export function createViewportProceduralSky(
     sky.updateMatrixWorld(true);
   };
 
-  const pmrem = new THREE.PMREMGenerator(renderer);
+  // `three/webgpu`'s PMREMGenerator, not `three`'s. They are different classes:
+  // the one on the THREE namespace reaches into `renderer.state.buffers` and
+  // throws "Cannot read properties of undefined (reading 'buffers')" the moment
+  // it is handed a WebGPURenderer. This one takes a `Renderer` directly, so it
+  // also needs no cast, and exposes the same fromScene() signature.
+  const pmrem = new PMREMGenerator(renderer);
   const bakeScene = new THREE.Scene();
   const hazeColor = new THREE.Color();
   const scratch = new THREE.Color();
 
   let enabled = false;
-  let envTarget: THREE.WebGLRenderTarget | null = null;
+  let envTarget: THREE.RenderTarget | null = null;
   const savedBackground = new THREE.Color(DEFAULT_BACKGROUND);
   let savedFog: THREE.Fog | THREE.FogExp2 | null = null;
 
@@ -243,8 +308,8 @@ export function createViewportProceduralSky(
 
   /** Grade the whole palette off sun height, the way BP_Sky_Sphere does. */
   function applySunHeight(height: number): void {
-    const dayMix = smoothstep(-0.02, 0.22, height);
-    const nightMix = smoothstep(0.02, -0.16, height);
+    const dayMix = smoothstepScalar(-0.02, 0.22, height);
+    const nightMix = smoothstepScalar(0.02, -0.16, height);
 
     const grade = (key: keyof SkyPalette, target: THREE.Color): void => {
       blend(target, DUSK[key], DAY[key], dayMix);
@@ -259,7 +324,7 @@ export function createViewportProceduralSky(
 
     blend(uniforms.sunColor.value, SUN_TINT_DUSK, SUN_TINT_DAY, dayMix);
 
-    const above = smoothstep(-0.09, 0.06, height);
+    const above = smoothstepScalar(-0.09, 0.06, height);
     uniforms.sunIntensity.value = 14 * above;
     uniforms.sunGlowIntensity.value = above;
 

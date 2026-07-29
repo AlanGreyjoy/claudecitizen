@@ -1,13 +1,22 @@
 import * as THREE from "three";
+import { RectAreaLightNode, WebGPURenderer } from "three/webgpu";
+import { RectAreaLightTexturesLib } from "three/examples/jsm/lights/RectAreaLightTexturesLib.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { setupUpdateObjectAnimations } from "../prefabs/object-animation";
 import { createViewportProceduralSky } from "./viewport-procedural-sky";
 import { setKtx2SupportRenderer } from "../assets/ktx2";
+import { initRequiredWebGpu } from "../webgpu-required";
 
 export interface ViewportScene {
   canvas: HTMLCanvasElement;
-  renderer: THREE.WebGLRenderer;
+  renderer: WebGPURenderer;
+  /**
+   * Resolves once the renderer backend is live. `render()` before this settles
+   * still draws — it forwards to `renderAsync()` — but logs a warning every
+   * frame, so render loops should gate their first frame on this.
+   */
+  ready: Promise<void>;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   entityRoot: THREE.Group;
@@ -23,16 +32,46 @@ export interface ViewportScene {
   dispose: () => void;
 }
 
+let ltcInitialized = false;
+
+/**
+ * Hands the node lighting path its LTC BRDF tables.
+ *
+ * `RectAreaLightNode` keeps them in a module-level singleton that starts as
+ * `null` and dereferences it unconditionally when it sets up an area light, so
+ * any scene containing one throws on every frame until this runs.
+ * `ensureRectAreaLightsInitialized` in `src/render/prefabs/prefab-renderer.ts`
+ * is the `WebGLRenderer` counterpart — it patches `UniformsLib` and does
+ * nothing for the node path. Kept here rather than next to it because
+ * `prefab-renderer.ts` is shared with the still-WebGL game runtime, and
+ * importing `three/webgpu` there would pull 1.8 MB into its module graph.
+ *
+ * `init()` builds ~80 KB of data textures, hence the guard.
+ */
+function ensureNodeRectAreaLights(): void {
+  if (ltcInitialized) return;
+  RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
+  ltcInitialized = true;
+}
+
 /** Renderer, lights, grid, camera, orbit, and gizmo — no entity logic. */
 export function createViewportScene(container: HTMLElement): ViewportScene {
+  ensureNodeRectAreaLights();
   const canvas = document.createElement("canvas");
   canvas.tabIndex = 0;
   container.appendChild(canvas);
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  // The viewport is usually the first live context in the editor, so it also
-  // seeds KTX2 format detection for loads that happen before Play.
-  setKtx2SupportRenderer(renderer);
+  // WebGPU backend, with three's automatic WebGL2 fallback stripped —
+  // `initRequiredWebGpu` rejects rather than degrading. WebGPU is a hard engine
+  // requirement; see src/render/webgpu-required.ts for why.
+  const renderer = new WebGPURenderer({ canvas, antialias: true });
+  // KTX2 detection reads GPU features synchronously, which needs a live backend —
+  // so unlike the old WebGLRenderer path this cannot run at construction time.
+  // The viewport is usually the first renderer in the editor, so it still seeds
+  // format detection for loads that happen before Play, just one tick later.
+  const ready = initRequiredWebGpu(renderer).then(() => {
+    setKtx2SupportRenderer(renderer);
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.AgXToneMapping;
@@ -110,6 +149,7 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   return {
     canvas,
     renderer,
+    ready,
     scene,
     camera,
     entityRoot,
