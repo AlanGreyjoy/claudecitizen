@@ -3524,6 +3524,13 @@ body.ed-resize-row * {
   background: var(--ed-chrome);
 }
 
+.ed-material-toolbar-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .ed-material-toolbar-title {
   font: 700 10px/1 var(--ed-font);
   letter-spacing: 0.12em;
@@ -3541,30 +3548,69 @@ body.ed-resize-row * {
   overflow: auto;
 }
 
+.ed-material-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.ed-material-check input {
+  margin: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--ed-focus);
+  cursor: pointer;
+}
+
 .ed-material-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   margin: 0;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: pointer;
 }
 
 .ed-material-row:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.ed-material-row.is-checked:not(.is-focused) {
+  background: rgba(255, 255, 255, 0.035);
+}
+
 .ed-material-row.is-focused {
   background: var(--ed-select);
   box-shadow: inset 2px 0 0 var(--ed-focus);
+}
+
+.ed-material-row-main {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
 }
 
 .ed-material-swatch {
@@ -3825,7 +3871,9 @@ body.ed-resize-row * {
 
 .ed-material-inspector-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
   padding-top: 8px;
 }
 

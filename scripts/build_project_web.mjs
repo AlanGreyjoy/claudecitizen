@@ -251,6 +251,21 @@ async function main() {
     await run('npx', ['tsc', '--noEmit'], engineRoot);
   }
 
+  // Stance packs (ProRifle/Handgun locomotion.glb) are authored as loose clips
+  // and referenced by animation controllers — not prefabs. Pack before staging
+  // so Deploy → Frontend / File → Build Web ship them without a manual step.
+  console.log('[build-web] packing stance animation GLBs…');
+  await run(
+    'node',
+    [
+      join(engineRoot, 'scripts/pack_animation_glbs.mjs'),
+      '--project',
+      options.projectRoot,
+      '--optional',
+    ],
+    engineRoot,
+  );
+
   console.log('[build-web] staging engine + project…');
   await stageEngine(stageDir);
   const overlaid = await overlayProjectSource(options.projectRoot, stageDir);

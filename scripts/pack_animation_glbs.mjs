@@ -5,6 +5,7 @@
  * Usage:
  *   node scripts/pack_animation_glbs.mjs --in <dir> --out <file.glb>
  *   node scripts/pack_animation_glbs.mjs --project <projectRoot>
+ *   node scripts/pack_animation_glbs.mjs --project <projectRoot> --optional
  *
  * With --project, packs the default stance folders when present:
  *   assets/animations/ProRifle/*.glb → …/ProRifle/locomotion.glb
@@ -16,6 +17,7 @@
  * controller clipNames stay stable. Multi-clip inputs keep embedded names.
  * Output scene/skeleton comes from the first input; later clips must share bone names.
  */
+import { existsSync } from 'node:fs';
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -74,18 +76,21 @@ Options:
   --in <dir>         Directory of *.glb clip files (skips locomotion.glb)
   --out <file.glb>   Output multi-clip pack path
   --project <root>   Pack default ProRifle + Handgun folders under the project
+  --optional         With --project: warn instead of failing when nothing to pack
+                     (and when existing locomotion.glb packs are already present)
   --help             Show this help
 `);
 }
 
 function parseArgs(argv) {
-  const args = { inDir: null, outFile: null, projectRoot: null, help: false };
+  const args = { inDir: null, outFile: null, projectRoot: null, optional: false, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') args.help = true;
     else if (arg === '--in') args.inDir = argv[++i] ?? null;
     else if (arg === '--out') args.outFile = argv[++i] ?? null;
     else if (arg === '--project') args.projectRoot = argv[++i] ?? null;
+    else if (arg === '--optional') args.optional = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return args;
@@ -200,7 +205,7 @@ async function findFirstExistingDir(projectRoot, relativeIns) {
   return null;
 }
 
-async function packProject(projectRoot) {
+async function packProject(projectRoot, { optional = false } = {}) {
   const root = resolve(projectRoot);
   let packed = 0;
   for (const pack of DEFAULT_PACKS) {
@@ -215,9 +220,21 @@ async function packProject(projectRoot) {
     packed += 1;
   }
   if (packed === 0) {
-    throw new Error(
-      `No stance clip folders found under ${root}. Expected e.g. assets/animations/ProRifle/*.glb`,
-    );
+    const missingOutputs = DEFAULT_PACKS.filter(
+      (pack) => !existsSync(join(root, pack.relativeOut)),
+    ).map((pack) => pack.relativeOut);
+    if (missingOutputs.length === 0) {
+      console.log('No loose clips to pack; existing locomotion.glb packs are present.');
+      return;
+    }
+    const message =
+      `No stance clip folders found under ${root}. Expected e.g. assets/animations/ProRifle/*.glb. ` +
+      `Missing packs: ${missingOutputs.join(', ')}`;
+    if (optional) {
+      console.warn(message);
+      return;
+    }
+    throw new Error(message);
   }
 }
 
@@ -228,7 +245,7 @@ async function main() {
     return;
   }
   if (args.projectRoot) {
-    await packProject(args.projectRoot);
+    await packProject(args.projectRoot, { optional: args.optional });
     return;
   }
   if (!args.inDir || !args.outFile) {

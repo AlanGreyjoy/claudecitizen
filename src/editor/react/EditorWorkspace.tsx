@@ -117,6 +117,9 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
   const [materialFocus, setMaterialFocus] = useState<MaterialFocusTarget | null>(
     null,
   );
+  const [materialCheckedKeys, setMaterialCheckedKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const selectMaterial = (target: MaterialFocusTarget): void => {
     setMaterialFocus(target);
@@ -239,6 +242,8 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
               <MaterialManagerPanel
                 store={store}
                 selected={materialFocus}
+                checkedKeys={materialCheckedKeys}
+                onCheckedKeysChange={setMaterialCheckedKeys}
                 onSelectMaterial={selectMaterial}
               />
             </div>
@@ -293,6 +298,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
               <MaterialInspectorPanel
                 store={store}
                 selection={materialFocus}
+                checkedKeys={materialCheckedKeys}
                 viewport={viewport}
               />
             </div>

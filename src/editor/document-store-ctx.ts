@@ -113,6 +113,14 @@ export type EditorStoreCtx = {
     material: string,
     override: PrefabMaterialOverride | null,
   ) => void;
+  setMaterialOverridesBatch: (
+    edits: ReadonlyArray<{
+      entityId: string;
+      material: string;
+      override: PrefabMaterialOverride | null;
+    }>,
+    label?: string,
+  ) => void;
   setComponents: (id: string, components: PrefabComponent[]) => void;
   setTransform: (id: string, transform: EntityTransform) => void;
 

@@ -12,13 +12,28 @@ import { useEditorStore } from '../hooks';
 import { EmptyNote } from './InspectorForm';
 import { MaterialColorRow, MaterialSliderRow } from './MaterialFields';
 import { MaterialPreviewStage } from './MaterialPreviewStage';
-import type { MaterialFocusTarget } from './MaterialManagerPanel';
+import {
+  materialRowKey,
+  type MaterialFocusTarget,
+} from './MaterialManagerPanel';
 
 type MaterialInspectorPanelProps = {
   store: EditorStore;
   selection: MaterialFocusTarget | null;
+  checkedKeys: ReadonlySet<string>;
   viewport: EditorViewport | null;
 };
+
+function parseMaterialRowKey(
+  key: string,
+): { entityId: string; material: string } | null {
+  const split = key.indexOf(':');
+  if (split <= 0 || split === key.length - 1) return null;
+  return {
+    entityId: key.slice(0, split),
+    material: key.slice(split + 1),
+  };
+}
 
 function useMaterialRow(
   store: EditorStore,
@@ -71,9 +86,65 @@ function MaterialHeader({ row }: { row: MaterialRow }): ReactElement {
   );
 }
 
+function MaterialInspectorActions({
+  checkedCount,
+  applyTitle,
+  onApplyToChecked,
+  overridden,
+  onResetOverride,
+}: {
+  checkedCount: number;
+  applyTitle: string;
+  onApplyToChecked: () => void;
+  overridden: boolean;
+  onResetOverride: () => void;
+}): ReactElement {
+  return (
+    <div className="ed-material-inspector-actions">
+      <button
+        type="button"
+        className="ed-btn"
+        disabled={checkedCount === 0}
+        title={applyTitle}
+        onClick={onApplyToChecked}
+      >
+        {checkedCount === 0
+          ? 'Apply to checked'
+          : `Apply to ${checkedCount} checked`}
+      </button>
+      <button
+        type="button"
+        className="ed-btn"
+        disabled={!overridden}
+        title="Drop the override and go back to the asset's authored values"
+        onClick={onResetOverride}
+      >
+        Reset Override
+      </button>
+    </div>
+  );
+}
+
+function applyButtonTitle(
+  checkedCount: number,
+  focusedKey: string | null,
+  checkedKeys: ReadonlySet<string>,
+): string {
+  if (checkedCount === 0) {
+    return 'Check materials in the list, then apply these settings to them';
+  }
+  if (focusedKey && checkedKeys.has(focusedKey) && checkedCount === 1) {
+    return 'Apply these settings to the checked material';
+  }
+  return `Copy these settings onto ${checkedCount} checked material${
+    checkedCount === 1 ? '' : 's'
+  }`;
+}
+
 export function MaterialInspectorPanel({
   store,
   selection,
+  checkedKeys,
   viewport,
 }: MaterialInspectorPanelProps): ReactElement {
   const row = useMaterialRow(store, selection);
@@ -123,7 +194,36 @@ export function MaterialInspectorPanel({
     [store, viewport, entityId, materialName],
   );
 
+  const applyToChecked = useCallback(() => {
+    if (!draft || checkedKeys.size === 0) return;
+    const edits: Array<{
+      entityId: string;
+      material: string;
+      override: ReturnType<typeof valuesToOverride>;
+    }> = [];
+    for (const key of checkedKeys) {
+      const parsed = parseMaterialRowKey(key);
+      if (!parsed) continue;
+      edits.push({
+        entityId: parsed.entityId,
+        material: parsed.material,
+        override: valuesToOverride(parsed.material, draft),
+      });
+    }
+    if (edits.length === 0) return;
+    if (entityId && materialName) {
+      viewport?.setMaterialPreview(entityId, materialName, null);
+    }
+    store.setMaterialOverridesBatch(
+      edits,
+      `Apply materials to ${edits.length} checked`,
+    );
+  }, [store, viewport, draft, checkedKeys, entityId, materialName]);
+
   const values = draft ?? row?.values ?? null;
+  const checkedCount = checkedKeys.size;
+  const focusedKey =
+    entityId && materialName ? materialRowKey(entityId, materialName) : null;
 
   return (
     <>
@@ -192,22 +292,18 @@ export function MaterialInspectorPanel({
               onScrub={(emissiveIntensity) => scrub({ ...values, emissiveIntensity })}
               onCommit={(emissiveIntensity) => commit({ ...values, emissiveIntensity })}
             />
-            <div className="ed-material-inspector-actions">
-              <button
-                type="button"
-                className="ed-btn"
-                disabled={!row.overridden}
-                title="Drop the override and go back to the asset's authored values"
-                onClick={() => {
-                  if (!entityId || !materialName) return;
-                  viewport?.setMaterialPreview(entityId, materialName, null);
-                  setDraft(row.base);
-                  store.setMaterialOverride(entityId, materialName, null);
-                }}
-              >
-                Reset Override
-              </button>
-            </div>
+            <MaterialInspectorActions
+              checkedCount={checkedCount}
+              applyTitle={applyButtonTitle(checkedCount, focusedKey, checkedKeys)}
+              onApplyToChecked={applyToChecked}
+              overridden={row.overridden}
+              onResetOverride={() => {
+                if (!entityId || !materialName) return;
+                viewport?.setMaterialPreview(entityId, materialName, null);
+                setDraft(row.base);
+                store.setMaterialOverride(entityId, materialName, null);
+              }}
+            />
           </div>
         </div>
       )}

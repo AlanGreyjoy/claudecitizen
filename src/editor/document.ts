@@ -154,6 +154,7 @@ export function createEditorStore() {
     setPrimitive: ctx.setPrimitive,
     setAsset: ctx.setAsset,
     setMaterialOverride: ctx.setMaterialOverride,
+    setMaterialOverridesBatch: ctx.setMaterialOverridesBatch,
     setComponents: ctx.setComponents,
     setNodeOverrideComponents: ctx.setNodeOverrideComponents,
     setNodeOverrideComponentsBatch: ctx.setNodeOverrideComponentsBatch,
