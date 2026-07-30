@@ -29,11 +29,9 @@ globalThis.onmessage = (event: MessageEvent<WaterWorkerInMessage>) => {
       buffers.positions.buffer,
       buffers.barycentrics.buffer,
       buffers.colors.buffer,
-      buffers.effectDetails.buffer,
       buffers.radialDirections.buffer,
-      buffers.shores.buffer,
-      buffers.surfStrengths.buffer,
       buffers.waterDepths.buffer,
+      buffers.waterFactors.buffer,
     ]);
   } catch (error) {
     const message: WaterWorkerOutMessage = {

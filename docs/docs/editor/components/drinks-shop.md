@@ -39,4 +39,5 @@ Purchases call `POST /game/inventory/purchase`, deduct ARC, and add **one** stac
 
 - [Food Shop](./food-shop)
 - [Canteen](./canteen)
+- [Pharmacy](./pharmacy)
 - [Weapon Shop](./weapon-shop)

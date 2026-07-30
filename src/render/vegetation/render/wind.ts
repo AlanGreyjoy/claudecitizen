@@ -1,7 +1,7 @@
 import type * as THREE from 'three';
 
 /**
- * GPU wind sway for instanced vegetation.
+ * WebGL wind sway for instanced vegetation.
  *
  * Materials are patched via onBeforeCompile (MeshStandardMaterial trees /
  * MeshLambertMaterial grass). All patched materials share a single time uniform
@@ -23,7 +23,25 @@ export interface WindMaterialOptions {
   speed?: number;
 }
 
+/**
+ * Converts one wind-enabled source material for a particular instance buffer.
+ *
+ * The game still renders through WebGL and therefore keeps the legacy
+ * `onBeforeCompile` material in place. WebGPU-only surfaces can inject a
+ * node-material factory at the point where their `InstancedMesh` exists, which
+ * gives the factory access to the exact instance transforms used by that mesh.
+ */
+export type InstancedWindMaterialFactory = (
+  material: THREE.Material,
+  instanceMatrix: THREE.InstancedBufferAttribute,
+) => THREE.Material;
+
 export const sharedWindTime: THREE.IUniform<number> = { value: 0 };
+
+const windOptionsByMaterial = new WeakMap<
+  THREE.Material,
+  Readonly<WindMaterialOptions>
+>();
 
 const WIND_VERTEX_COMMON = /* glsl */ `
 uniform float uWindTime;
@@ -61,10 +79,16 @@ export function applyWindToMaterial(
   options: WindMaterialOptions,
 ): void {
   const referenceHeight = Math.max(options.referenceHeight, 1e-3);
+  const normalizedOptions: Readonly<WindMaterialOptions> = {
+    referenceHeight,
+    speed: options.speed ?? 1,
+    strength: options.strength,
+  };
+  windOptionsByMaterial.set(material, normalizedOptions);
   const windUniforms: Record<string, THREE.IUniform> = {
     uWindHeightInv: { value: 1 / referenceHeight },
-    uWindSpeed: { value: options.speed ?? 1 },
-    uWindStrength: { value: options.strength },
+    uWindSpeed: { value: normalizedOptions.speed },
+    uWindStrength: { value: normalizedOptions.strength },
     uWindTime: sharedWindTime,
   };
 
@@ -80,6 +104,13 @@ export function applyWindToMaterial(
   // All wind variants share identical shader code (uniforms carry the
   // per-asset tuning), so they can share one compiled program.
   material.customProgramCacheKey = () => 'vegetation-wind';
+}
+
+/** Returns the normalized tuning attached by `applyWindToMaterial`. */
+export function getWindMaterialOptions(
+  material: THREE.Material,
+): Readonly<WindMaterialOptions> | null {
+  return windOptionsByMaterial.get(material) ?? null;
 }
 
 export function updateVegetationWind(timeSeconds: number): void {

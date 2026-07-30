@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { EditorStore } from "../../editor/document";
+import { toSceneDocument } from "../../editor/serialize";
+import { resolveScenePlayConfig } from "../../world/scenes/scene-runtime";
 import { attachViewportDrop } from "./viewport-drop";
 import { createViewportEntityGraph } from "./viewport-entity-graph";
 import { createViewportFlythrough } from "./viewport-flythrough";
@@ -70,8 +72,11 @@ export function createEditorViewport(
     applyShipPreview: shipPreview.apply,
     resetShipPreviewWarnings: shipPreview.resetMissingWarnings,
     registerParticleHandle: particles.register,
+    registerParticlePrefabRoot: particles.registerPrefabRoot,
     disposeParticleHandles: particles.disposeAll,
     disposeParticleHandlesForEntity: particles.disposeForEntity,
+    disposeParticlePrefabRootsForEntity: particles.disposePrefabRootsForEntity,
+    discardParticlePrefabRoot: particles.discardPrefabRoot,
   });
 
   const glbQueries = createViewportGlbQueries(
@@ -127,12 +132,14 @@ export function createEditorViewport(
   const unsubscribe = store.subscribe((event) => {
     if (event.type === "structure" || event.type === "document") {
       graph.rebuildAll();
+      syncSceneEnvironment();
       return;
     }
     if (event.type === "entity") {
       // Component / rename / visibility edits — keep the live GLB graph so
       // hierarchy expand keys and selection highlight survive.
       graph.refreshEntity(event.entityId);
+      syncSceneEnvironment();
       return;
     }
     if (event.type === "glb-components") {
@@ -165,9 +172,20 @@ export function createEditorViewport(
       return;
     }
     if (event.type === "history") {
+      syncSceneEnvironment();
       return;
     }
   });
+
+  function syncSceneEnvironment(): void {
+    const state = store.getState();
+    if (state.documentType !== "scene") {
+      viewportScene.setSceneEnvironment(null);
+      return;
+    }
+    const config = resolveScenePlayConfig(toSceneDocument(state)).environment;
+    viewportScene.setSceneEnvironment(config);
+  }
 
   const resizeObserver = new ResizeObserver(viewportScene.resize);
   resizeObserver.observe(container);
@@ -212,6 +230,7 @@ export function createEditorViewport(
   animate();
 
   graph.rebuildAll();
+  syncSceneEnvironment();
 
   return {
     setGizmoMode(mode: GizmoMode) {
@@ -225,6 +244,8 @@ export function createEditorViewport(
     setSnap: snap.setSnap,
     setEnvironmentLights: viewportScene.setEnvironmentLights,
     setProceduralSky: viewportScene.setProceduralSky,
+    setShowAllColliders: selection.setShowAllColliders,
+    setGridVisible: viewportScene.setGridVisible,
     setPlayMode(playing: boolean) {
       playMode = playing;
       container.classList.toggle("is-playing", playing);
@@ -241,6 +262,7 @@ export function createEditorViewport(
     getViewFocusPosition: viewFocus.getViewFocusPosition,
     getGlbNodePrefabPosition: glbQueries.getGlbNodePrefabPosition,
     getGlbNodePrefabTransform: glbQueries.getGlbNodePrefabTransform,
+    getEntityTransformRelativeToGlbNode: glbQueries.getEntityTransformRelativeToGlbNode,
     getGlbNodeBounds: glbQueries.getGlbNodeBounds,
     getGlbNodeLocalTransform: glbQueries.getGlbNodeLocalTransform,
     setGlbNodeLocalTransform: glbQueries.setGlbNodeLocalTransform,

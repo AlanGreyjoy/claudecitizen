@@ -36,6 +36,64 @@ import { useEditorAppEffects } from './use-editor-app-effects';
 import { useEditorAppSave } from './use-editor-app-save';
 import { useEditorAppSession } from './use-editor-app-session';
 
+function playSurvivesTabChange(current: SceneEditorTab, next: SceneEditorTab): boolean {
+  if (current === 'ship') return next === 'ship';
+  if (current === 'planet-authoring') return next === 'planet-authoring';
+  return next === 'scene' || next === 'material-manager';
+}
+
+type EditorAppModalsProps = {
+  deployTarget: DeployTarget | null;
+  multiplayerDebugOpen: boolean;
+  packagesOpen: boolean;
+  transcodeOpen: boolean;
+  transcodeAutoStart: boolean;
+  onCloseDeploy: () => void;
+  onCloseMultiplayer: () => void;
+  onClosePackages: () => void;
+  onCloseTranscode: () => void;
+  onTranscodeAutoStartConsumed: () => void;
+};
+
+function EditorAppModals(props: EditorAppModalsProps): ReactElement {
+  return (
+    <>
+      <DeployBackendModal
+        open={props.deployTarget === 'backend'}
+        onClose={props.onCloseDeploy}
+      />
+      <DeployFrontendModal
+        open={props.deployTarget === 'client'}
+        onClose={props.onCloseDeploy}
+      />
+      <MultiplayerDebugModal
+        open={props.multiplayerDebugOpen}
+        onClose={props.onCloseMultiplayer}
+      />
+      <PackagesModal open={props.packagesOpen} onClose={props.onClosePackages} />
+      <TranscodeTexturesModal
+        open={props.transcodeOpen}
+        autoStart={props.transcodeAutoStart}
+        onAutoStartConsumed={props.onTranscodeAutoStartConsumed}
+        onClose={props.onCloseTranscode}
+      />
+    </>
+  );
+}
+
+function useEditorRootTabClass(tab: SceneEditorTab): void {
+  useEffect(() => {
+    const root = document.getElementById('editor-root');
+    if (!root) return;
+    root.classList.toggle('is-ship', tab === 'ship');
+    root.classList.toggle('is-base-characters', tab === 'base-characters');
+    root.classList.toggle('is-planet-authoring', tab === 'planet-authoring');
+    root.classList.toggle('is-system-map', tab === 'system-map');
+    root.classList.toggle('is-menu-manager', tab === 'menu-manager');
+    root.classList.toggle('is-server', tab === 'server');
+  }, [tab]);
+}
+
 export function EditorApp(): ReactElement {
   const store = useEditorStoreInstance(() => createEditorStore());
   const audioPreview = useMemo(() => createEditorAudioPreviewController(), []);
@@ -119,16 +177,7 @@ export function EditorApp(): ReactElement {
     projectSplitterRef,
   });
 
-  useEffect(() => {
-    const root = document.getElementById('editor-root');
-    if (!root) return;
-    root.classList.toggle('is-ship', tab === 'ship');
-    root.classList.toggle('is-base-characters', tab === 'base-characters');
-    root.classList.toggle('is-planet-authoring', tab === 'planet-authoring');
-    root.classList.toggle('is-system-map', tab === 'system-map');
-    root.classList.toggle('is-menu-manager', tab === 'menu-manager');
-    root.classList.toggle('is-server', tab === 'server');
-  }, [tab]);
+  useEditorRootTabClass(tab);
 
   // Dock tab-editor sidebars into Scene hierarchy/inspector so scene tabs sit
   // between them (same chrome as Scene).
@@ -186,14 +235,8 @@ export function EditorApp(): ReactElement {
     if (current === 'system-map' && next !== current && !handles.systemMapEditor?.canLeave()) {
       return;
     }
-    if (playingRef.current) {
-      // A ship playtest belongs to the Ship tab; scene Play survives the two
-      // tabs that keep showing the scene viewport.
-      const survivesTabChange =
-        current === 'ship'
-          ? next === 'ship'
-          : next === 'scene' || next === 'material-manager';
-      if (!survivesTabChange) stopInEditorPlay();
+    if (playingRef.current && !playSurvivesTabChange(current, next)) {
+      stopInEditorPlay();
     }
     setTabState(next);
     if (next === 'base-characters') {
@@ -276,6 +319,7 @@ export function EditorApp(): ReactElement {
   const {
     togglePlay,
     togglePause,
+    startPlanetAuthoringPlay,
     buildWeb,
     exitToTitle,
     onSave,
@@ -441,6 +485,7 @@ export function EditorApp(): ReactElement {
       openShipById={openShipById}
       newShipDocument={newShipDocument}
       togglePlay={() => void togglePlay()}
+      startPlanetAuthoringPlay={startPlanetAuthoringPlay}
       createPrefabsInFolder={createPrefabsInFolder}
       newSceneOpen={newSceneOpen}
       setNewSceneOpen={setNewSceneOpen}
@@ -450,30 +495,20 @@ export function EditorApp(): ReactElement {
       projectSettingsOpen={projectSettingsOpen}
       setProjectSettingsOpen={setProjectSettingsOpen}
     />
-    <DeployBackendModal
-      open={deployTarget === 'backend'}
-      onClose={() => setDeployTarget(null)}
-    />
-    <DeployFrontendModal
-      open={deployTarget === 'client'}
-      onClose={() => setDeployTarget(null)}
-    />
-    <MultiplayerDebugModal
-      open={multiplayerDebugOpen}
-      onClose={() => setMultiplayerDebugOpen(false)}
-    />
-    <PackagesModal
-      open={packagesOpen}
-      onClose={() => setPackagesOpen(false)}
-    />
-    <TranscodeTexturesModal
-      open={transcodeOpen}
-      autoStart={transcodeAutoStart}
-      onAutoStartConsumed={() => setTranscodeAutoStart(false)}
-      onClose={() => {
+    <EditorAppModals
+      deployTarget={deployTarget}
+      multiplayerDebugOpen={multiplayerDebugOpen}
+      packagesOpen={packagesOpen}
+      transcodeOpen={transcodeOpen}
+      transcodeAutoStart={transcodeAutoStart}
+      onCloseDeploy={() => setDeployTarget(null)}
+      onCloseMultiplayer={() => setMultiplayerDebugOpen(false)}
+      onClosePackages={() => setPackagesOpen(false)}
+      onCloseTranscode={() => {
         setTranscodeOpen(false);
         setTranscodeAutoStart(false);
       }}
+      onTranscodeAutoStartConsumed={() => setTranscodeAutoStart(false)}
     />
     </>
   );

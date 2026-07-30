@@ -338,7 +338,7 @@ function buildOutfittersHelper(
   return group;
 }
 function buildConsumableShopHelper(
-  component: Extract<PrefabComponent, { type: "food-shop" | "drinks-shop" | "canteen" }>,
+  component: Extract<PrefabComponent, { type: "food-shop" | "drinks-shop" | "canteen" | "pharmacy" }>,
 ): THREE.Object3D | null {
   const group = new THREE.Group();
   const color =
@@ -346,6 +346,8 @@ function buildConsumableShopHelper(
   ? 0xf0c14a
   : component.type === "drinks-shop"
   ? 0x4ab8f0
+  : component.type === "pharmacy"
+  ? 0x4af08a
   : 0xc47af0;
   const radius = component.gazeRadius ?? 0.4;
   const sphere = makeHelperMesh(
@@ -389,6 +391,7 @@ return {
     "food-shop": buildConsumableShopHelper,
     "drinks-shop": buildConsumableShopHelper,
     "canteen": buildConsumableShopHelper,
+    "pharmacy": buildConsumableShopHelper,
     "ship-controller": buildShipControllerHelper,
     "ship-stats": () => buildNullHelper(),
     "ship-gear": () => buildNullHelper(),

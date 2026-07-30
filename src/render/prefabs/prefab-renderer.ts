@@ -19,6 +19,7 @@ import type {
 import {
   attachParticleSystemToEntity,
   setupUpdateParticles,
+  type ParticleMaterialFactory,
 } from '../particles';
 import {
   bindObjectAnimationComponent,
@@ -54,6 +55,8 @@ interface BuildEntityOptions {
   owned?: OwnedGpuResources;
   /** Authoring surfaces hold clones outside any play session — exempt their templates from the sweep. */
   pinModels?: boolean;
+  /** Injected by WebGPU surfaces while the game runtime still uses WebGL. */
+  particleMaterialFactory?: ParticleMaterialFactory;
 }
 
 /** Cache name used with the asset-residency sweep. */
@@ -223,6 +226,12 @@ export interface PrefabLightRenderOptions {
 export interface PrefabStationRenderOptions {
   localLightShadowMapSize?: number;
   localLightShadowsEnabled?: boolean;
+  /**
+   * WebGPU surfaces must inject the TSL particle material. Three substitutes a
+   * blank node material for the GLSL `ShaderMaterial` default, so a station
+   * prefab with particle components renders them invisibly without this.
+   */
+  particleMaterialFactory?: ParticleMaterialFactory;
 }
 
 type PrefabLightComponent = Extract<
@@ -639,6 +648,7 @@ function attachLoadedAsset(
   entity: PrefabEntity,
   options: BuildEntityOptions,
 ): void {
+  if (options.owned?.disposed) return;
   const asset = entity.asset;
   if (!asset) return;
   if (asset.node && !isolatePrefabModelNode(model, asset.node)) {
@@ -695,7 +705,9 @@ function attachEntityComponents(
       }));
     }
     if (component.type === 'particle-system') {
-      attachParticleSystemToEntity(options.rootGroup, group, component);
+      attachParticleSystemToEntity(options.rootGroup, group, component, {
+        materialFactory: options.particleMaterialFactory,
+      });
     }
     if (component.type === 'object-animation' && entity.asset) {
       if ((component.nodes?.length ?? 0) === 0) {
@@ -783,6 +795,7 @@ export function createPrefabStationGroup(
     localLightShadowMapSize: options.localLightShadowMapSize ?? 0,
     localLightShadowsEnabled: options.localLightShadowsEnabled ?? false,
     owned,
+    particleMaterialFactory: options.particleMaterialFactory,
     rootGroup: group,
   }).group);
   group.scale.setScalar(renderScale);
@@ -793,7 +806,10 @@ export function createPrefabStationGroup(
 /** Builds a single prop prefab instance (not scaled — caller sets transform). */
 export function createPropInstanceGroup(
   doc: PrefabDocument,
-  options: { pinModels?: boolean } = {},
+  options: {
+    pinModels?: boolean;
+    particleMaterialFactory?: ParticleMaterialFactory;
+  } = {},
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = `prop:${doc.id}`;
@@ -808,6 +824,7 @@ export function createPropInstanceGroup(
     localLightShadowsEnabled: true,
     owned,
     pinModels: options.pinModels,
+    particleMaterialFactory: options.particleMaterialFactory,
     rootGroup: group,
   }).group);
   applyDefaultFrustumCulling(group);
@@ -820,7 +837,10 @@ export function createPropInstanceGroup(
  */
 export async function createPropInstanceGroupAsync(
   doc: PrefabDocument,
-  options: { pinModels?: boolean } = {},
+  options: {
+    pinModels?: boolean;
+    particleMaterialFactory?: ParticleMaterialFactory;
+  } = {},
 ): Promise<THREE.Group> {
   const group = new THREE.Group();
   group.name = `prop:${doc.id}`;
@@ -835,6 +855,7 @@ export async function createPropInstanceGroupAsync(
     localLightShadowsEnabled: true,
     owned,
     pinModels: options.pinModels,
+    particleMaterialFactory: options.particleMaterialFactory,
     rootGroup: group,
   });
   group.add(built.group);

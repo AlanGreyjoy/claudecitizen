@@ -22,6 +22,8 @@ export interface DisposedCounts {
 export interface OwnedGpuResources {
   geometries: Set<THREE.BufferGeometry>;
   materials: Set<THREE.Material>;
+  /** Prevents late async model loads from attaching to a torn-down instance. */
+  disposed: boolean;
 }
 
 interface OwnedGpuUserData {
@@ -29,7 +31,7 @@ interface OwnedGpuUserData {
 }
 
 export function createOwnedGpuResources(): OwnedGpuResources {
-  return { geometries: new Set(), materials: new Set() };
+  return { geometries: new Set(), materials: new Set(), disposed: false };
 }
 
 function emptyCounts(): DisposedCounts {
@@ -75,6 +77,7 @@ export function disposeOwnedGpuResources(root: THREE.Object3D): DisposedCounts {
   const counts = emptyCounts();
   const owned = (root.userData as OwnedGpuUserData | undefined)?.ownedGpu;
   if (owned) {
+    owned.disposed = true;
     for (const material of owned.materials) {
       material.dispose();
       counts.materials += 1;

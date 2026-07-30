@@ -109,19 +109,39 @@ export interface ParticleMaterialOptions {
   depthTexture?: THREE.Texture | null;
 }
 
+/**
+ * Renderer-independent particle material contract.
+ *
+ * The game still runs on `WebGLRenderer` while the editor viewport already
+ * runs on `WebGPURenderer`, so particle systems cannot hard-code either
+ * `ShaderMaterial` or `NodeMaterial` during the migration. WebGPU surfaces
+ * inject the TSL factory; existing WebGL surfaces keep this GLSL factory.
+ */
+export interface ParticleMaterialHandle {
+  material: THREE.Material;
+  applyOptions: (options: ParticleMaterialOptions) => void;
+  updateCamera: (camera: THREE.Camera) => void;
+  dispose: () => void;
+}
+
+export type ParticleMaterialFactory = (
+  options: ParticleMaterialOptions,
+) => ParticleMaterialHandle;
+
+function renderModeValue(renderMode: PrefabParticleRenderMode): number {
+  return renderMode === "stretched-billboard"
+    ? 1
+    : renderMode === "horizontal"
+      ? 2
+      : renderMode === "vertical"
+        ? 3
+        : 0;
+}
+
 export function createParticleMaterial(
   options: ParticleMaterialOptions,
-): THREE.ShaderMaterial {
-  const renderMode =
-    options.renderMode === "stretched-billboard"
-      ? 1
-      : options.renderMode === "horizontal"
-        ? 2
-        : options.renderMode === "vertical"
-          ? 3
-          : 0;
-
-  return new THREE.ShaderMaterial({
+): ParticleMaterialHandle {
+  const material = new THREE.ShaderMaterial({
     vertexShader: VERTEX_SHADER,
     fragmentShader: FRAGMENT_SHADER,
     transparent: true,
@@ -143,10 +163,40 @@ export function createParticleMaterial(
       uDepth: { value: options.depthTexture ?? null },
       uResolution: { value: new THREE.Vector2(1, 1) },
       uAdditive: { value: options.blendMode === "additive" ? 1 : 0 },
-      uRenderMode: { value: renderMode },
+      uRenderMode: { value: renderModeValue(options.renderMode) },
       uTileScale: { value: new THREE.Vector2(1, 1) },
     },
   });
+
+  return {
+    material,
+    applyOptions(next) {
+      material.uniforms.uMap.value = next.map ?? null;
+      material.uniforms.uHasMap.value = next.map ? 1 : 0;
+      material.uniforms.uSoftNear.value = next.softNear;
+      material.uniforms.uSoftFar.value = next.softFar;
+      material.uniforms.uSoftEnabled.value =
+        next.softParticles && next.depthTexture ? 1 : 0;
+      material.uniforms.uDepth.value = next.depthTexture ?? null;
+      material.uniforms.uAdditive.value =
+        next.blendMode === "additive" ? 1 : 0;
+      material.uniforms.uRenderMode.value = renderModeValue(next.renderMode);
+      material.blending =
+        next.blendMode === "additive"
+          ? THREE.AdditiveBlending
+          : THREE.NormalBlending;
+    },
+    updateCamera(camera) {
+      if (!material.uniforms.uSoftEnabled.value) return;
+      const perspective = camera as THREE.PerspectiveCamera;
+      if (!perspective.isPerspectiveCamera) return;
+      material.uniforms.uCameraNear.value = perspective.near;
+      material.uniforms.uCameraFar.value = perspective.far;
+    },
+    dispose() {
+      material.dispose();
+    },
+  };
 }
 
 export function createDefaultParticleTexture(): THREE.Texture {

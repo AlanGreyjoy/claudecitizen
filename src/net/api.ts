@@ -358,7 +358,7 @@ export interface InventoryConsumeResponse {
   vitals: PlayerSurvivalVitals;
 }
 
-/** Use a consumable to restore hunger/thirst reserves. */
+/** Use a consumable to restore hunger/thirst/health reserves. */
 export function consumeInventoryItem(
   itemDefinitionId: string,
 ): Promise<InventoryConsumeResponse> {

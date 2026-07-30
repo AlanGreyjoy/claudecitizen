@@ -1,6 +1,7 @@
 import type * as THREE from "three";
 import { createParticleSystem } from "./system";
 import type { ParticleSystemHandle } from "./system";
+import type { ParticleMaterialFactory } from "./material";
 
 /** Register particle system updates on a prefab root group (mirrors updateAnimations). */
 export function setupUpdateParticles(root: THREE.Group): void {
@@ -18,12 +19,33 @@ export function setupUpdateParticles(root: THREE.Group): void {
   };
 }
 
+/** Advances every prefab particle host nested anywhere under a preview root. */
+export function updateNestedParticleSystems(
+  root: THREE.Object3D,
+  dt: number,
+  camera?: THREE.Camera,
+): void {
+  root.traverse((object) => {
+    object.userData.updateParticles?.(dt, camera);
+  });
+}
+
+/** Disposes every prefab particle host before its owning scene graph is cleared. */
+export function disposeNestedParticleSystems(root: THREE.Object3D): void {
+  root.traverse((object) => {
+    object.userData.disposeParticleSystems?.();
+  });
+}
+
 export function attachParticleSystemToEntity(
   root: THREE.Group | undefined,
   entityGroup: THREE.Object3D,
   component: Parameters<typeof createParticleSystem>[0],
+  options: { materialFactory?: ParticleMaterialFactory } = {},
 ): ParticleSystemHandle {
-  const handle = createParticleSystem(component);
+  const handle = createParticleSystem(component, {
+    materialFactory: options.materialFactory,
+  });
   entityGroup.add(handle.object3d);
   if (root?.userData.registerParticleSystem) {
     root.userData.registerParticleSystem(handle);

@@ -1,7 +1,7 @@
 /**
  * Lightweight player vitals for HaloBand / status UI.
- * Hunger and thirst are persisted, but no vital drives damage, death, or
- * locomotion yet.
+ * Hunger, thirst, and health reserves are persisted. Health does not drain
+ * yet (combat will lower it later). No vital drives death or locomotion yet.
  */
 
 export interface PlayerSurvivalVitals {
@@ -9,10 +9,12 @@ export interface PlayerSurvivalVitals {
   hungerReserve01: number;
   /** Remaining hydration reserve. 1 = hydrated, 0 = empty. */
   thirstReserve01: number;
+  /** Remaining integrity. 1 = full, 0 = empty. */
+  healthReserve01: number;
 }
 
 export interface PlayerVitals extends PlayerSurvivalVitals {
-  /** Overall integrity 0..1 */
+  /** Overall integrity 0..1 (mirrors healthReserve01). */
   health01: number;
   /** Core body temperature °C */
   bodyTempC: number;
@@ -54,14 +56,17 @@ export function createPlayerVitals(
   survival: PlayerSurvivalVitals = {
     hungerReserve01: 1,
     thirstReserve01: 1,
+    healthReserve01: 1,
   },
 ): PlayerVitals {
+  const healthReserve01 = clamp01(survival.healthReserve01 ?? 1);
   return {
-    health01: 1,
+    health01: healthReserve01,
     bodyTempC: BASE_TEMP_C,
     heartRateBpm: BASE_HR,
     hungerReserve01: clamp01(survival.hungerReserve01),
     thirstReserve01: clamp01(survival.thirstReserve01),
+    healthReserve01,
     oxygen01: 1,
   };
 }
@@ -70,6 +75,7 @@ export function createPlayerVitals(
  * Project private survival reserves between server heartbeats.
  * Sprint time is added once more because the baseline elapsed time already
  * contains it, producing a 2x total drain while sprinting.
+ * Health does not drain in this pass.
  */
 export function drainPlayerSurvivalVitals(
   vitals: PlayerSurvivalVitals,
@@ -86,6 +92,7 @@ export function drainPlayerSurvivalVitals(
     thirstReserve01: clamp01(
       vitals.thirstReserve01 - effectiveSeconds / THIRST_FULL_TO_EMPTY_SECONDS,
     ),
+    healthReserve01: clamp01(vitals.healthReserve01),
   };
 }
 
@@ -118,15 +125,14 @@ export function updatePlayerVitals(
     oxygen01 = clamp01(oxygen01 + IDLE_RECOVER * dt);
   }
 
-  // Keep health high for now; slight coupling to O₂ for visual feedback only.
-  const health01 = clamp01(0.92 + oxygen01 * 0.08);
-
+  const healthReserve01 = clamp01(vitals.healthReserve01);
   return {
-    health01,
+    health01: healthReserve01,
     bodyTempC,
     heartRateBpm,
     hungerReserve01: vitals.hungerReserve01,
     thirstReserve01: vitals.thirstReserve01,
+    healthReserve01,
     oxygen01,
   };
 }

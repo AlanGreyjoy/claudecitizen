@@ -316,11 +316,12 @@ async function createPlayRenderer(
   characterAppearance: PlayerCharacterAppearanceV1 | null,
 ): Promise<{ renderer: SpikeRenderer | null; rendererError: unknown }> {
   try {
-    const renderer = createSpikeRenderer(dom.canvas, world.planet, world.seed, {
+    const renderer = await createSpikeRenderer(dom.canvas, world.planet, world.seed, {
       stationPrefab: world.stationPrefab,
       additionalStations: world.additionalStations,
       characterAppearance,
       environment: world.params.content.planet ? 'planet' : 'interior',
+      sceneEnvironment: world.params.environment,
     });
     return { renderer, rendererError: null };
   } catch (error) {
@@ -455,7 +456,11 @@ function createPlayVitalsSession(options: {
     options.overlays.haloBand.close();
   };
   return createPlayerVitalsSession({
-    initialVitals: options.bootstrap?.player.vitals ?? { hungerReserve01: 1, thirstReserve01: 1 },
+    initialVitals: options.bootstrap?.player.vitals ?? {
+      hungerReserve01: 1,
+      thirstReserve01: 1,
+      healthReserve01: 1,
+    },
     persistent: options.bootstrap !== null,
     onLocked: (message) => {
       closeGameplayOverlays();

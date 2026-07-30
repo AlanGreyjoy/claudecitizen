@@ -12,6 +12,7 @@ import {
   type SidekickPreviewStage,
 } from '../../characters/sidekick/preview-stage';
 import { createEquipmentAttachmentController } from '../../characters/sidekick/equipment-attach';
+import { createWebGpuParticleMaterial } from '../../particles/node-material';
 
 export interface InventoryAvatarPreview {
   dispose: () => void;
@@ -33,7 +34,9 @@ export function createInventoryAvatarPreview(
   let restoringBase = false;
   const resolvedAppearance = appearance ?? DEFAULT_PLAYER_CHARACTER_APPEARANCE;
   const characterType = resolvedAppearance.type === 2 ? 2 : 1;
-  const equipment = createEquipmentAttachmentController();
+  const equipment = createEquipmentAttachmentController({
+    particleMaterialFactory: createWebGpuParticleMaterial,
+  });
 
   const applyInventory = (): void => {
     if (!stage || !baseDefinition || !catalog) return;
@@ -61,9 +64,11 @@ export function createInventoryAvatarPreview(
         baseDefinition,
         {
           onBusyChange: (busy) => {
+            if (disposed) return;
             canvas.dataset.state = busy ? 'loading' : 'ready';
           },
           onError: (error) => {
+            if (disposed) return;
             console.warn('Inventory avatar wearable could not be rendered.', error);
             if (!restoringBase && stage && baseDefinition) {
               restoringBase = true;
@@ -89,6 +94,7 @@ export function createInventoryAvatarPreview(
       applyInventory();
       canvas.dataset.state = 'ready';
     })().catch((error: unknown) => {
+      if (disposed) return;
       canvas.dataset.state = 'error';
       console.warn('Inventory avatar preview unavailable.', error);
     });

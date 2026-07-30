@@ -56,6 +56,7 @@ function updateSurvivalAndVitals(
   if (survivalVitals) {
     ctx.world.vitals.hungerReserve01 = survivalVitals.hungerReserve01;
     ctx.world.vitals.thirstReserve01 = survivalVitals.thirstReserve01;
+    ctx.world.vitals.healthReserve01 = survivalVitals.healthReserve01;
   }
 
   if (input.dt <= 0) return;

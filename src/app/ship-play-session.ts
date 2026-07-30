@@ -214,7 +214,7 @@ export async function startShipSandboxSession(
     },
     addDispose,
   });
-  const sandboxScene = createShipSandboxScene(overlays.canvas);
+  const sandboxScene = await createShipSandboxScene(overlays.canvas);
   const visuals = createSandboxShipVisuals(
     sandboxScene,
     doc,

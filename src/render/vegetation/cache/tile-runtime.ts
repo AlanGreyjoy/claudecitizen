@@ -21,6 +21,7 @@ import {
   shouldShowGrassOnTile,
 } from '../domain/visibility';
 import type { InstancedAssetCatalog } from '../render/instanced-assets';
+import type { InstancedWindMaterialFactory } from '../render/wind';
 import {
   createEmptyVegetationRenderGroup,
   createVegetationGroupFromStored,
@@ -73,6 +74,7 @@ export interface VegetationTileRuntimeCtx {
   treesLayerVisible: boolean;
   vegetationGroup: import('three').Group;
   vegetationSettings: VegetationSettings;
+  windMaterialFactory?: InstancedWindMaterialFactory;
 }
 
 export interface ResolvedVegetationTile {
@@ -172,6 +174,7 @@ export function createVegetationTileRuntime(ctx: VegetationTileRuntimeCtx) {
       ctx.assets.grass,
       ctx.assets.trees,
       ctx.treeLodAsset,
+      ctx.windMaterialFactory,
     );
   }
 

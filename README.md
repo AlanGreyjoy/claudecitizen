@@ -15,6 +15,8 @@
 
 Author planets, ships, stations, characters, menus, and scenes in **AsteronEngine** — an Electron editor on TypeScript + Three.js. Hit Play in the Game view. Ship a browser build with **File → Build Web**. Run online against one Rust backend (Rapier authority, shared WASM prediction, Protobuf over WebTransport, PostgreSQL/SQLx, Redis).
 
+> Zero billion dollars crowdfunded. Still ships this decade.
+
 Star Citizen–style loop: procedural Earth-scale homeworld **Asteron**, ship flight, on-foot exploration, seamless surface-to-orbit. Scenes are GameObject trees; prefabs, components, and project settings drive everything — no separate web client or admin app.
 
 The goal is simple: put a full space-sim toolkit in anyone's hands — so you can build your own universe without starting from a blank engine.

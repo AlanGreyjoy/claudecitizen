@@ -12,7 +12,13 @@ import { distance } from '../../math/vec3';
 import { createCharacterAvatar } from './scene/character-avatar';
 import { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
 import { createPlanetTileManager, PLANET_RENDER_SCALE } from '../planet_tiles';
-import { createPlanetVegetationManager, normalizeVegetationSettings } from '../vegetation';
+import {
+  createPlanetVegetationManager,
+  DEFAULT_VEGETATION_SETTINGS,
+  normalizeVegetationSettings,
+} from '../vegetation';
+import { createWebGpuWindMaterial } from '../vegetation/render/wind-node-material';
+import { createWebGpuParticleMaterial } from '../particles/node-material';
 import { createSurfaceSpawnManager } from '../surface_spawns';
 import { applyRenderQualitySettings } from './domain/apply-render-quality';
 import { DAY_LENGTH_SECONDS, SURFACE_MAX_PIXEL_RATIO } from './domain/constants';
@@ -23,23 +29,30 @@ import {
 } from '../prefabs/prefab-renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import {
+  DEFAULT_SCENE_ENVIRONMENT,
+  type SceneEnvironmentConfig,
+} from '../../world/scenes/scene-runtime';
+import {
   disposeOwnedGpuResources,
   disposeSubtreeShadowMaps,
 } from '../assets/gpu-dispose';
 import { buildAtmosphereMesh } from './scene/atmosphere-mesh';
-import { createComposerStack } from './scene/composer-stack';
+import { createWebGpuMainPostStack } from './post/webgpu-post-stack';
 import { createShipRenderPool } from './scene/ship-render-pool';
 import { createRemotePresenceRenderer } from './scene/remote-presence';
 import { createStationNpcRenderer } from './scene/station-npcs';
 import { createStationModel } from './scene/station-model';
 import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene-lighting';
-import { createWebGlRenderer } from './scene/webgl-renderer';
+import { createWebGpuRenderer } from './scene/webgpu-renderer';
+import { createWebGpuTerrainMaterial } from '../planet_tiles/render/terrain-material';
+import { createWebGpuSurfaceWaterMaterial } from '../effects/lake_water/render/node-material';
+import { createWebGpuCloudShellMaterial } from '../effects/clouds/shell-node-material';
+import { createWebGpuHyperspaceMaterial } from '../effects/quantum-bubble-node-material';
 import { resolveRenderQuality } from './domain/render-quality';
 import {
   resolveColorCorrectionSettings,
   saveColorCorrectionSettings,
 } from './domain/color-correction';
-import { setFogSettings as applyFogSettings } from './update/environment';
 import { createQuantumBubble } from '../effects/quantum-bubble';
 import type { PlayerCharacterAppearanceV1 } from '../../player/character_creator/player-character-appearance';
 import {
@@ -111,6 +124,18 @@ export interface SpikeRendererOptions {
    * GameObjects never reference a planet. Defaults to `planet`.
    */
   environment?: 'planet' | 'interior';
+  /** Per-scene lighting / skybox overrides from `scene-environment`. */
+  sceneEnvironment?: SceneEnvironmentConfig;
+}
+
+function resolveSpikeEnvironmentOptions(options?: SpikeRendererOptions): {
+  planetEnabled: boolean;
+  sceneEnvironment: SceneEnvironmentConfig;
+} {
+  return {
+    planetEnabled: (options?.environment ?? 'planet') === 'planet',
+    sceneEnvironment: options?.sceneEnvironment ?? DEFAULT_SCENE_ENVIRONMENT,
+  };
 }
 
 /**
@@ -127,30 +152,48 @@ function createPlanetRenderStack(
 ): PlanetRenderStack {
   const atmosphereMesh = buildAtmosphereMesh(planet, renderScale);
   scene.add(atmosphereMesh);
-  const quantumBubble = createQuantumBubble(scene, renderScale);
+  // Every custom shader site below renders through WebGPURenderer, which only
+  // consumes node materials — a raw ShaderMaterial silently draws as a blank
+  // node material. Injecting the TSL factory is not optional here.
+  const quantumBubble = createQuantumBubble(scene, renderScale, {
+    hyperspaceMaterialFactory: createWebGpuHyperspaceMaterial,
+  });
   quantumBubble.enableRenderLayer(QUANTUM_RENDER_LAYER);
   return {
-    tileManager: createPlanetTileManager(scene, planet, seed),
-    vegetationManager: createPlanetVegetationManager(scene, planet, seed, renderScale),
+    tileManager: createPlanetTileManager(scene, planet, seed, {
+      materialFactory: createWebGpuTerrainMaterial,
+    }),
+    vegetationManager: createPlanetVegetationManager(
+      scene,
+      planet,
+      seed,
+      renderScale,
+      DEFAULT_VEGETATION_SETTINGS,
+      createWebGpuWindMaterial,
+    ),
     surfaceSpawnManager: createSurfaceSpawnManager(scene, planet, seed, renderScale),
-    cloudShell: createCloudShell(scene, planet, seed, renderScale),
-    surfaceWaterManager: createPlanetSurfaceWaterManager(scene, planet, seed, renderScale),
+    cloudShell: createCloudShell(scene, planet, seed, renderScale, {
+      materialFactory: createWebGpuCloudShellMaterial,
+    }),
+    surfaceWaterManager: createPlanetSurfaceWaterManager(scene, planet, seed, renderScale, {
+      materialFactory: createWebGpuSurfaceWaterMaterial,
+    }),
     atmosphereMesh,
     quantumBubble,
   };
 }
 
-export function createSpikeRenderer(
+export async function createSpikeRenderer(
   canvas: HTMLCanvasElement,
   planet: Planet,
   seed: number,
   options?: SpikeRendererOptions,
-): SpikeRenderer {
-  const planetEnabled = (options?.environment ?? 'planet') === 'planet';
+): Promise<SpikeRenderer> {
+  const { planetEnabled, sceneEnvironment } = resolveSpikeEnvironmentOptions(options);
   applyRenderQualitySettings();
   const renderQuality = resolveRenderQuality();
 
-  const { rendererMode, renderer } = createWebGlRenderer(canvas);
+  const { rendererMode, renderer } = await createWebGpuRenderer(canvas);
 
   const scene = createMainScene();
   const defaultFog = scene.fog as THREE.Fog;
@@ -201,7 +244,7 @@ export function createSpikeRenderer(
   };
   window.addEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
 
-  const composerStack = createComposerStack(
+  const postStack = createWebGpuMainPostStack(
     renderer,
     scene,
     camera,
@@ -209,7 +252,7 @@ export function createSpikeRenderer(
     lighting.sun,
     renderScale,
   );
-  composerStack.colorCorrectionEffect.setSettings(resolveColorCorrectionSettings());
+  postStack.setColorCorrectionSettings(resolveColorCorrectionSettings());
 
   const shipRenderPool = createShipRenderPool(scene, renderScale);
   window.__claudecitizenShipModel = shipRenderPool as unknown as typeof window.__claudecitizenShipModel;
@@ -219,6 +262,7 @@ export function createSpikeRenderer(
     ? createPrefabStationGroup(options.stationPrefab, renderScale, {
         localLightShadowMapSize: renderQuality.localLightShadowMapSize,
         localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
+        particleMaterialFactory: createWebGpuParticleMaterial,
       })
     : createStationModel(renderScale);
   scene.add(stationMesh);
@@ -240,6 +284,7 @@ export function createSpikeRenderer(
     entry.mesh = createPrefabStationGroup(entry.prefab, renderScale, {
       localLightShadowMapSize: renderQuality.localLightShadowMapSize,
       localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
+      particleMaterialFactory: createWebGpuParticleMaterial,
     });
     scene.add(entry.mesh);
     return entry.mesh;
@@ -291,7 +336,7 @@ export function createSpikeRenderer(
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    composerStack.resize(width, height, pixelRatio);
+    postStack.resize(width, height, pixelRatio);
   }
 
   function syncSurfacePixelRatio(altitudeMeters: number): void {
@@ -325,7 +370,7 @@ export function createSpikeRenderer(
     getCloudMode: () => cloudMode,
     planetStack,
     renderScale,
-    composerStack,
+    postStack,
     shipRenderPool,
     avatar,
     remotePresence,
@@ -346,26 +391,11 @@ export function createSpikeRenderer(
     resolveSunTimeSeconds,
     syncSurfacePixelRatio,
     ensureAdditionalStationMesh,
+    sceneEnvironment,
   };
 
   function render(world: SpikeRenderWorld): RenderStats {
     return executeSpikeRenderFrame(renderFrameDeps, renderFrameState, world);
-  }
-
-  function applySsaoSettings(settings: Partial<SsaoSettings>): void {
-    const n8aoPass = composerStack.n8aoPass;
-    if (!n8aoPass) return;
-    if (settings.intensity !== undefined) {
-      composerStack.ssaoBaseIntensity = settings.intensity;
-      n8aoPass.configuration.intensity = settings.intensity;
-    }
-    if (settings.aoRadius !== undefined) {
-      composerStack.ssaoBaseRadius = settings.aoRadius;
-      n8aoPass.configuration.aoRadius = settings.aoRadius * renderScale;
-    }
-    if (settings.distanceFalloff !== undefined) {
-      n8aoPass.configuration.distanceFalloff = settings.distanceFalloff;
-    }
   }
 
   return {
@@ -432,37 +462,26 @@ export function createSpikeRenderer(
       );
     },
     setFogSettings(settings) {
-      applyFogSettings(composerStack.volumetricFogEffect, settings);
+      postStack.setFogSettings(settings);
     },
     setColorCorrectionSettings(settings) {
-      composerStack.colorCorrectionEffect.setSettings(settings);
+      postStack.setColorCorrectionSettings(settings);
       saveColorCorrectionSettings(settings);
     },
     setSsaoSettings(settings: Partial<SsaoSettings>) {
-      applySsaoSettings(settings);
+      postStack.setAmbientOcclusionSettings(settings);
     },
     setSsaoIntensity(intensity) {
-      applySsaoSettings({ intensity });
+      postStack.setAmbientOcclusionSettings({ intensity });
     },
     setSsaoColor(color) {
-      if (composerStack.n8aoPass) {
-        composerStack.n8aoPass.configuration.color = color === null
-          ? new THREE.Color(0, 0, 0)
-          : new THREE.Color(color);
-      }
+      postStack.setAmbientOcclusionColor(color);
     },
     setBloomSettings(settings) {
-      const bloom = composerStack.bloomEffect;
-      if (settings.intensity !== undefined) bloom.intensity = settings.intensity;
-      if (settings.luminanceThreshold !== undefined) {
-        bloom.luminanceMaterial.threshold = settings.luminanceThreshold;
-      }
-      if (settings.luminanceSmoothing !== undefined) {
-        bloom.luminanceMaterial.smoothing = settings.luminanceSmoothing;
-      }
+      postStack.setBloomSettings(settings);
     },
     setExposure(exposure) {
-      renderer.toneMappingExposure = exposure;
+      postStack.setExposure(exposure);
     },
     setTimeOverride(mode) {
       timeOverride = mode;
@@ -538,7 +557,7 @@ export function createSpikeRenderer(
       scene.remove(stationMesh);
       disposeOwnedGpuResources(stationMesh);
       disposeSubtreeShadowMaps(scene);
-      composerStack.dispose();
+      postStack.dispose();
       renderer.dispose();
       scene.clear();
       // The diagnostic globals set during construction are strong refs. Scene

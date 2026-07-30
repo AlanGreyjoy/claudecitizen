@@ -18,7 +18,6 @@ import {
   positionWorld,
 } from 'three/tsl';
 import type TslBaseNode from 'three/src/nodes/core/Node.js';
-import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js';
 
 /**
  * A TSL value with the operator-chaining methods attached.
@@ -28,7 +27,7 @@ import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js';
  * overload instead and the destructure fails to compile. So every `Fn` below
  * names its parameter tuple.
  */
-type Tsl = ShaderNodeObject<TslBaseNode>;
+type Tsl = TslBaseNode;
 
 /**
  * Unreal-style procedural sky for the editor viewport.

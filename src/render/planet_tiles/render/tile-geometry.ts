@@ -4,15 +4,17 @@ import type { TerrainTileBuffers, TileInfo } from '../../../types';
 export function createTileGeometry(buffers: TerrainTileBuffers): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(buffers.positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 3, true));
-  geometry.setAttribute('normal', new THREE.BufferAttribute(buffers.normals, 3, true));
+  // itemSize 4: WebGPU has no unorm8x3 / snorm16x3, and every vertex buffer's
+  // arrayStride must be a multiple of 4. The fourth component is padding.
+  geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 4, true));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(buffers.normals, 4, true));
   return geometry;
 }
 
 export function createReadyMesh(
   info: TileInfo,
   buffers: TerrainTileBuffers,
-  material: THREE.MeshLambertMaterial,
+  material: THREE.Material,
   tileGroup: THREE.Group,
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(createTileGeometry(buffers), material);

@@ -463,6 +463,25 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       "Canteen screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy food and drinks for ARC.",
   },
   {
+    type: "pharmacy",
+    label: "Pharmacy",
+    category: "vendor",
+    kinds: ALL_KINDS,
+    scenes: true,
+    marker: true,
+    createDefault: () => ({
+      type: "pharmacy",
+      id: "pharmacy-1",
+      label: "Browse pharmacy",
+      gazeRadius: 0.4,
+      maxDistance: 3,
+      screenWidth: 0.45,
+      screenHeight: 0.28,
+    }),
+    hint:
+      "Pharmacy screen. Place an Empty on the terminal display. Walk up, look at it, and press F to buy heal pills for ARC.",
+  },
+  {
     type: "point-light",
     label: "Point Light",
     category: "lighting",
@@ -831,6 +850,22 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       scope: "player",
     }),
     hint: "Marks this scene as per-player instanced content, such as a hab or hangar.",
+  },
+  {
+    type: "scene-environment",
+    label: "Scene Environment",
+    category: "scene",
+    kinds: [],
+    scenes: true,
+    singleton: true,
+    createDefault: () => ({
+      type: "scene-environment",
+      lightingMode: "outdoor",
+      backgroundMode: "auto",
+      ambientIntensityScale: 1,
+    }),
+    hint:
+      "Per-scene lighting and skybox overrides. Leave outdoor + auto for engine defaults; use interior/off and solid for authored interiors.",
   },
 ];
 

@@ -34,6 +34,7 @@ function runCharacterCreationScreen(
   (document.getElementById('editor-play-host') ?? document.body).append(root);
 
   const setStatus = (message: string, error = false): void => {
+    if (finished) return;
     status.textContent = message;
     status.classList.toggle('is-error', error);
     status.hidden = message === 'Ready' && !error;
@@ -85,8 +86,16 @@ function runCharacterCreationScreen(
     canvas,
     animationSelect,
     getAppearance: () => appearance,
-    setStage: (next) => { stage = next; },
-    setStageBusy: (busy) => { stageBusy = busy; },
+    setStage: (next) => {
+      if (finished) {
+        next.dispose();
+        return;
+      }
+      stage = next;
+    },
+    setStageBusy: (busy) => {
+      if (!finished) stageBusy = busy;
+    },
     isSaving: () => saving,
     save,
     setStatus,

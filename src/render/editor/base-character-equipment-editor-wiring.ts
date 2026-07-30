@@ -1,10 +1,10 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import type { BackpackDefinition, WeaponDefinition } from '../../net/admin-api';
 import type { AnimationControllerV1, AnimationLocomotionKind } from '../../player/animation/schema';
 import type { BaseCharacterEquipmentV1 } from '../../player/equipment/base-character-equipment';
 import type { CharacterSettingsV1 } from '../../player/character-settings';
 import type { WeaponSelectSlotId } from '../../player/inventory/weapon-select';
-import { createPlayerControls } from '../../input/player-controls';
+import type { createPlayerControls } from '../../input/player-controls';
 import type { AnimationControllerListEntry } from '../../editor/api';
 import type { PrefabDocument, PrefabEntity } from '../../world/prefabs/schema';
 import type { ControllerClipContext } from './base-character-equipment-controller';
@@ -15,6 +15,9 @@ import type { CharacterPreviewPose } from './base-character-equipment-ui';
 import type { CatalogDefinition } from './base-character-equipment-utils';
 import type { PlayTestSessionContext } from './base-character-equipment-play-session';
 import type { SidekickUpperBodyAimController } from '../characters/sidekick/upper-body-aim';
+import type { SidekickAnimationRuntime } from '../characters/sidekick/animation-runtime';
+import type { SidekickAvatarInstance } from '../characters/sidekick/assemble-avatar';
+import type { SidekickCharacterDefinitionV2 } from '../../player/character_creator/sidekick-definition';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import type { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import type { CharacterState } from '../../types';
@@ -44,7 +47,7 @@ export interface EditorRuntimeState {
     backpacks: BackpackDefinition[];
     playTestActive: boolean;
     playTestWeaponSlotId: WeaponSelectSlotId | null;
-    animation: import('../characters/sidekick/animation-runtime').SidekickAnimationRuntime | null;
+    animation: SidekickAnimationRuntime | null;
     lastLoadedSourceId: string;
     animationObjectUrl: string | null;
     activeBackpackPrefabId: string | null;
@@ -54,8 +57,8 @@ export interface EditorRuntimeState {
     mountPivots: Map<string, THREE.Group>;
     backpackSocketObjects: Map<string, THREE.Object3D>;
     backpackSocketEntities: Map<string, PrefabEntity>;
-    avatar: import('../characters/sidekick/assemble-avatar').SidekickAvatarInstance | null;
-    defaultDefinition: import('../../player/character_creator/sidekick-definition').SidekickCharacterDefinitionV2 | null;
+    avatar: SidekickAvatarInstance | null;
+    defaultDefinition: SidekickCharacterDefinitionV2 | null;
   };
   dirty: { value: boolean };
   previewGeneration: { value: number };
@@ -125,7 +128,15 @@ export function createAvatarPreviewContext(
     controls: OrbitControls;
     gizmo: TransformControls;
   },
-  deps: Pick<AvatarPreviewContext, 'setStageStatus' | 'setPackMissing' | 'notifyUiChange' | 'syncGizmo' | 'renderPlayTestHud'>,
+  deps: Pick<
+    AvatarPreviewContext,
+    | 'isDisposed'
+    | 'setStageStatus'
+    | 'setPackMissing'
+    | 'notifyUiChange'
+    | 'syncGizmo'
+    | 'renderPlayTestHud'
+  >,
 ): AvatarPreviewContext {
   const { closure } = runtime;
   return {

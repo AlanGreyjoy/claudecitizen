@@ -118,23 +118,23 @@ export function updateCameraRig(
 }
 
 export function updateSpeedBlur(
-  speedBlurEffect: { setStrength: (value: number) => void },
+  setStrength: (value: number) => void,
   world: SpikeRenderWorld,
 ): void {
   const { character = null, mode = 'in-ship', ship, quantum } = world;
   if (quantum?.phase === 'traveling') {
     // Skip the 8-tap radial blur during warp — planet tile thrash was the
     // bigger hit, but this still costs a full-screen pass for little read.
-    speedBlurEffect.setStrength(0);
+    setStrength(0);
     return;
   }
   if (quantum?.phase === 'spooling') {
     const spoolT = quantum.spoolElapsed / Math.max(quantum.spoolDuration, 0.001);
-    speedBlurEffect.setStrength(spoolT * 0.02);
+    setStrength(spoolT * 0.02);
     return;
   }
   if (quantum?.phase === 'dropOut') {
-    speedBlurEffect.setStrength(0);
+    setStrength(0);
     return;
   }
 
@@ -146,11 +146,11 @@ export function updateSpeedBlur(
 
   if (mode === 'in-ship') {
     const t = Math.max(0, Math.min(1, (speed - 120) / 1000));
-    speedBlurEffect.setStrength(t * 0.045);
+    setStrength(t * 0.045);
   } else if (mode === MODE_IN_BED) {
-    speedBlurEffect.setStrength(0);
+    setStrength(0);
   } else {
     const t = Math.max(0, Math.min(1, (speed - 6) / 10));
-    speedBlurEffect.setStrength(t * 0.012);
+    setStrength(t * 0.012);
   }
 }

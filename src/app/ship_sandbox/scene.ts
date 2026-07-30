@@ -1,36 +1,127 @@
 import * as THREE from 'three';
-import { N8AOPostPass } from 'n8ao';
-import {
-  EffectComposer,
-  EffectPass,
-  RenderPass,
-  SMAAEffect,
-} from 'postprocessing';
+import { PostProcessing, WebGPURenderer, type Node } from 'three/webgpu';
+import { mrt, normalView, output, pass, vec4 } from 'three/tsl';
+import { ao } from 'three/examples/jsm/tsl/display/GTAONode.js';
+import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js';
+import { smaa } from 'three/examples/jsm/tsl/display/SMAANode.js';
+import { ensureNodeRectAreaLights } from '../../render/node-lights';
+import { initRequiredWebGpu } from '../../render/webgpu-required';
 import { resolveRenderQuality } from '../../render/main/domain/render-quality';
 import { PAD_RADIUS_METERS } from './types';
 
+/** AO radius the sandbox has always used — tighter than the planet default. */
+const SANDBOX_AO_RADIUS_METERS = 0.2;
+
+export interface ShipSandboxPost {
+  render: () => void;
+  resize: (width: number, height: number, pixelRatio: number) => void;
+  dispose: () => void;
+}
+
 export interface ShipSandboxScene {
-  renderer: THREE.WebGLRenderer;
+  renderer: WebGPURenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   cameraTarget: THREE.Vector3;
-  composer: EffectComposer;
-  n8aoPass: N8AOPostPass | null;
+  post: ShipSandboxPost;
 }
 
-function resolveN8aoQualityMode(samples: number): 'Performance' | 'Low' | 'Medium' | 'High' | 'Ultra' {
-  if (samples <= 8) return 'Performance';
-  if (samples <= 16) return 'Low';
-  if (samples <= 32) return 'Medium';
-  if (samples <= 64) return 'High';
-  return 'Ultra';
+function disposeNode(node: unknown): void {
+  (node as { dispose?: () => void }).dispose?.();
 }
 
-export function createShipSandboxScene(canvas: HTMLCanvasElement): ShipSandboxScene {
+/**
+ * The sandbox post stack: the `EffectComposer` + `N8AOPostPass` + `SMAAEffect`
+ * chain rebuilt as a node graph. `GTAONode` carries no denoiser of its own — the
+ * n8ao pass it replaces did — so the AO target runs through `denoise` before it
+ * multiplies scene color, otherwise half-resolution AO reads as blotchy.
+ */
+function createShipSandboxPost(
+  renderer: WebGPURenderer,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+): ShipSandboxPost {
   const renderQuality = resolveRenderQuality();
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const scenePass = pass(scene, camera, { samples: 0 });
+  scenePass.name = 'ship-sandbox-scene';
+
+  const aoEnabled = renderQuality.ambientOcclusionEnabled;
+  if (aoEnabled) scenePass.setMRT(mrt({ output, normal: normalView }));
+
+  const sceneColor = scenePass.getTextureNode('output');
+  const sceneDepth = scenePass.getTextureNode('depth');
+  const sceneNormal = aoEnabled ? scenePass.getTextureNode('normal') : null;
+
+  let color: Node = sceneColor;
+  const gtaoNode =
+    aoEnabled && sceneNormal ? ao(sceneDepth, sceneNormal, camera) : null;
+  if (gtaoNode && sceneNormal) {
+    gtaoNode.resolutionScale = renderQuality.ambientOcclusionResolutionScale;
+    gtaoNode.samples.value = renderQuality.ambientOcclusionSamples;
+    gtaoNode.scale.value = renderQuality.ambientOcclusionIntensity * 1.35;
+    gtaoNode.distanceFallOff.value = 1;
+    gtaoNode.radius.value = SANDBOX_AO_RADIUS_METERS;
+    gtaoNode.thickness.value = SANDBOX_AO_RADIUS_METERS * 4;
+    // `.r`, not the whole node: these post getters are vec4 with occlusion in
+    // the red channel, and using one as a scalar multiplier tints the frame.
+    const occlusion = denoise(
+      gtaoNode.getTextureNode(),
+      sceneDepth,
+      sceneNormal,
+      camera,
+    ).r;
+    // n8ao ran with `colorMultiply: true`, so occlusion scales scene color.
+    color = vec4(sceneColor.rgb.mul(occlusion), sceneColor.a);
+  }
+
+  const smaaNode = renderQuality.useSmaa ? smaa(color) : null;
+  const postProcessing = new PostProcessing(renderer);
+  // Left at the default: the sandbox never tone-mapped, so the output pass only
+  // has to do the working-to-sRGB conversion the old composer did inline.
+  postProcessing.outputNode = smaaNode ?? color;
+
+  return {
+    render() {
+      postProcessing.render();
+    },
+    resize(width, height, pixelRatio) {
+      scenePass.setPixelRatio(pixelRatio);
+      scenePass.setSize(width, height);
+      const drawingWidth = Math.max(1, Math.floor(width * pixelRatio));
+      const drawingHeight = Math.max(1, Math.floor(height * pixelRatio));
+      gtaoNode?.setSize(drawingWidth, drawingHeight);
+      smaaNode?.setSize(drawingWidth, drawingHeight);
+    },
+    dispose() {
+      postProcessing.dispose();
+      scenePass.dispose();
+      disposeNode(gtaoNode);
+      disposeNode(smaaNode);
+    },
+  };
+}
+
+/**
+ * Builds the ship sandbox stage. Async because `WebGPURenderer.init()` is —
+ * initialization completes before this returns so the caller can render and
+ * load content immediately, and a WebGPU failure rejects rather than silently
+ * degrading to WebGL (see `render/webgpu-required.ts`).
+ */
+export async function createShipSandboxScene(
+  canvas: HTMLCanvasElement,
+): Promise<ShipSandboxScene> {
+  // Ship prefabs can carry `area-light` components, and the node lighting path
+  // needs its LTC tables installed separately from the WebGL one.
+  ensureNodeRectAreaLights();
+
+  const renderer = new WebGPURenderer({ antialias: true, canvas });
+  // Do not dispose a rejected pre-init renderer: three's pre-init disposal path
+  // can re-enter init(). The boot gate owns failure presentation.
+  await initRequiredWebGpu(renderer);
+
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -42,29 +133,6 @@ export function createShipSandboxScene(canvas: HTMLCanvasElement): ShipSandboxSc
   camera.position.set(14, 8, 14);
   camera.userData.baseFovDeg = 60;
   const cameraTarget = new THREE.Vector3();
-
-  const composer = new EffectComposer(renderer, {
-    frameBufferType: THREE.HalfFloatType,
-    multisampling: 0,
-  });
-  composer.addPass(new RenderPass(scene, camera));
-  let n8aoPass: N8AOPostPass | null = null;
-  if (renderQuality.ambientOcclusionEnabled) {
-    n8aoPass = new N8AOPostPass(scene, camera, 1, 1);
-    n8aoPass.configuration.aoRadius = 0.2;
-    n8aoPass.configuration.intensity = renderQuality.ambientOcclusionIntensity * 1.35;
-    n8aoPass.configuration.distanceFalloff = 1.0;
-    n8aoPass.configuration.gammaCorrection = false;
-    n8aoPass.configuration.colorMultiply = true;
-    n8aoPass.configuration.halfRes = renderQuality.ambientOcclusionResolutionScale <= 0.5;
-    n8aoPass.configuration.depthAwareUpsampling = true;
-    n8aoPass.configuration.transparencyAware = false;
-    n8aoPass.setQualityMode(resolveN8aoQualityMode(renderQuality.ambientOcclusionSamples));
-    composer.addPass(n8aoPass);
-  }
-  if (renderQuality.useSmaa) {
-    composer.addPass(new EffectPass(camera, new SMAAEffect()));
-  }
 
   scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x1a2030, 1.0));
   const sun = new THREE.DirectionalLight(0xfff2df, 2.2);
@@ -94,16 +162,17 @@ export function createShipSandboxScene(canvas: HTMLCanvasElement): ShipSandboxSc
   grid.position.y = 0.01;
   scene.add(grid);
 
-  return { renderer, scene, camera, cameraTarget, composer, n8aoPass };
+  const post = createShipSandboxPost(renderer, scene, camera);
+  return { renderer, scene, camera, cameraTarget, post };
 }
 
 /**
  * Releases the GPU resources this stage owns. In-editor the sandbox starts and
- * stops repeatedly, so a leaked composer/renderer costs a WebGL context per
+ * stops repeatedly, so a leaked post stack / renderer costs a device context per
  * playtest and the browser hard-caps how many exist at once.
  */
 export function disposeShipSandboxScene(sandbox: ShipSandboxScene): void {
-  sandbox.composer.dispose();
+  sandbox.post.dispose();
   sandbox.scene.traverse((object) => {
     const mesh = object as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -126,9 +195,5 @@ export function resizeShipSandboxScene(scene: ShipSandboxScene): void {
   scene.renderer.setSize(width, height, false);
   scene.camera.aspect = width / height;
   scene.camera.updateProjectionMatrix();
-  scene.composer.setSize(width, height);
-  scene.n8aoPass?.setSize(
-    width * scene.renderer.getPixelRatio(),
-    height * scene.renderer.getPixelRatio(),
-  );
+  scene.post.resize(width, height, scene.renderer.getPixelRatio());
 }

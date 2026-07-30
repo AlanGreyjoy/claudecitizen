@@ -527,7 +527,7 @@ export interface StationOutfittersMarker {
 }
 
 /** Which consumable subtypes a food-shop / drinks-shop / canteen marker sells. */
-export type FoodShopCatalogMode = "food" | "drinks" | "both";
+export type FoodShopCatalogMode = "food" | "drinks" | "both" | "medical";
 
 /**
  * Station food / drinks / canteen vendor screen (gaze + F), baked from

@@ -3,16 +3,20 @@ import type {
   NpcSpawnerBehavior,
   PrefabComponent,
   PrefabSoundZone,
+  SceneBackgroundMode,
   SceneExitTrigger,
   SceneInstanceScope,
+  SceneLightingMode,
   SceneUiScreen,
   ShipSeatRole,
 } from "./schema";
 import {
   COCKPIT_CONTROL_ACTIONS,
   COCKPIT_STAT_KINDS,
+  SCENE_BACKGROUND_MODES,
   SCENE_EXIT_TRIGGERS,
   SCENE_INSTANCE_SCOPES,
+  SCENE_LIGHTING_MODES,
   SCENE_UI_SCREENS,
   SHIP_SEAT_ROLES,
 } from "./schema";
@@ -695,7 +699,7 @@ function parseFoodShopDrinksShopCanteenComponent(
   value: Record<string, unknown>,
   path: string,
 ): PrefabComponent {
-  const type = value.type as "food-shop" | "drinks-shop" | "canteen";
+  const type = value.type as "food-shop" | "drinks-shop" | "canteen" | "pharmacy";
   const idsRaw = value.itemDefinitionIds;
         let itemDefinitionIds: string[] | undefined;
         if (idsRaw !== undefined) {
@@ -1674,6 +1678,52 @@ function parseInstancedSceneComponent(
   };
 }
 
+function parseSceneEnvironmentComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const lightingMode = SCENE_LIGHTING_MODES.includes(
+    value.lightingMode as SceneLightingMode,
+  )
+    ? (value.lightingMode as SceneLightingMode)
+    : undefined;
+  const backgroundMode = SCENE_BACKGROUND_MODES.includes(
+    value.backgroundMode as SceneBackgroundMode,
+  )
+    ? (value.backgroundMode as SceneBackgroundMode)
+    : undefined;
+  const ambientIntensityScale =
+    value.ambientIntensityScale === undefined
+      ? undefined
+      : Math.min(
+          4,
+          Math.max(
+            0,
+            parseFiniteNumber(value.ambientIntensityScale, `${path}.ambientIntensityScale`),
+          ),
+        );
+  return {
+    type: "scene-environment",
+    ...(lightingMode ? { lightingMode } : {}),
+    ...(backgroundMode ? { backgroundMode } : {}),
+    ...(value.backgroundColor === undefined
+      ? {}
+      : { backgroundColor: parseColor(value.backgroundColor, `${path}.backgroundColor`) }),
+    ...(ambientIntensityScale === undefined ? {} : { ambientIntensityScale }),
+    ...(value.ambientSkyColor === undefined
+      ? {}
+      : { ambientSkyColor: parseColor(value.ambientSkyColor, `${path}.ambientSkyColor`) }),
+    ...(value.ambientGroundColor === undefined
+      ? {}
+      : {
+          ambientGroundColor: parseColor(
+            value.ambientGroundColor,
+            `${path}.ambientGroundColor`,
+          ),
+        }),
+  };
+}
+
 export const COMPONENT_PARSER_BY_TYPE: Record<
   string,
   (value: Record<string, unknown>, path: string) => PrefabComponent
@@ -1702,6 +1752,7 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "food-shop": parseFoodShopDrinksShopCanteenComponent,
   "drinks-shop": parseFoodShopDrinksShopCanteenComponent,
   "canteen": parseFoodShopDrinksShopCanteenComponent,
+  "pharmacy": parseFoodShopDrinksShopCanteenComponent,
   "point-light": parsePointLightComponent,
   "area-light": parseAreaLightComponent,
   "spot-light": parseSpotLightComponent,
@@ -1731,6 +1782,7 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "ui-screen": parseUiScreenComponent,
   "scene-link": parseSceneLinkComponent,
   "instanced-scene": parseInstancedSceneComponent,
+  "scene-environment": parseSceneEnvironmentComponent,
 };
 
 export function parseUnknownComponent(type: unknown, path: string): null {

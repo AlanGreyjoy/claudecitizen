@@ -181,6 +181,7 @@ export function attachStructureMethods(ctx: EditorStoreCtx): void {
     nodeUuid: string,
     targetParentId: string | null,
     transform: EntityTransform,
+    adoptedChildren: ReadonlyArray<{ id: string; transform: EntityTransform }> = [],
   ): string | null {
     const source = ctx.locate(entityId)?.entity;
     const tree = ctx.glbTreesByEntityId.get(entityId);
@@ -199,6 +200,28 @@ export function attachStructureMethods(ctx: EditorStoreCtx): void {
     const sourceOverridesBefore = structuredClone(source.glbNodeTransforms);
     const hiddenNodesBefore = [...source.glbNodeHidden];
 
+    const adoptedSnapshots = adoptedChildren.flatMap((adopted) => {
+      const location = ctx.locate(adopted.id);
+      // Never adopt the host model itself; anything else bound to this node
+      // travels with the extract (including siblings under the same host).
+      if (!location || location.entity.id === entityId) return [];
+      return [
+        {
+          id: adopted.id,
+          parentId: location.parent?.id ?? null,
+          index: location.index,
+          position: cloneVec(location.entity.position),
+          rotation: cloneVec(location.entity.rotation),
+          scale: cloneVec(location.entity.scale),
+          transform: {
+            position: cloneVec(adopted.transform.position),
+            rotation: cloneVec(adopted.transform.rotation),
+            scale: cloneVec(adopted.transform.scale),
+          },
+        },
+      ];
+    });
+
     ctx.history.execute({
       label: `Move ${node.name} out of model`,
       do() {
@@ -213,6 +236,14 @@ export function attachStructureMethods(ctx: EditorStoreCtx): void {
         syncGlbOverrideMapForEntity(target);
         insertEntity(copy, targetParentId);
         syncGlbOverrideMapForEntity(copy);
+        for (const adopted of adoptedSnapshots) {
+          const detached = detachEntity(adopted.id);
+          if (!detached) continue;
+          detached.entity.position = cloneVec(adopted.transform.position);
+          detached.entity.rotation = cloneVec(adopted.transform.rotation);
+          detached.entity.scale = cloneVec(adopted.transform.scale);
+          insertEntity(detached.entity, copy.id);
+        }
         if (ctx.subSelection?.entityId === entityId && ctx.subSelection.nodeUuid === nodeUuid) {
           ctx.subSelection = null;
           ctx.emit({ type: 'sub-selection', entityId, nodeUuid: null });
@@ -221,6 +252,15 @@ export function attachStructureMethods(ctx: EditorStoreCtx): void {
         ctx.emit({ type: 'structure' });
       },
       undo() {
+        for (let index = adoptedSnapshots.length - 1; index >= 0; index -= 1) {
+          const adopted = adoptedSnapshots[index];
+          const detached = detachEntity(adopted.id);
+          if (!detached) continue;
+          detached.entity.position = cloneVec(adopted.position);
+          detached.entity.rotation = cloneVec(adopted.rotation);
+          detached.entity.scale = cloneVec(adopted.scale);
+          insertEntity(detached.entity, adopted.parentId, adopted.index);
+        }
         detachEntity(copy.id);
         clearGlbOverrideMapForEntityId(copy.id);
         const target = ctx.locate(entityId)?.entity;

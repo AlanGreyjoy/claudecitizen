@@ -88,8 +88,26 @@ export interface PersonalInventoryRenderDeps {
 function consumableCanBeUsed(definition: ItemDefinition): boolean {
   return (
     definition.itemType === 'consumable' &&
-    ((definition.hungerRestore01 ?? 0) > 0 || (definition.thirstRestore01 ?? 0) > 0)
+    ((definition.hungerRestore01 ?? 0) > 0 ||
+      (definition.thirstRestore01 ?? 0) > 0 ||
+      (definition.healthRestore01 ?? 0) > 0)
   );
+}
+
+function appendConsumableRestoreStats(
+  appendStat: (label: string, value: string) => void,
+  definition: ItemDefinition,
+): void {
+  const restores: Array<{ label: string; amount: number }> = [
+    { label: 'Hunger', amount: definition.hungerRestore01 ?? 0 },
+    { label: 'Thirst', amount: definition.thirstRestore01 ?? 0 },
+    { label: 'Health', amount: definition.healthRestore01 ?? 0 },
+  ];
+  for (const entry of restores) {
+    if (entry.amount > 0) {
+      appendStat(entry.label, `+${Math.round(entry.amount * 100)}%`);
+    }
+  }
 }
 
 function formatCapacity(used: number, max: number, unit: string): string {
@@ -401,12 +419,7 @@ export function createPersonalInventoryRender(deps: PersonalInventoryRenderDeps)
     if (definition.emptyMassKg != null) {
       appendStat('Mass', `${definition.emptyMassKg} kg`);
     }
-    if ((definition.hungerRestore01 ?? 0) > 0) {
-      appendStat('Hunger', `+${Math.round((definition.hungerRestore01 ?? 0) * 100)}%`);
-    }
-    if ((definition.thirstRestore01 ?? 0) > 0) {
-      appendStat('Thirst', `+${Math.round((definition.thirstRestore01 ?? 0) * 100)}%`);
-    }
+    appendConsumableRestoreStats(appendStat, definition);
 
     const description = document.createElement('p');
     description.className = 'sc-personal-inv-detail-description';

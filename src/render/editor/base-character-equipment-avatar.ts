@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import {
   AdminAuthError,
   listBackpackDefinitions,
@@ -58,11 +58,14 @@ import {
 import {
   attachWeaponEquipmentPreviews,
   createEquipmentPreviewState,
+  type EquipmentPreviewState,
   loadBackpackEquipmentPreview,
   reportDrawnAuthoringStatus,
   setupEquipmentDrawnPivots,
   setupEquipmentMountPivots,
 } from './base-character-equipment-preview';
+import { disposeOwnedGpuResources } from '../assets/gpu-dispose';
+import { disposeNestedParticleSystems } from '../particles';
 import type { CharacterPreviewPose } from './base-character-equipment-ui';
 import type { CatalogDefinition } from './base-character-equipment-utils';
 import type { MountEditMode } from './base-character-equipment-transform';
@@ -121,6 +124,7 @@ export interface AvatarPreviewContext {
   weaponPrefabDrafts: Map<string, PrefabDocument>;
   getPreviewGeneration: () => number;
   bumpPreviewGeneration: () => number;
+  isDisposed: () => boolean;
   gizmo: { detach: () => void };
   setStageStatus: (message: string, error?: boolean) => void;
   setPackMissing: (missing: boolean, detail?: string) => void;
@@ -129,8 +133,54 @@ export interface AvatarPreviewContext {
   renderPlayTestHud: () => void;
 }
 
+function disposePreviewSubtrees(roots: Iterable<THREE.Object3D>): void {
+  const uniqueRoots = [...new Set(roots)];
+  const ownedRoots: THREE.Object3D[] = [];
+  for (const root of uniqueRoots) {
+    disposeNestedParticleSystems(root);
+    root.traverse((object) => {
+      if (object.userData.ownedGpu) ownedRoots.push(object);
+    });
+  }
+  // A weapon can be nested under a backpack socket. Dispose the deepest owner
+  // first so clearing the backpack never hides the weapon's owned allocations.
+  for (let index = ownedRoots.length - 1; index >= 0; index -= 1) {
+    disposeOwnedGpuResources(ownedRoots[index]);
+  }
+  for (const root of uniqueRoots) {
+    root.removeFromParent();
+    root.clear();
+  }
+}
+
+function disposeEquipmentPreviewState(state: EquipmentPreviewState): void {
+  disposePreviewSubtrees([
+    ...state.mountPivots.values(),
+    ...state.drawnPivots.values(),
+  ]);
+}
+
+function clearEquipmentPreview(ctx: AvatarPreviewContext): void {
+  disposePreviewSubtrees([
+    ...ctx.getMountPivots().values(),
+    ...ctx.getDrawnPivots().values(),
+  ]);
+  ctx.setMountPivots(new Map());
+  ctx.setDrawnPivots(new Map());
+  ctx.setWeaponPreviewRoots(new Map());
+  ctx.setWeaponGripEntities(new Map());
+  ctx.setActiveBackpackPrefabId(null);
+  ctx.setBackpackSocketObjects(new Map());
+  ctx.setBackpackSocketEntities(new Map());
+}
+
 export function disposeAvatarPreview(ctx: AvatarPreviewContext): void {
+  ctx.bumpPreviewGeneration();
+  clearEquipmentPreview(ctx);
   const avatar = ctx.getAvatar();
+  for (const child of [...ctx.previewRoot.children]) {
+    if (child !== avatar?.root) disposePreviewSubtrees([child]);
+  }
   if (avatar) {
     ctx.previewRoot.remove(avatar.root);
     avatar.dispose();
@@ -162,11 +212,12 @@ export function ensureDrawnGripEntity(doc: PrefabDocument): PrefabEntity {
 export async function loadBackpackPrefabDraft(
   ctx: AvatarPreviewContext,
   prefabId: string,
+  isCurrent: () => boolean = () => true,
 ): Promise<PrefabDocument | null> {
   const existing = ctx.backpackPrefabDrafts.get(prefabId);
   if (existing) return existing;
   const loaded = await loadPrefabDocument(prefabId);
-  if (!loaded) return null;
+  if (!isCurrent() || !loaded) return null;
   const draft = structuredClone(loaded);
   ctx.backpackPrefabDrafts.set(prefabId, draft);
   return draft;
@@ -175,11 +226,12 @@ export async function loadBackpackPrefabDraft(
 export async function loadWeaponPrefabDraft(
   ctx: AvatarPreviewContext,
   prefabId: string,
+  isCurrent: () => boolean = () => true,
 ): Promise<PrefabDocument | null> {
   const existing = ctx.weaponPrefabDrafts.get(prefabId);
   if (existing) return existing;
   const loaded = await loadPrefabDocument(prefabId);
-  if (!loaded) return null;
+  if (!isCurrent() || !loaded) return null;
   const draft = structuredClone(loaded);
   ctx.weaponPrefabDrafts.set(prefabId, draft);
   return draft;
@@ -191,10 +243,9 @@ export async function rebuildEquipmentPreview(ctx: AvatarPreviewContext): Promis
   if (!documentState || !avatar) return;
   const generation = ctx.bumpPreviewGeneration();
   ctx.gizmo.detach();
-  for (const pivot of ctx.getMountPivots().values()) pivot.removeFromParent();
-  for (const pivot of ctx.getDrawnPivots().values()) pivot.removeFromParent();
+  clearEquipmentPreview(ctx);
   for (const child of [...ctx.previewRoot.children]) {
-    if (child !== avatar.root) ctx.previewRoot.remove(child);
+    if (child !== avatar.root) disposePreviewSubtrees([child]);
   }
   const previewState = createEquipmentPreviewState();
   ctx.setMountPivots(previewState.mountPivots);
@@ -205,6 +256,8 @@ export async function rebuildEquipmentPreview(ctx: AvatarPreviewContext): Promis
   ctx.setBackpackSocketObjects(previewState.backpackSocketObjects);
   ctx.setBackpackSocketEntities(previewState.backpackSocketEntities);
 
+  const isCurrent = (): boolean =>
+    generation === ctx.getPreviewGeneration() && !ctx.isDisposed();
   const previewCtx = {
     documentState,
     selectedType: ctx.getSelectedType(),
@@ -215,8 +268,11 @@ export async function rebuildEquipmentPreview(ctx: AvatarPreviewContext): Promis
     playTestWeaponSlotId: ctx.getPlayTestWeaponSlotId(),
     simulateDrawnSlotId: ctx.getSimulateDrawnSlotId(),
     mountEditMode: ctx.getMountEditMode(),
-    loadBackpackPrefabDraft: (prefabId: string) => loadBackpackPrefabDraft(ctx, prefabId),
-    loadWeaponPrefabDraft: (prefabId: string) => loadWeaponPrefabDraft(ctx, prefabId),
+    loadBackpackPrefabDraft: (prefabId: string) =>
+      loadBackpackPrefabDraft(ctx, prefabId, isCurrent),
+    loadWeaponPrefabDraft: (prefabId: string) =>
+      loadWeaponPrefabDraft(ctx, prefabId, isCurrent),
+    isCurrent,
     ensureDrawnGripEntity,
     applyTransform,
     setStageStatus: ctx.setStageStatus,
@@ -229,19 +285,21 @@ export async function rebuildEquipmentPreview(ctx: AvatarPreviewContext): Promis
   const { backpackRoot, backpackSockets } = await loadBackpackEquipmentPreview(
     previewCtx,
     previewState,
-    generation,
-    ctx.getPreviewGeneration(),
   );
-  if (generation !== ctx.getPreviewGeneration()) return;
+  if (!isCurrent()) {
+    disposeEquipmentPreviewState(previewState);
+    return;
+  }
   const stale = await attachWeaponEquipmentPreviews(
     previewCtx,
     previewState,
     backpackRoot,
     backpackSockets,
-    generation,
-    ctx.getPreviewGeneration(),
   );
-  if (stale || generation !== ctx.getPreviewGeneration()) return;
+  if (stale || !isCurrent()) {
+    disposeEquipmentPreviewState(previewState);
+    return;
+  }
   reportDrawnAuthoringStatus(previewCtx);
   if (ctx.getPlayTestActive()) ctx.gizmo.detach();
   else ctx.syncGizmo();
@@ -262,14 +320,16 @@ export async function applyCharacterType(ctx: AvatarPreviewContext): Promise<voi
   definition.blendShapes.muscleValue = -100;
   if (ctx.getPreviewPose() === 'reference') restoreReferencePose(avatar.root);
   await avatar.applyDefinition(definition);
+  if (ctx.isDisposed()) return;
   await rebuildEquipmentPreview(ctx);
 }
 
 export async function ensureAvatar(ctx: AvatarPreviewContext): Promise<void> {
-  if (ctx.getAvatar()) return;
+  if (ctx.getAvatar() || ctx.isDisposed()) return;
   ctx.setStageStatus('Loading default Synty character…');
   try {
     const catalog = await loadSidekickCatalog();
+    if (ctx.isDisposed()) return;
     const species = findPreviewSpecies(catalog);
     if (!species) throw new Error('No playable Synty species is available.');
     const defaultDefinition = buildDefaultDefinition(catalog, species);
@@ -278,9 +338,18 @@ export async function ensureAvatar(ctx: AvatarPreviewContext): Promise<void> {
     defaultDefinition.blendShapes.muscleValue = -100;
     ctx.setDefaultDefinition(defaultDefinition);
     const avatar = await assembleSidekickCharacter(catalog, defaultDefinition);
+    if (ctx.isDisposed()) {
+      avatar.dispose();
+      return;
+    }
+    const animation = await createSidekickAnimationRuntime(avatar.root);
+    if (ctx.isDisposed()) {
+      animation.dispose();
+      avatar.dispose();
+      return;
+    }
     ctx.previewRoot.add(avatar.root);
     ctx.setAvatar(avatar);
-    const animation = await createSidekickAnimationRuntime(avatar.root);
     ctx.setAnimation(animation);
     ctx.setControllerUpperBodyAim(createSidekickUpperBodyAimController(ctx.previewRoot, avatar.root));
     // No bundled idle — clips load from project when Controllers / Preview / Play Test asks.

@@ -19,7 +19,14 @@ import {
   tileKey,
 } from '../src/render/planet_tiles/domain/tile-info';
 import { createTerrainMaterial } from '../src/render/planet_tiles/render/terrain-material';
-import type { CubeFace, TerrainTileBuffers, TileInfo, Vec3, WaterBody } from '../src/types';
+import type {
+  CubeFace,
+  SurfaceWaterBuffers,
+  TerrainTileBuffers,
+  TileInfo,
+  Vec3,
+  WaterBody,
+} from '../src/types';
 import { findSurfaceDestination } from '../src/world/biome-teleport';
 import { sampleSurfaceClimate } from '../src/world/climate';
 import { OCEAN_WATER_LEVEL_METERS } from '../src/world/coastal-profile';
@@ -135,6 +142,18 @@ interface TerrainValidationSummary {
   maxUniformLodSpacingErrorMeters: number;
 }
 
+/**
+ * Surf strength lives in `waterFactors.z` (stride 4). The scalar factors share
+ * one attribute because WebGPU has no 1-wide 8-bit vertex format.
+ */
+function maxSurfStrength(buffers: SurfaceWaterBuffers): number {
+  let max = 0;
+  for (let offset = 2; offset < buffers.waterFactors.length; offset += 4) {
+    max = Math.max(max, buffers.waterFactors[offset]);
+  }
+  return max;
+}
+
 const planet = CLAUDECITIZEN_PLANET;
 const seed = DEFAULT_PLANET_SEED;
 const edgeEpsilon = 1e-12;
@@ -221,10 +240,7 @@ function validateLevelLakeSurfaces(): {
   );
   const waterBuffers = buildSurfaceWaterGeometry(waterInfo, planet, seed);
   assert.ok(waterBuffers, 'generated lake emitted no water geometry');
-  let maxLakeSurfStrength = 0;
-  for (const strength of waterBuffers.surfStrengths) {
-    maxLakeSurfStrength = Math.max(maxLakeSurfStrength, strength);
-  }
+  const maxLakeSurfStrength = maxSurfStrength(waterBuffers);
   assert.equal(maxLakeSurfStrength, 0, 'inland lake emitted ocean surf');
   return {
     lakeSurfaceLevelMeters: lakeSurfaceLevelMeters!,
@@ -390,10 +406,7 @@ function validateCoastDestination(): {
   );
   const waterBuffers = buildSurfaceWaterGeometry(waterInfo, planet, seed);
   assert.ok(waterBuffers, 'raised shoreline emitted no water geometry');
-  assert.ok(
-    waterBuffers.surfStrengths.some((strength) => strength > 0),
-    'ocean coast emitted no surf',
-  );
+  assert.ok(maxSurfStrength(waterBuffers) > 0, 'ocean coast emitted no surf');
   let maxCoastWaterSurfaceLevelErrorMeters = 0;
   for (let offset = 0; offset < waterBuffers.positions.length; offset += 3) {
     const worldX = waterBuffers.positions[offset] + waterInfo.centerPosition.x;

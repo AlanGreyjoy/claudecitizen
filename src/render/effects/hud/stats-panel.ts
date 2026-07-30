@@ -154,7 +154,9 @@ function resolveFlightStatusMessage(
   if (!isPointerLocked) {
     return 'Click the flight view to lock the mouse, then steer with the mouse and roll with Q/E.';
   }
-  if (rendererMode !== 'log-depth') {
+  // WebGPU carries logarithmic depth too; only the legacy WebGL fallback modes
+  // lose orbit-scale depth precision.
+  if (rendererMode !== 'webgpu' && rendererMode !== 'log-depth') {
     return 'Low atmosphere. Rendering is running in fallback mode, so visuals may be a little less stable at orbit scale.';
   }
   return 'Low atmosphere. Mouse steer, Q/E roll, A/D strafe, and Shift boost should feel much closer to a real 3d game.';

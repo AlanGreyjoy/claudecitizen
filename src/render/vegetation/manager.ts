@@ -33,6 +33,7 @@ import {
   releaseVegetationGroup,
   type VegetationRenderGroup,
 } from './render/vegetation-group';
+import type { InstancedWindMaterialFactory } from './render/wind';
 import {
   DEFAULT_VEGETATION_SETTINGS,
   normalizeVegetationSettings,
@@ -74,6 +75,7 @@ export function createPlanetVegetationManager(
   seed: number,
   renderScale: number,
   initialSettings: Partial<VegetationSettings> = DEFAULT_VEGETATION_SETTINGS,
+  windMaterialFactory?: InstancedWindMaterialFactory,
 ): PlanetVegetationManager {
   const vegetationGroup = new THREE.Group();
   vegetationGroup.scale.setScalar(renderScale);
@@ -110,6 +112,7 @@ export function createPlanetVegetationManager(
   });
   let assetLoadGeneration = 0;
   let assetsLoading = false;
+  let disposed = false;
 
   const shared = {
     activeKeys,
@@ -135,11 +138,13 @@ export function createPlanetVegetationManager(
     treesLayerVisible,
     vegetationGroup,
     vegetationSettings,
+    windMaterialFactory,
   };
 
   const tileRuntime = createVegetationTileRuntime(shared);
 
   function startAssetCatalogLoad(): void {
+    if (disposed) return;
     const generation = ++assetLoadGeneration;
     const previousGrass = assets.grass;
     const previousTrees = assets.trees;
@@ -158,7 +163,7 @@ export function createPlanetVegetationManager(
         grassColor: vegetationSettings.grass.color,
       },
       (catalog) => {
-        if (generation !== assetLoadGeneration) {
+        if (disposed || generation !== assetLoadGeneration) {
           disposeInstancedAssets(catalog.grass);
           disposeInstancedAssets(catalog.trees);
           return;
@@ -250,6 +255,9 @@ export function createPlanetVegetationManager(
   tileRuntime.rebuildLandingGrove();
 
   function dispose(): void {
+    if (disposed) return;
+    disposed = true;
+    assetLoadGeneration += 1;
     tileRuntime.disposeWorkers();
     releaseVegetationGroup(vegetationGroup, shared.landingGrove.group);
     for (const [key, entry] of tileCache) {

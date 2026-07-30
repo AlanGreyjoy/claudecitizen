@@ -15,8 +15,10 @@
     "asar": true,
     "beforeBuild": "./editor-desktop/before-build.cjs",
     "directories": {
-      "output": "../release/editor"
+      "output": "../release/editor",
+      "buildResources": "build"
     },
+    "icon": "build/icon.png",
     "files": [
       "main.mjs",
       "preload.cjs",
@@ -26,7 +28,9 @@
       "dev_renderer.mjs",
       "deploy.mjs",
       "multiplayer_debug.mjs",
-      "package.json"
+      "package.json",
+      "build/icon.png",
+      "build/icon.ico"
     ],
     "extraResources": [
       {
@@ -38,14 +42,17 @@
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": "zip"
     },
     "linux": {
+      "icon": "build/icons",
       "category": "Development",
       "executableName": "claudecitizen-editor",
       "target": "AppImage"
     },
     "mac": {
+      "icon": "build/icon.png",
       "category": "public.app-category.developer-tools",
       "target": "zip"
     }

@@ -16,6 +16,7 @@ import {
   type InstancedAsset,
   type InstancedAssetCatalog,
 } from '../../render/vegetation/render/instanced-assets';
+import type { InstancedWindMaterialFactory } from '../../render/vegetation/render/wind';
 import { grassScaleCoverageMultiplier } from '../../render/vegetation/settings';
 
 /** Actual-scale diagnostic patch shared with planet_authoring.ts. */
@@ -56,6 +57,15 @@ export interface PreviewVegetationHandle {
   grassCount: number;
   treeCount: number;
   dispose: () => void;
+}
+
+export interface PreviewVegetationRenderOptions {
+  /**
+   * Optional renderer-specific conversion performed after each InstancedMesh
+   * owns its instance buffer. WebGL callers omit this and keep the catalog's
+   * onBeforeCompile wind material; WebGPU callers inject the TSL factory.
+   */
+  windMaterialFactory?: InstancedWindMaterialFactory;
 }
 
 /** hash01 can return negatives when the final XOR leaves a signed int. */
@@ -242,6 +252,8 @@ function addInstancedMeshes(
   assets: InstancedAsset[],
   instances: StoredVegetationInstance[],
   castShadow: boolean,
+  windMaterialFactory: InstancedWindMaterialFactory | undefined,
+  ownedMaterials: Set<THREE.Material>,
 ): void {
   if (assets.length === 0 || instances.length === 0) return;
   const packed = packByVariant(instances, assets.length);
@@ -262,6 +274,19 @@ function addInstancedMeshes(
         mesh.setMatrixAt(i, matrix);
       }
       mesh.instanceMatrix.needsUpdate = true;
+      if (windMaterialFactory) {
+        const sourceMaterials = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
+        const convertedMaterials = sourceMaterials.map((source) => {
+          const converted = windMaterialFactory(source, mesh.instanceMatrix);
+          if (converted !== source) ownedMaterials.add(converted);
+          return converted;
+        });
+        mesh.material = Array.isArray(mesh.material)
+          ? convertedMaterials
+          : convertedMaterials[0]!;
+      }
       group.add(mesh);
     }
   }
@@ -278,6 +303,7 @@ export function buildPreviewVegetation(
   vegetation: VegetationSettings,
   onReady: (handle: PreviewVegetationHandle) => void,
   onError?: (message: string) => void,
+  renderOptions: PreviewVegetationRenderOptions = {},
 ): { cancel: () => void } {
   let cancelled = false;
   const grassUrls = (vegetation.grass.assetUrls ?? []).filter(
@@ -307,9 +333,24 @@ export function buildPreviewVegetation(
         catalog,
       );
       const group = new THREE.Group();
+      const ownedMaterials = new Set<THREE.Material>();
       group.name = 'planet-preview-vegetation';
-      addInstancedMeshes(group, catalog.grass, grass, false);
-      addInstancedMeshes(group, catalog.trees, trees, true);
+      addInstancedMeshes(
+        group,
+        catalog.grass,
+        grass,
+        false,
+        renderOptions.windMaterialFactory,
+        ownedMaterials,
+      );
+      addInstancedMeshes(
+        group,
+        catalog.trees,
+        trees,
+        true,
+        renderOptions.windMaterialFactory,
+        ownedMaterials,
+      );
 
       onReady({
         group,
@@ -317,15 +358,21 @@ export function buildPreviewVegetation(
         treeCount: trees.length,
         dispose: () => {
           group.removeFromParent();
+          group.traverse((object) => {
+            if (object instanceof THREE.InstancedMesh) object.dispose();
+          });
           while (group.children.length > 0) {
             group.remove(group.children[0]!);
           }
+          ownedMaterials.forEach((material) => material.dispose());
+          ownedMaterials.clear();
           disposeInstancedAssets(catalog.grass);
           disposeInstancedAssets(catalog.trees);
         },
       });
     },
     (path, label, error) => {
+      if (cancelled) return;
       const detail = error instanceof Error ? error.message : String(error);
       onError?.(`Failed to load ${label} asset ${path}: ${detail}`);
     },

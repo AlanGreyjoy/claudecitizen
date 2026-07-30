@@ -1,8 +1,20 @@
 import * as THREE from 'three';
+import { PMREMGenerator, WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { SidekickCatalog } from '../../../player/character_creator/sidekick-manifest';
 import type { SidekickCharacterDefinitionV2 } from '../../../player/character_creator/sidekick-definition';
+import { setKtx2SupportRenderer } from '../../assets/ktx2';
+import {
+  disposeOwnedGpuResources,
+  disposeSubtreeShadowMaps,
+} from '../../assets/gpu-dispose';
+import { ensureNodeRectAreaLights } from '../../node-lights';
+import {
+  disposeNestedParticleSystems,
+  updateNestedParticleSystems,
+} from '../../particles';
+import { initRequiredWebGpu } from '../../webgpu-required';
 import { assembleSidekickCharacter } from './assemble-avatar';
 import { createSidekickAnimationRuntime } from './animation-runtime';
 
@@ -28,6 +40,62 @@ export interface SidekickPreviewStageOptions {
   subjectHorizontalOffset?: number;
 }
 
+interface PreviewRendererState {
+  renderer: WebGPURenderer;
+  scene: THREE.Scene;
+  dispose: () => void;
+}
+
+async function createRequiredPreviewRenderer(
+  canvas: HTMLCanvasElement,
+  transparent: boolean,
+): Promise<PreviewRendererState> {
+  const renderer = new WebGPURenderer({ canvas, antialias: true, alpha: transparent });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  let rendererInitialized = false;
+  let rendererDisposed = false;
+  const disposeRenderer = (): void => {
+    if (!rendererInitialized || rendererDisposed) return;
+    rendererDisposed = true;
+    renderer.dispose();
+  };
+
+  try {
+    await initRequiredWebGpu(renderer);
+    rendererInitialized = true;
+    setKtx2SupportRenderer(renderer);
+    ensureNodeRectAreaLights();
+    const scene = new THREE.Scene();
+    scene.background = transparent ? null : new THREE.Color(0x08101d);
+    if (transparent) renderer.setClearColor(0x000000, 0);
+    const environmentScene = new RoomEnvironment();
+    const pmremGenerator = new PMREMGenerator(renderer);
+    let environmentTarget: ReturnType<PMREMGenerator['fromScene']>;
+    try {
+      environmentTarget = pmremGenerator.fromScene(environmentScene, 0.04);
+      scene.environment = environmentTarget.texture;
+    } finally {
+      environmentScene.dispose();
+      pmremGenerator.dispose();
+    }
+    return {
+      renderer,
+      scene,
+      dispose: () => {
+        environmentTarget.dispose();
+        disposeRenderer();
+      },
+    };
+  } catch (error) {
+    disposeRenderer();
+    throw error;
+  }
+}
+
 function visibleGeometryBounds(root: THREE.Object3D): THREE.Box3 {
   const bounds = new THREE.Box3().makeEmpty();
   root.updateMatrixWorld(true);
@@ -41,6 +109,17 @@ function visibleGeometryBounds(root: THREE.Object3D): THREE.Box3 {
   return bounds.isEmpty() ? new THREE.Box3().setFromObject(root) : bounds;
 }
 
+function disposeOwnedAttachments(root: THREE.Object3D): void {
+  disposeNestedParticleSystems(root);
+  const ownedRoots: THREE.Object3D[] = [];
+  root.traverse((object) => {
+    if (object.userData.ownedGpu) ownedRoots.push(object);
+  });
+  for (let index = ownedRoots.length - 1; index >= 0; index -= 1) {
+    disposeOwnedGpuResources(ownedRoots[index]);
+  }
+}
+
 export async function createSidekickPreviewStage(
   canvas: HTMLCanvasElement,
   catalog: SidekickCatalog,
@@ -48,26 +127,19 @@ export async function createSidekickPreviewStage(
   hooks: SidekickPreviewStageHooks = {},
   options: SidekickPreviewStageOptions = {},
 ): Promise<SidekickPreviewStage> {
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: options.transparent ?? false,
-  });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
-
-  const scene = new THREE.Scene();
-  scene.background = options.transparent ? null : new THREE.Color(0x08101d);
-  if (options.transparent) renderer.setClearColor(0x000000, 0);
-  const environmentScene = new RoomEnvironment();
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  const environmentTarget = pmremGenerator.fromScene(environmentScene, 0.04);
-  scene.environment = environmentTarget.texture;
-  environmentScene.dispose();
-  pmremGenerator.dispose();
+  hooks.onBusyChange?.(true);
+  let rendererState: PreviewRendererState;
+  try {
+    rendererState = await createRequiredPreviewRenderer(
+      canvas,
+      options.transparent ?? false,
+    );
+  } catch (error) {
+    hooks.onBusyChange?.(false);
+    hooks.onError?.(error);
+    throw error;
+  }
+  const { renderer, scene } = rendererState;
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
   const controls = new OrbitControls(camera, canvas);
@@ -98,8 +170,18 @@ export async function createSidekickPreviewStage(
     scene.add(ground);
   }
 
-  hooks.onBusyChange?.(true);
-  const avatar = await assembleSidekickCharacter(catalog, initialDefinition);
+  let avatar: Awaited<ReturnType<typeof assembleSidekickCharacter>>;
+  try {
+    avatar = await assembleSidekickCharacter(catalog, initialDefinition);
+  } catch (error) {
+    controls.dispose();
+    ground?.geometry.dispose();
+    if (ground) (ground.material as THREE.Material).dispose();
+    rendererState.dispose();
+    hooks.onBusyChange?.(false);
+    hooks.onError?.(error);
+    throw error;
+  }
   scene.add(avatar.root);
   const bounds = visibleGeometryBounds(avatar.root);
   const size = bounds.getSize(new THREE.Vector3());
@@ -134,6 +216,7 @@ export async function createSidekickPreviewStage(
       hooks.onAnimationsReady?.(runtime.clipNames, desiredAnimation);
     })
     .catch((error: unknown) => {
+      if (disposed) return;
       hooks.onAnimationsReady?.([], '');
       console.warn('Character creator preview animations unavailable.', error);
     });
@@ -151,10 +234,10 @@ export async function createSidekickPreviewStage(
         await avatar.applyDefinition(definition);
       }
     } catch (error) {
-      hooks.onError?.(error);
+      if (!disposed) hooks.onError?.(error);
     } finally {
       applying = false;
-      hooks.onBusyChange?.(false);
+      if (!disposed) hooks.onBusyChange?.(false);
       if (pendingDefinition && !disposed) void flushDefinitions();
     }
   };
@@ -193,7 +276,9 @@ export async function createSidekickPreviewStage(
       clock.getDelta();
       return;
     }
-    animation?.update(clock.getDelta());
+    const deltaSeconds = clock.getDelta();
+    animation?.update(deltaSeconds);
+    updateNestedParticleSystems(avatar.root, deltaSeconds, camera);
     controls.update();
     renderer.render(scene, camera);
   };
@@ -215,16 +300,18 @@ export async function createSidekickPreviewStage(
       void flushDefinitions();
     },
     dispose: () => {
+      if (disposed) return;
       disposed = true;
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       controls.dispose();
       animation?.dispose();
+      disposeOwnedAttachments(avatar.root);
       avatar.dispose();
-      environmentTarget.dispose();
+      disposeSubtreeShadowMaps(scene);
       ground?.geometry.dispose();
       if (ground) (ground.material as THREE.Material).dispose();
-      renderer.dispose();
+      rendererState.dispose();
     },
   };
 }

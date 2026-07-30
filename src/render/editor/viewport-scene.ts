@@ -1,12 +1,19 @@
 import * as THREE from "three";
-import { RectAreaLightNode, WebGPURenderer } from "three/webgpu";
-import { RectAreaLightTexturesLib } from "three/examples/jsm/lights/RectAreaLightTexturesLib.js";
+import { WebGPURenderer } from "three/webgpu";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 import { setupUpdateObjectAnimations } from "../prefabs/object-animation";
 import { createViewportProceduralSky } from "./viewport-procedural-sky";
 import { setKtx2SupportRenderer } from "../assets/ktx2";
 import { initRequiredWebGpu } from "../webgpu-required";
+import { ensureNodeRectAreaLights } from "../node-lights";
+import { createSpaceSkybox } from "../main/scene/space-skybox";
+import {
+  DEFAULT_SCENE_ENVIRONMENT,
+  type SceneEnvironmentConfig,
+} from "../../world/scenes/scene-runtime";
+
+const STUDIO_BACKGROUND = 0x0a101d;
 
 export interface ViewportScene {
   canvas: HTMLCanvasElement;
@@ -26,32 +33,14 @@ export interface ViewportScene {
   setEnvironmentLights: (enabled: boolean) => void;
   /** Unreal-style procedural sky dome + sun disk (tracks env sun). */
   setProceduralSky: (enabled: boolean) => void;
+  /** Floor GridHelper visibility (default off). */
+  setGridVisible: (enabled: boolean) => void;
+  /** Apply authored `scene-environment` (or defaults when null / prefab docs). */
+  setSceneEnvironment: (config: SceneEnvironmentConfig | null) => void;
   /** Advance the procedural sky's cloud drift. No-op while the sky is off. */
   updateSky: (dt: number) => void;
   resize: () => void;
   dispose: () => void;
-}
-
-let ltcInitialized = false;
-
-/**
- * Hands the node lighting path its LTC BRDF tables.
- *
- * `RectAreaLightNode` keeps them in a module-level singleton that starts as
- * `null` and dereferences it unconditionally when it sets up an area light, so
- * any scene containing one throws on every frame until this runs.
- * `ensureRectAreaLightsInitialized` in `src/render/prefabs/prefab-renderer.ts`
- * is the `WebGLRenderer` counterpart — it patches `UniformsLib` and does
- * nothing for the node path. Kept here rather than next to it because
- * `prefab-renderer.ts` is shared with the still-WebGL game runtime, and
- * importing `three/webgpu` there would pull 1.8 MB into its module graph.
- *
- * `init()` builds ~80 KB of data textures, hence the guard.
- */
-function ensureNodeRectAreaLights(): void {
-  if (ltcInitialized) return;
-  RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
-  ltcInitialized = true;
 }
 
 /** Renderer, lights, grid, camera, orbit, and gizmo — no entity logic. */
@@ -69,7 +58,20 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   // so unlike the old WebGLRenderer path this cannot run at construction time.
   // The viewport is usually the first renderer in the editor, so it still seeds
   // format detection for loads that happen before Play, just one tick later.
+  let disposed = false;
+  let rendererInitialized = false;
+  let rendererDisposed = false;
+  const disposeRenderer = (): void => {
+    if (!rendererInitialized || rendererDisposed) return;
+    rendererDisposed = true;
+    renderer.dispose();
+  };
   const ready = initRequiredWebGpu(renderer).then(() => {
+    rendererInitialized = true;
+    if (disposed) {
+      disposeRenderer();
+      return;
+    }
     setKtx2SupportRenderer(renderer);
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -80,15 +82,16 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a101d);
-  scene.fog = new THREE.Fog(0x0a101d, 260, 620);
+  scene.background = new THREE.Color(STUDIO_BACKGROUND);
+  scene.fog = new THREE.Fog(STUDIO_BACKGROUND, 260, 620);
 
   const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 10_000);
   camera.position.set(20, 16, 20);
 
   const envLights = new THREE.Group();
   envLights.name = "editor-env-lights";
-  envLights.add(new THREE.HemisphereLight(0xbcd4ff, 0x121725, 0.82));
+  const hemi = new THREE.HemisphereLight(0xbcd4ff, 0x121725, 0.82);
+  envLights.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff3dc, 2.45);
   sun.position.set(36, 62, 26);
   sun.castShadow = true;
@@ -108,7 +111,17 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   envLights.add(fill);
   scene.add(envLights);
 
+  const defaultHemiIntensity = hemi.intensity;
+  const defaultSunIntensity = sun.intensity;
+  const defaultFillIntensity = fill.intensity;
+  const defaultHemiSky = hemi.color.clone();
+  const defaultHemiGround = hemi.groundColor.clone();
+
   const proceduralSky = createViewportProceduralSky(scene, renderer, sun);
+  const spaceSkybox = createSpaceSkybox();
+  void spaceSkybox.initPromise.then(() => {
+    if (!disposed) applySceneEnvironmentVisuals();
+  });
 
   // Studio: dark lines on dark bg. Daylight sky: mid blue-gray so lines
   // stay visible against a bright Preetham horizon without silhouetting.
@@ -116,6 +129,8 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   const GRID_SKY = { center: 0x4a5f78, grid: 0x8a9bb0, opacity: 0.55 } as const;
 
   let grid = createEditorGrid(GRID_STUDIO);
+  let gridVisible = false;
+  grid.visible = false;
   scene.add(grid);
   scene.add(new THREE.AxesHelper(3));
 
@@ -138,6 +153,56 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
   const gizmo = new TransformControls(camera, canvas);
   scene.add(gizmo.getHelper());
 
+  let toolbarEnvLightsEnabled = true;
+  let proceduralSkyEnabled = false;
+  let sceneEnvironment: SceneEnvironmentConfig = { ...DEFAULT_SCENE_ENVIRONMENT };
+  const solidFallback = new THREE.Color(STUDIO_BACKGROUND);
+
+  function applySceneEnvironmentVisuals(): void {
+    if (sceneEnvironment.lightingMode === "off") {
+      envLights.visible = false;
+    } else {
+      envLights.visible = toolbarEnvLightsEnabled;
+      if (sceneEnvironment.lightingMode === "interior") {
+        sun.intensity = 0;
+        fill.intensity = 0;
+        hemi.intensity = 0.48 * sceneEnvironment.ambientIntensityScale;
+      } else {
+        sun.intensity = defaultSunIntensity;
+        fill.intensity = defaultFillIntensity;
+        hemi.intensity = defaultHemiIntensity * sceneEnvironment.ambientIntensityScale;
+      }
+      if (sceneEnvironment.ambientSkyColor) {
+        hemi.color.set(sceneEnvironment.ambientSkyColor);
+      } else {
+        hemi.color.copy(defaultHemiSky);
+      }
+      if (sceneEnvironment.ambientGroundColor) {
+        hemi.groundColor.set(sceneEnvironment.ambientGroundColor);
+      } else {
+        hemi.groundColor.copy(defaultHemiGround);
+      }
+    }
+
+    // Procedural sky owns background while the toolbar toggle is on.
+    if (proceduralSkyEnabled) return;
+
+    if (sceneEnvironment.backgroundMode === "solid") {
+      solidFallback.set(sceneEnvironment.backgroundColor);
+      scene.background = solidFallback;
+      scene.fog = null;
+      return;
+    }
+    if (sceneEnvironment.backgroundMode === "space-skybox") {
+      solidFallback.set(STUDIO_BACKGROUND);
+      scene.background = spaceSkybox.getBackground(solidFallback);
+      scene.fog = null;
+      return;
+    }
+    scene.background = new THREE.Color(STUDIO_BACKGROUND);
+    scene.fog = new THREE.Fog(STUDIO_BACKGROUND, 260, 620);
+  }
+
   function resize(): void {
     const width = Math.max(1, container.clientWidth);
     const height = Math.max(1, container.clientHeight);
@@ -156,25 +221,39 @@ export function createViewportScene(container: HTMLElement): ViewportScene {
     orbit,
     gizmo,
     setEnvironmentLights(enabled: boolean) {
-      envLights.visible = enabled;
+      toolbarEnvLightsEnabled = enabled;
+      applySceneEnvironmentVisuals();
     },
     setProceduralSky(enabled: boolean) {
+      proceduralSkyEnabled = enabled;
       proceduralSky.setEnabled(enabled);
       const next = createEditorGrid(enabled ? GRID_SKY : GRID_STUDIO);
+      next.visible = gridVisible;
       scene.remove(grid);
       disposeEditorGrid(grid);
       grid = next;
       scene.add(grid);
+      applySceneEnvironmentVisuals();
+    },
+    setGridVisible(enabled: boolean) {
+      gridVisible = enabled;
+      grid.visible = enabled;
+    },
+    setSceneEnvironment(config: SceneEnvironmentConfig | null) {
+      sceneEnvironment = config ? { ...config } : { ...DEFAULT_SCENE_ENVIRONMENT };
+      applySceneEnvironmentVisuals();
     },
     updateSky: proceduralSky.update,
     resize,
     dispose() {
+      disposed = true;
       proceduralSky.dispose();
+      spaceSkybox.dispose();
       disposeEditorGrid(grid);
       gizmo.detach();
       gizmo.dispose();
       orbit.dispose();
-      renderer.dispose();
+      disposeRenderer();
       canvas.remove();
     },
   };

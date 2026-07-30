@@ -10,6 +10,7 @@ import {
 import { makeTileInfo, tileKey } from '../domain/tile-info';
 import type {
   PendingBuildJob,
+  ResolvedTile,
   TileCacheStatsAccumulator,
   TileEntryStatus,
   TileFrameCounters,
@@ -46,7 +47,7 @@ export interface TileMeshCache {
   requestBestAvailableTile: (
     info: TileInfo,
     buildBudget: BuildBudget,
-  ) => import('../domain/types').ResolvedTile;
+  ) => ResolvedTile;
   resetFrameCounters: () => void;
   setFocusPosition: (position: Vec3) => void;
   setFrameNumber: (frame: number) => void;
@@ -56,7 +57,7 @@ export interface TileMeshCache {
 }
 
 interface TileMeshCacheOptions {
-  material: THREE.MeshLambertMaterial;
+  material: THREE.Material;
   planet: Planet;
   seed: number;
   tileGroup: THREE.Group;

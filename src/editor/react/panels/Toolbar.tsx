@@ -43,6 +43,8 @@ export interface ToolbarActions {
   onSnapChange: (enabled: boolean, translateStep: number, rotateStepDegrees: number) => void;
   onEnvironmentLightsChange: (enabled: boolean) => void;
   onProceduralSkyChange: (enabled: boolean) => void;
+  onShowAllCollidersChange: (enabled: boolean) => void;
+  onGridVisibleChange: (enabled: boolean) => void;
   onFocusSelection: () => void;
   onAddBox: () => void;
   onAddEmpty: () => void;
@@ -767,6 +769,8 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [environmentLights, setEnvironmentLights] = useState(true);
   const [proceduralSky, setProceduralSky] = useState(false);
+  const [showAllColliders, setShowAllColliders] = useState(false);
+  const [gridVisible, setGridVisible] = useState(false);
   const [snapTranslate] = useState('0.25');
   const [snapRotate] = useState('15');
   const [prefabOptions, setPrefabOptions] = useState<PrefabListEntry[]>([]);
@@ -971,6 +975,18 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
     actions.onEnvironmentLightsChange(next);
   };
 
+  const toggleShowAllColliders = (): void => {
+    const next = !showAllColliders;
+    setShowAllColliders(next);
+    actions.onShowAllCollidersChange(next);
+  };
+
+  const toggleGridVisible = (): void => {
+    const next = !gridVisible;
+    setGridVisible(next);
+    actions.onGridVisibleChange(next);
+  };
+
   const toggleProceduralSky = (): void => {
     const next = !proceduralSky;
     setProceduralSky(next);
@@ -1020,6 +1036,26 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
               }
               active={environmentLights}
               onClick={toggleEnvironmentLights}
+            />
+            <ToolIconButton
+              icon={UiIcons.boxes}
+              title={
+                showAllColliders
+                  ? 'Collider overlays on — all entities (click for selection only)'
+                  : 'Collider overlays off — selection only (click to show all)'
+              }
+              active={showAllColliders}
+              onClick={toggleShowAllColliders}
+            />
+            <ToolIconButton
+              icon={UiIcons.grid3x3}
+              title={
+                gridVisible
+                  ? 'Floor grid on (click to hide)'
+                  : 'Floor grid off (click to show)'
+              }
+              active={gridVisible}
+              onClick={toggleGridVisible}
             />
             <ToolIconButton
               icon={UiIcons.cloudSun}

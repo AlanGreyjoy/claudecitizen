@@ -59,16 +59,22 @@ export interface PlanetTileManager {
   waitUntilReady: (keys: readonly string[], timeoutMs: number) => Promise<number>;
 }
 
+export interface PlanetTileManagerOptions {
+  /** WebGPU runtime injects the TSL terrain material during the renderer flip. */
+  materialFactory?: () => THREE.Material;
+}
+
 export function createPlanetTileManager(
   scene: THREE.Scene,
   planet: Planet,
   seed: number,
+  options: PlanetTileManagerOptions = {},
 ): PlanetTileManager {
   const tileGroup = new THREE.Group();
   tileGroup.scale.setScalar(PLANET_RENDER_SCALE);
   scene.add(tileGroup);
 
-  const material = createTerrainMaterial();
+  const material = options.materialFactory?.() ?? createTerrainMaterial();
 
   const meshCache = createTileMeshCache({
     material,

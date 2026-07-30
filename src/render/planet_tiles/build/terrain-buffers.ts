@@ -299,15 +299,18 @@ function writeTriangle(
     const sourceVertex = triangleVertices[localVertex];
     const sourceOffset = sourceVertex * 3;
     const outputOffset = (outputVertex + localVertex) * 3;
+    const packedOffset = (outputVertex + localVertex) * 4;
     positions[outputOffset] = gridPositions[sourceOffset];
     positions[outputOffset + 1] = gridPositions[sourceOffset + 1];
     positions[outputOffset + 2] = gridPositions[sourceOffset + 2];
-    colors[outputOffset] = Math.round(scratchColor[0] * 255);
-    colors[outputOffset + 1] = Math.round(scratchColor[1] * 255);
-    colors[outputOffset + 2] = Math.round(scratchColor[2] * 255);
-    normals[outputOffset] = Math.round(nx * 32767);
-    normals[outputOffset + 1] = Math.round(ny * 32767);
-    normals[outputOffset + 2] = Math.round(nz * 32767);
+    colors[packedOffset] = Math.round(scratchColor[0] * 255);
+    colors[packedOffset + 1] = Math.round(scratchColor[1] * 255);
+    colors[packedOffset + 2] = Math.round(scratchColor[2] * 255);
+    colors[packedOffset + 3] = 255;
+    normals[packedOffset] = Math.round(nx * 32767);
+    normals[packedOffset + 1] = Math.round(ny * 32767);
+    normals[packedOffset + 2] = Math.round(nz * 32767);
+    normals[packedOffset + 3] = 0;
   }
 
   return outputVertex + 3;
@@ -384,15 +387,18 @@ function writeSkirtTriangle(
   for (let localVertex = 0; localVertex < 3; localVertex += 1) {
     const vertex = orientedVertices[localVertex];
     const outputOffset = (outputVertex + localVertex) * 3;
+    const packedOffset = (outputVertex + localVertex) * 4;
     buffers.positions[outputOffset] = vertex.x;
     buffers.positions[outputOffset + 1] = vertex.y;
     buffers.positions[outputOffset + 2] = vertex.z;
-    buffers.colors[outputOffset] = color[0];
-    buffers.colors[outputOffset + 1] = color[1];
-    buffers.colors[outputOffset + 2] = color[2];
-    buffers.normals[outputOffset] = Math.round(nx * 32767);
-    buffers.normals[outputOffset + 1] = Math.round(ny * 32767);
-    buffers.normals[outputOffset + 2] = Math.round(nz * 32767);
+    buffers.colors[packedOffset] = color[0];
+    buffers.colors[packedOffset + 1] = color[1];
+    buffers.colors[packedOffset + 2] = color[2];
+    buffers.colors[packedOffset + 3] = 255;
+    buffers.normals[packedOffset] = Math.round(nx * 32767);
+    buffers.normals[packedOffset + 1] = Math.round(ny * 32767);
+    buffers.normals[packedOffset + 2] = Math.round(nz * 32767);
+    buffers.normals[packedOffset + 3] = 0;
   }
   return outputVertex + 3;
 }
@@ -579,8 +585,10 @@ function triangulateTerrainGrid(
   seed: number,
 ): TerrainTileBuffers {
   const buffers: TerrainTileBuffers = {
-    colors: new Uint8Array(TERRAIN_TILE_VERTEX_COUNT * 3),
-    normals: new Int16Array(TERRAIN_TILE_VERTEX_COUNT * 3),
+    // x4, not x3 — see TerrainTileBuffers: WebGPU has no 3-wide packed vertex
+    // format and requires a stride that is a multiple of 4.
+    colors: new Uint8Array(TERRAIN_TILE_VERTEX_COUNT * 4),
+    normals: new Int16Array(TERRAIN_TILE_VERTEX_COUNT * 4),
     positions: new Float32Array(TERRAIN_TILE_VERTEX_COUNT * 3),
   };
   const context = { buffers, grid, info, seed };

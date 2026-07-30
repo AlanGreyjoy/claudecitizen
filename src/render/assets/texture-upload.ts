@@ -11,16 +11,18 @@ import { AUTHORING_ENABLED } from '../../build-mode';
  * visible yet, so the drain calls `renderer.initTexture` to force the upload
  * before closing the bitmap.
  *
- * Disabled under authoring. The editor runs several WebGL contexts beside the
+ * Disabled under authoring. The editor runs several WebGPU renderers beside the
  * play renderer (viewport-scene, material-preview, equipment stage, thumbnails)
- * that render clones of the same cached templates. A texture uploaded to the
- * play context and then closed could never be uploaded to any of the others, so
- * the release is only safe in a shipped build, which has exactly one renderer.
+ * that render clones of the same cached templates. Each renderer owns a separate
+ * backend `DataMap`, so each must upload the texture itself — releasing the
+ * bitmap after the first upload would leave every other renderer with no source.
+ * The release is only safe in a shipped build, which has exactly one renderer.
  *
- * Trade-off in that build: a released texture can never be re-uploaded.
- * `WebGLTextures` handles a null image with a warning rather than a throw, so a
- * lost context degrades to black textures instead of a crash — and the app has
- * no context recovery today regardless. Flip the constant to disable entirely.
+ * Trade-off in that build: a released texture can never be re-uploaded. Under
+ * WebGPU that is stricter than it was under WebGL — `Textures.updateTexture`
+ * re-runs `backend.createTexture` whenever a placeholder texture later gains
+ * real data, and `WebGPUTextureUtils` *throws* ("Texture already initialized")
+ * rather than warning. Flip the constant to disable entirely.
  */
 const RELEASE_DECODED_TEXTURE_SOURCES = !AUTHORING_ENABLED;
 
@@ -67,7 +69,10 @@ export function queueSourceRelease(root: THREE.Object3D): void {
  * Uploads and releases up to `budget` queued textures. Call once per frame
  * after presenting, so a large scene never stalls a single frame.
  */
-export function drainSourceReleases(renderer: THREE.WebGLRenderer, budget: number): number {
+export function drainSourceReleases(
+  renderer: Pick<THREE.WebGLRenderer, 'initTexture'>,
+  budget: number,
+): number {
   if (!RELEASE_DECODED_TEXTURE_SOURCES || queue.length === 0) return 0;
   let released = 0;
   while (released < budget) {

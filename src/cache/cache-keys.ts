@@ -15,7 +15,10 @@ import { getActivePlanetConfig } from '../world/planets/runtime';
 // v17: the renderable-surface blend and the river proximity test were rewritten
 // to scalar form. Algebraically identical, but the summation order moved, so
 // stored heights can differ in the last ULP from v16 tiles.
-export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v17';
+// v18: packed color and normal attributes went from 3 to 4 components. WebGPU
+// defines no unorm8x3 / snorm16x3 vertex format and requires a stride that is a
+// multiple of 4, so cached v17 buffers are the wrong length for the new layout.
+export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v18';
 // v22: placement rides on the rewritten height sampler (see terrain v17), whose
 // last-ULP shifts can flip an accept/reject exactly at a density threshold.
 export const VEGETATION_CACHE_VERSION = 'v22';

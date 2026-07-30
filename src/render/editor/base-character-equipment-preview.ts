@@ -5,7 +5,10 @@ import type {
 } from "../../player/equipment/base-character-equipment";
 import type { PrefabDocument, PrefabEntity, PrefabTransform } from "../../world/prefabs/schema";
 import type { SidekickAvatarInstance } from "../characters/sidekick/assemble-avatar";
-import { createPropInstanceGroup } from "../prefabs/prefab-renderer";
+import { disposeOwnedGpuResources } from "../assets/gpu-dispose";
+import { disposeNestedParticleSystems } from "../particles";
+import { createPropInstanceGroupAsync } from "../prefabs/prefab-renderer";
+import { createWebGpuParticleMaterial } from "../particles/node-material";
 import {
   collectEquipmentSockets,
   identityDrawnGripTransform,
@@ -25,6 +28,7 @@ export interface EquipmentPreviewContext {
   mountEditMode: MountEditMode;
   loadBackpackPrefabDraft: (prefabId: string) => Promise<PrefabDocument | null>;
   loadWeaponPrefabDraft: (prefabId: string) => Promise<PrefabDocument | null>;
+  isCurrent: () => boolean;
   ensureDrawnGripEntity: (doc: PrefabDocument) => PrefabEntity;
   applyTransform: (object: THREE.Object3D, transform: PrefabTransform) => void;
   setStageStatus: (message: string, isWarning?: boolean) => void;
@@ -53,6 +57,18 @@ export function createEquipmentPreviewState(): EquipmentPreviewState {
     backpackSocketObjects: new Map(),
     backpackSocketEntities: new Map(),
   };
+}
+
+function emptyBackpackPreview(): {
+  backpackRoot: null;
+  backpackSockets: Map<string, THREE.Object3D>;
+} {
+  return { backpackRoot: null, backpackSockets: new Map() };
+}
+
+function disposeStalePrefabRoot(root: THREE.Group): void {
+  disposeNestedParticleSystems(root);
+  disposeOwnedGpuResources(root);
 }
 
 export function setupEquipmentMountPivots(
@@ -101,6 +117,7 @@ async function loadBackpackPrefabPreview(
   const prefab = backpackAssignment.prefabId
     ? await ctx.loadBackpackPrefabDraft(backpackAssignment.prefabId)
     : null;
+  if (!ctx.isCurrent()) return emptyBackpackPreview();
   const errors = prefab ? validateBackpackPrefab(prefab) : ["Backpack prefab is missing."];
   if (!prefab || errors.length > 0) {
     state.mountPivots.get("backpack")?.add(ctx.placeholder(0xffa832));
@@ -108,10 +125,17 @@ async function loadBackpackPrefabPreview(
     ctx.setStageStatus(`Backpack warning: ${errors.join(" ")}`, true);
     return { backpackRoot: null, backpackSockets };
   }
-  state.activeBackpackPrefabId = prefab.id;
-  // Pinned: this preview stage owns its own WebGL context and keeps these
+  // Pinned: this preview stage owns its own renderer and keeps these
   // clones across a Play/Stop cycle, whose sweep would evict the templates.
-  const backpackRoot = createPropInstanceGroup(prefab, { pinModels: true });
+  const backpackRoot = await createPropInstanceGroupAsync(prefab, {
+    pinModels: true,
+    particleMaterialFactory: createWebGpuParticleMaterial,
+  });
+  if (!ctx.isCurrent()) {
+    disposeStalePrefabRoot(backpackRoot);
+    return emptyBackpackPreview();
+  }
+  state.activeBackpackPrefabId = prefab.id;
   state.mountPivots.get("backpack")?.add(backpackRoot);
   for (const socket of collectEquipmentSockets(prefab)) {
     const object = ctx.findEntityObject(backpackRoot, socket.entityId);
@@ -129,20 +153,15 @@ async function loadBackpackPrefabPreview(
 export async function loadBackpackEquipmentPreview(
   ctx: EquipmentPreviewContext,
   state: EquipmentPreviewState,
-  generation: number,
-  previewGeneration: number,
 ): Promise<{ backpackRoot: THREE.Group | null; backpackSockets: Map<string, THREE.Object3D> }> {
+  if (!ctx.isCurrent()) return emptyBackpackPreview();
   const backpackAssignment = ctx.assignments.get("backpack");
   if (backpackAssignment?.itemType !== "backpack") {
     ctx.assignments.delete("rifle-secondary");
     ctx.setStageStatus("No backpack equipped. One rifle uses the character backAttach fallback.");
     return { backpackRoot: null, backpackSockets: new Map() };
   }
-  const result = await loadBackpackPrefabPreview(ctx, state, backpackAssignment);
-  if (generation !== previewGeneration) {
-    return { backpackRoot: null, backpackSockets: new Map() };
-  }
-  return result;
+  return loadBackpackPrefabPreview(ctx, state, backpackAssignment);
 }
 
 async function attachWeaponPreviewForSlot(
@@ -157,9 +176,16 @@ async function attachWeaponPreviewForSlot(
   if (slot.requiresSlotId && !ctx.assignments.has(slot.requiresSlotId)) return;
   if (!definition.prefabId) return;
   const draft = await ctx.loadWeaponPrefabDraft(definition.prefabId);
-  if (!draft) return;
+  if (!ctx.isCurrent() || !draft) return;
   const gripEntity = ctx.ensureDrawnGripEntity(draft);
-  const item = createPropInstanceGroup(draft, { pinModels: true });
+  const item = await createPropInstanceGroupAsync(draft, {
+    pinModels: true,
+    particleMaterialFactory: createWebGpuParticleMaterial,
+  });
+  if (!ctx.isCurrent()) {
+    disposeStalePrefabRoot(item);
+    return;
+  }
   state.weaponPreviewRoots.set(slot.id, item);
   state.weaponGripEntities.set(slot.id, gripEntity);
   const drawnSlotId = ctx.playTestActive ? ctx.playTestWeaponSlotId : ctx.simulateDrawnSlotId;
@@ -182,19 +208,14 @@ export async function attachWeaponEquipmentPreviews(
   state: EquipmentPreviewState,
   backpackRoot: THREE.Group | null,
   backpackSockets: Map<string, THREE.Object3D>,
-  generation: number,
-  previewGeneration: number,
 ): Promise<boolean> {
-  let stale = false;
+  if (!ctx.isCurrent()) return true;
   for (const slot of ctx.documentState.slots) {
     if (slot.kind !== "weapon") continue;
     await attachWeaponPreviewForSlot(ctx, state, slot, backpackRoot, backpackSockets);
-    if (generation !== previewGeneration) {
-      stale = true;
-      break;
-    }
+    if (!ctx.isCurrent()) return true;
   }
-  return stale;
+  return false;
 }
 
 export function reportDrawnAuthoringStatus(ctx: EquipmentPreviewContext): void {

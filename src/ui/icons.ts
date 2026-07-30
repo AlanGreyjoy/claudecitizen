@@ -4,6 +4,7 @@
 import {
   BookOpen,
   Box,
+  Boxes,
   Bug,
   ChevronDown,
   ChevronLeft,
@@ -19,6 +20,7 @@ import {
   Folder,
   FolderOpen,
   Globe,
+  Grid3x3,
   Hammer,
   Magnet,
   Move,
@@ -77,6 +79,7 @@ export function setUiIcon(
 export const UiIcons = {
   bug: Bug,
   box: Box,
+  boxes: Boxes,
   chevronDown: ChevronDown,
   chevronLeft: ChevronLeft,
   chevronRight: ChevronRight,
@@ -89,6 +92,7 @@ export const UiIcons = {
   folder: Folder,
   folderOpen: FolderOpen,
   globe: Globe,
+  grid3x3: Grid3x3,
   hammer: Hammer,
   magnet: Magnet,
   move: Move,

@@ -1,14 +1,20 @@
 import { type ReactElement } from 'react';
 import {
+  SCENE_BACKGROUND_MODES,
+  SCENE_ENVIRONMENT_DEFAULT_BACKGROUND_COLOR,
   SCENE_INSTANCE_SCOPES,
+  SCENE_LIGHTING_MODES,
   SCENE_UI_SCREENS,
   type PrefabComponent,
+  type SceneBackgroundMode,
   type SceneInstanceScope,
+  type SceneLightingMode,
   type SceneUiScreen,
 } from '../../../../world/prefabs/schema';
 import type { ComponentFieldsProps } from './context';
 import {
   CheckboxRow,
+  ColorField,
   FieldRow,
   NumberField,
   SelectField,
@@ -296,5 +302,80 @@ export function InstancedSceneFields({
         }
       />
     </FieldRow>
+  );
+}
+
+type SceneEnvironmentComponent = Extract<PrefabComponent, { type: 'scene-environment' }>;
+
+export function SceneEnvironmentFields({
+  ctx,
+  component,
+}: ComponentFieldsProps<SceneEnvironmentComponent>): ReactElement {
+  const { update } = ctx;
+
+  function commit(patch: Partial<SceneEnvironmentComponent>): void {
+    update({ ...component, ...patch, type: 'scene-environment' });
+  }
+
+  return (
+    <>
+      <FieldRow label="Lighting" wide>
+        <SelectField
+          options={[...SCENE_LIGHTING_MODES]}
+          value={component.lightingMode ?? 'outdoor'}
+          onCommit={(lightingMode) =>
+            commit({ lightingMode: lightingMode as SceneLightingMode })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Background" wide>
+        <SelectField
+          options={[...SCENE_BACKGROUND_MODES]}
+          value={component.backgroundMode ?? 'auto'}
+          onCommit={(backgroundMode) =>
+            commit({ backgroundMode: backgroundMode as SceneBackgroundMode })
+          }
+        />
+      </FieldRow>
+      {(component.backgroundMode ?? 'auto') === 'solid' ? (
+        <FieldRow label="BG Color" wide>
+          <ColorField
+            value={component.backgroundColor ?? SCENE_ENVIRONMENT_DEFAULT_BACKGROUND_COLOR}
+            onCommit={(backgroundColor) => commit({ backgroundColor })}
+          />
+        </FieldRow>
+      ) : null}
+      <FieldRow label="Ambient Scale" wide>
+        <NumberField
+          value={component.ambientIntensityScale ?? 1}
+          onCommit={(ambientIntensityScale) => commit({ ambientIntensityScale })}
+        />
+      </FieldRow>
+      <FieldRow label="Ambient Sky" wide>
+        <ColorField
+          value={component.ambientSkyColor ?? '#c4e2ff'}
+          onCommit={(ambientSkyColor) => commit({ ambientSkyColor })}
+        />
+      </FieldRow>
+      <FieldRow label="Ambient Ground" wide>
+        <ColorField
+          value={component.ambientGroundColor ?? '#473b28'}
+          onCommit={(ambientGroundColor) => commit({ ambientGroundColor })}
+        />
+      </FieldRow>
+      <FieldRow label="Clear Colors" wide>
+        <CheckboxRow
+          label="Use day/night ambient colors"
+          checked={!component.ambientSkyColor && !component.ambientGroundColor}
+          onChange={(useDefault) => {
+            if (!useDefault) return;
+            commit({
+              ambientSkyColor: undefined,
+              ambientGroundColor: undefined,
+            });
+          }}
+        />
+      </FieldRow>
+    </>
   );
 }

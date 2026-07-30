@@ -14,6 +14,9 @@ import { sampleBurstCount, sampleEmitterShape } from "./emitter";
 import {
   createDefaultParticleTexture,
   createParticleMaterial,
+  type ParticleMaterialFactory,
+  type ParticleMaterialHandle,
+  type ParticleMaterialOptions,
 } from "./material";
 import { createParticleTrails } from "./trails";
 import type { ParticleSlot } from "./system-types";
@@ -76,9 +79,13 @@ function createSlot(): ParticleSlot {
 
 export function createParticleSystem(
   component: ParticleSystemComponent,
-  options: { depthTexture?: THREE.Texture | null } = {},
+  options: {
+    depthTexture?: THREE.Texture | null;
+    materialFactory?: ParticleMaterialFactory;
+  } = {},
 ): ParticleSystemHandle {
   let spec = component;
+  const materialFactory = options.materialFactory ?? createParticleMaterial;
   const root = new THREE.Group();
   root.name = "particle-system";
 
@@ -95,43 +102,61 @@ export function createParticleSystem(
 
   const baseGeometry = new THREE.PlaneGeometry(1, 1);
   let activeGeometry = baseGeometry.clone();
-  let material = createParticleMaterial({
-    blendMode: spec.renderer.blendMode,
-    renderMode: spec.renderer.renderMode,
-    softParticles: spec.renderer.softParticles,
-    softNear: spec.renderer.softParticleNearFade,
-    softFar: spec.renderer.softParticleFarFade,
-    map: loadTexture(spec.renderer.textureUrl),
+  const materialOptions = (
+    particleSpec: ParticleSystemComponent,
+  ): ParticleMaterialOptions => ({
+    blendMode: particleSpec.renderer.blendMode,
+    renderMode: particleSpec.renderer.renderMode,
+    softParticles: particleSpec.renderer.softParticles,
+    softNear: particleSpec.renderer.softParticleNearFade,
+    softFar: particleSpec.renderer.softParticleFarFade,
+    map: loadTexture(particleSpec.renderer.textureUrl),
     depthTexture: options.depthTexture ?? null,
   });
+  let particleMaterial: ParticleMaterialHandle = materialFactory(materialOptions(spec));
 
-  let mesh = new THREE.InstancedMesh(activeGeometry, material, maxParticles);
+  let mesh = new THREE.InstancedMesh(
+    activeGeometry,
+    particleMaterial.material,
+    maxParticles,
+  );
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   // Instance positions move every frame; geometry bounds do not cover them.
   mesh.frustumCulled = false;
   mesh.count = 0;
 
   function attachInstanceAttributes(target: THREE.InstancedMesh, count: number): void {
-    target.geometry.setAttribute(
-      "instanceColorAttr",
-      new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3),
+    // Plane position/normal/uv, these particle attributes, and (for large
+    // systems) Three's instance-matrix fallback all consume WebGPU vertex
+    // buffer slots. Keep every custom field in one binding so the pipeline
+    // remains below the portable maxVertexBuffers limit of 8.
+    const data = new THREE.InstancedInterleavedBuffer(
+      new Float32Array(count * 13),
+      13,
+      1,
     );
-    target.geometry.setAttribute(
-      "instanceAlpha",
-      new THREE.InstancedBufferAttribute(new Float32Array(count), 1),
-    );
-    target.geometry.setAttribute(
-      "instanceTileOffset",
-      new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2),
-    );
-    target.geometry.setAttribute(
-      "instanceTileScale",
-      new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2),
-    );
-    target.geometry.setAttribute(
-      "instanceStretch",
-      new THREE.InstancedBufferAttribute(new Float32Array(count), 1),
-    );
+    data.setUsage(THREE.DynamicDrawUsage);
+    const attach = (
+      name: string,
+      itemSize: number,
+      offset: number,
+    ): void => {
+      const attribute = new THREE.InterleavedBufferAttribute(
+        data,
+        itemSize,
+        offset,
+      );
+      target.geometry.setAttribute(name, attribute);
+    };
+    attach("instanceColorAttr", 3, 0);
+    attach("instanceAlpha", 1, 3);
+    attach("instanceTileOffset", 2, 4);
+    attach("instanceTileScale", 2, 6);
+    attach("instanceStretch", 1, 8);
+    // Explicit center/size data lets the TSL material reproduce the existing
+    // billboard shader without reading Three's private instance-matrix node.
+    attach("instancePositionAttr", 3, 9);
+    attach("instanceSize", 1, 12);
   }
 
   attachInstanceAttributes(mesh, maxParticles);
@@ -173,24 +198,20 @@ export function createParticleSystem(
     root.remove(mesh);
     mesh.dispose();
     activeGeometry.dispose();
-    material.dispose();
+    particleMaterial.dispose();
     trails.dispose();
     root.remove(trails.object3d);
     releaseAll();
 
     maxParticles = Math.max(1, nextMax);
     slots = Array.from({ length: maxParticles }, createSlot);
-    material = createParticleMaterial({
-      blendMode: spec.renderer.blendMode,
-      renderMode: spec.renderer.renderMode,
-      softParticles: spec.renderer.softParticles,
-      softNear: spec.renderer.softParticleNearFade,
-      softFar: spec.renderer.softParticleFarFade,
-      map: loadTexture(spec.renderer.textureUrl),
-      depthTexture: options.depthTexture ?? null,
-    });
+    particleMaterial = materialFactory(materialOptions(spec));
     activeGeometry = baseGeometry.clone();
-    mesh = new THREE.InstancedMesh(activeGeometry, material, maxParticles);
+    mesh = new THREE.InstancedMesh(
+      activeGeometry,
+      particleMaterial.material,
+      maxParticles,
+    );
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     // Instance positions move every frame; geometry bounds do not cover them.
     mesh.frustumCulled = false;
@@ -398,7 +419,7 @@ export function createParticleSystem(
       worldScale,
       invQuat,
       tmp,
-      material,
+      material: particleMaterial,
       dt,
       camera,
       hexToRgb,
@@ -440,26 +461,7 @@ export function createParticleSystem(
     applyComponent(next) {
       const needsRebuild = next.maxParticles !== spec.maxParticles;
       spec = next;
-      material.uniforms.uMap.value = loadTexture(next.renderer.textureUrl);
-      material.uniforms.uHasMap.value = 1;
-      material.uniforms.uSoftNear.value = next.renderer.softParticleNearFade;
-      material.uniforms.uSoftFar.value = next.renderer.softParticleFarFade;
-      material.uniforms.uSoftEnabled.value =
-        next.renderer.softParticles && options.depthTexture ? 1 : 0;
-      material.uniforms.uAdditive.value =
-        next.renderer.blendMode === "additive" ? 1 : 0;
-      material.blending =
-        next.renderer.blendMode === "additive"
-          ? THREE.AdditiveBlending
-          : THREE.NormalBlending;
-      material.uniforms.uRenderMode.value =
-        next.renderer.renderMode === "stretched-billboard"
-          ? 1
-          : next.renderer.renderMode === "horizontal"
-            ? 2
-            : next.renderer.renderMode === "vertical"
-              ? 3
-              : 0;
+      particleMaterial.applyOptions(materialOptions(next));
       trails.applyConfig(next.trails);
       if (needsRebuild) {
         rebuildCapacity(next.maxParticles);
@@ -477,7 +479,7 @@ export function createParticleSystem(
       releaseAll();
       trails.dispose();
       mesh.dispose();
-      material.dispose();
+      particleMaterial.dispose();
       activeGeometry.dispose();
       baseGeometry.dispose();
     },

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
+import { PMREMGenerator, WebGPURenderer } from 'three/webgpu';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { setKtx2SupportRenderer } from '../../render/assets/ktx2';
 import { loadPrefabModel } from '../../render/prefabs/prefab-renderer';
+import { initRequiredWebGpu } from '../../render/webgpu-required';
 import type { MaterialValues } from './material-manager';
 
 export type MaterialPreviewShape =
@@ -150,19 +153,14 @@ function applyValues(
   material.needsUpdate = true;
 }
 
-function createStage(renderer: THREE.WebGLRenderer): {
+function createStage(renderer: WebGPURenderer): {
   scene: THREE.Scene;
   ground: THREE.Mesh;
+  initializeEnvironment: () => void;
   dispose: () => void;
 } {
   const scene = new THREE.Scene();
-
-  const environmentScene = new RoomEnvironment();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const environmentTarget = pmrem.fromScene(environmentScene, 0.04);
-  scene.environment = environmentTarget.texture;
-  environmentScene.dispose();
-  pmrem.dispose();
+  let environmentTarget: ReturnType<PMREMGenerator['fromScene']> | null = null;
 
   // The image-based light does the shading; the directionals only add a
   // specular hit and a cool rim. Anything stronger blows a white base colour
@@ -191,10 +189,23 @@ function createStage(renderer: THREE.WebGLRenderer): {
   return {
     scene,
     ground,
+    initializeEnvironment() {
+      if (environmentTarget) return;
+      const environmentScene = new RoomEnvironment();
+      const pmrem = new PMREMGenerator(renderer);
+      try {
+        environmentTarget = pmrem.fromScene(environmentScene, 0.04);
+        scene.environment = environmentTarget.texture;
+      } finally {
+        environmentScene.dispose();
+        pmrem.dispose();
+      }
+    },
     dispose() {
       ground.geometry.dispose();
       groundMaterial.dispose();
-      environmentTarget.dispose();
+      environmentTarget?.dispose();
+      environmentTarget = null;
     },
   };
 }
@@ -204,7 +215,7 @@ function createStage(renderer: THREE.WebGLRenderer): {
  * mesh and backdrop, drag to tumble, wheel to dolly, optional idle spin.
  */
 export function createMaterialPreview(host: HTMLElement): MaterialPreviewHandle {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  const renderer = new WebGPURenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -214,8 +225,44 @@ export function createMaterialPreview(host: HTMLElement): MaterialPreviewHandle 
   canvas.className = 'ed-material-inspector-canvas';
   host.replaceChildren(canvas);
 
+  let disposed = false;
+  let backendReady = false;
+  let backendFailed = false;
+  let rendererInitialized = false;
+  let rendererDisposed = false;
+  const disposeRenderer = (): void => {
+    // Three's pre-init dispose path calls setAnimationLoop(), which starts
+    // init() itself. If explicit initialization failed there are no live
+    // renderer services to release; if it is pending, the ready handler below
+    // will dispose after success.
+    if (!rendererInitialized || rendererDisposed) return;
+    rendererDisposed = true;
+    renderer.dispose();
+  };
+
   const stage = createStage(renderer);
   const { scene } = stage;
+  // WebGPU initialization is asynchronous, and KTX2 capability detection plus
+  // the PMREM bake both require a live backend. Keep the public factory
+  // synchronous, but do not render or load a dropped model until this settles.
+  const ready = initRequiredWebGpu(renderer).then(() => {
+    rendererInitialized = true;
+    if (disposed) {
+      disposeRenderer();
+      return;
+    }
+    setKtx2SupportRenderer(renderer);
+    stage.initializeEnvironment();
+    backendReady = true;
+  });
+  void ready.catch((error: unknown) => {
+    backendFailed = true;
+    disposeRenderer();
+    if (!disposed) {
+      console.error('[material-preview] WebGPU unavailable — preview disabled.', error);
+    }
+  });
+
   const checker = createCheckerTexture();
   const studio = createStudioTexture();
   scene.background = checker;
@@ -272,7 +319,6 @@ export function createMaterialPreview(host: HTMLElement): MaterialPreviewHandle 
     mesh.visible = true;
   }
 
-  let disposed = false;
   let spinning = true;
   let dragging = false;
   let lastX = 0;
@@ -333,8 +379,9 @@ export function createMaterialPreview(host: HTMLElement): MaterialPreviewHandle 
   resize();
 
   const frame = (ts: number): void => {
-    if (disposed) return;
+    if (disposed || backendFailed) return;
     raf = requestAnimationFrame(frame);
+    if (!backendReady) return;
     const dt = lastTs === 0 ? 0 : Math.min(0.05, (ts - lastTs) / 1000);
     lastTs = ts;
     // A spinning plane just goes edge-on and vanishes — it exists to be read
@@ -363,6 +410,8 @@ export function createMaterialPreview(host: HTMLElement): MaterialPreviewHandle 
       const token = ++customToken;
       clearCustomMesh();
       if (!url) return;
+      await ready;
+      if (disposed || token !== customToken) return;
       const model = await loadPrefabModel(url, { pin: true });
       if (disposed || token !== customToken) return;
       const wrapper = new THREE.Group();
@@ -418,7 +467,7 @@ export function createMaterialPreview(host: HTMLElement): MaterialPreviewHandle 
       checker.dispose();
       studio.dispose();
       stage.dispose();
-      renderer.dispose();
+      disposeRenderer();
       host.replaceChildren();
     },
   };

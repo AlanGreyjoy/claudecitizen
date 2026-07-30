@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { attachKtx2Loader, setKtx2SupportRenderer } from '../assets/ktx2';
 import {
@@ -6,6 +7,8 @@ import {
   putCachedModelThumbnail,
 } from '../../editor/model-thumbnail-cache';
 import { disposeCacheTemplate } from '../assets/gpu-dispose';
+import { initRequiredWebGpu } from '../webgpu-required';
+import { captureWebGpuThumbnailDataUrl } from '../webgpu-capture';
 
 /**
  * Lazy model thumbnails for the asset browser / inventory icons.
@@ -16,7 +19,7 @@ import { disposeCacheTemplate } from '../assets/gpu-dispose';
 const THUMB_SIZE = 96;
 const MAX_CACHED_THUMBS = 96;
 const CLEAR_COLOR = 0x12161c;
-const PERSISTENT_CACHE_EPOCH = 'model-thumbnail-v1';
+const PERSISTENT_CACHE_EPOCH = 'model-thumbnail-v2-webgpu';
 
 const gltfLoader = attachKtx2Loader(new GLTFLoader());
 /** Resolved thumbnail data-URLs (insertion order = LRU). */
@@ -24,27 +27,26 @@ const resolved = new Map<string, string>();
 /** In-flight renders keyed by url. */
 const inflight = new Map<string, Promise<string>>();
 
-let shared: {
-  renderer: THREE.WebGLRenderer;
+interface SharedThumbnailRenderer {
+  renderer: WebGPURenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   stage: THREE.Group;
-} | null = null;
+}
+
+let sharedPromise: Promise<SharedThumbnailRenderer> | null = null;
 
 let queue: Promise<unknown> = Promise.resolve();
 
-function ensureShared() {
-  if (shared) return shared;
+async function createShared(): Promise<SharedThumbnailRenderer> {
   const canvas = document.createElement('canvas');
   canvas.width = THUMB_SIZE;
   canvas.height = THUMB_SIZE;
-  const renderer = new THREE.WebGLRenderer({
+  const renderer = new WebGPURenderer({
     canvas,
     antialias: true,
     alpha: false,
-    preserveDrawingBuffer: true,
   });
-  renderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
   renderer.setClearColor(CLEAR_COLOR, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -58,20 +60,28 @@ function ensureShared() {
   const stage = new THREE.Group();
   scene.add(stage);
 
-  // The asset browser can render thumbnails before the play renderer exists,
-  // so this offscreen context doubles as the KTX2 format probe.
-  setKtx2SupportRenderer(renderer);
-
-  shared = { renderer, scene, camera, stage };
-  return shared;
+  let rendererInitialized = false;
+  try {
+    await initRequiredWebGpu(renderer);
+    rendererInitialized = true;
+    // The asset browser can render thumbnails before the play renderer exists,
+    // so this offscreen renderer doubles as the KTX2 format probe.
+    setKtx2SupportRenderer(renderer);
+    return { renderer, scene, camera, stage };
+  } catch (error) {
+    if (rendererInitialized) renderer.dispose();
+    throw error;
+  }
 }
 
-function encodeThumbnail(canvas: HTMLCanvasElement): string {
-  try {
-    return canvas.toDataURL('image/webp', 0.82);
-  } catch {
-    return canvas.toDataURL('image/jpeg', 0.85);
-  }
+function ensureShared(): Promise<SharedThumbnailRenderer> {
+  if (sharedPromise) return sharedPromise;
+  const pending = createShared();
+  sharedPromise = pending;
+  void pending.catch(() => {
+    if (sharedPromise === pending) sharedPromise = null;
+  });
+  return pending;
 }
 
 function rememberResolved(url: string, dataUrl: string): void {
@@ -86,7 +96,7 @@ function rememberResolved(url: string, dataUrl: string): void {
 }
 
 async function renderThumbnail(url: string): Promise<string> {
-  const { renderer, scene, camera, stage } = ensureShared();
+  const { renderer, scene, camera, stage } = await ensureShared();
   const gltf = await gltfLoader.loadAsync(url);
   const model = gltf.scene;
   stage.add(model);
@@ -102,8 +112,13 @@ async function renderThumbnail(url: string): Promise<string> {
     camera.near = radius / 100;
     camera.far = radius * 20;
     camera.updateProjectionMatrix();
-    renderer.render(scene, camera);
-    return encodeThumbnail(renderer.domElement);
+    return await captureWebGpuThumbnailDataUrl(
+      renderer,
+      scene,
+      camera,
+      THUMB_SIZE,
+      THUMB_SIZE,
+    );
   } finally {
     stage.remove(model);
     disposeCacheTemplate(model);

@@ -205,6 +205,12 @@ export function CanteenFields(
   return <ConsumableShopFields {...props} />;
 }
 
+export function PharmacyFields(
+  props: ComponentFieldsProps<Extract<PrefabComponent, { type: 'pharmacy' }>>,
+): ReactElement {
+  return <ConsumableShopFields {...props} />;
+}
+
 export function CockpitStatFields({
   ctx,
   component,

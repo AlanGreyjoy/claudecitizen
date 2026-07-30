@@ -485,6 +485,61 @@ async function enqueueSidekickJsonDependencies(
   }
 }
 
+/**
+ * Files allowed to construct a `WebGLRenderer` in a shipped bundle.
+ *
+ * Only the KTX2 capability probe qualifies: it reads supported texture formats
+ * off the same GPU, never renders a frame, and is thrown away immediately.
+ */
+const WEBGL_RENDERER_EXEMPT_FILES = new Set(['src/render/assets/ktx2.ts']);
+
+const NEW_WEBGL_RENDERER = /\bnew\s+(?:THREE\.)?WebGLRenderer\b/;
+/** The constructor-option form, not prose — `webgpu-required.ts` explains it in a comment. */
+const FORCE_WEBGL_OPTION = /\bforceWebGL\s*:/;
+
+/**
+ * Fails a release build that would silently run on WebGL2.
+ *
+ * WebGPU is a hard product requirement (`prds/webgpu-migration/PLAN.md`): the
+ * compute paths the engine depends on have no WebGL2 equivalent. Three's
+ * `WebGPURenderer` degrades to a WebGL2 backend on its own and no constructor
+ * parameter opts out, so a leftover `forceWebGL` or a stray `WebGLRenderer`
+ * produces a build that looks correct while missing the thing it exists for.
+ * Cheaper to fail here than to debug it as a field report.
+ */
+function enforceRequiredWebGpu(): Plugin {
+  let root = process.cwd();
+
+  return {
+    name: 'claudecitizen-enforce-required-webgpu',
+    apply: 'build',
+    enforce: 'pre',
+    configResolved(config) {
+      root = config.root;
+    },
+    transform(code, id) {
+      const path = relative(root, id.split('?')[0]).replace(/\\/g, '/');
+      if (!path.startsWith('src/') || !/\.tsx?$/.test(path)) return null;
+      if (FORCE_WEBGL_OPTION.test(code)) {
+        this.error(
+          `${path}: \`forceWebGL\` is migration scaffolding and must not ship. `
+            + 'Route the renderer through src/render/webgpu-required.ts instead.',
+        );
+      }
+      if (
+        !WEBGL_RENDERER_EXEMPT_FILES.has(path)
+        && NEW_WEBGL_RENDERER.test(code)
+      ) {
+        this.error(
+          `${path}: constructs a WebGLRenderer, but WebGPU is a hard requirement. `
+            + 'Use WebGPURenderer via initRequiredWebGpu() in src/render/webgpu-required.ts.',
+        );
+      }
+      return null;
+    },
+  };
+}
+
 function copyReferencedGameAssets(): Plugin {
   let root = process.cwd();
   let outDir = 'dist';
@@ -599,13 +654,7 @@ const VENDOR_CHUNKS: { name: string; packages: string[] }[] = [
   { name: 'vendor-three', packages: ['three-mesh-bvh', 'three'] },
   {
     name: 'vendor-postfx',
-    packages: [
-      'postprocessing',
-      'n8ao',
-      '@takram/three-atmosphere',
-      '@takram/three-clouds',
-      '@takram/three-geospatial',
-    ],
+    packages: ['@takram/three-atmosphere', '@takram/three-geospatial'],
   },
   { name: 'vendor-rapier', packages: ['@dimforge/rapier3d'] },
   { name: 'vendor-react', packages: ['react-dom', 'react', 'scheduler'] },
@@ -653,7 +702,7 @@ const editorBridgeTarget = editorBridgePort
   : null;
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), copyReferencedGameAssets()],
+  plugins: [react(), enforceRequiredWebGpu(), copyReferencedGameAssets()],
   build: {
     // The engine is open source, so shipping maps leaks nothing, and a release
     // stack trace that reads `prefab-renderer.ts:214` instead of `RH @ index.js`

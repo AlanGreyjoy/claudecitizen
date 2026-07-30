@@ -492,6 +492,27 @@ function collectCanteen(
   );
 }
 
+function collectPharmacy(
+  component: Extract<PrefabComponent, { type: "pharmacy" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  collectFoodShopSeed(
+    {
+      id: component.id || ctx.entity.id,
+      label: component.label?.trim() || 'Browse pharmacy',
+      catalogMode: 'medical',
+      itemDefinitionIds: component.itemDefinitionIds,
+      gazeRadius: component.gazeRadius,
+      maxDistance: component.maxDistance,
+      screenWidth: component.screenWidth,
+      screenHeight: component.screenHeight,
+    },
+    ctx,
+    out,
+  );
+}
+
 function collectAnimation(
   component: Extract<PrefabComponent, { type: "animation" }>,
   out: FlattenedComponents,
@@ -582,6 +603,9 @@ function collectStationComponent(
       break;
     case 'canteen':
       collectCanteen(component, ctx, out);
+      break;
+    case 'pharmacy':
+      collectPharmacy(component, ctx, out);
       break;
     case 'animation':
       collectAnimation(component, out);

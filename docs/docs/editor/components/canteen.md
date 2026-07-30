@@ -39,4 +39,5 @@ Lists food and drink offerings in one flat list. Purchases call `POST /game/inve
 
 - [Food Shop](./food-shop)
 - [Drinks Shop](./drinks-shop)
+- [Pharmacy](./pharmacy)
 - [Weapon Shop](./weapon-shop)

@@ -3,6 +3,7 @@ import type { Vec3 } from '../../../types';
 import { getGrassDistanceMeters } from '../domain/constants';
 import type { StoredVegetationInstance, StoredVegetationTile } from '../domain/storage';
 import type { InstancedAsset } from './instanced-assets';
+import type { InstancedWindMaterialFactory } from './wind';
 import {
   createTreeLodState,
   hasTreeNearFocus,
@@ -28,6 +29,44 @@ export interface VegetationRenderGroup {
 // instances are currently high or low detail.
 const TREE_BOUNDS_MARGIN_METERS = 40;
 
+const ownedWindMaterials = new WeakMap<
+  THREE.InstancedMesh,
+  Set<THREE.Material>
+>();
+
+function applyInstancedWindMaterial(
+  mesh: THREE.InstancedMesh,
+  factory: InstancedWindMaterialFactory | undefined,
+): void {
+  if (!factory) return;
+
+  const sourceMaterials = Array.isArray(mesh.material)
+    ? mesh.material
+    : [mesh.material];
+  const convertedMaterials = sourceMaterials.map((source) =>
+    factory(source, mesh.instanceMatrix),
+  );
+  const owned = new Set<THREE.Material>();
+  for (let index = 0; index < convertedMaterials.length; index += 1) {
+    const converted = convertedMaterials[index];
+    if (converted !== sourceMaterials[index]) owned.add(converted);
+  }
+  if (owned.size > 0) ownedWindMaterials.set(mesh, owned);
+  mesh.material = Array.isArray(mesh.material)
+    ? convertedMaterials
+    : convertedMaterials[0];
+}
+
+function disposeInstancedMesh(mesh: THREE.InstancedMesh): void {
+  const owned = ownedWindMaterials.get(mesh);
+  if (owned) {
+    for (const material of owned) material.dispose();
+    owned.clear();
+    ownedWindMaterials.delete(mesh);
+  }
+  mesh.dispose();
+}
+
 function computeInstanceBoundingSphere(
   instances: StoredVegetationInstance[],
 ): THREE.Sphere {
@@ -49,6 +88,7 @@ function createEmptyInstancedMeshes(
   capacity: number,
   options: { castShadow: boolean; receiveShadow: boolean },
   boundingSphere: THREE.Sphere | null = null,
+  windMaterialFactory?: InstancedWindMaterialFactory,
 ): THREE.InstancedMesh[] {
   if (!asset?.parts?.length || capacity === 0) return [];
 
@@ -70,6 +110,7 @@ function createEmptyInstancedMeshes(
     mesh.castShadow = options.castShadow;
     mesh.receiveShadow = options.receiveShadow;
     mesh.count = 0;
+    applyInstancedWindMaterial(mesh, windMaterialFactory);
     group.add(mesh);
     meshes.push(mesh);
   }
@@ -113,6 +154,7 @@ function buildTreeLodMeshes(
   instances: StoredVegetationInstance[],
   treeAssets: InstancedAsset[],
   treeLodAsset: InstancedAsset | null,
+  windMaterialFactory: InstancedWindMaterialFactory | undefined,
 ): TreeLodMeshes | null {
   if (
     instances.length === 0 ||
@@ -138,6 +180,7 @@ function buildTreeLodMeshes(
           receiveShadow: true,
         },
         tileBounds,
+        windMaterialFactory,
       ),
     );
   });
@@ -151,6 +194,7 @@ function buildTreeLodMeshes(
       receiveShadow: true,
     },
     tileBounds,
+    windMaterialFactory,
   );
 
   const lod = createTreeLodState(
@@ -174,6 +218,7 @@ interface GrassRadiusState {
   tempMatrix: THREE.Matrix4;
   lastPackedFocus: Vec3 | null;
   visible: boolean;
+  windMaterialFactory: InstancedWindMaterialFactory | undefined;
 }
 
 function releaseInstancedMeshes(
@@ -182,7 +227,7 @@ function releaseInstancedMeshes(
 ): void {
   for (const mesh of meshes) {
     group.remove(mesh);
-    mesh.dispose();
+    disposeInstancedMesh(mesh);
   }
   meshes.length = 0;
 }
@@ -220,6 +265,8 @@ function ensureGrassMeshCapacity(
     state.assets[variant],
     grassAllocationCapacity(required, available),
     { castShadow: false, receiveShadow: true },
+    null,
+    state.windMaterialFactory,
   );
   state.meshesByVariant[variant] = meshes;
   return meshes;
@@ -347,6 +394,7 @@ export function createVegetationGroupFromStored(
   grassAssets: InstancedAsset[],
   treeAssets: InstancedAsset[],
   treeLodAsset: InstancedAsset | null,
+  windMaterialFactory?: InstancedWindMaterialFactory,
 ): VegetationRenderGroup {
   const group = new THREE.Group();
   group.position.set(data.anchor.x, data.anchor.y, data.anchor.z);
@@ -359,6 +407,7 @@ export function createVegetationGroupFromStored(
     tempMatrix: new THREE.Matrix4(),
     lastPackedFocus: null,
     visible: false,
+    windMaterialFactory,
   };
   initGrassMeshes(
     group,
@@ -373,6 +422,7 @@ export function createVegetationGroupFromStored(
     data.trees,
     treeAssets,
     treeLodAsset,
+    windMaterialFactory,
   );
   let treesVisible = true;
 
@@ -414,7 +464,7 @@ export function releaseVegetationGroup(
   if (!group) return;
   parent.remove(group);
   group.traverse((object) => {
-    if (object instanceof THREE.InstancedMesh) object.dispose();
+    if (object instanceof THREE.InstancedMesh) disposeInstancedMesh(object);
   });
   group.clear();
 }

@@ -1,5 +1,22 @@
 import * as THREE from 'three';
 
+export interface SurfaceWaterMaterialParameters {
+  planetRadiusMeters: number;
+}
+
+export interface SurfaceWaterMaterialHandle {
+  material: THREE.Material;
+  setSkyColor: (color: THREE.Color) => void;
+  setSunColor: (color: THREE.Color) => void;
+  setSunDirection: (direction: THREE.Vector3) => void;
+  setTime: (seconds: number) => void;
+  dispose: () => void;
+}
+
+export type SurfaceWaterMaterialFactory = (
+  parameters: SurfaceWaterMaterialParameters,
+) => SurfaceWaterMaterialHandle;
+
 const vertexShader = /* glsl */ `
 #include <common>
 #include <fog_pars_vertex>
@@ -9,12 +26,13 @@ uniform vec3 sunDirection;
 uniform float planetRadius;
 uniform float time;
 
-attribute vec3 barycentric;
-attribute vec3 color;
-attribute float effectDetail;
+// barycentric/color are vec4 and the three scalar factors share waterFactor
+// because WebGPU rejects 3-wide and 1-wide 8-bit vertex formats. The GLSL path
+// reads the same buffers so both renderers can share the geometry builder.
+attribute vec4 barycentric;
+attribute vec4 color;
+attribute vec4 waterFactor;
 attribute vec3 radialDirection;
-attribute float shore;
-attribute float surfStrength;
 attribute float waterDepth;
 
 varying vec3 vBarycentric;
@@ -28,11 +46,13 @@ varying float vSurfStrength;
 varying float vWaterDepth;
 
 void main() {
-  vBarycentric = barycentric;
-  vFacetColor = color;
+  vBarycentric = barycentric.xyz;
+  vFacetColor = color.xyz;
+  float effectDetail = waterFactor.x;
+  float shore = waterFactor.y;
   vEffectDetail = effectDetail;
   vShore = shore;
-  vSurfStrength = surfStrength;
+  vSurfStrength = waterFactor.z;
   vWaterDepth = waterDepth;
   vSunDirection = normalize((viewMatrix * vec4(sunDirection, 0.0)).xyz);
   vec3 radial = normalize(radialDirection);
@@ -128,11 +148,15 @@ void main() {
 }
 `;
 
-export function createSurfaceWaterMaterial(planetRadiusMeters: number): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
+export const createSurfaceWaterMaterial: SurfaceWaterMaterialFactory = ({
+  planetRadiusMeters,
+}) => {
+  const material = new THREE.ShaderMaterial({
     depthWrite: false,
+    depthTest: true,
     fog: true,
     fragmentShader,
+    blending: THREE.NormalBlending,
     side: THREE.FrontSide,
     transparent: true,
     uniforms: {
@@ -152,4 +176,23 @@ export function createSurfaceWaterMaterial(planetRadiusMeters: number): THREE.Sh
     },
     vertexShader,
   });
-}
+
+  return {
+    material,
+    setSkyColor(color) {
+      material.uniforms.skyColor.value.copy(color);
+    },
+    setSunColor(color) {
+      material.uniforms.sunColor.value.copy(color);
+    },
+    setSunDirection(direction) {
+      material.uniforms.sunDirection.value.copy(direction).normalize();
+    },
+    setTime(seconds) {
+      material.uniforms.time.value = seconds;
+    },
+    dispose() {
+      material.dispose();
+    },
+  };
+};

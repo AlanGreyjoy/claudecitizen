@@ -46,8 +46,8 @@ function getKtx2Loader(): KTX2Loader {
 
 /**
  * Registers the app's main renderer as the source of truth for compressed
- * format support. Called from `createWebGlRenderer`, which runs before any
- * scene content loads.
+ * format support. Called from `createWebGpuRenderer` and each editor surface's
+ * renderer setup, all of which run before any scene content loads.
  *
  * **Call this only after the renderer's backend is live.** On a `WebGPURenderer`,
  * `detectSupport` uses the synchronous `renderer.hasFeature(...)`, which needs an

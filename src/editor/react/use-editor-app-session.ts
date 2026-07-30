@@ -4,10 +4,12 @@ import type { EditorAudioPreviewController } from '../audio-preview';
 import type { EditorStore } from '../document';
 import { showToast } from '../dom';
 import { startEditorPlay, type EditorPlaySession } from '../play-in-editor';
+import { startPlanetSurfaceTest } from '../planet-test';
 import { startShipTest } from '../ship-test';
 import { addBox, addEmpty } from '../session-helpers';
 import type { EditorViewport } from '../../render/editor/viewport';
 import type { ShipEditor } from './panels/ShipPanel';
+import type { ShipTestEnv } from './panels/ship/types';
 import type { ToolbarGizmoMode, ToolbarHandle } from './panels/Toolbar';
 import type { TabEditorHandles } from './TabEditorHosts';
 import type { SceneEditorTab } from './types';
@@ -45,6 +47,56 @@ export type EditorAppSessionArgs = {
   confirmDiscard: (message: string) => Promise<boolean>;
   hasUnsavedWork: () => boolean;
 };
+
+type PlayLaunch =
+  | { kind: 'session'; session: EditorPlaySession; setViewportPlayMode?: boolean }
+  | { kind: 'abort' }
+  | { kind: 'blocked'; message: string; error?: boolean };
+
+async function resolvePlayLaunch(args: {
+  tab: SceneEditorTab;
+  handles: TabEditorHandles;
+  store: EditorStore;
+  shipTestEnv: ShipTestEnv;
+}): Promise<PlayLaunch> {
+  const { tab, handles, store, shipTestEnv } = args;
+  if (tab === 'system-map' && !(await handles.systemMapEditor?.save())) {
+    return { kind: 'abort' };
+  }
+  if (tab === 'base-characters') {
+    await handles.baseCharacterEditor?.save();
+    return {
+      kind: 'blocked',
+      message: 'Use the Play Test control in the Base Characters panel.',
+    };
+  }
+  if (tab === 'server') {
+    return { kind: 'blocked', message: 'Open a scene to play.', error: true };
+  }
+  if (tab === 'ship') {
+    if (store.getState().kind !== 'ship') {
+      return { kind: 'blocked', message: 'Open a ship prefab to test it.', error: true };
+    }
+    return {
+      kind: 'session',
+      session: startShipTest(store, shipTestEnv),
+      setViewportPlayMode: true,
+    };
+  }
+  if (tab === 'planet-authoring') {
+    if (!(await handles.planetAuthoringEditor?.save())) return { kind: 'abort' };
+    const planetId = handles.planetAuthoringEditor?.getDocument()?.id;
+    if (!planetId) {
+      return { kind: 'blocked', message: 'Open a planet to test play.', error: true };
+    }
+    return { kind: 'session', session: startPlanetSurfaceTest(planetId) };
+  }
+  return {
+    kind: 'session',
+    session: startEditorPlay(store),
+    setViewportPlayMode: true,
+  };
+}
 
 export function useEditorAppSession(args: EditorAppSessionArgs) {
   const {
@@ -88,40 +140,42 @@ const togglePlay = useCallback(async () => {
   }
 
   const current = tabRef.current;
-  const handles = tabHandlesRef.current;
   audioPreview.stop();
-
-  if (current === 'planet-authoring' && !(await handles.planetAuthoringEditor?.save())) {
+  const launch = await resolvePlayLaunch({
+    tab: current,
+    handles: tabHandlesRef.current,
+    store,
+    shipTestEnv: shipEditorRef.current?.getTestEnv() ?? 'pad',
+  });
+  if (launch.kind === 'abort') return;
+  if (launch.kind === 'blocked') {
+    showToast(launch.message, launch.error === true);
     return;
   }
-  if (current === 'system-map' && !(await handles.systemMapEditor?.save())) return;
-  if (current === 'base-characters') {
-    await handles.baseCharacterEditor?.save();
-    showToast('Use the Play Test control in the Base Characters panel.');
-    return;
+  if (current !== 'scene' && current !== 'ship' && current !== 'planet-authoring') {
+    setTabState('scene');
   }
-  if (current === 'server') {
-    showToast('Open a scene to play.', true);
-    return;
-  }
-  if (current === 'ship') {
-    if (store.getState().kind !== 'ship') {
-      showToast('Open a ship prefab to test it.', true);
-      return;
-    }
-    viewportRef.current?.setPlayMode(true);
-    playSessionRef.current = startShipTest(store, shipEditorRef.current?.getTestEnv() ?? 'pad');
-    setPaused(false);
-    setPlaying(true);
-    return;
-  }
-  if (current !== 'scene') setTabState('scene');
-
-  viewportRef.current?.setPlayMode(true);
-  playSessionRef.current = startEditorPlay(store);
+  if (launch.setViewportPlayMode) viewportRef.current?.setPlayMode(true);
+  playSessionRef.current = launch.session;
   setPaused(false);
   setPlaying(true);
 }, [playing, audioPreview, stopInEditorPlay, store]);
+
+/** Planet Authoring → Test Play: panel already saved; just boot surface play. */
+const startPlanetAuthoringPlay = useCallback(() => {
+  if (playing) {
+    stopInEditorPlay();
+  }
+  const planetId = tabHandlesRef.current.planetAuthoringEditor?.getDocument()?.id;
+  if (!planetId) {
+    showToast('Open a planet to test play.', true);
+    return;
+  }
+  audioPreview.stop();
+  playSessionRef.current = startPlanetSurfaceTest(planetId);
+  setPaused(false);
+  setPlaying(true);
+}, [playing, stopInEditorPlay, audioPreview, tabHandlesRef, playSessionRef, setPaused, setPlaying]);
 
 const togglePause = useCallback(() => {
   const session = playSessionRef.current;
@@ -214,6 +268,10 @@ const toolbarActions = useMemo(
       viewportRef.current?.setEnvironmentLights(enabled),
     onProceduralSkyChange: (enabled: boolean) =>
       viewportRef.current?.setProceduralSky(enabled),
+    onShowAllCollidersChange: (enabled: boolean) =>
+      viewportRef.current?.setShowAllColliders(enabled),
+    onGridVisibleChange: (enabled: boolean) =>
+      viewportRef.current?.setGridVisible(enabled),
     onFocusSelection: () => viewportRef.current?.focusSelection(),
     onAddBox: () => addBox(store),
     onAddEmpty: () => addEmpty(store),
@@ -284,6 +342,7 @@ const toolbarActions = useMemo(
   return {
     togglePlay,
     togglePause,
+    startPlanetAuthoringPlay,
     buildWeb,
     exitToTitle,
     onSave,

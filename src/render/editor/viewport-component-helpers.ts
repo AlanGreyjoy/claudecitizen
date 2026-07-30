@@ -207,6 +207,7 @@ export function createViewportComponentHelpers(
     const targetWorldInverse = target.matrixWorld.clone().invert();
     const group = new THREE.Group();
     group.userData.editorMeshColliderHelper = true;
+    group.userData.editorColliderHelper = true;
     // Mirrors the gameplay bake's carve-out (prefab-colliders `excludeNodes`).
     // The preview is the only way to see what got baked, so it has to drop the
     // same subtrees or it reports collision that does not exist.

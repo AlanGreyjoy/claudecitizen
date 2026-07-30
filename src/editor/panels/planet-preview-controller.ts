@@ -1,5 +1,8 @@
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { setKtx2SupportRenderer } from '../../render/assets/ktx2';
+import { initRequiredWebGpu } from '../../render/webgpu-required';
 import { cartesianFromLatLonAlt } from '../../world/coordinates';
 import { sampleSurfaceHeight } from '../../world/elevation';
 import { activatePlanetDocument } from '../../world/planets/runtime';
@@ -12,6 +15,7 @@ import {
   buildPreviewVegetation,
   type PreviewVegetationHandle,
 } from './planet-preview-vegetation';
+import { createWebGpuWindMaterial } from '../../render/vegetation/render/wind-node-material';
 import { buildPreviewSpawns, type PreviewSpawnHandle } from './planet-preview-spawns';
 import {
   buildPlanetPreviewMeshes,
@@ -54,6 +58,26 @@ export interface PlanetPreviewController {
   endFly: () => void;
 }
 
+function createPlanetPreviewRenderer(): WebGPURenderer {
+  const renderer = new WebGPURenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setClearColor(0x07101c, 1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  return renderer;
+}
+
+function mountPlanetPreviewCanvas(
+  previewHost: HTMLElement,
+  canvas: HTMLCanvasElement,
+): void {
+  canvas.className = 'ed-planet-canvas';
+  const hint = document.createElement('div');
+  hint.className = 'ed-planet-preview-hint';
+  hint.textContent =
+    'LMB orbit · MMB pan · hold RMB + WASD/QE fly · wheel (while flying) speed · Shift boost';
+  previewHost.replaceChildren(canvas, hint);
+}
+
 export function createPlanetPreviewController(
   previewHost: HTMLElement,
   deps: PlanetPreviewControllerDeps,
@@ -63,17 +87,9 @@ export function createPlanetPreviewController(
   let resetCameraOnRebuild = true;
   let raf = 0;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.setClearColor(0x07101c, 1);
+  const renderer = createPlanetPreviewRenderer();
   const canvas = renderer.domElement;
-  canvas.className = 'ed-planet-canvas';
-
-  const previewHint = document.createElement('div');
-  previewHint.className = 'ed-planet-preview-hint';
-  previewHint.textContent =
-    'LMB orbit · MMB pan · hold RMB + WASD/QE fly · wheel (while flying) speed · Shift boost';
-  previewHost.replaceChildren(canvas, previewHint);
+  mountPlanetPreviewCanvas(previewHost, canvas);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(50, 1, 1, 50_000);
@@ -90,6 +106,22 @@ export function createPlanetPreviewController(
   let previewSpawns: PreviewSpawnHandle | null = null;
   let previewSpawnsLoad: { cancel: () => void } | null = null;
   let previewSpawnsGeneration = 0;
+  let disposed = false;
+  let backendReady = false;
+  let backendFailed = false;
+  let rendererInitialized = false;
+  let rendererDisposed = false;
+  let pendingHeightfieldRefresh = false;
+
+  const disposeRenderer = (): void => {
+    // Three's pre-init dispose path calls setAnimationLoop(), which starts
+    // init() itself. If explicit initialization failed there are no live
+    // renderer services to release; if it is pending, the ready handler below
+    // disposes after success.
+    if (!rendererInitialized || rendererDisposed) return;
+    rendererDisposed = true;
+    renderer.dispose();
+  };
 
   const orbit = new OrbitControls(camera, canvas);
   orbit.enableDamping = true;
@@ -284,7 +316,7 @@ export function createPlanetPreviewController(
   }
 
   function frame(): void {
-    if (!active) return;
+    if (!active || !backendReady || disposed) return;
     const dt = Math.min(clock.getDelta(), 0.05);
     if (previewDirty) rebuildPreviewMesh();
     resize();
@@ -292,6 +324,21 @@ export function createPlanetPreviewController(
     else orbit.update();
     renderer.render(scene, camera);
     raf = requestAnimationFrame(frame);
+  }
+
+  function startFrameLoop(): void {
+    if (!active || !backendReady || disposed) return;
+    clock.start();
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(frame);
+    if (!pendingHeightfieldRefresh) return;
+    try {
+      refreshHeightfieldPreviewReady();
+    } catch (error) {
+      pendingHeightfieldRefresh = false;
+      console.error('[planet-preview] Content build failed after WebGPU initialization.', error);
+      deps.onBuildStatus('Planet Preview content failed to build. Check the console for details.', true);
+    }
   }
 
   function framePreviewCameraForVegetation(): void {
@@ -311,7 +358,8 @@ export function createPlanetPreviewController(
     orbit.update();
   }
 
-  function refreshHeightfieldPreview(): void {
+  function refreshHeightfieldPreviewReady(): void {
+    pendingHeightfieldRefresh = false;
     const documentState = deps.getDocument();
     activatePlanetDocument(documentState);
     const vegGeneration = ++previewVegetationGeneration;
@@ -369,6 +417,7 @@ export function createPlanetPreviewController(
         hadError = true;
         deps.onBuildStatus(message, true);
       },
+      { windMaterialFactory: createWebGpuWindMaterial },
     );
 
     previewSpawnsLoad = buildPreviewSpawns(
@@ -396,12 +445,46 @@ export function createPlanetPreviewController(
     );
   }
 
+  function refreshHeightfieldPreview(): void {
+    if (!backendReady) {
+      pendingHeightfieldRefresh = !backendFailed;
+      if (backendFailed) {
+        deps.onBuildStatus('Planet Preview is unavailable because WebGPU failed to initialize.', true);
+      }
+      return;
+    }
+    refreshHeightfieldPreviewReady();
+  }
+
+  // WebGPU initialization is asynchronous. KTX2 capability detection reads
+  // backend GPU features synchronously, so vegetation/spawn GLBs and the frame
+  // loop must stay gated until this settles.
+  const ready = initRequiredWebGpu(renderer).then(() => {
+    rendererInitialized = true;
+    if (disposed) {
+      disposeRenderer();
+      return;
+    }
+    setKtx2SupportRenderer(renderer);
+    backendReady = true;
+  });
+  void ready.then(
+    () => {
+      startFrameLoop();
+    },
+    (error: unknown) => {
+      backendFailed = true;
+      disposeRenderer();
+      if (disposed) return;
+      console.error('[planet-preview] WebGPU unavailable — preview disabled.', error);
+      deps.onBuildStatus('Planet Preview requires WebGPU, but initialization failed.', true);
+    },
+  );
+
   return {
     activate: () => {
       active = true;
-      clock.start();
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(frame);
+      startFrameLoop();
     },
     deactivate: () => {
       active = false;
@@ -410,6 +493,8 @@ export function createPlanetPreviewController(
       clearPreviewDecorations();
     },
     dispose: () => {
+      disposed = true;
+      active = false;
       window.removeEventListener('keydown', onFlyKey);
       window.removeEventListener('keyup', onFlyKey);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
@@ -417,7 +502,9 @@ export function createPlanetPreviewController(
       clearPreviewDecorations();
       disposePreviewMesh(previewMesh, scene);
       disposePreviewMesh(previewWaterMesh, scene);
-      renderer.dispose();
+      orbit.dispose();
+      disposeRenderer();
+      canvas.remove();
     },
     markPreviewDirty: () => {
       previewDirty = true;

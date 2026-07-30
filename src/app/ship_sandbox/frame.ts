@@ -207,7 +207,7 @@ export function runShipSandboxFrame(session: ShipSandboxSession, nowMs: number):
     session.camera.updateMatrixWorld();
   }
 
-  session.composer.render(dt);
+  session.post.render();
 
   if (session.mode === 'in-bed' || session.entertainmentSystem.isOpen()) {
     session.esScreen.sync();

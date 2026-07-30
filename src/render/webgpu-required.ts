@@ -101,16 +101,21 @@ export function disableWebGlFallback(renderer: WebGPURenderer): void {
 }
 
 /**
- * Pre-flight, strip the fallback, then initialize.
+ * Strip the fallback synchronously, pre-flight, then initialize.
  *
- * Rejects with `WebGpuUnavailableError` on any path, so callers have one error
- * type to branch on. Kept separate from renderer construction because
+ * Availability and device failures reject with `WebGpuUnavailableError`, so
+ * callers have one error type to branch on. The private-field compatibility
+ * guard intentionally remains a plain loud error. Kept separate from renderer
+ * construction because
  * `WebGPURenderer`'s constructor is synchronous and touches no GPU state, which
  * lets creation sites stay synchronous and expose this promise as `ready`.
  */
 export async function initRequiredWebGpu(renderer: WebGPURenderer): Promise<void> {
-  await assertWebGpuAvailable();
+  // This must happen before the first await. Three's dispose path can call
+  // init() when a surface unmounts during startup; no lifecycle race may get a
+  // chance to initialize the constructor's automatic WebGL2 fallback.
   disableWebGlFallback(renderer);
+  await assertWebGpuAvailable();
   try {
     await renderer.init();
   } catch (error) {

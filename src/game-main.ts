@@ -1,14 +1,4 @@
-import { showLoadingScreen } from './app/loading-screen';
-import { restoreTitleScreen } from './app/title-screen';
-import { startPlaySession } from './app/play-session';
-import { showCharacterCreationScreen } from './app/character-creation-screen';
-import { AUTHORING_ENABLED } from './build-mode';
-import { createSceneHost } from './app/scene-host';
-import { loadRuntimeConfig, runtimeConfig } from './net/runtime-config';
-import {
-  multiplayerDebugDescriptor,
-  prepareMultiplayerDebug,
-} from './app/multiplayer-debug-boot';
+import { passRequiredWebGpuStartupGate } from './app/required-webgpu-gate';
 
 /**
  * Game runtime entry (`index.html`).
@@ -31,70 +21,103 @@ import {
  *   ?stationPrefab=<id>                — station prefab playtest
  *   ?shipPrefab=<id>                   — ship sandbox
  */
-function startPlaytest(): void {
-  const loading = showLoadingScreen();
-  void startPlaySession(loading, { requireAuth: false }).catch((error) => {
-    console.error('ClaudeCitizen play session failed to start.', error);
-    loading.hide();
-    restoreTitleScreen(null);
+async function bootGameEntry(): Promise<void> {
+  const canStart = await passRequiredWebGpuStartupGate({
+    productName: 'ClaudeCitizen',
   });
-}
+  if (!canStart) return;
 
-function showLoadingPreview(sceneId: string | null): void {
-  const loading = showLoadingScreen();
-  loading.setStatus(`Loading ${sceneId ?? 'scene'}...`);
-  loading.setProgress(0.42);
-}
+  const [
+    { showLoadingScreen },
+    { restoreTitleScreen },
+    { startPlaySession },
+    { showCharacterCreationScreen },
+    { AUTHORING_ENABLED },
+    { createSceneHost },
+    { loadRuntimeConfig, runtimeConfig },
+    { multiplayerDebugDescriptor, prepareMultiplayerDebug },
+  ] = await Promise.all([
+    import('./app/loading-screen'),
+    import('./app/title-screen'),
+    import('./app/play-session'),
+    import('./app/character-creation-screen'),
+    import('./build-mode'),
+    import('./app/scene-host'),
+    import('./net/runtime-config'),
+    import('./app/multiplayer-debug-boot'),
+  ]);
 
-/** Editor preview deep links. Returns true when a route was handled. */
-function tryBootPreviewRoute(params: URLSearchParams, boot: string | null): boolean {
-  const launchedScene = params.has('scene');
-  const allowPreview = AUTHORING_ENABLED || launchedScene;
-  if (!allowPreview) return false;
-
-  const shipPrefabId = params.get('shipPrefab');
-  if (shipPrefabId) {
-    import('./app/ship-play-session')
-      .then((module) => module.startShipPlaySession(shipPrefabId))
-      .catch((error) => console.error('ClaudeCitizen ship sandbox failed to load.', error));
-    return true;
+  function startPlaytest(): void {
+    const loading = showLoadingScreen();
+    void startPlaySession(loading, { requireAuth: false }).catch((error) => {
+      console.error('ClaudeCitizen play session failed to start.', error);
+      loading.hide();
+      restoreTitleScreen(null);
+    });
   }
-  if (boot === 'loadingPreview' && launchedScene) {
-    showLoadingPreview(params.get('scene'));
-    return true;
-  }
-  if (boot === 'characterCreator') {
-    void showCharacterCreationScreen();
-    return true;
-  }
-  if (boot === 'play' || params.has('stationPrefab')) {
-    startPlaytest();
-    return true;
-  }
-  return false;
-}
 
-function bootGame(): void {
-  const params = new URLSearchParams(window.location.search);
-  const boot = params.get('boot');
+  function showLoadingPreview(sceneId: string | null): void {
+    const loading = showLoadingScreen();
+    loading.setStatus(`Loading ${sceneId ?? 'scene'}...`);
+    loading.setProgress(0.42);
+  }
 
-  if (boot === 'scene') {
-    const sceneId = params.get('sceneId');
-    if (!sceneId) {
-      console.error('Scene launch requires ?sceneId=<id>.');
+  function tryBootPreviewRoute(
+    params: URLSearchParams,
+    boot: string | null,
+  ): boolean {
+    const launchedScene = params.has('scene');
+    const allowPreview = AUTHORING_ENABLED || launchedScene;
+    if (!allowPreview) return false;
+
+    const shipPrefabId = params.get('shipPrefab');
+    if (shipPrefabId) {
+      import('./app/ship-play-session')
+        .then((module) => module.startShipPlaySession(shipPrefabId))
+        .catch((error) => {
+          console.error('ClaudeCitizen ship sandbox failed to load.', error);
+        });
+      return true;
+    }
+    if (boot === 'loadingPreview' && launchedScene) {
+      showLoadingPreview(params.get('scene'));
+      return true;
+    }
+    if (boot === 'characterCreator') {
+      void showCharacterCreationScreen();
+      return true;
+    }
+    if (boot === 'play' || params.has('stationPrefab')) {
+      startPlaytest();
+      return true;
+    }
+    return false;
+  }
+
+  function bootGame(): void {
+    const params = new URLSearchParams(window.location.search);
+    const boot = params.get('boot');
+
+    if (boot === 'scene') {
+      const sceneId = params.get('sceneId');
+      if (!sceneId) {
+        console.error('Scene launch requires ?sceneId=<id>.');
+        return;
+      }
+      createSceneHost({ initialSceneId: sceneId, requireAuth: true });
       return;
     }
-    createSceneHost({ initialSceneId: sceneId, requireAuth: true });
-    return;
+    if (tryBootPreviewRoute(params, boot)) return;
+
+    createSceneHost({
+      initialSceneId: runtimeConfig().bootScene,
+      requireAuth: true,
+    });
   }
-  if (tryBootPreviewRoute(params, boot)) return;
 
-  createSceneHost({ initialSceneId: runtimeConfig().bootScene, requireAuth: true });
-}
-
-// Resolve the backend URL before anything can issue a request. A multiplayer
-// debug window then provisions itself before the scene host asks for a session.
-void loadRuntimeConfig().then(async () => {
+  // Resolve backend config before anything can issue a request. A multiplayer
+  // debug window then provisions itself before the scene host asks for a session.
+  await loadRuntimeConfig();
   const descriptor = multiplayerDebugDescriptor();
   if (descriptor) {
     await prepareMultiplayerDebug(descriptor).catch((error: unknown) => {
@@ -102,4 +125,6 @@ void loadRuntimeConfig().then(async () => {
     });
   }
   bootGame();
-});
+}
+
+void bootGameEntry();

@@ -5,7 +5,7 @@ import { FieldRow, Hint, NumberField, TextField } from '../InspectorForm';
 
 type ConsumableShopComponent = Extract<
   PrefabComponent,
-  { type: 'food-shop' | 'drinks-shop' | 'canteen' }
+  { type: 'food-shop' | 'drinks-shop' | 'canteen' | 'pharmacy' }
 >;
 
 function consumableShopDefaults(component: ConsumableShopComponent): {
@@ -22,6 +22,13 @@ function consumableShopDefaults(component: ConsumableShopComponent): {
     return {
       defaultLabel: 'Browse drinks',
       filterHint: 'Optional comma-separated drink item IDs. Empty = all drink consumables.',
+    };
+  }
+  if (component.type === 'pharmacy') {
+    return {
+      defaultLabel: 'Browse pharmacy',
+      filterHint:
+        'Optional comma-separated medical item IDs. Empty = all medical consumables.',
     };
   }
   return {

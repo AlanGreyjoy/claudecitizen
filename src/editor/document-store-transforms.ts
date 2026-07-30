@@ -190,12 +190,28 @@ export function attachTransformLifecycleMethods(ctx: EditorStoreCtx): void {
     ctx.emit({ type: 'selection', entityId: null, selectedIds: [] });
   }
 
-  function setPrefabMeta(
-    meta: Partial<Pick<EditorDocumentState, 'prefabId' | 'prefabName' | 'kind'>>,
-  ): void {
+  function applyDocumentMetaPatch<K extends keyof EditorDocumentState>(
+    meta: Partial<Pick<EditorDocumentState, K>>,
+  ): boolean {
+    let changed = false;
+    for (const key of Object.keys(meta) as K[]) {
+      const value = meta[key];
+      if (value !== undefined && ctx.state[key] !== value) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return false;
     ctx.state = { ...ctx.state, ...meta };
     ctx.markDirty();
     ctx.emit({ type: 'document' });
+    return true;
+  }
+
+  function setPrefabMeta(
+    meta: Partial<Pick<EditorDocumentState, 'prefabId' | 'prefabName' | 'kind'>>,
+  ): void {
+    applyDocumentMetaPatch(meta);
   }
 
   function setDocumentMeta(
@@ -210,9 +226,7 @@ export function attachTransformLifecycleMethods(ctx: EditorStoreCtx): void {
       >
     >,
   ): void {
-    ctx.state = { ...ctx.state, ...meta };
-    ctx.markDirty();
-    ctx.emit({ type: 'document' });
+    applyDocumentMetaPatch(meta);
   }
   ctx.beginGlbTransformGesture = beginGlbTransformGesture;
   ctx.previewGlbTransform = previewGlbTransform;

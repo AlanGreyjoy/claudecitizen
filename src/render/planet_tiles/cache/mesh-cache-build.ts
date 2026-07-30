@@ -35,7 +35,7 @@ export interface MeshCacheBuildCtx {
   evictedThisFrame: number;
   focusPosition: Vec3 | null;
   frameNumber: number;
-  material: THREE.MeshLambertMaterial;
+  material: THREE.Material;
   meshCache: Map<string, TileMeshEntry>;
   nextBuildId: number;
   pendingBuildQueue: PendingBuildJob[];

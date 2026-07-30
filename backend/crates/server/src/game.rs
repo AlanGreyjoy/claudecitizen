@@ -106,7 +106,7 @@ pub async fn bootstrap(
     let player = sqlx::query(
         r#"SELECT "id", "handle", "displayName", "characterAppearance", "arcBalance",
                   "creditBalance", "currentInstanceId", "currentRoomId",
-                  "hungerReserve", "thirstReserve"
+                  "hungerReserve", "thirstReserve", "healthReserve"
            FROM "Player" WHERE "id" = $1"#,
     )
     .bind(&player_id)
@@ -125,6 +125,7 @@ pub async fn bootstrap(
             "vitals": vitals_json(
                 player.try_get::<f64, _>("hungerReserve")?,
                 player.try_get::<f64, _>("thirstReserve")?,
+                player.try_get::<f64, _>("healthReserve")?,
             ),
         },
         "economy": {
@@ -163,7 +164,7 @@ pub async fn start_vitals_session(
                "vitalsHeartbeatAt" = NOW(),
                "updatedAt" = NOW()
            WHERE "id" = $1
-           RETURNING "hungerReserve", "thirstReserve""#,
+           RETURNING "hungerReserve", "thirstReserve", "healthReserve""#,
     )
     .bind(&player_id)
     .bind(&session_id)
@@ -176,6 +177,7 @@ pub async fn start_vitals_session(
         0,
         row.try_get("hungerReserve")?,
         row.try_get("thirstReserve")?,
+        row.try_get("healthReserve")?,
     )))
 }
 
@@ -201,7 +203,7 @@ pub async fn resume_vitals_session(
                "vitalsHeartbeatAt" = NOW(),
                "updatedAt" = NOW()
            WHERE "id" = $1 AND "vitalsSessionId" = $2
-           RETURNING "vitalsSessionSequence", "hungerReserve", "thirstReserve""#,
+           RETURNING "vitalsSessionSequence", "hungerReserve", "thirstReserve", "healthReserve""#,
     )
     .bind(&player_id)
     .bind(&session_id)
@@ -218,6 +220,7 @@ pub async fn resume_vitals_session(
         row.try_get("vitalsSessionSequence")?,
         row.try_get("hungerReserve")?,
         row.try_get("thirstReserve")?,
+        row.try_get("healthReserve")?,
     )))
 }
 
@@ -245,7 +248,7 @@ async fn update_vitals_session(
     let mut tx = state.db.begin().await?;
     let row = sqlx::query(
         r#"SELECT "vitalsSessionId", "vitalsSessionSequence",
-                  "vitalsSessionSprintSeconds", "hungerReserve", "thirstReserve",
+                  "vitalsSessionSprintSeconds", "hungerReserve", "thirstReserve", "healthReserve",
                   GREATEST(0, EXTRACT(EPOCH FROM (NOW() - "vitalsHeartbeatAt")))::DOUBLE PRECISION AS "elapsedSeconds"
            FROM "Player" WHERE "id" = $1 FOR UPDATE"#,
     )
@@ -265,6 +268,7 @@ async fn update_vitals_session(
     let accepted_sprinting_seconds: f64 = row.try_get("vitalsSessionSprintSeconds")?;
     let mut hunger: f64 = row.try_get("hungerReserve")?;
     let mut thirst: f64 = row.try_get("thirstReserve")?;
+    let health: f64 = row.try_get("healthReserve")?;
     let mut next_sequence = accepted_sequence;
 
     if body.sequence > accepted_sequence {
@@ -318,13 +322,15 @@ async fn update_vitals_session(
         next_sequence,
         hunger,
         thirst,
+        health,
     )))
 }
 
-fn vitals_json(hunger: f64, thirst: f64) -> Value {
+fn vitals_json(hunger: f64, thirst: f64, health: f64) -> Value {
     json!({
         "hungerReserve01": hunger.clamp(0.0, 1.0),
         "thirstReserve01": thirst.clamp(0.0, 1.0),
+        "healthReserve01": health.clamp(0.0, 1.0),
     })
 }
 
@@ -333,11 +339,12 @@ fn vitals_session_json(
     accepted_sequence: i64,
     hunger: f64,
     thirst: f64,
+    health: f64,
 ) -> Value {
     json!({
         "sessionId": session_id,
         "acceptedSequence": accepted_sequence,
-        "vitals": vitals_json(hunger, thirst),
+        "vitals": vitals_json(hunger, thirst, health),
     })
 }
 
@@ -484,7 +491,8 @@ pub async fn consume_inventory_item(
     let player_id = require_player_id(&state, &access.user_id).await?;
     let mut tx = state.db.begin().await?;
     let player = sqlx::query(
-        r#"SELECT "hungerReserve", "thirstReserve" FROM "Player" WHERE "id" = $1 FOR UPDATE"#,
+        r#"SELECT "hungerReserve", "thirstReserve", "healthReserve"
+           FROM "Player" WHERE "id" = $1 FOR UPDATE"#,
     )
     .bind(&player_id)
     .fetch_optional(&mut *tx)
@@ -515,26 +523,31 @@ pub async fn consume_inventory_item(
         ));
     }
     let metadata: Option<Value> = definition.try_get("metadata")?;
-    let (hunger_restore, thirst_restore) = consumable_restore_amounts(metadata.as_ref());
-    if hunger_restore <= 0.0 && thirst_restore <= 0.0 {
+    let (hunger_restore, thirst_restore, health_restore) =
+        consumable_restore_amounts(metadata.as_ref());
+    if hunger_restore <= 0.0 && thirst_restore <= 0.0 && health_restore <= 0.0 {
         return Err(ApiError::BadRequest(
             "This consumable has no restore effect.".to_owned(),
         ));
     }
     let mut hunger: f64 = player.try_get("hungerReserve")?;
     let mut thirst: f64 = player.try_get("thirstReserve")?;
+    let mut health: f64 = player.try_get("healthReserve")?;
     hunger = (hunger + hunger_restore).clamp(0.0, 1.0);
     thirst = (thirst + thirst_restore).clamp(0.0, 1.0);
+    health = (health + health_restore).clamp(0.0, 1.0);
     sqlx::query(
         r#"UPDATE "Player"
            SET "hungerReserve" = $2,
                "thirstReserve" = $3,
+               "healthReserve" = $4,
                "updatedAt" = NOW()
            WHERE "id" = $1"#,
     )
     .bind(&player_id)
     .bind(hunger)
     .bind(thirst)
+    .bind(health)
     .execute(&mut *tx)
     .await?;
     if owned <= 1 {
@@ -560,7 +573,7 @@ pub async fn consume_inventory_item(
     tx.commit().await?;
     Ok(Json(json!({
         "inventory": inventory_state(&state, &player_id).await?,
-        "vitals": vitals_json(hunger, thirst),
+        "vitals": vitals_json(hunger, thirst, health),
     })))
 }
 
@@ -1298,9 +1311,9 @@ pub(crate) async fn inventory_state(state: &AppState, player_id: &str) -> ApiRes
     Ok(json!({ "catalog": catalog, "items": items, "loadout": parse_loadout(loadout) }))
 }
 
-fn consumable_restore_amounts(metadata: Option<&Value>) -> (f64, f64) {
+fn consumable_restore_amounts(metadata: Option<&Value>) -> (f64, f64, f64) {
     let Some(meta) = metadata else {
-        return (0.0, 0.0);
+        return (0.0, 0.0, 0.0);
     };
     let hunger = meta
         .get("hungerRestore01")
@@ -1312,7 +1325,12 @@ fn consumable_restore_amounts(metadata: Option<&Value>) -> (f64, f64) {
         .and_then(|value| value.as_f64())
         .unwrap_or(0.0)
         .clamp(0.0, 1.0);
-    (hunger, thirst)
+    let health = meta
+        .get("healthRestore01")
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
+    (hunger, thirst, health)
 }
 
 fn item_row_json(row: sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
@@ -1324,12 +1342,16 @@ fn item_row_json(row: sqlx::postgres::PgRow) -> Result<Value, sqlx::Error> {
         "costArc": row.try_get::<i32, _>("costArc")?, "rarity": row.try_get::<String, _>("rarity")?,
     });
     let metadata: Option<Value> = row.try_get("metadata")?;
-    let (hunger_restore, thirst_restore) = consumable_restore_amounts(metadata.as_ref());
+    let (hunger_restore, thirst_restore, health_restore) =
+        consumable_restore_amounts(metadata.as_ref());
     if hunger_restore > 0.0 {
         value["hungerRestore01"] = json!(hunger_restore);
     }
     if thirst_restore > 0.0 {
         value["thirstRestore01"] = json!(thirst_restore);
+    }
+    if health_restore > 0.0 {
+        value["healthRestore01"] = json!(health_restore);
     }
     if let Some(weapon_slot_type) = row.try_get::<Option<String>, _>("weaponSlotType")? {
         value["weaponSlotType"] = json!(weapon_slot_type);

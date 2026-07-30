@@ -28,13 +28,18 @@ export type TabEditorHandles = {
 type TabEditorHostsProps = {
   tab: SceneEditorTab;
   onHandles: (handles: TabEditorHandles) => void;
+  onPlanetTestPlay: () => void;
 };
 
 /**
  * Tab editors with React chrome and imperative preview stages. React owns visibility /
  * activate lifecycle; preview runtimes stay in their modules.
  */
-export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactElement {
+export function TabEditorHosts({
+  tab,
+  onHandles,
+  onPlanetTestPlay,
+}: TabEditorHostsProps): ReactElement {
   const baseCharacterRef = useRef<BaseCharacterEquipmentEditor | null>(null);
   const planetRef = useRef<PlanetAuthoringEditor | null>(null);
   const systemRef = useRef<SystemMapEditor | null>(null);
@@ -117,6 +122,7 @@ export function TabEditorHosts({ tab, onHandles }: TabEditorHostsProps): ReactEl
       <PlanetAuthoringPanel
         ref={planetRef}
         hidden={tab !== 'planet-authoring'}
+        onTestPlay={onPlanetTestPlay}
       />
       <SystemMapPanel
         ref={systemRef}

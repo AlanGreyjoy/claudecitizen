@@ -42,6 +42,8 @@ export interface ItemDefinition {
   hungerRestore01?: number;
   /** Present for consumables that restore thirst (0..1). */
   thirstRestore01?: number;
+  /** Present for consumables that restore health (0..1). */
+  healthRestore01?: number;
   /** Present for weapons. */
   weaponSlotType?: WeaponSlotType;
   ammoItemDefinitionId?: string | null;

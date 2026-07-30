@@ -76,6 +76,7 @@ These components only appear on scene documents, and they decide what the scene
 | [Food Shop](./food-shop) | Gaze + F vendor screen — buy consumable food |
 | [Drinks Shop](./drinks-shop) | Gaze + F vendor screen — buy drinks |
 | [Canteen](./canteen) | Gaze + F vendor — buy food and drink consumables |
+| [Pharmacy](./pharmacy) | Gaze + F vendor — buy medical heal pills for ARC |
 
 ### Station NPCs
 

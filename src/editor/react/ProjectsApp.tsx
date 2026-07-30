@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import asteronEngineBannerUrl from '../../assets/generated/asteron-engine-projects-banner.png';
 import {
   getDesktopEditorBridge,
   type ClaudeCitizenEditorDesktopBridge,
@@ -80,6 +81,103 @@ function NewProjectForm(props: {
   );
 }
 
+function ProjectRowMenu(props: {
+  busy: boolean;
+  renaming: boolean;
+  canShowInFolder: boolean;
+  onRename: () => void;
+  onShow: () => void;
+  onRemove: () => void;
+  onDelete: () => void;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (event: MouseEvent): void => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const run = (action: () => void): void => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      className={`ae-projects-menu${open ? ' is-open' : ''}`}
+    >
+      <button
+        type="button"
+        className="ae-projects-menu-trigger"
+        disabled={props.busy}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Project actions"
+        title="Project actions"
+        onClick={() => setOpen((value) => !value)}
+      >
+        ⋯
+      </button>
+      {open ? (
+        <div className="ae-projects-menu-dropdown" role="menu">
+          <button
+            type="button"
+            className="ae-projects-menu-item"
+            role="menuitem"
+            disabled={props.busy || props.renaming}
+            onClick={() => run(props.onRename)}
+          >
+            Rename
+          </button>
+          <button
+            type="button"
+            className="ae-projects-menu-item"
+            role="menuitem"
+            disabled={props.busy || !props.canShowInFolder}
+            onClick={() => run(props.onShow)}
+          >
+            Show in Folder
+          </button>
+          <button
+            type="button"
+            className="ae-projects-menu-item"
+            role="menuitem"
+            disabled={props.busy}
+            title="Forget this project in Recent without deleting files"
+            onClick={() => run(props.onRemove)}
+          >
+            Remove from Recent
+          </button>
+          <div className="ae-projects-menu-sep" />
+          <button
+            type="button"
+            className="ae-projects-menu-item ae-projects-menu-item-danger"
+            role="menuitem"
+            disabled={props.busy}
+            title="Permanently delete the project folder from disk"
+            onClick={() => run(props.onDelete)}
+          >
+            Delete…
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function RecentProjectsList(props: {
   busy: boolean;
   projects: DesktopRecentProject[];
@@ -155,45 +253,20 @@ function RecentProjectsList(props: {
                 </button>
               )}
               <div className="ae-projects-item-side">
-                <button
-                  type="button"
-                  className="ae-projects-link"
-                  disabled={props.busy || renamingPath === project.path}
-                  onClick={() => {
+                <ProjectRowMenu
+                  busy={props.busy}
+                  renaming={renamingPath === project.path}
+                  canShowInFolder={Boolean(props.bridge)}
+                  onRename={() => {
                     setRenamingPath(project.path);
                     setRenameValue(project.name);
                   }}
-                >
-                  Rename
-                </button>
-                <button
-                  type="button"
-                  className="ae-projects-link"
-                  disabled={props.busy || !props.bridge}
-                  onClick={() => {
+                  onShow={() => {
                     void props.bridge?.showProjectInFolder(project.path);
                   }}
-                >
-                  Show
-                </button>
-                <button
-                  type="button"
-                  className="ae-projects-link"
-                  disabled={props.busy}
-                  onClick={() => props.onRemove(project.path)}
-                  title="Forget this project in Recent without deleting files"
-                >
-                  Remove
-                </button>
-                <button
-                  type="button"
-                  className="ae-projects-link ae-projects-link-danger"
-                  disabled={props.busy}
-                  onClick={() => props.onDelete(project.path)}
-                  title="Permanently delete the project folder from disk"
-                >
-                  Delete
-                </button>
+                  onRemove={() => props.onRemove(project.path)}
+                  onDelete={() => props.onDelete(project.path)}
+                />
               </div>
             </li>
           ))}
@@ -261,11 +334,25 @@ export function ProjectsApp(): ReactElement {
 
   return (
     <div className="ae-projects">
+      <header className="ae-projects-banner" aria-label="AsteronEngine">
+        <img
+          className="ae-projects-banner-img"
+          src={asteronEngineBannerUrl}
+          alt=""
+          draggable={false}
+        />
+        <div className="ae-projects-banner-copy">
+          <h1 className="ae-projects-banner-title">AsteronEngine</h1>
+          <p className="ae-projects-banner-tagline">Build worlds. Play in-engine.</p>
+          <p className="ae-projects-banner-punchline">
+            Zero billion dollars crowdfunded. Still ships this decade.
+          </p>
+        </div>
+      </header>
       <div className="ae-projects-shell">
-        <header className="ae-projects-header">
+        <div className="ae-projects-header">
           <div>
             <p className="ae-projects-kicker">Projects</p>
-            <h1 className="ae-projects-brand">AsteronEngine</h1>
             <p className="ae-projects-tag">Create or open a project to start authoring.</p>
           </div>
           <div className="ae-projects-actions">
@@ -294,7 +381,7 @@ export function ProjectsApp(): ReactElement {
               Open
             </button>
           </div>
-        </header>
+        </div>
 
         {error ? <p className="ae-projects-error" role="alert">{error}</p> : null}
 

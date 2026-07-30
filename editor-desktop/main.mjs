@@ -55,6 +55,7 @@ const BACKEND_PROXY_PREFIX = '/__editor/backend/';
 const MP_PROXY_PATTERN = /^\/__editor\/mp\/(\d+)\/backend(\/.*)$/;
 const editorDesktopRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = dirname(editorDesktopRoot);
+const appIconPath = join(editorDesktopRoot, 'build', 'icon.png');
 
 // Chromium gates WebGPU on Linux behind Vulkan, and `chrome://flags` does not
 // carry into Electron — without these, `requestAdapter()` returns null and the
@@ -556,6 +557,7 @@ function toEditorProtocolRequest(request) {
 function browserWindowOptions(overrides = {}) {
   return {
     backgroundColor: '#02070d',
+    icon: appIconPath,
     show: false,
     webPreferences: {
       preload: join(editorDesktopRoot, 'preload.cjs'),

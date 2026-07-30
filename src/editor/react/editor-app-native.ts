@@ -1,6 +1,7 @@
 import type { EditorStore } from '../document';
 import { fromPrefabDocument } from '../serialize';
 import type { DesktopNativeCommand } from '../../platform/editor-desktop';
+import { isTypingTarget } from '../session-helpers';
 import type { takeEditorHmrSnapshot } from './hmr-snapshot';
 import type { BrowsePanelKind, ToolbarGizmoMode } from './panels/Toolbar';
 import { SCENE_EDITOR_TABS, type SceneEditorTab } from './types';
@@ -85,10 +86,24 @@ export function dispatchNativeCommand(
     'open-scene-settings': handlers.openSceneSettings,
     'delete-scene': handlers.deleteScene,
     'open-project-settings': handlers.openProjectSettings,
-    undo: handlers.undo,
-    redo: handlers.redo,
-    duplicate: handlers.duplicate,
-    delete: handlers.deleteSelection,
+    // Electron menu accelerators fire even while an <input> is focused —
+    // skip edit commands so Delete/Ctrl+Z don't nuke the scene mid-type.
+    undo: () => {
+      if (isTypingTarget(document.activeElement)) return;
+      handlers.undo();
+    },
+    redo: () => {
+      if (isTypingTarget(document.activeElement)) return;
+      handlers.redo();
+    },
+    duplicate: () => {
+      if (isTypingTarget(document.activeElement)) return;
+      handlers.duplicate();
+    },
+    delete: () => {
+      if (isTypingTarget(document.activeElement)) return;
+      handlers.deleteSelection();
+    },
     'exit-to-title': handlers.exitToTitle,
     'open-multiplayer-debug': handlers.openMultiplayerDebug,
     'open-packages': handlers.openPackages,

@@ -468,36 +468,40 @@ function buildColliderHelper(
   component: Extract<PrefabComponent, { type: "collider" }>,
   meshColliderTarget?: THREE.Object3D,
 ): THREE.Object3D | null {
+  let root: THREE.Object3D | null = null;
   if (component.shape === "mesh") {
     if (meshColliderTarget) {
-      return makeMeshColliderHelper(meshColliderTarget, component);
+      root = makeMeshColliderHelper(meshColliderTarget, component);
+    } else {
+      const group = new THREE.Group();
+      const geometry = component.convex
+        ? new THREE.IcosahedronGeometry(0.7, 1)
+        : new THREE.BoxGeometry(1.2, 1.2, 1.2);
+      const helper = makeHelperMesh(
+        geometry,
+        component.convex ? 0xffb36b : 0xff7d7d,
+        component.convex ? 0.24 : 0.34,
+        true,
+      );
+      const offset = component.offset;
+      if (offset) helper.position.set(offset.x, offset.y, offset.z);
+      group.add(helper);
+      root = group;
     }
-    const group = new THREE.Group();
-    const geometry = component.convex
-      ? new THREE.IcosahedronGeometry(0.7, 1)
-      : new THREE.BoxGeometry(1.2, 1.2, 1.2);
-    const helper = makeHelperMesh(
-      geometry,
-      component.convex ? 0xffb36b : 0xff7d7d,
-      component.convex ? 0.24 : 0.34,
+  } else if (component.shape === "box") {
+    const size = component.size;
+    const box = makeHelperMesh(
+      new THREE.BoxGeometry(size.x, size.y, size.z),
+      0xff7d7d,
+      0.4,
       true,
     );
     const offset = component.offset;
-    if (offset) helper.position.set(offset.x, offset.y, offset.z);
-    group.add(helper);
-    return group;
+    if (offset) box.position.set(offset.x, offset.y, offset.z);
+    root = box;
   }
-  if (component.shape !== "box") return null;
-  const size = component.size;
-  const box = makeHelperMesh(
-    new THREE.BoxGeometry(size.x, size.y, size.z),
-    0xff7d7d,
-    0.4,
-    true,
-  );
-  const offset = component.offset;
-  if (offset) box.position.set(offset.x, offset.y, offset.z);
-  return box;
+  if (root) root.userData.editorColliderHelper = true;
+  return root;
 }
 function buildFrameAxesHelper(): THREE.Object3D | null {
   return new THREE.AxesHelper(2);

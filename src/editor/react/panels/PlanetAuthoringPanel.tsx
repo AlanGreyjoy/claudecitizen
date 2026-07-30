@@ -25,12 +25,13 @@ export interface PlanetAuthoringEditor {
 
 type PlanetAuthoringPanelProps = {
   hidden: boolean;
+  onTestPlay: () => void;
 };
 
 export const PlanetAuthoringPanel = forwardRef<PlanetAuthoringEditor, PlanetAuthoringPanelProps>(
-  function PlanetAuthoringPanel({ hidden }, ref): ReactElement {
+  function PlanetAuthoringPanel({ hidden, onTestPlay }, ref): ReactElement {
     const previewHostRef = useRef<HTMLDivElement>(null);
-    const panel = usePlanetAuthoringPanel(hidden);
+    const panel = usePlanetAuthoringPanel(hidden, onTestPlay);
 
     useImperativeHandle(
       ref,

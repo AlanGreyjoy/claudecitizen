@@ -1,8 +1,14 @@
 import type {
   PrefabComponent,
   PrefabEntity,
+  PrefabColor,
+  SceneBackgroundMode,
   SceneInstanceScope,
+  SceneLightingMode,
   SceneUiScreen,
+} from '../prefabs/schema';
+import {
+  SCENE_ENVIRONMENT_DEFAULT_BACKGROUND_COLOR,
 } from '../prefabs/schema';
 import type { SceneDocument } from './schema';
 import { sceneHasStationContent } from './scene-station';
@@ -22,6 +28,46 @@ export interface ScenePlayContent {
   ship: boolean;
   /** Scene authors a station: inline geometry/markers or a placed prefab. */
   station: boolean;
+}
+
+/**
+ * Normalized per-scene lighting / background overrides. Always fully filled —
+ * absent `scene-environment` component resolves to outdoor + auto.
+ */
+export interface SceneEnvironmentConfig {
+  lightingMode: SceneLightingMode;
+  backgroundMode: SceneBackgroundMode;
+  backgroundColor: PrefabColor;
+  ambientIntensityScale: number;
+  ambientSkyColor: PrefabColor | null;
+  ambientGroundColor: PrefabColor | null;
+}
+
+export const DEFAULT_SCENE_ENVIRONMENT: SceneEnvironmentConfig = {
+  lightingMode: 'outdoor',
+  backgroundMode: 'auto',
+  backgroundColor: SCENE_ENVIRONMENT_DEFAULT_BACKGROUND_COLOR,
+  ambientIntensityScale: 1,
+  ambientSkyColor: null,
+  ambientGroundColor: null,
+};
+
+export function normalizeSceneEnvironment(
+  component: Extract<PrefabComponent, { type: 'scene-environment' }> | null | undefined,
+): SceneEnvironmentConfig {
+  if (!component) return { ...DEFAULT_SCENE_ENVIRONMENT };
+  return {
+    lightingMode: component.lightingMode ?? 'outdoor',
+    backgroundMode: component.backgroundMode ?? 'auto',
+    backgroundColor:
+      component.backgroundColor ?? SCENE_ENVIRONMENT_DEFAULT_BACKGROUND_COLOR,
+    ambientIntensityScale:
+      component.ambientIntensityScale === undefined
+        ? 1
+        : component.ambientIntensityScale,
+    ambientSkyColor: component.ambientSkyColor ?? null,
+    ambientGroundColor: component.ambientGroundColor ?? null,
+  };
 }
 
 export interface ScenePlayConfig {
@@ -72,6 +118,11 @@ export interface ScenePlayConfig {
   }>;
   /** Set when the scene is per-player instanced content (hab, hangar). */
   instanceScope: SceneInstanceScope | null;
+  /**
+   * Normalized scene lighting / background. Defaults (outdoor + auto) when the
+   * scene never authored a `scene-environment` component.
+   */
+  environment: SceneEnvironmentConfig;
   /** Subsystems the scene's GameObjects actually reference. */
   content: ScenePlayContent;
 }
@@ -119,6 +170,7 @@ interface ScenePlayAccum extends Record<SceneFlowRefKey, string | null> {
   shipPrefabId: string | null;
   instanceScope: SceneInstanceScope | null;
   requiresPlanet: boolean;
+  environment: SceneEnvironmentConfig | null;
   prefabInstances: ScenePlayConfig['prefabInstances'];
   uiScreens: ScenePlayConfig['uiScreens'];
   sceneLinks: ScenePlayConfig['sceneLinks'];
@@ -199,6 +251,8 @@ function collectScenePlayEntity(entity: PrefabEntity, out: ScenePlayAccum): void
   }
   const instanced = findComponent(entity, 'instanced-scene');
   if (instanced) out.instanceScope = instanced.scope;
+  const environment = findComponent(entity, 'scene-environment');
+  if (environment) out.environment = normalizeSceneEnvironment(environment);
 }
 
 /** Resolve Unity-style scene GameObject components into play config. */
@@ -220,6 +274,7 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
     // Naming a planet or spawning on the surface is what makes a scene need the
     // terrain stack; placing a station in orbit on its own does not.
     requiresPlanet: false,
+    environment: null,
     prefabInstances: [],
     uiScreens: [],
     sceneLinks: [],
@@ -244,6 +299,7 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
     uiScreens: out.uiScreens,
     sceneLinks: out.sceneLinks,
     instanceScope: out.instanceScope,
+    environment: out.environment ?? normalizeSceneEnvironment(null),
     content: {
       planet: out.requiresPlanet,
       ship: out.shipPrefabId !== null,

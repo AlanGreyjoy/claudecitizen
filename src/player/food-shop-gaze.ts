@@ -74,5 +74,6 @@ export function foodShopLabel(shop: StationFoodShopMarker): string {
   if (shop.label.trim()) return shop.label.trim();
   if (shop.catalogMode === "food") return "Browse food";
   if (shop.catalogMode === "drinks") return "Browse drinks";
+  if (shop.catalogMode === "medical") return "Browse pharmacy";
   return "Browse food & drinks";
 }

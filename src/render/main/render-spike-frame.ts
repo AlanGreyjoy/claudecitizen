@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import type {
   Planet,
   PlanetSurfaceSample,
@@ -24,6 +25,7 @@ import { getAssetResidencySnapshot } from '../../cache/asset-residency';
 /** Textures released per frame. Small enough that a fresh scene cannot stall a frame. */
 const SOURCE_RELEASE_BUDGET_PER_FRAME = 8;
 import type { PrefabDocument } from '../../world/prefabs/schema';
+import type { SceneEnvironmentConfig } from '../../world/scenes/scene-runtime';
 import { updateCameraRig, updateSpeedBlur } from './update/camera-rig';
 import { updateEnvironment } from './update/environment';
 import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun-system';
@@ -39,7 +41,7 @@ import type { createPlanetTileManager } from '../planet_tiles';
 import type { createPlanetVegetationManager } from '../vegetation';
 import type { createSurfaceSpawnManager } from '../surface_spawns';
 import type { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
-import type { createComposerStack } from './scene/composer-stack';
+import type { MainPostStack } from './post/types';
 import type { createShipRenderPool } from './scene/ship-render-pool';
 import type { createCharacterAvatar } from './scene/character-avatar';
 import type { createRemotePresenceRenderer } from './scene/remote-presence';
@@ -118,7 +120,7 @@ export function enableRenderLayer(root: THREE.Object3D, layer: number): void {
 }
 
 export function renderQuantumIsolation(
-  renderer: THREE.WebGLRenderer,
+  renderer: WebGPURenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   quantumRoot: THREE.Object3D,
@@ -205,7 +207,7 @@ export interface SpikeRenderFrameDeps {
   /** Null for scenes that declared no planet. */
   planetStack: PlanetRenderStack | null;
   renderScale: number;
-  composerStack: ReturnType<typeof createComposerStack>;
+  postStack: MainPostStack;
   shipRenderPool: ReturnType<typeof createShipRenderPool>;
   avatar: ReturnType<typeof createCharacterAvatar>;
   remotePresence: ReturnType<typeof createRemotePresenceRenderer>;
@@ -214,7 +216,7 @@ export interface SpikeRenderFrameDeps {
   hitDecalRenderer: ReturnType<typeof createHitDecalRenderer>;
   tracerRenderer: ReturnType<typeof createTracerRenderer>;
   lighting: ReturnType<typeof createSceneLighting>;
-  renderer: THREE.WebGLRenderer;
+  renderer: WebGPURenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   cameraTarget: THREE.Vector3;
@@ -233,6 +235,7 @@ export interface SpikeRenderFrameDeps {
     entry: SpikeRenderFrameDeps['additionalStationMeshes'][number],
     focusPosition: Vec3,
   ) => THREE.Group | null;
+  sceneEnvironment: SceneEnvironmentConfig;
 }
 
 interface RenderFocus {
@@ -611,7 +614,7 @@ function updateNormalPlayPresentation(
     defaultFog: deps.defaultFog,
     atmosphereMesh: deps.planetStack?.atmosphereMesh ?? null,
     lighting: deps.lighting,
-    composerStack: deps.composerStack,
+    postStack: deps.postStack,
     planet: deps.planet,
     camera: deps.camera,
     sunState: lighting.sunState,
@@ -625,6 +628,7 @@ function updateNormalPlayPresentation(
     volumetricEnabled: volumetricEnabled && !quantumBusy,
     stationInteriorActive:
       focus.renderMode === 'in-station',
+    sceneEnvironment: deps.sceneEnvironment,
   });
   deps.avatar.update(
     character,
@@ -647,36 +651,29 @@ function updateNormalPlayPresentation(
       backgroundColor,
     );
   }
-  updateSpeedBlur(deps.composerStack.speedBlurEffect, world);
+  updateSpeedBlur(deps.postStack.setSpeedBlurStrength, world);
   return backgroundColor;
 }
 
-function configureComposerPasses(
+function configurePostStack(
   deps: SpikeRenderFrameDeps,
   focus: RenderFocus,
   lighting: LightingFrame,
   state: SpikeRenderFrameState,
 ): void {
   const { focusBody, quantumBusy, quantumTraveling } = focus;
+  deps.postStack.setEffectsEnabled(!quantumBusy);
   if (quantumBusy) {
-    deps.composerStack.normalPass.setEnabled(false);
-    deps.composerStack.n8aoPass?.setEnabled(false);
-    deps.composerStack.volumetricFogPass.setEnabled(false);
-    deps.composerStack.speedBlurPass.setEnabled(false);
-    deps.composerStack.motionBlurPass.setEnabled(false);
     deps.lighting.sun.castShadow = false;
     deps.lighting.moonLight.castShadow = false;
     if (quantumTraveling && !state.wasQuantumTraveling) {
-      deps.composerStack.motionBlurEffect.reset();
+      deps.postStack.resetMotionBlur();
     }
   } else {
-    deps.composerStack.n8aoPass?.setEnabled(deps.composerStack.ambientOcclusionEnabled);
-    deps.composerStack.speedBlurPass.setEnabled(true);
-    deps.composerStack.motionBlurPass.setEnabled(deps.composerStack.motionBlurEnabledByQuality);
     if (state.wasQuantumTraveling) {
-      deps.composerStack.motionBlurEffect.reset();
+      deps.postStack.resetMotionBlur();
     }
-    deps.composerStack.motionBlurEffect.updateCamera(
+    deps.postStack.updateMotionBlurCamera(
       deps.camera,
       new THREE.Vector3(focusBody.position.x, focusBody.position.y, focusBody.position.z),
       lighting.renderScale,
@@ -715,7 +712,7 @@ function presentRenderOutput(
     deps.renderer.render(deps.scene, deps.camera);
     return;
   }
-  deps.composerStack.composer.render(dt);
+  deps.postStack.render(dt);
 }
 
 export function executeSpikeRenderFrame(
@@ -732,7 +729,7 @@ export function executeSpikeRenderFrame(
   const { tileState, vegetationStats } = updateWorldStreaming(deps, focus, lighting, state, world);
   const activeShipGroup = updateShipsAndStations(deps, focus, lighting, world);
   updateNormalPlayPresentation(deps, focus, lighting, world, tileState);
-  configureComposerPasses(deps, focus, lighting, state);
+  configurePostStack(deps, focus, lighting, state);
   presentRenderOutput(deps, focus, activeShipGroup);
   // After present: uploads are settled for this frame, so freeing the decoded
   // CPU bitmaps is safe. Budgeted so a freshly loaded scene cannot stall a frame.
@@ -751,7 +748,9 @@ export function executeSpikeRenderFrame(
       estimatedTextureBytes: dedup.estimatedBytes,
       geometries: deps.renderer.info.memory.geometries,
       pendingSourceReleases: getPendingSourceReleaseCount(),
-      programs: deps.renderer.info.programs?.length ?? 0,
+      // WebGPU's Info tracks no compiled-program count. Draw calls are the
+      // closest per-frame pipeline signal the HUD can show instead.
+      programs: deps.renderer.info.render.drawCalls,
       textures: deps.renderer.info.memory.textures,
     },
     surfaceCache: getRenderableSurfaceCacheStats(),

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Planet, Vec3 } from '../../../types';
-import { type VolumetricFogEffect } from '../../effects';
+import type { SceneEnvironmentConfig } from '../../../world/scenes/scene-runtime';
+import { DEFAULT_SCENE_ENVIRONMENT } from '../../../world/scenes/scene-runtime';
 import {
   HAZE_LOW_COLOR,
   NIGHT_FOG_COLOR,
@@ -12,7 +13,11 @@ import {
   SPACE_FOG_COLOR,
 } from '../domain/constants';
 import { clamp01 } from '../domain/math';
-import type { ComposerStack } from '../scene/composer-stack';
+import type { MainPostStack } from '../post/types';
+import {
+  applyAmbientOverrides,
+  applySceneLightingMode,
+} from '../scene/scene-environment-apply';
 import type { SceneLighting } from '../scene/scene-lighting';
 import type { SunSystemState } from './sun-system';
 
@@ -38,7 +43,7 @@ export interface EnvironmentUpdateInput {
   /** Null for scenes with no planet, which have no atmosphere shell to fade. */
   atmosphereMesh: THREE.Mesh | null;
   lighting: SceneLighting;
-  composerStack: ComposerStack;
+  postStack: MainPostStack;
   planet: Planet;
   camera: THREE.PerspectiveCamera;
   sunState: SunSystemState;
@@ -51,6 +56,8 @@ export interface EnvironmentUpdateInput {
   focusPosition: Vec3;
   volumetricEnabled: boolean;
   stationInteriorActive?: boolean;
+  /** Normalized scene overrides; outdoor + auto when the scene never authored one. */
+  sceneEnvironment?: SceneEnvironmentConfig;
 }
 
 export function updateEnvironment(input: EnvironmentUpdateInput): {
@@ -64,7 +71,7 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     defaultFog,
     atmosphereMesh,
     lighting,
-    composerStack,
+    postStack,
     planet,
     camera,
     sunState,
@@ -77,48 +84,61 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     focusPosition,
     volumetricEnabled,
     stationInteriorActive = false,
+    sceneEnvironment = DEFAULT_SCENE_ENVIRONMENT,
   } = input;
 
-  const {
-    normalPass,
-    n8aoPass,
-    ssaoBaseIntensity,
-    ssaoBaseRadius,
-    atmospherePass,
-    volumetricFogPass,
-    volumetricFogEffect,
-    spaceSkybox,
-    volumetricClouds,
-    starField,
-  } = composerStack;
   const { ambient, sun } = lighting;
   const { sunDir, daylightFactor, rawDaylight, planetCenter } = sunState;
 
-  volumetricClouds.update(dt, altitudeMeters, focusPosition, volumetricEnabled);
-  // isActive is false while the Takram composite is skipped, so the blue
-  // scene.background and planet fog stay on (avoids black "space" sky on foot).
-  const volumetricSkyActive = volumetricClouds.isActive(altitudeMeters, volumetricEnabled);
   const planetFogActive =
-    altitudeMeters < PLANET_FOG_MAX_ALTITUDE_METERS && spaceFactor < 0.9;
+    altitudeMeters < PLANET_FOG_MAX_ALTITUDE_METERS && spaceFactor < 0.9
+    && sceneEnvironment.backgroundMode === 'auto'
+    && sceneEnvironment.lightingMode === 'outdoor';
 
   backgroundColor
     .copy(SKY_LOW_COLOR)
     .lerp(SKY_MID_COLOR, clamp01(altitudeMeters / 14_000))
     .lerp(SKY_HIGH_COLOR, spaceFactor);
   backgroundColor.lerp(NIGHT_SKY_COLOR, (1 - daylightFactor) * (1 - spaceFactor));
+  if (sceneEnvironment.backgroundMode === 'solid') {
+    backgroundColor.set(sceneEnvironment.backgroundColor);
+  }
 
   fogColor.copy(HAZE_LOW_COLOR).lerp(SKY_LOW_COLOR, 0.18);
   fogColor.lerp(SPACE_FOG_COLOR, spaceFactor * 0.82);
   fogColor.lerp(NIGHT_FOG_COLOR, (1 - daylightFactor) * (1 - spaceFactor));
 
-  const spaceSkyboxActive =
-    !volumetricSkyActive && altitudeMeters >= planet.atmosphereHeightMeters;
+  const { background, volumetricSkyActive } = postStack.updateEnvironment({
+    camera,
+    dt,
+    altitudeMeters,
+    atmosphereHeightMeters: planet.atmosphereHeightMeters,
+    focusPosition,
+    volumetricEnabled,
+    planetFogActive,
+    stationInteriorActive:
+      stationInteriorActive || sceneEnvironment.lightingMode === 'interior',
+    renderScale,
+    planetCenter,
+    planetRadiusMeters: planet.radiusMeters,
+    sunDirection: sunDir,
+    backgroundColor,
+    fogColorDay: fogColor,
+    fogColorNight: NIGHT_FOG_COLOR,
+    sunColor: sun.color,
+    nowSeconds,
+    daylightFactor,
+    spaceFactor,
+    backgroundMode: sceneEnvironment.backgroundMode,
+  });
+
   // Keep a sky fill while volumetric clouds composite; aerial sky is disabled
   // until WGS84/sphere height parity is solid.
-  scene.background = spaceSkyboxActive
-    ? spaceSkybox.getBackground(backgroundColor)
-    : backgroundColor;
+  scene.background = background;
   scene.fog = volumetricSkyActive || planetFogActive ? null : defaultFog;
+  if (sceneEnvironment.backgroundMode === 'solid') {
+    scene.fog = null;
+  }
   if (scene.fog) {
     const hazeTopMeters = Math.max(
       40 + altitudeFactor * 1_200,
@@ -132,14 +152,6 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     scene.fog.near = hazeTopMeters * renderScale;
     scene.fog.far = (hazeTopMeters + spanMeters) * renderScale;
   }
-
-  // N8AO reconstructs normals from depth; NormalPass only feeds volumetric clouds.
-  normalPass.setEnabled(volumetricSkyActive);
-  atmospherePass.setEnabled(volumetricSkyActive);
-  // Takram aerial perspective already carries haze/sky when the volumetric
-  // stack is live; stacking our ground fog on top washes the cloud layer into
-  // a flat milky gradient.
-  volumetricFogPass.setEnabled(planetFogActive && !volumetricSkyActive);
 
   // The moon sits opposite the sun, so its elevation is the negated raw
   // daylight; a moonlit night gets a cool ambient lift so it isn't pitch black.
@@ -157,65 +169,30 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     ambient.intensity = Math.max(ambient.intensity, 0.48);
     ambient.color.lerp(AMBIENT_SKY_DAY, 0.16);
     ambient.groundColor.lerp(AMBIENT_GROUND_DAY, 0.2);
-    // Station interiors have flat slabs and lots of local fill light, which
-    // make raw SSAO read noisy and overdrawn. Keep it tighter than the outdoor
-    // preset so it reads as contact shadowing instead of a black outline pass.
-    if (n8aoPass) {
-      n8aoPass.configuration.intensity = ssaoBaseIntensity;
-      n8aoPass.configuration.aoRadius = ssaoBaseRadius * renderScale * 0.6;
-    }
-  } else if (n8aoPass) {
-    n8aoPass.configuration.intensity = ssaoBaseIntensity;
-    n8aoPass.configuration.aoRadius = ssaoBaseRadius * renderScale;
   }
-
-  starField.update({
-    camera,
-    daylightFactor,
-    spaceFactor,
-    nowSeconds,
+  applyAmbientOverrides(ambient, sceneEnvironment, {
+    forceInteriorFloor: false,
   });
+  applySceneLightingMode(lighting, sceneEnvironment.lightingMode);
 
   if (atmosphereMesh) {
     atmosphereMesh.position.copy(planetCenter);
     const atmosphereMaterial = atmosphereMesh.material as THREE.MeshBasicMaterial;
-    // Additive atmosphere haze must fade out at night or it washes the whole
-    // sky bright blue and drowns out the stars.
-    const atmosphereDaylight = 0.03 + 0.97 * daylightFactor;
-    atmosphereMaterial.opacity =
-      (volumetricSkyActive
-        ? 0.04 * (1 - spaceFactor * 0.8)
-        : 0.22 * (1 - spaceFactor * 0.86)) * atmosphereDaylight;
-  }
-
-  if (planetFogActive) {
-    volumetricFogEffect.uniforms.get('uProjectionMatrixInverse')!.value.copy(camera.projectionMatrixInverse);
-    volumetricFogEffect.uniforms.get('uCameraMatrixWorld')!.value.copy(camera.matrixWorld);
-    volumetricFogEffect.uniforms.get('uPlanetCenter')!.value.copy(planetCenter);
-    volumetricFogEffect.uniforms.get('uPlanetRadius')!.value = planet.radiusMeters * renderScale;
-    volumetricFogEffect.uniforms.get('uRenderScale')!.value = renderScale;
-    volumetricFogEffect.uniforms.get('uSunDirection')!.value.copy(sunDir);
-    volumetricFogEffect.uniforms.get('uFogColorDay')!.value.copy(fogColor);
-    volumetricFogEffect.uniforms.get('uFogColorNight')!.value.copy(NIGHT_FOG_COLOR);
-    volumetricFogEffect.uniforms.get('uSunColor')!.value.copy(sun.color);
-    volumetricFogEffect.uniforms.get('uTime')!.value = nowSeconds;
-    volumetricFogEffect.uniforms.get('uCameraNear')!.value = camera.near;
-    volumetricFogEffect.uniforms.get('uCameraFar')!.value = camera.far;
-    volumetricFogEffect.uniforms.get('uDaylightFactor')!.value = daylightFactor;
-    volumetricFogEffect.uniforms.get('uSpaceFactor')!.value = spaceFactor;
+    if (
+      sceneEnvironment.lightingMode !== 'outdoor'
+      || sceneEnvironment.backgroundMode === 'solid'
+    ) {
+      atmosphereMaterial.opacity = 0;
+    } else {
+      // Additive atmosphere haze must fade out at night or it washes the whole
+      // sky bright blue and drowns out the stars.
+      const atmosphereDaylight = 0.03 + 0.97 * daylightFactor;
+      atmosphereMaterial.opacity =
+        (volumetricSkyActive
+          ? 0.04 * (1 - spaceFactor * 0.8)
+          : 0.22 * (1 - spaceFactor * 0.86)) * atmosphereDaylight;
+    }
   }
 
   return { volumetricSkyActive, planetFogActive, backgroundColor, fogColor };
-}
-
-export function setFogSettings(
-  volumetricFogEffect: VolumetricFogEffect,
-  settings: import('../../../types').FogSettings,
-): void {
-  if (volumetricFogEffect.uniforms.has('uFogDensity')) {
-    volumetricFogEffect.uniforms.get('uFogDensity')!.value = settings.density;
-    volumetricFogEffect.uniforms.get('uFogMaxHeight')!.value = settings.maxHeight;
-    volumetricFogEffect.uniforms.get('uFogHeightFalloff')!.value = settings.heightFalloff;
-    volumetricFogEffect.uniforms.get('uNoiseStrength')!.value = settings.noiseStrength;
-  }
 }

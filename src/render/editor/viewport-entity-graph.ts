@@ -11,6 +11,7 @@ import {
   createParticleSystem,
   type ParticleSystemHandle,
 } from "../particles";
+import { createWebGpuParticleMaterial } from "../particles/node-material";
 import type { EditorEntity, EditorStore, EntityTransform } from "../../editor/document";
 import type {
   PrefabComponent,
@@ -44,6 +45,45 @@ import {
 type ShipControllerSeat = NonNullable<
   Extract<PrefabComponent, { type: "ship-controller" }>["seats"]
 >[number];
+
+function createViewportParticleSystem(
+  component: Parameters<typeof createParticleSystem>[0],
+): ParticleSystemHandle {
+  return createParticleSystem(component, {
+    materialFactory: createWebGpuParticleMaterial,
+  });
+}
+
+function prefabInstanceId(entity: EditorEntity): string | null {
+  const component = entity.components.find(
+    (candidate) => candidate.type === "prefab-instance",
+  );
+  return component?.type === "prefab-instance" ? component.prefabId : null;
+}
+
+function recordEntityVisualIdentity(
+  group: THREE.Group,
+  entity: EditorEntity,
+  recenterAsHull: boolean,
+): void {
+  group.userData.editorAssetUrl = entity.asset?.url ?? null;
+  group.userData.editorHasPrimitive = Boolean(entity.primitive);
+  group.userData.editorRecenterAsHull = recenterAsHull;
+  group.userData.editorPrefabInstanceId = prefabInstanceId(entity);
+}
+
+function entityVisualIdentityChanged(
+  group: THREE.Group,
+  entity: EditorEntity,
+  recenterAsHull: boolean,
+): boolean {
+  return (
+    group.userData.editorAssetUrl !== (entity.asset?.url ?? null) ||
+    group.userData.editorHasPrimitive !== Boolean(entity.primitive) ||
+    group.userData.editorRecenterAsHull !== recenterAsHull ||
+    group.userData.editorPrefabInstanceId !== prefabInstanceId(entity)
+  );
+}
 
 /**
  * Walks the document for `ship-controller.seats[]` entity-id references that
@@ -110,8 +150,11 @@ export interface ViewportEntityGraphDeps {
   applyShipPreview: (options?: { quiet?: boolean }) => void;
   resetShipPreviewWarnings: () => void;
   registerParticleHandle: (entityId: string, handle: ParticleSystemHandle) => void;
+  registerParticlePrefabRoot: (entityId: string, root: THREE.Group) => void;
   disposeParticleHandles: () => void;
   disposeParticleHandlesForEntity: (entityId: string) => void;
+  disposeParticlePrefabRootsForEntity: (entityId: string) => void;
+  discardParticlePrefabRoot: (root: THREE.Group) => void;
 }
 
 function findLoadedEntityModel(group: THREE.Group): THREE.Object3D | null {
@@ -133,9 +176,9 @@ export function createViewportEntityGraph(
     syncSelectionHighlight,
     applyShipPreview,
     resetShipPreviewWarnings,
-    registerParticleHandle,
-    disposeParticleHandles,
-    disposeParticleHandlesForEntity,
+    registerParticleHandle, registerParticlePrefabRoot,
+    disposeParticleHandles, disposeParticleHandlesForEntity,
+    disposeParticlePrefabRootsForEntity, discardParticlePrefabRoot,
   } = deps;
 
   type Disposable = { dispose: () => void };
@@ -213,6 +256,7 @@ export function createViewportEntityGraph(
 
   function notifyModelLoadSettled(generation: number): void {
     if (generation !== buildGeneration || pendingModelLoads > 0) return;
+    syncSelectionHighlight();
     applyShipPreview({ quiet: false });
   }
 
@@ -320,9 +364,7 @@ export function createViewportEntityGraph(
       (component) =>
         component.type === "ship-hull" || component.type === "ship-controller",
     );
-    group.userData.editorAssetUrl = entity.asset?.url ?? null;
-    group.userData.editorHasPrimitive = Boolean(entity.primitive);
-    group.userData.editorRecenterAsHull = recenterAsHull;
+    recordEntityVisualIdentity(group, entity, recenterAsHull);
     applyEntityTransformToObject(group, entity);
     objectsById.set(entity.id, group);
 
@@ -369,6 +411,8 @@ export function createViewportEntityGraph(
               applyHiddenNodesForEntity,
             }),
           );
+          // Helpers attach after rebuildAll's sync — re-apply selection gating.
+          if (generation === buildGeneration) syncSelectionHighlight();
         })
         .catch(() => {
           if (generation !== buildGeneration) return;
@@ -397,7 +441,7 @@ export function createViewportEntityGraph(
           entityRoot,
           helpers: { buildComponentHelper },
           registerParticleHandle,
-          createParticleSystem,
+          createParticleSystem: createViewportParticleSystem,
         }),
       ) || hasVisual;
 
@@ -411,8 +455,11 @@ export function createViewportEntityGraph(
       void loadPrefabDocument(prefabId)
         .then(async (doc) => {
           if (generation !== buildGeneration || !doc) return;
-          const instanceGroup = await createPropInstanceGroupAsync(doc, { pinModels: true });
-          if (generation !== buildGeneration) return;
+          const instanceGroup = await createPropInstanceGroupAsync(doc, {
+            pinModels: true,
+            particleMaterialFactory: createWebGpuParticleMaterial,
+          });
+          if (generation !== buildGeneration) return discardParticlePrefabRoot(instanceGroup);
           attachPrefabInstanceColliderHelpers({
             instanceRoot: instanceGroup,
             doc,
@@ -422,10 +469,12 @@ export function createViewportEntityGraph(
           instanceGroup.name = `prefab-instance:${prefabId}`;
           instanceGroup.userData.prefabInstanceId = prefabId;
           // Clear any previous instance preview children marked as such.
+          disposeParticlePrefabRootsForEntity(entity.id);
           for (const child of [...group.children]) {
             if (child.userData.prefabInstanceId) group.remove(child);
           }
           group.add(instanceGroup);
+          registerParticlePrefabRoot(entity.id, instanceGroup);
           selectionBoxes.forEach((box) => box.update());
           syncSelectionHighlight();
         })
@@ -499,17 +548,11 @@ export function createViewportEntityGraph(
       return;
     }
 
-    const nextAssetUrl = entity.asset?.url ?? null;
-    const nextHasPrimitive = Boolean(entity.primitive);
     const nextRecenterAsHull = entity.components.some(
       (component) =>
         component.type === "ship-hull" || component.type === "ship-controller",
     );
-    if (
-      group.userData.editorAssetUrl !== nextAssetUrl ||
-      group.userData.editorHasPrimitive !== nextHasPrimitive ||
-      group.userData.editorRecenterAsHull !== nextRecenterAsHull
-    ) {
+    if (entityVisualIdentityChanged(group, entity, nextRecenterAsHull)) {
       rebuildAll();
       return;
     }
@@ -529,7 +572,7 @@ export function createViewportEntityGraph(
         entityRoot,
         helpers: { buildComponentHelper },
         registerParticleHandle,
-        createParticleSystem,
+        createParticleSystem: createViewportParticleSystem,
       });
 
       const model = findLoadedEntityModel(group);

@@ -5,8 +5,9 @@ import { cloneCharacterSettings, getCharacterSettings } from '../../player/chara
 import { setDefaultAnimationController } from '../../player/animation/default-controller';
 import type { CharacterEquipmentSlotV1 } from '../../player/equipment/base-character-equipment';
 import type { WeaponSelectSlotId } from '../../player/inventory/weapon-select';
-import { createPlayerControls } from '../../input/player-controls';
+import type { createPlayerControls } from '../../input/player-controls';
 import type { PrefabDocument, PrefabEntity } from '../../world/prefabs/schema';
+import { updateNestedParticleSystems } from '../particles';
 import {
   assignClipToState,
   ensureControllerClipLoaded,
@@ -186,8 +187,8 @@ export function createBaseCharacterEquipmentEditor(
     if (!closure.playTestActive && !flyCamera.isFlying()) controls.enabled = !dragging;
   });
   const {
-    renderer, scene, camera, controls, gizmo, previewRoot, environmentTarget,
-    resize, updateAuthoringClipPlanes, clock, resizeObserver,
+    renderer, ready: stageReady, scene, camera, controls, gizmo, previewRoot,
+    resize, updateAuthoringClipPlanes, clock, dispose: disposeStage,
   } = stageThree;
 
   const flyCamera = createBaseCharacterFlyCamera({
@@ -223,6 +224,7 @@ export function createBaseCharacterEquipmentEditor(
     playTest: null as ReturnType<typeof createPlayTestSession> | null,
   };
   const avatarCtx = createAvatarPreviewContext(runtime, { previewRoot, camera, controls, gizmo }, {
+    isDisposed: () => disposed,
     setStageStatus, setPackMissing, notifyUiChange, syncGizmo,
     renderPlayTestHud: () => sessions.playTest!.renderPlayTestHud(),
   });
@@ -253,9 +255,11 @@ export function createBaseCharacterEquipmentEditor(
     notifyUiChange();
   });
 
+  let raf = 0;
+  let frameLoopStarted = false;
   const renderFrame = (): void => {
     if (disposed) return;
-    requestAnimationFrame(renderFrame);
+    raf = requestAnimationFrame(renderFrame);
     if (!active) return;
     resize();
     const deltaSeconds = Math.min(clock.getDelta(), 0.05);
@@ -268,9 +272,14 @@ export function createBaseCharacterEquipmentEditor(
       closure.animation?.update(deltaSeconds);
       runtime.controllerUpperBodyAim.current?.update(deltaSeconds);
     }
+    updateNestedParticleSystems(previewRoot, deltaSeconds, camera);
     renderer.render(scene, camera);
   };
-  requestAnimationFrame(renderFrame);
+  const startFrameLoop = (): void => {
+    if (disposed || frameLoopStarted) return;
+    frameLoopStarted = true;
+    raf = requestAnimationFrame(renderFrame);
+  };
 
   async function ensureAnimatedPose(): Promise<void> {
     if (closure.previewPose !== 'animated') {
@@ -300,12 +309,23 @@ export function createBaseCharacterEquipmentEditor(
     URL.revokeObjectURL(animationObjectUrl);
     animationObjectUrl = null;
   };
-  const ensureReady = (): Promise<void> => {
+  let webGpuFailureReported = false;
+  const reportWebGpuFailure = (error: unknown): void => {
+    if (disposed || webGpuFailureReported) return;
+    webGpuFailureReported = true;
+    console.error('[base-character-preview] WebGPU unavailable — preview disabled.', error);
+    setStageStatus('Base Character preview requires WebGPU, but initialization failed.', true);
+  };
+  void stageReady.catch(reportWebGpuFailure);
+  const ensureReady = async (): Promise<void> => {
     active = true;
+    await stageReady;
+    if (disposed) return;
+    startFrameLoop();
     clock.start();
     resize();
     readyPromise ??= Promise.all([loadDocument(), refreshCatalog()]).then(() => undefined);
-    return readyPromise;
+    await readyPromise;
   };
   const loadAnimationFromAsset = async (url: string): Promise<void> => {
     await ensureReady();
@@ -364,7 +384,7 @@ export function createBaseCharacterEquipmentEditor(
   canvas.addEventListener('pointerdown', () => { if (closure.playTestActive) canvas.focus(); });
 
   return {
-    activate: () => { void ensureReady(); },
+    activate: () => { void ensureReady().catch(reportWebGpuFailure); },
     deactivate: () => { active = false; if (closure.playTestActive) void playTestSession.setPlayTestActive(false); },
     canLeave: () => !hasUnsavedChanges() || window.confirm(
       'Leave Base Characters with unsaved character, controller, settings, backpack, or weapon grip changes?',
@@ -374,21 +394,18 @@ export function createBaseCharacterEquipmentEditor(
     getLeftPanel: () => leftHost, getRightPanel: () => rightHost, getUiApi: () => uiApi,
     dispose: () => {
       disposed = true;
+      cancelAnimationFrame(raf);
       flyCamera.endFly();
       flyCamera.dispose();
-      resizeObserver.disconnect();
       window.removeEventListener('keydown', playTestSession.onPlayTestKeyDown);
       playTestSession.stopPlayTestControls();
       runtime.controllerSourceLoads.clear();
       gizmo.detach();
       controls.dispose();
       gizmo.dispose();
-      closure.animation?.dispose();
-      runtime.controllerUpperBodyAim.current?.dispose();
       revokeAnimationObjectUrl();
-      closure.avatar?.dispose();
-      environmentTarget.dispose();
-      renderer.dispose();
+      disposeAvatarPreview(avatarCtx);
+      disposeStage();
       stage.remove();
     },
   };

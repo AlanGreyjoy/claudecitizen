@@ -41,6 +41,13 @@ export interface EditorViewport {
   /** Toggle Unreal-style procedural sky dome + sun disk (tracks env sun). */
   setProceduralSky: (enabled: boolean) => void;
   /**
+   * When false (default), collider wireframes show only on selected entities.
+   * When true, show collider helpers on every entity.
+   */
+  setShowAllColliders: (enabled: boolean) => void;
+  /** Floor GridHelper visibility (default off). */
+  setGridVisible: (enabled: boolean) => void;
+  /**
    * Unity-style in-editor Play: Scene view becomes Play view in place.
    * Disables edit picking/gizmos; flythrough camera remains available.
    */
@@ -56,6 +63,11 @@ export interface EditorViewport {
     entityId: string,
     nodeUuid: string,
     parentEntityId?: string | null,
+  ) => EntityTransform | null;
+  getEntityTransformRelativeToGlbNode: (
+    hostEntityId: string,
+    nodeUuid: string,
+    childEntityId: string,
   ) => EntityTransform | null;
   getGlbNodeBounds: (entityId: string, nodeUuid: string) => { min: Vec3; max: Vec3 } | null;
   getGlbNodeLocalTransform: (

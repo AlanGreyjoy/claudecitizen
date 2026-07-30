@@ -1,7 +1,11 @@
 import * as THREE from 'three';
+import { PMREMGenerator, WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { setKtx2SupportRenderer } from '../assets/ktx2';
+import { ensureNodeRectAreaLights } from '../node-lights';
+import { initRequiredWebGpu } from '../webgpu-required';
 
 export interface BaseCharacterStageDom {
   stage: HTMLDivElement;
@@ -14,17 +18,17 @@ export interface BaseCharacterStageDom {
 }
 
 export interface BaseCharacterStageThree {
-  renderer: THREE.WebGLRenderer;
+  renderer: WebGPURenderer;
+  ready: Promise<void>;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   gizmo: TransformControls;
   previewRoot: THREE.Group;
-  environmentTarget: THREE.Texture;
   resize: () => void;
   updateAuthoringClipPlanes: () => void;
   clock: THREE.Clock;
-  resizeObserver: ResizeObserver;
+  dispose: () => void;
 }
 
 export function createBaseCharacterStageDom(stageHost: HTMLElement): BaseCharacterStageDom {
@@ -82,19 +86,14 @@ export function createBaseCharacterStageThree(
   onGizmoDrag: (dragging: boolean) => void,
 ): BaseCharacterStageThree {
   const { canvas, stage } = dom;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  ensureNodeRectAreaLights();
+  const renderer = new WebGPURenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x08101d);
-  const environment = new RoomEnvironment();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const environmentTarget = pmrem.fromScene(environment, 0.04);
-  scene.environment = environmentTarget.texture;
-  environment.dispose();
-  pmrem.dispose();
   scene.add(new THREE.HemisphereLight(0xc6dcff, 0x263047, 1.5));
   const light = new THREE.DirectionalLight(0xffffff, 2.2);
   light.position.set(2.5, 4.5, 2);
@@ -153,18 +152,68 @@ export function createBaseCharacterStageThree(
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(stage);
   const clock = new THREE.Clock();
+  let disposed = false;
+  let rendererInitialized = false;
+  let rendererDisposed = false;
+  let environmentTarget: ReturnType<PMREMGenerator['fromScene']> | null = null;
+
+  const disposeRenderer = (): void => {
+    if (!rendererInitialized || rendererDisposed) return;
+    rendererDisposed = true;
+    renderer.dispose();
+  };
+
+  // WebGPU initialization is asynchronous. KTX2 feature detection and the
+  // PMREM bake both require a live backend, so no preview content or frame loop
+  // may start until this promise settles.
+  const ready = initRequiredWebGpu(renderer).then(() => {
+    rendererInitialized = true;
+    if (disposed) {
+      disposeRenderer();
+      return;
+    }
+    setKtx2SupportRenderer(renderer);
+    const environment = new RoomEnvironment();
+    const pmrem = new PMREMGenerator(renderer);
+    try {
+      environmentTarget = pmrem.fromScene(environment, 0.04);
+      scene.environment = environmentTarget.texture;
+    } finally {
+      environment.dispose();
+      pmrem.dispose();
+    }
+  });
+  void ready.catch(() => {
+    disposeRenderer();
+  });
 
   return {
     renderer,
+    ready,
     scene,
     camera,
     controls,
     gizmo,
     previewRoot,
-    environmentTarget: environmentTarget.texture,
     resize,
     updateAuthoringClipPlanes,
     clock,
-    resizeObserver,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      resizeObserver.disconnect();
+      environmentTarget?.dispose();
+      environmentTarget = null;
+      ground.geometry.dispose();
+      (ground.material as THREE.Material).dispose();
+      grid.geometry.dispose();
+      const gridMaterial = grid.material;
+      if (Array.isArray(gridMaterial)) {
+        for (const material of gridMaterial) material.dispose();
+      } else {
+        gridMaterial.dispose();
+      }
+      disposeRenderer();
+    },
   };
 }

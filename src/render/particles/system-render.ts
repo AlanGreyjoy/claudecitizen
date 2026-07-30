@@ -1,6 +1,7 @@
-import * as THREE from "three";
+import type * as THREE from "three";
 import type { PrefabComponent } from "../../world/prefabs/schema";
 import { sampleCurve, sampleGradient, hash01 } from "./curves";
+import type { ParticleMaterialHandle } from "./material";
 import type { ParticleSlot } from "./system-types";
 import type { ParticleTrailsController } from "./trails";
 
@@ -55,7 +56,7 @@ export function renderParticleInstances(args: {
   worldScale: THREE.Vector3;
   invQuat: THREE.Quaternion;
   tmp: THREE.Vector3;
-  material: THREE.ShaderMaterial;
+  material: ParticleMaterialHandle;
   dt: number;
   camera: THREE.Camera | undefined;
   hexToRgb: (color: string) => { r: number; g: number; b: number };
@@ -72,24 +73,27 @@ export function renderParticleInstances(args: {
   let drawIndex = 0;
   const colorAttr = mesh.geometry.getAttribute(
     "instanceColorAttr",
-  ) as THREE.InstancedBufferAttribute;
+  ) as THREE.InterleavedBufferAttribute;
   const alphaAttr = mesh.geometry.getAttribute(
     "instanceAlpha",
-  ) as THREE.InstancedBufferAttribute;
+  ) as THREE.InterleavedBufferAttribute;
   const tileOffsetAttr = mesh.geometry.getAttribute(
     "instanceTileOffset",
-  ) as THREE.InstancedBufferAttribute;
+  ) as THREE.InterleavedBufferAttribute;
   const tileScaleAttr = mesh.geometry.getAttribute(
     "instanceTileScale",
-  ) as THREE.InstancedBufferAttribute;
+  ) as THREE.InterleavedBufferAttribute;
   const stretchAttr = mesh.geometry.getAttribute(
     "instanceStretch",
-  ) as THREE.InstancedBufferAttribute;
-  const colorArray = colorAttr.array as Float32Array;
-  const alphaArray = alphaAttr.array as Float32Array;
-  const tileOffsetArray = tileOffsetAttr.array as Float32Array;
-  const tileScaleArray = tileScaleAttr.array as Float32Array;
-  const stretchArray = stretchAttr.array as Float32Array;
+  ) as THREE.InterleavedBufferAttribute;
+  const positionAttr = mesh.geometry.getAttribute(
+    "instancePositionAttr",
+  ) as THREE.InterleavedBufferAttribute;
+  const sizeAttr = mesh.geometry.getAttribute(
+    "instanceSize",
+  ) as THREE.InterleavedBufferAttribute;
+  const instanceData = colorAttr.data;
+  const instanceArray = instanceData.array as Float32Array;
 
   root.updateWorldMatrix(true, false);
   root.matrixWorld.decompose(worldPos, worldQuat, worldScale);
@@ -140,15 +144,20 @@ export function renderParticleInstances(args: {
     dummy.updateMatrix();
     mesh.setMatrixAt(drawIndex, dummy.matrix);
 
-    colorArray[drawIndex * 3] = r;
-    colorArray[drawIndex * 3 + 1] = g;
-    colorArray[drawIndex * 3 + 2] = b;
-    alphaArray[drawIndex] = a;
-    tileOffsetArray[drawIndex * 2] = uv.ox;
-    tileOffsetArray[drawIndex * 2 + 1] = uv.oy;
-    tileScaleArray[drawIndex * 2] = uv.sx;
-    tileScaleArray[drawIndex * 2 + 1] = uv.sy;
-    stretchArray[drawIndex] = stretch;
+    const instanceOffset = drawIndex * instanceData.stride;
+    instanceArray[instanceOffset + colorAttr.offset] = r;
+    instanceArray[instanceOffset + colorAttr.offset + 1] = g;
+    instanceArray[instanceOffset + colorAttr.offset + 2] = b;
+    instanceArray[instanceOffset + alphaAttr.offset] = a;
+    instanceArray[instanceOffset + tileOffsetAttr.offset] = uv.ox;
+    instanceArray[instanceOffset + tileOffsetAttr.offset + 1] = uv.oy;
+    instanceArray[instanceOffset + tileScaleAttr.offset] = uv.sx;
+    instanceArray[instanceOffset + tileScaleAttr.offset + 1] = uv.sy;
+    instanceArray[instanceOffset + stretchAttr.offset] = stretch;
+    instanceArray[instanceOffset + positionAttr.offset] = rx;
+    instanceArray[instanceOffset + positionAttr.offset + 1] = ry;
+    instanceArray[instanceOffset + positionAttr.offset + 2] = rz;
+    instanceArray[instanceOffset + sizeAttr.offset] = size;
 
     trails.pushPoint(i, slot.hasTrail, rx, ry, rz, true);
     drawIndex += 1;
@@ -156,20 +165,10 @@ export function renderParticleInstances(args: {
 
   mesh.count = drawIndex;
   mesh.instanceMatrix.needsUpdate = true;
-  colorAttr.needsUpdate = true;
-  alphaAttr.needsUpdate = true;
-  tileOffsetAttr.needsUpdate = true;
-  tileScaleAttr.needsUpdate = true;
-  stretchAttr.needsUpdate = true;
+  instanceData.needsUpdate = true;
   trails.endFrame(dt);
 
-  if (camera && material.uniforms.uSoftEnabled.value) {
-    const cam = camera as THREE.PerspectiveCamera;
-    if (cam.isPerspectiveCamera) {
-      material.uniforms.uCameraNear.value = cam.near;
-      material.uniforms.uCameraFar.value = cam.far;
-    }
-  }
+  if (camera) material.updateCamera(camera);
 
   if (camera && spec.renderer.sortMode === "by-distance") {
     root.getWorldPosition(worldPos);
@@ -178,4 +177,3 @@ export function renderParticleInstances(args: {
     root.visible = true;
   }
 }
-

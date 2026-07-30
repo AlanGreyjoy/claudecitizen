@@ -9,6 +9,8 @@ import {
 } from '../api';
 import type { EditorStore } from '../document';
 import { showToast } from '../dom';
+import { collectGlbNodeNames, findGlbNodeRef } from '../document-glb-tree';
+import { entityBoundToAnyGlbNode } from '../glb-binding';
 import { toPrefabDocument, toSceneDocument } from '../serialize';
 import { parsePrefabDocument, slugifyPrefabName } from '../../world/prefabs/schema';
 import { parseSceneDocument, SCENE_ID_PATTERN } from '../../world/scenes/schema';
@@ -62,7 +64,25 @@ const extractGlbNode = useCallback(
       showToast('Could not move the model node — its target transform is unavailable.', true);
       return false;
     }
-    if (!store.extractGlbNode(entityId, nodeUuid, targetParentId, transform)) {
+
+    const tree = store.getGlbTree(entityId);
+    const node = tree ? findGlbNodeRef(tree, nodeUuid) : null;
+    const host = store.locate(entityId)?.entity;
+    const adoptedChildren =
+      node && host
+        ? host.children.flatMap((child) => {
+            if (!entityBoundToAnyGlbNode(child, collectGlbNodeNames(node))) return [];
+            const relative = vp.getEntityTransformRelativeToGlbNode(
+              entityId,
+              nodeUuid,
+              child.id,
+            );
+            if (!relative) return [];
+            return [{ id: child.id, transform: relative }];
+          })
+        : [];
+
+    if (!store.extractGlbNode(entityId, nodeUuid, targetParentId, transform, adoptedChildren)) {
       showToast('Could not move the model node out of its prefab.', true);
       return false;
     }

@@ -1,97 +1,97 @@
 /**
- * Holographic shader for the HaloBand screen. Renders an animated GLSL
- * fragment shader to a canvas sized to the screen element: moving scanlines,
- * a slow refresh sweep, a faint grid, film grain, flicker, and a boot-up pulse
- * when the device opens.
- *
- * Uses raw WebGL2 (no Three.js scene) so the overlay stays lightweight. The
- * render loop only runs while the HaloBand is open. If WebGL2 is unavailable
- * the controller degrades to a no-op and the CSS screen background shows
- * through the transparent canvas.
+ * Lightweight WebGPU hologram for the HaloBand screen. This intentionally
+ * stays outside Three.js: it owns one full-screen triangle, one uniform
+ * buffer, and no scene graph. The render loop only runs while the device is
+ * open.
  */
 
-const VERT_SRC = `#version 300 es
-in vec2 aPos;
-void main() {
-  gl_Position = vec4(aPos, 0.0, 1.0);
-}`;
+const HOLO_SHADER = /* wgsl */ `
+struct HoloUniforms {
+  resolution: vec2f,
+  time: f32,
+  aspect: f32,
+};
 
-const FRAG_SRC = `#version 300 es
-precision highp float;
+@group(0) @binding(0) var<uniform> uniforms: HoloUniforms;
 
-uniform vec2 uResolution;
-uniform float uTime;
-uniform float uAspect;
-
-out vec4 outColor;
-
-float hash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+fn hash(p: vec2f) -> f32 {
+  return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
 }
 
-float vnoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
+fn vnoise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
   return mix(
-    mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+    mix(hash(i), hash(i + vec2f(1.0, 0.0)), u.x),
+    mix(hash(i + vec2f(0.0, 1.0)), hash(i + vec2f(1.0, 1.0)), u.x),
     u.y
   );
 }
 
-void main() {
-  vec2 uv = gl_FragCoord.xy / uResolution;
+@vertex
+fn vertexMain(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
+  let positions = array<vec2f, 3>(
+    vec2f(-1.0, -1.0),
+    vec2f(3.0, -1.0),
+    vec2f(-1.0, 3.0),
+  );
+  return vec4f(positions[index], 0.0, 1.0);
+}
 
-  vec3 base = vec3(0.018, 0.052, 0.092);
-  vec3 holo = vec3(0.36, 0.78, 1.0);
-  vec3 col = base;
+@fragment
+fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
+  let uv = position.xy / uniforms.resolution;
 
-  // Even phosphor glow. Keep it non-radial so the screen does not form a
-  // dark circular spot in the middle.
-  col += holo * 0.035;
+  let base = vec3f(0.018, 0.052, 0.092);
+  let holo = vec3f(0.36, 0.78, 1.0);
+  var color = base + holo * 0.035;
 
   // Moving scanlines.
-  float scan = 0.5 + 0.5 * sin((uv.y + uTime * 0.04) * 260.0);
+  var scan = 0.5 + 0.5 * sin((uv.y + uniforms.time * 0.04) * 260.0);
   scan = pow(scan, 6.0);
-  col += holo * scan * 0.05;
+  color += holo * scan * 0.05;
 
   // Slow vertical refresh sweep.
-  float sweepPos = fract(uTime * 0.12);
-  float sweep = exp(-pow((uv.y - sweepPos) * 24.0, 2.0));
-  col += holo * sweep * 0.06;
+  let sweepPosition = fract(uniforms.time * 0.12);
+  let sweep = exp(-pow((uv.y - sweepPosition) * 24.0, 2.0));
+  color += holo * sweep * 0.06;
 
   // Faint holographic grid.
-  vec2 g = abs(fract(uv * vec2(uAspect, 1.0) * 26.0) - 0.5);
-  float grid = 1.0 - smoothstep(0.46, 0.5, max(g.x, g.y));
-  col += holo * grid * 0.015;
+  let gridCell = abs(
+    fract(uv * vec2f(uniforms.aspect, 1.0) * 26.0) - vec2f(0.5)
+  );
+  let grid = 1.0 - smoothstep(0.46, 0.5, max(gridCell.x, gridCell.y));
+  color += holo * grid * 0.015;
 
   // Film grain.
-  float grain = vnoise(uv * vec2(uResolution.x / uResolution.y, 1.0) * 220.0 + uTime * 8.0);
-  col += (grain - 0.5) * 0.018;
+  let grain = vnoise(
+    uv * vec2f(uniforms.resolution.x / uniforms.resolution.y, 1.0) * 220.0
+      + vec2f(uniforms.time * 8.0)
+  );
+  color += vec3f((grain - 0.5) * 0.018);
 
   // Subtle flicker.
-  float flicker = 0.94 + 0.06 * sin(uTime * 31.0) * sin(uTime * 5.3);
-  col *= flicker;
+  let flicker =
+    0.94 + 0.06 * sin(uniforms.time * 31.0) * sin(uniforms.time * 5.3);
+  color *= flicker;
 
-  // Boot-up pulse: bright flash that fades over the first ~0.6s after open.
-  float boot = exp(-uTime * 4.0);
-  col += holo * boot * 0.5;
+  // Bright pulse that fades over the first ~0.6 seconds after opening.
+  let boot = exp(-uniforms.time * 4.0);
+  color += holo * boot * 0.5;
 
-  outColor = vec4(col, 1.0);
-}`;
+  return vec4f(color, 1.0);
+}
+`;
 
-function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.warn('Haloband holo shader compile failed:', gl.getShaderInfoLog(shader));
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
+const HOLO_LABEL = 'HaloBand hologram';
+
+interface HalobandGpuState {
+  context: GPUCanvasContext;
+  device: GPUDevice;
+  pipeline: GPURenderPipeline;
+  bindGroup: GPUBindGroup;
+  uniformBuffer: GPUBuffer;
 }
 
 export interface HalobandHoloController {
@@ -100,79 +100,159 @@ export interface HalobandHoloController {
   dispose(): void;
 }
 
+const EMPTY_CONTROLLER: HalobandHoloController = {
+  start: () => undefined,
+  stop: () => undefined,
+  dispose: () => undefined,
+};
+
+async function createGpuState(canvas: HTMLCanvasElement): Promise<HalobandGpuState> {
+  if (!navigator.gpu) {
+    throw new Error('WebGPU is unavailable for the HaloBand hologram.');
+  }
+
+  const context = canvas.getContext('webgpu');
+  if (!context) {
+    throw new Error('Could not acquire a WebGPU canvas context for the HaloBand.');
+  }
+
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: 'high-performance',
+  });
+  if (!adapter) {
+    throw new Error('Could not acquire a WebGPU adapter for the HaloBand.');
+  }
+
+  const device = await adapter.requestDevice();
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  context.configure({
+    device,
+    format,
+    alphaMode: 'premultiplied',
+  });
+
+  const module = device.createShaderModule({
+    label: HOLO_LABEL,
+    code: HOLO_SHADER,
+  });
+  const pipeline = await device.createRenderPipelineAsync({
+    label: HOLO_LABEL,
+    layout: 'auto',
+    vertex: {
+      module,
+      entryPoint: 'vertexMain',
+    },
+    fragment: {
+      module,
+      entryPoint: 'fragmentMain',
+      targets: [{ format }],
+    },
+    primitive: {
+      topology: 'triangle-list',
+    },
+  });
+  const uniformBuffer = device.createBuffer({
+    label: `${HOLO_LABEL} uniforms`,
+    size: 16,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
+  });
+  const bindGroup = device.createBindGroup({
+    label: HOLO_LABEL,
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+  });
+
+  return {
+    context,
+    device,
+    pipeline,
+    bindGroup,
+    uniformBuffer,
+  };
+}
+
 export function createHalobandHolo(canvas: HTMLCanvasElement): HalobandHoloController {
-  const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: false });
-  if (!gl) {
-    return { start() {}, stop() {}, dispose() {} };
-  }
-
-  const vert = compile(gl, gl.VERTEX_SHADER, VERT_SRC);
-  const frag = compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-  if (!vert || !frag) {
-    return { start() {}, stop() {}, dispose() {} };
-  }
-
-  const program = gl.createProgram();
-  if (!program) {
-    return { start() {}, stop() {}, dispose() {} };
-  }
-  gl.attachShader(program, vert);
-  gl.attachShader(program, frag);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.warn('Haloband holo program link failed:', gl.getProgramInfoLog(program));
-    gl.deleteProgram(program);
-    return { start() {}, stop() {}, dispose() {} };
-  }
-
-  const buffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([-1, -1, 3, -1, -1, 3]),
-    gl.STATIC_DRAW,
-  );
-
-  const aPos = gl.getAttribLocation(program, 'aPos');
-  const uResolution = gl.getUniformLocation(program, 'uResolution');
-  const uTime = gl.getUniformLocation(program, 'uTime');
-  const uAspect = gl.getUniformLocation(program, 'uAspect');
+  if (!navigator.gpu) return EMPTY_CONTROLLER;
 
   let rafId = 0;
   let startTime = 0;
   let running = false;
   let disposed = false;
+  let gpuState: HalobandGpuState | null = null;
 
   const dprCap = 2;
   function resize(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-    const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
-    const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
+    const width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
+    const height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
     }
   }
 
-  const ro = new ResizeObserver(resize);
-  ro.observe(canvas);
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(canvas);
   resize();
 
   const render = (): void => {
-    if (!running || disposed) return;
+    if (!running || disposed || !gpuState) return;
+
     const now = performance.now();
-    const t = (now - startTime) / 1000;
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.useProgram(program);
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform2f(uResolution, canvas.width, canvas.height);
-    gl.uniform1f(uTime, t);
-    gl.uniform1f(uAspect, canvas.width / canvas.height);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const time = (now - startTime) / 1000;
+    const width = Math.max(canvas.width, 1);
+    const height = Math.max(canvas.height, 1);
+    gpuState.device.queue.writeBuffer(
+      gpuState.uniformBuffer,
+      0,
+      new Float32Array([width, height, time, width / height]),
+    );
+
+    const encoder = gpuState.device.createCommandEncoder({
+      label: HOLO_LABEL,
+    });
+    const pass = encoder.beginRenderPass({
+      label: HOLO_LABEL,
+      colorAttachments: [
+        {
+          view: gpuState.context.getCurrentTexture().createView(),
+          clearValue: { r: 0.018, g: 0.052, b: 0.092, a: 1 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+    pass.setPipeline(gpuState.pipeline);
+    pass.setBindGroup(0, gpuState.bindGroup);
+    pass.draw(3);
+    pass.end();
+    gpuState.device.queue.submit([encoder.finish()]);
     rafId = requestAnimationFrame(render);
   };
+
+  const ready = createGpuState(canvas)
+    .then((state) => {
+      if (disposed) {
+        state.uniformBuffer.destroy();
+        state.context.unconfigure();
+        state.device.destroy();
+        return;
+      }
+      gpuState = state;
+      void state.device.lost.then((info) => {
+        if (disposed) return;
+        running = false;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = 0;
+        console.warn(`HaloBand WebGPU device lost: ${info.message}`);
+      });
+      if (running) rafId = requestAnimationFrame(render);
+    })
+    .catch((error: unknown) => {
+      if (!disposed) {
+        console.warn('HaloBand WebGPU initialization failed:', error);
+      }
+    });
 
   return {
     start() {
@@ -180,7 +260,7 @@ export function createHalobandHolo(canvas: HTMLCanvasElement): HalobandHoloContr
       running = true;
       startTime = performance.now();
       resize();
-      rafId = requestAnimationFrame(render);
+      if (gpuState) rafId = requestAnimationFrame(render);
     },
     stop() {
       running = false;
@@ -193,11 +273,15 @@ export function createHalobandHolo(canvas: HTMLCanvasElement): HalobandHoloContr
       running = false;
       if (rafId) cancelAnimationFrame(rafId);
       rafId = 0;
-      ro.disconnect();
-      gl.deleteBuffer(buffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vert);
-      gl.deleteShader(frag);
+      resizeObserver.disconnect();
+      const state = gpuState;
+      gpuState = null;
+      if (state) {
+        state.uniformBuffer.destroy();
+        state.context.unconfigure();
+        state.device.destroy();
+      }
+      void ready;
     },
   };
 }

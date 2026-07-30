@@ -131,6 +131,65 @@ export interface QuantumBubbleHandle {
   dispose: () => void;
 }
 
+export interface HyperspaceMaterialHandle {
+  material: THREE.Material;
+  setFlowTexture: (texture: THREE.Texture) => void;
+  setIntensity: (intensity: number) => void;
+  setOpacityTexture: (texture: THREE.Texture) => void;
+  setTime: (timeSeconds: number) => void;
+  dispose: () => void;
+}
+
+export type HyperspaceMaterialFactory = (
+  flowTexture: THREE.Texture,
+  opacityTexture: THREE.Texture,
+) => HyperspaceMaterialHandle;
+
+export interface QuantumBubbleOptions {
+  /** WebGPU runtime injects the TSL hyperspace material during the renderer flip. */
+  hyperspaceMaterialFactory?: HyperspaceMaterialFactory;
+}
+
+function createWebGlHyperspaceMaterial(
+  flowTexture: THREE.Texture,
+  opacityTexture: THREE.Texture,
+): HyperspaceMaterialHandle {
+  const uniforms = {
+    uIntensity: new THREE.Uniform(0),
+    uTime: new THREE.Uniform(0),
+    uFlowTexture: new THREE.Uniform(flowTexture),
+    uOpacityTexture: new THREE.Uniform(opacityTexture),
+  };
+  const material = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: hyperspaceVertexShader,
+    fragmentShader: hyperspaceFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    side: THREE.BackSide,
+    toneMapped: false,
+  });
+  return {
+    material,
+    setFlowTexture(texture) {
+      uniforms.uFlowTexture.value = texture;
+    },
+    setIntensity(intensity) {
+      uniforms.uIntensity.value = intensity;
+    },
+    setOpacityTexture(texture) {
+      uniforms.uOpacityTexture.value = texture;
+    },
+    setTime(timeSeconds) {
+      uniforms.uTime.value = timeSeconds;
+    },
+    dispose() {
+      material.dispose();
+    },
+  };
+}
+
 function makeLabelSprite(text: string): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -236,6 +295,7 @@ function boostedMarkerPosition(marker: Vec3): Vec3 {
 export function createQuantumBubble(
   scene: THREE.Scene,
   renderScale: number,
+  options: QuantumBubbleOptions = {},
 ): QuantumBubbleHandle {
   const root = new THREE.Group();
   root.name = 'quantum-bubble-root';
@@ -246,30 +306,20 @@ export function createQuantumBubble(
   // protected asset pack exists, its original flow maps add surface detail.
   const fallbackFlowTexture = createFallbackHyperspaceTexture(128);
   const fallbackOpacityTexture = createFallbackHyperspaceTexture(150);
-  const hyperspaceUniforms = {
-    uIntensity: new THREE.Uniform(0),
-    uTime: new THREE.Uniform(0),
-    uFlowTexture: new THREE.Uniform<THREE.Texture>(fallbackFlowTexture),
-    uOpacityTexture: new THREE.Uniform<THREE.Texture>(fallbackOpacityTexture),
-  };
+  const hyperspaceVisual = (
+    options.hyperspaceMaterialFactory ?? createWebGlHyperspaceMaterial
+  )(fallbackFlowTexture, fallbackOpacityTexture);
   const hyperspaceGeometry = new THREE.CapsuleGeometry(
     HYPERSPACE_RADIUS_METERS * renderScale,
     HYPERSPACE_LENGTH_METERS * renderScale,
     5,
     16,
   );
-  const hyperspaceMaterial = new THREE.ShaderMaterial({
-    uniforms: hyperspaceUniforms,
-    vertexShader: hyperspaceVertexShader,
-    fragmentShader: hyperspaceFragmentShader,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-    side: THREE.BackSide,
-    toneMapped: false,
-  });
   const shellSpin = new THREE.Group();
-  const hyperspaceShell = new THREE.Mesh(hyperspaceGeometry, hyperspaceMaterial);
+  const hyperspaceShell = new THREE.Mesh(
+    hyperspaceGeometry,
+    hyperspaceVisual.material,
+  );
   hyperspaceShell.name = 'quantum-hyperspace-capsule';
   hyperspaceShell.rotation.x = Math.PI * 0.5;
   hyperspaceShell.renderOrder = 8;
@@ -283,10 +333,13 @@ export function createQuantumBubble(
     fallbackFlowTexture,
     fallbackOpacityTexture,
   ]);
+  let flowTexture: THREE.Texture = fallbackFlowTexture;
+  let opacityTexture: THREE.Texture = fallbackOpacityTexture;
   const textureLoader = new THREE.TextureLoader();
   const loadTexture = (
     url: string,
-    uniform: THREE.Uniform<THREE.Texture>,
+    getCurrent: () => THREE.Texture,
+    apply: (texture: THREE.Texture) => void,
   ): void => {
     textureLoader.load(
       url,
@@ -296,8 +349,8 @@ export function createQuantumBubble(
           return;
         }
         configureHyperspaceTexture(texture);
-        const previous = uniform.value;
-        uniform.value = texture;
+        const previous = getCurrent();
+        apply(texture);
         ownedHyperspaceTextures.delete(previous);
         previous.dispose();
         ownedHyperspaceTextures.add(texture);
@@ -310,8 +363,22 @@ export function createQuantumBubble(
     );
   };
   if (import.meta.env.DEV) {
-    loadTexture(HYPERSPACE_FLOW_TEXTURE_URL, hyperspaceUniforms.uFlowTexture);
-    loadTexture(HYPERSPACE_OPACITY_TEXTURE_URL, hyperspaceUniforms.uOpacityTexture);
+    loadTexture(
+      HYPERSPACE_FLOW_TEXTURE_URL,
+      () => flowTexture,
+      (texture) => {
+        flowTexture = texture;
+        hyperspaceVisual.setFlowTexture(texture);
+      },
+    );
+    loadTexture(
+      HYPERSPACE_OPACITY_TEXTURE_URL,
+      () => opacityTexture,
+      (texture) => {
+        opacityTexture = texture;
+        hyperspaceVisual.setOpacityTexture(texture);
+      },
+    );
   }
 
   const markerSlots: MarkerSlot[] = [];
@@ -355,8 +422,8 @@ export function createQuantumBubble(
       quantum.phase === 'dropOut'
         ? -dropT * HYPERSPACE_LENGTH_METERS * 0.62 * renderScale
         : 0;
-    hyperspaceUniforms.uTime.value = timeSeconds;
-    hyperspaceUniforms.uIntensity.value = intensity;
+    hyperspaceVisual.setTime(timeSeconds);
+    hyperspaceVisual.setIntensity(intensity);
   }
 
   function updateMarkerSlot(
@@ -458,7 +525,7 @@ export function createQuantumBubble(
       diamondGeometry.dispose();
       root.removeFromParent();
       hyperspaceGeometry.dispose();
-      hyperspaceMaterial.dispose();
+      hyperspaceVisual.dispose();
       for (const texture of ownedHyperspaceTextures) texture.dispose();
       ownedHyperspaceTextures.clear();
     },

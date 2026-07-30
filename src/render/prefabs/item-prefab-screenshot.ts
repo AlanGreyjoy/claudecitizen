@@ -1,5 +1,17 @@
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
 import { loadPrefabDocument } from '../../world/prefabs/loader';
+import type { PrefabDocument, PrefabEntity } from '../../world/prefabs/schema';
+import { disposeOwnedGpuResources } from '../assets/gpu-dispose';
+import { setKtx2SupportRenderer } from '../assets/ktx2';
+import { ensureNodeRectAreaLights } from '../node-lights';
+import { createWebGpuParticleMaterial } from '../particles/node-material';
+import {
+  disposeNestedParticleSystems,
+  updateNestedParticleSystems,
+} from '../particles/setup';
+import { initRequiredWebGpu } from '../webgpu-required';
+import { captureWebGpuPngDataUrl } from '../webgpu-capture';
 import { createPropInstanceGroupAsync } from './prefab-renderer';
 
 /** Square PNG capture size for admin item icons. */
@@ -13,6 +25,24 @@ const ISOMETRIC_DIRECTION = new THREE.Vector3(1, 1, 1).normalize();
 
 /** Extra margin so the subject never kisses the frame edge. */
 const FRAME_PADDING = 1.28;
+
+/** Fixed warm-up makes the captured particle phase repeatable between clicks. */
+const PARTICLE_WARMUP_STEPS = 15;
+const PARTICLE_WARMUP_STEP_SECONDS = 1 / 30;
+
+function prepareScreenshotDocument(doc: PrefabDocument): PrefabDocument {
+  const copy = structuredClone(doc);
+  const visit = (entity: PrefabEntity): void => {
+    for (const component of entity.components ?? []) {
+      if (component.type === 'particle-system') {
+        component.startDelay = { mode: 'constant', value: 0 };
+      }
+    }
+    for (const child of entity.children ?? []) visit(child);
+  };
+  visit(copy.root);
+  return copy;
+}
 
 function visibleBounds(root: THREE.Object3D): THREE.Box3 {
   const bounds = new THREE.Box3().makeEmpty();
@@ -108,25 +138,15 @@ export async function generateItemPrefabScreenshot(prefabId: string): Promise<st
     throw new Error('Select an item prefab before generating a screenshot.');
   }
 
-  const doc = await loadPrefabDocument(trimmed);
-  if (!doc) {
-    throw new Error(`Item prefab "${trimmed}" could not be loaded.`);
-  }
-  if (doc.kind !== 'item') {
-    throw new Error(`Prefab "${trimmed}" is kind "${doc.kind}", not an item prefab.`);
-  }
-
   const canvas = document.createElement('canvas');
   canvas.width = SCREENSHOT_SIZE;
   canvas.height = SCREENSHOT_SIZE;
 
-  const renderer = new THREE.WebGLRenderer({
+  const renderer = new WebGPURenderer({
     canvas,
     antialias: true,
     alpha: true,
-    preserveDrawingBuffer: true,
   });
-  renderer.setSize(SCREENSHOT_SIZE, SCREENSHOT_SIZE, false);
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -144,18 +164,51 @@ export async function generateItemPrefabScreenshot(prefabId: string): Promise<st
 
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 2000);
   let model: THREE.Group | null = null;
+  let rendererInitialized = false;
+  let rendererDisposed = false;
+
+  const disposeRenderer = (): void => {
+    if (!rendererInitialized || rendererDisposed) return;
+    rendererDisposed = true;
+    renderer.dispose();
+  };
 
   try {
-    model = await createPropInstanceGroupAsync(doc);
+    await initRequiredWebGpu(renderer);
+    rendererInitialized = true;
+    setKtx2SupportRenderer(renderer);
+    ensureNodeRectAreaLights();
+
+    const loaded = await loadPrefabDocument(trimmed);
+    if (!loaded) {
+      throw new Error(`Item prefab "${trimmed}" could not be loaded.`);
+    }
+    if (loaded.kind !== 'item') {
+      throw new Error(`Prefab "${trimmed}" is kind "${loaded.kind}", not an item prefab.`);
+    }
+
+    const doc = prepareScreenshotDocument(loaded);
+    model = await createPropInstanceGroupAsync(doc, {
+      particleMaterialFactory: createWebGpuParticleMaterial,
+    });
     scene.add(model);
     frameIsometricCamera(camera, model);
-    renderer.render(scene, camera);
-    return canvas.toDataURL('image/png');
+    for (let step = 0; step < PARTICLE_WARMUP_STEPS; step += 1) {
+      updateNestedParticleSystems(model, PARTICLE_WARMUP_STEP_SECONDS, camera);
+    }
+    return await captureWebGpuPngDataUrl(
+      renderer,
+      scene,
+      camera,
+      SCREENSHOT_SIZE,
+      SCREENSHOT_SIZE,
+    );
   } finally {
     if (model) {
       scene.remove(model);
-      // Prefab GLBs share geometry/materials via the model cache — do not dispose them.
+      disposeNestedParticleSystems(model);
+      disposeOwnedGpuResources(model);
     }
-    renderer.dispose();
+    disposeRenderer();
   }
 }

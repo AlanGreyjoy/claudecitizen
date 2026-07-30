@@ -207,8 +207,13 @@ function entityRowClassName(
   inSelection: boolean,
   parentSelected: boolean,
   isDropTarget: boolean,
+  isPrefabInstance: boolean,
 ): string {
-  return `ed-tree-row${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}${parentSelected ? ' is-parent-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}`;
+  return `ed-tree-row${selected ? ' is-selected' : ''}${inSelection && !selected ? ' is-in-selection' : ''}${parentSelected ? ' is-parent-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${isPrefabInstance ? ' is-prefab-instance' : ''}`;
+}
+
+function isPrefabInstanceEntity(entity: EditorEntity): boolean {
+  return entity.components.some((component) => component.type === 'prefab-instance');
 }
 
 function EntityRowName({
@@ -241,8 +246,12 @@ function EntityRowName({
       />
     );
   }
+  const prefab = isPrefabInstanceEntity(entity);
   return (
-    <span className={`ed-tree-name${entity.visible ? '' : ' is-hidden-entity'}`}>
+    <span
+      className={`ed-tree-name${entity.visible ? '' : ' is-hidden-entity'}${prefab ? ' is-prefab-instance' : ''}`}
+      title={prefab ? 'Prefab instance' : undefined}
+    >
       {entity.name}
     </span>
   );
@@ -299,11 +308,18 @@ function EntityRow({
   const parentSelected =
     selection === entity.id && Boolean(sub) && sub?.entityId === entity.id;
   const isDropTarget = ctx.dropTargetId === entity.id;
+  const isPrefabInstance = isPrefabInstanceEntity(entity);
 
   return (
     <>
       <div
-        className={entityRowClassName(selected, inSelection, parentSelected, isDropTarget)}
+        className={entityRowClassName(
+          selected,
+          inSelection,
+          parentSelected,
+          isDropTarget,
+          isPrefabInstance,
+        )}
         draggable
         data-entity-id={entity.id}
         style={{ paddingLeft: `${10 + depth * 14}px` }}

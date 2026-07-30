@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { PrefabEntity, PrefabTransform } from '../../world/prefabs/schema';
 import type { CharacterEquipmentSlotV1 } from '../../player/equipment/base-character-equipment';
 import type { BackpackDefinition, WeaponDefinition } from '../../net/admin-api';
+import { createOwnedGpuResources } from '../assets/gpu-dispose';
 
 export type CatalogDefinition = WeaponDefinition | BackpackDefinition;
 
@@ -126,9 +127,15 @@ export function findEntityObject(root: THREE.Object3D, entityId: string): THREE.
 
 export function placeholder(color: number): THREE.Group {
   const group = new THREE.Group();
+  const owned = createOwnedGpuResources();
+  group.userData.ownedGpu = owned;
+  const geometry = new THREE.BoxGeometry(0.18, 0.32, 0.12);
+  const material = new THREE.MeshBasicMaterial({ color, wireframe: true });
+  owned.geometries.add(geometry);
+  owned.materials.add(material);
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(0.18, 0.32, 0.12),
-    new THREE.MeshBasicMaterial({ color, wireframe: true }),
+    geometry,
+    material,
   );
   group.add(mesh);
   return group;

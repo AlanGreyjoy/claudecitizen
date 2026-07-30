@@ -92,6 +92,7 @@ export type EditorStoreCtx = {
     nodeUuid: string,
     targetParentId: string | null,
     transform: EntityTransform,
+    adoptedChildren?: ReadonlyArray<{ id: string; transform: EntityTransform }>,
   ) => string | null;
   duplicateEntities: (ids: string[]) => string[];
   reparentEntity: (id: string, newParentId: string | null) => void;

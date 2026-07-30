@@ -220,7 +220,8 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
       const cancelLabel = options.cancelLabel ?? 'Cancel';
       const destructive = options.destructive ?? false;
 
-      const host = document.getElementById('editor-root') ?? document.body;
+      // Mount on body — #editor-root is z-index 250 stacking context; dialogs
+      // inside it sit under play host / HUD and inherit user-select: none.
       const overlay = el('div', { className: 'ed-dialog-overlay' });
       const dialog = el('div', {
         className: 'ed-dialog',
@@ -251,11 +252,12 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
         el('div', { className: 'ed-dialog-actions' }, [cancelBtn, confirmBtn]),
       );
       overlay.append(dialog);
-      host.append(overlay);
+      document.body.append(overlay);
 
       const onKeyDown = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') {
           event.preventDefault();
+          event.stopPropagation();
           finish(false);
         }
       };
@@ -266,7 +268,10 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
 
       overlay.addEventListener('click', onOverlayClick);
       window.addEventListener('keydown', onKeyDown);
-      requestAnimationFrame(() => overlay.classList.add('is-visible'));
+      requestAnimationFrame(() => {
+        overlay.classList.add('is-visible');
+        cancelBtn.focus();
+      });
 
       function cleanup(): void {
         overlay.removeEventListener('click', onOverlayClick);
@@ -284,7 +289,6 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
       }
 
       activeConfirmDialog = { finish };
-      cancelBtn.focus();
     }, 0);
   });
 }
@@ -311,7 +315,6 @@ export function showSaveDiscardCancelDialog(options: {
       const discardLabel = options.discardLabel ?? "Don't Save";
       const cancelLabel = options.cancelLabel ?? 'Cancel';
 
-      const host = document.getElementById('editor-root') ?? document.body;
       const overlay = el('div', { className: 'ed-dialog-overlay' });
       const dialog = el('div', {
         className: 'ed-dialog',
@@ -347,11 +350,12 @@ export function showSaveDiscardCancelDialog(options: {
         el('div', { className: 'ed-dialog-actions' }, [cancelBtn, discardBtn, saveBtn]),
       );
       overlay.append(dialog);
-      host.append(overlay);
+      document.body.append(overlay);
 
       const onKeyDown = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') {
           event.preventDefault();
+          event.stopPropagation();
           finish('cancel');
         }
       };
@@ -361,7 +365,10 @@ export function showSaveDiscardCancelDialog(options: {
 
       overlay.addEventListener('click', onOverlayClick);
       window.addEventListener('keydown', onKeyDown);
-      requestAnimationFrame(() => overlay.classList.add('is-visible'));
+      requestAnimationFrame(() => {
+        overlay.classList.add('is-visible');
+        cancelBtn.focus();
+      });
 
       function cleanup(): void {
         overlay.removeEventListener('click', onOverlayClick);
@@ -383,7 +390,6 @@ export function showSaveDiscardCancelDialog(options: {
       activeConfirmDialog = {
         finish: (confirmed) => finish(confirmed ? 'save' : 'cancel'),
       };
-      cancelBtn.focus();
     }, 0);
   });
 }
@@ -410,7 +416,9 @@ export function showPromptDialog(options: PromptDialogOptions): Promise<string |
       const cancelLabel = options.cancelLabel ?? 'Cancel';
       const defaultValue = options.defaultValue ?? '';
 
-      const host = document.getElementById('editor-root') ?? document.body;
+      // Mount on body — same as React modals. Inside #editor-root the overlay
+      // loses to higher body stacking contexts and inherits user-select: none,
+      // so the New Folder field looks focused but never receives keys.
       const overlay = el('div', { className: 'ed-dialog-overlay' });
       const dialog = el('div', {
         className: 'ed-dialog',
@@ -425,7 +433,22 @@ export function showPromptDialog(options: PromptDialogOptions): Promise<string |
       input.type = 'text';
       input.className = 'ed-input ed-dialog-input';
       input.value = defaultValue;
+      input.spellcheck = false;
+      input.autocomplete = 'off';
       if (options.placeholder) input.placeholder = options.placeholder;
+      // Global shortcuts (W/E/R, Delete, Ctrl+Z) listen on window — don't leak.
+      input.addEventListener('keydown', (event) => {
+        event.stopPropagation();
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          finish(null);
+          return;
+        }
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          finish(input.value);
+        }
+      });
 
       const cancelBtn = el('button', {
         className: 'ed-btn ed-dialog-btn-cancel',
@@ -448,17 +471,13 @@ export function showPromptDialog(options: PromptDialogOptions): Promise<string |
         el('div', { className: 'ed-dialog-actions' }, [cancelBtn, confirmBtn]),
       );
       overlay.append(dialog);
-      host.append(overlay);
+      document.body.append(overlay);
 
       const onKeyDown = (event: KeyboardEvent): void => {
         if (event.key === 'Escape') {
           event.preventDefault();
+          event.stopPropagation();
           finish(null);
-          return;
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          finish(input.value);
         }
       };
 
@@ -468,7 +487,11 @@ export function showPromptDialog(options: PromptDialogOptions): Promise<string |
 
       overlay.addEventListener('click', onOverlayClick);
       window.addEventListener('keydown', onKeyDown);
-      requestAnimationFrame(() => overlay.classList.add('is-visible'));
+      requestAnimationFrame(() => {
+        overlay.classList.add('is-visible');
+        input.focus();
+        input.select();
+      });
 
       function cleanup(): void {
         overlay.removeEventListener('click', onOverlayClick);
@@ -486,8 +509,6 @@ export function showPromptDialog(options: PromptDialogOptions): Promise<string |
       }
 
       activePromptDialog = { finish };
-      input.focus();
-      input.select();
     }, 0);
   });
 }

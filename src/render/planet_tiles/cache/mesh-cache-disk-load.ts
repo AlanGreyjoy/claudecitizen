@@ -15,7 +15,7 @@ export interface MeshCacheDiskCtx {
   confirmedDiskMisses: Set<string>;
   diskLoadsInFlight: Set<string>;
   frameNumber: number;
-  material: THREE.MeshLambertMaterial;
+  material: THREE.Material;
   meshCache: Map<string, TileMeshEntry>;
   planet: Planet;
   seed: number;

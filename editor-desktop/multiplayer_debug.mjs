@@ -253,6 +253,7 @@ export function createMultiplayerDebugManager({
     };
     const window = new BrowserWindow({
       backgroundColor: '#02070d',
+      icon: join(editorDesktopRoot, 'build', 'icon.png'),
       show: false,
       title: `${label} — Multiplayer Debug`,
       ...tile,

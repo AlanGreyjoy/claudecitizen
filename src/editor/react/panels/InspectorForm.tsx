@@ -83,20 +83,70 @@ export function TextField({
   );
 }
 
+export type ColorSwatch = {
+  label: string;
+  color: string;
+};
+
+/** Authored light looks — warm practicals through sci-fi accents. */
+export const LIGHT_COLOR_SWATCHES: readonly ColorSwatch[] = [
+  { label: 'Daylight', color: '#ffffff' },
+  { label: 'Cool', color: '#a8c8ff' },
+  { label: 'Warm', color: '#ffb36b' },
+  { label: 'Candle', color: '#ff8c42' },
+  { label: 'Moonlight', color: '#8ea8ff' },
+  { label: 'Overcast', color: '#c8d4e8' },
+  { label: 'Sci-Fi Green', color: '#5dff9a' },
+  { label: 'Holo Cyan', color: '#4de8ff' },
+  { label: 'Neon Magenta', color: '#ff4dc8' },
+  { label: 'Amber', color: '#ffc45a' },
+  { label: 'Alert Red', color: '#ff4a4a' },
+  { label: 'UV Violet', color: '#b48cff' },
+];
+
+function normalizeHexColor(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export function ColorField({
   value,
   onCommit,
+  swatches,
 }: {
   value: string;
   onCommit: (next: string) => void;
+  swatches?: readonly ColorSwatch[];
 }): ReactElement {
+  const active = normalizeHexColor(value);
   return (
-    <input
-      className="ed-input"
-      type="color"
-      value={value}
-      onChange={(event) => onCommit(event.currentTarget.value)}
-    />
+    <div className="ed-color-field">
+      <input
+        className="ed-input ed-color-picker"
+        type="color"
+        value={value}
+        onChange={(event) => onCommit(event.currentTarget.value)}
+      />
+      {swatches && swatches.length > 0 ? (
+        <div className="ed-color-swatches" role="list">
+          {swatches.map((swatch) => {
+            const selected = active === normalizeHexColor(swatch.color);
+            return (
+              <button
+                key={`${swatch.label}:${swatch.color}`}
+                type="button"
+                role="listitem"
+                className={`ed-color-swatch${selected ? ' is-active' : ''}`}
+                style={{ background: swatch.color }}
+                title={swatch.label}
+                aria-label={swatch.label}
+                aria-pressed={selected}
+                onClick={() => onCommit(swatch.color)}
+              />
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

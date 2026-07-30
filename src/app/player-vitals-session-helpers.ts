@@ -36,6 +36,7 @@ export function copyVitals(vitals: PlayerSurvivalVitals): PlayerSurvivalVitals {
   return {
     hungerReserve01: vitals.hungerReserve01,
     thirstReserve01: vitals.thirstReserve01,
+    healthReserve01: vitals.healthReserve01 ?? 1,
   };
 }
 

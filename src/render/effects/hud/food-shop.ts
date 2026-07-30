@@ -47,6 +47,9 @@ function shopTitle(shop: StationFoodShopMarker): { kicker: string; title: string
   if (shop.catalogMode === "drinks") {
     return { kicker: "Hydration Kiosk", title: "Drinks Shop" };
   }
+  if (shop.catalogMode === "medical") {
+    return { kicker: "Station Pharmacy", title: "Pharmacy" };
+  }
   return { kicker: "Station Canteen", title: "Canteen" };
 }
 
@@ -57,6 +60,7 @@ function matchesCatalogMode(
   if (entry.itemType !== "consumable") return false;
   if (shop.catalogMode === "food") return entry.subType === "food";
   if (shop.catalogMode === "drinks") return entry.subType === "drink";
+  if (shop.catalogMode === "medical") return entry.subType === "medical";
   return entry.subType === "food" || entry.subType === "drink";
 }
 
@@ -78,8 +82,10 @@ function restoreHint(definition: ItemDefinition): string {
   const parts: string[] = [];
   const hunger = definition.hungerRestore01 ?? 0;
   const thirst = definition.thirstRestore01 ?? 0;
+  const health = definition.healthRestore01 ?? 0;
   if (hunger > 0) parts.push(`Hunger +${Math.round(hunger * 100)}%`);
   if (thirst > 0) parts.push(`Thirst +${Math.round(thirst * 100)}%`);
+  if (health > 0) parts.push(`Health +${Math.round(health * 100)}%`);
   if (parts.length > 0) return parts.join(" · ");
   return definition.description || definition.subType || "Consumable";
 }

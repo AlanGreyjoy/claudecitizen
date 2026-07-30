@@ -58,6 +58,7 @@ import {
   DrinksShopFields,
   FoodShopFields,
   OutfittersFields,
+  PharmacyFields,
   WeaponShopFields,
 } from './Builders6';
 import {
@@ -66,6 +67,7 @@ import {
   PlanetFields,
   PlayerStartFields,
   PrefabInstanceFields,
+  SceneEnvironmentFields,
   SceneLinkFields,
   UiScreenFields,
 } from './BuildersScene';
@@ -127,6 +129,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'food-shop': field(FoodShopFields),
   'drinks-shop': field(DrinksShopFields),
   canteen: field(CanteenFields),
+  pharmacy: field(PharmacyFields),
   'cockpit-stat': field(CockpitStatFields),
   'game-manager': field(GameManagerFields),
   planet: field(PlanetFields),
@@ -135,6 +138,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'ui-screen': field(UiScreenFields),
   'scene-link': field(SceneLinkFields),
   'instanced-scene': field(InstancedSceneFields),
+  'scene-environment': field(SceneEnvironmentFields),
 };
 
 export function renderComponentFields(
@@ -146,5 +150,5 @@ export function renderComponentFields(
   return render({ ctx, component });
 }
 
-/** All 49 component types with dedicated inspector field editors. */
+/** All component types with dedicated inspector field editors. */
 export const COMPONENT_FIELD_TYPE_COUNT = Object.keys(COMPONENT_FIELD_COMPONENTS).length;

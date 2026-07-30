@@ -36,10 +36,10 @@ export const BaseCharactersPanel = forwardRef<BaseCharacterEquipmentEditor, Base
     const leftHostRef = useRef<HTMLDivElement | null>(null);
     const rightHostRef = useRef<HTMLDivElement | null>(null);
 
-    // Hold the latest onReady in a ref so the WebGL editor is created exactly
+    // Hold the latest onReady in a ref so the GPU editor is created exactly
     // once. If onReady were an effect dependency, an unstable parent callback
-    // would recreate the WebGLRenderer on every render — an infinite
-    // create/dispose loop that leaks WebGL contexts.
+    // would recreate the renderer on every render — an infinite create/dispose
+    // loop that leaks GPU devices.
     const onReadyRef = useRef(onReady);
     onReadyRef.current = onReady;
 

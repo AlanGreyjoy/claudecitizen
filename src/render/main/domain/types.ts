@@ -14,7 +14,12 @@ import type {
 import type { InventoryState } from '../../../player/inventory/types';
 import type { Camera, Object3D } from 'three';
 
-export type RendererMode = 'log-depth' | 'default-depth' | 'compatibility';
+/**
+ * `webgpu` is the shipping mode. The WebGL variants are retained only because
+ * the HUD stats panel reports whichever mode a surface came up in, and the ship
+ * sandbox still creates a `WebGLRenderer`.
+ */
+export type RendererMode = 'webgpu' | 'log-depth' | 'default-depth' | 'compatibility';
 
 export type RenderMode = SpikeRenderWorld['mode'] | 'on-ship-deck';
 

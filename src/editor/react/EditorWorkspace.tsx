@@ -5,9 +5,10 @@ import type {
   RefObject,
   SetStateAction,
 } from 'react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { EditorAudioPreviewController } from '../audio-preview';
 import type { EditorStore } from '../document';
+import type { DraggedGlbNode } from '../panels/hierarchy-logic';
 import { addAssetEntity, addPrefabInstanceEntity } from '../session-helpers';
 import { getModelThumbnail } from '../../render/editor/thumbnails';
 import type { EditorViewport } from '../../render/editor/viewport';
@@ -62,6 +63,7 @@ export type EditorWorkspaceProps = {
   openShipById: (id: string) => void | Promise<void>;
   newShipDocument: () => void | Promise<void>;
   togglePlay: () => void;
+  startPlanetAuthoringPlay: () => void;
   createPrefabsInFolder: (entityIds: string[], folder: string) => Promise<string[]>;
   newSceneOpen: boolean;
   setNewSceneOpen: (open: boolean) => void;
@@ -104,6 +106,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
     openShipById,
     newShipDocument,
     togglePlay,
+    startPlanetAuthoringPlay,
     createPrefabsInFolder,
     newSceneOpen,
     setNewSceneOpen,
@@ -125,6 +128,28 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
     setMaterialFocus(target);
     store.setSelection(target.entityId);
   };
+
+  /**
+   * Unity-style: drag a Hierarchy GLB mesh into a Project folder.
+   * Extracts under the same host (keeps hierarchy place), writes prefab,
+   * swaps that GameObject for a blue prefab-instance.
+   */
+  const createPrefabsFromGlbNodesInFolder = useCallback(
+    async (nodes: DraggedGlbNode[], folder: string) => {
+      const created: string[] = [];
+      for (const node of nodes) {
+        // Parent under the host model so the instance stays where the mesh was,
+        // not at the scene root.
+        if (!extractGlbNode(node.entityId, node.nodeUuid, node.entityId)) continue;
+        const entityId = store.getSelectedIds()[0];
+        if (!entityId) continue;
+        const ids = await createPrefabsInFolder([entityId], folder);
+        created.push(...ids);
+      }
+      return created;
+    },
+    [createPrefabsInFolder, extractGlbNode, store],
+  );
 
   return (
     <>
@@ -247,7 +272,11 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
                 onSelectMaterial={selectMaterial}
               />
             </div>
-            <TabEditorHosts tab={tab} onHandles={onTabHandles} />
+            <TabEditorHosts
+              tab={tab}
+              onHandles={onTabHandles}
+              onPlanetTestPlay={startPlanetAuthoringPlay}
+            />
           </div>
         </div>
 
@@ -320,6 +349,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
           onCreateItemPrefab={createItemPrefab}
           onOpenPrefab={(prefabId) => void loadById(prefabId)}
           onCreatePrefabsInFolder={createPrefabsInFolder}
+          onCreatePrefabsFromGlbNodesInFolder={createPrefabsFromGlbNodesInFolder}
         />
       </div>
 

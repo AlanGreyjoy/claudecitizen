@@ -116,12 +116,12 @@ function packFacetedWaterBuffers(
 ): SurfaceWaterBuffers {
   const { depths, indices, positions, shoreFactors, surfFactors } = source;
   const facetedPositions = new Float32Array(indices.length * 3);
-  const barycentrics = new Uint8Array(indices.length * 3);
-  const colors = new Uint8Array(indices.length * 3);
-  const effectDetails = new Uint8Array(indices.length);
+  // 4-wide packed attributes and one shared factor attribute — WebGPU has no
+  // 3-wide or 1-wide 8-bit vertex format. See SurfaceWaterBuffers.
+  const barycentrics = new Uint8Array(indices.length * 4);
+  const colors = new Uint8Array(indices.length * 4);
+  const waterFactors = new Uint8Array(indices.length * 4);
   const radialDirections = new Float32Array(indices.length * 3);
-  const shores = new Uint8Array(indices.length);
-  const surfStrengths = new Uint8Array(indices.length);
   const waterDepths = new Float32Array(indices.length);
   const cellSpanMeters = info.spanMeters / TILE_SEGMENTS;
   const effectDetail =
@@ -138,15 +138,17 @@ function packFacetedWaterBuffers(
       const outputVertex = facetIndex * 3 + corner;
       const sourceVertex = indices[outputVertex];
       const outputOffset = outputVertex * 3;
+      const packedOffset = outputVertex * 4;
       const sourceOffset = sourceVertex * 3;
       facetedPositions[outputOffset] = positions[sourceOffset];
       facetedPositions[outputOffset + 1] = positions[sourceOffset + 1];
       facetedPositions[outputOffset + 2] = positions[sourceOffset + 2];
-      barycentrics[outputOffset + corner] = 255;
-      colors[outputOffset] = color[0];
-      colors[outputOffset + 1] = color[1];
-      colors[outputOffset + 2] = color[2];
-      effectDetails[outputVertex] = packedEffectDetail;
+      barycentrics[packedOffset + corner] = 255;
+      colors[packedOffset] = color[0];
+      colors[packedOffset + 1] = color[1];
+      colors[packedOffset + 2] = color[2];
+      colors[packedOffset + 3] = 255;
+      waterFactors[packedOffset] = packedEffectDetail;
       const positionX = positions[sourceOffset] + info.centerPosition.x;
       const positionY = positions[sourceOffset + 1] + info.centerPosition.y;
       const positionZ = positions[sourceOffset + 2] + info.centerPosition.z;
@@ -154,8 +156,12 @@ function packFacetedWaterBuffers(
       radialDirections[outputOffset] = positionX * inverseRadius;
       radialDirections[outputOffset + 1] = positionY * inverseRadius;
       radialDirections[outputOffset + 2] = positionZ * inverseRadius;
-      shores[outputVertex] = Math.round(clamp01(shoreFactors[sourceVertex]) * 255);
-      surfStrengths[outputVertex] = Math.round(clamp01(surfFactors[sourceVertex]) * 255);
+      waterFactors[packedOffset + 1] = Math.round(
+        clamp01(shoreFactors[sourceVertex]) * 255,
+      );
+      waterFactors[packedOffset + 2] = Math.round(
+        clamp01(surfFactors[sourceVertex]) * 255,
+      );
       waterDepths[outputVertex] = depths[sourceVertex];
     }
   }
@@ -163,12 +169,10 @@ function packFacetedWaterBuffers(
   return {
     barycentrics,
     colors,
-    effectDetails,
     positions: facetedPositions,
     radialDirections,
-    shores,
-    surfStrengths,
     waterDepths,
+    waterFactors,
   };
 }
 

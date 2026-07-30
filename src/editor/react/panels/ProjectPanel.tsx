@@ -28,6 +28,12 @@ import {
   type AssetEntry,
   type FolderOrderMap,
 } from '../../api';
+import {
+  GLB_NODE_DND_TYPE,
+  parseDraggedEntityIds,
+  parseDraggedGlbNode,
+  type DraggedGlbNode,
+} from '../../panels/hierarchy-logic';
 import { showConfirmDialog, showContextMenu, showPromptDialog, showToast } from '../../dom';
 import type { EditorAudioPreviewController } from '../../audio-preview';
 import {
@@ -71,7 +77,6 @@ import {
   type FolderDropZone,
   type FolderNode,
 } from '../../panels/project-logic';
-import { parseDraggedEntityIds } from '../../panels/hierarchy-logic';
 import {
   attachColumnSplitter,
   PANEL_SIZE_BOUNDS,
@@ -93,6 +98,14 @@ export interface ProjectPanelOptions {
    * ids that were written so the panel can reveal them.
    */
   onCreatePrefabsInFolder: (entityIds: string[], folder: string) => Promise<string[]>;
+  /**
+   * Save dragged Hierarchy GLB mesh nodes as prefabs in `folder` (extract from
+   * parent model first, then write the prefab).
+   */
+  onCreatePrefabsFromGlbNodesInFolder: (
+    nodes: DraggedGlbNode[],
+    folder: string,
+  ) => Promise<string[]>;
   audioPreview: EditorAudioPreviewController;
 }
 
@@ -109,13 +122,14 @@ type BottomLeftTab = 'project' | 'console';
 type FolderScope = 'this-folder' | 'all-subfolders';
 
 /** Drop kinds a Project folder accepts. */
-type FolderDropKind = 'prefab-from-entity' | 'move';
+type FolderDropKind = 'prefab-from-entity' | 'prefab-from-glb' | 'move';
 
 type FolderDropTarget = { path: string; zone: FolderDropZone };
 
 function folderDropKind(dataTransfer: DataTransfer | null): FolderDropKind | null {
   if (!dataTransfer) return null;
   if (dataTransfer.types.includes(ENTITY_DND_TYPE)) return 'prefab-from-entity';
+  if (dataTransfer.types.includes(GLB_NODE_DND_TYPE)) return 'prefab-from-glb';
   if (dataTransfer.types.includes(ASSET_MOVE_DND_TYPE)) return 'move';
   return null;
 }
@@ -1177,6 +1191,10 @@ function useProjectFolderDnd(options: {
     siblingNames: string[],
   ) => Promise<void>;
   savePrefabsInto: (entityIds: string[], folderPath: string) => Promise<void>;
+  savePrefabsFromGlbNodesInto: (
+    nodes: DraggedGlbNode[],
+    folderPath: string,
+  ) => Promise<void>;
 }): {
   dropTarget: FolderDropTarget | null;
   onFolderDragStart: (event: DragEvent, folder: FolderNode) => void;
@@ -1192,6 +1210,7 @@ function useProjectFolderDnd(options: {
     moveFolderTo,
     reorderFolderAmongSiblings,
     savePrefabsInto,
+    savePrefabsFromGlbNodesInto,
   } = options;
   const [dropTarget, setDropTarget] = useState<FolderDropTarget | null>(null);
 
@@ -1256,6 +1275,15 @@ function useProjectFolderDnd(options: {
         return;
       }
 
+      if (kind === 'prefab-from-glb') {
+        if (zone !== 'into') return;
+        const node = parseDraggedGlbNode(
+          event.dataTransfer?.getData(GLB_NODE_DND_TYPE) ?? '',
+        );
+        if (node) void savePrefabsFromGlbNodesInto([node], folderPath);
+        return;
+      }
+
       const payload = parseAssetMovePayload(
         event.dataTransfer?.getData(ASSET_MOVE_DND_TYPE) ?? '',
       );
@@ -1276,6 +1304,7 @@ function useProjectFolderDnd(options: {
       moveFolderTo,
       orderMapRef,
       reorderFolderAmongSiblings,
+      savePrefabsFromGlbNodesInto,
       savePrefabsInto,
       treeRef,
     ],
@@ -1303,6 +1332,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       onCreateItemPrefab,
       onOpenPrefab,
       onCreatePrefabsInFolder,
+      onCreatePrefabsFromGlbNodesInFolder,
       audioPreview,
     } = options;
 
@@ -1492,6 +1522,15 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       [onCreatePrefabsInFolder, revealFolder],
     );
 
+    const savePrefabsFromGlbNodesInto = useCallback(
+      async (nodes: DraggedGlbNode[], folderPath: string): Promise<void> => {
+        const created = await onCreatePrefabsFromGlbNodesInFolder(nodes, folderPath);
+        if (created.length === 0) return;
+        await revealFolder(folderPath);
+      },
+      [onCreatePrefabsFromGlbNodesInFolder, revealFolder],
+    );
+
     const {
       dropTarget,
       onFolderDragStart,
@@ -1506,6 +1545,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       moveFolderTo,
       reorderFolderAmongSiblings,
       savePrefabsInto,
+      savePrefabsFromGlbNodesInto,
     });
 
     const onProjectContextMenu = useCallback(

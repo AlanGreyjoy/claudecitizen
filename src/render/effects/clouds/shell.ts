@@ -4,8 +4,35 @@ import { CLOUD_LAYER_CONFIGS, phaseFromSeed } from '../../../world/clouds';
 
 interface CloudLayer {
   baseOpacity: number;
-  material: THREE.ShaderMaterial;
+  material: CloudShellMaterialHandle;
   mesh: THREE.Mesh;
+}
+
+export interface CloudShellMaterialParameters {
+  cameraSimPosition: THREE.Vector3;
+  invRenderScale: number;
+  phase: number;
+  scale: number;
+}
+
+/**
+ * Renderer-neutral controls used by the shell. WebGL owns the default
+ * ShaderMaterial below; WebGPU callers can inject the TSL factory without
+ * making the shell lifecycle or animation logic renderer-specific.
+ */
+export interface CloudShellMaterialHandle {
+  material: THREE.Material;
+  setDriftAngle: (value: number) => void;
+  setOpacity: (value: number) => void;
+  dispose: () => void;
+}
+
+export type CloudShellMaterialFactory = (
+  parameters: CloudShellMaterialParameters,
+) => CloudShellMaterialHandle;
+
+export interface CloudShellOptions {
+  materialFactory?: CloudShellMaterialFactory;
 }
 
 export interface CloudShell {
@@ -109,6 +136,46 @@ void main() {
 }
 `;
 
+const createWebGlCloudShellMaterial: CloudShellMaterialFactory = ({
+  cameraSimPosition,
+  invRenderScale,
+  phase,
+  scale,
+}) => {
+  const material = new THREE.ShaderMaterial({
+    vertexShader: VERTEX_SHADER,
+    fragmentShader: FRAGMENT_SHADER,
+    uniforms: {
+      uCameraSimPos: { value: cameraSimPosition },
+      uInvRenderScale: { value: invRenderScale },
+      uDriftAngle: { value: 0 },
+      uScale: { value: scale },
+      uPhase: { value: phase },
+      uOpacity: { value: 0 },
+    },
+    // Depth-test so nearby trees/terrain occlude the shell; don't write depth
+    // so translucent layers don't fight each other.
+    depthWrite: false,
+    depthTest: true,
+    side: THREE.BackSide,
+    transparent: true,
+    blending: THREE.NormalBlending,
+  });
+
+  return {
+    material,
+    setDriftAngle(value) {
+      material.uniforms.uDriftAngle.value = value;
+    },
+    setOpacity(value) {
+      material.uniforms.uOpacity.value = value;
+    },
+    dispose() {
+      material.dispose();
+    },
+  };
+};
+
 /**
  * Camera-centered sky dome. The geometry follows the camera, but coverage is
  * sampled against planet-fixed directions so the pattern is anchored to the
@@ -120,6 +187,7 @@ export function createCloudShell(
   _planet: Planet,
   seed: number,
   renderScale: number,
+  options: CloudShellOptions = {},
 ): CloudShell {
   const group = new THREE.Group();
   const layers: CloudLayer[] = [];
@@ -127,30 +195,20 @@ export function createCloudShell(
   const domeRadius = 90;
   const invRenderScale = 1 / renderScale;
   const cameraSimPos = new THREE.Vector3();
+  const materialFactory =
+    options.materialFactory ?? createWebGlCloudShellMaterial;
 
   CLOUD_LAYER_CONFIGS.forEach((config, layerIndex) => {
-    const material = new THREE.ShaderMaterial({
-      vertexShader: VERTEX_SHADER,
-      fragmentShader: FRAGMENT_SHADER,
-      uniforms: {
-        uCameraSimPos: { value: cameraSimPos },
-        uInvRenderScale: { value: invRenderScale },
-        uDriftAngle: { value: 0 },
-        uScale: { value: config.scale },
-        uPhase: { value: phaseFromSeed(seed, layerIndex) },
-        uOpacity: { value: 0 },
-      },
-      // Depth-test so nearby trees/terrain occlude the shell; don't write depth
-      // so translucent layers don't fight each other.
-      depthWrite: false,
-      depthTest: true,
-      side: THREE.BackSide,
-      transparent: true,
+    const material = materialFactory({
+      cameraSimPosition: cameraSimPos,
+      invRenderScale,
+      scale: config.scale,
+      phase: phaseFromSeed(seed, layerIndex),
     });
     const baseOpacity = Math.min(1, config.opacity);
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(domeRadius * (1 + layerIndex * 0.05), 64, 32),
-      material,
+      material.material,
     );
     mesh.frustumCulled = false;
     mesh.renderOrder = -20;
@@ -184,9 +242,10 @@ export function createCloudShell(
     for (let i = 0; i < layers.length; i += 1) {
       const layer = layers[i];
       const config = CLOUD_LAYER_CONFIGS[i];
-      layer.material.uniforms.uDriftAngle.value =
-        nowSeconds * (config?.rotationRate ?? 0.00004) * 40;
-      layer.material.uniforms.uOpacity.value = layer.baseOpacity * shellStrength;
+      layer.material.setDriftAngle(
+        nowSeconds * (config?.rotationRate ?? 0.00004) * 40,
+      );
+      layer.material.setOpacity(layer.baseOpacity * shellStrength);
     }
   }
 

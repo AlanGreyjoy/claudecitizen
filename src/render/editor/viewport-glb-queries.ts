@@ -19,6 +19,15 @@ export interface ViewportGlbQueries {
     nodeUuid: string,
     parentEntityId?: string | null,
   ) => EntityTransform | null;
+  /**
+   * Child entity pose in the GLB node's local space — used when extracting a
+   * node and adopting hierarchy-bound markers (lights, shops, etc.).
+   */
+  getEntityTransformRelativeToGlbNode: (
+    hostEntityId: string,
+    nodeUuid: string,
+    childEntityId: string,
+  ) => EntityTransform | null;
   getGlbNodeBounds: (
     entityId: string,
     nodeUuid: string,
@@ -107,6 +116,29 @@ export function createViewportGlbQueries(
       .clone()
       .invert()
       .multiply(node.matrixWorld);
+    return decomposeRelativeMatrix(relativeMatrix);
+  }
+
+  function getEntityTransformRelativeToGlbNode(
+    hostEntityId: string,
+    nodeUuid: string,
+    childEntityId: string,
+  ): EntityTransform | null {
+    const sourceGroup = objectsById.get(hostEntityId);
+    const childGroup = objectsById.get(childEntityId);
+    if (!sourceGroup || !childGroup) return null;
+    const node = findObjectByUuid(sourceGroup, nodeUuid);
+    if (!node) return null;
+    sourceGroup.updateWorldMatrix(true, true);
+    childGroup.updateWorldMatrix(true, false);
+    const relativeMatrix = node.matrixWorld
+      .clone()
+      .invert()
+      .multiply(childGroup.matrixWorld);
+    return decomposeRelativeMatrix(relativeMatrix);
+  }
+
+  function decomposeRelativeMatrix(relativeMatrix: THREE.Matrix4): EntityTransform {
     const position = new THREE.Vector3();
     const rotation = new THREE.Quaternion();
     const scale = new THREE.Vector3();
@@ -179,6 +211,7 @@ export function createViewportGlbQueries(
     setGlbNodeLocalTransform,
     getGlbNodePrefabPosition,
     getGlbNodePrefabTransform,
+    getEntityTransformRelativeToGlbNode,
     getGlbNodeBounds,
   };
 }

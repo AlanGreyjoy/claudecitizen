@@ -13,6 +13,7 @@ import {
   TextField,
   Vec3NumberRow,
   ColorField,
+  LIGHT_COLOR_SWATCHES,
 } from '../InspectorForm';
 
 export function PointLightFields({
@@ -26,6 +27,7 @@ export function PointLightFields({
         <ColorField
           value={component.color ?? '#dfeaff'}
           onCommit={(color) => update({ ...component, color })}
+          swatches={LIGHT_COLOR_SWATCHES}
         />
       </FieldRow>
       <FieldRow label="Intensity" wide>
@@ -83,6 +85,7 @@ export function AreaLightFields({
         <ColorField
           value={component.color ?? '#cfe8ff'}
           onCommit={(color) => update({ ...component, color })}
+          swatches={LIGHT_COLOR_SWATCHES}
         />
       </FieldRow>
       <FieldRow label="Intensity" wide>
@@ -132,6 +135,7 @@ export function SpotLightFields({
         <ColorField
           value={component.color ?? '#dfeaff'}
           onCommit={(color) => update({ ...component, color })}
+          swatches={LIGHT_COLOR_SWATCHES}
         />
       </FieldRow>
       <FieldRow label="Intensity" wide>

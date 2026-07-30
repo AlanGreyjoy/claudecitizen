@@ -4,14 +4,7 @@ export {
   createPersonalInventory,
   type PersonalInventoryController,
 } from './hud/personal-inventory';
-export {
-  createCloudShell,
-  createVolumetricCloudManager,
-  type CloudShell,
-  type VolumetricCloudManager,
-} from './clouds';
-export { VolumetricFogEffect } from './fog';
-export { createStarField, type StarField, type StarFieldUpdateParams } from './stars';
+export { createCloudShell, type CloudShell } from './clouds';
 export {
   createPlanetSurfaceWaterManager,
   type PlanetSurfaceWaterManager,

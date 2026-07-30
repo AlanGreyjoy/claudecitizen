@@ -84,7 +84,10 @@ export type PlanetAuthoringPanelState = {
   savedSnapshotRef: RefObject<PlanetDocument>;
 };
 
-export function usePlanetAuthoringPanel(hidden: boolean): PlanetAuthoringPanelState {
+export function usePlanetAuthoringPanel(
+  hidden: boolean,
+  onTestPlayRequest: () => void,
+): PlanetAuthoringPanelState {
   const [documentState, setDocumentState] = useState<PlanetDocument>(() =>
     createDefaultPlanetDocument(),
   );
@@ -348,10 +351,9 @@ export function usePlanetAuthoringPanel(hidden: boolean): PlanetAuthoringPanelSt
     setDocumentState({ ...doc });
     const ok = await save();
     if (!ok) return false;
-    const id = documentRef.current.id;
-    window.location.href = `/?boot=play&planetId=${encodeURIComponent(id)}&spawn=surface&from=editor&debug=1`;
+    onTestPlayRequest();
     return true;
-  }, [save]);
+  }, [save, onTestPlayRequest]);
 
   const openPlanetPicker = useCallback(() => {
     const query = window.prompt(

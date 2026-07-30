@@ -1,5 +1,6 @@
-export { createCloudShell, type CloudShell } from './shell';
 export {
-  createVolumetricCloudManager,
-  type VolumetricCloudManager,
-} from './volumetric';
+  createCloudShell,
+  type CloudShell,
+  type CloudShellMaterialFactory,
+} from './shell';
+export { createWebGpuCloudShellMaterial } from './shell-node-material';

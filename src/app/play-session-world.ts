@@ -27,7 +27,7 @@ import type { Planet } from '../types';
 import type { PlanetDocument } from '../world/planets/schema';
 import type { PrefabDocument } from '../world/prefabs/schema';
 import type { SceneDocument } from '../world/scenes/schema';
-import { resolveScenePlayConfig, type ScenePlayContent } from '../world/scenes/scene-runtime';
+import { resolveScenePlayConfig, type ScenePlayContent, type SceneEnvironmentConfig, DEFAULT_SCENE_ENVIRONMENT } from '../world/scenes/scene-runtime';
 import { buildSceneStationDocument } from '../world/scenes/scene-station';
 import { AUTHORING_ENABLED } from '../build-mode';
 
@@ -65,6 +65,8 @@ export interface PlayWorldParams {
    * terrain, vegetation, surface-spawn, and space environment stacks stay off.
    */
   content: ScenePlayContent;
+  /** Normalized scene lighting / skybox overrides (outdoor + auto when unset). */
+  environment: SceneEnvironmentConfig;
 }
 
 export function readPlayWorldParams(): PlayWorldParams {
@@ -79,6 +81,7 @@ export function readPlayWorldParams(): PlayWorldParams {
     shipTest: false,
     scene: null,
     content: { ...ALL_CONTENT },
+    environment: { ...DEFAULT_SCENE_ENVIRONMENT },
   };
 }
 
@@ -98,6 +101,7 @@ export function playWorldParamsFromScene(
     shipTest: scene.kind === 'prefab-stage' && config.shipPrefabId !== null,
     scene,
     content: config.content,
+    environment: config.environment,
     ...overrides,
   };
 }
@@ -129,6 +133,7 @@ export async function readPlayWorldParamsFromScene(): Promise<PlayWorldParams> {
       shipTest: scene.kind === 'prefab-stage' && config.shipPrefabId !== null,
       scene,
       content: config.content,
+      environment: config.environment,
     };
   } catch {
     return base;

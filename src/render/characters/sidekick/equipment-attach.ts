@@ -11,6 +11,7 @@ import {
   type BaseCharacterEquipmentV1,
   type BaseCharacterType,
   type CharacterBoneMountV1,
+  type CharacterEquipmentSlotV1,
 } from '../../../player/equipment/base-character-equipment';
 import {
   findItemDefinition,
@@ -32,6 +33,11 @@ import { loadPrefabDocument } from '../../../world/prefabs/loader';
 import type { PrefabTransform } from '../../../world/prefabs/schema';
 import { createPropInstanceGroup } from '../../prefabs/prefab-renderer';
 import { AUTHORING_ENABLED } from '../../../build-mode';
+import { disposeOwnedGpuResources } from '../../assets/gpu-dispose';
+import {
+  disposeNestedParticleSystems,
+  type ParticleMaterialFactory,
+} from '../../particles';
 
 const BUNDLED_EQUIPMENT_DOC = parseBaseCharacterEquipment(baseCharactersJson);
 const IDENTITY_GRIP = identityDrawnGripTransform();
@@ -60,19 +66,22 @@ function applyTransform(object: THREE.Object3D, transform: PrefabTransform | Cha
   object.scale.set(transform.scale.x, transform.scale.y, transform.scale.z);
 }
 
-function disposeObject3D(root: THREE.Object3D): void {
-  root.traverse((object) => {
-    if (object instanceof THREE.Mesh) {
-      object.geometry?.dispose();
-      const material = object.material;
-      if (Array.isArray(material)) {
-        for (const entry of material) entry.dispose();
-      } else {
-        material?.dispose();
-      }
-    }
-  });
-  root.clear();
+function disposeEquipmentMounts(roots: Iterable<THREE.Object3D>): void {
+  const uniqueRoots = [...new Set(roots)];
+  const ownedRoots: THREE.Object3D[] = [];
+  for (const root of uniqueRoots) {
+    disposeNestedParticleSystems(root);
+    root.traverse((object) => {
+      if (object.userData.ownedGpu) ownedRoots.push(object);
+    });
+  }
+  for (let index = ownedRoots.length - 1; index >= 0; index -= 1) {
+    disposeOwnedGpuResources(ownedRoots[index]);
+  }
+  for (const root of uniqueRoots) {
+    root.removeFromParent();
+    root.clear();
+  }
 }
 
 function findEntityObject(root: THREE.Object3D, entityId: string): THREE.Object3D | null {
@@ -85,6 +94,17 @@ function findEntityObject(root: THREE.Object3D, entityId: string): THREE.Object3
 
 function loadoutKey(loadout: LoadoutState): string {
   return PLAY_LOADOUT_SLOTS.map((slot) => `${slot.id}:${loadout[slot.id] ?? ''}`).join('|');
+}
+
+function equippedWeaponPrefabId(
+  inventory: InventoryState,
+  slot: CharacterEquipmentSlotV1,
+): string | null {
+  if (slot.kind !== 'weapon') return null;
+  const itemId = inventory.loadout[slot.id];
+  if (!itemId) return null;
+  if (slot.requiresSlotId && !inventory.loadout[slot.requiresSlotId]) return null;
+  return findItemDefinition(inventory.catalog, itemId)?.prefabId ?? null;
 }
 
 async function collectWeaponGrips(
@@ -185,7 +205,14 @@ export interface ActiveWeaponAttachment {
   muzzleFlash: THREE.Object3D | null;
 }
 
-export function createEquipmentAttachmentController(): EquipmentAttachmentController {
+export interface EquipmentAttachmentControllerOptions {
+  /** WebGPU preview surfaces inject TSL; omitted keeps gameplay on WebGL. */
+  particleMaterialFactory?: ParticleMaterialFactory;
+}
+
+export function createEquipmentAttachmentController(
+  options: EquipmentAttachmentControllerOptions = {},
+): EquipmentAttachmentController {
   let generation = 0;
   let lastLoadoutKey = '';
   let lastMountFingerprint = '';
@@ -203,14 +230,10 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
   const missingDrawnBoneWarned = new Set<string>();
 
   function clearMounts(): void {
-    for (const pivot of mountPivots.values()) {
-      disposeObject3D(pivot);
-      pivot.removeFromParent();
-    }
-    for (const pivot of drawnPivots.values()) {
-      disposeObject3D(pivot);
-      pivot.removeFromParent();
-    }
+    disposeEquipmentMounts([
+      ...mountPivots.values(),
+      ...drawnPivots.values(),
+    ]);
     mountPivots.clear();
     drawnPivots.clear();
     weaponRoots.clear();
@@ -311,8 +334,15 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
     }
     if (!prefab || validateBackpackPrefab(prefab).length > 0) return new Map();
 
-    const backpackRoot = createPropInstanceGroup(prefab);
-    mountPivots.get('backpack')?.add(backpackRoot);
+    const backpackRoot = createPropInstanceGroup(prefab, {
+      particleMaterialFactory: options.particleMaterialFactory,
+    });
+    const backpackMount = mountPivots.get('backpack');
+    if (!backpackMount) {
+      disposeEquipmentMounts([backpackRoot]);
+      return new Map();
+    }
+    backpackMount.add(backpackRoot);
     const sockets = new Map<string, THREE.Object3D>();
     for (const socket of collectEquipmentSockets(prefab)) {
       const object = findEntityObject(backpackRoot, socket.entityId);
@@ -328,7 +358,6 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
     loadoutKeyValue: string,
     mountFingerprint: string,
   ): Promise<void> {
-    const loadout = inventory.loadout;
     const attachmentMaps = {
       holsterParents,
       weaponRoots,
@@ -337,23 +366,24 @@ export function createEquipmentAttachmentController(): EquipmentAttachmentContro
       weaponCombat,
     };
     for (const slot of PLAY_LOADOUT_SLOTS) {
-      if (slot.kind !== 'weapon') continue;
-      const itemId = loadout[slot.id];
-      if (!itemId) continue;
-      if (slot.requiresSlotId && !loadout[slot.requiresSlotId]) continue;
-      const definition = findItemDefinition(inventory.catalog, itemId);
-      if (!definition?.prefabId) continue;
-      const prefab = await loadPrefabDocument(definition.prefabId);
+      const prefabId = equippedWeaponPrefabId(inventory, slot);
+      if (!prefabId) continue;
+      const prefab = await loadPrefabDocument(prefabId);
       if (rebuildWasCancelled(gen, generation, loadoutKeyValue, lastLoadoutKey, mountFingerprint, lastMountFingerprint)) {
         return;
       }
       if (!prefab) continue;
-      const item = createPropInstanceGroup(prefab);
+      const item = createPropInstanceGroup(prefab, {
+        particleMaterialFactory: options.particleMaterialFactory,
+      });
       const socket = slot.providerSocket
         ? backpackSockets.get(slot.providerSocket.socketId)
         : null;
       const holster = socket ?? (!slot.requiresSlotId ? mountPivots.get(slot.id) ?? null : null);
-      if (!holster) continue;
+      if (!holster) {
+        disposeEquipmentMounts([item]);
+        continue;
+      }
       registerWeaponAttachments(slot.id, item, prefab, holster, attachmentMaps);
     }
   }

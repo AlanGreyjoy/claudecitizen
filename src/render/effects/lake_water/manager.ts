@@ -9,7 +9,10 @@ import type {
 } from '../../../types';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
 import { buildSurfaceWaterGeometry } from './build/buffers';
-import { createSurfaceWaterMaterial } from './render/material';
+import {
+  createSurfaceWaterMaterial,
+  type SurfaceWaterMaterialFactory,
+} from './render/material';
 import { createSurfaceWaterBuildWorker } from './worker/create-worker';
 
 const MAX_WATER_CACHE_ENTRIES = 256;
@@ -42,8 +45,13 @@ export interface PlanetSurfaceWaterManager {
     sunDirection: THREE.Vector3 | null | undefined,
     dtSeconds: number,
     skyColor: THREE.Color | null | undefined,
+    sunColor?: THREE.Color | null,
   ) => void;
   shiftFocus: (bodyPosition: Vec3) => void;
+}
+
+export interface PlanetSurfaceWaterManagerOptions {
+  materialFactory?: SurfaceWaterMaterialFactory;
 }
 
 function tileKey(face: TileInfo['face'], level: number, x: number, y: number): string {
@@ -59,12 +67,17 @@ export function createPlanetSurfaceWaterManager(
   planet: Planet,
   seed: number,
   renderScale: number,
+  options: PlanetSurfaceWaterManagerOptions = {},
 ): PlanetSurfaceWaterManager {
   const waterGroup = new THREE.Group();
   waterGroup.scale.setScalar(renderScale);
   scene.add(waterGroup);
 
-  const sharedMaterial = createSurfaceWaterMaterial(planet.radiusMeters);
+  const sharedMaterial = (
+    options.materialFactory ?? createSurfaceWaterMaterial
+  )({
+    planetRadiusMeters: planet.radiusMeters,
+  });
   const cache = new Map<string, WaterCacheEntry>();
   const activeKeys = new Set<string>();
   const pendingBuilds: WaterBuildJob[] = [];
@@ -82,28 +95,35 @@ export function createPlanetSurfaceWaterManager(
   function createWaterMesh(info: TileInfo, buffers: SurfaceWaterBuffers): THREE.Mesh {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(buffers.positions, 3));
+    // itemSize 4 throughout: WebGPU has no 3-wide or 1-wide 8-bit vertex
+    // format, and arrayStride must be a multiple of 4. See SurfaceWaterBuffers.
     geometry.setAttribute(
       'barycentric',
-      new THREE.BufferAttribute(buffers.barycentrics, 3, true),
+      new THREE.BufferAttribute(buffers.barycentrics, 4, true),
     );
-    geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 3, true));
+    geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 4, true));
     geometry.setAttribute(
-      'effectDetail',
-      new THREE.BufferAttribute(buffers.effectDetails, 1, true),
+      'waterFactor',
+      new THREE.BufferAttribute(buffers.waterFactors, 4, true),
     );
     geometry.setAttribute(
       'radialDirection',
       new THREE.BufferAttribute(buffers.radialDirections, 3),
     );
-    geometry.setAttribute('shore', new THREE.BufferAttribute(buffers.shores, 1, true));
+    // The shader derives its faceted normal per-fragment from screen-space
+    // derivatives, so the mesh never needed a normal attribute under WebGL. The
+    // WebGPU scene pass writes an MRT normal target for GTAO, and `normalView`
+    // reads this attribute — without it three warns "Vertex attribute 'normal'
+    // not found on geometry" and the normal target is garbage. The outward
+    // radial direction is the water surface normal before wave displacement.
     geometry.setAttribute(
-      'surfStrength',
-      new THREE.BufferAttribute(buffers.surfStrengths, 1, true),
+      'normal',
+      new THREE.BufferAttribute(buffers.radialDirections, 3),
     );
     geometry.setAttribute('waterDepth', new THREE.BufferAttribute(buffers.waterDepths, 1));
     geometry.computeBoundingSphere();
 
-    const mesh = new THREE.Mesh(geometry, sharedMaterial);
+    const mesh = new THREE.Mesh(geometry, sharedMaterial.material);
     mesh.renderOrder = 2;
     mesh.position.copy(toThreeVector3(info.centerPosition));
     mesh.visible = false;
@@ -334,17 +354,21 @@ export function createPlanetSurfaceWaterManager(
     sunDirection: THREE.Vector3 | null | undefined,
     dtSeconds: number,
     skyColor: THREE.Color | null | undefined,
+    sunColor?: THREE.Color | null,
   ): void {
     frameNumber += 1;
     elapsedSeconds += dtSeconds;
     syncBuildBudgetRemaining = WATER_SYNC_BUILD_BUDGET_PER_FRAME;
-    sharedMaterial.uniforms.time.value = elapsedSeconds;
+    sharedMaterial.setTime(elapsedSeconds);
 
     if (sunDirection) {
-      sharedMaterial.uniforms.sunDirection.value.copy(sunDirection).normalize();
+      sharedMaterial.setSunDirection(sunDirection);
     }
     if (skyColor) {
-      sharedMaterial.uniforms.skyColor.value.copy(skyColor);
+      sharedMaterial.setSkyColor(skyColor);
+    }
+    if (sunColor) {
+      sharedMaterial.setSunColor(sunColor);
     }
 
     const nextActiveKeys = new Set<string>();

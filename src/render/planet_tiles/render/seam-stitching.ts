@@ -267,8 +267,9 @@ function restoreBaseGeometry(mesh: THREE.Mesh, state: TerrainSeamState): void {
     positions.needsUpdate = true;
   }
   geometry.setAttribute(
+    // itemSize 4 must match tile-geometry.ts — WebGPU rejects snorm16x3.
     'normal',
-    new THREE.BufferAttribute(state.baseNormals.slice(), 3, true),
+    new THREE.BufferAttribute(state.baseNormals.slice(), 4, true),
   );
   geometry.computeBoundingSphere();
 }

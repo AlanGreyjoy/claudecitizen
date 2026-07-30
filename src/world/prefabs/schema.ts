@@ -38,6 +38,15 @@ export const SCENE_INSTANCE_SCOPES = ["player", "party", "shared"] as const;
 
 export type SceneInstanceScope = (typeof SCENE_INSTANCE_SCOPES)[number];
 
+export const SCENE_LIGHTING_MODES = ["outdoor", "interior", "off"] as const;
+export type SceneLightingMode = (typeof SCENE_LIGHTING_MODES)[number];
+
+export const SCENE_BACKGROUND_MODES = ["auto", "solid", "space-skybox"] as const;
+export type SceneBackgroundMode = (typeof SCENE_BACKGROUND_MODES)[number];
+
+/** Default solid background when `scene-environment.backgroundMode` is solid. */
+export const SCENE_ENVIRONMENT_DEFAULT_BACKGROUND_COLOR = "#0a101d";
+
 /** How a `scene-exit` marker fires. */
 export const SCENE_EXIT_TRIGGERS = ["interact", "fly-through"] as const;
 
@@ -614,6 +623,22 @@ export type PrefabComponent =
       /** Optional filter of catalog consumable ids. Empty = all food and drinks. */
       itemDefinitionIds?: string[];
     }
+  /**
+   * Station pharmacy vendor screen (gaze + F while on foot). Sells medical
+   * consumables (heal pills). Empty marker is the gaze / screen anchor.
+   */
+  | {
+      type: "pharmacy";
+      id: string;
+      /** Prompt when gazing (default "Browse pharmacy"). */
+      label?: string;
+      gazeRadius?: number;
+      maxDistance?: number;
+      screenWidth?: number;
+      screenHeight?: number;
+      /** Optional filter of catalog medical item ids. Empty = all medical consumables. */
+      itemDefinitionIds?: string[];
+    }
   | {
       type: "point-light";
       color?: PrefabColor;
@@ -1129,6 +1154,25 @@ export type PrefabComponent =
       type: "instanced-scene";
       /** Ownership scope for the instance. */
       scope: SceneInstanceScope;
+    }
+  /**
+   * Per-scene lighting and background overrides. Absent = outdoor sun/ambient
+   * and altitude-driven sky (current engine defaults).
+   */
+  | {
+      type: "scene-environment";
+      /** outdoor = altitude sun/ambient; interior = mute sun/moon; off = local lights only. */
+      lightingMode?: SceneLightingMode;
+      /** auto = altitude sky; solid = flat color; space-skybox = force nebula map. */
+      backgroundMode?: SceneBackgroundMode;
+      /** Hex; used when backgroundMode is solid. */
+      backgroundColor?: PrefabColor;
+      /** Multiplier on runtime hemisphere ambient intensity. */
+      ambientIntensityScale?: number;
+      /** Optional hemisphere sky color override (skips day/night ambient sky lerp). */
+      ambientSkyColor?: PrefabColor;
+      /** Optional hemisphere ground color override. */
+      ambientGroundColor?: PrefabColor;
     };
 
 export type PrefabComponentType = PrefabComponent["type"];

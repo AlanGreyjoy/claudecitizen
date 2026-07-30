@@ -15,6 +15,7 @@ const SECONDARY_BOX_COLOR = 0x5a9cb8;
 export interface ViewportSelection {
   boxes: THREE.BoxHelper[];
   syncHighlight: () => void;
+  setShowAllColliders: (enabled: boolean) => void;
   getGizmoTarget: () => THREE.Object3D | null;
   focusSelection: () => void;
   getDraggingEntityId: () => string | null;
@@ -50,6 +51,7 @@ export function createViewportSelection(
   let selectionBoxes: THREE.BoxHelper[] = [];
   let draggingEntityId: string | null = null;
   let draggingGlbNode: { entityId: string; nodeUuid: string } | null = null;
+  let showAllColliders = false;
 
   function getGizmoTarget(): THREE.Object3D | null {
     const entityId = store.getSelection();
@@ -84,13 +86,90 @@ export function createViewportSelection(
     }
   }
 
+  function isUnderOrIs(
+    object: THREE.Object3D,
+    ancestor: THREE.Object3D,
+  ): boolean {
+    let current: THREE.Object3D | null = object;
+    while (current) {
+      if (current === ancestor) return true;
+      current = current.parent;
+    }
+    return false;
+  }
+
+  /**
+   * Walk this entity's Three subtree only — nested editor entities keep their
+   * own objectsById entry and are synced separately.
+   */
+  function walkOwnEntitySubtree(
+    root: THREE.Object3D,
+    entityId: string,
+    visit: (object: THREE.Object3D) => void,
+  ): void {
+    visit(root);
+    for (const child of root.children) {
+      if (
+        child.userData.entityId &&
+        child.userData.entityId !== entityId
+      ) {
+        continue;
+      }
+      walkOwnEntitySubtree(child, entityId, visit);
+    }
+  }
+
+  /**
+   * Helper belongs to selected GLB node when its host node and the selection
+   * share an ancestry chain (pick deepest mesh still shows parent collider).
+   */
+  function colliderHelperMatchesSub(
+    helper: THREE.Object3D,
+    subNode: THREE.Object3D,
+  ): boolean {
+    const host = helper.parent;
+    if (!host) return false;
+    return isUnderOrIs(host, subNode) || isUnderOrIs(subNode, host);
+  }
+
+  function syncColliderHelpers(selectedIds: ReadonlySet<string>): void {
+    const sub = store.getSubSelection();
+    for (const [entityId, object] of objectsById) {
+      const entitySelected = selectedIds.has(entityId);
+      const subNode =
+        sub && sub.entityId === entityId
+          ? findObjectByUuid(object, sub.nodeUuid)
+          : null;
+
+      walkOwnEntitySubtree(object, entityId, (child) => {
+        if (!child.userData.editorColliderHelper) return;
+        if (showAllColliders) {
+          child.visible = true;
+          return;
+        }
+        if (!entitySelected) {
+          child.visible = false;
+          return;
+        }
+        // GLB node pick / hierarchy row: only that node's collider(s).
+        if (subNode) {
+          child.visible = colliderHelperMatchesSub(child, subNode);
+          return;
+        }
+        child.visible = true;
+      });
+    }
+  }
+
   function syncSelectionHighlight(): void {
     const entityId = store.getSelection();
     gizmo.detach();
     clearSelectionBoxes();
     const selectedIds = store.getSelectedIds();
     const sub = store.getSubSelection();
-    syncLightRangeHelpers(new Set(selectedIds));
+    const selectedSet = new Set(selectedIds);
+    syncLightRangeHelpers(selectedSet);
+    syncColliderHelpers(selectedSet);
     if (selectedIds.length === 0) return;
 
     for (const selectedId of selectedIds) {
@@ -242,6 +321,10 @@ export function createViewportSelection(
       return selectionBoxes;
     },
     syncHighlight: syncSelectionHighlight,
+    setShowAllColliders(enabled: boolean) {
+      showAllColliders = enabled;
+      syncColliderHelpers(new Set(store.getSelectedIds()));
+    },
     getGizmoTarget,
     focusSelection,
     getDraggingEntityId: () => draggingEntityId,

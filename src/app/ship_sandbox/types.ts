@@ -20,8 +20,8 @@ import type { EntertainmentCameraState } from '../../player/entertainment-camera
 import type { FlightCameraFeelResult, FlightCameraFeelState } from '../../player/flight-camera-feel';
 import type { LadderClimbState } from '../../world/ladders';
 import type { PrefabDocument } from '../../world/prefabs/schema';
-import type { EffectComposer } from 'postprocessing';
-import type { N8AOPostPass } from 'n8ao';
+import type { WebGPURenderer } from 'three/webgpu';
+import type { ShipSandboxPost } from './scene';
 
 export type SandboxMode =
   | 'deck'
@@ -59,12 +59,11 @@ export interface ShipSandboxSession {
   transition: SandboxTransition | null;
   autoRestPending: boolean;
   controls: ReturnType<typeof createPlayerControls>;
-  renderer: THREE.WebGLRenderer;
+  renderer: WebGPURenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   cameraTarget: THREE.Vector3;
-  composer: EffectComposer;
-  n8aoPass: N8AOPostPass | null;
+  post: ShipSandboxPost;
   shipModel: ReturnType<typeof createShipModel>;
   avatar: ReturnType<typeof createCharacterAvatar>;
   flightReticle: ReturnType<typeof createFlightReticle>;

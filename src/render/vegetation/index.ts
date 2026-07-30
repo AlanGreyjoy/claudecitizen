@@ -2,6 +2,7 @@ export {
   createPlanetVegetationManager,
   type PlanetVegetationManager,
 } from './manager';
+export type { InstancedWindMaterialFactory } from './render/wind';
 export {
   DEFAULT_GRASS_COLOR,
   DEFAULT_VEGETATION_SETTINGS,

@@ -187,7 +187,9 @@ export function createPersonalInventory(
     const definition = findItemDefinition(inventory.catalog, uiState.selectedItemId);
     const canUse =
       definition?.itemType === 'consumable' &&
-      ((definition.hungerRestore01 ?? 0) > 0 || (definition.thirstRestore01 ?? 0) > 0);
+      ((definition.hungerRestore01 ?? 0) > 0 ||
+        (definition.thirstRestore01 ?? 0) > 0 ||
+        (definition.healthRestore01 ?? 0) > 0);
     if (!definition || !canUse) {
       setStatus('That item cannot be used.', 'error');
       return;
