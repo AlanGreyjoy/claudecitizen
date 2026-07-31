@@ -45,6 +45,8 @@ const SEAT_LOOK_YAW_SENSITIVITY = 0.0035;
 const SEAT_LOOK_PITCH_SENSITIVITY = 0.0028;
 const ORBIT_GAMEPAD_YAW_RATE = 2.4;
 const ORBIT_GAMEPAD_PITCH_RATE = 1.8;
+/** Chromium warps the cursor on lock enter/exit and can emit a huge movement spike. */
+const POINTER_LOCK_LOOK_IGNORE_MS = 80;
 const PROFILE_IDS: readonly DeviceProfileId[] = ['controller', 'hotas'];
 const ONE_SHOT_KEYBOARD_ACTIONS: readonly KeyboardActionId[] = [
   'interact',
@@ -118,6 +120,8 @@ interface ControlsState {
   combatInputActive: boolean;
   /** CapsLock walk gait toggle (on-foot). */
   walkToggleEnabled: boolean;
+  /** Ignore mouse look until this timestamp (pointer-lock enter/exit spikes). */
+  ignoreLookUntilMs: number;
 }
 
 function clampAxis(value: number): number {
@@ -363,6 +367,11 @@ function handleControlsKeyUp(state: ControlsState, event: KeyboardEvent): void {
 }
 
 function onKeyChange(state: ControlsState, event: KeyboardEvent, down: boolean): void {
+  // Esc unlocks pointer lock (browser + game menu). Arm look-ignore before the
+  // cursor-warp mousemove so orbit/seat look do not jump.
+  if (down && event.code === 'Escape') {
+    state.ignoreLookUntilMs = performance.now() + POINTER_LOCK_LOOK_IGNORE_MS;
+  }
   if (!isHandledKey(state, event.code)) return;
   event.preventDefault();
   if (state.inputSuppressed) return;
@@ -375,6 +384,9 @@ function onKeyChange(state: ControlsState, event: KeyboardEvent, down: boolean):
 
 function onMouseMove(state: ControlsState, event: MouseEvent): void {
   if (document.pointerLockElement !== state.canvas) return;
+  if (performance.now() < state.ignoreLookUntilMs) return;
+  // Pointer-lock cursor warp arrives as one absurd delta; never treat as look.
+  if (Math.abs(event.movementX) > 64 || Math.abs(event.movementY) > 64) return;
   const mouseKeyboard = inputSettings(state).mouseKeyboard;
   const lookSensitivity = mouseKeyboard.lookSensitivity;
   const flightMouseSensitivity = mouseKeyboard.flightMouseSensitivity;
@@ -439,6 +451,8 @@ function onMouseUp(state: ControlsState, event: MouseEvent): void {
 }
 
 function onPointerLockChange(state: ControlsState): void {
+  // Esc / menu unlock warps the cursor; swallow the spike so look does not jump.
+  state.ignoreLookUntilMs = performance.now() + POINTER_LOCK_LOOK_IGNORE_MS;
   if (document.pointerLockElement !== state.canvas) {
     state.primaryClickHeld = false;
     state.secondaryClickHeld = false;
@@ -452,8 +466,8 @@ function onBlur(state: ControlsState): void {
   state.primaryClickPressed = false;
   state.primaryClickHeld = false;
   state.secondaryClickHeld = false;
-  state.flightAim = createFlightAimState();
-  resetSeatLookState(state);
+  // Do not reset flight aim / seat look — Esc menu unlock and focus changes
+  // must not snap the camera back to nose / center aim.
 }
 
 function onWheel(state: ControlsState, event: WheelEvent): void {
@@ -773,6 +787,7 @@ function createControlsState(
     inputSuppressed: false,
     combatInputActive: false,
     walkToggleEnabled: false,
+    ignoreLookUntilMs: 0,
   };
 }
 

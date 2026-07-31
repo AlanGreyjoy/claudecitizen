@@ -87,6 +87,9 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
     ctx.world.cameraOrbit.pitchRadians,
   );
 
+  let lastWeaponPoseAiming = false;
+  let lastUnpausedNowMs = 0;
+
   function frame(nowMs: number): void {
     if (!ctx.running) return;
 
@@ -99,23 +102,29 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
       ctx.boostSfx.stop();
       ctx.thrustSfx.stop();
       ctx.controls.setCombatInputActive(false);
+    } else {
+      lastUnpausedNowMs = nowMs;
     }
 
     let camera = ctx.controls.sampleCameraState(0);
-    let weaponPoseAiming = false;
+    // Keep last ADS state while paused so orbit zoom does not ease out on Esc.
+    let weaponPoseAiming = lastWeaponPoseAiming;
 
     if (!paused) {
       const tick = runSimulationTick(ctx, simDeps, dt);
       camera = tick.camera;
       weaponPoseAiming = tick.weaponPoseAiming;
+      lastWeaponPoseAiming = weaponPoseAiming;
       if (tick.abortFrame) return;
     }
 
+    // Freeze render clock while paused so camera smooth / ADS zoom stay put.
+    const renderNowMs = paused && lastUnpausedNowMs > 0 ? lastUnpausedNowMs : nowMs;
     renderFrame(ctx, renderDeps, {
-      nowMs,
+      nowMs: renderNowMs,
       camera,
       weaponPoseAiming,
-      frameDt,
+      frameDt: dt,
       dt,
       paused,
     });
