@@ -284,15 +284,16 @@ export function createWebGpuMainPostStack(
       atmosphere.update(frame, currentPixelRatio);
       volumetricFog.update(frame, currentRenderScale);
 
-      // @takram/three-clouds has no WebGPU export. Atmosphere, aerial
-      // perspective, and StarsNode are active, but the volumetric-cloud mode is
-      // deliberately reported inactive until the replacement cloud node lands.
+      // @takram/three-clouds has no WebGPU export, so the volumetric-cloud mode
+      // is deliberately reported inactive until the replacement cloud node
+      // lands. Atmosphere, aerial perspective, and StarsNode are active, and it
+      // is the atmosphere's SkyNode — not clouds — that owns the sky here, so
+      // this flag must not reach the background decision.
       const volumetricSkyActive = false;
       const spaceSkyboxActive = resolveSpaceSkyboxActive({
         backgroundMode: frame.backgroundMode,
         altitudeMeters: frame.altitudeMeters,
         atmosphereHeightMeters: frame.atmosphereHeightMeters,
-        volumetricSkyActive,
       });
       return {
         background: spaceSkyboxActive

@@ -601,6 +601,18 @@ against a live renderer. That is item 1 under "Next action".
 Replaces `@takram/three-clouds`. Largest single unknown in the migration; sequenced late so
 everything else is already stable.
 
+**Stage 5 is not what makes the sky work.** A surface scene rendered with a pure black daytime
+sky and it looked like the missing clouds. It was not: `resolveSpaceSkyboxActive` — added during
+this migration, with no WebGL predecessor — short-circuited on
+`backgroundMode === 'space-skybox'` and painted the star-field equirect at ground level. The
+WebGL original never consulted the authored mode, only
+`altitudeMeters >= planet.atmosphereHeightMeters`. Fixed by restoring the altitude rule.
+
+The lesson generalizes: `volumetricSkyActive` used to mean "something else owns the sky," and
+clouds were merely the thing that set it. On WebGPU the atmosphere's `SkyNode` owns the sky, so
+that flag must not reach any background or fog decision. Reporting it `false` is correct — wiring
+it into control flow is not.
+
 ### Stage 6 — Flip the game runtime, then compute — code complete
 `src/render/main/scene/webgpu-renderer.ts` is the game's only renderer factory, routed through
 `initRequiredWebGpu` and calling `ensureNodeRectAreaLights()`. `manager.ts` awaits it, builds

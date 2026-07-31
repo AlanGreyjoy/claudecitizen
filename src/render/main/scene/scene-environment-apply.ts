@@ -7,16 +7,27 @@ import type { SceneLighting } from './scene-lighting';
  * Decide whether the space equirect skybox should replace the solid
  * background color this frame.
  */
+/**
+ * Whether the star-field equirect replaces the sky.
+ *
+ * **Altitude decides this, not the authored background mode.** Inside an
+ * atmosphere the sky belongs to the atmosphere renderer — takram's `SkyNode` on
+ * WebGPU, volumetric clouds on the WebGL path this replaced — and painting the
+ * equirect there produces a black daytime sky over lit ground.
+ *
+ * An earlier revision short-circuited on `backgroundMode === 'space-skybox'`,
+ * which is how that regression shipped: a surface scene authored with that mode
+ * got the skybox at ground level. The WebGL original never consulted the mode
+ * here at all, only `altitudeMeters >= planet.atmosphereHeightMeters`. Scenes
+ * that genuinely want the skybox — Open Space, orbit — are above the atmosphere
+ * anyway and still get it.
+ */
 export function resolveSpaceSkyboxActive(input: {
   backgroundMode: SceneBackgroundMode;
   altitudeMeters: number;
   atmosphereHeightMeters: number;
-  /** WebGL volumetric clouds own the sky; they exclude the equirect. */
-  volumetricSkyActive: boolean;
 }): boolean {
   if (input.backgroundMode === 'solid') return false;
-  if (input.volumetricSkyActive) return false;
-  if (input.backgroundMode === 'space-skybox') return true;
   return input.altitudeMeters >= input.atmosphereHeightMeters;
 }
 
