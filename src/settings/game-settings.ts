@@ -20,7 +20,6 @@ export interface GameSettings {
   input: InputSettings;
   renderQuality: RenderQualityPreset;
   ambientOcclusion: boolean;
-  motionBlur: boolean;
   shadowQuality: ShadowQualitySetting;
   cloudMode: CloudModeSetting;
   /** Hard radial grass cull distance in meters (default 20). */
@@ -37,7 +36,6 @@ const DEFAULT_SETTINGS: GameSettings = {
   input: normalizeInputSettings(undefined),
   renderQuality: 'balanced',
   ambientOcclusion: true,
-  motionBlur: true,
   shadowQuality: 'auto',
   cloudMode: 'shell',
   grassRenderDistanceMeters: DEFAULT_GRASS_DISTANCE_METERS,
@@ -78,10 +76,6 @@ function normalizeSettings(raw: Partial<GameSettings>): GameSettings {
       typeof raw.ambientOcclusion === 'boolean'
         ? raw.ambientOcclusion
         : DEFAULT_SETTINGS.ambientOcclusion,
-    motionBlur:
-      typeof raw.motionBlur === 'boolean'
-        ? raw.motionBlur
-        : DEFAULT_SETTINGS.motionBlur,
     shadowQuality: pickEnum(
       raw.shadowQuality,
       ['auto', 'off', 'low', 'medium', 'high'],
@@ -125,27 +119,37 @@ export function saveGameSettings(settings: GameSettings): GameSettings {
   return next;
 }
 
-export function applyRenderQualityAndReload(preset: RenderQualityPreset): void {
-  saveGameSettings({ ...loadGameSettings(), renderQuality: preset });
+/**
+ * Video settings apply live — the renderer rebuilds whatever it must when it
+ * sees `GAME_SETTINGS_CHANGED_EVENT`, so saving *is* the whole operation. These
+ * wrappers exist only so call sites read as the knob they turn.
+ */
+export function applyRenderQuality(preset: RenderQualityPreset): GameSettings {
+  const next = saveGameSettings({ ...loadGameSettings(), renderQuality: preset });
+  // `?quality=` outranks stored settings in `parseQualityPreset`. One left over
+  // from the old reload-based flow would pin the preset for the rest of the
+  // session, so drop it rather than rewrite it — storage is the source now.
   const params = new URLSearchParams(window.location.search);
-  params.set('quality', preset);
-  const query = params.toString();
-  window.location.href = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+  if (params.has('quality')) {
+    params.delete('quality');
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      query ? `${window.location.pathname}?${query}` : window.location.pathname,
+    );
+  }
+  return next;
 }
 
-export function applyAmbientOcclusionAndReload(enabled: boolean): void {
-  saveGameSettings({ ...loadGameSettings(), ambientOcclusion: enabled });
-  window.location.reload();
+export function applyAmbientOcclusion(enabled: boolean): GameSettings {
+  return saveGameSettings({ ...loadGameSettings(), ambientOcclusion: enabled });
 }
 
-export function applyMotionBlurAndReload(enabled: boolean): void {
-  saveGameSettings({ ...loadGameSettings(), motionBlur: enabled });
-  window.location.reload();
-}
-
-export function applyShadowQualityAndReload(shadowQuality: ShadowQualitySetting): void {
-  saveGameSettings({ ...loadGameSettings(), shadowQuality });
-  window.location.reload();
+export function applyShadowQualitySetting(
+  shadowQuality: ShadowQualitySetting,
+): GameSettings {
+  return saveGameSettings({ ...loadGameSettings(), shadowQuality });
 }
 
 export function getStoredRenderQuality(): RenderQualityPreset | null {

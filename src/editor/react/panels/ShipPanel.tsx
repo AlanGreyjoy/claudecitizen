@@ -119,10 +119,11 @@ export const ShipPanel = forwardRef<ShipEditor, ShipPanelProps>(function ShipPan
     try {
       const result = await renamePrefab(state.prefabId, toId, name);
       store.setPrefabMeta({ prefabId: result.id, prefabName: name });
+      const renamedPath = result.absolutePath ?? result.path;
       showToast(
         result.rewritten.length > 0
-          ? `Renamed to ${result.path} — repointed ${result.rewritten.length} document(s).`
-          : `Renamed to ${result.path}.`,
+          ? `Renamed to ${renamedPath} — repointed ${result.rewritten.length} document(s).`
+          : `Renamed to ${renamedPath}.`,
       );
       void refreshList();
     } catch (error) {

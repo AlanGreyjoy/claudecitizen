@@ -43,7 +43,12 @@ export async function createWebGpuRenderer(
   // second tone-map to the post result.
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.toneMappingExposure = 1.35;
-  renderer.shadowMap.enabled = renderQuality.shadowMapSize > 0;
+  // Left on unconditionally so shadow quality can change without a reload.
+  // Whether anything actually casts is owned per-light by `applyShadowQuality`
+  // and `updateSunSystem`; with no caster the shadow pass renders nothing, and
+  // keeping the flag steady avoids invalidating every scene material when the
+  // player switches the setting.
+  renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   setKtx2SupportRenderer(renderer);

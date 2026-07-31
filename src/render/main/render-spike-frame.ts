@@ -661,23 +661,11 @@ function configurePostStack(
   lighting: LightingFrame,
   state: SpikeRenderFrameState,
 ): void {
-  const { focusBody, quantumBusy, quantumTraveling } = focus;
+  const { quantumBusy, quantumTraveling } = focus;
   deps.postStack.setEffectsEnabled(!quantumBusy);
   if (quantumBusy) {
     deps.lighting.sun.castShadow = false;
     deps.lighting.moonLight.castShadow = false;
-    if (quantumTraveling && !state.wasQuantumTraveling) {
-      deps.postStack.resetMotionBlur();
-    }
-  } else {
-    if (state.wasQuantumTraveling) {
-      deps.postStack.resetMotionBlur();
-    }
-    deps.postStack.updateMotionBlurCamera(
-      deps.camera,
-      new THREE.Vector3(focusBody.position.x, focusBody.position.y, focusBody.position.z),
-      lighting.renderScale,
-    );
   }
   state.wasQuantumTraveling = quantumTraveling;
   if (!quantumTraveling) {

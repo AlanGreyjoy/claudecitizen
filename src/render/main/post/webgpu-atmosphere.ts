@@ -134,6 +134,43 @@ export function createWebGpuAtmospherePost(
   const cameraWorldPosition = new THREE.Vector3();
   const cameraWorldQuaternion = new THREE.Quaternion();
 
+  let lutComputeRequested = false;
+
+  /**
+   * Dispatches the atmosphere LUT compute once, as soon as the node graph
+   * exists.
+   *
+   * Those tables multiply every transmittance and scattering lookup, so until
+   * they are filled the sky is black however correct the camera, sun and depth
+   * are. `AtmosphereLUTNode` normally dispatches them from its own
+   * `updateBefore`, inside the frame's node traversal several render targets
+   * deep — and that did not happen in Planet Authoring Test Play, which keeps
+   * the editor viewport *and* the planet preview rendering alongside the game.
+   * The same planet played from the Scene tab, with one less renderer live, was
+   * fine. Sampling the transmittance LUT directly confirmed it: a smooth ramp
+   * from the Scene tab, pure black from Test Play.
+   *
+   * `updateTextures` asserts `textures != null`, and `textures` is created in
+   * `setup()` — so this cannot run at construction (it throws "Invariant
+   * failed") and must wait for the first build. Hence the poll: `update()` runs
+   * every frame, and the first one after the graph compiles wins.
+   */
+  function ensureLutCompute(): void {
+    if (lutComputeRequested) return;
+    // `textures` is private; there is no public "has it been built" signal, and
+    // calling before setup() throws rather than returning a rejected promise.
+    const built =
+      (atmosphereContext.lutNode as unknown as { textures?: unknown })
+        .textures != null;
+    if (!built) return;
+    lutComputeRequested = true;
+    void atmosphereContext.lutNode
+      .updateTextures(renderer)
+      .catch((error: unknown) => {
+        console.error('ClaudeCitizen atmosphere LUT compute failed.', error);
+      });
+  }
+
   function update(
     frame: MainPostEnvironmentFrame,
     pixelRatio: number,
@@ -178,6 +215,8 @@ export function createWebGpuAtmospherePost(
     );
     starsNode.intensity.value = stars.intensity;
     starsNode.pointSize.value = stars.pointSize * pixelRatio;
+
+    ensureLutCompute();
   }
 
   return {

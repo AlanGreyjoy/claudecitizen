@@ -49,16 +49,19 @@ export interface MainPostBloomSettings {
  * private to the implementation.
  */
 export interface MainPostStack {
+  /**
+   * Rebuilds the underlying graph against the current render-quality settings,
+   * preserving this object's identity and every setting pushed in so far.
+   *
+   * Needed because AO and SMAA change the graph's *shape*, not a uniform, and a
+   * built `PostProcessing` cannot be re-wired in place. Costs a shader
+   * recompile, so call it on a settings change, never per frame.
+   */
+  rebuild: () => void;
   render: (deltaSeconds: number) => void;
   resize: (width: number, height: number, pixelRatio: number) => void;
   setEffectsEnabled: (enabled: boolean) => void;
   setSpeedBlurStrength: (strength: number) => void;
-  updateMotionBlurCamera: (
-    camera: THREE.PerspectiveCamera,
-    focusPosition: THREE.Vector3,
-    renderScale: number,
-  ) => void;
-  resetMotionBlur: () => void;
   updateEnvironment: (
     frame: MainPostEnvironmentFrame,
   ) => MainPostEnvironmentResult;

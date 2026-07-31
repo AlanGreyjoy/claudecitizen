@@ -32,6 +32,26 @@ export interface SceneListEntry {
 
 /** Client for the local /__editor API provided by Vite or the Electron shell. */
 
+/**
+ * Every save endpoint answers with the root-relative `path` it wrote plus the
+ * `absolutePath` that resolved to.
+ */
+interface SavedFileResponse {
+  path: string;
+  absolutePath?: string;
+}
+
+/**
+ * Where a save landed, spelled for a human. The open project mirrors the engine
+ * checkout's directory layout, so a bare `src/world/planets/data/…` in a toast
+ * reads as the engine copy of the same file — the absolute path is the only
+ * spelling that says which tree. Falls back to the relative path for an older
+ * shell that does not send one.
+ */
+function savedPathLabel(payload: SavedFileResponse): string {
+  return payload.absolutePath ?? payload.path;
+}
+
 /** Drag-and-drop MIME type for Project panel asset cards. */
 export const ASSET_DND_TYPE = 'application/x-claudecitizen-asset';
 
@@ -146,7 +166,7 @@ export async function fetchPrefab(id: string): Promise<PrefabDocument> {
  * folder when no folder is given).
  */
 export async function savePrefab(doc: PrefabDocument, folder?: string): Promise<string> {
-  const payload = await requestJson<{ path: string }>('/__editor/prefab', {
+  const payload = await requestJson<SavedFileResponse>('/__editor/prefab', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -154,7 +174,7 @@ export async function savePrefab(doc: PrefabDocument, folder?: string): Promise<
       ...(folder ? { root: PROJECT_ASSET_ROOT, folder } : {}),
     }),
   });
-  return payload.path;
+  return savedPathLabel(payload);
 }
 
 export interface PrefabRenameResult {
@@ -162,6 +182,8 @@ export interface PrefabRenameResult {
   id: string;
   /** Project-relative path the prefab now lives at. */
   path: string;
+  /** Absolute path of the same file — the spelling that names which tree. */
+  absolutePath?: string;
   /** Project JSON files whose `prefabId` references were repointed. */
   rewritten: string[];
 }
@@ -300,12 +322,12 @@ export async function fetchScene(id: string): Promise<SceneDocument> {
 export async function saveScene(document: SceneDocument): Promise<string> {
   const parsed = parseSceneDocument(document);
   if (!parsed) throw new Error(`invalid scene document for "${document.id}"`);
-  const payload = await requestJson<{ path: string }>('/__editor/scene', {
+  const payload = await requestJson<SavedFileResponse>('/__editor/scene', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: parsed }),
   });
-  return payload.path;
+  return savedPathLabel(payload);
 }
 
 export interface SceneDeleteResult {
@@ -339,12 +361,12 @@ export async function saveBaseCharacterEquipment(
   document: BaseCharacterEquipmentV1,
 ): Promise<string> {
   const parsed = parseBaseCharacterEquipment(document);
-  const payload = await requestJson<{ path: string }>('/__editor/base-characters', {
+  const payload = await requestJson<SavedFileResponse>('/__editor/base-characters', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: parsed }),
   });
-  return payload.path;
+  return savedPathLabel(payload);
 }
 
 export async function fetchCharacterSettings(): Promise<CharacterSettingsV1> {
@@ -356,12 +378,12 @@ export async function saveCharacterSettings(
   document: CharacterSettingsV1,
 ): Promise<string> {
   const parsed = parseCharacterSettings(document);
-  const payload = await requestJson<{ path: string }>('/__editor/character-settings', {
+  const payload = await requestJson<SavedFileResponse>('/__editor/character-settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: parsed }),
   });
-  return payload.path;
+  return savedPathLabel(payload);
 }
 
 export interface AnimationControllerListEntry {
@@ -385,12 +407,12 @@ export async function fetchAnimationController(id: string): Promise<AnimationCon
 
 export async function saveAnimationController(document: AnimationControllerV1): Promise<string> {
   const parsed = parseAnimationController(document);
-  const payload = await requestJson<{ path: string }>('/__editor/animation-controllers', {
+  const payload = await requestJson<SavedFileResponse>('/__editor/animation-controllers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document: parsed }),
   });
-  return payload.path;
+  return savedPathLabel(payload);
 }
 
 export interface PlanetListEntry {
@@ -413,12 +435,12 @@ export async function fetchPlanet(id: string): Promise<PlanetDocument> {
 }
 
 export async function savePlanet(document: PlanetDocument): Promise<string> {
-  const payload = await requestJson<{ path: string }>('/__editor/planet', {
+  const payload = await requestJson<SavedFileResponse>('/__editor/planet', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document }),
   });
-  return payload.path;
+  return savedPathLabel(payload);
 }
 
 export interface SystemListEntry {
@@ -441,12 +463,12 @@ export async function fetchSystem(id: string): Promise<SystemDocument> {
 }
 
 export async function saveSystem(document: SystemDocument): Promise<string> {
-  const payload = await requestJson<{ path: string }>('/__editor/system', {
+  const payload = await requestJson<SavedFileResponse>('/__editor/system', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document }),
   });
-  return payload.path;
+  return savedPathLabel(payload);
 }
 
 export interface SidekickPackStatus {

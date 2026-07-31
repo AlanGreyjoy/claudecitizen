@@ -39,7 +39,7 @@ The uncommitted work, by cluster:
 | Gameplay renderer | `src/render/main/scene/webgpu-renderer.ts` *(new)*, `manager.ts` | `createWebGpuRenderer()` is the game's only renderer factory. `webgl-renderer.ts` deleted |
 | Stage 3 node materials | `particles/node-material.ts`, `vegetation/render/wind-node-material.ts`, `planet_tiles/render/terrain-material.ts`, `effects/clouds/shell-node-material.ts`, `effects/lake_water/render/node-material.ts`, `effects/quantum-bubble-node-material.ts`, `effects/stars/field.ts` | every `ShaderMaterial` site has a TSL twin, selected through an injected factory. `manager.ts` injects all of them |
 | Stage 4 post stack | `src/render/main/post/` *(new, 8 files)*, `render-spike-frame.ts`, `manager.ts` | the TSL node graph is the gameplay post stack. `composer-stack.ts` deleted |
-| Parity ports | `post/motion-blur-node.ts` *(new)*, `post/volumetric-fog-node.ts` *(new)* | floating-origin motion blur and the depth-aware planet fog raymarch, ported from the deleted WebGL effects |
+| Parity ports | `post/volumetric-fog-node.ts` *(new)* | the depth-aware planet fog raymarch, ported from the deleted WebGL effects. A floating-origin motion-blur port also landed here and was later removed outright — see below |
 | Ship sandbox cutover | `app/ship_sandbox/{scene,types,frame}.ts`, `app/ship-play-session{,-helpers}.ts` | `WebGPURenderer` + a `PostProcessing` graph (`GTAONode` + `denoise` + optional `SMAANode`) replacing `EffectComposer`/`N8AOPostPass`/`SMAAEffect`. `createShipSandboxScene` is now async |
 | Dead WebGL code removed | `render/effects/{stars,fog}/`, `render/effects/clouds/volumetric.ts`, `render/main/effects/`, `src/types/n8ao.d.ts` | seven modules with zero consumers; `n8ao` and `@takram/three-clouds` left `package.json` with them |
 | Release guard | `vite.config.ts` | `enforceRequiredWebGpu()` fails a build that constructs a `WebGLRenderer` outside the KTX2 probe, or passes a `forceWebGL:` option |
@@ -138,7 +138,7 @@ the last; the originals in the left column are deleted.
 | `BloomEffect` | `BloomNode` | done |
 | `SMAAEffect` | `SMAANode` | done |
 | `ToneMappingEffect` (AgX) | `AgXToneMapping` | done |
-| `MotionBlurEffect` (161 ln) | hand port — `post/motion-blur-node.ts` | done; stock velocity blur cannot do floating origin |
+| `MotionBlurEffect` (161 ln) | **removed, not ported** | owner call 2026-07-30: motion blur is cut from the product, effect and setting both |
 | takram atmosphere | `@takram/three-atmosphere/webgpu` | done — `0.19.1` imports on Three 0.182 |
 | `VolumetricFogEffect` (183 ln) | hand port — `post/volumetric-fog-node.ts` | done |
 | `SpeedBlurEffect` (51 ln) | hand port — `post/speed-blur-node.ts` | done |
@@ -241,7 +241,7 @@ that peer.
   `webgpu-post-stack.ts` (`PostProcessing` + `GTAONode` + `BloomNode` + AgX),
   `webgpu-atmosphere.ts` (takram `/webgpu` — `AerialPerspectiveNode`, `StarsNode`, `sky`), and
   hand ports `color-correction-node.ts`, `speed-blur-node.ts`, `vignette-node.ts`,
-  `motion-blur-node.ts`, `volumetric-fog-node.ts`. `render-spike-frame.ts` drives it through the
+  `volumetric-fog-node.ts`. `render-spike-frame.ts` drives it through the
   neutral `MainPostStack` interface in `post/types.ts`.
 
   Pass order deliberately mirrors the deleted composer — AO, atmosphere, planet fog, bloom,
@@ -579,7 +579,7 @@ renderer at all.
 ### Stage 4 — Rebuild the game post stack on `THREE.PostProcessing` — code complete
 `composer-stack.ts` is deleted; `src/render/main/post/webgpu-post-stack.ts` is the only post
 stack, built from `PostProcessing`, `GTAONode` + `DenoiseNode`, `BloomNode`, `SMAANode`, AgX, the
-hand-ported color-correction / speed-blur / vignette / motion-blur / volumetric-fog nodes, and
+hand-ported color-correction / speed-blur / vignette / volumetric-fog nodes, and
 takram atmosphere via `webgpu-atmosphere.ts`. `render-spike-frame.ts` drives it through the
 neutral `MainPostStack` interface in `post/types.ts`.
 

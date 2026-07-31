@@ -96,6 +96,33 @@ export function createSceneLighting(scene: THREE.Scene): SceneLighting {
   return { ambient, sun, sunMesh, moonMesh, moonLight };
 }
 
+/**
+ * Repoints the sun/moon shadow maps at a new size without rebuilding the scene.
+ *
+ * Three allocates `shadow.map` lazily at the size recorded when it was first
+ * rendered, so changing `mapSize` alone does nothing — the existing target has
+ * to be disposed and dropped so the next frame reallocates. `castShadow` itself
+ * is owned per-frame by `updateSunSystem`, which gates on
+ * `sun.userData.shadowsEnabled`; setting that here is what makes 'off' stick.
+ */
+export function applyShadowQuality(
+  lighting: SceneLighting,
+  shadowMapSize: number,
+): void {
+  const enabled = shadowMapSize > 0;
+  lighting.sun.userData.shadowsEnabled = enabled;
+  for (const light of [lighting.sun, lighting.moonLight]) {
+    if (light.shadow.mapSize.width === shadowMapSize && light.castShadow === enabled) {
+      continue;
+    }
+    light.shadow.mapSize.width = shadowMapSize;
+    light.shadow.mapSize.height = shadowMapSize;
+    light.shadow.map?.dispose();
+    light.shadow.map = null;
+    light.castShadow = enabled;
+  }
+}
+
 export function createMainScene(): THREE.Scene {
   const scene = new THREE.Scene();
   scene.background = SKY_HIGH_COLOR.clone();

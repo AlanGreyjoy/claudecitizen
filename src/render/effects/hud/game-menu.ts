@@ -1,8 +1,7 @@
 import {
-  applyAmbientOcclusionAndReload,
-  applyMotionBlurAndReload,
-  applyRenderQualityAndReload,
-  applyShadowQualityAndReload,
+  applyAmbientOcclusion,
+  applyRenderQuality,
+  applyShadowQualitySetting,
   loadGameSettings,
   saveGameSettings,
   type CloudModeSetting,
@@ -80,9 +79,6 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     elements.rootEl.querySelector<HTMLInputElement>(
       '[data-orig-id="game-menu-ambient-occlusion"]',
     ) ?? elements.rootEl.querySelector<HTMLInputElement>('#game-menu-ambient-occlusion');
-  const motionBlurInput =
-    elements.rootEl.querySelector<HTMLInputElement>('[data-orig-id="game-menu-motion-blur"]') ??
-    elements.rootEl.querySelector<HTMLInputElement>('#game-menu-motion-blur');
   const grassDistanceInput =
     elements.rootEl.querySelector<HTMLInputElement>(
       '[data-orig-id="game-menu-grass-distance"]',
@@ -125,10 +121,6 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     if (ambientOcclusionInput) ambientOcclusionInput.checked = settings.ambientOcclusion;
   }
 
-  function syncMotionBlur(): void {
-    if (motionBlurInput) motionBlurInput.checked = settings.motionBlur;
-  }
-
   function syncGrassDistance(): void {
     if (grassDistanceInput) {
       grassDistanceInput.value = String(settings.grassRenderDistanceMeters);
@@ -169,7 +161,6 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
       syncShadowRadios();
       syncCloudModeRadios();
       syncAmbientOcclusion();
-      syncMotionBlur();
       syncGrassDistance();
       syncAudioControls();
       controls.renderControlsPanel();
@@ -206,12 +197,16 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     });
   }
 
+  // Every video setting applies live; the renderer listens for the
+  // settings-changed event and rebuilds only what the change actually touches.
+  // Each handler must write the result back to `settings` — the equality guards
+  // below read it, and nothing reloads the page to refresh it any more.
   for (const input of qualityInputs) {
     input.addEventListener('change', () => {
       if (!input.checked) return;
       const preset = input.value as RenderQualityPreset;
       if (preset === settings.renderQuality) return;
-      applyRenderQualityAndReload(preset);
+      settings = applyRenderQuality(preset);
     });
   }
 
@@ -220,12 +215,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
       if (!input.checked) return;
       const shadowQuality = input.value as ShadowQualitySetting;
       if (shadowQuality === settings.shadowQuality) return;
-      applyShadowQualityAndReload(shadowQuality);
+      settings = applyShadowQualitySetting(shadowQuality);
     });
   }
 
-  // Cloud mode applies immediately (no reload) so the two paths can be
-  // compared live; the renderer listens for the settings-changed event.
   for (const input of cloudModeInputs) {
     input.addEventListener('change', () => {
       if (!input.checked) return;
@@ -236,12 +229,10 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   }
 
   ambientOcclusionInput?.addEventListener('change', () => {
-    applyAmbientOcclusionAndReload(ambientOcclusionInput.checked);
+    if (ambientOcclusionInput.checked === settings.ambientOcclusion) return;
+    settings = applyAmbientOcclusion(ambientOcclusionInput.checked);
   });
 
-  motionBlurInput?.addEventListener('change', () => {
-    applyMotionBlurAndReload(motionBlurInput.checked);
-  });
 
   grassDistanceInput?.addEventListener('input', () => {
     const meters = Number.parseInt(grassDistanceInput.value, 10);
@@ -290,7 +281,6 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
   syncQualityRadios();
   syncCloudModeRadios();
   syncAmbientOcclusion();
-  syncMotionBlur();
   syncGrassDistance();
   syncAudioControls();
   controls.renderControlsPanel();

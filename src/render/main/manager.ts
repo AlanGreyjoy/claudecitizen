@@ -42,13 +42,23 @@ import { createShipRenderPool } from './scene/ship-render-pool';
 import { createRemotePresenceRenderer } from './scene/remote-presence';
 import { createStationNpcRenderer } from './scene/station-npcs';
 import { createStationModel } from './scene/station-model';
-import { createMainCamera, createMainScene, createSceneLighting } from './scene/scene-lighting';
+import {
+  applyShadowQuality,
+  createMainCamera,
+  createMainScene,
+  createSceneLighting,
+  type SceneLighting,
+} from './scene/scene-lighting';
+import type { MainPostStack } from './post/types';
 import { createWebGpuRenderer } from './scene/webgpu-renderer';
 import { createWebGpuTerrainMaterial } from '../planet_tiles/render/terrain-material';
 import { createWebGpuSurfaceWaterMaterial } from '../effects/lake_water/render/node-material';
 import { createWebGpuCloudShellMaterial } from '../effects/clouds/shell-node-material';
 import { createWebGpuHyperspaceMaterial } from '../effects/quantum-bubble-node-material';
-import { resolveRenderQuality } from './domain/render-quality';
+import {
+  resolveRenderQuality,
+  type RenderQualitySettings,
+} from './domain/render-quality';
 import {
   resolveColorCorrectionSettings,
   saveColorCorrectionSettings,
@@ -72,6 +82,40 @@ import {
   QUANTUM_RENDER_LAYER,
   enableRenderLayer,
 } from './render-spike-frame';
+
+/**
+ * The video settings whose effect is baked into the render graph rather than a
+ * uniform: quality preset (pixel ratio, SMAA, LOD, vegetation budgets), shadow
+ * map size, and the AO branch. A change to any of them costs a post-stack
+ * rebuild, so they are compared as one string instead of applied blindly.
+ */
+function renderQualitySignature(settings: GameSettings): string {
+  return [
+    settings.renderQuality,
+    settings.shadowQuality,
+    settings.ambientOcclusion ? 'ao' : 'no-ao',
+  ].join('|');
+}
+
+/**
+ * Re-applies the stored video settings to a live renderer, replacing what used
+ * to be a page reload.
+ *
+ * Tile LOD and vegetation budgets are module globals read lazily per tile
+ * build, and the budgets are already part of the vegetation cache key, so
+ * re-applying them is enough — tiles already on screen keep their old density
+ * until they are rebuilt, and no cache is invalidated.
+ */
+function applyLiveRenderQuality(
+  lighting: SceneLighting,
+  postStack: MainPostStack,
+): RenderQualitySettings {
+  applyRenderQualitySettings();
+  const quality = resolveRenderQuality();
+  applyShadowQuality(lighting, quality.shadowMapSize);
+  postStack.rebuild();
+  return quality;
+}
 
 // A full protected station can carry multiple gigabytes of decoded atlas data.
 // Distant stations already have System Map/nav markers, so load their detailed
@@ -191,7 +235,7 @@ export async function createSpikeRenderer(
 ): Promise<SpikeRenderer> {
   const { planetEnabled, sceneEnvironment } = resolveSpikeEnvironmentOptions(options);
   applyRenderQualitySettings();
-  const renderQuality = resolveRenderQuality();
+  let renderQuality = resolveRenderQuality();
 
   const { rendererMode, renderer } = await createWebGpuRenderer(canvas);
 
@@ -237,12 +281,6 @@ export async function createSpikeRenderer(
   vegetationManager?.setGrassRenderDistanceMeters(
     initialGameSettings.grassRenderDistanceMeters,
   );
-  const handleGameSettingsChanged = (event: Event) => {
-    const next = (event as CustomEvent<GameSettings>).detail ?? loadGameSettings();
-    cloudMode = next.cloudMode;
-    vegetationManager?.setGrassRenderDistanceMeters(next.grassRenderDistanceMeters);
-  };
-  window.addEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
 
   const postStack = createWebGpuMainPostStack(
     renderer,
@@ -363,6 +401,37 @@ export async function createSpikeRenderer(
       Math.min(window.devicePixelRatio || 1, maxPixelRatio),
     );
   }
+
+  function refreshViewport(): void {
+    if (lastSurfaceAltitudeMeters != null) {
+      syncSurfacePixelRatio(lastSurfaceAltitudeMeters);
+      return;
+    }
+    resize(lastResizeWidth, lastResizeHeight);
+  }
+
+  // Every video setting applies live; none of them reload the page. Cloud mode
+  // and grass distance are plain field writes, so they run on every event; the
+  // graph-shaping ones are gated on a signature because each costs a shader
+  // recompile.
+  // Seeded from the *resolved* preset, not the stored one: a hand-typed
+  // `?quality=` still outranks storage at boot, and seeding from storage would
+  // make the first menu change look like a no-op and skip the rebuild.
+  let appliedQualitySignature = renderQualitySignature({
+    ...initialGameSettings,
+    renderQuality: renderQuality.preset,
+  });
+  const handleGameSettingsChanged = (event: Event) => {
+    const next = (event as CustomEvent<GameSettings>).detail ?? loadGameSettings();
+    cloudMode = next.cloudMode;
+    vegetationManager?.setGrassRenderDistanceMeters(next.grassRenderDistanceMeters);
+    const signature = renderQualitySignature(next);
+    if (signature === appliedQualitySignature) return;
+    appliedQualitySignature = signature;
+    renderQuality = applyLiveRenderQuality(lighting, postStack);
+    refreshViewport();
+  };
+  window.addEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
 
   const renderFrameDeps: SpikeRenderFrameDeps = {
     planet,

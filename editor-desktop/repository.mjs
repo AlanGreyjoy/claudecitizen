@@ -110,10 +110,18 @@ function requireSlugId(value, label = 'document.id') {
   return id;
 }
 
+/**
+ * Writes a document and reports both spellings of where it landed.
+ *
+ * `path` is root-relative and stays the value other project JSON quotes.
+ * `absolutePath` exists because the open project mirrors the engine checkout's
+ * layout exactly — a bare `src/world/planets/data/asteron.planet.json` in a save
+ * toast reads as the engine copy, so the UI shows the absolute one.
+ */
 async function writeJson(projectRoot, filePath, document) {
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
-  return relative(projectRoot, filePath).split(sep).join('/');
+  return { path: relative(projectRoot, filePath).split(sep).join('/'), absolutePath: filePath };
 }
 
 async function listAssetsRecursive(rootDir) {
@@ -328,8 +336,8 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
       absolute = resolveAssetPath(root, folder ? `${folder}/${fileName}` : `${DEFAULT_PREFAB_FOLDER}/${fileName}`);
     }
 
-    const path = await writeJson(projectRoot, absolute, document);
-    return { saved: true, id, path };
+    const { path, absolutePath } = await writeJson(projectRoot, absolute, document);
+    return { saved: true, id, path, absolutePath };
   }
 
   /**
@@ -371,7 +379,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
           continue;
         }
         if (!rewritePrefabIdsInPlace(document, fromId, toId)) continue;
-        rewritten.push(await writeJson(projectRoot, file, document));
+        rewritten.push((await writeJson(projectRoot, file, document)).path);
       }
     }
     return rewritten;
@@ -401,14 +409,14 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     document.name = name;
 
     const destination = join(dirname(existing.absolute), `${toId}${PREFAB_FILE_SUFFIX}`);
-    const path = await writeJson(projectRoot, destination, document);
+    const { path, absolutePath } = await writeJson(projectRoot, destination, document);
     if (destination !== existing.absolute) {
       await rm(existing.absolute, { force: true });
     }
 
     const rewritten =
       toId === fromId ? [] : await rewritePrefabIdReferences(fromId, toId, destination);
-    return { renamed: true, id: toId, path, rewritten };
+    return { renamed: true, id: toId, path, absolutePath, rewritten };
   }
 
   async function getBaseCharacters() {
@@ -424,8 +432,12 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     if (document.schemaVersion !== 1 || !Array.isArray(document.slots)) {
       throw new EditorRepositoryError('invalid base character equipment document');
     }
-    const path = await writeJson(projectRoot, baseCharacterEquipmentPath(), document);
-    return { saved: true, path };
+    const { path, absolutePath } = await writeJson(
+      projectRoot,
+      baseCharacterEquipmentPath(),
+      document,
+    );
+    return { saved: true, path, absolutePath };
   }
 
   async function getCharacterSettings() {
@@ -449,8 +461,8 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     ) {
       throw new EditorRepositoryError('invalid character settings document');
     }
-    const path = await writeJson(projectRoot, characterSettingsPath(), document);
-    return { saved: true, path };
+    const { path, absolutePath } = await writeJson(projectRoot, characterSettingsPath(), document);
+    return { saved: true, path, absolutePath };
   }
 
   /**
@@ -525,8 +537,8 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     if (!/^https?:\/\/[^\s]+$/.test(document.editorBackendUrl)) {
       throw new EditorRepositoryError('editorBackendUrl must be an http(s) URL');
     }
-    const path = await writeJson(projectRoot, projectSettingsPath(), document);
-    return { saved: true, path, document };
+    const { path, absolutePath } = await writeJson(projectRoot, projectSettingsPath(), document);
+    return { saved: true, path, absolutePath, document };
   }
 
   /**
@@ -571,8 +583,8 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
 
   async function saveFolderOrder(value) {
     const document = normalizeFolderOrder(requireDocument(value));
-    const path = await writeJson(projectRoot, folderOrderPath(), document);
-    return { saved: true, path, document };
+    const { path, absolutePath } = await writeJson(projectRoot, folderOrderPath(), document);
+    return { saved: true, path, absolutePath, document };
   }
 
   /**
@@ -604,8 +616,8 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
 
   async function saveEditorSession(value) {
     const document = normalizeEditorSession(requireDocument(value));
-    const path = await writeJson(projectRoot, editorSessionPath(), document);
-    return { saved: true, path, document };
+    const { path, absolutePath } = await writeJson(projectRoot, editorSessionPath(), document);
+    return { saved: true, path, absolutePath, document };
   }
 
   async function listAnimationControllers() {
@@ -655,12 +667,12 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
       throw new EditorRepositoryError('invalid animation controller document');
     }
     const id = requireSlugId(document.id);
-    const path = await writeJson(
+    const { path, absolutePath } = await writeJson(
       engineRoot,
       join(animationControllerDataDir(), `${id}.controller.json`),
       document,
     );
-    return { saved: true, id, path };
+    return { saved: true, id, path, absolutePath };
   }
 
   async function listNamedDocuments(dataDir, suffix, key) {
@@ -698,8 +710,12 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
   async function saveNamedDocument(dataDir, suffix, value) {
     const document = requireDocument(value);
     const id = requireSlugId(document.id);
-    const path = await writeJson(projectRoot, join(dataDir, `${id}${suffix}`), document);
-    return { saved: true, id, path };
+    const { path, absolutePath } = await writeJson(
+      projectRoot,
+      join(dataDir, `${id}${suffix}`),
+      document,
+    );
+    return { saved: true, id, path, absolutePath };
   }
 
   /**
