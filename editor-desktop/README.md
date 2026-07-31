@@ -22,6 +22,11 @@ npm run editor:dev
 `/__editor` plus project asset mounts through the main process. Use plain
 `editor` when you want to exercise the packaged `dist-editor` path.
 
+On macOS, both launch scripts run `brand_dev_electron.mjs` first so the
+unpackaged Electron.app's `CFBundleName` is AsteronEngine (menu bar /
+Cmd+Tab). `app.setName()` alone cannot change those OS labels. Fully quit
+Electron before relaunching after a fresh install.
+
 Cold start opens the **Projects** window first. Create a new project, open an
 existing AsteronEngine / ClaudeCitizen project folder, or reopen a recent
 project. The editor workspace opens only after a project is selected.

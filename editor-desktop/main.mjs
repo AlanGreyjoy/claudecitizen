@@ -1,13 +1,14 @@
 import { spawn } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { stat, writeFile } from 'node:fs/promises';
+import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import {
   app,
   BrowserWindow,
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   net,
   protocol,
   shell,
@@ -38,6 +39,7 @@ import {
   uninstallKtxPackage,
 } from './engine_tools.mjs';
 import { resolvePreferredAssetPath } from '../scripts/derived-assets.mjs';
+import { createModelThumbnailCache } from './model_thumbnail_cache.mjs';
 
 const EDITOR_SCHEME = 'cceditor';
 const EDITOR_HOST = 'app';
@@ -53,9 +55,45 @@ const BACKEND_PROXY_PREFIX = '/__editor/backend/';
  * protocol handler would never be consulted.
  */
 const MP_PROXY_PATTERN = /^\/__editor\/mp\/(\d+)\/backend(\/.*)$/;
+const APP_DISPLAY_NAME = 'AsteronEngine';
 const editorDesktopRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = dirname(editorDesktopRoot);
 const appIconPath = join(editorDesktopRoot, 'build', 'icon.png');
+
+// Internal Electron name (userData, About panel helpers). macOS menu bar /
+// Cmd+Tab still read CFBundleName from Electron.app — `brand_dev_electron.mjs`
+// patches that before launch. Call before any `app.getPath('userData')`.
+app.setName(APP_DISPLAY_NAME);
+
+/**
+ * Pre-productName unpackaged launches stored settings under the npm `name`.
+ * Copy the settings file once so recent projects survive the AsteronEngine rename
+ * (Electron may already have created an empty `userData` dir for the new name).
+ */
+async function migrateLegacyUserData() {
+  const nextDir = app.getPath('userData');
+  const legacyDir = join(app.getPath('appData'), 'claudecitizen-editor-desktop');
+  if (legacyDir === nextDir) return;
+  const legacySettings = join(legacyDir, 'editor-project.json');
+  const nextSettings = join(nextDir, 'editor-project.json');
+  try {
+    await stat(legacySettings);
+  } catch {
+    return;
+  }
+  try {
+    await stat(nextSettings);
+    return;
+  } catch {
+    // next settings missing
+  }
+  try {
+    await mkdir(nextDir, { recursive: true });
+    await rename(legacySettings, nextSettings);
+  } catch (error) {
+    console.warn('[editor] Could not migrate legacy userData:', error);
+  }
+}
 
 // Chromium gates WebGPU on Linux behind Vulkan, and `chrome://flags` does not
 // carry into Electron — without these, `requestAdapter()` returns null and the
@@ -73,6 +111,15 @@ let disposeDevRenderer = null;
 let agentServer = null;
 /** @type {ReturnType<typeof createMultiplayerDebugManager> | null} */
 let multiplayerDebug = null;
+/** @type {ReturnType<typeof createModelThumbnailCache> | null} */
+let modelThumbnailCache = null;
+
+function getModelThumbnailCache() {
+  if (!modelThumbnailCache) {
+    modelThumbnailCache = createModelThumbnailCache(app.getPath('userData'));
+  }
+  return modelThumbnailCache;
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -339,6 +386,21 @@ async function handleEditorApi(repository, request, url) {
       }
       case 'GET /__editor/packages':
         return jsonResponse(200, await listEnginePackages());
+      case 'GET /__editor/model-thumbnail': {
+        const key = url.searchParams.get('key');
+        if (!key) throw new EditorRepositoryError('key is required');
+        const dataUrl = await getModelThumbnailCache().get(key);
+        return jsonResponse(200, { dataUrl });
+      }
+      case 'POST /__editor/model-thumbnail': {
+        const body = await parseJsonBody(request);
+        const key = typeof body?.key === 'string' ? body.key : '';
+        const dataUrl = typeof body?.dataUrl === 'string' ? body.dataUrl : '';
+        if (!key) throw new EditorRepositoryError('key is required');
+        if (!dataUrl) throw new EditorRepositoryError('dataUrl is required');
+        await getModelThumbnailCache().put(key, dataUrl);
+        return jsonResponse(200, { ok: true });
+      }
       default:
         return jsonResponse(404, { error: `unknown editor API route: ${route}` });
     }
@@ -596,9 +658,15 @@ function viewMenuTemplate() {
   };
 }
 
+/** macOS leftmost app menu (About / Quit) — uses `app.getName()`. */
+function darwinAppMenuPrefix() {
+  return process.platform === 'darwin' ? [{ role: 'appMenu' }] : [];
+}
+
 /** Menu for the Projects hub — no scene/prefab/play actions. */
 function installProjectsApplicationMenu({ getProjectsWindow, onOpenProject }) {
   const menu = Menu.buildFromTemplate([
+    ...darwinAppMenuPrefix(),
     {
       label: 'File',
       submenu: [
@@ -640,6 +708,7 @@ function installEditorApplicationMenu({
   onRevealSidekickPack,
 }) {
   const menu = Menu.buildFromTemplate([
+    ...darwinAppMenuPrefix(),
     {
       label: 'File',
       submenu: [
@@ -1422,6 +1491,13 @@ if (!hasSingleInstanceLock) {
 
   app.whenReady()
     .then(async () => {
+      // BrowserWindow `icon` is ignored on macOS; dock uses Electron.app unless set.
+      if (process.platform === 'darwin' && app.dock) {
+        app.dock.setIcon(nativeImage.createFromPath(appIconPath));
+      }
+      app.setAboutPanelOptions({ applicationName: APP_DISPLAY_NAME });
+      await migrateLegacyUserData();
+
       await protocol.handle(
         EDITOR_SCHEME,
         (request) => serveEditorRequest(() => repository, request),

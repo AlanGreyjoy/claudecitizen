@@ -7,8 +7,8 @@
     "docs"
   ],
   "scripts": {
-    "editor": "npm run build:editor:web && electron editor-desktop",
-    "editor:dev": "npm run build:wasm && electron editor-desktop --dev",
+    "editor": "npm run build:editor:web && node editor-desktop/brand_dev_electron.mjs && electron editor-desktop",
+    "editor:dev": "npm run build:wasm && node editor-desktop/brand_dev_electron.mjs && electron editor-desktop --dev",
     "editor:desktop:package": "npm run build:editor:web && electron-builder --projectDir editor-desktop",
     "build:editor:web": "npm run build:wasm && tsc --noEmit && vite build --mode editor --outDir dist-editor",
     "build:editor:desktop": "npm run build:editor:web && electron-builder --projectDir editor-desktop --dir",

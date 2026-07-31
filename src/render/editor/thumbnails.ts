@@ -13,7 +13,8 @@ import { captureWebGpuThumbnailDataUrl } from '../webgpu-capture';
 /**
  * Lazy model thumbnails for the asset browser / inventory icons.
  * One shared offscreen renderer, one model at a time, ephemeral GLB loads
- * (never touches the prefab modelCache), LRU-cached data-URLs.
+ * (never touches the prefab modelCache). In-memory LRU plus Electron
+ * userData file cache for versioned editor assets.
  */
 
 const THUMB_SIZE = 96;
@@ -149,8 +150,8 @@ async function loadThumbnail(url: string, persistentKey: string | null): Promise
 
 /**
  * Returns a data-url thumbnail for a GLB/GLTF asset.
- * Versioned editor assets use an IndexedDB-backed cache; unversioned runtime
- * callers retain the existing in-memory behavior.
+ * Versioned editor assets use the Electron userData file cache via
+ * `/__editor/model-thumbnail`; unversioned runtime callers stay memory-only.
  */
 export function getModelThumbnail(url: string, assetVersion?: string): Promise<string> {
   const memoryKey = assetVersion ? `${url}\u0000${assetVersion}` : url;
