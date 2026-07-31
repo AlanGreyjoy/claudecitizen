@@ -463,8 +463,11 @@ feature efforts.**
    deleted `@takram/three-clouds` consumer is in git history at
    `src/render/effects/clouds/volumetric.ts` as of `f4881ef` if the old parameterization is
    worth reading.
-4. **Compute** — the work the spike validated, and the reason the migration exists. Untouched.
-   Terrain compute stays excluded per the mesh-vs-foot-placement invariant.
+4. **Compute** — investigated, and the vegetation target does not pay. A validated kernel and
+   its gating validator are in the tree; the worker wiring was built, measured, and reverted.
+   Read "Correction: the vegetation payoff is not there" before spending more here. Terrain
+   compute stays excluded per the mesh-vs-foot-placement invariant. The next candidate needs
+   large batches or no readback at all — not another per-tile job.
 5. Once QA clears the ports, delete the GLSL originals whose TSL twins now carry the game:
    `particles/material.ts`'s shaders, `vegetation/render/wind.ts`'s `onBeforeCompile` patch, and
    the WebGL branches in `terrain-material.ts`, `shell.ts`, `quantum-bubble.ts`, and
@@ -650,14 +653,68 @@ an RTX 3080 Ti:
 
 Implications:
 
-- Even the pessimistic hybrid (compute on GPU, read straight back to CPU) is a large win.
+- Even the pessimistic hybrid (compute on GPU, read straight back to CPU) is a large win
+  **at that batch size**. See the correction below — it does not survive contact with real
+  vegetation tiles.
 - The kernel being effectively free is the argument for GPU-resident instance data, which
   is what the full migration buys.
-- `CLIMATE_GRID_CELLS = 6` in `src/render/vegetation/domain/tile-data.ts` exists *only*
-  because per-instance climate is too expensive on CPU. It is not anymore. Deleting that
-  coarse grid is a visual quality gain, not just a speed one.
 - WebGPU is available inside dedicated workers (verified), so the vegetation worker can own
   its own `GPUDevice`. No main-thread detour.
+
+### Correction: the vegetation payoff is not there
+
+Two claims in the paragraph above were wrong, and `scripts/validate_climate_gpu.mjs` — which
+drives the production kernel and the production placement path — measures both.
+
+**`CLIMATE_GRID_CELLS = 6` was not costing visual quality.** The earlier revision said the
+coarse grid exists *only* because per-instance climate is too expensive, so deleting it is a
+quality gain. A per-instance GPU path was built and measured against the grid on three vegetated
+tiles. It placed **exactly the same instances** — identical counts, identical variant draws,
+matrices agreeing to ~1e-7:
+
+```
+  level    span  attempts  placed  variant-mm  max matrix d  coarse6x6   CPU ms   GPU ms
+  L17     0.1km     5,859   2,450           0       0.00e+0      2,450     3.80     2.30
+  L13     1.9km        48      47           0       1.19e-7         47     0.00     2.30
+  L11     7.6km        24       7           0       5.96e-8          7     0.00     2.20
+```
+
+The reason is scale. The climate fields run at fbm scale 1.5–3.0 over a *unit sphere*, so
+temperature and moisture vary over thousands of kilometres. Vegetation only exists from L17
+(0.1 km across) down to L11 (7.6 km). Across any of those, climate is very nearly constant, and
+six samples across the tile were already an excellent approximation. The grid was a good
+decision, not a compromise.
+
+**And the batch sizes are far too small for the GPU to win.** The 2758x figure came from a
+1M-sample dispatch. A real tile asks for 24–5,859 samples, where the fixed ~2.2 ms of dispatch
+and readback dominates: at L11 the GPU costs 2.2 ms for work the CPU finishes in microseconds.
+Break-even is ~3,400 samples, so only dense L16/L17 grass tiles clear it, and there the whole
+prize is ~1.5 ms on a worker thread.
+
+**So the vegetation wiring was reverted.** `vegetation-worker.ts` and `tile-data.ts` are back to
+the coarse grid, and `VEGETATION_CACHE_VERSION` stays at `v22` — invalidating every user's
+vegetation cache to rebuild identical tiles would have been the change's largest real effect.
+The reverted path also carried a standing hazard worth naming: it required a direction pre-pass
+that mirrored the placement loop's jitter exactly, and any future drift between the two would
+have paired each instance with a different instance's climate, silently.
+
+What survives, because it is worth keeping:
+
+- **The kernel.** `createClimateNoiseGpu` in `src/render/vegetation/gpu/climate-noise-gpu.ts` is
+  a working, validated WGSL compute path with reusable buffers. Its only consumer today is the
+  validator; it exists as the in-tree reference for the next compute workload, and this section
+  is why it has no production caller.
+- **The measurement retires a named risk.** The f32 threshold-flip entry under "Known risks" is
+  now struck: 1.4M samples across two seeds, with a deliberate elevation sweep so samples
+  actually sit on `classifyBiome` thresholds, produced zero flips. `validate_climate_gpu.mjs`
+  gates on the rate, so a future kernel change cannot quietly reintroduce it.
+- **Single source of truth for the noise tables.** `buildNoiseTable` (terrain-noise.ts) and
+  `CLIMATE_NOISE_FIELDS` / `climateValuesFromNoise` / `evaluateClimateNoise` (climate.ts) give
+  any non-JS evaluator the engine's own tables and field specs instead of a copied RNG. A second
+  copy of the generator would change every planet's biome map with no error anywhere.
+
+The compute win the migration was sold on needs a workload with *large batches* — terrain, or
+GPU-resident instance data that never reads back at all. Per-tile vegetation climate is neither.
 
 ## Writing TSL against `@types/three`
 
@@ -772,10 +829,12 @@ identical — matching the Node-level `===` check recorded above. `vite.config.t
 
 ## Known risks
 
-- **f32 threshold flips.** `classifyBiome` compares climate against thresholds. A 1e-6
-  delta can flip classification for a sample sitting exactly on a boundary, changing one
-  plant's type. Rare but nonzero; needs a tolerance strategy before GPU climate drives
-  visuals.
+- ~~**f32 threshold flips.**~~ **Measured, and it is zero.** `scripts/validate_climate_gpu.mjs`
+  compares `classifyBiome` on CPU-f64 and GPU-f32 climate across 1.4M samples on two seeds,
+  sweeping normalized height from -0.15 to 1.0 so samples genuinely land on the elevation
+  thresholds. Nothing flipped. Field deltas are ~1e-7 mean, ~1e-6 max. No tolerance strategy is
+  needed; the validator gates on a flip rate so a future kernel change cannot quietly
+  reintroduce the risk.
 - **Terrain stays on CPU for now.** `buildTerrainTileBuffers` is deliberately excluded.
   AGENTS.md requires the mesh and the foot sampler resolve identical band-limited heights;
   a WGSL port creates a second height implementation that must agree bit-for-bit, and the
@@ -807,7 +866,11 @@ npm run typecheck                      # tsc --noEmit, must stay at 0 errors
 npm run lint                           # scripts/ is eslint-exempt; src/ is not
 npm run editor:dev                     # owner runs this — do not start it unprompted
 node scripts/webgpu_noise_spike.mjs --samples 1048576 --repeats 3
+node scripts/validate_climate_gpu.mjs  # GPU-vs-CPU climate agreement and biome-flip rate
 ```
+
+`validate_climate_gpu.mjs` exits non-zero when the biome-flip rate exceeds `--max-flip-rate`, so
+it is a gate rather than a report. It needs a GPU; there is no CPU-only mode.
 
 The repo has **no unit tests and no test runner** (see `CLAUDE.md`); validation is typecheck +
 lint, and the owner does all interactive QA. That is why the two runtime crashes above were

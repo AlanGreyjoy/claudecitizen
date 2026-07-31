@@ -1,6 +1,23 @@
-import { createNoise3D, type NoiseFunction3D } from 'simplex-noise';
+import {
+  buildPermutationTable,
+  createNoise3D,
+  type NoiseFunction3D,
+} from 'simplex-noise';
 
 const noiseCache = new Map<number, NoiseFunction3D>();
+
+/** Entries in a permutation table, and in each gradient component array. */
+export const NOISE_TABLE_SIZE = 512;
+
+/**
+ * `grad3` from simplex-noise, which is module-private there. `createNoise3D`
+ * indexes it with `(perm[i] % 12) * 3`; `buildNoiseTable` reproduces that.
+ */
+const GRAD3 = [
+  1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0,
+  1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1,
+  0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1,
+];
 
 export interface BandLimitedNoise3dInput {
   lacunarity: number;
@@ -42,6 +59,37 @@ export function getNoise3D(seed: number): NoiseFunction3D {
     noiseCache.set(seed, noise);
   }
   return noise;
+}
+
+export interface NoiseTable {
+  /** Permutation table, exactly the one `getNoise3D(seed)` closed over. */
+  perm: Uint8Array;
+  /** Per-entry gradient as xyz0, `NOISE_TABLE_SIZE` vec4s. */
+  grad: Float32Array;
+}
+
+/**
+ * The permutation and gradient tables behind `getNoise3D(seed)`, as plain data.
+ *
+ * Exists so a non-JS evaluator — the WGSL climate kernel in
+ * `render/vegetation/gpu/` — can be handed the *same* tables rather than
+ * re-deriving them from a copied RNG. A second copy of the generator is exactly
+ * the drift that would change every planet's biome layout without any visible
+ * error, so this is the only sanctioned way to get at them.
+ *
+ * `grad` is padded to vec4 because WGSL's storage-buffer layout rules give
+ * `array<vec3<f32>>` a 16-byte stride anyway.
+ */
+export function buildNoiseTable(seed: number): NoiseTable {
+  const perm = buildPermutationTable(createMulberry32(seed));
+  const grad = new Float32Array(NOISE_TABLE_SIZE * 4);
+  for (let index = 0; index < NOISE_TABLE_SIZE; index += 1) {
+    const gradientOffset = (perm[index] % 12) * 3;
+    grad[index * 4] = GRAD3[gradientOffset];
+    grad[index * 4 + 1] = GRAD3[gradientOffset + 1];
+    grad[index * 4 + 2] = GRAD3[gradientOffset + 2];
+  }
+  return { grad, perm };
 }
 
 export function fbm3d(

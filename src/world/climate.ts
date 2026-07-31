@@ -11,6 +11,82 @@ import type { PlanetBiomeRecipe } from './planets/schema';
 
 const FOREST_NOISE_SEED_OFFSET = 4321;
 
+export interface ClimateNoiseFieldSpec {
+  /** Added to the planet seed to pick this field's permutation table. */
+  readonly seedOffset: number;
+  readonly octaves: number;
+  readonly persistence: number;
+  readonly lacunarity: number;
+  readonly scale: number;
+}
+
+/**
+ * The three fbm fields `sampleSurfaceClimate` evaluates, in the order a batched
+ * evaluator returns them.
+ *
+ * Declared here rather than inline at the call sites because the WGSL kernel in
+ * `render/vegetation/gpu/` evaluates the identical three fields on the GPU.
+ * Octave counts and scales that drift between the two would not throw — they
+ * would silently give GPU-placed vegetation a different biome map than the
+ * terrain it stands on.
+ */
+export const CLIMATE_NOISE_FIELDS: readonly ClimateNoiseFieldSpec[] = [
+  { seedOffset: 1234, octaves: 3, persistence: 0.5, lacunarity: 2.0, scale: 2.0 },
+  { seedOffset: 5678, octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: 1.5 },
+  {
+    seedOffset: FOREST_NOISE_SEED_OFFSET,
+    octaves: 3,
+    persistence: 0.5,
+    lacunarity: 2.0,
+    scale: 3.0,
+  },
+];
+
+const [TEMPERATURE_FIELD, MOISTURE_FIELD, FOREST_FIELD] = CLIMATE_NOISE_FIELDS;
+
+/** Batched fbm results for one position, in `CLIMATE_NOISE_FIELDS` order. */
+export interface ClimateNoiseSample {
+  temperature: number;
+  moisture: number;
+  forest: number;
+}
+
+/** Temperature and moisture — the two climate values `classifyBiome` reads. */
+export interface ClimateValues {
+  temperature: number;
+  moisture: number;
+}
+
+/**
+ * Turns raw fbm output into temperature and moisture.
+ *
+ * Split out of `sampleSurfaceClimate` so vegetation placement can resolve
+ * climate per instance without also re-running lake and river sampling, which
+ * is the expensive half and still resolves on a coarse grid. Both callers must
+ * share this formula: two copies would drift, and the symptom would be
+ * vegetation whose biome disagrees with the terrain it is standing on.
+ */
+export function climateValuesFromNoise(
+  noise: ClimateNoiseSample,
+  latRadians: number,
+  normalizedHeight: number,
+): ClimateValues {
+  const latFactor = Math.abs(latRadians) / (Math.PI / 2);
+  const altitudeFactor = Math.max(0, normalizedHeight);
+  const temperature = clamp01(
+    1.0 - latFactor - altitudeFactor * 0.5 + noise.temperature * 0.2,
+  );
+
+  let moisture = noise.moisture * 0.5 + 0.5;
+  moisture += Math.cos(latRadians * 3) * 0.2;
+  // Softened altitude penalty so mid-elevation land can still be forest.
+  moisture -= altitudeFactor * 0.1;
+  // Medium-scale patch noise makes forests form coherent regions instead of
+  // moisture speckle at the biome threshold.
+  moisture += noise.forest * 0.25;
+  return { moisture: clamp01(moisture), temperature };
+}
+
 // classifyBiome runs once per terrain vertex, per vegetation placement attempt,
 // and per surface-spawn probe — tens of thousands of calls per tile. Building a
 // Set from the recipe on every one of those was pure allocation churn, so key a
@@ -39,12 +115,52 @@ let cachedClimateNoise: ClimateNoiseSet | null = null;
 function climateNoiseForSeed(seed: number): ClimateNoiseSet {
   if (cachedClimateNoise && cachedClimateNoiseSeed === seed) return cachedClimateNoise;
   cachedClimateNoise = {
-    forest: getNoise3D(seed + FOREST_NOISE_SEED_OFFSET),
-    moisture: getNoise3D(seed + 5678),
-    temperature: getNoise3D(seed + 1234),
+    forest: getNoise3D(seed + FOREST_FIELD.seedOffset),
+    moisture: getNoise3D(seed + MOISTURE_FIELD.seedOffset),
+    temperature: getNoise3D(seed + TEMPERATURE_FIELD.seedOffset),
   };
   cachedClimateNoiseSeed = seed;
   return cachedClimateNoise;
+}
+
+function fbmForField(
+  noise3D: ReturnType<typeof getNoise3D>,
+  field: ClimateNoiseFieldSpec,
+  x: number,
+  y: number,
+  z: number,
+): number {
+  return fbm3d(
+    noise3D,
+    x,
+    y,
+    z,
+    field.octaves,
+    field.persistence,
+    field.lacunarity,
+    field.scale,
+  );
+}
+
+/**
+ * The CPU evaluation of the three climate fields at a unit direction.
+ *
+ * This is the reference the WGSL kernel is validated against, and the fallback
+ * whenever no GPU device is available. `sampleSurfaceClimate` calls it when it
+ * is not handed a precomputed batch.
+ */
+export function evaluateClimateNoise(
+  seed: number,
+  x: number,
+  y: number,
+  z: number,
+): ClimateNoiseSample {
+  const noise = climateNoiseForSeed(seed);
+  return {
+    forest: fbmForField(noise.forest, FOREST_FIELD, x, y, z),
+    moisture: fbmForField(noise.moisture, MOISTURE_FIELD, x, y, z),
+    temperature: fbmForField(noise.temperature, TEMPERATURE_FIELD, x, y, z),
+  };
 }
 
 export interface BiomeClassificationInput {
@@ -168,6 +284,11 @@ export function sampleSurfaceClimate(
   position: Vec3,
   heightMeters: number,
   heightDetails?: SurfaceHeightDetails,
+  /**
+   * Precomputed fbm values for this direction, from the GPU climate kernel.
+   * Omit to evaluate them on the CPU — the two paths agree to f32 epsilon.
+   */
+  climateNoise?: ClimateNoiseSample,
 ): PlanetSurfaceSample {
   const surfaceRadiusMeters = planet.radiusMeters + heightMeters;
   const altitudeMeters = altitudeForPosition(position, surfaceRadiusMeters);
@@ -176,23 +297,14 @@ export function sampleSurfaceClimate(
   // normalize a second time and allocate a result object per sample.
   const unit = radialUp(position);
   const latRadians = Math.asin(Math.max(-1, Math.min(1, unit.y)));
-  const noise = climateNoiseForSeed(seed);
+  const noise = climateNoise ?? evaluateClimateNoise(seed, unit.x, unit.y, unit.z);
 
-  const tempNoise = fbm3d(noise.temperature, unit.x, unit.y, unit.z, 3, 0.5, 2.0, 2.0);
   const latFactor = Math.abs(latRadians) / (Math.PI / 2);
-  const altitudeFactor = Math.max(0, normalizedHeight);
-  let temperature = 1.0 - latFactor - altitudeFactor * 0.5 + tempNoise * 0.2;
-  temperature = clamp01(temperature);
-
-  const mNoise = fbm3d(noise.moisture, unit.x, unit.y, unit.z, 4, 0.5, 2.0, 1.5);
-  let moisture = mNoise * 0.5 + 0.5;
-  moisture += Math.cos(latRadians * 3) * 0.2;
-  // Softened altitude penalty so mid-elevation land can still be forest.
-  moisture -= Math.max(0, normalizedHeight) * 0.1;
-  // Medium-scale patch noise makes forests form coherent regions instead of
-  // moisture speckle at the biome threshold.
-  moisture += fbm3d(noise.forest, unit.x, unit.y, unit.z, 3, 0.5, 2.0, 3.0) * 0.25;
-  moisture = clamp01(moisture);
+  const { moisture, temperature } = climateValuesFromNoise(
+    noise,
+    latRadians,
+    normalizedHeight,
+  );
 
   const mountainRegion =
     heightDetails?.mountainRegion ??
