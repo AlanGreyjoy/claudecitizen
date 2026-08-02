@@ -256,6 +256,7 @@ export function createBaseCharacterUiBindings(
     currentMount: () => currentMount(closure.documentState, closure.selectedType, closure.selectedSlotId),
     currentDrawnMount: () => currentDrawnMount(closure.documentState, closure.selectedType, closure.selectedSlotId),
     currentTransformTarget: () => currentTransformTarget(transformParams()),
+    getBackpackSocketEntities: () => closure.backpackSocketEntities,
     displayNumber,
     transformEulerDegrees,
     setTransformEulerDegrees,

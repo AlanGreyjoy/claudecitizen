@@ -12,3 +12,7 @@ export {
   createPersonalInventory,
   type PersonalInventoryController,
 } from './personal-inventory';
+export {
+  createChestStorage,
+  type ChestStorageController,
+} from './chest-storage';

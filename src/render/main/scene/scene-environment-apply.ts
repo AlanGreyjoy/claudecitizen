@@ -4,23 +4,16 @@ import type { SceneEnvironmentConfig } from '../../../world/scenes/scene-runtime
 import type { SceneLighting } from './scene-lighting';
 
 /**
- * Decide whether the space equirect skybox should replace the solid
- * background color this frame.
- */
-/**
- * Whether the star-field equirect replaces the sky.
+ * Whether the star-field equirect replaces the sky fill.
  *
- * **Altitude decides this, not the authored background mode.** Inside an
- * atmosphere the sky belongs to the atmosphere renderer — takram's `SkyNode` on
- * WebGPU, volumetric clouds on the WebGL path this replaced — and painting the
- * equirect there produces a black daytime sky over lit ground.
+ * - `solid` — never
+ * - `space-skybox` — always (station/hab/open-space authoring; matches editor viewport)
+ * - `auto` — only above the atmosphere (orbit / open space)
  *
- * An earlier revision short-circuited on `backgroundMode === 'space-skybox'`,
- * which is how that regression shipped: a surface scene authored with that mode
- * got the skybox at ground level. The WebGL original never consulted the mode
- * here at all, only `altitudeMeters >= planet.atmosphereHeightMeters`. Scenes
- * that genuinely want the skybox — Open Space, orbit — are above the atmosphere
- * anyway and still get it.
+ * When this is true, the gameplay post stack must also suppress takram's
+ * `SkyNode` on far pixels — otherwise aerial perspective paints atmosphere (or
+ * black LUTs) over the nebula and Play looks skybox-less while the editor,
+ * which has no atmosphere pass, shows it fine.
  */
 export function resolveSpaceSkyboxActive(input: {
   backgroundMode: SceneBackgroundMode;
@@ -28,7 +21,27 @@ export function resolveSpaceSkyboxActive(input: {
   atmosphereHeightMeters: number;
 }): boolean {
   if (input.backgroundMode === 'solid') return false;
+  if (input.backgroundMode === 'space-skybox') return true;
   return input.altitudeMeters >= input.atmosphereHeightMeters;
+}
+
+/**
+ * Whether takram's `SkyNode` owns far pixels this frame.
+ *
+ * When it does, the sky draws its own scattered sun disc and phase-shaded
+ * moon, so the scene-space `sunMesh` / `moonMesh` bodies must be hidden or the
+ * player sees each body twice at different sizes. The exact inverse of the
+ * suppression test in `createWebGpuAtmospherePost`; both read it from here so
+ * the two decisions cannot drift apart.
+ */
+export function resolveAtmosphereSkyActive(input: {
+  backgroundMode: SceneBackgroundMode;
+  altitudeMeters: number;
+  atmosphereHeightMeters: number;
+}): boolean {
+  if (input.backgroundMode === 'solid') return false;
+  if (input.backgroundMode === 'space-skybox') return false;
+  return input.altitudeMeters < input.atmosphereHeightMeters;
 }
 
 /** Mute / restore celestial lights after the outdoor sun-system pass. */

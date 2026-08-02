@@ -1,4 +1,4 @@
-import { MODE_IN_BED, MODE_IN_SHIP } from "../../player/modes";
+import { MODE_IN_BED, MODE_IN_CHAIR, MODE_IN_SHIP } from "../../player/modes";
 import type { getActiveShipBody } from "../../player/world-state";
 import { getShipLayout } from "../../player/ship-layout";
 import { getBedEyeLocal, localOffsetToWorld } from "../../player/ship-interaction";
@@ -53,5 +53,5 @@ export function renderEntertainmentCameraFeel(
 }
 
 export function characterVisibleInMode(mode: string): boolean {
-  return mode !== MODE_IN_SHIP && mode !== MODE_IN_BED;
+  return mode !== MODE_IN_SHIP && mode !== MODE_IN_BED && mode !== MODE_IN_CHAIR;
 }

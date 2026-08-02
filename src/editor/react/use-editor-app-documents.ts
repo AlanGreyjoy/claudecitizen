@@ -16,7 +16,7 @@ import {
   fromSceneDocument,
 } from '../serialize';
 import { addAssetEntity, itemNameFromUrl } from '../session-helpers';
-import { slugifyPrefabName } from '../../world/prefabs/schema';
+import { slugifyPrefabName, type PrefabKind } from '../../world/prefabs/schema';
 import type { SceneTemplateId } from '../../world/scenes/templates';
 import type { TabEditorHandles } from './TabEditorHosts';
 import type { SceneEditorTab } from './types';
@@ -35,6 +35,7 @@ export type EditorAppDocumentsArgs = {
   stopInEditorPlay: () => void;
   setTab: (next: SceneEditorTab) => void;
   setNewSceneOpen: (open: boolean) => void;
+  setNewPrefabOpen: (open: boolean) => void;
   confirmLeaveDocument: ConfirmLeaveDocument;
   clearIsolation: () => void;
   confirmBaseDiscardIfNeeded: () => Promise<boolean>;
@@ -62,6 +63,7 @@ export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
     stopInEditorPlay,
     setTab,
     setNewSceneOpen,
+    setNewPrefabOpen,
     confirmLeaveDocument,
     clearIsolation,
     confirmBaseDiscardIfNeeded,
@@ -217,22 +219,43 @@ export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
   }, [store, deleteSceneById]);
 
   const newDocument = useCallback(async () => {
-    if (!(await confirmLeaveDocument({ discardMessage: 'Discard unsaved changes?' }))) {
+    if (
+      !(await confirmLeaveDocument({
+        discardMessage: 'Discard unsaved changes?',
+        deferBaseDiscard: true,
+      }))
+    ) {
       return;
     }
-    audioPreview.stop();
-    if (playingRef.current) stopInEditorPlay();
-    clearIsolation();
-    store.newDocument();
-    setTab('scene');
-  }, [
-    store,
-    audioPreview,
-    confirmLeaveDocument,
-    clearIsolation,
-    stopInEditorPlay,
-    setTab,
-  ]);
+    setNewPrefabOpen(true);
+  }, [confirmLeaveDocument, setNewPrefabOpen]);
+
+  const createPrefabDocument = useCallback(
+    async (name: string, kind: PrefabKind) => {
+      if (!(await confirmBaseDiscardIfNeeded())) return;
+      setNewPrefabOpen(false);
+      audioPreview.stop();
+      if (playingRef.current) stopInEditorPlay();
+      clearIsolation();
+      store.newDocument();
+      const trimmed = name.trim() || 'Untitled Prefab';
+      store.setDocumentMeta({
+        kind,
+        prefabName: trimmed,
+        prefabId: slugifyPrefabName(trimmed),
+      });
+      setTab(kind === 'ship' ? 'ship' : 'scene');
+    },
+    [
+      store,
+      audioPreview,
+      clearIsolation,
+      stopInEditorPlay,
+      setTab,
+      setNewPrefabOpen,
+      confirmBaseDiscardIfNeeded,
+    ],
+  );
 
   const newSceneDocument = useCallback(async () => {
     if (
@@ -352,6 +375,7 @@ export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
     deleteSceneById,
     deleteCurrentScene,
     newDocument,
+    createPrefabDocument,
     newSceneDocument,
     newShipDocument,
     openShipById,

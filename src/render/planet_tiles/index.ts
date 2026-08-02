@@ -1,7 +1,6 @@
 export {
   createPlanetTileManager,
   type PlanetTileManager,
-  type PlanetTileManagerOptions,
   type PlanetTileUpdateOptions,
 } from './manager';
 export { PLANET_RENDER_SCALE } from './domain/constants';

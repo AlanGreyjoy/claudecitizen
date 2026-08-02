@@ -19,6 +19,16 @@ export interface MainPostEnvironmentFrame {
   planetCenter: THREE.Vector3;
   planetRadiusMeters: number;
   sunDirection: THREE.Vector3;
+  /** Planet-center-to-moon unit direction for the authored lunar orbit. */
+  moonDirection: THREE.Vector3;
+  /** Moon's rotation axis; orients its tidally-locked surface texture. */
+  moonOrbitNormal: THREE.Vector3;
+  /**
+   * Whether the atmosphere's SkyNode owns far pixels this frame. False for
+   * solid / space-skybox backgrounds and above the atmosphere, where the
+   * nebula equirect and the scene-space sun and moon take over.
+   */
+  atmosphereSkyActive: boolean;
   backgroundColor: THREE.Color;
   fogColorDay: THREE.Color;
   fogColorNight: THREE.Color;

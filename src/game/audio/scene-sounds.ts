@@ -11,6 +11,9 @@ import {
   MODE_ENTERING_BED,
   MODE_IN_BED,
   MODE_LEAVING_BED,
+  MODE_ENTERING_CHAIR,
+  MODE_IN_CHAIR,
+  MODE_LEAVING_CHAIR,
   MODE_IN_SHIP,
   MODE_IN_STATION,
 } from "../../player/modes";
@@ -41,6 +44,12 @@ export const SHIP_SOUND_MODES = new Set<GameMode>([
   MODE_ENTERING_BED,
   MODE_IN_BED,
   MODE_LEAVING_BED,
+]);
+
+const CHAIR_SOUND_MODES = new Set<GameMode>([
+  MODE_ENTERING_CHAIR,
+  MODE_IN_CHAIR,
+  MODE_LEAVING_CHAIR,
 ]);
 
 export interface SceneSounds {
@@ -200,7 +209,27 @@ export function createSceneSounds(ctx: LoopContext): SceneSounds {
       return;
     }
 
-    if (SHIP_SOUND_MODES.has(ctx.world.mode)) {
+    if (
+      CHAIR_SOUND_MODES.has(ctx.world.mode) &&
+      ctx.world.chairOccupancy?.surface === "station"
+    ) {
+      updateStationSounds(
+        ctx,
+        listenerWorld,
+        listenerForward,
+        listenerUp,
+        stationNpcs,
+        networkEntities,
+        dtSeconds,
+      );
+      return;
+    }
+
+    if (
+      SHIP_SOUND_MODES.has(ctx.world.mode) ||
+      (CHAIR_SOUND_MODES.has(ctx.world.mode) &&
+        ctx.world.chairOccupancy?.surface === "ship")
+    ) {
       updateShipSounds(
         ctx,
         listenerWorld,

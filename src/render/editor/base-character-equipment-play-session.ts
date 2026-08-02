@@ -7,6 +7,7 @@ import type { BaseCharacterEquipmentV1 } from '../../player/equipment/base-chara
 import type { BackpackDefinition, WeaponDefinition } from '../../net/admin-api';
 import type { CharacterState, JumpPhase, Vec3 } from '../../types';
 import type { WeaponSelectSlotId } from '../../player/inventory/weapon-select';
+import type { WeaponSlotType } from '../../types/equipment';
 import type { WalkGait } from '../../player/character-locomotion';
 import type { SidekickAnimationRuntime } from '../characters/sidekick/animation-runtime';
 import type { SidekickUpperBodyAimController } from '../characters/sidekick/upper-body-aim';
@@ -24,110 +25,23 @@ import { updatePlayTestFrame } from './base-character-equipment-play-update';
 
 export type { CatalogDefinition };
 
-interface PlayTestDefaultAssignment {
+interface PlayTestDefaultSlot {
   slotId: 'backpack' | WeaponSelectSlotId;
-  definition: CatalogDefinition;
+  /** Catalog weapon slot type this loadout slot draws from; `null` takes any backpack. */
+  weaponSlotType: WeaponSlotType | null;
 }
 
-export const PLAY_TEST_DEFAULT_ASSIGNMENTS: readonly PlayTestDefaultAssignment[] = [
-  {
-    slotId: 'backpack',
-    definition: {
-      id: 'demo-backpack',
-      name: 'Demo Backpack',
-      description: 'Base Character play-test backpack.',
-      itemType: 'backpack',
-      subType: 'field',
-      prefabId: 'demo-backpack',
-      iconUrl: null,
-      stackMax: 1,
-      costArc: 0,
-      rarity: 'common',
-      createdAt: '',
-      updatedAt: '',
-      capacityLiters: 48,
-      emptyMassKg: 2.5,
-    },
-  },
-  {
-    slotId: 'rifle-primary',
-    definition: {
-      id: 'assault-01',
-      name: 'Assault 01',
-      description: 'Base Character primary-rifle play-test weapon.',
-      itemType: 'weapon',
-      subType: 'rifle',
-      prefabId: 'assault-01',
-      iconUrl: null,
-      stackMax: 1,
-      costArc: 0,
-      rarity: 'common',
-      createdAt: '',
-      updatedAt: '',
-      weaponSlotType: 'rifle',
-      ammoItemDefinitionId: null,
-      magazineSize: 30,
-      fireModes: ['single'],
-      roundsPerMinute: 600,
-      muzzleVelocityMps: 850,
-      bulletGravityMps2: 9.81,
-      maxRangeMeters: 1000,
-      damage: 20,
-    },
-  },
-  {
-    slotId: 'rifle-secondary',
-    definition: {
-      id: 'brown-50',
-      name: 'Brown 50',
-      description: 'Base Character secondary-rifle play-test weapon.',
-      itemType: 'weapon',
-      subType: 'rifle',
-      prefabId: 'brown-50',
-      iconUrl: null,
-      stackMax: 1,
-      costArc: 0,
-      rarity: 'common',
-      createdAt: '',
-      updatedAt: '',
-      weaponSlotType: 'rifle',
-      ammoItemDefinitionId: null,
-      magazineSize: 30,
-      fireModes: ['single'],
-      roundsPerMinute: 600,
-      muzzleVelocityMps: 850,
-      bulletGravityMps2: 9.81,
-      maxRangeMeters: 1000,
-      damage: 20,
-    },
-  },
-  {
-    slotId: 'handgun',
-    definition: {
-      id: 'twin-horned-pistol',
-      name: 'Twin Horned Pistol',
-      description: 'Base Character handgun play-test weapon.',
-      itemType: 'weapon',
-      subType: 'handgun',
-      prefabId: 'twin-horned-pistol',
-      iconUrl: null,
-      stackMax: 1,
-      costArc: 0,
-      rarity: 'common',
-      createdAt: '',
-      updatedAt: '',
-      weaponSlotType: 'handgun',
-      ammoItemDefinitionId: null,
-      magazineSize: 30,
-      fireModes: ['single'],
-      roundsPerMinute: 600,
-      muzzleVelocityMps: 850,
-      bulletGravityMps2: 9.81,
-      maxRangeMeters: 1000,
-      damage: 20,
-    },
-  },
-] as const;
+/**
+ * Play-test gear is picked from the live Admin catalog by slot type, never from
+ * literal item ids: item prefabs live in the open project, so a hard-coded id
+ * 404s in every project that does not happen to ship that exact document.
+ */
+export const PLAY_TEST_DEFAULT_SLOTS: readonly PlayTestDefaultSlot[] = [
+  { slotId: 'backpack', weaponSlotType: null },
+  { slotId: 'rifle-primary', weaponSlotType: 'rifle' },
+  { slotId: 'rifle-secondary', weaponSlotType: 'rifle' },
+  { slotId: 'handgun', weaponSlotType: 'handgun' },
+];
 
 const PLAY_TEST_STAGE_FORWARD: Vec3 = { x: 0, y: 0, z: 1 };
 const PLAY_TEST_WORLD_UP: Vec3 = { x: 0, y: 1, z: 0 };
@@ -223,18 +137,25 @@ export function equipDefaultPlayTestLoadout(
   const assignments = ctx.getAssignments();
   const weapons = ctx.getWeapons();
   const backpacks = ctx.getBackpacks();
+  const taken = new Set<string>();
   let changed = false;
-  for (const entry of PLAY_TEST_DEFAULT_ASSIGNMENTS) {
-    const current = assignments.get(entry.slotId);
-    const shouldReplaceFallback = current === entry.definition;
-    if (!overwrite && current && !shouldReplaceFallback) continue;
-    const catalog = entry.definition.itemType === 'backpack' ? backpacks : weapons;
-    const next = catalog.find((definition) =>
-      definition.prefabId === entry.definition.prefabId
-      && definition.itemType === entry.definition.itemType
-    ) ?? entry.definition;
+  for (const slot of PLAY_TEST_DEFAULT_SLOTS) {
+    const current = assignments.get(slot.slotId);
+    if (current && !overwrite) {
+      taken.add(current.id);
+      continue;
+    }
+    const candidates = slot.weaponSlotType === null
+      ? backpacks
+      : weapons.filter((definition) => definition.weaponSlotType === slot.weaponSlotType);
+    // Prefer a distinct item per slot so the two rifle slots differ when stock allows.
+    const next = candidates.find((definition) => !taken.has(definition.id)) ?? candidates[0];
+    // Empty catalog (unauthenticated Admin) leaves the slot empty rather than
+    // inventing a definition that points at a prefab the project may not have.
+    if (!next) continue;
+    taken.add(next.id);
     if (current === next) continue;
-    assignments.set(entry.slotId, next);
+    assignments.set(slot.slotId, next);
     changed = true;
   }
   return changed;

@@ -10,6 +10,10 @@ import { updateEntertainmentCameraFeel } from '../../player/entertainment-camera
 import { resolveEntertainmentGazeTarget } from '../../player/entertainment-gaze';
 import { occludeShipCamera } from '../../physics/ship-physics';
 import { getShipLayout } from '../../player/ship-layout';
+import {
+  getSandboxChairEyeWorld,
+  getSandboxChairFaceForward,
+} from './chair';
 import type { ShipSandboxSession } from './types';
 import { WORLD_UP } from './types';
 import { resolveSandboxOrbit, resolveShipSeatLook, smoothVector } from './camera-math';
@@ -75,6 +79,47 @@ function updateInBedSandboxCamera(session: ShipSandboxSession, dt: number): void
   session.camera.updateProjectionMatrix();
   session.camera.position.set(feelEye.x, feelEye.y, feelEye.z);
   session.cameraTarget.set(feelTarget.x, feelTarget.y, feelTarget.z);
+  session.camera.up.set(look.up.x, look.up.y, look.up.z);
+  session.camera.lookAt(session.cameraTarget);
+  session.camera.userData.smoothedPos = null;
+  session.camera.userData.smoothedTarget = null;
+}
+
+function updateInChairSandboxCamera(session: ShipSandboxSession, dt: number): void {
+  session.flightCameraFeelFrame = null;
+  const eye = getSandboxChairEyeWorld(session.ship, session.activeChairId);
+  if (!eye) {
+    updateWalkSandboxCamera(session, dt);
+    return;
+  }
+  const faceForward = getSandboxChairFaceForward(session.ship, session.activeChairId);
+  const cameraState = session.controls.sampleCameraState(dt);
+  const seatLook = cameraState.seatLook;
+  const lookingAround =
+    seatLook &&
+    (Math.abs(seatLook.yawRadians) > 1e-6 ||
+      Math.abs(seatLook.pitchRadians) > 1e-6);
+  const look = lookingAround
+    ? resolveShipSeatLook(
+        faceForward,
+        session.ship.up,
+        seatLook.yawRadians,
+        seatLook.pitchRadians,
+        FIRST_PERSON_PITCH_LIMIT,
+      )
+    : { forward: faceForward, up: session.ship.up };
+
+  if (typeof session.camera.userData.baseFovDeg !== 'number') {
+    session.camera.userData.baseFovDeg = session.camera.fov;
+  }
+  session.camera.fov = session.camera.userData.baseFovDeg as number;
+  session.camera.updateProjectionMatrix();
+  session.camera.position.set(eye.x, eye.y, eye.z);
+  session.cameraTarget.set(
+    eye.x + look.forward.x * 60,
+    eye.y + look.forward.y * 60,
+    eye.z + look.forward.z * 60,
+  );
   session.camera.up.set(look.up.x, look.up.y, look.up.z);
   session.camera.lookAt(session.cameraTarget);
   session.camera.userData.smoothedPos = null;
@@ -177,7 +222,9 @@ function updateWalkSandboxCamera(session: ShipSandboxSession, dt: number): void 
     session.mode === 'sitting' ||
     session.mode === 'standing' ||
     session.mode === 'lying' ||
-    session.mode === 'getting-up';
+    session.mode === 'getting-up' ||
+    session.mode === 'chair-sitting' ||
+    session.mode === 'chair-standing';
   const cameraState = session.controls.sampleCameraState(dt);
   const orbit = onShip
     ? resolveDeckCameraOrbit(
@@ -234,6 +281,10 @@ function updateWalkSandboxCamera(session: ShipSandboxSession, dt: number): void 
 export function updateShipSandboxCamera(session: ShipSandboxSession, dt: number): void {
   if (session.mode === 'in-bed') {
     updateInBedSandboxCamera(session, dt);
+    return;
+  }
+  if (session.mode === 'in-chair') {
+    updateInChairSandboxCamera(session, dt);
     return;
   }
   session.esCameraState.focus01 = 0;

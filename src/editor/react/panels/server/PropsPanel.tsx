@@ -188,7 +188,7 @@ export function PropFormPanel({ propId }: { propId: string | null }): ReactEleme
               defaultValue={defaults.description}
             />
           </AdminField>
-          <AdminField label="Prop prefab">
+          <AdminField label="Placeable prefab">
             <select className="sc-admin-select" name="prefabId" defaultValue={defaults.prefabId}>
               {prefabs.map((prefab) => (
                 <option key={prefab.id} value={prefab.id}>

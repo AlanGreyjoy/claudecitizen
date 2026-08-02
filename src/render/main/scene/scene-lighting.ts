@@ -3,7 +3,9 @@ import {
   DEFAULT_FOG_COLOR,
   DEFAULT_FOG_FAR,
   DEFAULT_FOG_NEAR,
+  MOON_MESH_RADIUS,
   SKY_HIGH_COLOR,
+  SUN_MESH_RADIUS,
 } from '../domain/constants';
 import { resolveRenderQuality } from '../domain/render-quality';
 
@@ -53,14 +55,17 @@ export function createSceneLighting(scene: THREE.Scene): SceneLighting {
   scene.add(sun);
   scene.add(sun.target);
 
+  // The space-view bodies. On the surface the atmosphere's SkyNode draws a
+  // scattered sun and a phase-shaded moon instead, and `updateEnvironment`
+  // hides these two so the sky never shows both.
   const sunMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(12000, 32, 32),
+    new THREE.SphereGeometry(SUN_MESH_RADIUS, 32, 32),
     new THREE.MeshBasicMaterial({ color: 0xfff1d2, fog: false }),
   );
   scene.add(sunMesh);
 
   const moonMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(7000, 32, 32),
+    new THREE.SphereGeometry(MOON_MESH_RADIUS, 32, 32),
     new THREE.MeshBasicMaterial({ color: 0xdfe6f2, fog: false, toneMapped: false }),
   );
   scene.add(moonMesh);

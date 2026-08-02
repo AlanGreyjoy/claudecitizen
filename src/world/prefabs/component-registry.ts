@@ -73,8 +73,8 @@ export interface ComponentDef {
   hint?: string;
 }
 
-const ALL_KINDS: PrefabKind[] = ["station", "ship", "site", "prop", "item"];
-const PROP_KINDS: PrefabKind[] = ["prop"];
+const ALL_KINDS: PrefabKind[] = ["station", "ship", "site", "placeable", "item"];
+const PLACEABLE_KINDS: PrefabKind[] = ["placeable"];
 const ITEM_KINDS: PrefabKind[] = ["item"];
 
 export const COMPONENT_REGISTRY: ComponentDef[] = [
@@ -89,12 +89,12 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
   },
   {
     type: "prop-frame",
-    label: "Prop Frame",
+    label: "Placeable Frame",
     category: "structure",
-    kinds: PROP_KINDS,
+    kinds: PLACEABLE_KINDS,
     singleton: true,
     createDefault: () => ({ type: "prop-frame" }),
-    hint: "Marks the prop origin used when placed in a hangar.",
+    hint: "Marks the origin used when this placeable is snapped in hangar/apartment Build Mode.",
   },
   {
     type: "item-frame",
@@ -336,6 +336,24 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       "Station F-key door. Empty is the interact target (radial stand-in or camera-aim raycast). Bind GLB nodes + deltas; drag Open/Close SFX from the asset browser.",
   },
   {
+    type: "chest-storage",
+    label: "Chest Storage",
+    category: "gameplay",
+    kinds: ["station"],
+    marker: true,
+    createDefault: () => ({
+      type: "chest-storage",
+      id: "chest-1",
+      label: "Open chest",
+      trigger: "radial",
+      radius: 1.6,
+      aimRadius: 0.35,
+      slotCount: 20,
+    }),
+    hint:
+      "Personal stash chest. F opens a transfer UI; contents are per-player and keyed by Id (same Id anywhere = same stash).",
+  },
+  {
     type: "object-animation",
     label: "Object Animation",
     category: "animation",
@@ -559,13 +577,13 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "collider",
     label: "Collider",
     category: "structure",
-    kinds: ["station", "ship", "site", "prop", "item"],
+    kinds: ["station", "ship", "site", "placeable", "item"],
     createDefault: () => ({
       type: "collider",
       shape: "box",
       size: { x: 1, y: 1, z: 1 },
     }),
-    hint: "Blocks walking characters. Use Box for simple props or Mesh for GLB walls and hull details.",
+    hint: "Blocks walking characters. Use Box for simple placeables or Mesh for GLB walls and hull details.",
   },
   // --- ship components -------------------------------------------------------
   {
@@ -741,6 +759,26 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       "F-key bunk. Empty is the mattress/interact target (radial or raycast). Eye/stand offsets set lie-down camera and get-up spot. No flight.",
   },
   {
+    type: "chair-seat",
+    label: "Chair Seat",
+    category: "gameplay",
+    kinds: ["station", "ship"],
+    scenes: true,
+    marker: true,
+    createDefault: () => ({
+      type: "chair-seat",
+      id: "chair-1",
+      label: "chair",
+      trigger: "radial",
+      radius: 1.45,
+      aimRadius: 0.35,
+      eye: { x: 0, y: 0.87, z: 0.25 },
+      stand: { x: 0, z: -1.55 },
+    }),
+    hint:
+      "F-key sit. Empty is the seated character's root — put it at seat height under the cushion, then raise Eye for first-person height. Works on station and ship deck. Hold Y to stand. No flight.",
+  },
+  {
     type: "entertainment-system",
     label: "Entertainment System",
     category: "ship",
@@ -810,7 +848,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       prefabId: "demo-station",
       prefabKind: "station",
     }),
-    hint: "Instantiate a reusable prefab into this scene (station, ship, prop, …).",
+    hint: "Instantiate a reusable prefab into this scene (station, ship, placeable, …).",
   },
   {
     type: "ui-screen",

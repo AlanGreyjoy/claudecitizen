@@ -9,6 +9,8 @@ import type {
   VegetationSettings,
   WaterBody,
 } from '../../types';
+import { isFiniteNumber, readHexColor, readNumber } from './read-values';
+import { createDefaultSkyRecipe, readSky, type PlanetSkyRecipe } from './sky-schema';
 
 const DEFAULT_GRASS_COLOR = '#7a9f42';
 
@@ -46,6 +48,17 @@ export type {
   PlanetSpawnLayer,
   SurfaceSpawnCollider,
 };
+
+export type {
+  PlanetAtmosphereRecipe,
+  PlanetCloudLayerRecipe,
+  PlanetCloudsRecipe,
+  PlanetMoonRecipe,
+  PlanetNightRecipe,
+  PlanetSkyRecipe,
+  PlanetStarsRecipe,
+  PlanetSunRecipe,
+} from './sky-schema';
 
 export interface PlanetHeightRecipe {
   continentScale: number;
@@ -132,6 +145,8 @@ export interface PlanetDocument {
   biomes: PlanetBiomeRecipe;
   palette: PlanetSurfacePalette;
   vegetation: VegetationSettings;
+  /** Day/night cycle, scattering, sun, moon, stars, clouds, night palette. */
+  sky: PlanetSkyRecipe;
   /** Authored surface spawn catalog (rocks, props, etc.). */
   spawning: PlanetSpawnCatalog;
   spawnHint?: LandingSiteHint;
@@ -319,21 +334,6 @@ export function planetPhysicsFromDocument(doc: Pick<
     terrainAmplitudeMeters: doc.terrainAmplitudeMeters,
     dragSeaLevel: doc.dragSeaLevel,
   };
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function readNumber(value: unknown, fallback: number): number {
-  return isFiniteNumber(value) ? value : fallback;
-}
-
-function readHexColor(value: unknown, fallback: string): string {
-  if (typeof value !== 'string') return fallback;
-  const trimmed = value.trim();
-  if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) return fallback;
-  return trimmed.toLowerCase();
 }
 
 function readHeight(raw: unknown): PlanetHeightRecipe {
@@ -703,6 +703,7 @@ export function parsePlanetDocument(raw: unknown): PlanetDocument | null {
     biomes: readBiomes(src.biomes),
     palette: readPalette(src.palette),
     vegetation: readVegetation(src.vegetation),
+    sky: readSky(src.sky),
     spawning: readSpawning(src.spawning),
     spawnHint: readSpawnHint(src.spawnHint),
   };
@@ -739,6 +740,7 @@ export function createDefaultPlanetDocument(
         assetUrls: [...DEFAULT_VEGETATION.tree.assetUrls],
       },
     },
+    sky: createDefaultSkyRecipe(),
     spawning: createDefaultSpawnCatalog(),
   };
 }

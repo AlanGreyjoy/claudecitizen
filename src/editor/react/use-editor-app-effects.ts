@@ -69,6 +69,7 @@ export type EditorAppEffectsArgs = {
   newDocument: () => void | Promise<void>;
   onSave: () => void;
   openSceneSettings: () => void;
+  openPrefabSettings: () => void;
   deleteCurrentScene: () => void | Promise<void>;
   openProjectSettings: () => void;
   openDeployFrontend: () => void;
@@ -109,6 +110,7 @@ export function useEditorAppEffects(args: EditorAppEffectsArgs): void {
     newDocument,
     onSave,
     openSceneSettings,
+    openPrefabSettings,
     deleteCurrentScene,
     openProjectSettings,
     openDeployFrontend,
@@ -150,6 +152,7 @@ useEffect(() => {
       save: onSave,
       openBrowse: (panel) => toolbarRef.current?.openBrowsePanel(panel),
       openSceneSettings,
+      openPrefabSettings,
       deleteScene: () => void deleteCurrentScene(),
       openProjectSettings: openProjectSettings,
       openDeployFrontend,
@@ -180,6 +183,7 @@ useEffect(() => {
   newDocument,
   onSave,
   openSceneSettings,
+  openPrefabSettings,
   deleteCurrentScene,
   openProjectSettings,
   openDeployFrontend,

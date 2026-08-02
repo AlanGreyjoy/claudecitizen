@@ -87,6 +87,14 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     elements.rootEl.querySelector<HTMLElement>(
       '[data-orig-id="game-menu-grass-distance-value"]',
     ) ?? elements.rootEl.querySelector<HTMLElement>('#game-menu-grass-distance-value');
+  const vegetationDistanceInput =
+    elements.rootEl.querySelector<HTMLInputElement>(
+      '[data-orig-id="game-menu-vegetation-distance"]',
+    ) ?? elements.rootEl.querySelector<HTMLInputElement>('#game-menu-vegetation-distance');
+  const vegetationDistanceValueEl =
+    elements.rootEl.querySelector<HTMLElement>(
+      '[data-orig-id="game-menu-vegetation-distance-value"]',
+    ) ?? elements.rootEl.querySelector<HTMLElement>('#game-menu-vegetation-distance-value');
 
   const controls = createGameMenuControls({
     controlsRoot,
@@ -130,6 +138,15 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     }
   }
 
+  function syncVegetationDistance(): void {
+    if (vegetationDistanceInput) {
+      vegetationDistanceInput.value = String(settings.vegetationDrawDistanceMeters);
+    }
+    if (vegetationDistanceValueEl) {
+      vegetationDistanceValueEl.textContent = `${settings.vegetationDrawDistanceMeters} m`;
+    }
+  }
+
   function syncAudioControls(): void {
     elements.masterVolumeEl.value = String(Math.round(settings.masterVolume * 100));
     elements.sfxVolumeEl.value = String(Math.round(settings.sfxVolume * 100));
@@ -162,6 +179,7 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
       syncCloudModeRadios();
       syncAmbientOcclusion();
       syncGrassDistance();
+      syncVegetationDistance();
       syncAudioControls();
       controls.renderControlsPanel();
       controls.startTelemetry();
@@ -242,6 +260,19 @@ export function createGameMenu(elements: GameMenuElements, callbacks: GameMenuCa
     }
     settings = saveGameSettings({ ...settings, grassRenderDistanceMeters: meters });
     syncGrassDistance();
+  });
+
+  vegetationDistanceInput?.addEventListener('input', () => {
+    const meters = Number.parseInt(vegetationDistanceInput.value, 10);
+    if (
+      !Number.isFinite(meters) ||
+      meters === settings.vegetationDrawDistanceMeters
+    ) {
+      syncVegetationDistance();
+      return;
+    }
+    settings = saveGameSettings({ ...settings, vegetationDrawDistanceMeters: meters });
+    syncVegetationDistance();
   });
 
   elements.masterVolumeEl.addEventListener('input', () => {

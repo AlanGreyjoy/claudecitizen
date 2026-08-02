@@ -1,9 +1,11 @@
 import {
   bedInteractPrompt,
+  chairInteractPromptFromDeck,
   createDeckCharacterState,
   DECK_FLOOR_OFFSET_METERS,
   isOnShipRampDeck,
   nearestBed,
+  nearestChair,
   nearestDeckLadder,
   nearestDoor,
   nearestSeat,
@@ -26,7 +28,8 @@ import { getPilotSeatAnchor, getBedAnchor, nearShipRampOutside } from '../../pla
 import { doorBlends } from '../../player/ship-rig';
 import { playSfx } from '../../audio/sfx';
 import { playShipRampToggleSfx } from '../../player/ship-articulation-sfx';
-import { LIE_TRANSITION_SECONDS } from '../../player/modes';
+import { CHAIR_SIT_TRANSITION_SECONDS, LIE_TRANSITION_SECONDS } from '../../player/modes';
+import { getSandboxChairAnchor } from './chair';
 import type { ShipSandboxSession, SandboxWalkActions } from './types';
 import { PAD_RADIUS_METERS, SANDBOX_GRAVITY } from './types';
 
@@ -113,6 +116,34 @@ function handleSeatInteract(
       duration: SIT_SECONDS,
     };
     session.mode = 'sitting';
+  }
+  return true;
+}
+
+function handleChairInteract(
+  session: ShipSandboxSession,
+  deckLocal: DeckCharacterState['deckLocal'],
+  doorAim: ReturnType<typeof resolveDoorInteractAim>,
+  actions: SandboxWalkActions,
+): boolean {
+  const chairNearby = nearestChair(deckLocal, doorAim);
+  if (!chairNearby) return false;
+  session.prompt = chairInteractPromptFromDeck(chairNearby);
+  if (actions.interactPressed) {
+    const end = getSandboxChairAnchor(session.ship, chairNearby.id);
+    if (!end) return true;
+    session.activeChairId = chairNearby.id;
+    session.transition = {
+      start: {
+        forward: session.character.forward,
+        position: session.character.position,
+        up: session.character.up,
+      },
+      end,
+      elapsed: 0,
+      duration: CHAIR_SIT_TRANSITION_SECONDS,
+    };
+    session.mode = 'chair-sitting';
   }
   return true;
 }
@@ -252,6 +283,7 @@ function handleDeckInteractions(
     cameraState.pitchRadians,
     cameraState.zoomDistance,
   );
+  if (handleChairInteract(session, deckLocal, doorAim, actions)) return;
   if (handleBedInteract(session, deckLocal, doorAim, actions)) return;
   if (handleDoorInteract(session, deckLocal, doorAim, actions)) return;
   handleInteriorRampInteract(session, deckLocal, actions);

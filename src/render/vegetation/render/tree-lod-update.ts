@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Vec3 } from '../../../types';
-import { TREE_LOD_DISTANCE_METERS } from '../domain/constants';
+import { getTreeLodDistanceMeters } from '../domain/constants';
 import type { StoredVegetationInstance } from '../domain/storage';
 
 export interface TreeLodMeshes {
@@ -101,7 +101,8 @@ export function updateTreeLodMeshes(
   } = lod;
   if (instances.length === 0 || !lowMesh || assetCount === 0) return;
 
-  const lodDistanceSq = TREE_LOD_DISTANCE_METERS * TREE_LOD_DISTANCE_METERS;
+  const lodDistance = getTreeLodDistanceMeters();
+  const lodDistanceSq = lodDistance * lodDistance;
   highIndices.fill(0);
   let lowIndex = 0;
 

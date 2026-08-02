@@ -1,5 +1,6 @@
 import { type DragEvent, type ReactElement } from 'react';
 import type { CharacterEquipmentSlotV1 } from '../../../../player/equipment/base-character-equipment';
+import { suggestProviderSocketId } from '../../../../world/prefabs/item-runtime';
 import type { WeaponSlotType } from '../../../../types/equipment';
 import { ATTACHMENT_BONES, EQUIPMENT_DND_TYPE, LOCOMOTION_LABELS } from './constants';
 import type { BaseCharacterEditorUiApi } from './types';
@@ -71,7 +72,7 @@ function SlotSettingsSection({
   const snap = api.getSnapshot();
   const documentState = snap.documentState!;
   const slotOptions = [
-    { value: '', label: 'Always available' },
+    { value: '', label: 'None' },
     ...documentState.slots
       .filter((candidate) => candidate.id !== slot.id)
       .map((candidate) => ({ value: candidate.id, label: candidate.label })),
@@ -121,6 +122,20 @@ function SlotSettingsSection({
             onChange={(event) => {
               slot.weaponSlotType = event.currentTarget.value as WeaponSlotType;
               snap.assignments.delete(slot.id);
+              if (slot.weaponSlotType === 'rifle' && !slot.providerSocket) {
+                const backpack = documentState.slots.find((entry) => entry.kind === 'backpack');
+                const socketId = suggestProviderSocketId(
+                  'rifle',
+                  slot.id,
+                  snap.equippedBackpackSockets,
+                );
+                if (backpack) {
+                  slot.providerSocket = {
+                    slotId: backpack.id,
+                    socketId: socketId ?? slot.id,
+                  };
+                }
+              }
               api.updateSlot();
             }}
           >
@@ -158,9 +173,21 @@ function SlotSettingsSection({
           value={slot.providerSocket?.slotId ?? ''}
           onChange={(event) => {
             const value = event.currentTarget.value;
-            slot.providerSocket = value
-              ? { slotId: value, socketId: slot.providerSocket?.socketId || slot.id }
-              : undefined;
+            if (!value) {
+              slot.providerSocket = undefined;
+              api.updateSlot();
+              return;
+            }
+            const accepts = slot.weaponSlotType ?? 'rifle';
+            const matching = snap.equippedBackpackSockets.filter(
+              (socket) => socket.accepts === accepts,
+            );
+            const socketId =
+              matching.find((socket) => socket.id === slot.id)?.id
+              ?? matching.find((socket) => socket.id === slot.providerSocket?.socketId)?.id
+              ?? matching[0]?.id
+              ?? slot.id;
+            slot.providerSocket = { slotId: value, socketId };
             api.updateSlot();
           }}
         >
@@ -175,20 +202,54 @@ function SlotSettingsSection({
       {slot.providerSocket ? (
         <label className="ed-base-field">
           <span>Provider socket</span>
-          <input
-            className="ed-input"
-            value={slot.providerSocket.socketId}
-            onChange={(event) => {
-              if (slot.providerSocket) slot.providerSocket.socketId = event.currentTarget.value;
-              api.updateSlot();
-            }}
-          />
+          {snap.equippedBackpackSockets.length > 0 ? (
+            <select
+              className="ed-select"
+              value={slot.providerSocket.socketId}
+              onChange={(event) => {
+                if (slot.providerSocket) {
+                  slot.providerSocket.socketId = event.currentTarget.value;
+                  api.updateSlot();
+                }
+              }}
+            >
+              {snap.equippedBackpackSockets.map((socket) => (
+                <option key={socket.id} value={socket.id}>
+                  {`${socket.id} · ${socket.accepts}`}
+                </option>
+              ))}
+              {!snap.equippedBackpackSockets.some(
+                (socket) => socket.id === slot.providerSocket?.socketId,
+              ) ? (
+                <option value={slot.providerSocket.socketId}>
+                  {`${slot.providerSocket.socketId} · missing on pack`}
+                </option>
+              ) : null}
+            </select>
+          ) : (
+            <>
+              <input
+                className="ed-input"
+                value={slot.providerSocket.socketId}
+                onChange={(event) => {
+                  if (slot.providerSocket) {
+                    slot.providerSocket.socketId = event.currentTarget.value;
+                    api.updateSlot();
+                  }
+                }}
+              />
+              <p className="ed-base-note">
+                Equip a backpack to pick sockets from the prefab (Asteron Backpack:
+                rifle-primary / rifle-secondary).
+              </p>
+            </>
+          )}
         </label>
       ) : null}
       <button
         type="button"
         className="ed-btn"
-        onClick={() => api.deleteSlot(slot.id)}
+        onClick={() => void api.deleteSlot(slot.id)}
       >
         Delete slot
       </button>

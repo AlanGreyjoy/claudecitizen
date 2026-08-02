@@ -139,6 +139,14 @@ export function createInStationMode(
 
     walkInStation(ctx, deps.combat, input);
 
+    if (input.actions.hangarBuildPressed) {
+      const roomRuntime = deps.buildTool.buildRuntimeForCurrentRoom();
+      if (roomRuntime && ctx.build) {
+        ctx.build.terminal.open(roomRuntime.controller);
+        return;
+      }
+    }
+
     if (deps.padInterest.tryEnterShipPadInterest()) return;
 
     const boardPrompt = deps.shipSystems.handleBoardExterior(

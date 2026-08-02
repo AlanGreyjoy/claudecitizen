@@ -55,6 +55,11 @@ export interface EditorViewport {
   isPlayMode: () => boolean;
   /** Ship kind only: articulates gear/ramp/doors on loaded models for preview. */
   setShipPreview: (state: ShipPreviewState) => void;
+  /**
+   * Item/backpack prefabs: spawn catalog (or fallback) weapons on each
+   * equipment-socket so socket empties can be posed with a real gun mesh.
+   */
+  setSocketWeaponPreview: (enabled: boolean) => void;
   focusSelection: () => void;
   /** Orbit pivot (what the Scene view is centred on) in a parent's local space. */
   getViewFocusPosition: (parentEntityId: string | null) => Vec3;

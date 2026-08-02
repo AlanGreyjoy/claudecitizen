@@ -171,6 +171,14 @@ Deployment specifics — TLS, WebTransport certificates, CORS, cookies — are i
 - Switching between full and lower-body variants of the same gait must preserve `AnimationAction.time`; otherwise pressing or releasing RMB visibly restarts the foot cycle.
 - Diagnose aim-only orientation bugs in this order: confirm `upperBodyAnimation`, inspect the root/pelvis tracks in both clips, then inspect the spine compensation. Do not patch walk/sprint `yawOffsetDegrees` unless the corresponding full-body clip is also facing incorrectly.
 
+### Weapon fire feedback
+
+- **Recoil rides on top of the aim, never inside it.** `state.lookRecoil` in `src/input/player-controls.ts` is an additive offset added at `sampleCameraState` time and decayed there. Writing kick into `orbitLook.target{Pitch,Yaw}Radians` instead makes the camera climb permanently over a magazine, because nothing ever pulls it back. The pattern itself (climb per consecutive shot, alternating horizontal wander, per-weapon profile derived from RPM and muzzle velocity) is the pure module `src/player/weapon-recoil.ts`; it takes a `random01` callback rather than calling `Math.random` itself.
+- **Combat effects update after the camera rig.** `updateCombatEffects` in `src/render/main/render-spike-frame.ts` runs after `updateLightingAndCamera` because muzzle flashes, tracer streaks and impact sparks all billboard against the camera; running them first shows a one-frame swim on fast turns.
+- **Combat FX textures are procedural**, generated on canvas in `src/render/effects/combat-fx-textures.ts` with a fixed LCG. They must stay art-free: a project that authored no combat assets still gets flashes, tracers and impacts. Weapon-authored `hitDecalUrl` remains optional decoration on top of the always-on impact burst.
+- Tracers simulate travel (`src/render/effects/tracers.ts`): a fixed-length streak chases the round from the muzzle to the impact point at the weapon's clamped muzzle velocity. Do not go back to drawing the full barrel-to-impact line at once — it reads as a laser, not a bullet.
+- The crosshair is driven per frame, not toggled. `src/render/effects/hud/weapon-crosshair.ts` writes `--weapon-crosshair-spread` and `--weapon-crosshair-punch`; the bars in `sc-ui.css` are separate elements so recoil can push them apart. Keep those two custom properties as the only JS→CSS channel.
+
 ### Friendly station NPCs
 
 - Ambient populations use `npc-spawner` markers connected to an undirected graph of `npc-waypoint` markers. Named/service characters use `npc-placement`.
@@ -335,6 +343,28 @@ npm run build:wasm       # compile shared prediction code for the browser
 
 Backend env template: `backend/.env.example`. JWT secrets, DB URLs, certificate paths, etc. live there.
 
+#### Checking whether the dev backend is up
+
+Use the port, not a request: `ss -ltnp | grep :3000` (the process is `cc-server`). Health routes are **`/livez` and `/readyz`** — there is no `/health`, and the route table in `backend/crates/server/src/main.rs` is the only source of truth for paths, so read it rather than guessing by convention.
+
+If you do probe with curl, ask for the status code and do not pipe through `head`: axum answers an unknown route with a 404 and an **empty body**, so `curl -s .../health | head` prints exactly the same nothing as a refused connection, and `$?` reports head's status rather than curl's. Both cases look identical.
+
+```bash
+curl -s -m 5 -o /dev/null -w '%{http_code}\n' http://localhost:3000/livez
+```
+
+#### Reading catalog data (weapons, items, ships)
+
+`/admin/*` endpoints require an operator session (`/admin/session`) and return `401 {"message":"Admin session is missing."}` without one. For read-only inspection, query the dev database directly instead of trying to authenticate:
+
+```bash
+docker exec claude-citizen-postgres-1 psql -U claude -d claude_citizen \
+  -c 'SELECT i."id", i."prefabId", w.* FROM "ItemDefinition" i
+      JOIN "WeaponDefinition" w ON w."itemDefinitionId"=i."id";'
+```
+
+Weapon stats live in `WeaponDefinition` joined to `ItemDefinition` on `itemDefinitionId`; a weapon prefab is wired to its catalog row by `ItemDefinition.prefabId`. Table and column names are quoted camelCase.
+
 ### Payments and AsteronCredits
 
 Real-money monetization lives in `backend/crates/server/src/payments/` (Stripe client, AES-256-GCM
@@ -498,17 +528,22 @@ The visible terrain mesh and on-foot physics **must sample the same LOD grid**. 
 - Mesh grid vertices use `sampleAnalyticPlanetSurface()` with the band-limited spacing from `renderableGridSampleSpacingMeters()`. Foot placement uses **`sampleFootPlanetSurface()`** (`world/planet-surface.ts`) at the level from **`getFootSurfaceSampleLevel()`** (`world/foot-surface-level.ts`); both paths must resolve the same per-LOD grid heights.
 - Each frame, the tile manager sets that level from `finestSelectedTileLevel` (`render/planet_tiles/domain/tile-coverage.ts`). Character update runs *before* render, so foot sampling uses the **previous frame's** level (one-frame lag is OK).
 - Below ~2 km altitude, `shouldSplitTile` forces L17 detail only for **nearby facing tiles** (`GROUND_DETAIL_RADIUS_METERS` in `render/planet_tiles/domain/lod.ts`). The 450 m radius keeps max-detail tile pressure close to the former L16/900 m budget while halving on-foot triangle span.
-- Every vertex in a tile uses the tile level's uniform band limit. Do not give inherited even/even vertices coarser octave cutoffs: isolated coarse samples surrounded by fine samples become pyramid spikes or inverted holes. Same-LOD neighbors remain bit-identical; `render/planet_tiles/render/seam-stitching.ts` handles active mixed-LOD boundaries.
-- Terrain tiles append radially inset, two-sided skirt walls on all four edges while the main material remains `FrontSide`. `render/planet_tiles/render/seam-stitching.ts` snaps the finer side of active mixed-LOD contacts onto the coarse rendered surface and collapses that edge's skirt; the base skirts remain the fallback for culled or temporarily uncovered neighbors. Changing the stored skirt layout requires updating `TERRAIN_TILE_VERTEX_COUNT` and bumping `TERRAIN_CACHE_VERSION`.
+- Every vertex in a tile uses the tile level's uniform band limit. Do not give inherited even/even vertices coarser octave cutoffs: isolated coarse samples surrounded by fine samples become pyramid spikes or inverted holes. Same-LOD neighbors agree to well under a pixel — `terrain:validate`'s `sameLodSameFaceSeamErrorByLevel` measures 0.1 mm at L17 and 2 mm at L8, with the 10 cm at L2 sitting on a ~2500 km tile — which is what makes skirt suppression safe on those edges. Mixed-LOD boundaries are folded in the vertex shader from the per-instance edge deltas that `domain/edge-deltas.ts` resolves.
+- Terrain tiles append radially inset, two-sided skirt walls on all four edges while the main material remains `FrontSide`. Skirts cover culled, cross-face and temporarily uncovered neighbors; the edge morph covers active mixed-LOD contacts. Changing the skirt layout means changing `grid-geometry.ts` and `tile-vertex.ts` together.
+- **The shared grid carries four skirts; the shader draws only the ones an edge needs.** `domain/edge-deltas.ts` returns `EDGE_NEIGHBOUR_ABSENT` (-1) when no neighbor resolves — cross-face, past `MAX_NEIGHBOUR_SEARCH_LEVELS`, culled, or still building — and a delta of exactly `0` now means a same-level, same-face neighbor really is in the rendered set. On that case alone `terrain-node-material.ts` leaves the skirt vertices at their surface corner, so the quads collapse to degenerates and rasterize nothing. `terrain:validate` measures 72% of skirt edges suppressed on a representative selection, ~18% fewer terrain triangles. Topology, vertex counts and the identity attribute are untouched, so this needs **no** `TERRAIN_CACHE_VERSION` bump — but if you make edge deltas mean something else, the skirts are what you are silently turning off.
+- **`TERRAIN_SKIRT_MIN_DEPTH_METERS` (48 m) is load-bearing — do not "right-size" it to the cell span.** The gap a skirt covers is driven by terrain relief across the seam, not by cell size: `terrain:validate`'s `skirtGapByLevel` measures 38.71 m at L15 and 20.62 m at L17, where `cellSpan * TERRAIN_SKIRT_DEPTH_FACTOR` would only give 25.8 m and 6.5 m. Lowering the floor to match cell scale opens real holes at exactly the levels a player stands on. Read `skirtGapByLevel` before touching any skirt-depth constant.
 - The terrain fallback chain must reach L0, and the six synchronously built L0 roots must remain pinned in `mesh-cache.ts`. This is the no-hole coverage guarantee when disk/worker tiles are cold, delayed, or over budget.
 - `world/base-elevation.ts` owns the terrain recipe through lake carving. `world/rivers.ts` builds one cached, spatially indexed downhill drainage graph from that pre-river surface; vertex sampling only queries the graph. Preserve its acyclic confluences and non-increasing water levels—do not put route solving back in the per-vertex hot path.
-- **Do not vary `TILE_SEGMENTS` / `RENDER_SURFACE_SEGMENTS` per quality preset.** The low-poly triangle layout, foot sampler, lake mesh, and disk cache assume a fixed count. Validate cached tiles with `isValidTerrainTileBuffers()`.
-- Terrain tiles are non-indexed, flat-shaded triangles with baked per-face palette colors. `terrain-triangulation.ts` owns the alternating diagonal rule shared by mesh generation and foot sampling; do not reintroduce smooth normals or photographic terrain splat textures without an explicit art-direction change.
+- **Do not vary `TILE_SEGMENTS` / `RENDER_SURFACE_SEGMENTS` per quality preset.** The low-poly triangle layout, foot sampler, lake mesh, height atlas and disk cache assume a fixed count. `TILE_SEGMENTS` must also stay **even**: the shared index buffer is only valid because an even tile origin cannot change `(gridX + gridY)` diagonal parity.
+- **Terrain is one instanced draw, not one draw per tile.** All visible tiles are instances of a single indexed grid (`render/grid-geometry.ts`); a tile is sixteen floats in a params buffer plus a slot in the shared height/colour atlas (`render/height-atlas.ts`). Tiles own no `BufferGeometry`, no scene-graph node, and no per-tile material. Never give the terrain material a per-mesh binding: `Node.customCacheKey()` returns the node id, so a per-tile buffer means a per-tile synchronous pipeline compile.
+- **Vertex placement is float32-critical.** A vertex is `direction * (radius + height) - tileCentre`, and both terms are ~6.37e6 m, where float32 spacing is half a metre. `domain/tile-vertex.ts` cancels the large terms symbolically instead; `terrain-node-material.ts` is a transliteration of it, and `terrain:validate` simulates the shader in `Math.fround` to prove it (naive 0.69 m vs 0.00008 m). Change the pure function first, watch the assertion, then mirror it into TSL.
+- Terrain reads as flat-shaded triangles with baked per-corner palette colors: `material.flatShading` derives exact facet normals from view-position derivatives, and colour uses a `flat`-interpolated varying. `terrain-triangulation.ts` owns the alternating diagonal rule shared by the shared grid and foot sampling; do not reintroduce smooth normals or photographic terrain splat textures without an explicit art-direction change.
+- `build/terrain-buffers.ts`'s `buildTerrainTileBuffers` is the **CPU reference mesh, not a render path** — nothing in `src/` calls it. It exists so `terrain:validate` has concrete triangles to check skirt winding, mixed-LOD gaps and mesh-vs-foot agreement against. Do not wire it back into streaming.
 - **Do not bypass** the per-frame tile build budget in `mesh-cache.ts` — unbounded sync builds freeze at 0 FPS.
 - **Generation runs in workers; the main thread only installs results.** Terrain (`planet_tiles/worker/`), vegetation (`vegetation/worker/`), and surface spawns (`surface_spawns/worker/`) each own a pool with a startup liveness handshake, because some embedded browsers construct module workers that never run and never fire an error. Failing that handshake reverts the subsystem to a *budgeted* sync path — never an unbudgeted one. Do not move placement or height sampling back onto the main thread: a lush L17 vegetation tile issues over ten thousand surface probes, and the millisecond budget is only checked between tiles.
 - The hot samplers (`world/renderable-surface.ts`, `world/rivers.ts`, `world/climate.ts`) are written allocation-free on purpose: numeric cache keys, module scratch objects, scalar math instead of `add`/`cross`/`scale` chains. Reintroducing per-sample strings or vector allocations there costs whole frames, not microseconds. Scratch returns are documented at each site — copy out anything you retain.
 - `Tile Build` in the HUD stats panel is the diagnostic that separates the two failure modes: a low average with `workers` means the queue is the bottleneck, a high average means the sampler is, and `sync` means a pool never started.
-- **Debugging:** `npm run terrain:validate` checks horizon coverage, cold-cache/root fallback, packed mesh/foot height and normal agreement, uniform per-LOD sampling, same- and mixed-LOD seams across cube faces, two-sided skirt coverage, routed-water invariants, and finest triangle span. `scripts/measure_desync.ts` compares analytic/mesh heights. `?quality=balanced|performance|high` toggles render presets.
+- **Debugging:** `npm run terrain:validate` checks horizon coverage, cold-cache/root fallback, packed mesh/foot height and normal agreement, uniform per-LOD sampling, same- and mixed-LOD seams across cube faces, two-sided skirt coverage, per-level skirt gap budgets, skirt-edge suppression (including that no cross-face edge ever loses its skirt), routed-water invariants, and finest triangle span. `scripts/measure_desync.ts` compares analytic/mesh heights. `?quality=balanced|performance|high` toggles render presets.
 
 ## Terrain & vegetation disk cache invalidation
 
@@ -526,6 +561,22 @@ IndexedDB keys live in `src/cache/cache-keys.ts` (`TERRAIN_CACHE_VERSION`, `VEGE
 | Quality sample budgets (`grassSampleCount` / `treeSampleCount`) | Already in the veg storage key via `hashVegetationQualityBudgets` — no version bump for budget-only changes |
 
 When unsure whether probes catch a code change, bump. Stale veg tiles with wrong instance counts tank FPS; stale terrain tiles desync feet from mesh.
+
+## Sky, day/night, and clouds
+
+The sky is **authored per planet**, in the `sky` block of `*.planet.json` (`world/planets/sky-schema.ts`). Defaults are Earth's; the Planet Authoring panel exposes every field under Sky & Atmosphere / Sun / Moon / Clouds / Stars / Night. Nothing here feeds terrain generation, so **sky edits never invalidate a terrain or vegetation cache** — `terrainFingerprint()` hashes only biomes and probed heights.
+
+- **One conversion point.** `render/main/domain/sky-recipe.ts` turns the authored hex/degrees into linear `THREE.Color`s, radians, and Bruneton scattering coefficients, memoized on the recipe object's identity (`activatePlanetDocument` swaps the whole config, so identity is an exact staleness check). Never parse `sky.*` hex strings anywhere else.
+- **The atmosphere owns the surface sky.** `post/webgpu-atmosphere.ts` builds takram's `SkyNode` with `showSun`, `showMoon`, and `moonScattering` on. The sun disc and the phase-shaded moon are drawn *by the sky pass*, because only it has the transmittance LUT that reddens a body at the horizon. `scene-lighting.ts`'s `sunMesh` / `moonMesh` are the **orbital** bodies; `updateEnvironment` hides them whenever `resolveAtmosphereSkyActive()` is true, and that predicate has exactly one definition (`scene/scene-environment-apply.ts`) because two would drift and show two suns.
+- **The additive `atmosphereMesh` shell is orbit-only.** Inside the atmosphere it was a second, non-physical blue wash stacked on the scattering solve, which is what flattened daylight. Do not re-enable it below `atmosphereHeightMeters`.
+- **Night is lifted deliberately.** Physically, a moonless night in this model is black — no airglow, no zodiacal light, no galaxy. `post/night-sky-node.ts` adds those as an authored layer on sky pixels only (`depth == 1`), gated on `atmosphereSkyActive` and faded out with `spaceFactor` so orbit keeps its real black. Ambient has an authored floor (`sky.night.ambientIntensity`); moonlight scales with both moon elevation *and* phase.
+- **The moon has real phases.** `update/sun-system.ts` puts it on its own inclined orbit with a `synodicPeriodDays` drift instead of pinning it opposite the sun (which is what made every night a full moon). `matrixMoonFixedToECEF` tidally locks its texture: first basis column = direction to the moon, third = orbit normal. The albedo map is procedural (`scene/moon-texture.ts`) — maria from fBm, craters placed as unit directions so they don't pile up at the poles.
+- **Clouds are lit.** `effects/clouds/shell-node-material.ts` is domain-warped fBm shaded against the sun: thin edges transmit, thick cores self-shadow, a low sun washes the lit side with the authored sunset color, looking toward the sun lights a silver rim, and night falls to the night color plus moonlight. Coverage is sampled from the **planet-fixed** direction so banks stay over their geography. There is no GLSL fallback material — `WebGPURenderer` draws a raw `ShaderMaterial` as a blank node material, so `createCloudShell` requires the TSL factory.
+- **Judge cloud cell size against the layer altitude, not the horizon.** A cell of size D on a deck at altitude h subtends `2·atan(D/2h)` overhead, so a 12 km cell on a 1.4 km deck is one cloud covering 80 degrees of sky. `CLOUD_CELL_METERS` (3 km) is the base-octave size at `layer.scale === 1`, derived from planet radius because coverage is sampled from a unit direction.
+- **Cloud wind is authored in m/s, never rad/s.** `cloudDriftAngle` divides by the shell radius to get the rotation rate, so a value reads the same on a moon and on a gas giant. The pre-recipe deck hard-coded `0.0016 rad/s`, which on an Earth-sized planet is 10.2 km/s — Mach 30 — and only looked still because the coverage field was one cell per planet.
+- **`clouds.sharpness` has a narrow useful range.** The coverage field is a normalized fBM — 0.5 mean, ~0.09 spread — so a sharpness above ~0.3 ramps density over several standard deviations and turns the whole sky into one gradient with no clear air.
+- **Octave counts are shader constants, not uniforms.** `materials/tsl-noise.ts` compiles one fBm per octave count, normalized so the 0..1 range holds whatever the count is. Changing `clouds.detail`, or adding/removing a layer, is a different graph and needs a Play restart; coverage, sharpness, cell scale, altitude, drift, and the four colors are pushed as uniforms every frame and tune live.
+- `DAY_LENGTH_SECONDS` is gone — day length is `sky.dayLengthSeconds`, read through `resolveSkyRecipe()`.
 
 ## Texture memory: derived KTX2 assets and the residency sweep
 
@@ -655,6 +706,12 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `src/npc/catalog.ts` | Reusable friendly NPC definitions and population pools |
 | `src/npc/station-population.ts` | Deterministic cosmetic station population + waypoint movement |
 | `src/render/main/scene/station-npcs.ts` | Station NPC avatar lifecycle, animation, and distance activation |
+| `src/world/planets/sky-schema.ts` | Authored `sky` block: day length, scattering, sun, moon, stars, clouds, night palette |
+| `src/render/main/domain/sky-recipe.ts` | Sole hex/degrees → linear colors, radians, scattering coefficients conversion |
+| `src/render/main/post/webgpu-atmosphere.ts` | Takram sky/aerial graph, sun disc, phase-shaded moon, star field, LUT compute |
+| `src/render/main/post/night-sky-node.ts` | Airglow, horizon glow, and nebula band added onto sky pixels at night |
+| `src/render/main/scene/moon-texture.ts` | Procedural equirect moon albedo (maria + craters) for `MoonNode` |
+| `src/render/effects/clouds/shell-node-material.ts` | Sun-lit, domain-warped fBm cloud deck (TSL; no GLSL fallback) |
 | `src/physics/prefab-colliders.ts` | Bakes `collider` components into `GameplayCollider` objects |
 | `src/physics/ship-physics.ts` | Ship-local Rapier world for collider-deck walking (doors/ramp/pad enable toggles) |
 | `src/physics/colliders.ts` | GameplayCollider types, mesh BVH bake/ground sample, legacy custom capsule push |

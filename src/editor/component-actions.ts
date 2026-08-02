@@ -10,7 +10,35 @@ import {
   searchComponents,
 } from '../world/prefabs/component-registry';
 import type { PrefabComponent, PrefabComponentType } from '../world/prefabs/schema';
+import { nextEquipmentSocketId } from '../world/prefabs/item-runtime';
+import type { WeaponSlotType } from '../types/equipment';
 import type { Vec3 } from '../types';
+
+function collectEditorEquipmentSockets(
+  store: EditorStore,
+): Array<{ id: string; accepts: WeaponSlotType }> {
+  const sockets: Array<{ id: string; accepts: WeaponSlotType }> = [];
+  const visit = (entities: EditorEntity[]): void => {
+    for (const current of entities) {
+      for (const component of current.components) {
+        if (component.type === 'equipment-socket') {
+          sockets.push({ id: component.id, accepts: component.accepts });
+        }
+      }
+      visit(current.children);
+    }
+  };
+  visit(store.getState().roots);
+  return sockets;
+}
+
+function humanizeSocketId(id: string): string {
+  return id
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 export function collectExistingComponentTypes(store: EditorStore): PrefabComponentType[] {
   const types: PrefabComponentType[] = [];
@@ -89,7 +117,7 @@ export function addColliderToEntities(
       skipped += 1;
       continue;
     }
-    const component = createComponentForEntity(colliderDef, entity, null, shape);
+    const component = createComponentForEntity(store, colliderDef, entity, null, shape);
     store.setComponents(entityId, [...entity.components, component]);
     added += 1;
   }
@@ -277,6 +305,7 @@ export function addColliderToGlbNodes(
       continue;
     }
     const component = createComponentForEntity(
+      store,
       colliderDef,
       entity,
       target.nodeName,
@@ -327,7 +356,7 @@ function addColliderToGlbNodeFromPalette(
   getNodeBounds?: () => NodeBounds | null,
 ): void {
   const existing = store.getNodeOverrideComponents(targetEntityId, subNodeName);
-  const component = createComponentForEntity(def, entity, subNodeName);
+  const component = createComponentForEntity(store, def, entity, subNodeName);
   if (component.type === 'collider' && component.shape === 'box') {
     const bounds = getNodeBounds?.();
     if (bounds) {
@@ -348,18 +377,26 @@ function addMarkerChildFromPalette(
   subNodeName: string | null,
   options?: AddComponentOptions,
 ): void {
-  const markerLabel = subNodeName ? `${def.label} (${subNodeName})` : def.label;
+  const component = createComponentForEntity(store, def, entity, subNodeName);
+  const markerLabel =
+    component.type === 'equipment-socket'
+      ? humanizeSocketId(component.id)
+      : subNodeName
+        ? `${def.label} (${subNodeName})`
+        : def.label;
   const marker = createEmptyEntity(markerLabel);
   if (subNodeName) marker.glbAnchor = subNodeName;
-  marker.components = [createComponentForEntity(def, entity, subNodeName)];
+  marker.components = [component];
   if (options?.spawnPosition) {
     marker.position = { ...options.spawnPosition };
   }
   store.addEntity(marker, targetEntityId);
+  const toastName =
+    component.type === 'equipment-socket' ? `socket "${component.id}"` : `"${def.label}"`;
   showToast(
     options?.spawnPosition
-      ? `Added "${def.label}" at mesh position — fine-tune with the gizmo.`
-      : `Added "${def.label}" as a child marker — position it with the gizmo.`,
+      ? `Added ${toastName} at mesh position — fine-tune with the gizmo.`
+      : `Added ${toastName} as a child marker — position it with the gizmo.`,
   );
 }
 
@@ -371,7 +408,7 @@ function finalizeEntityComponentAdd(
   subNodeName: string | null,
 ): void {
   const components = structuredClone(entity.components);
-  components.push(createComponentForEntity(def, entity, subNodeName));
+  components.push(createComponentForEntity(store, def, entity, subNodeName));
   store.setComponents(targetEntityId, components);
 
   if (subNodeName && def.type === 'object-animation') {
@@ -426,12 +463,17 @@ export function addComponentFromPalette(
 }
 
 function createComponentForEntity(
+  store: EditorStore,
   def: ComponentDef,
   entity: EditorEntity,
   subNodeName?: string | null,
   colliderShape?: ColliderShapeChoice,
 ): PrefabComponent {
   const component = def.createDefault();
+  if (component.type === 'equipment-socket') {
+    const id = nextEquipmentSocketId(collectEditorEquipmentSockets(store), component.accepts);
+    return { ...component, id };
+  }
   if (component.type === 'animation' && subNodeName) {
     const idSafe = subNodeName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
     return {
@@ -660,12 +702,18 @@ export function createEntityWithComponent(
   glbAnchor?: string | null,
 ): string {
   const entity = createEmptyEntity(def.label);
-  entity.components = [createComponentForEntity(def, entity)];
+  const component = createComponentForEntity(store, def, entity);
+  if (component.type === 'equipment-socket') {
+    entity.name = humanizeSocketId(component.id);
+  }
+  entity.components = [component];
   if (position) entity.position = { ...position };
   if (glbAnchor) entity.glbAnchor = glbAnchor;
   const id = store.addEntity(entity, parentId);
   store.setEntitySelection(id);
-  showToast(`Added "${def.label}".`);
+  const toastName =
+    component.type === 'equipment-socket' ? `socket "${component.id}"` : `"${def.label}"`;
+  showToast(`Added ${toastName}.`);
   return id;
 }
 

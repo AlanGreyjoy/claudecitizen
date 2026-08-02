@@ -8,6 +8,7 @@ import type {
   ShipCameraView,
 } from '../types';
 import type { LadderClimbState } from '../world/ladders';
+import type { ChairOccupancyState } from '../world/chair-seats';
 import type { ShipInstance } from '../flight/ship-instance';
 import {
   clearShipWorld,
@@ -43,7 +44,7 @@ import {
   type PlayerVitals,
 } from './vitals';
 
-export type TransitionType = 'sit' | 'stand' | 'lie' | 'get-up';
+export type TransitionType = 'sit' | 'stand' | 'lie' | 'get-up' | 'chair-sit' | 'chair-stand';
 
 export interface WorldTransition {
   duration: number;
@@ -88,6 +89,8 @@ export interface WorldState {
   activeShipId: string;
   /** Active bunk id while entering / in / leaving bed. */
   activeBedId: string | null;
+  /** Furniture chair occupancy while entering / in / leaving chair. */
+  chairOccupancy: ChairOccupancyState | null;
   transition: WorldTransition | null;
   /** Hangar the ship was delivered to via the lobby terminal, if called. */
   assignedHangar: number | null;
@@ -190,6 +193,7 @@ export function createWorldState(
     prompt: '',
     activeShipId: instance.id,
     activeBedId: null,
+    chairOccupancy: null,
     transition: null,
     assignedHangar: null,
     ladderClimb: null,

@@ -36,6 +36,9 @@ services:
       # Optional: overrides whatever the Server console has stored.
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-}
       WEBTRANSPORT_BIND: 0.0.0.0:4433
       WEBTRANSPORT_PUBLIC_URL: https://127.0.0.1:4433/world
     ports:

@@ -31,6 +31,7 @@ import {
   getStationFrame,
   getStationRoom,
   getStationSpawn,
+  resolveStationRoomIdAtLocal,
   stationDirToWorld,
   stationLocalToWorld,
   worldToStationLocal,
@@ -266,6 +267,7 @@ export function updateCharacterInStation(
     gait: intent.gait,
     jumpPhase: jump.jumpPhase,
   });
+  const stationRoomId = resolveStationRoomIdAtLocal(local, state.stationRoomId);
   return {
     ...state,
     animation: layers.baseClip,
@@ -276,6 +278,7 @@ export function updateCharacterInStation(
     jumpPhaseTime: jump.jumpPhaseTime,
     position,
     stationLocal: { right: local.right, forward: local.forward },
+    stationRoomId,
     stationVerticalVelocity: verticalVelocity,
     up: frame.up,
     velocity,

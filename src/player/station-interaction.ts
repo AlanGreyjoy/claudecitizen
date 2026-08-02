@@ -15,11 +15,13 @@ import {
   worldToStationLocal,
   type HangarSpec,
   type StationAnchor,
+  type StationChestStorageMarker,
   type StationDoorSpec,
   type StationFrame,
   type StationSceneExitMarker,
 } from '../world/station';
 import { nearestLadderMount, type LadderSpec } from '../world/ladders';
+import { type ChairSeatSpec } from '../world/chair-seats';
 import type { GameBootstrap } from '../net/api';
 import { applyOwnedShipToInstance, ensurePlayerShipInstance } from '../world/ships';
 import { getShipRestHeightMeters } from './ship-layout';
@@ -37,6 +39,7 @@ export type StationInteraction =
   | { kind: 'terminal' }
   | { kind: 'scene-exit'; marker: StationSceneExitMarker }
   | { kind: 'ladder'; ladder: LadderSpec; along: number }
+  | { kind: 'chair'; chair: ChairSeatSpec }
   | {
       kind: 'prefab-info';
       prompt: string;
@@ -48,6 +51,7 @@ export type StationInteraction =
       interactSoundUrl?: string;
     }
   | { kind: 'door'; door: StationDoorSpec }
+  | { kind: 'chest-storage'; marker: StationChestStorageMarker }
   | { kind: 'avms-terminal' };
 
 /** Build on-foot camera aim for station door raycasts. */
@@ -72,7 +76,7 @@ export function resolveStationDoorInteractAim(
 
 function scoreRaycastStationDoor(
   frame: StationFrame,
-  door: StationDoorSpec,
+  door: Pick<StationDoorSpec, 'right' | 'up' | 'forward' | 'radius' | 'aimRadius'>,
   aim: StationDoorInteractAim,
 ): number | null {
   const worldPos = stationLocalToWorld(frame, {
@@ -123,6 +127,78 @@ function nearestStationDoor(
   return best?.door ?? null;
 }
 
+function scoreRaycastChest(
+  frame: StationFrame,
+  chest: StationChestStorageMarker,
+  aim: StationDoorInteractAim,
+): number | null {
+  return scoreRaycastStationDoor(frame, chest, aim);
+}
+
+function nearestChestStorage(
+  character: StationCharacterState,
+  frame: StationFrame,
+  chests: StationChestStorageMarker[],
+  localUp: number,
+  aim?: StationDoorInteractAim | null,
+): StationChestStorageMarker | null {
+  let best: { chest: StationChestStorageMarker; score: number } | null = null;
+  for (const chest of chests) {
+    if (chest.trigger === 'raycast') {
+      if (!aim) continue;
+      const hit = scoreRaycastChest(frame, chest, aim);
+      if (hit == null) continue;
+      if (!best || hit < best.score) best = { chest, score: hit };
+      continue;
+    }
+    const distance = Math.hypot(
+      character.stationLocal.right - chest.right,
+      localUp - chest.up,
+      character.stationLocal.forward - chest.forward,
+    );
+    if (distance > chest.radius) continue;
+    if (!best || distance < best.score) best = { chest, score: distance };
+  }
+  return best?.chest ?? null;
+}
+
+function nearestStationChair(
+  character: StationCharacterState,
+  frame: StationFrame,
+  chairs: ChairSeatSpec[],
+  localUp: number,
+  aim?: StationDoorInteractAim | null,
+): ChairSeatSpec | null {
+  let best: { chair: ChairSeatSpec; score: number } | null = null;
+  for (const chair of chairs) {
+    if (chair.trigger === 'raycast') {
+      if (!aim) continue;
+      const hit = scoreRaycastStationDoor(
+        frame,
+        {
+          right: chair.seat.right,
+          up: chair.seat.up,
+          forward: chair.seat.forward,
+          radius: chair.radius,
+          aimRadius: chair.aimRadius,
+        },
+        aim,
+      );
+      if (hit == null) continue;
+      if (!best || hit < best.score) best = { chair, score: hit };
+      continue;
+    }
+    const distance = Math.hypot(
+      character.stationLocal.right - chair.seat.right,
+      localUp - chair.seat.up,
+      character.stationLocal.forward - chair.seat.forward,
+    );
+    if (distance > chair.radius) continue;
+    if (!best || distance < best.score) best = { chair, score: distance };
+  }
+  return best?.chair ?? null;
+}
+
 function nearAnchor(character: StationCharacterState, anchor: StationAnchor): boolean {
   const room = getStationRoom(character.stationRoomId);
   if (!room || room.floorId !== anchor.floorId) return false;
@@ -169,6 +245,15 @@ function resolvePrefabInteraction(
   });
   if (mount) return { kind: 'ladder', ladder: mount.ladder, along: mount.along };
 
+  const chair = nearestStationChair(
+    character,
+    frame,
+    override.chairs,
+    localUp,
+    doorAim,
+  );
+  if (chair) return { kind: 'chair', chair };
+
   for (const avms of override.avmsMarkers) {
     const near =
       Math.hypot(
@@ -187,6 +272,15 @@ function resolvePrefabInteraction(
     doorAim,
   );
   if (door) return { kind: 'door', door };
+
+  const chest = nearestChestStorage(
+    character,
+    frame,
+    override.chestStorage,
+    localUp,
+    doorAim,
+  );
+  if (chest) return { kind: 'chest-storage', marker: chest };
 
   for (const info of override.infoMarkers) {
     const near =

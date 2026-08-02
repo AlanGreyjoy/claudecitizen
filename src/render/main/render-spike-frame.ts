@@ -13,6 +13,7 @@ import {
   getRenderableSurfaceCacheStats,
   sampleRenderablePlanetSurface,
 } from '../../world/planet-surface';
+import { getHeightPageStats } from '../../world/terrain-pages';
 import { clamp01 } from './domain/math';
 import type { RenderMode } from './domain/types';
 import type { StationFrame } from '../../world/station';
@@ -24,9 +25,9 @@ import { getAssetResidencySnapshot } from '../../cache/asset-residency';
 
 /** Textures released per frame. Small enough that a fresh scene cannot stall a frame. */
 const SOURCE_RELEASE_BUDGET_PER_FRAME = 8;
-import type { PrefabDocument } from '../../world/prefabs/schema';
 import type { SceneEnvironmentConfig } from '../../world/scenes/scene-runtime';
 import { updateCameraRig, updateSpeedBlur } from './update/camera-rig';
+import { resolveSkyRecipe } from './domain/sky-recipe';
 import { updateEnvironment } from './update/environment';
 import { updateShipPlacement, updateSunIntensity, updateSunSystem } from './update/sun-system';
 import {
@@ -49,8 +50,10 @@ import type { createStationNpcRenderer } from './scene/station-npcs';
 import type { createQuantumBubble } from '../effects/quantum-bubble';
 import type { createMuzzleFlashRenderer } from '../effects/muzzle-flash';
 import type { createHitDecalRenderer } from '../effects/hit-decals';
+import type { createImpactBurstRenderer } from '../effects/impact-burst';
 import type { createTracerRenderer } from '../effects/tracers';
 import type { createSceneLighting } from './scene/scene-lighting';
+import type { SecondaryStationEntry } from './scene/secondary-stations';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 const QUANTUM_RENDER_LAYER = 1;
@@ -214,6 +217,7 @@ export interface SpikeRenderFrameDeps {
   stationNpcs: ReturnType<typeof createStationNpcRenderer>;
   muzzleFlashRenderer: ReturnType<typeof createMuzzleFlashRenderer>;
   hitDecalRenderer: ReturnType<typeof createHitDecalRenderer>;
+  impactBurstRenderer: ReturnType<typeof createImpactBurstRenderer>;
   tracerRenderer: ReturnType<typeof createTracerRenderer>;
   lighting: ReturnType<typeof createSceneLighting>;
   renderer: WebGPURenderer;
@@ -222,11 +226,7 @@ export interface SpikeRenderFrameDeps {
   cameraTarget: THREE.Vector3;
   stationFrame: StationFrame;
   stationMesh: THREE.Group;
-  additionalStationMeshes: Array<{
-    prefab: PrefabDocument;
-    frame: StationFrame;
-    mesh: THREE.Group | null;
-  }>;
+  additionalStationMeshes: SecondaryStationEntry[];
   defaultFog: THREE.Fog;
   quantumLightingRoots: readonly THREE.Object3D[];
   resolveSunTimeSeconds: (nowSeconds: number, up: Vec3) => number;
@@ -261,7 +261,14 @@ function resolveRenderFocus(
   const renderMode = mode as RenderMode;
   const dt = Math.max(0.0001, Math.min(nowSeconds - state.lastTime, 0.1));
   state.lastTime = nowSeconds;
-  const focusBody = mode === 'in-ship' || mode === 'in-bed' || !character ? ship : character;
+  // Seated ship modes (pilot / bed / ship chair) focus the hull. Station chair
+  // must keep the character pose — nulling the avatar used to fall through to
+  // the ship and park the camera at a stored/orbit hull.
+  const focusUsesShip =
+    mode === 'in-ship' ||
+    mode === 'in-bed' ||
+    (mode === 'in-chair' && world.chairOccupancy?.surface === 'ship');
+  const focusBody = focusUsesShip || !character ? ship : character;
   state.lastFocusPosition.x = focusBody.position.x;
   state.lastFocusPosition.y = focusBody.position.y;
   state.lastFocusPosition.z = focusBody.position.z;
@@ -463,7 +470,9 @@ function updateWorldStreaming(
   );
   planetStack.tileManager.setVisible(!quantumTraveling);
   planetStack.surfaceWaterManager.setVisible(!quantumTraveling);
-  planetStack.cloudShell.setVisible(!quantumTraveling && deps.getCloudMode() === 'shell');
+  const cloudShellActive =
+    deps.getCloudMode() === 'shell' && resolveSkyRecipe().clouds.enabled;
+  planetStack.cloudShell.setVisible(!quantumTraveling && cloudShellActive);
   planetStack.vegetationManager.setVisible(!quantumTraveling);
   planetStack.surfaceSpawnManager.setVisible(!quantumTraveling);
   const vegetationStats = quantumTraveling
@@ -482,18 +491,26 @@ function updateWorldStreaming(
     );
     maybePrefetchVegetation(deps, planetStack, focus, lighting, state, focusVelocity);
   }
-  if (!quantumTraveling && deps.getCloudMode() === 'shell') {
-    planetStack.cloudShell.update(
-      focusBody.position,
+  if (!quantumTraveling && cloudShellActive) {
+    const { sunState } = lighting;
+    planetStack.cloudShell.update({
+      bodyPosition: focusBody.position,
       nowSeconds,
-      lighting.spaceFactor,
-      lighting.surface.altitudeMeters,
-      {
+      spaceFactor: lighting.spaceFactor,
+      altitudeMeters: lighting.surface.altitudeMeters,
+      cameraPosition: {
         x: deps.camera.position.x,
         y: deps.camera.position.y,
         z: deps.camera.position.z,
       },
-    );
+      lighting: {
+        sunDirection: sunState.sunDir,
+        moonDirection: sunState.moonDir,
+        daylightFactor: sunState.daylightFactor,
+        moonlight:
+          Math.pow(sunState.moonElevation, 0.6) * sunState.moonIllumination,
+      },
+    });
   }
   return { tileState, vegetationStats };
 }
@@ -627,17 +644,20 @@ function updateNormalPlayPresentation(
     focusPosition: focusBody.position,
     volumetricEnabled: volumetricEnabled && !quantumBusy,
     stationInteriorActive:
-      focus.renderMode === 'in-station',
+      focus.renderMode === 'in-station' ||
+      (focus.renderMode === 'in-chair' &&
+        world.chairOccupancy?.surface === 'station'),
     sceneEnvironment: deps.sceneEnvironment,
   });
   deps.avatar.update(
-    character,
+    world.hideCharacter ? null : character,
     focusBody.position,
     nowSeconds,
     {
-      headLook: character && !world.weaponAimActive
-        ? (world.characterHeadLook ?? null)
-        : null,
+      headLook:
+        character && !world.hideCharacter && !world.weaponAimActive
+          ? (world.characterHeadLook ?? null)
+          : null,
     },
   );
   deps.remotePresence.update(world.networkEntities ?? [], focusBody.position, nowSeconds);
@@ -703,17 +723,27 @@ function presentRenderOutput(
   deps.postStack.render(dt);
 }
 
+/** Muzzle flashes, tracers, impacts and decals all share the focus rebase. */
+function updateCombatEffects(deps: SpikeRenderFrameDeps, focus: RenderFocus): void {
+  const visible = !focus.quantumTraveling;
+  const focusPosition = focus.focusBody.position;
+  deps.muzzleFlashRenderer.update(focus.dt, focusPosition, visible);
+  deps.hitDecalRenderer.update(focus.dt, focusPosition, visible);
+  deps.impactBurstRenderer.update(focus.dt, focusPosition, visible);
+  deps.tracerRenderer.update(focus.dt, focusPosition, visible);
+}
+
 export function executeSpikeRenderFrame(
   deps: SpikeRenderFrameDeps,
   state: SpikeRenderFrameState,
   world: SpikeRenderWorld,
 ): RenderStats {
   const focus = resolveRenderFocus(world, state);
-  deps.muzzleFlashRenderer.update(focus.dt, focus.focusBody.position, !focus.quantumTraveling);
-  deps.hitDecalRenderer.update(focus.focusBody.position, !focus.quantumTraveling);
-  deps.tracerRenderer.update(focus.dt, focus.focusBody.position, !focus.quantumTraveling);
   syncQuantumPreload(deps, state, focus.quantumTraveling, focus.quantumState);
   const lighting = updateLightingAndCamera(deps, world, focus, state);
+  // After the camera moves: every combat effect billboards against it, so a
+  // stale pose shows up as a one-frame swim on fast turns.
+  updateCombatEffects(deps, focus);
   const { tileState, vegetationStats } = updateWorldStreaming(deps, focus, lighting, state, world);
   const activeShipGroup = updateShipsAndStations(deps, focus, lighting, world);
   updateNormalPlayPresentation(deps, focus, lighting, world, tileState);
@@ -736,12 +766,11 @@ export function executeSpikeRenderFrame(
       estimatedTextureBytes: dedup.estimatedBytes,
       geometries: deps.renderer.info.memory.geometries,
       pendingSourceReleases: getPendingSourceReleaseCount(),
-      // WebGPU's Info tracks no compiled-program count. Draw calls are the
-      // closest per-frame pipeline signal the HUD can show instead.
-      programs: deps.renderer.info.render.drawCalls,
+      drawCalls: deps.renderer.info.render.drawCalls,
       textures: deps.renderer.info.memory.textures,
     },
     surfaceCache: getRenderableSurfaceCacheStats(),
+    heightPages: getHeightPageStats(),
     terrain: tileState?.stats ?? IDLE_TERRAIN_STATS,
     vegetation: vegetationStats,
   };

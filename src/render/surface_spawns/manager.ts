@@ -61,6 +61,8 @@ export interface SurfaceSpawnManager {
     focus: Vec3,
     radiusMeters: number,
   ) => SurfaceSpawnInstance[];
+  /** Bumps when tile instance sets change — drives planet prop collider resync. */
+  getInstanceRevision: () => number;
   getLayers: () => readonly PlanetSpawnLayer[];
   getCatalog: () => PlanetSpawnCatalog;
   /**
@@ -111,6 +113,11 @@ export function createSurfaceSpawnManager(
   let frameNumber = 0;
   let visible = true;
   let nextBuildId = 1;
+  let instanceRevision = 0;
+
+  function bumpInstanceRevision(): void {
+    instanceRevision += 1;
+  }
 
   const tileCache = new Map<string, TileEntry>();
   const pendingKeys: string[] = [];
@@ -171,7 +178,10 @@ export function createSurfaceSpawnManager(
     getWorker: () => worker,
     getWorkerAlive: () => workerAlive,
     getWorkerReady: () => workerReady,
-    markPackedSelectionDirty: batch.markPackedSelectionDirty,
+    markPackedSelectionDirty: () => {
+      batch.markPackedSelectionDirty();
+      bumpInstanceRevision();
+    },
     pendingKeys,
     planet,
     seed,
@@ -232,6 +242,7 @@ export function createSurfaceSpawnManager(
     layers = catalog.entries;
     catalogHash = nextHash;
     catalogEpoch += 1;
+    bumpInstanceRevision();
     tileCache.clear();
     pendingKeys.length = 0;
     diskLoadsInFlight.clear();
@@ -294,6 +305,7 @@ export function createSurfaceSpawnManager(
     getMeshCollisions() {
       return meshCollisions;
     },
+    getInstanceRevision: () => instanceRevision,
     getDebugStats() {
       let readyTiles = 0;
       let pendingTiles = 0;

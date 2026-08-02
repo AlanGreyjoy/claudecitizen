@@ -12,6 +12,7 @@ import {
   getShipEntryStandPose,
   worldToShipLocal,
 } from '../../player/ship-interaction';
+import { getShipLayout } from '../../player/ship-layout';
 import { teleportShipPlayerLocal } from '../../physics/ship-physics';
 import { doorBlends } from '../../player/ship-rig';
 import { clamp } from './camera-math';
@@ -36,6 +37,15 @@ function finishLyingTransition(session: ShipSandboxSession): void {
   session.transition = null;
 }
 
+function finishChairSittingTransition(session: ShipSandboxSession): void {
+  session.mode = 'in-chair';
+  session.transition = null;
+  session.character = {
+    ...session.character,
+    animation: 'Sitting_Idle',
+  };
+}
+
 /**
  * Exterior entry has no deck: step off onto the pad beside the hull. Y is
  * pinned to the pad plane rather than the seat-relative floor hint the deck
@@ -58,19 +68,28 @@ function finishExteriorStandingTransition(session: ShipSandboxSession): void {
     velocity: vec3(0, 0, 0),
   };
   session.activeBedId = null;
+  session.activeChairId = null;
   session.mode = 'ground';
   session.transition = null;
 }
 
 function finishStandingTransition(session: ShipSandboxSession): void {
-  if (session.exteriorEntry && !session.activeBedId) {
+  if (session.exteriorEntry && !session.activeBedId && !session.activeChairId) {
     finishExteriorStandingTransition(session);
     return;
   }
   const leave =
     session.mode === 'getting-up' && session.activeBedId
       ? getDeckWorldPose(session.ship, getBedSpec(session.activeBedId)?.stand ?? { right: 0, forward: 0 })
-      : getLeavePilotStandPose(session.ship);
+      : session.mode === 'chair-standing' && session.activeChairId
+        ? getDeckWorldPose(
+            session.ship,
+            getShipLayout().chairs.find((c) => c.id === session.activeChairId)?.stand ?? {
+              right: 0,
+              forward: 0,
+            },
+          )
+        : getLeavePilotStandPose(session.ship);
   const leaveLocal = worldToShipLocal(session.ship, leave.position);
   const resumeLocal = {
     right: leaveLocal.right,
@@ -96,6 +115,7 @@ function finishStandingTransition(session: ShipSandboxSession): void {
     });
   }
   session.activeBedId = null;
+  session.activeChairId = null;
   session.mode = 'deck';
   session.transition = null;
 }
@@ -105,7 +125,10 @@ export function updateShipSandboxTransition(session: ShipSandboxSession, dt: num
   session.transition.elapsed = Math.min(session.transition.duration, session.transition.elapsed + dt);
   const eased = smoothstep01(session.transition.elapsed / session.transition.duration);
   const pose = createTransitionPose(session.transition.start, session.transition.end, eased);
-  const entering = session.mode === 'sitting' || session.mode === 'lying';
+  const entering =
+    session.mode === 'sitting' ||
+    session.mode === 'lying' ||
+    session.mode === 'chair-sitting';
   session.character = {
     animation: entering ? 'Sitting_Enter' : 'Sitting_Exit',
     forward: pose.forward,
@@ -123,6 +146,10 @@ export function updateShipSandboxTransition(session: ShipSandboxSession, dt: num
   }
   if (session.mode === 'lying') {
     finishLyingTransition(session);
+    return;
+  }
+  if (session.mode === 'chair-sitting') {
+    finishChairSittingTransition(session);
     return;
   }
   finishStandingTransition(session);

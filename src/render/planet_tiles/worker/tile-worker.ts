@@ -1,4 +1,4 @@
-import { buildTerrainTileBuffers } from '../build/terrain-buffers';
+import { buildTerrainTile } from '../build/terrain-buffers';
 import { activatePlanetDocument } from '../../../world/planets/runtime';
 import type { TileWorkerInMessage, TileWorkerOutMessage } from '../../../types';
 
@@ -18,24 +18,15 @@ globalThis.onmessage = (event: MessageEvent<TileWorkerInMessage>) => {
     }
     activatePlanetDocument(planetDocument);
     const startedAt = performance.now();
-    const { colors, normals, positions } = buildTerrainTileBuffers(
-      info,
-      planet,
-      seed,
-    );
+    const { raster, gridColors } = buildTerrainTile(info, planet, seed);
     const message: TileWorkerOutMessage = {
       buildId,
       buildMs: performance.now() - startedAt,
-      colors,
       key,
-      normals,
-      positions,
+      raster,
+      gridColors,
     };
-    globalThis.postMessage(message, [
-      positions.buffer,
-      colors.buffer,
-      normals.buffer,
-    ]);
+    globalThis.postMessage(message, [raster.samples.buffer, gridColors.buffer]);
   } catch (error) {
     const message: TileWorkerOutMessage = {
       buildId,

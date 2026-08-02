@@ -1,3 +1,6 @@
+// LUT idle bind before `webgpu-atmosphere` pulls `@takram/three-atmosphere`.
+import './atmosphere-idle-bypass';
+
 import * as THREE from 'three';
 import {
   NodeUpdateType,
@@ -6,6 +9,8 @@ import {
   type WebGPURenderer,
 } from 'three/webgpu';
 import {
+  Fn,
+  float,
   mix,
   mrt,
   normalView,
@@ -32,7 +37,9 @@ import { resolveRenderQuality } from '../domain/render-quality';
 import { resolveSsaoSettings } from '../domain/ssao-settings';
 import { createSpaceSkybox } from '../scene/space-skybox';
 import { resolveSpaceSkyboxActive } from '../scene/scene-environment-apply';
+import { resolveSkyRecipe } from '../domain/sky-recipe';
 import { createMainColorCorrectionNode } from './color-correction-node';
+import { createMainNightSkyNode } from './night-sky-node';
 import { createMainSpeedBlurNode } from './speed-blur-node';
 import { createMainVolumetricFogNode } from './volumetric-fog-node';
 import type {
@@ -42,13 +49,17 @@ import type {
   MainPostStack,
 } from './types';
 import { createMainVignetteNode } from './vignette-node';
-import { createWebGpuAtmospherePost } from './webgpu-atmosphere';
+import {
+  createWebGpuAtmospherePost,
+  ensureStarsCatalog,
+} from './webgpu-atmosphere';
 
 interface DisposableNode {
   dispose: () => void;
 }
 
 function disposeNode(node: unknown): void {
+  if (node == null) return;
   (node as Partial<DisposableNode>).dispose?.();
 }
 
@@ -75,11 +86,13 @@ function clamp01(value: number): number {
 
 interface PostGraph {
   scenePass: ReturnType<typeof pass>;
+  cloudPass: ReturnType<typeof pass>;
   gtaoNode: ReturnType<typeof ao> | null;
   bloomNode: ReturnType<typeof bloom>;
   smaaNode: ReturnType<typeof smaa> | null;
   speedBlur: ReturnType<typeof createMainSpeedBlurNode>;
   atmosphere: ReturnType<typeof createWebGpuAtmospherePost>;
+  nightSky: ReturnType<typeof createMainNightSkyNode>;
   volumetricFog: ReturnType<typeof createMainVolumetricFogNode>;
   colorCorrection: ReturnType<typeof createMainColorCorrectionNode>;
   // Narrowed to what the stack writes: `uniform()`'s return type is generic and
@@ -107,6 +120,7 @@ interface PostGraph {
 function buildPostGraph(
   renderer: WebGPURenderer,
   scene: THREE.Scene,
+  cloudScene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   planet: Planet,
   renderScale: number,
@@ -121,8 +135,23 @@ function buildPostGraph(
     }),
   );
 
+  // The cloud deck gets its own pass rather than an extra MRT target on the
+  // scene pass, because three only attaches a blend state to colour attachment
+  // 0 (`WebGPUPipelineUtils._getColorTargets`) — a second target would have the
+  // upper deck overwrite the lower one instead of compositing over it. This
+  // scene holds nothing but the deck, clears to transparent black, and is empty
+  // (so effectively free) anywhere there is no planet.
+  const cloudPass = pass(cloudScene, camera, { samples: 0 });
+  cloudPass.name = 'cloud-deck';
+
   const sceneColor = scenePass.getTextureNode('output');
-  const sceneDepth = scenePass.getTextureNode('depth');
+  const rawSceneDepth = scenePass.getTextureNode('depth');
+  // Empty WebGPU depth texels read ~0; atmosphere / night / fog sky gates
+  // expect conventional far = 1 (see webgpu-atmosphere skyAwareDepth).
+  const sceneDepth = Fn(() => {
+    const d = float(rawSceneDepth).r.toVar();
+    return d.lessThanEqual(0.001).select(float(1), d);
+  })();
   const sceneNormal = scenePass.getTextureNode('normal');
   const ssaoSettings = resolveSsaoSettings(
     renderQuality.ambientOcclusionIntensity,
@@ -172,10 +201,19 @@ function buildPostGraph(
     colorAfterAo,
     sceneDepth,
     sceneNormal,
+    cloudPass.getTextureNode('output'),
     planet,
   );
-  const volumetricFog = createMainVolumetricFogNode(
+  // Airglow / galaxy go in between: after the physical sky so they lift a black
+  // night, before the fog raymarch and bloom so they are fogged and bloomed
+  // like any other sky luminance.
+  const nightSky = createMainNightSkyNode(
     atmosphere.node,
+    sceneDepth,
+    resolveSkyRecipe(),
+  );
+  const volumetricFog = createMainVolumetricFogNode(
+    nightSky.node,
     sceneDepth,
     planet,
     renderScale,
@@ -212,19 +250,27 @@ function buildPostGraph(
     renderer.outputColorSpace,
   );
   const smaaNode = renderQuality.useSmaa ? smaa(outputColor) : null;
+  // Force opaque alpha on the final composite. With the default transparent
+  // canvas (`alpha: true`) sky pixels kept clear-alpha 0 after SkyNode wrote
+  // only RGB, and Electron composited them to black over the play host while
+  // opaque terrain stayed lit. Even on an opaque canvas, bloom can push A > 1.
+  const displayColor = smaaNode ?? outputColor;
+  const opaqueOutput = vec4(displayColor.rgb, 1);
 
   const postProcessing = new PostProcessing(renderer);
   postProcessing.outputColorTransform = false;
-  postProcessing.outputNode = smaaNode ?? outputColor;
+  postProcessing.outputNode = opaqueOutput;
 
 
   return {
     scenePass,
+    cloudPass,
     gtaoNode,
     bloomNode,
     smaaNode,
     speedBlur,
     atmosphere,
+    nightSky,
     volumetricFog,
     colorCorrection,
     aoBlend,
@@ -238,6 +284,7 @@ function buildPostGraph(
 function disposePostGraph(graph: PostGraph): void {
   graph.postProcessing.dispose();
   graph.scenePass.dispose();
+  graph.cloudPass.dispose();
   disposeNode(graph.gtaoNode);
   disposeNode(graph.bloomNode);
   disposeNode(graph.smaaNode);
@@ -262,15 +309,26 @@ function disposePostGraph(graph: PostGraph): void {
  * The returned object's identity is stable across `rebuild()`, so callers may
  * hold the reference indefinitely; only the graph behind it is swapped.
  */
-export function createWebGpuMainPostStack(
+export async function createWebGpuMainPostStack(
   renderer: WebGPURenderer,
   scene: THREE.Scene,
+  cloudScene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
   planet: Planet,
   _sun: THREE.DirectionalLight,
   renderScale: number,
-): MainPostStack {
-  let graph = buildPostGraph(renderer, scene, camera, planet, renderScale);
+): Promise<MainPostStack> {
+  // Stars catalog must be an ArrayBuffer before StarsNode.setup — URL load
+  // races the first sky frames and has zeroed the whole SkyNode luminance.
+  await ensureStarsCatalog();
+  let graph = buildPostGraph(
+    renderer,
+    scene,
+    cloudScene,
+    camera,
+    planet,
+    renderScale,
+  );
 
   const spaceSkybox = createSpaceSkybox();
   let effectsEnabled = true;
@@ -341,6 +399,8 @@ export function createWebGpuMainPostStack(
     lastHeight = height;
     graph.scenePass.setPixelRatio(pixelRatio);
     graph.scenePass.setSize(width, height);
+    graph.cloudPass.setPixelRatio(pixelRatio);
+    graph.cloudPass.setSize(width, height);
     const drawingWidth = Math.max(1, Math.floor(width * pixelRatio));
     const drawingHeight = Math.max(1, Math.floor(height * pixelRatio));
     graph.gtaoNode?.setSize(drawingWidth, drawingHeight);
@@ -359,7 +419,14 @@ export function createWebGpuMainPostStack(
       // LIFO. Building first would have the new graph install its getter, then
       // the old graph's dispose immediately overwrite it with the original.
       disposePostGraph(graph);
-      graph = buildPostGraph(renderer, scene, camera, planet, renderScale);
+      graph = buildPostGraph(
+        renderer,
+        scene,
+        cloudScene,
+        camera,
+        planet,
+        renderScale,
+      );
 
       // The new graph re-resolves SSAO tuning and quality defaults from storage;
       // everything below came in through a setter and would otherwise be lost.
@@ -376,6 +443,11 @@ export function createWebGpuMainPostStack(
     },
     render(deltaSeconds) {
       void deltaSeconds;
+      // Cloud-deck pass clears with the renderer's clear color. Its alpha is
+      // coverage for the sky composite (`sky * (1-a) + cloud`). Opaque clear
+      // (Three's default when `alpha: false`) makes every sky pixel a=1 and
+      // kills day sky + night lift — pitch black over lit terrain. Keep a=0.
+      renderer.setClearColor(0x000000, 0);
       graph.postProcessing.render();
     },
     resize(width, height, pixelRatio) {
@@ -396,6 +468,7 @@ export function createWebGpuMainPostStack(
       stationInteriorActive = frame.stationInteriorActive;
       syncAoRadius();
       graph.atmosphere.update(frame, currentPixelRatio);
+      graph.nightSky.update(frame);
       graph.volumetricFog.update(frame, currentRenderScale);
 
       // @takram/three-clouds has no WebGPU export, so the volumetric-cloud mode

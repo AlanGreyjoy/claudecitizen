@@ -16,6 +16,7 @@ import {
   createCombatAmmoHud,
   type CombatAmmoHudState,
 } from './combat-ammo';
+import { createWeaponCrosshair } from './weapon-crosshair';
 
 export interface HudElements {
   fpsEl: HTMLElement;
@@ -52,6 +53,8 @@ export interface HudUpdateParams {
   isPointerLocked: boolean;
   nowMs: number;
   weaponCrosshairVisible: boolean;
+  /** Recoil bloom + fire punch. Omitted while paused or unarmed. */
+  weaponCrosshair?: { shotCount: number; spreadPx: number };
   combatAmmo?: CombatAmmoHudState | null;
   flightDual?: {
     aimOffsetPx: { x: number; y: number };
@@ -100,6 +103,7 @@ export function createHud(
   });
   const flightReticle = createFlightReticle({ rootEl: elements.flightReticleEl });
   elements.weaponCrosshairEl.classList.remove('is-visible');
+  const weaponCrosshair = createWeaponCrosshair(elements.weaponCrosshairEl);
   const combatAmmoHud = createCombatAmmoHud(elements.combatAmmoEl);
   const cockpitGazeHud = createCockpitGazeHud({ rootEl: elements.cockpitGazeEl });
   const cockpitSpeedHud = createCockpitSpeedHud({ rootEl: elements.cockpitSpeedEl });
@@ -132,9 +136,13 @@ export function createHud(
       quantum: params.world.quantum,
       dual: params.flightDual,
     });
-    elements.weaponCrosshairEl.classList.toggle(
-      'is-visible',
-      params.weaponCrosshairVisible,
+    weaponCrosshair.update(
+      {
+        shotCount: params.weaponCrosshair?.shotCount ?? 0,
+        spreadPx: params.weaponCrosshair?.spreadPx ?? 0,
+        visible: params.weaponCrosshairVisible,
+      },
+      params.nowMs,
     );
     combatAmmoHud.update(params.combatAmmo ?? null);
     cockpitGazeHud.update(
@@ -153,7 +161,7 @@ export function createHud(
     );
 
     if (debugSettings.getSettings().showStatsPanel) {
-      statsPanel.update(params);
+      statsPanel.update({ ...params, fps: fpsCounter.getReadout() });
     }
   }
 

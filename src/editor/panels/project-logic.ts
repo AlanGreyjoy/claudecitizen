@@ -432,3 +432,109 @@ export function canDropRelativeTo(payload: AssetMoveDragPayload, targetPath: str
   if (targetPath.startsWith(`${payload.path}/`)) return false;
   return true;
 }
+
+/** Visible grid order: child folders first, then files (matches ProjectAssetGrid). */
+export function gridAssetPaths(
+  folders: readonly FolderNode[],
+  files: readonly AssetEntry[],
+): string[] {
+  return [...folders.map((folder) => folder.path), ...files.map((entry) => entry.path)];
+}
+
+/**
+ * Click / Ctrl·Cmd-click / Shift-click selection for the asset grid.
+ * Anchor stays put on Shift (range from anchor); Ctrl/Cmd and plain click move it.
+ */
+export function applyGridAssetSelectionClick(
+  selected: ReadonlySet<string>,
+  anchorPath: string | null,
+  clickedPath: string,
+  orderedPaths: readonly string[],
+  modifiers: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean },
+): { selected: Set<string>; anchorPath: string } {
+  if (modifiers.shiftKey) {
+    const anchor = anchorPath && orderedPaths.includes(anchorPath) ? anchorPath : clickedPath;
+    const a = orderedPaths.indexOf(anchor);
+    const b = orderedPaths.indexOf(clickedPath);
+    if (a < 0 || b < 0) {
+      return { selected: new Set([clickedPath]), anchorPath: clickedPath };
+    }
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    return {
+      selected: new Set(orderedPaths.slice(lo, hi + 1)),
+      anchorPath: anchor,
+    };
+  }
+  if (modifiers.ctrlKey || modifiers.metaKey) {
+    const next = new Set(selected);
+    if (next.has(clickedPath)) next.delete(clickedPath);
+    else next.add(clickedPath);
+    return { selected: next, anchorPath: clickedPath };
+  }
+  return { selected: new Set([clickedPath]), anchorPath: clickedPath };
+}
+
+/** Read-only asset row for the Inspector when the Project grid has a selection. */
+export type AssetInspectorItem = {
+  path: string;
+  kind: 'dir' | 'file';
+  size?: number;
+  modifiedAtMs?: number;
+};
+
+/** Resolve selected grid paths to inspector items (folders first by set iteration order). */
+export function resolveAssetInspectorItems(
+  tree: FolderNode,
+  paths: ReadonlySet<string> | readonly string[],
+): AssetInspectorItem[] {
+  const items: AssetInspectorItem[] = [];
+  for (const path of paths) {
+    if (!path) continue;
+    const folder = findFolder(tree, path);
+    if (folder && folder.path === path) {
+      items.push({ path, kind: 'dir' });
+      continue;
+    }
+    const parent = findFolder(tree, parentFolderOfPath(path));
+    const entry = parent?.files.find((file) => file.path === path);
+    if (entry) {
+      items.push({
+        path: entry.path,
+        kind: 'file',
+        size: entry.size,
+        modifiedAtMs: entry.modifiedAtMs,
+      });
+    } else {
+      items.push({ path, kind: 'file' });
+    }
+  }
+  return items;
+}
+
+/** Human label for an asset inspector type row. */
+export function assetInspectorTypeLabel(item: AssetInspectorItem): string {
+  if (item.kind === 'dir') return 'Folder';
+  if (isPrefabPath(item.path)) return 'Prefab';
+  if (isModelPath(item.path)) return 'Model';
+  if (isAudioPath(item.path)) return 'Audio';
+  if (isImagePath(item.path)) return 'Image';
+  return 'File';
+}
+
+export function formatAssetByteSize(size: number | undefined): string {
+  if (size === undefined) return '—';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+export function formatAssetModifiedAt(modifiedAtMs: number | undefined): string {
+  if (modifiedAtMs === undefined) return '—';
+  try {
+    return new Date(modifiedAtMs).toLocaleString();
+  } catch {
+    return '—';
+  }
+}

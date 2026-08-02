@@ -29,6 +29,29 @@ export interface MainSpeedBlurNode {
  * The convolution needs a texture input, so `convertToTexture()` inserts one
  * renderer-owned RTT before the sampling loop. The handle owns that RTT only
  * when Three actually had to allocate one.
+ *
+ * ## Why the idle-frame RTT is not bypassed
+ *
+ * The input here is `volumetricFog.node.add(bloomNode)` — arithmetic, not a
+ * texture node — so an RTT *is* allocated, and it renders full-res every frame
+ * even at strength 0. That cost is real, and three known fixes all fail:
+ *
+ * - **Read `inputNode` directly on the idle path.** Tried; it black-screens.
+ *   `RTTNode.setup()` builds its node under `builder.getSharedContext()`, so
+ *   naming the same node again inside this `Fn` builds that subgraph in a
+ *   second scope and re-emits every `.toVar()`. The result is a WGSL
+ *   `redeclaration of 'cameraPositionUnit'` / `'atmosphereParameters'` in
+ *   `fragment_RTT` and an invalid pipeline. Do not retry this.
+ * - **Stop the RTT with `autoUpdate = false` when idle.** The shader still
+ *   samples that texture at `screenUv` on the idle path, so the frame freezes
+ *   on stale contents. Gating the render requires also not reading it.
+ * - **Swap the graph when strength crosses zero.** Correct, and what a
+ *   `PassNode` swap would mean in practice: `postStack.rebuild()`, which
+ *   recompiles the post pipelines. That is a far longer stall than the RTT it
+ *   saves, and it would land exactly on quantum entry and exit.
+ *
+ * Sampling a shrunken RTT while idle was also considered and rejected: it
+ * changes what is on screen, which is not a performance decision to make here.
  */
 export function createMainSpeedBlurNode(inputNode: Node): MainSpeedBlurNode {
   const inputTexture = convertToTexture(inputNode);

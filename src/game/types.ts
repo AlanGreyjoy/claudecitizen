@@ -10,6 +10,7 @@ import type { WeaponShopController } from "../render/effects/hud/weapon-shop";
 import type { OutfittersController } from "../render/effects/hud/outfitters";
 import type { FoodShopController } from "../render/effects/hud/food-shop";
 import type { PersonalInventoryController } from "../render/effects/hud/personal-inventory";
+import type { ChestStorageController } from "../render/effects/hud/chest-storage";
 import type { PlayerVitalsSessionController } from "../app/player-vitals-session";
 import type { HudUpdateParams } from "../render/effects";
 import type { SpikeRenderer } from "../render/main";
@@ -82,6 +83,7 @@ export interface GameLoopOptions {
   outfitters?: OutfittersController | null;
   foodShop?: FoodShopController | null;
   personalInventory?: PersonalInventoryController | null;
+  chestStorage?: ChestStorageController | null;
   build?: BuildRuntime | null;
   physics?: StationPhysics | null;
   stationPrefab?: PrefabDocument | null;

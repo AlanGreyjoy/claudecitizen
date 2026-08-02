@@ -5,6 +5,7 @@ import {
   type StationInteraction,
 } from "../../player/station-interaction";
 import type { StationCharacterState } from "../../player/station-walk";
+import { beginChairSitTransition } from "../../player/chair-sit";
 import {
   getActiveShip,
   PLAYER_SHIP_INSTANCE_ID,
@@ -87,6 +88,12 @@ export function stationInteractionPrompt(
         : pressInteractPrompt(interaction.marker.prompt.replace(/^Press F\s*[—-]\s*/i, "") || "exit");
     case "ladder":
       return pressInteractPrompt(interaction.ladder.label || "ladder");
+    case "chair": {
+      const label = interaction.chair.label.trim() || "chair";
+      return label.toLowerCase() === "chair"
+        ? pressInteractPrompt("sit")
+        : pressInteractPrompt(`sit (${label})`);
+    }
     case "prefab-info":
       return prefabInfoPrompt(ctx, interaction);
     case "door": {
@@ -96,6 +103,10 @@ export function stationInteractionPrompt(
         `${isOpen ? "close" : "open"} ${interaction.door.label}`,
       );
     }
+    case "chest-storage":
+      return pressInteractPrompt(
+        interaction.marker.label.replace(/^Press F\s*[—-]\s*/i, "") || "Open chest",
+      );
   }
 }
 
@@ -232,6 +243,17 @@ function activateStationInteraction(
     handleDoorInteraction(ctx, actions, interaction, deps.animations);
     return;
   }
+  if (interaction.kind === "chest-storage") {
+    if (actions.interactPressed) {
+      ctx.chestStorage?.open({
+        chestId: interaction.marker.id,
+        label: interaction.marker.label,
+        slotCount: interaction.marker.slotCount,
+      });
+      ctx.world.prompt = "";
+    }
+    return;
+  }
   if (interaction.kind === "ladder") {
     if (actions.interactPressed) {
       ctx.world.ladderClimb = {
@@ -239,6 +261,17 @@ function activateStationInteraction(
         ladderId: interaction.ladder.id,
         along: interaction.along,
       };
+    }
+    return;
+  }
+  if (interaction.kind === "chair") {
+    if (actions.interactPressed) {
+      beginChairSitTransition(
+        ctx.world,
+        "station",
+        interaction.chair.id,
+        ctx.stationFrame,
+      );
     }
     return;
   }

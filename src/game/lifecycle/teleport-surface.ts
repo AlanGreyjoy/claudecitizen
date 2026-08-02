@@ -48,6 +48,7 @@ export function teleportToSurface(
   ctx.world.mode = MODE_ON_FOOT;
   ctx.world.shipExteriorWalk = false;
   ctx.world.activeBedId = null;
+  ctx.world.chairOccupancy = null;
   ctx.world.transition = null;
   ctx.world.screenFade = 0;
   ctx.world.flightMode = "traverse";

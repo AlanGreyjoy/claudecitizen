@@ -21,6 +21,10 @@ import {
   startPlaySession,
   stopPlaySession,
 } from './play-session';
+import {
+  createEditorOfflineBootstrap,
+  type BuildPersistMode,
+} from './editor-play-bootstrap';
 import { playWorldParamsFromScene } from './play-session-world';
 
 /**
@@ -167,25 +171,59 @@ export async function mountSceneUiScreens(options: {
 }
 
 export type SceneBootstrapResult =
-  | { status: 'ready'; bootstrap: GameBootstrap | null }
+  | {
+      status: 'ready';
+      bootstrap: GameBootstrap | null;
+      buildPersist: BuildPersistMode;
+    }
   | { status: 'redirect-character-create' }
   | { status: 'cancelled' };
+
+function editorOfflineReady(): Extract<SceneBootstrapResult, { status: 'ready' }> {
+  return {
+    status: 'ready',
+    bootstrap: createEditorOfflineBootstrap(),
+    buildPersist: 'local',
+  };
+}
 
 /**
  * Signed-in players need a citizen record. When Game Manager names a create
  * scene and appearance is missing, redirect there instead of the inline UI.
+ * Editor Play falls back to an offline bootstrap so Build Mode still wires.
  */
 export async function resolveSceneBootstrap(
   requireAuth: boolean,
   session: AuthSession | null,
   screen: LoadingScreenHandle,
   entryFlow: SceneEntryFlow | null,
+  fromEditor = false,
 ): Promise<SceneBootstrapResult> {
-  if (!requireAuth || !session) return { status: 'ready', bootstrap: null };
+  if (!session) {
+    return fromEditor
+      ? editorOfflineReady()
+      : { status: 'ready', bootstrap: null, buildPersist: 'api' };
+  }
+  // Editor Play may pass a session without requireAuth. Still load bootstrap
+  // so player-scoped habs get apartment ids; failures use local Build Mode.
+  if (!requireAuth) {
+    screen.setStatus('Loading citizen record...');
+    try {
+      return {
+        status: 'ready',
+        bootstrap: await fetchGameBootstrap(),
+        buildPersist: 'api',
+      };
+    } catch {
+      return fromEditor
+        ? editorOfflineReady()
+        : { status: 'ready', bootstrap: null, buildPersist: 'api' };
+    }
+  }
   screen.setStatus('Loading citizen record...');
   const bootstrap = await fetchGameBootstrap();
   if (bootstrap.player.characterAppearance) {
-    return { status: 'ready', bootstrap };
+    return { status: 'ready', bootstrap, buildPersist: 'api' };
   }
   if (entryFlow?.characterCreateSceneId) {
     return { status: 'redirect-character-create' };
@@ -195,7 +233,7 @@ export async function resolveSceneBootstrap(
   const appearance = await showCharacterCreationScreen();
   if (!appearance) return { status: 'cancelled' };
   bootstrap.player.characterAppearance = appearance;
-  return { status: 'ready', bootstrap };
+  return { status: 'ready', bootstrap, buildPersist: 'api' };
 }
 
 export async function startSceneGameplay(options: {
@@ -220,6 +258,7 @@ export async function startSceneGameplay(options: {
       options.session,
       screen,
       options.entryFlow,
+      options.fromEditor,
     );
     if (result.status === 'redirect-character-create') {
       if (options.session) options.onRedirectCharacterCreate(options.session);
@@ -242,6 +281,7 @@ export async function startSceneGameplay(options: {
       requireAuth: options.requireAuth,
       session: options.session,
       ...(bootstrap ? { bootstrap } : {}),
+      buildPersist: result.buildPersist,
       worldParams: playWorldParamsFromScene(options.scene, {
         fromEditor: options.fromEditor,
         ...playOverridesFromEntryFlow(options.entryFlow),

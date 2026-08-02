@@ -9,6 +9,7 @@ import { activatePlanetDocument } from '../../world/planets/runtime';
 import { planetPhysicsFromDocument, type PlanetDocument } from '../../world/planets/schema';
 import type { LandingSiteHint } from '../../types';
 import type { SurfaceDestination } from '../../world/biome-teleport';
+import { createPlanetPreviewFlySession } from './planet-preview-fly';
 import {
   PREVIEW_HEIGHT_SCALE,
   PREVIEW_PATCH_EXTENT_METERS,
@@ -24,19 +25,6 @@ import {
 } from './planet-preview-mesh';
 
 const PREVIEW_SEGMENTS = 96;
-
-const FLY_KEY_CODES = new Set([
-  'KeyW',
-  'KeyA',
-  'KeyS',
-  'KeyD',
-  'KeyQ',
-  'KeyE',
-  'ShiftLeft',
-  'ShiftRight',
-]);
-const FLY_LOOK_RADIANS_PER_PIXEL = 0.0022;
-const FLY_PITCH_LIMIT = Math.PI / 2 - 0.01;
 
 export type { PlanetPreviewMeshDiagnostics as PreviewDiagnostics };
 
@@ -78,6 +66,32 @@ function mountPlanetPreviewCanvas(
   previewHost.replaceChildren(canvas, hint);
 }
 
+function configureOrbit(orbit: OrbitControls): void {
+  orbit.enableDamping = true;
+  orbit.dampingFactor = 0.12;
+  orbit.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: null as unknown as THREE.MOUSE,
+  };
+}
+
+function previewPatchFor(
+  documentState: PlanetDocument,
+  location: LandingSiteHint,
+) {
+  const halfExtentMeters = PREVIEW_PATCH_EXTENT_METERS / 2;
+  const halfLatExtentRadians = halfExtentMeters / documentState.radiusMeters;
+  return {
+    halfLatExtentRadians,
+    halfLonExtentRadians:
+      halfLatExtentRadians / Math.max(Math.cos(location.latRadians), 0.1),
+    heightScale: PREVIEW_HEIGHT_SCALE,
+    hint: location,
+    patchExtentMeters: PREVIEW_PATCH_EXTENT_METERS,
+  };
+}
+
 export function createPlanetPreviewController(
   previewHost: HTMLElement,
   deps: PlanetPreviewControllerDeps,
@@ -87,9 +101,14 @@ export function createPlanetPreviewController(
   let resetCameraOnRebuild = true;
   let raf = 0;
 
-  const renderer = createPlanetPreviewRenderer();
-  const canvas = renderer.domElement;
-  mountPlanetPreviewCanvas(previewHost, canvas);
+  // Lazy WebGPU: constructed on activate, disposed on deactivate so Planet
+  // Authoring Test Play does not share the adapter with a live preview device
+  // (concurrent devices stall takram atmosphere LUT fill → black sky).
+  let renderer: WebGPURenderer | null = null;
+  let canvas: HTMLCanvasElement | null = null;
+  let orbit: OrbitControls | null = null;
+  /** Bumped on every release so in-flight init promises cannot revive a dead device. */
+  let gpuGeneration = 0;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(50, 1, 1, 50_000);
@@ -109,149 +128,15 @@ export function createPlanetPreviewController(
   let disposed = false;
   let backendReady = false;
   let backendFailed = false;
-  let rendererInitialized = false;
-  let rendererDisposed = false;
   let pendingHeightfieldRefresh = false;
+  const savedOrbitTarget = new THREE.Vector3(0, 0, 0);
 
-  const disposeRenderer = (): void => {
-    // Three's pre-init dispose path calls setAnimationLoop(), which starts
-    // init() itself. If explicit initialization failed there are no live
-    // renderer services to release; if it is pending, the ready handler below
-    // disposes after success.
-    if (!rendererInitialized || rendererDisposed) return;
-    rendererDisposed = true;
-    renderer.dispose();
-  };
-
-  const orbit = new OrbitControls(camera, canvas);
-  orbit.enableDamping = true;
-  orbit.dampingFactor = 0.12;
-  orbit.target.set(0, 0, 0);
-  orbit.mouseButtons = {
-    LEFT: THREE.MOUSE.ROTATE,
-    MIDDLE: THREE.MOUSE.PAN,
-    RIGHT: null as unknown as THREE.MOUSE,
-  };
-
-  const flyKeys = new Set<string>();
-  const flyEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-  const flyForward = new THREE.Vector3();
-  const flyRight = new THREE.Vector3();
-  const flyMove = new THREE.Vector3();
-  let flying = false;
-  let flySpeed = 80;
-  let flyTargetDistance = 400;
-
-  function beginFly(): void {
-    if (flying || !active) return;
-    flying = true;
-    flyTargetDistance = Math.max(40, camera.position.distanceTo(orbit.target));
-    flyEuler.setFromQuaternion(camera.quaternion, 'YXZ');
-    flyEuler.z = 0;
-    orbit.enabled = false;
-    canvas.requestPointerLock?.();
-  }
-
-  function endFly(): void {
-    if (!flying) return;
-    flying = false;
-    flyKeys.clear();
-    if (document.pointerLockElement === canvas) document.exitPointerLock();
-    camera.getWorldDirection(flyForward);
-    orbit.target.copy(camera.position).addScaledVector(flyForward, flyTargetDistance);
-    orbit.enabled = true;
-    orbit.update();
-  }
-
-  function onFlyLook(event: PointerEvent): void {
-    if (!flying) return;
-    flyEuler.y -= event.movementX * FLY_LOOK_RADIANS_PER_PIXEL;
-    flyEuler.x -= event.movementY * FLY_LOOK_RADIANS_PER_PIXEL;
-    flyEuler.x = Math.max(-FLY_PITCH_LIMIT, Math.min(FLY_PITCH_LIMIT, flyEuler.x));
-    camera.quaternion.setFromEuler(flyEuler);
-  }
-
-  function updateFly(dt: number): void {
-    camera.getWorldDirection(flyForward);
-    flyRight.crossVectors(flyForward, camera.up).normalize();
-    flyMove.set(0, 0, 0);
-    if (flyKeys.has('KeyW')) flyMove.add(flyForward);
-    if (flyKeys.has('KeyS')) flyMove.sub(flyForward);
-    if (flyKeys.has('KeyD')) flyMove.add(flyRight);
-    if (flyKeys.has('KeyA')) flyMove.sub(flyRight);
-    if (flyKeys.has('KeyE')) flyMove.y += 1;
-    if (flyKeys.has('KeyQ')) flyMove.y -= 1;
-    if (flyMove.lengthSq() === 0) return;
-    const boost = flyKeys.has('ShiftLeft') || flyKeys.has('ShiftRight') ? 4 : 1;
-    flyMove.normalize().multiplyScalar(flySpeed * boost * dt);
-    camera.position.add(flyMove);
-  }
-
-  function onFlyKey(event: KeyboardEvent): void {
-    if (!flying || !FLY_KEY_CODES.has(event.code)) return;
-    if (
-      event.target instanceof HTMLElement &&
-      (event.target.tagName === 'INPUT' ||
-        event.target.tagName === 'TEXTAREA' ||
-        event.target.tagName === 'SELECT' ||
-        event.target.isContentEditable)
-    ) {
-      return;
-    }
-    event.preventDefault();
-    if (event.type === 'keydown') flyKeys.add(event.code);
-    else flyKeys.delete(event.code);
-  }
-
-  function onPointerLockChange(): void {
-    if (flying && document.pointerLockElement !== canvas) endFly();
-  }
-
-  window.addEventListener('keydown', onFlyKey);
-  window.addEventListener('keyup', onFlyKey);
-  document.addEventListener('pointerlockchange', onPointerLockChange);
-  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  canvas.addEventListener('pointermove', onFlyLook);
-  canvas.addEventListener('pointerdown', (event) => {
-    if (event.button !== 2) return;
-    try {
-      canvas.setPointerCapture(event.pointerId);
-    } catch {
-      // Stale pointer id — flythrough still works.
-    }
-    beginFly();
+  const fly = createPlanetPreviewFlySession({
+    camera,
+    getOrbit: () => orbit,
+    getCanvas: () => canvas,
+    isActive: () => active,
   });
-  canvas.addEventListener('pointerup', (event) => {
-    if (event.button === 2) endFly();
-  });
-  canvas.addEventListener('pointercancel', () => endFly());
-  canvas.addEventListener(
-    'wheel',
-    (event) => {
-      if (!flying) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      flySpeed = Math.min(
-        800,
-        Math.max(2, flySpeed * Math.pow(1.1, -event.deltaY / 100)),
-      );
-    },
-    { passive: false },
-  );
-
-  function previewPatch(location = deps.getPreviewLocation()) {
-    const documentState = deps.getDocument();
-    const halfExtentMeters = PREVIEW_PATCH_EXTENT_METERS / 2;
-    const halfLatExtentRadians = halfExtentMeters / documentState.radiusMeters;
-    return {
-      halfLatExtentRadians,
-      halfLonExtentRadians:
-        halfLatExtentRadians / Math.max(Math.cos(location.latRadians), 0.1),
-      heightScale: PREVIEW_HEIGHT_SCALE,
-      hint: location,
-      patchExtentMeters: PREVIEW_PATCH_EXTENT_METERS,
-    };
-  }
 
   function clearPreviewVegetation(): void {
     previewVegetationLoad?.cancel();
@@ -272,14 +157,94 @@ export function createPlanetPreviewController(
     clearPreviewSpawns();
   }
 
+  function releaseGpu(): void {
+    fly.endFly();
+    cancelAnimationFrame(raf);
+    raf = 0;
+    clearPreviewDecorations();
+    disposePreviewMesh(previewMesh, scene);
+    disposePreviewMesh(previewWaterMesh, scene);
+    previewMesh = null;
+    previewWaterMesh = null;
+    deps.onDiagnostics(null);
+    if (orbit) {
+      savedOrbitTarget.copy(orbit.target);
+      orbit.dispose();
+      orbit = null;
+    }
+    if (renderer) {
+      // Three's pre-init dispose path calls setAnimationLoop(), which starts
+      // init() itself. Only dispose after init finished; in-flight init is
+      // dropped by the generation check in acquireGpu's then/catch.
+      if (backendReady) {
+        renderer.dispose();
+      }
+      renderer = null;
+    }
+    canvas?.remove();
+    canvas = null;
+    backendReady = false;
+    gpuGeneration += 1;
+    previewHost.replaceChildren();
+  }
+
+  function acquireGpu(): void {
+    if (disposed || renderer) return;
+    backendFailed = false;
+    const nextRenderer = createPlanetPreviewRenderer();
+    const nextCanvas = nextRenderer.domElement;
+    renderer = nextRenderer;
+    canvas = nextCanvas;
+    mountPlanetPreviewCanvas(previewHost, nextCanvas);
+    const nextOrbit = new OrbitControls(camera, nextCanvas);
+    configureOrbit(nextOrbit);
+    nextOrbit.target.copy(savedOrbitTarget);
+    nextOrbit.update();
+    orbit = nextOrbit;
+    fly.bindCanvas(nextCanvas);
+
+    const generation = gpuGeneration;
+    void initRequiredWebGpu(nextRenderer).then(
+      () => {
+        if (disposed || generation !== gpuGeneration || renderer !== nextRenderer) {
+          nextRenderer.dispose();
+          return;
+        }
+        setKtx2SupportRenderer(nextRenderer);
+        backendReady = true;
+        startFrameLoop();
+      },
+      (error: unknown) => {
+        if (disposed || generation !== gpuGeneration) return;
+        backendFailed = true;
+        if (renderer === nextRenderer) {
+          renderer = null;
+          canvas?.remove();
+          canvas = null;
+          orbit?.dispose();
+          orbit = null;
+          previewHost.replaceChildren();
+          gpuGeneration += 1;
+        }
+        console.error('[planet-preview] WebGPU unavailable — preview disabled.', error);
+        deps.onBuildStatus('Planet Preview requires WebGPU, but initialization failed.', true);
+      },
+    );
+  }
+
+  window.addEventListener('keydown', fly.onFlyKey);
+  window.addEventListener('keyup', fly.onFlyKey);
+  document.addEventListener('pointerlockchange', fly.onPointerLockChange);
+
   function rebuildPreviewMesh(): void {
+    if (!orbit) return;
     clearPreviewDecorations();
     const documentState = deps.getDocument();
     activatePlanetDocument(documentState);
     const planet = planetPhysicsFromDocument(documentState);
     const seed = documentState.seed;
     const hint = deps.getPreviewLocation();
-    const patch = previewPatch(hint);
+    const patch = previewPatchFor(documentState, hint);
     const built = buildPlanetPreviewMeshes({
       planet,
       seed,
@@ -297,7 +262,7 @@ export function createPlanetPreviewController(
     if (previewWaterMesh) scene.add(previewWaterMesh);
     deps.onDiagnostics(built.diagnostics);
     if (resetCameraOnRebuild) {
-      endFly();
+      fly.endFly();
       camera.position.set(0, built.midHeight + 230, 440);
       orbit.target.set(0, built.midHeight, 0);
       camera.lookAt(orbit.target);
@@ -308,6 +273,7 @@ export function createPlanetPreviewController(
   }
 
   function resize(): void {
+    if (!renderer) return;
     const width = Math.max(1, previewHost.clientWidth);
     const height = Math.max(1, previewHost.clientHeight);
     renderer.setSize(width, height, false);
@@ -316,11 +282,11 @@ export function createPlanetPreviewController(
   }
 
   function frame(): void {
-    if (!active || !backendReady || disposed) return;
+    if (!active || !backendReady || disposed || !renderer || !orbit) return;
     const dt = Math.min(clock.getDelta(), 0.05);
     if (previewDirty) rebuildPreviewMesh();
     resize();
-    if (flying) updateFly(dt);
+    if (fly.isFlying()) fly.updateFly(dt);
     else orbit.update();
     renderer.render(scene, camera);
     raf = requestAnimationFrame(frame);
@@ -342,6 +308,7 @@ export function createPlanetPreviewController(
   }
 
   function framePreviewCameraForVegetation(): void {
+    if (!orbit) return;
     const documentState = deps.getDocument();
     const planet = planetPhysicsFromDocument(documentState);
     const hint = deps.getPreviewLocation();
@@ -351,7 +318,7 @@ export function createPlanetPreviewController(
         documentState.seed,
         cartesianFromLatLonAlt(hint.latRadians, hint.lonRadians, 0, planet.radiusMeters),
       ) * PREVIEW_HEIGHT_SCALE;
-    endFly();
+    fly.endFly();
     camera.position.set(0, midHeight + 85, 170);
     orbit.target.set(0, midHeight + 15, 0);
     camera.lookAt(orbit.target);
@@ -368,7 +335,7 @@ export function createPlanetPreviewController(
     rebuildPreviewMesh();
 
     const planet = planetPhysicsFromDocument(documentState);
-    const patch = previewPatch(deps.getPreviewLocation());
+    const patch = previewPatchFor(documentState, deps.getPreviewLocation());
 
     let grassCount = 0;
     let treeCount = 0;
@@ -456,55 +423,33 @@ export function createPlanetPreviewController(
     refreshHeightfieldPreviewReady();
   }
 
-  // WebGPU initialization is asynchronous. KTX2 capability detection reads
-  // backend GPU features synchronously, so vegetation/spawn GLBs and the frame
-  // loop must stay gated until this settles.
-  const ready = initRequiredWebGpu(renderer).then(() => {
-    rendererInitialized = true;
-    if (disposed) {
-      disposeRenderer();
-      return;
-    }
-    setKtx2SupportRenderer(renderer);
-    backendReady = true;
-  });
-  void ready.then(
-    () => {
-      startFrameLoop();
-    },
-    (error: unknown) => {
-      backendFailed = true;
-      disposeRenderer();
-      if (disposed) return;
-      console.error('[planet-preview] WebGPU unavailable — preview disabled.', error);
-      deps.onBuildStatus('Planet Preview requires WebGPU, but initialization failed.', true);
-    },
-  );
-
   return {
     activate: () => {
+      if (disposed) return;
       active = true;
+      // Rebuild after Play: GPU was torn down and mesh may be stale.
+      previewDirty = true;
+      acquireGpu();
       startFrameLoop();
     },
     deactivate: () => {
       active = false;
-      endFly();
-      cancelAnimationFrame(raf);
-      clearPreviewDecorations();
+      // Drop the WebGPU device entirely — pausing RAF is not enough. A second
+      // live adapter beside Test Play's gameplay renderer breaks atmosphere LUT
+      // compute and leaves a pitch-black sky over lit terrain.
+      releaseGpu();
     },
     dispose: () => {
       disposed = true;
       active = false;
-      window.removeEventListener('keydown', onFlyKey);
-      window.removeEventListener('keyup', onFlyKey);
-      document.removeEventListener('pointerlockchange', onPointerLockChange);
-      cancelAnimationFrame(raf);
-      clearPreviewDecorations();
+      window.removeEventListener('keydown', fly.onFlyKey);
+      window.removeEventListener('keyup', fly.onFlyKey);
+      document.removeEventListener('pointerlockchange', fly.onPointerLockChange);
+      releaseGpu();
       disposePreviewMesh(previewMesh, scene);
       disposePreviewMesh(previewWaterMesh, scene);
-      orbit.dispose();
-      disposeRenderer();
-      canvas.remove();
+      previewMesh = null;
+      previewWaterMesh = null;
     },
     markPreviewDirty: () => {
       previewDirty = true;
@@ -513,6 +458,6 @@ export function createPlanetPreviewController(
       resetCameraOnRebuild = true;
     },
     refreshHeightfieldPreview,
-    endFly,
+    endFly: fly.endFly,
   };
 }

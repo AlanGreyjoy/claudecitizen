@@ -4,8 +4,6 @@ import type { SceneEnvironmentConfig } from '../../../world/scenes/scene-runtime
 import { DEFAULT_SCENE_ENVIRONMENT } from '../../../world/scenes/scene-runtime';
 import {
   HAZE_LOW_COLOR,
-  NIGHT_FOG_COLOR,
-  NIGHT_SKY_COLOR,
   PLANET_FOG_MAX_ALTITUDE_METERS,
   SKY_HIGH_COLOR,
   SKY_LOW_COLOR,
@@ -13,10 +11,12 @@ import {
   SPACE_FOG_COLOR,
 } from '../domain/constants';
 import { clamp01 } from '../domain/math';
+import { resolveSkyPalette, resolveSkyRecipe } from '../domain/sky-recipe';
 import type { MainPostStack } from '../post/types';
 import {
   applyAmbientOverrides,
   applySceneLightingMode,
+  resolveAtmosphereSkyActive,
 } from '../scene/scene-environment-apply';
 import type { SceneLighting } from '../scene/scene-lighting';
 import type { SunSystemState } from './sun-system';
@@ -25,9 +25,7 @@ const backgroundColor = new THREE.Color();
 const fogColor = new THREE.Color();
 
 const AMBIENT_SKY_DAY = new THREE.Color(0xc4e2ff);
-const AMBIENT_SKY_NIGHT = new THREE.Color(0x6e86bd);
 const AMBIENT_GROUND_DAY = new THREE.Color(0x473b28);
-const AMBIENT_GROUND_NIGHT = new THREE.Color(0x1f2740);
 
 // Classic THREE.Fog only runs above the volumetric fog band (>72 km), so it
 // models the air column seen from near-space rather than ground haze: its
@@ -87,8 +85,19 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     sceneEnvironment = DEFAULT_SCENE_ENVIRONMENT,
   } = input;
 
-  const { ambient, sun } = lighting;
-  const { sunDir, daylightFactor, rawDaylight, planetCenter } = sunState;
+  const { sun } = lighting;
+  const { sunDir, daylightFactor, planetCenter } = sunState;
+  const skyRecipe = resolveSkyRecipe();
+  const skyPalette = resolveSkyPalette(skyRecipe);
+  // Deliberately not gated on `lightingMode`: an interior-lit scene can still
+  // sit under an authored sky, and the post stack's suppression test has never
+  // looked at the lighting mode. Mesh visibility is where the mode matters,
+  // and `applySceneLightingMode` already owns that.
+  const atmosphereSkyActive = resolveAtmosphereSkyActive({
+    backgroundMode: sceneEnvironment.backgroundMode,
+    altitudeMeters,
+    atmosphereHeightMeters: planet.atmosphereHeightMeters,
+  });
 
   const planetFogActive =
     altitudeMeters < PLANET_FOG_MAX_ALTITUDE_METERS && spaceFactor < 0.9
@@ -99,14 +108,17 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     .copy(SKY_LOW_COLOR)
     .lerp(SKY_MID_COLOR, clamp01(altitudeMeters / 14_000))
     .lerp(SKY_HIGH_COLOR, spaceFactor);
-  backgroundColor.lerp(NIGHT_SKY_COLOR, (1 - daylightFactor) * (1 - spaceFactor));
+  backgroundColor.lerp(
+    skyPalette.nightAirglow,
+    (1 - daylightFactor) * (1 - spaceFactor),
+  );
   if (sceneEnvironment.backgroundMode === 'solid') {
     backgroundColor.set(sceneEnvironment.backgroundColor);
   }
 
   fogColor.copy(HAZE_LOW_COLOR).lerp(SKY_LOW_COLOR, 0.18);
   fogColor.lerp(SPACE_FOG_COLOR, spaceFactor * 0.82);
-  fogColor.lerp(NIGHT_FOG_COLOR, (1 - daylightFactor) * (1 - spaceFactor));
+  fogColor.lerp(skyPalette.nightFog, (1 - daylightFactor) * (1 - spaceFactor));
 
   const { background, volumetricSkyActive } = postStack.updateEnvironment({
     camera,
@@ -122,9 +134,12 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     planetCenter,
     planetRadiusMeters: planet.radiusMeters,
     sunDirection: sunDir,
+    moonDirection: sunState.moonDir,
+    moonOrbitNormal: sunState.moonOrbitNormal,
+    atmosphereSkyActive,
     backgroundColor,
     fogColorDay: fogColor,
-    fogColorNight: NIGHT_FOG_COLOR,
+    fogColorNight: skyPalette.nightFog,
     sunColor: sun.color,
     nowSeconds,
     daylightFactor,
@@ -136,7 +151,10 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
   // until WGS84/sphere height parity is solid.
   scene.background = background;
   scene.fog = volumetricSkyActive || planetFogActive ? null : defaultFog;
-  if (sceneEnvironment.backgroundMode === 'solid') {
+  if (
+    sceneEnvironment.backgroundMode === 'solid'
+    || sceneEnvironment.backgroundMode === 'space-skybox'
+  ) {
     scene.fog = null;
   }
   if (scene.fog) {
@@ -153,46 +171,117 @@ export function updateEnvironment(input: EnvironmentUpdateInput): {
     scene.fog.far = (hazeTopMeters + spanMeters) * renderScale;
   }
 
-  // The moon sits opposite the sun, so its elevation is the negated raw
-  // daylight; a moonlit night gets a cool ambient lift so it isn't pitch black.
-  const moonElevation = Math.max(0, -rawDaylight);
+  applyCelestialAmbient({
+    lighting,
+    sunState,
+    spaceFactor,
+    stationInteriorActive,
+    sceneEnvironment,
+  });
+  applySceneLightingMode(lighting, sceneEnvironment.lightingMode);
+
+  // One sun and one moon per frame. Under the atmosphere the SkyNode draws both
+  // — scattered, reddened at the horizon, and phase-shaded — so the scene-space
+  // bodies must go; above it (and for authored skybox backgrounds) the SkyNode
+  // is off and these meshes are the only sun and moon there is.
+  lighting.sunMesh.visible = lighting.sunMesh.visible && !atmosphereSkyActive;
+  lighting.moonMesh.visible =
+    lighting.moonMesh.visible && !atmosphereSkyActive && skyRecipe.moon.enabled;
+
+  applyAtmosphereShell(atmosphereMesh, {
+    planetCenter,
+    atmosphereSkyActive,
+    sceneEnvironment,
+    daylightFactor,
+    spaceFactor,
+    volumetricSkyActive,
+  });
+
+  return { volumetricSkyActive, planetFogActive, backgroundColor, fogColor };
+}
+
+interface CelestialAmbientInput {
+  lighting: SceneLighting;
+  sunState: SunSystemState;
+  spaceFactor: number;
+  stationInteriorActive: boolean;
+  sceneEnvironment: SceneEnvironmentConfig;
+}
+
+/** Hemisphere fill: authored night floor, moonlight lift, interior override. */
+function applyCelestialAmbient(input: CelestialAmbientInput): void {
+  const { ambient } = input.lighting;
+  const { daylightFactor } = input.sunState;
+  const skyRecipe = resolveSkyRecipe();
+  const skyPalette = resolveSkyPalette(skyRecipe);
+
+  // Moonlight lifts the night ambient in proportion to how high and how full
+  // the moon is, so a new moon really is darker than a full one.
+  const moonAmbient = input.sunState.moonAboveHorizon
+    ? Math.pow(input.sunState.moonElevation, 0.6)
+      * (0.3 + input.sunState.moonIllumination * 0.7)
+      * (1 - daylightFactor)
+      * 0.2
+    : 0;
   // Night ambient stays low so moon shadows read; the moon directional light
-  // (which is shadowed) does the work of shaping the terrain.
-  const moonAmbient = Math.pow(moonElevation, 0.6) * (1 - daylightFactor) * 0.15;
+  // (which is shadowed) does the work of shaping the terrain. The authored
+  // floor is what keeps an unlit night readable instead of pure black.
+  const nightAmbient = skyRecipe.night.ambientIntensity;
   ambient.intensity =
-    (1.3 - spaceFactor * 0.62) * (0.27 + daylightFactor * 0.73 + moonAmbient);
+    (1.3 - input.spaceFactor * 0.62)
+    * (nightAmbient + daylightFactor * (1 - nightAmbient) + moonAmbient);
   // Shift the ambient fill toward moonlight blue at night so the scene stays
   // readable but clearly reads as night instead of a dim day.
-  ambient.color.copy(AMBIENT_SKY_NIGHT).lerp(AMBIENT_SKY_DAY, daylightFactor);
-  ambient.groundColor.copy(AMBIENT_GROUND_NIGHT).lerp(AMBIENT_GROUND_DAY, daylightFactor);
-  if (stationInteriorActive) {
+  ambient.color
+    .copy(skyPalette.nightAmbientSky)
+    .lerp(AMBIENT_SKY_DAY, daylightFactor);
+  ambient.groundColor
+    .copy(skyPalette.nightAmbientGround)
+    .lerp(AMBIENT_GROUND_DAY, daylightFactor);
+  if (input.stationInteriorActive) {
     ambient.intensity = Math.max(ambient.intensity, 0.48);
     ambient.color.lerp(AMBIENT_SKY_DAY, 0.16);
     ambient.groundColor.lerp(AMBIENT_GROUND_DAY, 0.2);
   }
-  applyAmbientOverrides(ambient, sceneEnvironment, {
+  applyAmbientOverrides(ambient, input.sceneEnvironment, {
     forceInteriorFloor: false,
   });
-  applySceneLightingMode(lighting, sceneEnvironment.lightingMode);
+}
 
-  if (atmosphereMesh) {
-    atmosphereMesh.position.copy(planetCenter);
-    const atmosphereMaterial = atmosphereMesh.material as THREE.MeshBasicMaterial;
-    if (
-      sceneEnvironment.lightingMode !== 'outdoor'
-      || sceneEnvironment.backgroundMode === 'solid'
-    ) {
-      atmosphereMaterial.opacity = 0;
-    } else {
-      // Additive atmosphere haze must fade out at night or it washes the whole
-      // sky bright blue and drowns out the stars.
-      const atmosphereDaylight = 0.03 + 0.97 * daylightFactor;
-      atmosphereMaterial.opacity =
-        (volumetricSkyActive
-          ? 0.04 * (1 - spaceFactor * 0.8)
-          : 0.22 * (1 - spaceFactor * 0.86)) * atmosphereDaylight;
-    }
+interface AtmosphereShellInput {
+  planetCenter: THREE.Vector3;
+  atmosphereSkyActive: boolean;
+  sceneEnvironment: SceneEnvironmentConfig;
+  daylightFactor: number;
+  spaceFactor: number;
+  volumetricSkyActive: boolean;
+}
+
+/** The additive limb shell — an orbital-only effect since the sky pass landed. */
+function applyAtmosphereShell(
+  atmosphereMesh: THREE.Mesh | null,
+  input: AtmosphereShellInput,
+): void {
+  if (!atmosphereMesh) return;
+  atmosphereMesh.position.copy(input.planetCenter);
+  const material = atmosphereMesh.material as THREE.MeshBasicMaterial;
+  const suppressed =
+    input.atmosphereSkyActive
+    || input.sceneEnvironment.lightingMode !== 'outdoor'
+    || input.sceneEnvironment.backgroundMode === 'solid'
+    || input.sceneEnvironment.backgroundMode === 'space-skybox';
+  if (suppressed) {
+    // Inside the atmosphere this additive shell is a second, non-physical blue
+    // wash on top of the scattering solve — it is what flattened the daytime
+    // sky. Only the orbital limb needs it now.
+    material.opacity = 0;
+    return;
   }
-
-  return { volumetricSkyActive, planetFogActive, backgroundColor, fogColor };
+  // Additive atmosphere haze must fade out at night or it washes the whole sky
+  // bright blue and drowns out the stars.
+  const atmosphereDaylight = 0.03 + 0.97 * input.daylightFactor;
+  material.opacity =
+    (input.volumetricSkyActive
+      ? 0.04 * (1 - input.spaceFactor * 0.8)
+      : 0.22 * (1 - input.spaceFactor * 0.86)) * atmosphereDaylight;
 }

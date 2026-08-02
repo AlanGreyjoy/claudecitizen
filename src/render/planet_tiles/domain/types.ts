@@ -1,13 +1,19 @@
-import type * as THREE from 'three';
 import type { PlanetSurfaceSample, TileCacheStats, TileInfo } from '../../../types';
 
 export type TileEntryStatus = 'loading-disk' | 'pending' | 'ready';
 
+/**
+ * A tile's residency, not its geometry.
+ *
+ * Tiles used to own a `THREE.Mesh` and `status === 'ready'` meant "that mesh
+ * exists". The shared grid draws every tile as an instance of one geometry, so
+ * a ready tile is one whose height and colour pages are resident in the atlas —
+ * there is nothing per-tile left to hold.
+ */
 export interface TileMeshEntry {
   buildId: number | null;
   info: TileInfo;
   lastUsedFrame: number;
-  mesh: THREE.Mesh | null;
   status: TileEntryStatus;
 }
 
@@ -22,7 +28,8 @@ export interface PendingBuildJob {
 export interface ResolvedTile {
   info: TileInfo;
   key: string;
-  mesh: THREE.Mesh | null;
+  /** False when nothing in the tile's ancestry could be drawn this frame. */
+  ready: boolean;
 }
 
 export interface ExtendedTileCacheStats extends TileCacheStats {

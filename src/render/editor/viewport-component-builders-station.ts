@@ -74,6 +74,54 @@ function buildLadderHelper(
   group.add(stepOff);
   return group;
 }
+
+function buildChairSeatHelper(
+  component: Extract<PrefabComponent, { type: "chair-seat" }>,
+  makeHelperMesh: ViewportHelperMeshFactory,
+): THREE.Object3D | null {
+  const color = 0x7dffb8;
+  const group = new THREE.Group();
+  const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
+  const foot = makeHelperMesh(new THREE.CircleGeometry(0.26, 24), color, 0.3);
+  foot.rotation.x = -Math.PI / 2;
+  const footRing = makeHelperMesh(new THREE.TorusGeometry(0.26, 0.015, 6, 24), color, 0.85);
+  footRing.rotation.x = Math.PI / 2;
+  const eyeBall = makeHelperMesh(new THREE.SphereGeometry(0.16, 20, 14), color, 0.45);
+  eyeBall.position.set(eye.x, eye.y, eye.z);
+  const stem = makeHelperMesh(
+    new THREE.CylinderGeometry(0.012, 0.012, Math.max(0.05, Math.hypot(eye.x, eye.y, eye.z)), 6),
+    color,
+    0.45,
+  );
+  stem.position.set(eye.x / 2, eye.y / 2, eye.z / 2);
+  stem.lookAt(new THREE.Vector3(eye.x, eye.y, eye.z));
+  stem.rotateX(Math.PI / 2);
+  const stand = component.stand ?? { x: 0, z: -1.55 };
+  const standRing = makeHelperMesh(new THREE.CircleGeometry(0.3, 20), 0xffce6f, 0.22, true);
+  standRing.rotation.x = -Math.PI / 2;
+  standRing.position.set(stand.x, 0.01, stand.z);
+  const radius = component.radius ?? 1.45;
+  const raycast = (component.trigger ?? "radial") === "raycast";
+  const reach = makeHelperMesh(
+    new THREE.SphereGeometry(radius, 16, 12),
+    raycast ? 0x7db8ff : color,
+    raycast ? 0.14 : 0.12,
+    true,
+  );
+  group.add(foot, footRing, stem, eyeBall, standRing, reach);
+  if (raycast) {
+    group.add(
+      makeHelperMesh(
+        new THREE.SphereGeometry(component.aimRadius ?? 0.35, 12, 10),
+        0x7db8ff,
+        0.45,
+        true,
+      ),
+    );
+  }
+  return group;
+}
+
 function attachNpcModelPreview(
   group: THREE.Group,
   proxies: readonly THREE.Object3D[],
@@ -525,6 +573,11 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
     "ladder": (component: PrefabComponent) =>
       buildLadderHelper(
         component as Extract<PrefabComponent, { type: "ladder" }>,
+        makeHelperMesh,
+      ),
+    "chair-seat": (component: PrefabComponent) =>
+      buildChairSeatHelper(
+        component as Extract<PrefabComponent, { type: "chair-seat" }>,
         makeHelperMesh,
       ),
     "hangar-pad": buildHangarPadHelper,

@@ -1,7 +1,5 @@
-import type * as THREE from 'three';
 import type {
   Planet,
-  TerrainTileBuffers,
   TileInfo,
   TileWorkerInMessage,
   TileWorkerOutMessage,
@@ -10,14 +8,19 @@ import type {
 import { distance } from '../../../math/vec3';
 import { saveTerrainTile } from '../../../cache/terrain-tile-cache';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
-import { buildTerrainTileBuffers } from '../build/terrain-buffers';
+import {
+  installHeightPage,
+  releaseHeightPage,
+} from '../../../world/terrain-pages';
+import type { TileHeightRaster } from '../../../world/terrain-raster';
+import type { TerrainGridRenderer } from '../render/terrain-grid-renderer';
+import { buildTerrainTile } from '../build/terrain-buffers';
 import { tileKey } from '../domain/tile-info';
 import type {
   PendingBuildJob,
   TileCacheStatsAccumulator,
   TileMeshEntry,
 } from '../domain/types';
-import { createReadyMesh } from '../render/tile-geometry';
 
 export const SYNC_TILE_BUILD_BUDGET_PER_FRAME = 1;
 export const WORKER_LIVENESS_TIMEOUT_MS = 5_000;
@@ -35,7 +38,7 @@ export interface MeshCacheBuildCtx {
   evictedThisFrame: number;
   focusPosition: Vec3 | null;
   frameNumber: number;
-  material: THREE.Material;
+  gridRenderer: TerrainGridRenderer;
   meshCache: Map<string, TileMeshEntry>;
   nextBuildId: number;
   pendingBuildQueue: PendingBuildJob[];
@@ -43,7 +46,6 @@ export interface MeshCacheBuildCtx {
   queuedThisFrame: number;
   seed: number;
   syncBuildBudgetRemaining: number;
-  tileGroup: THREE.Group;
   workerAlive: boolean;
   workerLivenessTimer: ReturnType<typeof setTimeout> | null;
   workerPool: WorkerSlot[];
@@ -60,7 +62,11 @@ export interface MeshCacheBuildOps {
   markAsyncBuildFailed: (key: string, buildId: number, error?: string) => void;
   markWorkerAlive: () => void;
   maySyncBuild: (info: TileInfo) => boolean;
-  persistTerrainBuffers: (info: TileInfo, buffers: TerrainTileBuffers) => void;
+  persistTerrainTile: (
+    info: TileInfo,
+    raster: TileHeightRaster,
+    gridColors: Float32Array,
+  ) => void;
   pumpWorkerQueue: () => void;
   queueSyncTileBuild: (info: TileInfo) => TileMeshEntry;
   queueTileBuild: (info: TileInfo) => TileMeshEntry;
@@ -101,10 +107,17 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
     ctx.cacheStats.peakCachedTiles = Math.max(ctx.cacheStats.peakCachedTiles, ctx.meshCache.size);
   }
 
-  function persistTerrainBuffers(info: TileInfo, buffers: TerrainTileBuffers): void {
+  function persistTerrainTile(
+    info: TileInfo,
+    raster: TileHeightRaster,
+    gridColors: Float32Array,
+  ): void {
     const key = tileKey(info.face, info.level, info.x, info.y);
     ctx.confirmedDiskMisses.delete(key);
-    saveTerrainTile(ctx.planet, ctx.seed, info.face, info.level, info.x, info.y, buffers);
+    saveTerrainTile(ctx.planet, ctx.seed, info.face, info.level, info.x, info.y, {
+      raster,
+      gridColors,
+    });
   }
 
   function discardPendingQueueForKey(key: string, buildId: number | null = null): void {
@@ -117,13 +130,15 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
   }
 
   function releaseTileEntry(key: string, entry: TileMeshEntry, countEviction = true): void {
-    if (entry.mesh) {
-      ctx.tileGroup.remove(entry.mesh);
-      entry.mesh.geometry.dispose();
-    } else {
+    if (entry.status !== 'ready') {
       discardPendingQueueForKey(key, entry.buildId ?? null);
     }
 
+    // The height page has the same lifetime as the tile: dropping it here keeps
+    // the resident set bounded by the mesh cache's own eviction policy, and
+    // anything still sampling this area falls back to the analytic sampler.
+    releaseHeightPage(entry.info.face, entry.info.level, entry.info.x, entry.info.y);
+    ctx.gridRenderer?.releaseTile(entry.info);
     ctx.meshCache.delete(key);
     if (!countEviction) return;
     ctx.cacheStats.totalEvictions += 1;
@@ -159,7 +174,7 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
     ctx.workerPool.length = 0;
     ctx.pendingBuildQueue.length = 0;
     for (const entry of ctx.meshCache.values()) {
-      if (entry.status !== 'pending' || entry.mesh) continue;
+      if (entry.status !== 'pending') continue;
       entry.buildId = null;
     }
   }
@@ -219,26 +234,26 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
   function buildTileMeshSync(info: TileInfo): TileMeshEntry {
     const key = tileKey(info.face, info.level, info.x, info.y);
     let entry = ctx.meshCache.get(key);
-    if (entry?.mesh) {
+    if (entry?.status === 'ready') {
       entry.lastUsedFrame = ctx.frameNumber;
       return entry;
     }
 
     const startedAt = performance.now();
-    const buffers = buildTerrainTileBuffers(info, ctx.planet, ctx.seed);
+    const { raster, gridColors } = buildTerrainTile(info, ctx.planet, ctx.seed);
     recordBuildMs(performance.now() - startedAt);
-    const mesh = createReadyMesh(info, buffers, ctx.material, ctx.tileGroup);
+    installHeightPage(raster);
+    ctx.gridRenderer.installTile(info, raster, gridColors);
     entry = {
       buildId: null,
       info,
       lastUsedFrame: ctx.frameNumber,
-      mesh,
       status: 'ready',
     };
     ctx.meshCache.set(key, entry);
     ctx.cacheStats.totalBuilds += 1;
     ctx.builtThisFrame += 1;
-    persistTerrainBuffers(info, buffers);
+    persistTerrainTile(info, raster, gridColors);
     updateCachePeak();
     return entry;
   }
@@ -255,7 +270,6 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
       buildId: null,
       info,
       lastUsedFrame: ctx.frameNumber,
-      mesh: null,
       status: 'pending',
     };
     ctx.meshCache.set(key, entry);
@@ -286,7 +300,6 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
       buildId: ctx.nextBuildId,
       info,
       lastUsedFrame: ctx.frameNumber,
-      mesh: null,
       status: 'pending',
     };
     ctx.nextBuildId += 1;
@@ -324,16 +337,16 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
           return;
         }
 
-        const { buildMs, colors, normals, positions } = event.data;
+        const { buildMs, raster, gridColors } = event.data;
         recordBuildMs(buildMs);
         const entry = ctx.meshCache.get(key);
         if (entry && entry.buildId === buildId && entry.status === 'pending') {
-          const buffers = { colors, normals, positions };
-          entry.mesh = createReadyMesh(entry.info, buffers, ctx.material, ctx.tileGroup);
+          installHeightPage(raster);
+          ctx.gridRenderer.installTile(entry.info, raster, gridColors);
           entry.status = 'ready';
           ctx.cacheStats.totalBuilds += 1;
           ctx.completedSinceLastUpdate += 1;
-          persistTerrainBuffers(entry.info, buffers);
+          persistTerrainTile(entry.info, raster, gridColors);
         }
 
         pumpWorkerQueue();
@@ -356,7 +369,7 @@ export function createMeshCacheBuildOps(ctx: MeshCacheBuildCtx): MeshCacheBuildO
     markAsyncBuildFailed,
     markWorkerAlive,
     maySyncBuild,
-    persistTerrainBuffers,
+    persistTerrainTile,
     pumpWorkerQueue,
     queueSyncTileBuild,
     queueTileBuild,

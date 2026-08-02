@@ -5,14 +5,20 @@ export const SKY_MID_COLOR = new THREE.Color(0x284f88);
 export const SKY_HIGH_COLOR = new THREE.Color(0x01040b);
 export const HAZE_LOW_COLOR = new THREE.Color(0xb8daf2);
 export const SPACE_FOG_COLOR = new THREE.Color(0x050915);
-// Moonlit-blue night rather than near-black: keeps terrain and tree
-// silhouettes readable after tone mapping.
-export const NIGHT_SKY_COLOR = new THREE.Color(0x0c1730);
-export const NIGHT_FOG_COLOR = new THREE.Color(0x0b1526);
+// Night sky and night fog are authored per planet (`sky.night` in the planet
+// document) and resolved through `domain/sky-recipe.ts`.
 
-/** Full sun cycle (day + night). 3600s ≈ 30 min day / 30 min night. */
-export const DAY_LENGTH_SECONDS = 3600;
 export const PLANET_FOG_MAX_ALTITUDE_METERS = 72_000;
+
+/**
+ * Authored geometry radii of the space-view sun and moon spheres.
+ *
+ * These bodies are anchored 200 km out in scene space and are scaled per frame
+ * so their discs subtend the planet's authored angular diameters; the mesh
+ * radius is only the unit the scale factor divides by.
+ */
+export const SUN_MESH_RADIUS = 12_000;
+export const MOON_MESH_RADIUS = 7_000;
 /** Volumetric fog only runs on the planet surface path; keep ray steps cheap. */
 export const SURFACE_FOG_RAY_STEPS = 8;
 /** Cap High's 2× DPR while on the surface so look-down fill-rate stays playable. */

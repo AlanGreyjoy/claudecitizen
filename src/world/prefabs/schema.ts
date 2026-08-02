@@ -18,9 +18,24 @@ import type { StationFloorId } from "../station";
  * station-local gameplay axes as: right = -x, up = y, forward = z.
  */
 
-export type PrefabKind = "station" | "ship" | "site" | "prop" | "item";
+export type PrefabKind = "station" | "ship" | "site" | "placeable" | "item";
 
-export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site", "prop", "item"];
+export const PREFAB_KINDS: PrefabKind[] = ["station", "ship", "site", "placeable", "item"];
+
+/** Display labels for kind pickers (toolbar, New Prefab, Settings). */
+export const PREFAB_KIND_LABELS: Readonly<Record<PrefabKind, string>> = {
+  station: "Station",
+  ship: "Ship",
+  site: "Site",
+  placeable: "Placeable",
+  item: "Item",
+};
+
+/** Legacy `kind: "prop"` in saved JSON maps to placeable. */
+export function normalizePrefabKind(value: string): PrefabKind | null {
+  if (value === "prop") return "placeable";
+  return PREFAB_KINDS.includes(value as PrefabKind) ? (value as PrefabKind) : null;
+}
 
 /** UI surfaces a scene can mount through the `ui-screen` component. */
 export const SCENE_UI_SCREENS = [
@@ -528,6 +543,28 @@ export type PrefabComponent =
       /** Spin only: reverse rotation direction. */
       reverse?: boolean;
     }
+  /**
+   * Station F-key personal stash chest. Empty marker is the interact target.
+   * Contents are per-player and keyed by `id` (same id anywhere = same stash).
+   */
+  | {
+      type: "chest-storage";
+      /** Personal stash key; unique within the prefab, stable across sessions. */
+      id: string;
+      /** Prompt label (default "Open chest"). */
+      label?: string;
+      /**
+       * How F-key interact is detected (default radial).
+       * radial = stand inside the sphere; raycast = aim camera at the marker within radius.
+       */
+      trigger?: "radial" | "raycast";
+      /** Interact distance from the entity (radial stand reach / raycast max range; default 1.6). */
+      radius?: number;
+      /** Raycast-only: max perpendicular miss from the camera ray to the marker (default 0.35). */
+      aimRadius?: number;
+      /** Max distinct item stacks in the chest (default 20, clamp 1..64). */
+      slotCount?: number;
+    }
   | { type: "avms-terminal"; id: string; radius: number; floorId: StationFloorId }
   /**
    * Station weapon vendor screen (gaze + F while on foot). Empty marker
@@ -1009,6 +1046,30 @@ export type PrefabComponent =
       /** Get-up spot offset from the marker in scene XZ (default {-0.9, 0}). */
       stand?: PrefabVec2;
     }
+  /**
+   * Furniture chair: F to sit (station or ship deck; no flight). Empty is the
+   * seated character's root — place at seat height under the cushion.
+   */
+  | {
+      type: "chair-seat";
+      /** Unique within the prefab. */
+      id: string;
+      /** Display name for prompts ("Press F — sit" / label variant). */
+      label?: string;
+      /**
+       * How F-key interact is detected (default radial).
+       * radial = stand inside the sphere; raycast = aim camera at the marker within radius.
+       */
+      trigger?: "radial" | "raycast";
+      /** Interact distance from the entity (radial stand reach / raycast max range; default 1.45). */
+      radius?: number;
+      /** Raycast-only: max perpendicular miss from the camera ray to the marker (default 0.35). */
+      aimRadius?: number;
+      /** Eye offset from the marker in scene axes (default {0, 0.87, 0.25}). */
+      eye?: Vec3;
+      /** Stand-up spot offset from the marker in scene XZ (default {0, -1.55}). */
+      stand?: PrefabVec2;
+    }
   | {
       type: "ramp-interact";
       /** outside: ground-level ramp toggle; deck: interior ramp panel. */
@@ -1131,7 +1192,7 @@ export type PrefabComponent =
   | {
       type: "prefab-instance";
       prefabId: string;
-      prefabKind?: "station" | "ship" | "site" | "prop" | "item";
+      prefabKind?: PrefabKind;
     }
   /** Full-screen UI surface the scene mounts instead of (or over) 3D play. */
   | {
@@ -1416,8 +1477,12 @@ export function parsePrefabDocument(value: unknown): PrefabDocument {
   if (!PREFAB_ID_PATTERN.test(id))
     fail("$.id", "expected lowercase slug (a-z, 0-9, -)");
   if (value.version !== 1) fail("$.version", "expected version 1");
-  const kind = value.kind;
-  if (typeof kind !== "string" || !PREFAB_KINDS.includes(kind as PrefabKind)) {
+  const kindRaw = value.kind;
+  if (typeof kindRaw !== "string") {
+    fail("$.kind", `expected one of ${PREFAB_KINDS.join(", ")}`);
+  }
+  const kind = normalizePrefabKind(kindRaw);
+  if (!kind) {
     fail("$.kind", `expected one of ${PREFAB_KINDS.join(", ")}`);
   }
   return {
@@ -1427,7 +1492,7 @@ export function parsePrefabDocument(value: unknown): PrefabDocument {
         ? value.name.slice(0, 128)
         : id,
     version: 1,
-    kind: kind as PrefabKind,
+    kind,
     root: parseEntity(value.root, "$.root", 0),
   };
 }

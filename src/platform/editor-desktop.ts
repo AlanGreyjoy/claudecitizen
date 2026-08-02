@@ -59,6 +59,7 @@ export type DesktopNativeCommandType =
   | 'open-planet'
   | 'open-menu'
   | 'open-scene-settings'
+  | 'open-prefab-settings'
   | 'delete-scene'
   | 'open-project-settings'
   | 'undo'

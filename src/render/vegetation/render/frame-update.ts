@@ -5,7 +5,7 @@ import {
   MAX_CACHED_VEGETATION_TILES,
   VEGETATION_SELECTION_BUDGET,
 } from '../domain/constants';
-import { tileKey } from '../domain/hash';
+import { tileKey } from '../../planet_tiles/domain/tile-key';
 import {
   isVegetationVisibleAtAltitude,
   selectVegetationTiles,

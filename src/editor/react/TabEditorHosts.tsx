@@ -27,6 +27,8 @@ export type TabEditorHandles = {
 
 type TabEditorHostsProps = {
   tab: SceneEditorTab;
+  /** When true, pause every tab preview WebGPU loop (Play / Planet Test Play). */
+  playing: boolean;
   onHandles: (handles: TabEditorHandles) => void;
   onPlanetTestPlay: () => void;
 };
@@ -34,9 +36,16 @@ type TabEditorHostsProps = {
 /**
  * Tab editors with React chrome and imperative preview stages. React owns visibility /
  * activate lifecycle; preview runtimes stay in their modules.
+ *
+ * Preview stages must not keep a live WebGPU device during in-editor Play.
+ * Planet Authoring Test Play stays on this tab, so without the `playing` gate
+ * the planet preview adapter sits beside the game — and takram atmosphere LUT
+ * compute then fails to fill, leaving a pitch-black sky over lit terrain.
+ * `deactivate` disposes that device; RAF pause alone is not enough.
  */
 export function TabEditorHosts({
   tab,
+  playing,
   onHandles,
   onPlanetTestPlay,
 }: TabEditorHostsProps): ReactElement {
@@ -74,32 +83,34 @@ export function TabEditorHosts({
     h.systemMapEditor = systemRef.current;
     h.menuManagerEditor = menuManagerRef.current;
 
-    if (tab === 'base-characters') {
+    // Play pauses every tab preview, even the active tab — concurrent WebGPU
+    // renderers break atmosphere LUT fill on the game path.
+    if (tab === 'base-characters' && !playing) {
       h.baseCharacterEditor?.activate();
     } else {
       h.baseCharacterEditor?.deactivate();
     }
 
-    if (tab === 'planet-authoring') {
+    if (tab === 'planet-authoring' && !playing) {
       h.planetAuthoringEditor?.activate();
     } else {
       h.planetAuthoringEditor?.deactivate();
     }
 
-    if (tab === 'system-map') {
+    if (tab === 'system-map' && !playing) {
       h.systemMapEditor?.activate();
     } else {
       h.systemMapEditor?.deactivate();
     }
 
-    if (tab === 'menu-manager') {
+    if (tab === 'menu-manager' && !playing) {
       h.menuManagerEditor?.activate();
     } else {
       h.menuManagerEditor?.deactivate();
     }
 
     syncHandles();
-  }, [tab, syncHandles]);
+  }, [tab, playing, syncHandles]);
 
   useEffect(() => {
     return () => {

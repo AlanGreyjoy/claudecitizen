@@ -54,10 +54,3 @@ export interface LandingSite {
   lonRadians: number;
 }
 
-export interface CloudLayerConfig {
-  altitudeMeters: number;
-  opacity: number;
-  radiusOffsetMeters: number;
-  rotationRate: number;
-  scale: number;
-}

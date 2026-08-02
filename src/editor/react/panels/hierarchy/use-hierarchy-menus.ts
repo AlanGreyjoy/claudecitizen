@@ -15,7 +15,7 @@ import {
 } from '../../../component-actions';
 import type { EditorEntity, EditorStore, GlbNodeRef } from '../../../document';
 import { showToast, type ContextMenuEntry } from '../../../dom';
-import { PREFAB_KINDS, type PrefabKind } from '../../../../world/prefabs/schema';
+import { PREFAB_KIND_LABELS, PREFAB_KINDS, type PrefabKind } from '../../../../world/prefabs/schema';
 import {
   collectEntitySubtreeIds,
   createMoveToPanel,
@@ -157,7 +157,7 @@ const entityMenuEntries = useCallback(
       {
         label: 'Create Prefab from Selection',
         children: PREFAB_KINDS.map((kind) => ({
-          label: kind,
+          label: PREFAB_KIND_LABELS[kind],
           action: () => void createPrefab(entity.id, kind),
         })),
       },

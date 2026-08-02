@@ -11,6 +11,7 @@ import {
   findDefinition,
   findPlacement,
   inventoryQuantity,
+  type BuildPersistMode,
   type BuildToolMode,
   type HangarBuildContext,
 } from './types';
@@ -19,13 +20,28 @@ import {
   validateClientPlacement,
   type PlacementTransform,
 } from './validation';
+import {
+  localDeleteResponse,
+  localMoveResponse,
+  localPlaceResponse,
+  localPurchaseResponse,
+} from './local-persist';
 
 type FloorPoint = { right: number; up: number; forward: number };
+
+/** Returns true when the prop colliders intersect station/hangar geometry. */
+export type BuildEnvironmentProbe = (args: {
+  prefabId: string;
+  transform: PlacementTransform;
+  excludePlacementId?: string;
+}) => boolean | Promise<boolean>;
 
 interface BuildActionDeps {
   applyResponse: (response: HangarBuildState & { arcBalance: number }) => void;
   context: HangarBuildContext;
   notify: () => void;
+  persist: BuildPersistMode;
+  environmentProbe: BuildEnvironmentProbe | null;
 }
 
 function placementPickTargets(context: HangarBuildContext) {
@@ -51,6 +67,18 @@ function placementTransforms(
     }));
 }
 
+async function resolveEnvironmentBlocked(
+  probe: BuildEnvironmentProbe | null,
+  args: {
+    prefabId: string;
+    transform: PlacementTransform;
+    excludePlacementId?: string;
+  },
+): Promise<{ blocked: boolean; probed: boolean }> {
+  if (!probe) return { blocked: false, probed: false };
+  return { blocked: await probe(args), probed: true };
+}
+
 async function handlePlacePrimaryAction(
   deps: BuildActionDeps,
   floorPoint: FloorPoint,
@@ -70,6 +98,10 @@ async function handlePlacePrimaryAction(
     forward: floorPoint.forward,
     rotationY: 0,
   };
+  const environment = await resolveEnvironmentBlocked(deps.environmentProbe, {
+    prefabId: definition.prefabId,
+    transform: ghost,
+  });
   const validation = validateClientPlacement({
     area: context.state.area,
     transform: ghost,
@@ -77,6 +109,8 @@ async function handlePlacePrimaryAction(
     allowRotateY: definition.allowRotateY,
     snapGridM: definition.snapGridM,
     existingPlacements: placementTransforms(context),
+    skipPropOverlap: environment.probed,
+    environmentBlocked: environment.blocked,
   });
   if (!validation.ok) {
     context.statusMessage = validation.message;
@@ -86,11 +120,14 @@ async function handlePlacePrimaryAction(
   context.busy = true;
   notify();
   try {
-    const response = await createBuildPlacement(
-      context.state.area,
-      definitionId,
-      validation.transform,
-    );
+    const response =
+      deps.persist === 'local'
+        ? localPlaceResponse(context, definitionId, validation.transform)
+        : await createBuildPlacement(
+            context.state.area,
+            definitionId,
+            validation.transform,
+          );
     applyResponse(response);
     context.ghost = validation.transform;
     context.statusMessage = 'Prop placed.';
@@ -128,6 +165,11 @@ async function handleMovePrimaryAction(
   const definition = placement ? findDefinition(context, placement.propDefinitionId) : null;
   if (!placement || !definition || !context.ghost) return;
 
+  const environment = await resolveEnvironmentBlocked(deps.environmentProbe, {
+    prefabId: placement.prefabId,
+    transform: context.ghost,
+    excludePlacementId: placement.id,
+  });
   const validation = validateClientPlacement({
     area: context.state.area,
     transform: context.ghost,
@@ -135,6 +177,8 @@ async function handleMovePrimaryAction(
     allowRotateY: definition.allowRotateY,
     snapGridM: definition.snapGridM,
     existingPlacements: placementTransforms(context, placement.id),
+    skipPropOverlap: environment.probed,
+    environmentBlocked: environment.blocked,
   });
   if (!validation.ok) {
     context.statusMessage = validation.message;
@@ -145,11 +189,14 @@ async function handleMovePrimaryAction(
   context.busy = true;
   notify();
   try {
-    const response = await updateBuildPlacement(
-      context.state.area,
-      placement.id,
-      validation.transform,
-    );
+    const response =
+      deps.persist === 'local'
+        ? localMoveResponse(context, placement.id, validation.transform)
+        : await updateBuildPlacement(
+            context.state.area,
+            placement.id,
+            validation.transform,
+          );
     applyResponse(response);
     context.selectedPlacementId = null;
     context.ghost = null;
@@ -171,7 +218,10 @@ async function handleDeletePrimaryAction(
   context.busy = true;
   notify();
   try {
-    const response = await deleteBuildPlacement(context.state.area, picked);
+    const response =
+      deps.persist === 'local'
+        ? localDeleteResponse(context, picked)
+        : await deleteBuildPlacement(context.state.area, picked);
     applyResponse(response);
     context.statusMessage = 'Prop removed.';
   } catch (error) {
@@ -184,6 +234,8 @@ async function handleDeletePrimaryAction(
 export interface HangarBuildControllerOptions {
   initialState: HangarBuildState;
   arcBalance: number;
+  /** Default `api`. Editor offline Play uses `local` in-memory mutations. */
+  persist?: BuildPersistMode;
   onStateChange?: (context: HangarBuildContext) => void;
   onPlacementsChange?: (state: HangarBuildState) => void;
 }
@@ -191,8 +243,10 @@ export interface HangarBuildControllerOptions {
 interface ControllerRuntime {
   context: HangarBuildContext;
   options: HangarBuildControllerOptions;
+  persist: BuildPersistMode;
   catalogOpen: boolean;
   pointerNdc: { x: number; y: number };
+  environmentProbe: BuildEnvironmentProbe | null;
 }
 
 function notify(rt: ControllerRuntime): void {
@@ -214,6 +268,8 @@ function buildDeps(rt: ControllerRuntime): BuildActionDeps {
     context: rt.context,
     notify: () => notify(rt),
     applyResponse: (response) => applyResponse(rt, response),
+    persist: rt.persist,
+    environmentProbe: rt.environmentProbe,
   };
 }
 
@@ -262,6 +318,8 @@ function updateGhostFromFloor(
       forward: floorPoint.forward,
       rotationY: context.ghost?.rotationY ?? 0,
     };
+    // Live ghost snap uses AABB rules only; collider probe runs on click
+    // (async mesh bake / Rapier). Snap still keeps the ghost on-grid.
     const validation = validateClientPlacement({
       area: context.state.area,
       transform: ghost,
@@ -274,6 +332,7 @@ function updateGhostFromFloor(
         forward: entry.forward,
         rotationY: entry.rotationY,
       })),
+      skipPropOverlap: rt.environmentProbe !== null,
     });
     context.ghost = validation.ok ? validation.transform : ghost;
     notify(rt);
@@ -308,7 +367,10 @@ async function purchaseSelected(rt: ControllerRuntime): Promise<void> {
   context.statusMessage = 'Purchasing…';
   notify(rt);
   try {
-    const response = await purchaseBuildProp(context.state.area, definitionId);
+    const response =
+      rt.persist === 'local'
+        ? localPurchaseResponse(context, definitionId)
+        : await purchaseBuildProp(context.state.area, definitionId);
     applyResponse(rt, response);
     context.statusMessage = 'Purchase complete.';
   } catch (error) {
@@ -355,8 +417,10 @@ export function createHangarBuildController(options: HangarBuildControllerOption
   const rt: ControllerRuntime = {
     context: createHangarBuildContext(options.initialState, options.arcBalance),
     options,
+    persist: options.persist ?? 'api',
     catalogOpen: false,
     pointerNdc: { x: 0, y: 0 },
+    environmentProbe: null,
   };
 
   return {
@@ -389,6 +453,9 @@ export function createHangarBuildController(options: HangarBuildControllerOption
     cancelTool: (): void => cancelTool(rt),
     syncBootstrap: (state: HangarBuildState, arcBalance: number): void =>
       syncBootstrap(rt, state, arcBalance),
+    setEnvironmentProbe(probe: BuildEnvironmentProbe | null): void {
+      rt.environmentProbe = probe;
+    },
   };
 }
 

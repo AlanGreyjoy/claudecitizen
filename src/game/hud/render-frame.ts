@@ -1,5 +1,6 @@
 import {
   MODE_IN_BED,
+  MODE_IN_CHAIR,
   MODE_IN_SHIP,
 } from "../../player/modes";
 import { getActiveShipBody } from "../../player/world-state";
@@ -78,7 +79,10 @@ function resolveFocus(
   activeShip: ReturnType<typeof getActiveShipBody>,
 ) {
   const focusUsesShip =
-    ctx.world.mode === MODE_IN_SHIP || ctx.world.mode === MODE_IN_BED;
+    ctx.world.mode === MODE_IN_SHIP ||
+    ctx.world.mode === MODE_IN_BED ||
+    (ctx.world.mode === MODE_IN_CHAIR &&
+      ctx.world.chairOccupancy?.surface === "ship");
   const shipSurface = sampleRenderablePlanetSurface(
     ctx.planet,
     ctx.seed,
@@ -182,6 +186,7 @@ export function renderFrame(
       !paused &&
       ctx.activeWeaponSlotId !== null &&
       isWeaponWalkMode(ctx.world.mode),
+    weaponCrosshair: paused ? undefined : deps.combat.currentCrosshairState(),
     combatAmmo: paused ? null : deps.combat.currentCombatAmmoHud(),
     flightDual,
     cockpitGaze,

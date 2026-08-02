@@ -7,25 +7,36 @@ import {
   Loop,
   cameraFar,
   cameraNear,
-  dot,
   float,
-  floor,
-  fract,
   int,
   logarithmicDepthToViewZ,
   mix,
   smoothstep,
   uniform,
   uv,
+  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
 import type { FogSettings, Planet } from '../../../types';
 import { SURFACE_FOG_RAY_STEPS } from '../domain/constants';
+import { noise3 } from '../../materials/tsl-noise';
 import type { MainPostEnvironmentFrame } from './types';
 
+/**
+ * Ground-pooling haze only — the atmosphere owns real distance falloff.
+ *
+ * `density` is extinction per meter, so the old 0.006 was an extinction length
+ * of ~256 m: geometry a kilometre out came back 96% fog color, and because the
+ * raymarch runs on every `depth < 1` pixel it hit the cloud deck too, replacing
+ * a horizon deck with flat `fogColorDay` on the *first* of eight steps. Takram's
+ * aerial perspective already integrates the whole air column with the real
+ * Bruneton solve; this pass exists on top of it purely to let fog settle in
+ * valleys, so it has to be thin enough not to double-count. 1e-4 is ~15 km of
+ * ground-level extinction length, a few percent of haze at a kilometre.
+ */
 const DEFAULT_FOG_SETTINGS: FogSettings = {
-  density: 0.006,
+  density: 0.0001,
   maxHeight: 4000,
   heightFalloff: 350,
   noiseStrength: 0.4,
@@ -36,32 +47,6 @@ export interface MainVolumetricFogNode {
   setSettings: (settings: FogSettings) => void;
   update: (frame: MainPostEnvironmentFrame, renderScale: number) => void;
 }
-
-/** Value-noise hash from the GLSL original, kept bit-for-bit in structure. */
-const hash31 = Fn(([p]: [ReturnType<typeof vec3>]) => {
-  const q = fract(p.mul(0.1031)).toVar();
-  q.addAssign(dot(q, q.yzx.add(33.33)));
-  return fract(q.x.add(q.y).mul(q.z));
-});
-
-const noise3 = Fn(([p]: [ReturnType<typeof vec3>]) => {
-  const i = floor(p).toVar();
-  const f = fract(p).toVar();
-  f.assign(f.mul(f).mul(float(3).sub(f.mul(2))));
-  const n000 = hash31(i.add(vec3(0, 0, 0)));
-  const n100 = hash31(i.add(vec3(1, 0, 0)));
-  const n010 = hash31(i.add(vec3(0, 1, 0)));
-  const n110 = hash31(i.add(vec3(1, 1, 0)));
-  const n001 = hash31(i.add(vec3(0, 0, 1)));
-  const n101 = hash31(i.add(vec3(1, 0, 1)));
-  const n011 = hash31(i.add(vec3(0, 1, 1)));
-  const n111 = hash31(i.add(vec3(1, 1, 1)));
-  const nx00 = mix(n000, n100, f.x);
-  const nx10 = mix(n010, n110, f.x);
-  const nx01 = mix(n001, n101, f.x);
-  const nx11 = mix(n011, n111, f.x);
-  return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
-});
 
 /**
  * TSL port of `VolumetricFogEffect` — the depth-aware planet fog raymarch.
@@ -95,6 +80,10 @@ export function createMainVolumetricFogNode(
   const fogHeightFalloff = uniform(DEFAULT_FOG_SETTINGS.heightFalloff);
   const noiseStrength = uniform(DEFAULT_FOG_SETTINGS.noiseStrength);
   const spaceFactor = uniform(0);
+  // `planetFogActive` was computed in `update/environment.ts` and passed in the
+  // frame from the day this node landed, but nothing here ever read it, so
+  // surface fog also ran inside stations and under solid/skybox backgrounds.
+  const planetFogEnabled = uniform(1);
 
   const fogDensityAt = Fn(([worldPos]: [ReturnType<typeof vec3>]) => {
     const scale = renderScaleUniform.max(0.000001);
@@ -136,7 +125,10 @@ export function createMainVolumetricFogNode(
 
   const node = Fn(() => {
     const output = vec4(inputNode).toVar();
-    const planetMask = smoothstep(0.2, 0.85, spaceFactor).oneMinus().toVar();
+    const planetMask = smoothstep(0.2, 0.85, spaceFactor)
+      .oneMinus()
+      .mul(planetFogEnabled)
+      .toVar();
     const depth = float(depthNode).toVar();
 
     If(planetMask.greaterThan(0.001).and(depth.lessThan(1)), () => {
@@ -145,9 +137,16 @@ export function createMainVolumetricFogNode(
         cameraNear,
         cameraFar,
       ).toVar();
+      // `uv()` on three's post quad has v = 0 at the *top* — its uv attribute
+      // is flipped against the NDC positions so render-target sampling lines
+      // up. Unprojecting it raw mirrors the ray vertically, so the marched
+      // altitude band no longer matches the pixel it shades. three's own
+      // `getViewPosition` undoes the flip the same way.
+      //
       // Join as four scalars — `vec4(vec2, float, float)` is legal GLSL but
       // TSL's JoinNode has tripped over that shape in this stack before.
-      const ndc = uv().mul(2).sub(1);
+      const screenUv = uv();
+      const ndc = vec2(screenUv.x, screenUv.y.oneMinus()).mul(2).sub(1);
       const rayClip = vec4(ndc.x, ndc.y, 1, 1);
       const rayEye = projectionMatrixInverse.mul(rayClip).toVar();
       const eyeDir = rayEye.xyz.div(rayEye.w.abs().max(0.00001)).toVar();
@@ -220,6 +219,7 @@ export function createMainVolumetricFogNode(
       time.value = frame.nowSeconds;
       daylightFactor.value = frame.daylightFactor;
       spaceFactor.value = frame.spaceFactor;
+      planetFogEnabled.value = frame.planetFogActive ? 1 : 0;
     },
   };
 }

@@ -38,6 +38,7 @@ import { showConfirmDialog, showContextMenu, showPromptDialog, showToast } from 
 import type { EditorAudioPreviewController } from '../../audio-preview';
 import {
   applyFolderMoveToOrder,
+  applyGridAssetSelectionClick,
   assetCardKind,
   assetCardTitle,
   assetVersionOf,
@@ -58,6 +59,7 @@ import {
   findFolder,
   folderBreadcrumbs,
   folderDropZoneFromOffset,
+  gridAssetPaths,
   insertChildInOrder,
   isDraggableAssetPath,
   isPrefabPath,
@@ -69,14 +71,18 @@ import {
   PROJECT_ROOT_LABEL,
   remapFolderPath,
   removeChildFromOrder,
+  resolveAssetInspectorItems,
   setParentOrder,
   siblingOrderAfterDrop,
   sortedFolderChildren,
   type AssetCardKind,
+  type AssetInspectorItem,
   type AssetMoveDragPayload,
   type FolderDropZone,
   type FolderNode,
 } from '../../panels/project-logic';
+
+export type { AssetInspectorItem };
 import {
   attachColumnSplitter,
   PANEL_SIZE_BOUNDS,
@@ -107,6 +113,8 @@ export interface ProjectPanelOptions {
     folder: string,
   ) => Promise<string[]>;
   audioPreview: EditorAudioPreviewController;
+  /** Fired whenever the asset-grid selection changes (including clear → `[]`). */
+  onAssetSelectionChange?: (items: AssetInspectorItem[]) => void;
 }
 
 export interface ProjectPanelHandle {
@@ -114,6 +122,8 @@ export interface ProjectPanelHandle {
   selectFolder: (folderPath: string) => void;
   /** Re-read the project asset listing. There is no filesystem watcher. */
   refresh: () => Promise<void>;
+  /** Clear the asset-grid selection (e.g. when Hierarchy takes focus). */
+  clearAssetSelection: () => void;
 }
 
 export type ProjectPanelProps = ProjectPanelOptions;
@@ -385,9 +395,11 @@ function AudioAssetActions({
 
 function AssetCard({
   entry,
+  selected,
   thumbSrc,
   audioPreview,
   audioTick,
+  onSelect,
   onAudioToggle,
   onPreviewAnimationSource,
   onCreateItemPrefab,
@@ -395,9 +407,11 @@ function AssetCard({
   onContextMenu,
 }: {
   entry: AssetEntry;
+  selected: boolean;
   thumbSrc: string | undefined;
   audioPreview: EditorAudioPreviewController;
   audioTick: number;
+  onSelect: (event: MouseEvent, path: string) => void;
   onAudioToggle: () => void;
   onPreviewAnimationSource: (url: string) => void | Promise<void>;
   onCreateItemPrefab: (url: string) => void | Promise<void>;
@@ -429,9 +443,13 @@ function AssetCard({
 
   return (
     <div
-      className={`ed-asset-card${isEmptyFile ? ' is-unavailable' : ''}`}
+      className={`ed-asset-card${selected ? ' is-selected' : ''}${
+        isEmptyFile ? ' is-unavailable' : ''
+      }`}
       title={assetCardTitle(sourcePath, kind)}
+      aria-selected={selected}
       draggable={isDraggable && !isEmptyFile}
+      onClick={(event) => onSelect(event, entry.path)}
       onDragStart={isDraggable && !isEmptyFile ? onDragStart : undefined}
       onDoubleClick={
         isPrefab && !isEmptyFile ? () => onOpenPrefab(prefabIdFromPath(entry.path)) : undefined
@@ -473,8 +491,10 @@ function AssetCard({
 
 function FolderCard({
   folder,
+  selected,
   dropTarget,
   onOpen,
+  onSelect,
   onContextMenu,
   onFolderDragStart,
   onDropOver,
@@ -483,8 +503,10 @@ function FolderCard({
   onDragEnd,
 }: {
   folder: FolderNode;
+  selected: boolean;
   dropTarget: FolderDropTarget | null;
   onOpen: (path: string) => void;
+  onSelect: (event: MouseEvent, path: string) => void;
   onContextMenu: (event: MouseEvent, folderPath: string) => void;
   onFolderDragStart: (event: DragEvent, folder: FolderNode) => void;
   onDropOver: (event: DragEvent, folderPath: string) => void;
@@ -498,10 +520,14 @@ function FolderCard({
 
   return (
     <div
-      className={`ed-asset-card is-folder${dropZone === 'into' ? ' is-drop-target' : ''}`}
+      className={`ed-asset-card is-folder${selected ? ' is-selected' : ''}${
+        dropZone === 'into' ? ' is-drop-target' : ''
+      }`}
       title={`${labelPath}\nDouble-click to open`}
+      aria-selected={selected}
       draggable
       data-folder-path={folder.path}
+      onClick={(event) => onSelect(event, folder.path)}
       onDoubleClick={() => onOpen(folder.path)}
       onContextMenu={(event) => onContextMenu(event, folder.path)}
       onDragStart={(event) => onFolderDragStart(event, folder)}
@@ -698,6 +724,7 @@ function ProjectAssetGrid({
   searchQuery,
   folders,
   files,
+  selectedPaths,
   thumbByUrl,
   audioPreview,
   audioTick,
@@ -706,7 +733,11 @@ function ProjectAssetGrid({
   onNavigate,
   onScopeChange,
   onSearchChange,
+  onSelectAsset,
+  onClearSelection,
+  onDeleteSelection,
   onContextMenu,
+  onFolderCardContextMenu,
   onAssetContextMenu,
   onOpenPrefab,
   onFolderDragStart,
@@ -724,6 +755,7 @@ function ProjectAssetGrid({
   searchQuery: string;
   folders: FolderNode[];
   files: AssetEntry[];
+  selectedPaths: ReadonlySet<string>;
   thumbByUrl: Record<string, string>;
   audioPreview: EditorAudioPreviewController;
   audioTick: number;
@@ -732,7 +764,11 @@ function ProjectAssetGrid({
   onNavigate: (path: string) => void;
   onScopeChange: (scope: FolderScope) => void;
   onSearchChange: (query: string) => void;
+  onSelectAsset: (event: MouseEvent, path: string) => void;
+  onClearSelection: () => void;
+  onDeleteSelection: () => void;
   onContextMenu: (event: MouseEvent, folderPath: string) => void;
+  onFolderCardContextMenu: (event: MouseEvent, folderPath: string) => void;
   onAssetContextMenu: (event: MouseEvent, entry: AssetEntry) => void;
   onOpenPrefab: (prefabId: string) => void;
   onFolderDragStart: (event: DragEvent, folder: FolderNode) => void;
@@ -748,6 +784,19 @@ function ProjectAssetGrid({
   return (
     <div
       className={`ed-asset-browser-body${isDropTarget ? ' is-drop-target' : ''}`}
+      tabIndex={0}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('.ed-asset-card')) return;
+        onClearSelection();
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+        if (selectedPaths.size === 0) return;
+        const target = event.target as HTMLElement;
+        if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+        event.preventDefault();
+        onDeleteSelection();
+      }}
       onContextMenu={(event) => {
         if ((event.target as HTMLElement).closest('.ed-asset-card')) return;
         onContextMenu(event, selectedFolder);
@@ -776,9 +825,11 @@ function ProjectAssetGrid({
               <FolderCard
                 key={`folder:${folder.path}`}
                 folder={folder}
+                selected={selectedPaths.has(folder.path)}
                 dropTarget={dropTarget}
                 onOpen={onNavigate}
-                onContextMenu={onContextMenu}
+                onSelect={onSelectAsset}
+                onContextMenu={onFolderCardContextMenu}
                 onFolderDragStart={onFolderDragStart}
                 onDropOver={onDropOver}
                 onDropInto={onDropInto}
@@ -792,9 +843,11 @@ function ProjectAssetGrid({
                 <AssetCard
                   key={entry.path}
                   entry={entry}
+                  selected={selectedPaths.has(entry.path)}
                   thumbSrc={thumbByUrl[url]}
                   audioPreview={audioPreview}
                   audioTick={audioTick}
+                  onSelect={onSelectAsset}
                   onAudioToggle={onAudioToggle}
                   onPreviewAnimationSource={onPreviewAnimationSource}
                   onCreateItemPrefab={onCreateItemPrefab}
@@ -825,6 +878,7 @@ function useProjectFileOperations(
   onFolderRenamed: (fromPath: string, toPath: string) => void,
   getOrderMap: () => FolderOrderMap,
   persistOrder: (order: FolderOrderMap) => Promise<void>,
+  getTree: () => FolderNode,
 ): {
   createFolderIn: (parentPath: string) => Promise<void>;
   moveEntryInto: (payload: AssetMoveDragPayload, folderPath: string) => Promise<void>;
@@ -842,6 +896,7 @@ function useProjectFileOperations(
   renameEntry: (entry: AssetEntry) => Promise<void>;
   deleteEntry: (entry: AssetEntry) => Promise<void>;
   deleteFolder: (folder: FolderNode) => Promise<void>;
+  deleteSelectedAssets: (paths: ReadonlySet<string>) => Promise<void>;
 } {
   const createFolderIn = useCallback(
     async (parentPath: string): Promise<void> => {
@@ -1083,6 +1138,67 @@ function useProjectFileOperations(
     [getOrderMap, persistOrder, reload],
   );
 
+  const deleteSelectedAssets = useCallback(
+    async (paths: ReadonlySet<string>): Promise<void> => {
+      if (paths.size === 0) return;
+      const tree = getTree();
+      const folders: FolderNode[] = [];
+      const files: string[] = [];
+      for (const path of paths) {
+        if (!path) continue;
+        const folder = findFolder(tree, path);
+        if (folder && folder.path === path) folders.push(folder);
+        else files.push(path);
+      }
+
+      for (const folder of folders) {
+        if (folder.children.size > 0 || folder.files.length > 0) {
+          showToast(`Cannot delete "${folder.name}": folder is not empty.`, true);
+          return;
+        }
+      }
+
+      const total = folders.length + files.length;
+      if (total === 0) return;
+
+      let message: string;
+      if (total === 1) {
+        const only = folders[0]?.name ?? fileNameFromPath(files[0]!);
+        message = `Delete ${only}? This cannot be undone.`;
+      } else {
+        message = `Delete ${total} items? This cannot be undone.`;
+      }
+      const confirmed = await showConfirmDialog({
+        title: 'Delete',
+        message,
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (!confirmed) return;
+
+      let deleted = 0;
+      let order = getOrderMap();
+      try {
+        for (const path of files) {
+          await deleteAssetEntry(PROJECT_ASSET_ROOT, path);
+          deleted += 1;
+        }
+        for (const folder of folders) {
+          await deleteAssetEntry(PROJECT_ASSET_ROOT, folder.path);
+          order = removeChildFromOrder(order, parentFolderOfPath(folder.path), folder.name);
+          deleted += 1;
+        }
+        if (folders.length > 0) await persistOrder(order);
+        await reload();
+        showToast(deleted === 1 ? `Deleted ${deleted} item` : `Deleted ${deleted} items`);
+      } catch (error) {
+        await reload();
+        showToast(`Could not delete: ${(error as Error).message}`, true);
+      }
+    },
+    [getOrderMap, getTree, persistOrder, reload],
+  );
+
   return {
     createFolderIn,
     moveEntryInto,
@@ -1092,6 +1208,7 @@ function useProjectFileOperations(
     renameEntry,
     deleteEntry,
     deleteFolder,
+    deleteSelectedAssets,
   };
 }
 
@@ -1320,6 +1437,234 @@ function useProjectFolderDnd(options: {
   };
 }
 
+function useProjectGridSelection(options: {
+  treeRef: RefObject<FolderNode>;
+  selectedFolderRef: RefObject<string>;
+  orderMapRef: RefObject<FolderOrderMap>;
+  gridRef: RefObject<HTMLDivElement | null>;
+  folderScope: FolderScope;
+  searchQuery: string;
+  deleteSelectedAssets: (paths: ReadonlySet<string>) => Promise<void>;
+  createFolderIn: (parentPath: string) => Promise<void>;
+  renameFolder: (folder: FolderNode) => Promise<void>;
+  renameEntry: (entry: AssetEntry) => Promise<void>;
+  onOpenPrefab: (prefabId: string) => void;
+  onAssetSelectionChange?: (items: AssetInspectorItem[]) => void;
+  load: () => Promise<void>;
+}): {
+  selectedAssetPaths: ReadonlySet<string>;
+  clearAssetSelection: () => void;
+  onSelectAsset: (event: MouseEvent, path: string) => void;
+  onDeleteSelection: () => void;
+  onFolderCardContextMenu: (event: MouseEvent, folderPath: string) => void;
+  onAssetContextMenu: (event: MouseEvent, entry: AssetEntry) => void;
+} {
+  const {
+    treeRef,
+    selectedFolderRef,
+    orderMapRef,
+    gridRef,
+    folderScope,
+    searchQuery,
+    deleteSelectedAssets,
+    createFolderIn,
+    renameFolder,
+    renameEntry,
+    onOpenPrefab,
+    onAssetSelectionChange,
+    load,
+  } = options;
+
+  const [selectedAssetPaths, setSelectedAssetPaths] = useState(() => new Set<string>());
+  const [selectionAnchorPath, setSelectionAnchorPath] = useState<string | null>(null);
+  const selectedAssetPathsRef = useRef(selectedAssetPaths);
+  selectedAssetPathsRef.current = selectedAssetPaths;
+  const selectionAnchorPathRef = useRef(selectionAnchorPath);
+  selectionAnchorPathRef.current = selectionAnchorPath;
+  const onAssetSelectionChangeRef = useRef(onAssetSelectionChange);
+  onAssetSelectionChangeRef.current = onAssetSelectionChange;
+
+  const publishSelection = useCallback((paths: ReadonlySet<string>): void => {
+    const notify = onAssetSelectionChangeRef.current;
+    if (!notify) return;
+    const tree = treeRef.current ?? emptyFolderNode();
+    notify(resolveAssetInspectorItems(tree, paths));
+  }, [treeRef]);
+
+  const clearAssetSelection = useCallback((): void => {
+    setSelectedAssetPaths(new Set());
+    setSelectionAnchorPath(null);
+    selectedAssetPathsRef.current = new Set();
+    selectionAnchorPathRef.current = null;
+    publishSelection(new Set());
+  }, [publishSelection]);
+
+  const prepareGridContextSelection = useCallback((clickedPath: string): Set<string> => {
+    let next = selectedAssetPathsRef.current;
+    if (!next.has(clickedPath)) {
+      next = new Set([clickedPath]);
+      selectedAssetPathsRef.current = next;
+      selectionAnchorPathRef.current = clickedPath;
+      setSelectedAssetPaths(next);
+      setSelectionAnchorPath(clickedPath);
+      publishSelection(next);
+    }
+    return next;
+  }, [publishSelection]);
+
+  const onSelectAsset = useCallback(
+    (event: MouseEvent, path: string) => {
+      const ordered = gridAssetPaths(
+        filterFoldersByQuery(
+          collectImmediateChildFolders(
+            treeRef.current,
+            selectedFolderRef.current,
+            orderMapRef.current,
+          ),
+          searchQuery,
+        ),
+        filterAssetEntriesByQuery(
+          collectFolderFiles(
+            treeRef.current,
+            selectedFolderRef.current,
+            folderScope === 'all-subfolders',
+            orderMapRef.current,
+          ),
+          searchQuery,
+        ),
+      );
+      const resolved = applyGridAssetSelectionClick(
+        selectedAssetPathsRef.current,
+        selectionAnchorPathRef.current,
+        path,
+        ordered,
+        event,
+      );
+      selectedAssetPathsRef.current = resolved.selected;
+      selectionAnchorPathRef.current = resolved.anchorPath;
+      setSelectedAssetPaths(resolved.selected);
+      setSelectionAnchorPath(resolved.anchorPath);
+      publishSelection(resolved.selected);
+      gridRef.current?.parentElement?.focus();
+    },
+    [
+      folderScope,
+      gridRef,
+      orderMapRef,
+      publishSelection,
+      searchQuery,
+      selectedFolderRef,
+      treeRef,
+    ],
+  );
+
+  const onDeleteSelection = useCallback(() => {
+    const paths = selectedAssetPathsRef.current;
+    if (paths.size === 0) return;
+    void deleteSelectedAssets(paths).then(() => {
+      clearAssetSelection();
+    });
+  }, [clearAssetSelection, deleteSelectedAssets]);
+
+  const onFolderCardContextMenu = useCallback(
+    (event: MouseEvent, folderPath: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const selection = prepareGridContextSelection(folderPath);
+      const items: { label: string; action: () => void }[] = [];
+      if (selection.size === 1) {
+        items.push({
+          label: 'New Folder',
+          action: () => {
+            void createFolderIn(folderPath);
+          },
+        });
+        const folder = findFolder(treeRef.current, folderPath);
+        if (folder) {
+          items.push({
+            label: 'Rename…',
+            action: () => {
+              void renameFolder(folder);
+            },
+          });
+        }
+      }
+      items.push({
+        label: selection.size > 1 ? `Delete ${selection.size} Items…` : 'Delete…',
+        action: () => {
+          void deleteSelectedAssets(selection).then(() => {
+            clearAssetSelection();
+          });
+        },
+      });
+      items.push({
+        label: 'Refresh',
+        action: () => {
+          void load();
+        },
+      });
+      showContextMenu(event.clientX, event.clientY, items);
+    },
+    [
+      clearAssetSelection,
+      createFolderIn,
+      deleteSelectedAssets,
+      load,
+      prepareGridContextSelection,
+      renameFolder,
+      treeRef,
+    ],
+  );
+
+  const onAssetContextMenu = useCallback(
+    (event: MouseEvent, entry: AssetEntry) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const selection = prepareGridContextSelection(entry.path);
+      const items: { label: string; action: () => void }[] = [];
+      if (selection.size === 1 && isPrefabPath(entry.path)) {
+        items.push({
+          label: 'Open Prefab',
+          action: () => onOpenPrefab(prefabIdFromPath(entry.path)),
+        });
+      }
+      if (selection.size === 1) {
+        items.push({
+          label: 'Rename…',
+          action: () => {
+            void renameEntry(entry);
+          },
+        });
+      }
+      items.push({
+        label: selection.size > 1 ? `Delete ${selection.size} Items…` : 'Delete…',
+        action: () => {
+          void deleteSelectedAssets(selection).then(() => {
+            clearAssetSelection();
+          });
+        },
+      });
+      showContextMenu(event.clientX, event.clientY, items);
+    },
+    [
+      clearAssetSelection,
+      deleteSelectedAssets,
+      onOpenPrefab,
+      prepareGridContextSelection,
+      renameEntry,
+    ],
+  );
+
+  return {
+    selectedAssetPaths,
+    clearAssetSelection,
+    onSelectAsset,
+    onDeleteSelection,
+    onFolderCardContextMenu,
+    onAssetContextMenu,
+  };
+}
+
 /**
  * Project browser for the Rogue-style shell.
  * Bottom dock: Project tree | assets grid, or full-width Console.
@@ -1334,6 +1679,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       onCreatePrefabsInFolder,
       onCreatePrefabsFromGlbNodesInFolder,
       audioPreview,
+      onAssetSelectionChange,
     } = options;
 
     const [tree, setTree] = useState<FolderNode>(() => emptyFolderNode());
@@ -1423,58 +1769,6 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       void load();
     }, [load]);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        selectFolder(folderPath: string) {
-          if (!findFolder(treeRef.current, folderPath)) {
-            pendingFolderRef.current = folderPath;
-            return;
-          }
-          pendingFolderRef.current = null;
-          setBottomTab('project');
-          setSelectedFolder(folderPath);
-          setExpanded((prev) => {
-            const next = new Set(prev);
-            expandAncestorsInto(next, folderPath);
-            return next;
-          });
-        },
-        refresh: load,
-      }),
-      [load],
-    );
-
-    const onFolderSelect = useCallback((path: string) => {
-      setSelectedFolder(path);
-      setExpanded((prev) => {
-        if (prev.has(path)) return prev;
-        const node = findFolder(treeRef.current, path);
-        if (!node || node.children.size === 0) return prev;
-        const next = new Set(prev);
-        next.add(path);
-        return next;
-      });
-    }, []);
-
-    const onToggleExpand = useCallback((path: string) => {
-      setExpanded((prev) => {
-        const next = new Set(prev);
-        if (next.has(path)) next.delete(path);
-        else next.add(path);
-        return next;
-      });
-    }, []);
-
-    const onNavigateFolder = useCallback((path: string) => {
-      setSelectedFolder(path);
-      setExpanded((prev) => {
-        const next = new Set(prev);
-        expandAncestorsInto(next, path);
-        return next;
-      });
-    }, []);
-
     const revealFolder = useCallback(
       async (folderPath: string): Promise<void> => {
         pendingFolderRef.current = folderPath;
@@ -1509,9 +1803,101 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
       reorderFolderAmongSiblings,
       renameFolder,
       renameEntry,
-      deleteEntry,
       deleteFolder,
-    } = useProjectFileOperations(load, revealFolder, onFolderRenamed, getOrderMap, persistOrder);
+      deleteSelectedAssets,
+    } = useProjectFileOperations(
+      load,
+      revealFolder,
+      onFolderRenamed,
+      getOrderMap,
+      persistOrder,
+      () => treeRef.current,
+    );
+
+    const {
+      selectedAssetPaths,
+      clearAssetSelection,
+      onSelectAsset,
+      onDeleteSelection,
+      onFolderCardContextMenu,
+      onAssetContextMenu,
+    } = useProjectGridSelection({
+      treeRef,
+      selectedFolderRef,
+      orderMapRef,
+      gridRef,
+      folderScope,
+      searchQuery,
+      deleteSelectedAssets,
+      createFolderIn,
+      renameFolder,
+      renameEntry,
+      onOpenPrefab,
+      onAssetSelectionChange,
+      load,
+    });
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        selectFolder(folderPath: string) {
+          if (!findFolder(treeRef.current, folderPath)) {
+            pendingFolderRef.current = folderPath;
+            return;
+          }
+          pendingFolderRef.current = null;
+          setBottomTab('project');
+          setSelectedFolder(folderPath);
+          clearAssetSelection();
+          setExpanded((prev) => {
+            const next = new Set(prev);
+            expandAncestorsInto(next, folderPath);
+            return next;
+          });
+        },
+        refresh: load,
+        clearAssetSelection,
+      }),
+      [clearAssetSelection, load],
+    );
+
+    const onFolderSelect = useCallback(
+      (path: string) => {
+        setSelectedFolder(path);
+        clearAssetSelection();
+        setExpanded((prev) => {
+          if (prev.has(path)) return prev;
+          const node = findFolder(treeRef.current, path);
+          if (!node || node.children.size === 0) return prev;
+          const next = new Set(prev);
+          next.add(path);
+          return next;
+        });
+      },
+      [clearAssetSelection],
+    );
+
+    const onToggleExpand = useCallback((path: string) => {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) next.delete(path);
+        else next.add(path);
+        return next;
+      });
+    }, []);
+
+    const onNavigateFolder = useCallback(
+      (path: string) => {
+        setSelectedFolder(path);
+        clearAssetSelection();
+        setExpanded((prev) => {
+          const next = new Set(prev);
+          expandAncestorsInto(next, path);
+          return next;
+        });
+      },
+      [clearAssetSelection],
+    );
 
     const savePrefabsInto = useCallback(
       async (entityIds: string[], folderPath: string): Promise<void> => {
@@ -1575,47 +1961,15 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
             },
           });
         }
-        items.push(
-          {
-            label: 'Refresh',
-            action: () => {
-              void load();
-            },
+        items.push({
+          label: 'Refresh',
+          action: () => {
+            void load();
           },
-        );
+        });
         showContextMenu(event.clientX, event.clientY, items);
       },
       [createFolderIn, deleteFolder, load, renameFolder],
-    );
-
-    const onAssetContextMenu = useCallback(
-      (event: MouseEvent, entry: AssetEntry) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const items = [];
-        if (isPrefabPath(entry.path)) {
-          items.push({
-            label: 'Open Prefab',
-            action: () => onOpenPrefab(prefabIdFromPath(entry.path)),
-          });
-        }
-        items.push(
-          {
-            label: 'Rename…',
-            action: () => {
-              void renameEntry(entry);
-            },
-          },
-          {
-            label: 'Delete…',
-            action: () => {
-              void deleteEntry(entry);
-            },
-          },
-        );
-        showContextMenu(event.clientX, event.clientY, items);
-      },
-      [deleteEntry, onOpenPrefab, renameEntry],
     );
 
     const files = filterAssetEntriesByQuery(
@@ -1692,6 +2046,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
             searchQuery={searchQuery}
             folders={folders}
             files={files}
+            selectedPaths={selectedAssetPaths}
             thumbByUrl={thumbByUrl}
             audioPreview={audioPreview}
             audioTick={audioTick}
@@ -1700,9 +2055,19 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(
             }
             dropTarget={dropTarget}
             onNavigate={onNavigateFolder}
-            onScopeChange={setFolderScope}
-            onSearchChange={setSearchQuery}
+            onScopeChange={(scope) => {
+              setFolderScope(scope);
+              clearAssetSelection();
+            }}
+            onSearchChange={(query) => {
+              setSearchQuery(query);
+              clearAssetSelection();
+            }}
+            onSelectAsset={onSelectAsset}
+            onClearSelection={clearAssetSelection}
+            onDeleteSelection={onDeleteSelection}
             onContextMenu={onProjectContextMenu}
+            onFolderCardContextMenu={onFolderCardContextMenu}
             onAssetContextMenu={onAssetContextMenu}
             onOpenPrefab={onOpenPrefab}
             onFolderDragStart={onFolderDragStart}

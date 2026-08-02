@@ -23,7 +23,7 @@ import {
 import { SceneRefField } from './SceneRefField';
 
 const SPAWN_OPTIONS = ['station', 'surface'];
-const PREFAB_KIND_OPTIONS = ['station', 'ship', 'site', 'prop', 'item'];
+const PREFAB_KIND_OPTIONS = ['station', 'ship', 'site', 'placeable', 'item'] as const;
 const AUTO_OPTIONS = ['on activate', 'automatic'];
 const NONE_SCENE = '';
 
@@ -202,17 +202,12 @@ export function PrefabInstanceFields({
       </FieldRow>
       <FieldRow label="Kind" wide>
         <SelectField
-          options={PREFAB_KIND_OPTIONS}
-          value={component.prefabKind ?? 'prop'}
+          options={[...PREFAB_KIND_OPTIONS]}
+          value={component.prefabKind ?? 'placeable'}
           onCommit={(prefabKind) =>
             update({
               ...component,
-              prefabKind: prefabKind as
-                | 'station'
-                | 'ship'
-                | 'site'
-                | 'prop'
-                | 'item',
+              prefabKind: prefabKind as (typeof PREFAB_KIND_OPTIONS)[number],
             })
           }
         />

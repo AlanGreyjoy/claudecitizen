@@ -1,7 +1,8 @@
-import type * as THREE from 'three';
 import type { Planet, TileInfo, Vec3 } from '../../../types';
 import { distance } from '../../../math/vec3';
 import { CUBE_FACES } from '../../../world/cube-sphere';
+import { clearHeightPages } from '../../../world/terrain-pages';
+import type { TerrainGridRenderer } from '../render/terrain-grid-renderer';
 import {
   MAX_CACHED_TILES,
   TILE_CACHE_ACTIVE_HEADROOM,
@@ -40,7 +41,6 @@ export interface TileMeshCache {
   dispose: () => void;
   entryCount: () => number;
   evictTileMeshes: (selectedKeys: Set<string>) => void;
-  hideInactiveMeshes: (activeKeys: Set<string>, previousActiveKeys: Set<string>) => void;
   isTileReady: (key: string) => boolean;
   isWorkerEnabled: () => boolean;
   prefetchTiles: (tiles: readonly TileInfo[]) => string[];
@@ -57,14 +57,14 @@ export interface TileMeshCache {
 }
 
 interface TileMeshCacheOptions {
-  material: THREE.Material;
   planet: Planet;
   seed: number;
-  tileGroup: THREE.Group;
+  /** Shared-grid renderer the cache publishes each tile's pages to. */
+  gridRenderer: TerrainGridRenderer;
 }
 
 export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCache {
-  const { material, planet, seed, tileGroup } = options;
+  const { gridRenderer, planet, seed } = options;
 
   const meshCache = new Map<string, TileMeshEntry>();
   const cacheStats: TileCacheStatsAccumulator = {
@@ -93,7 +93,7 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     evictedThisFrame: 0,
     focusPosition: null,
     frameNumber: 0,
-    material,
+    gridRenderer,
     meshCache,
     nextBuildId: 1,
     pendingBuildQueue,
@@ -101,7 +101,6 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     queuedThisFrame: 0,
     seed,
     syncBuildBudgetRemaining: SYNC_TILE_BUILD_BUDGET_PER_FRAME,
-    tileGroup,
     workerAlive: false,
     workerLivenessTimer: null,
     workerPool,
@@ -114,11 +113,10 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       confirmedDiskMisses,
       diskLoadsInFlight,
       get frameNumber() { return buildCtx.frameNumber; },
-      material,
+      gridRenderer,
       meshCache,
       planet,
       seed,
-      tileGroup,
     },
     build,
   );
@@ -132,17 +130,30 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     disk,
   );
 
+  /**
+   * Status tallies, computed at most once per frame.
+   *
+   * The stats panel asks for `ready` and `pending` every frame, and each ask
+   * was a full scan of the entry map. One pass covers every status, and the
+   * result is reused for the rest of the frame — so read these after the
+   * frame's mutations, not between them.
+   */
+  const statusCounts = new Map<TileEntryStatus, number>();
+  let statusCountsFrame = -1;
+
   function countEntries(status: TileEntryStatus): number {
-    let count = 0;
-    for (const entry of meshCache.values()) {
-      if (entry.status === status) count += 1;
+    if (statusCountsFrame !== buildCtx.frameNumber) {
+      statusCounts.clear();
+      for (const entry of meshCache.values()) {
+        statusCounts.set(entry.status, (statusCounts.get(entry.status) ?? 0) + 1);
+      }
+      statusCountsFrame = buildCtx.frameNumber;
     }
-    return count;
+    return statusCounts.get(status) ?? 0;
   }
 
   function isTileReady(key: string): boolean {
-    const entry = meshCache.get(key);
-    return Boolean(entry?.mesh && entry.status === 'ready');
+    return meshCache.get(key)?.status === 'ready';
   }
 
   function prefetchTiles(tiles: readonly TileInfo[]): string[] {
@@ -220,14 +231,6 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     }
   }
 
-  function hideInactiveMeshes(activeKeys: Set<string>, previousActiveKeys: Set<string>): void {
-    for (const key of previousActiveKeys) {
-      if (activeKeys.has(key)) continue;
-      const entry = meshCache.get(key);
-      if (entry?.mesh) entry.mesh.visible = false;
-    }
-  }
-
   for (const face of CUBE_FACES) {
     build.buildTileMeshSync(makeTileInfo(face, 0, 0, 0, planet));
   }
@@ -243,6 +246,9 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
       }
       workerPool.length = 0;
 
+      // Pages belong to this cache's tiles; nothing should still be sampling
+      // them once the planet stack is torn down.
+      clearHeightPages();
       pendingBuildQueue.length = 0;
       diskLoadsInFlight.clear();
       confirmedDiskMisses.clear();
@@ -252,7 +258,6 @@ export function createTileMeshCache(options: TileMeshCacheOptions): TileMeshCach
     },
     entryCount: () => meshCache.size,
     evictTileMeshes,
-    hideInactiveMeshes,
     isTileReady,
     isWorkerEnabled: () => build.hasWorkers(),
     prefetchTiles,

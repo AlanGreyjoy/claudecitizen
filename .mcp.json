@@ -6,6 +6,25 @@
       "args": [
         "${CLAUDE_PROJECT_DIR:-.}/tools/asteron-mcp/src/index.mjs"
       ]
+    },
+    "blender": {
+      "command": "/home/alan/.local/bin/uvx",
+      "args": [
+        "--python",
+        "3.11",
+        "blender-mcp"
+      ],
+      "env": {
+        "UV_PYTHON_PREFERENCE": "only-managed",
+        "DISABLE_TELEMETRY": "true"
+      }
+    },
+    "unity-mcp": {
+      "command": "/home/alan/.unity/relay/relay_linux",
+      "args": [
+        "--mcp"
+      ],
+      "env": {}
     }
   }
 }

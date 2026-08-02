@@ -61,6 +61,8 @@ function ensurePlaceGhost(runtime: BuildAreaRuntime): boolean {
     ? context.state.catalog.find((entry) => entry.id === context.selectedDefinitionId)
     : null;
   if (!definition || !context.ghost) return false;
+  // Warm collider bake so place-click probe is sync-ready.
+  void runtime.propColliders.ensurePrefabColliders(definition.prefabId);
   if (!rendererGhost || rendererGhost.prefabId !== definition.prefabId) {
     void runtime.propRenderer.setGhost({
       prefabId: definition.prefabId,
@@ -79,6 +81,7 @@ function ensureMoveGhost(runtime: BuildAreaRuntime): boolean {
     (entry) => entry.id === context.selectedPlacementId,
   );
   if (!placement) return false;
+  void runtime.propColliders.ensurePrefabColliders(placement.prefabId);
   if (!rendererGhost || rendererGhost.prefabId !== placement.prefabId) {
     void runtime.propRenderer.setGhost({
       prefabId: placement.prefabId,

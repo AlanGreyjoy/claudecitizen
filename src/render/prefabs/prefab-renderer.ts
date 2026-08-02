@@ -879,9 +879,28 @@ export function collectLocalShadowLights(root: THREE.Object3D): THREE.Light[] {
 }
 
 /**
+ * How much further a light must drift before it loses its shadow, and how many
+ * ranks it may slip before being displaced.
+ *
+ * Without these, the test is a hard threshold: a light sitting near
+ * `maxDistance`, or two lights near-tied on distance, flip `castShadow` every
+ * frame. That is not a cheap flag — `LightsNode.customCacheKey()` hashes
+ * `castShadow` per light, so every flip changes the program cache key and
+ * rebuilds every material lit by that node. Walking past a lamp turns into a
+ * per-frame pipeline compile.
+ */
+const SHADOW_CULL_EXIT_FACTOR = 1.15;
+const SHADOW_CULL_RANK_SLACK = 1;
+
+const scratchLightPosition = new THREE.Vector3();
+/** Reused across frames; this runs every frame with a stable light count. */
+const scratchLightScores: { light: THREE.Light; distance: number }[] = [];
+
+/**
  * Distance-based shadow culling for local prefab lights. Only the closest
  * `maxLights` lights within `maxDistance` keep shadows; the rest are toggled
- * off to save the per-light shadow map cost.
+ * off to save the per-light shadow map cost. Hysteretic in both distance and
+ * rank so the decision cannot oscillate.
  */
 export function updateLocalLightShadowCull(
   root: THREE.Object3D,
@@ -896,19 +915,27 @@ export function updateLocalLightShadowCull(
   }
   if (lights.length === 0) return;
 
-  const worldPosition = new THREE.Vector3();
-  const scored = lights
-    .map((light) => {
-      light.getWorldPosition(worldPosition);
-      return { light, distance: worldPosition.distanceTo(cameraPosition) };
-    })
-    .sort((a, b) => a.distance - b.distance);
+  scratchLightScores.length = 0;
+  for (const light of lights) {
+    light.getWorldPosition(scratchLightPosition);
+    scratchLightScores.push({
+      light,
+      distance: scratchLightPosition.distanceTo(cameraPosition),
+    });
+  }
+  scratchLightScores.sort((a, b) => a.distance - b.distance);
 
-  for (let i = 0; i < scored.length; i++) {
-    const { light, distance } = scored[i];
-    const wantsShadow = distance <= maxDistance && i < maxLights;
+  const exitDistance = maxDistance * SHADOW_CULL_EXIT_FACTOR;
+  for (let i = 0; i < scratchLightScores.length; i++) {
+    const { light, distance } = scratchLightScores[i];
+    // A light that already casts keeps casting until it is clearly out, so the
+    // boundary case resolves to "leave it alone" rather than to a flip.
+    const wantsShadow = light.castShadow
+      ? distance <= exitDistance && i < maxLights + SHADOW_CULL_RANK_SLACK
+      : distance <= maxDistance && i < maxLights;
     if (light.castShadow !== wantsShadow) {
       light.castShadow = wantsShadow;
     }
   }
+  scratchLightScores.length = 0;
 }

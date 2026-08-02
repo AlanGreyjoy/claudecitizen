@@ -8,12 +8,19 @@ import type {
   WaterWorkerOutMessage,
 } from '../../../types';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
-import { buildSurfaceWaterGeometry } from './build/buffers';
+import { oceanWaterLevelMeters } from '../../../world/coastal-profile';
+import { lakeWaterTableNormalized } from '../../../world/lakes';
+import { getHeightPage } from '../../../world/terrain-pages';
+import { rasterMayContainWater } from '../../../world/terrain-raster';
+import {
+  SHORE_PADDING_METERS,
+  buildSurfaceWaterGeometry,
+} from './build/buffers';
 import {
   createSurfaceWaterMaterial,
   type SurfaceWaterMaterialFactory,
 } from './render/material';
-import { createSurfaceWaterBuildWorker } from './worker/create-worker';
+import { createSurfaceWaterBuildWorkers } from './worker/create-worker';
 
 const MAX_WATER_CACHE_ENTRIES = 256;
 const WATER_CACHE_STALE_FRAMES = 300;
@@ -34,6 +41,12 @@ interface WaterCacheEntry {
 interface WaterBuildJob {
   buildId: number;
   key: string;
+}
+
+/** One worker plus the job it is currently running, or `null` when idle. */
+interface WaterWorkerSlot {
+  job: WaterBuildJob | null;
+  worker: Worker;
 }
 
 export interface PlanetSurfaceWaterManager {
@@ -81,9 +94,9 @@ export function createPlanetSurfaceWaterManager(
   const cache = new Map<string, WaterCacheEntry>();
   const activeKeys = new Set<string>();
   const pendingBuilds: WaterBuildJob[] = [];
-  let waterBuildWorker = createSurfaceWaterBuildWorker();
-  let activeWorkerJob: WaterBuildJob | null = null;
-  let workerBusy = false;
+  const workerSlots: WaterWorkerSlot[] = createSurfaceWaterBuildWorkers().map(
+    (worker) => ({ job: null, worker }),
+  );
   let workerAlive = false;
   let workerLivenessTimer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
@@ -196,7 +209,11 @@ export function createPlanetSurfaceWaterManager(
     return null;
   }
 
-  function postWorkerBuild(job: WaterBuildJob, entry: WaterCacheEntry): void {
+  function postWorkerBuild(
+    slot: WaterWorkerSlot,
+    job: WaterBuildJob,
+    entry: WaterCacheEntry,
+  ): void {
     const message: WaterWorkerInMessage = {
       buildId: job.buildId,
       info: entry.info,
@@ -205,29 +222,36 @@ export function createPlanetSurfaceWaterManager(
       planetDocument: getActivePlanetConfig().document,
       seed,
     };
-    activeWorkerJob = job;
-    workerBusy = true;
+    slot.job = job;
     try {
-      waterBuildWorker!.postMessage(message);
+      slot.worker.postMessage(message);
     } catch (error) {
+      // Requeues the job and drops the slot. Deliberately does not pump again
+      // from here: `pumpBuildQueue` is the only caller and is mid-iteration.
       abandonWorker(
+        slot,
         `rejected a build request (${error instanceof Error ? error.message : String(error)})`,
       );
-      pumpBuildQueue();
     }
   }
 
   function pumpBuildQueue(): void {
     if (disposed) return;
 
-    if (waterBuildWorker) {
-      if (workerBusy) return;
+    // Fill every idle slot rather than dispatching one job per pump: a coastline
+    // arriving queues tens of wet tiles at once, and draining them one at a time
+    // was the whole reason water filled in visibly.
+    //
+    // Iterated over a snapshot because a rejected `postMessage` removes its slot
+    // from `workerSlots` from inside this loop.
+    for (const slot of [...workerSlots]) {
+      if (slot.job || !workerSlots.includes(slot)) continue;
       const job = nextPendingJob();
       if (!job) return;
-      const entry = cache.get(job.key)!;
-      postWorkerBuild(job, entry);
-      return;
+      postWorkerBuild(slot, job, cache.get(job.key)!);
     }
+    // Only a pool that lost every worker falls through to budgeted sync builds.
+    if (workerSlots.length > 0) return;
 
     while (syncBuildBudgetRemaining > 0) {
       const job = nextPendingJob();
@@ -245,17 +269,31 @@ export function createPlanetSurfaceWaterManager(
     workerLivenessTimer = null;
   }
 
-  function abandonWorker(reason: string): void {
-    console.error(`ClaudeCitizen water worker ${reason}, reverting future builds to sync.`);
-    clearWorkerLivenessTimer();
-    if (waterBuildWorker) {
-      waterBuildWorker.terminate();
-      waterBuildWorker = null;
+  /**
+   * Drops one dead worker, requeueing whatever it was building.
+   *
+   * Only the last slot leaving takes the manager back to budgeted sync builds —
+   * one crashed worker in a pool must not cost the others.
+   */
+  function abandonWorker(slot: WaterWorkerSlot, reason: string): void {
+    const slotIndex = workerSlots.indexOf(slot);
+    if (slotIndex < 0) return;
+    workerSlots.splice(slotIndex, 1);
+    slot.worker.terminate();
+
+    if (workerSlots.length === 0) {
+      clearWorkerLivenessTimer();
+      console.error(
+        `ClaudeCitizen water worker ${reason}, reverting future builds to sync.`,
+      );
+    } else {
+      console.error(
+        `ClaudeCitizen water worker ${reason}; ${workerSlots.length} remaining.`,
+      );
     }
 
-    const interruptedJob = activeWorkerJob;
-    activeWorkerJob = null;
-    workerBusy = false;
+    const interruptedJob = slot.job;
+    slot.job = null;
     if (interruptedJob) {
       const entry = cache.get(interruptedJob.key);
       if (
@@ -266,6 +304,14 @@ export function createPlanetSurfaceWaterManager(
         queueBuild(entry, true);
       }
     }
+  }
+
+  /** Higher of the two planet-wide standing-water planes, in metres. */
+  function highestStandingWaterLevelMeters(): number {
+    return Math.max(
+      oceanWaterLevelMeters(),
+      lakeWaterTableNormalized() * planet.terrainAmplitudeMeters,
+    );
   }
 
   function requestTile(info: TileInfo): WaterCacheEntry {
@@ -287,6 +333,20 @@ export function createPlanetSurfaceWaterManager(
     };
     nextBuildId += 1;
     cache.set(key, entry);
+
+    // Every selected tile used to be queued, and each build pays a full
+    // grid of surface samples through a single serialised worker — even for
+    // tiles nowhere near a water level, which is most of a continent. The
+    // terrain page already carries the height envelope and the lake/river
+    // channels, so when it is resident it can rule the tile out for free.
+    // Tiles requested before their terrain page arrives fall through and build,
+    // exactly as before.
+    const page = getHeightPage(info.face, info.level, info.x, info.y);
+    if (page && !rasterMayContainWater(page, highestStandingWaterLevelMeters(), SHORE_PADDING_METERS)) {
+      entry.status = 'empty';
+      return entry;
+    }
+
     queueBuild(entry);
     return entry;
   }
@@ -310,12 +370,8 @@ export function createPlanetSurfaceWaterManager(
     }
   }
 
-  if (waterBuildWorker) {
-    workerLivenessTimer = setTimeout(() => {
-      if (!workerAlive) abandonWorker('never responded to startup handshake');
-    }, WORKER_LIVENESS_TIMEOUT_MS);
-
-    waterBuildWorker.onmessage = (event: MessageEvent<WaterWorkerOutMessage>) => {
+  function attachWorkerSlot(slot: WaterWorkerSlot): void {
+    slot.worker.onmessage = (event: MessageEvent<WaterWorkerOutMessage>) => {
       workerAlive = true;
       clearWorkerLivenessTimer();
       if ('ready' in event.data) {
@@ -323,8 +379,7 @@ export function createPlanetSurfaceWaterManager(
         return;
       }
 
-      workerBusy = false;
-      activeWorkerJob = null;
+      slot.job = null;
       const { buildId, key } = event.data;
       const entry = cache.get(key);
 
@@ -343,9 +398,22 @@ export function createPlanetSurfaceWaterManager(
       pumpBuildQueue();
     };
 
-    waterBuildWorker.onerror = (event: ErrorEvent) => {
-      abandonWorker(`crashed (${event.message || 'unknown error'})`);
+    slot.worker.onerror = (event: ErrorEvent) => {
+      abandonWorker(slot, `crashed (${event.message || 'unknown error'})`);
     };
+  }
+
+  if (workerSlots.length > 0) {
+    // One timer for the pool: any worker answering proves the module loaded, so
+    // a slow machine does not get its whole pool torn down slot by slot.
+    workerLivenessTimer = setTimeout(() => {
+      if (workerAlive) return;
+      for (const slot of [...workerSlots]) {
+        abandonWorker(slot, 'never responded to startup handshake');
+      }
+    }, WORKER_LIVENESS_TIMEOUT_MS);
+
+    for (const slot of workerSlots) attachWorkerSlot(slot);
   }
 
   function update(
@@ -408,11 +476,11 @@ export function createPlanetSurfaceWaterManager(
   function dispose(): void {
     disposed = true;
     clearWorkerLivenessTimer();
-    if (waterBuildWorker) {
-      waterBuildWorker.terminate();
-      waterBuildWorker = null;
+    for (const slot of workerSlots) {
+      slot.job = null;
+      slot.worker.terminate();
     }
-    activeWorkerJob = null;
+    workerSlots.length = 0;
     pendingBuilds.length = 0;
     for (const [key, entry] of cache) releaseEntry(key, entry);
     sharedMaterial.dispose();

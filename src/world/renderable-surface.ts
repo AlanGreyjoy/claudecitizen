@@ -2,12 +2,25 @@ import { normalize, scale } from '../math/vec3';
 import { directionFromCubeFace, faceUvFromDirection } from './cube-sphere';
 import { sampleSurfaceHeightDetails, type SurfaceHeightDetails } from './elevation';
 import { getActivePlanetConfig, type PlanetRuntimeConfig } from './planets/runtime';
+import {
+  RENDER_SURFACE_LEVEL,
+  RENDER_SURFACE_SEGMENTS,
+} from './renderable-surface-constants';
 import { clamp } from './terrain-noise';
+import {
+  clearHeightPages,
+  lookupGridSampleOffset,
+  recordHeightPageHit,
+  recordHeightPageMiss,
+} from './terrain-pages';
+import { readRasterDetails } from './terrain-raster';
 import { terrainCellUsesNorthwestSoutheastDiagonal } from './terrain-triangulation';
 import type { CubeFace, Planet, RenderableSurfaceCacheStats, TileBounds, Vec3 } from '../types';
 
-export const RENDER_SURFACE_LEVEL = 17;
-export const RENDER_SURFACE_SEGMENTS = 24;
+export {
+  RENDER_SURFACE_LEVEL,
+  RENDER_SURFACE_SEGMENTS,
+} from './renderable-surface-constants';
 
 // On-foot L17 + lush veg probes thrash at 120k; give the ring more headroom so
 // short walks do not constantly recompute band-limited heights.
@@ -116,6 +129,10 @@ function ensureCacheGeneration(planet: Planet, seed: number): void {
   if (identity === cachedPlanetIdentity) return;
   cachedPlanetIdentity = identity;
   renderableHeightCache.clear();
+  // Page keys are face/level/x/y only — they carry no planet identity, so
+  // rasters generated for the previous body would otherwise keep answering
+  // probes with heights from the wrong planet.
+  clearHeightPages();
 }
 
 function renderableHeightKey(
@@ -154,6 +171,19 @@ function evictRenderableHeightEntries(): void {
     renderableHeightCache.delete(key);
     renderableHeightCacheStats.evictions += 1;
   }
+}
+
+/**
+ * Drops every memoized grid corner.
+ *
+ * Normally handled by `ensureCacheGeneration` when the active planet changes.
+ * Exposed so callers that swap the resident height pages under a fixed planet —
+ * the terrain validator, and editor previews that re-page a patch — can force
+ * subsequent samples to resolve against the new pages instead of returning
+ * entries memoized from the old ones.
+ */
+export function resetRenderableHeightCache(): void {
+  renderableHeightCache.clear();
 }
 
 export function getRenderableSurfaceCacheStats(): RenderableSurfaceCacheStats {
@@ -222,14 +252,27 @@ function renderableGridPoint(
   const u = -1 + (gridX * 2) / cellsPerFace;
   const v = -1 + (gridY * 2) / cellsPerFace;
   const direction = directionFromCubeFace(face, u, v);
-  const details = sampleSurfaceHeightDetails(
-    planet,
-    seed,
-    scale(direction, planet.radiusMeters),
-    {
-      sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, level),
-    },
-  );
+  // Prefer a resident page. The terrain worker already evaluated this exact
+  // corner to build the tile mesh, so recomputing it here would run the whole
+  // band-limited stack a second time — on the main thread, in the middle of
+  // foot placement and vegetation scatter. Reading it back is what makes mesh
+  // and foot agreement structural rather than a numerical coincidence.
+  const paged = lookupGridSampleOffset(face, level, gridX, gridY);
+  let details: SurfaceHeightDetails;
+  if (paged) {
+    recordHeightPageHit();
+    details = readRasterDetails(paged.raster, paged.offset);
+  } else {
+    recordHeightPageMiss();
+    details = sampleSurfaceHeightDetails(
+      planet,
+      seed,
+      scale(direction, planet.radiusMeters),
+      {
+        sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, level),
+      },
+    );
+  }
   const surfaceRadius = planet.radiusMeters + details.heightMeters;
   const entry: RenderableGridEntry = {
     details,

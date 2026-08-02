@@ -5,15 +5,17 @@ import type {
   RefObject,
   SetStateAction,
 } from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { EditorAudioPreviewController } from '../audio-preview';
 import type { EditorStore } from '../document';
 import type { DraggedGlbNode } from '../panels/hierarchy-logic';
+import type { AssetInspectorItem } from '../panels/project-logic';
 import { addAssetEntity, addPrefabInstanceEntity } from '../session-helpers';
 import { getModelThumbnail } from '../../render/editor/thumbnails';
 import type { EditorViewport } from '../../render/editor/viewport';
 import type { Vec3 } from '../../types';
 import type { SceneTemplateId } from '../../world/scenes/templates';
+import type { PrefabKind } from '../../world/prefabs/schema';
 import { HierarchyPanel } from './panels/HierarchyPanel';
 import { InspectorPanel } from './panels/InspectorPanel';
 import {
@@ -23,14 +25,18 @@ import {
 import { MaterialInspectorPanel } from './panels/MaterialInspectorPanel';
 import { ProjectPanel, type ProjectPanelHandle } from './panels/ProjectPanel';
 import { NewSceneModal } from './panels/NewSceneModal';
+import { NewPrefabModal } from './panels/NewPrefabModal';
 import { ProjectSettingsModal } from './panels/ProjectSettingsModal';
 import { SceneSettingsModal } from './panels/SceneSettingsModal';
+import { PrefabSettingsModal } from './panels/PrefabSettingsModal';
 import { ShipPanel, type ShipEditor } from './panels/ShipPanel';
+import { PrefabBar } from './panels/PrefabBar';
 import { Toolbar, type ToolbarHandle } from './panels/Toolbar';
 import { TabEditorHosts, type TabEditorHandles } from './TabEditorHosts';
 import { SCENE_EDITOR_TABS, type SceneEditorTab } from './types';
 import { ViewportHost } from './ViewportHost';
 import type { usePrefabIsolation } from './use-prefab-isolation';
+import type { EditorDocModals } from './use-editor-doc-modals';
 
 export type EditorWorkspaceProps = {
   store: EditorStore;
@@ -65,13 +71,10 @@ export type EditorWorkspaceProps = {
   togglePlay: () => void;
   startPlanetAuthoringPlay: () => void;
   createPrefabsInFolder: (entityIds: string[], folder: string) => Promise<string[]>;
-  newSceneOpen: boolean;
-  setNewSceneOpen: (open: boolean) => void;
+  docModals: EditorDocModals;
   createSceneFromTemplate: (templateId: SceneTemplateId, name: string) => void | Promise<void>;
-  sceneSettingsOpen: boolean;
-  setSceneSettingsOpen: (open: boolean) => void;
-  projectSettingsOpen: boolean;
-  setProjectSettingsOpen: (open: boolean) => void;
+  createPrefabDocument: (name: string, kind: PrefabKind) => void | Promise<void>;
+  refreshPrefabList: () => void | Promise<void>;
 };
 
 export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
@@ -108,14 +111,28 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
     togglePlay,
     startPlanetAuthoringPlay,
     createPrefabsInFolder,
+    docModals,
+    createSceneFromTemplate,
+    createPrefabDocument,
+    refreshPrefabList,
+  } = props;
+
+  const onSocketWeaponPreviewChange = useCallback((enabled: boolean) => {
+    viewportRef.current?.setSocketWeaponPreview(enabled);
+  }, [viewportRef]);
+
+  const {
     newSceneOpen,
     setNewSceneOpen,
-    createSceneFromTemplate,
+    newPrefabOpen,
+    setNewPrefabOpen,
     sceneSettingsOpen,
     setSceneSettingsOpen,
+    prefabSettingsOpen,
+    setPrefabSettingsOpen,
     projectSettingsOpen,
     setProjectSettingsOpen,
-  } = props;
+  } = docModals;
 
   const [materialFocus, setMaterialFocus] = useState<MaterialFocusTarget | null>(
     null,
@@ -123,11 +140,29 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
   const [materialCheckedKeys, setMaterialCheckedKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  const [assetFocus, setAssetFocus] = useState<AssetInspectorItem[]>([]);
 
   const selectMaterial = (target: MaterialFocusTarget): void => {
     setMaterialFocus(target);
     store.setSelection(target.entityId);
   };
+
+  const onAssetSelectionChange = useCallback(
+    (items: AssetInspectorItem[]): void => {
+      setAssetFocus(items);
+      if (items.length > 0) store.clearSelection();
+    },
+    [store],
+  );
+
+  useEffect(() => {
+    return store.subscribe((event) => {
+      if (event.type !== 'selection') return;
+      if (store.getSelectedIds().length === 0) return;
+      setAssetFocus((current) => (current.length === 0 ? current : []));
+      projectRef.current?.clearAssetSelection();
+    });
+  }, [projectRef, store]);
 
   /**
    * Unity-style: drag a Hierarchy GLB mesh into a Project folder.
@@ -233,6 +268,15 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
               <span className="ed-prefab-isolation-hint">Editing Prefab</span>
             </div>
           ) : null}
+          <PrefabBar
+            store={store}
+            hidden={tab !== 'scene'}
+            onOpenSettings={toolbarActions.onOpenPrefabSettings}
+            onSave={toolbarActions.onSave}
+            onOpenShipTab={() => setTab('ship')}
+            onRenamed={() => void refreshPrefabList()}
+            onSocketWeaponPreviewChange={onSocketWeaponPreviewChange}
+          />
           <ShipPanel
             ref={shipEditorRef}
             store={store}
@@ -274,6 +318,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
             </div>
             <TabEditorHosts
               tab={tab}
+              playing={playing}
               onHandles={onTabHandles}
               onPlanetTestPlay={startPlanetAuthoringPlay}
             />
@@ -297,6 +342,8 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
                 store={store}
                 audioPreview={audioPreview}
                 particlePreview={viewport.particlePreview}
+                assetFocus={assetFocus}
+                onOpenPrefab={(prefabId) => void loadById(prefabId)}
                 getGlbNodeLocalTransform={(entityId, nodeUuid) =>
                   viewport.getGlbNodeLocalTransform(entityId, nodeUuid)
                 }
@@ -350,6 +397,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
           onOpenPrefab={(prefabId) => void loadById(prefabId)}
           onCreatePrefabsInFolder={createPrefabsInFolder}
           onCreatePrefabsFromGlbNodesInFolder={createPrefabsFromGlbNodesInFolder}
+          onAssetSelectionChange={onAssetSelectionChange}
         />
       </div>
 
@@ -358,10 +406,21 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
         onCancel={() => setNewSceneOpen(false)}
         onCreate={createSceneFromTemplate}
       />
+      <NewPrefabModal
+        open={newPrefabOpen}
+        onCancel={() => setNewPrefabOpen(false)}
+        onCreate={createPrefabDocument}
+      />
       <SceneSettingsModal
         open={sceneSettingsOpen}
         store={store}
         onClose={() => setSceneSettingsOpen(false)}
+      />
+      <PrefabSettingsModal
+        open={prefabSettingsOpen}
+        store={store}
+        onClose={() => setPrefabSettingsOpen(false)}
+        onRenamed={() => void refreshPrefabList()}
       />
       <ProjectSettingsModal
         open={projectSettingsOpen}

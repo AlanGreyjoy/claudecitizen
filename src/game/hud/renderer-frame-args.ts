@@ -76,15 +76,18 @@ export function buildRendererFrameArgs(
       flightCameraFeel: ctx.flightCameraFeelFrame ?? undefined,
       entertainmentCameraFeel: deps.entertainmentCameraFeel ?? undefined,
       activeBedId: ctx.world.activeBedId,
-      character: characterVisibleInMode(ctx.world.mode)
-        ? {
-            animation: ctx.world.character.animation,
-            upperBodyAnimation: ctx.world.character.upperBodyAnimation ?? null,
-            forward: ctx.world.character.forward,
-            position: ctx.world.character.position,
-            up: ctx.world.character.up,
-          }
-        : null,
+      chairOccupancy: ctx.world.chairOccupancy,
+      // Always pass pose for floating-origin focus. Avatar hide is mode-gated in
+      // the render frame — nulling character here made station sits focus the
+      // parked/stored ship and yeet the camera into deep space.
+      character: {
+        animation: ctx.world.character.animation,
+        upperBodyAnimation: ctx.world.character.upperBodyAnimation ?? null,
+        forward: ctx.world.character.forward,
+        position: ctx.world.character.position,
+        up: ctx.world.character.up,
+      },
+      hideCharacter: !characterVisibleInMode(ctx.world.mode),
       weaponAimActive: deps.weaponPoseAiming && isWeaponWalkMode(ctx.world.mode),
       characterHeadLook: ctx.stationScreenHeadLook,
       mode: ctx.world.mode,

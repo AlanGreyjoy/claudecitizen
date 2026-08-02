@@ -48,6 +48,7 @@ import { listPropPrefabOptions, type PropPrefabOption } from '../../../../world/
 import { listShipPrefabOptions, type ShipPrefabOption } from '../../../../world/prefabs/list-ship-prefabs';
 import { loadPrefabDocument } from '../../../../world/prefabs/loader';
 import { validateBackpackPrefab } from '../../../../world/prefabs/item-runtime';
+import { AUTHORING_ENABLED } from '../../../../build-mode';
 
 export {
   AdminAuthError,
@@ -113,6 +114,12 @@ export async function ensureShipPrefabs(): Promise<ShipPrefabOption[]> {
 }
 
 export async function ensurePropPrefabs(): Promise<PropPrefabOption[]> {
+  // Authoring: always re-read so a newly saved placeable shows up without
+  // leaving the Server tab. Cached list is for release builds only.
+  if (import.meta.env.DEV || AUTHORING_ENABLED) {
+    propPrefabsCache = await listPropPrefabOptions();
+    return propPrefabsCache;
+  }
   if (propPrefabsCache.length > 0) return propPrefabsCache;
   propPrefabsCache = await listPropPrefabOptions();
   return propPrefabsCache;

@@ -31,6 +31,9 @@ const IDENTITY_TRANSFORM: PrefabTransform = {
   scale: { x: 1, y: 1, z: 1 },
 };
 
+/** Canonical backpack rifle sockets required by validateBackpackPrefab. */
+export const BACKPACK_RIFLE_SOCKET_IDS = ['rifle-primary', 'rifle-secondary'] as const;
+
 export function collectEquipmentSockets(doc: PrefabDocument): EquipmentSocketLayout[] {
   const sockets: EquipmentSocketLayout[] = [];
   const visit = (entity: PrefabEntity): void => {
@@ -43,6 +46,44 @@ export function collectEquipmentSockets(doc: PrefabDocument): EquipmentSocketLay
   };
   visit(doc.root);
   return sockets;
+}
+
+/** Next free socket id for Accepts type (rifle prefers rifle-primary / rifle-secondary). */
+export function nextEquipmentSocketId(
+  existing: readonly { id: string; accepts: WeaponSlotType }[],
+  accepts: WeaponSlotType,
+  reservedId?: string,
+): string {
+  const taken = new Set(
+    existing.filter((socket) => socket.id !== reservedId).map((socket) => socket.id),
+  );
+  if (accepts === 'rifle') {
+    for (const id of BACKPACK_RIFLE_SOCKET_IDS) {
+      if (!taken.has(id)) return id;
+    }
+  }
+  if (!taken.has(accepts)) return accepts;
+  let n = 2;
+  while (taken.has(`${accepts}-${n}`)) n += 1;
+  return `${accepts}-${n}`;
+}
+
+/**
+ * Pick a backpack socket for a loadout weapon slot.
+ * Prefers exact slot id match, then Accepts-compatible sockets.
+ */
+export function suggestProviderSocketId(
+  weaponSlotType: WeaponSlotType,
+  preferredId: string,
+  sockets: readonly { id: string; accepts: WeaponSlotType }[],
+): string | undefined {
+  const matching = sockets.filter((socket) => socket.accepts === weaponSlotType);
+  if (matching.length === 0) return undefined;
+  return (
+    matching.find((socket) => socket.id === preferredId)?.id
+    ?? matching.find((socket) => socket.id.startsWith(weaponSlotType))?.id
+    ?? matching[0]?.id
+  );
 }
 
 /** First drawn-grip marker in the item prefab, if any. */
@@ -118,14 +159,15 @@ export function validateBackpackPrefab(doc: PrefabDocument): string[] {
   if (doc.kind !== 'item') return ['Backpack visual must reference an item prefab.'];
   const sockets = collectEquipmentSockets(doc);
   const errors: string[] = [];
-  for (const id of ['rifle-primary', 'rifle-secondary']) {
+  for (const id of BACKPACK_RIFLE_SOCKET_IDS) {
     const matches = sockets.filter((socket) => socket.id === id);
     if (matches.length !== 1 || matches[0]?.accepts !== 'rifle') {
       errors.push(`Expected exactly one rifle socket named "${id}".`);
     }
   }
   const unexpected = sockets.filter(
-    (socket) => socket.id !== 'rifle-primary' && socket.id !== 'rifle-secondary',
+    (socket) =>
+      socket.id !== 'rifle-primary' && socket.id !== 'rifle-secondary',
   );
   if (unexpected.length > 0) {
     errors.push(`Unexpected equipment sockets: ${unexpected.map((socket) => socket.id).join(', ')}.`);

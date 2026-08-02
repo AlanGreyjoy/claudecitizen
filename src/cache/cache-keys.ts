@@ -18,7 +18,14 @@ import { getActivePlanetConfig } from '../world/planets/runtime';
 // v18: packed color and normal attributes went from 3 to 4 components. WebGPU
 // defines no unorm8x3 / snorm16x3 vertex format and requires a stride that is a
 // multiple of 4, so cached v17 buffers are the wrong length for the new layout.
-export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-stitched-routed-l17-v18';
+// v19: stored tiles carry the band-limited height raster next to the vertex
+// buffers, so a disk hit warms the page table instead of leaving the main
+// thread to re-evaluate the field. v18 records have no raster and would render
+// with a permanently cold page for that tile.
+// v20: the shared-grid renderer displaces one geometry from the height atlas,
+// so records drop the triangulated mesh entirely and store only the raster and
+// its grid colours. A v19 record has the wrong shape, not merely extra fields.
+export const TERRAIN_CACHE_VERSION = 'mulberry-uniform-lod-paged-l17-v20';
 // v22: placement rides on the rewritten height sampler (see terrain v17), whose
 // last-ULP shifts can flip an accept/reject exactly at a density threshold.
 export const VEGETATION_CACHE_VERSION = 'v22';

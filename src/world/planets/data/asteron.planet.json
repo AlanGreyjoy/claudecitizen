@@ -109,6 +109,83 @@
       ]
     }
   },
+  "sky": {
+    "dayLengthSeconds": 3600,
+    "atmosphere": {
+      "rayleighColor": "#75acff",
+      "rayleighStrength": 1,
+      "mieColor": "#ffffff",
+      "mieStrength": 1,
+      "mieAnisotropy": 0.8,
+      "groundAlbedo": "#56704b",
+      "skyBrightness": 1
+    },
+    "sun": {
+      "color": "#fff4e8",
+      "intensity": 1.75,
+      "angularDiameterDegrees": 0.53,
+      "discBrightness": 1
+    },
+    "moon": {
+      "enabled": true,
+      "color": "#d8d4cc",
+      "mariaColor": "#6a6f80",
+      "angularDiameterDegrees": 1.6,
+      "brightness": 1.1,
+      "synodicPeriodDays": 6,
+      "phaseOffsetDegrees": 25,
+      "orbitTiltDegrees": 15,
+      "lightColor": "#8ba3d9",
+      "lightIntensity": 0.75,
+      "crateredness": 0.55,
+      "mariaCoverage": 0.35,
+      "surfaceSeed": 1337
+    },
+    "stars": {
+      "intensity": 1,
+      "pointSize": 1.6,
+      "magnitudeMin": -1.5,
+      "magnitudeMax": 6.5
+    },
+    "clouds": {
+      "enabled": true,
+      "sharpness": 0.12,
+      "detail": 4,
+      "litColor": "#fbfaf6",
+      "shadowColor": "#9aa9bf",
+      "sunsetColor": "#ffb27a",
+      "nightColor": "#2b3550",
+      "silverLining": 0.7,
+      "layers": [
+        {
+          "altitudeMeters": 1400,
+          "coverage": 0.46,
+          "opacity": 0.9,
+          "scale": 1,
+          "windMetersPerSecond": 11
+        },
+        {
+          "altitudeMeters": 5200,
+          "coverage": 0.32,
+          "opacity": 0.45,
+          "scale": 2.1,
+          "windMetersPerSecond": -26
+        }
+      ]
+    },
+    "night": {
+      "airglowColor": "#16244d",
+      "airglowStrength": 1,
+      "horizonColor": "#243a63",
+      "nebulaColor": "#6d5ba8",
+      "nebulaStrength": 0.55,
+      "nebulaTiltDegrees": 32,
+      "ambientSkyColor": "#6e86bd",
+      "ambientGroundColor": "#1f2740",
+      "ambientIntensity": 0.34,
+      "fogColor": "#0b1526"
+    }
+  },
   "spawning": {
     "samplesPerTile": 96,
     "density": 1,

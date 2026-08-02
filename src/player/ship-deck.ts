@@ -45,6 +45,10 @@ import {
   type LadderSpec,
 } from "../world/ladders";
 import {
+  chairInteractPrompt,
+  type ChairSeatSpec,
+} from "../world/chair-seats";
+import {
   ladderAlongFromCapsule,
   ladderCapsuleLocal,
   ladderFacing,
@@ -593,6 +597,44 @@ export function bedInteractPrompt(bed: ShipBedSpec, interactLabel = "F"): string
     return `Press ${interactLabel} — lie down (${label})`;
   }
   return `Press ${interactLabel} — lie down`;
+}
+
+/** Nearest authored furniture chair within interact reach, or null. */
+export function nearestChair(
+  deckLocal: DeckLocal,
+  aim?: DoorInteractAim | null,
+): ChairSeatSpec | null {
+  let best: { chair: ChairSeatSpec; score: number } | null = null;
+  for (const chair of getShipLayout().chairs) {
+    if (chair.trigger === "raycast") {
+      if (!aim) continue;
+      const hit = scoreRaycastDoor(
+        {
+          interact: chair.seat,
+          radius: chair.radius,
+          aimRadius: chair.aimRadius,
+        },
+        aim,
+      );
+      if (hit == null) continue;
+      if (!best || hit < best.score) best = { chair, score: hit };
+      continue;
+    }
+    const distance = localDistance(deckLocal, {
+      right: chair.seat.right,
+      forward: chair.seat.forward,
+    });
+    if (distance > chair.radius) continue;
+    if (!best || distance < best.score) best = { chair, score: distance };
+  }
+  return best?.chair ?? null;
+}
+
+export function chairInteractPromptFromDeck(
+  chair: ChairSeatSpec,
+  interactLabel = "F",
+): string {
+  return chairInteractPrompt(chair, interactLabel);
 }
 
 /**

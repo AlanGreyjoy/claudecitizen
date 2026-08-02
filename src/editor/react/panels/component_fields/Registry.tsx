@@ -43,6 +43,8 @@ import {
 import { ShipControllerFields } from './ShipControllerFields';
 import {
   BedFields,
+  ChairSeatFields,
+  ChestStorageFields,
   CockpitControlFields,
   DoorFields,
   EntertainmentSystemFields,
@@ -102,6 +104,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   interaction: field(InteractionFields),
   animation: field(AnimationFields),
   door: field(DoorFields),
+  'chest-storage': field(ChestStorageFields),
   'object-animation': field(ObjectAnimationFields),
   'avms-terminal': field(AvmsTerminalFields),
   'point-light': field(PointLightFields),
@@ -120,6 +123,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'pilot-seat': field(PilotSeatFields),
   'ship-seat': field(ShipSeatFields),
   bed: field(BedFields),
+  'chair-seat': field(ChairSeatFields),
   'ramp-interact': field(RampInteractFields),
   'ship-entry': field(ShipEntryFields),
   'cockpit-control': field(CockpitControlFields),

@@ -92,6 +92,9 @@ function buildFrame(
     stationInteriorActive: false,
     sunColor: new THREE.Color(0xfff2df),
     sunDirection: sunAtElevation(up, sunElevationDegrees),
+    moonDirection: sunAtElevation(up, sunElevationDegrees).negate(),
+    moonOrbitNormal: new THREE.Vector3(0, -0.966, 0.259).normalize(),
+    atmosphereSkyActive: true,
     volumetricEnabled: false,
   };
 }
@@ -125,9 +128,12 @@ export async function run(): Promise<GameplaySkyResult> {
   const sun = new THREE.DirectionalLight(0xfff2df, 2.2);
   scene.add(sun);
 
+  // Empty cloud scene: this harness bisects the atmosphere in isolation, so the
+  // deck pass composites nothing and the sky is what it measures.
   const postStack = createWebGpuMainPostStack(
     renderer,
     scene,
+    new THREE.Scene(),
     camera,
     PLANET,
     sun,

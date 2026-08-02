@@ -56,6 +56,16 @@ pub struct EquipItemBody {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ChestTransferBody {
+    chest_id: String,
+    item_definition_id: String,
+    quantity: i32,
+}
+
+const CHEST_STACK_HARD_CEILING: i64 = 64;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PurchasePropBody {
     prop_definition_id: String,
 }
@@ -801,6 +811,301 @@ pub async fn equip_inventory_item(
     ))
 }
 
+pub async fn get_chest_contents(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Path(chest_id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let chest_id = chest_id.trim().to_owned();
+    if chest_id.is_empty() {
+        return Err(ApiError::BadRequest("chestId is required.".to_owned()));
+    }
+    let player_id = require_player_id(&state, &access.user_id).await?;
+    Ok(Json(json!({
+        "items": chest_items(&state, &player_id, &chest_id).await?,
+        "inventory": inventory_state(&state, &player_id).await?,
+    })))
+}
+
+pub async fn deposit_chest_item(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Json(body): Json<ChestTransferBody>,
+) -> ApiResult<Json<Value>> {
+    let chest_id = body.chest_id.trim().to_owned();
+    let item_definition_id = body.item_definition_id.trim().to_owned();
+    if chest_id.is_empty() {
+        return Err(ApiError::BadRequest("chestId is required.".to_owned()));
+    }
+    if item_definition_id.is_empty() {
+        return Err(ApiError::BadRequest(
+            "itemDefinitionId is required.".to_owned(),
+        ));
+    }
+    if body.quantity < 1 {
+        return Err(ApiError::BadRequest(
+            "quantity must be a positive integer.".to_owned(),
+        ));
+    }
+
+    let player_id = require_player_id(&state, &access.user_id).await?;
+    let mut tx = state.db.begin().await?;
+    let _player = sqlx::query(r#"SELECT "id" FROM "Player" WHERE "id" = $1 FOR UPDATE"#)
+        .bind(&player_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("Player not found.".to_owned()))?;
+
+    let definition = sqlx::query(
+        r#"SELECT "itemType", "stackMax" FROM "ItemDefinition" WHERE "id" = $1"#,
+    )
+    .bind(&item_definition_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
+    let stack_max: i32 = definition.try_get("stackMax")?;
+
+    let owned: i32 = sqlx::query_scalar(
+        r#"SELECT "quantity" FROM "PlayerItem"
+           WHERE "playerId" = $1 AND "itemDefinitionId" = $2
+           FOR UPDATE"#,
+    )
+    .bind(&player_id)
+    .bind(&item_definition_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::BadRequest("You do not own that item.".to_owned()))?;
+    if owned < body.quantity {
+        return Err(ApiError::BadRequest(
+            "Insufficient inventory quantity.".to_owned(),
+        ));
+    }
+
+    let chest_qty: Option<i32> = sqlx::query_scalar(
+        r#"SELECT "quantity" FROM "PlayerChestItem"
+           WHERE "playerId" = $1 AND "chestId" = $2 AND "itemDefinitionId" = $3
+           FOR UPDATE"#,
+    )
+    .bind(&player_id)
+    .bind(&chest_id)
+    .bind(&item_definition_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if chest_qty.is_none() {
+        let stack_count: i64 = sqlx::query_scalar(
+            r#"SELECT COUNT(*) FROM "PlayerChestItem"
+               WHERE "playerId" = $1 AND "chestId" = $2 AND "quantity" > 0"#,
+        )
+        .bind(&player_id)
+        .bind(&chest_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if stack_count >= CHEST_STACK_HARD_CEILING {
+            return Err(ApiError::BadRequest(
+                "Chest is full.".to_owned(),
+            ));
+        }
+    }
+
+    let next_chest_qty = chest_qty.unwrap_or(0).saturating_add(body.quantity);
+    if next_chest_qty > stack_max {
+        return Err(ApiError::BadRequest(
+            "Chest stack is already full.".to_owned(),
+        ));
+    }
+
+    let remaining = owned - body.quantity;
+    if remaining <= 0 {
+        sqlx::query(
+            r#"DELETE FROM "PlayerItem"
+               WHERE "playerId" = $1 AND "itemDefinitionId" = $2"#,
+        )
+        .bind(&player_id)
+        .bind(&item_definition_id)
+        .execute(&mut *tx)
+        .await?;
+
+        let row = sqlx::query(r#"SELECT "loadout" FROM "Player" WHERE "id" = $1"#)
+            .bind(&player_id)
+            .fetch_one(&mut *tx)
+            .await?;
+        let mut loadout = parse_loadout(row.try_get::<Option<Value>, _>("loadout")?);
+        let slots_to_clear: Vec<String> = loadout
+            .iter()
+            .filter(|(_, equipped)| *equipped == &item_definition_id)
+            .map(|(slot, _)| slot.clone())
+            .collect();
+        for slot_id in slots_to_clear {
+            clear_loadout_slot(&mut loadout, &slot_id);
+        }
+        save_loadout(&mut tx, &player_id, &loadout).await?;
+    } else {
+        sqlx::query(
+            r#"UPDATE "PlayerItem"
+               SET "quantity" = $3, "updatedAt" = NOW()
+               WHERE "playerId" = $1 AND "itemDefinitionId" = $2"#,
+        )
+        .bind(&player_id)
+        .bind(&item_definition_id)
+        .bind(remaining)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    sqlx::query(
+        r#"INSERT INTO "PlayerChestItem"
+           ("id", "playerId", "chestId", "itemDefinitionId", "quantity", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+           ON CONFLICT ("playerId", "chestId", "itemDefinitionId") DO UPDATE
+           SET "quantity" = "PlayerChestItem"."quantity" + $5, "updatedAt" = NOW()"#,
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(&player_id)
+    .bind(&chest_id)
+    .bind(&item_definition_id)
+    .bind(body.quantity)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(Json(json!({
+        "chestItems": chest_items(&state, &player_id, &chest_id).await?,
+        "inventory": inventory_state(&state, &player_id).await?,
+    })))
+}
+
+pub async fn withdraw_chest_item(
+    State(state): State<AppState>,
+    access: AccessUser,
+    Json(body): Json<ChestTransferBody>,
+) -> ApiResult<Json<Value>> {
+    let chest_id = body.chest_id.trim().to_owned();
+    let item_definition_id = body.item_definition_id.trim().to_owned();
+    if chest_id.is_empty() {
+        return Err(ApiError::BadRequest("chestId is required.".to_owned()));
+    }
+    if item_definition_id.is_empty() {
+        return Err(ApiError::BadRequest(
+            "itemDefinitionId is required.".to_owned(),
+        ));
+    }
+    if body.quantity < 1 {
+        return Err(ApiError::BadRequest(
+            "quantity must be a positive integer.".to_owned(),
+        ));
+    }
+
+    let player_id = require_player_id(&state, &access.user_id).await?;
+    let mut tx = state.db.begin().await?;
+    let _player = sqlx::query(r#"SELECT "id" FROM "Player" WHERE "id" = $1 FOR UPDATE"#)
+        .bind(&player_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("Player not found.".to_owned()))?;
+
+    let definition = sqlx::query(
+        r#"SELECT "itemType", "stackMax" FROM "ItemDefinition" WHERE "id" = $1"#,
+    )
+    .bind(&item_definition_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("Item definition not found.".to_owned()))?;
+    let item_type: String = definition.try_get("itemType")?;
+    let stack_max: i32 = definition.try_get("stackMax")?;
+    let is_stackable = matches!(item_type.as_str(), "consumable" | "ammo");
+    let is_unique_gear = matches!(
+        item_type.as_str(),
+        "weapon" | "backpack" | "armor" | "clothing"
+    );
+
+    let chest_qty: i32 = sqlx::query_scalar(
+        r#"SELECT "quantity" FROM "PlayerChestItem"
+           WHERE "playerId" = $1 AND "chestId" = $2 AND "itemDefinitionId" = $3
+           FOR UPDATE"#,
+    )
+    .bind(&player_id)
+    .bind(&chest_id)
+    .bind(&item_definition_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::BadRequest("That item is not in this chest.".to_owned()))?;
+    if chest_qty < body.quantity {
+        return Err(ApiError::BadRequest(
+            "Insufficient chest quantity.".to_owned(),
+        ));
+    }
+
+    let owned: i32 = sqlx::query_scalar(
+        r#"SELECT COALESCE((SELECT "quantity" FROM "PlayerItem"
+           WHERE "playerId" = $1 AND "itemDefinitionId" = $2), 0)"#,
+    )
+    .bind(&player_id)
+    .bind(&item_definition_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if is_unique_gear && owned >= 1 {
+        return Err(ApiError::BadRequest(
+            "You already own this item.".to_owned(),
+        ));
+    }
+    if is_stackable && owned + body.quantity > stack_max {
+        return Err(ApiError::BadRequest(
+            "Inventory stack is already full.".to_owned(),
+        ));
+    }
+    if !is_stackable && !is_unique_gear && owned + body.quantity > stack_max {
+        return Err(ApiError::BadRequest(
+            "Inventory stack is already full.".to_owned(),
+        ));
+    }
+
+    let remaining_chest = chest_qty - body.quantity;
+    if remaining_chest <= 0 {
+        sqlx::query(
+            r#"DELETE FROM "PlayerChestItem"
+               WHERE "playerId" = $1 AND "chestId" = $2 AND "itemDefinitionId" = $3"#,
+        )
+        .bind(&player_id)
+        .bind(&chest_id)
+        .bind(&item_definition_id)
+        .execute(&mut *tx)
+        .await?;
+    } else {
+        sqlx::query(
+            r#"UPDATE "PlayerChestItem"
+               SET "quantity" = $4, "updatedAt" = NOW()
+               WHERE "playerId" = $1 AND "chestId" = $2 AND "itemDefinitionId" = $3"#,
+        )
+        .bind(&player_id)
+        .bind(&chest_id)
+        .bind(&item_definition_id)
+        .bind(remaining_chest)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    sqlx::query(
+        r#"INSERT INTO "PlayerItem"
+           ("id", "playerId", "itemDefinitionId", "quantity", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4, NOW(), NOW())
+           ON CONFLICT ("playerId", "itemDefinitionId") DO UPDATE
+           SET "quantity" = "PlayerItem"."quantity" + $4, "updatedAt" = NOW()"#,
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(&player_id)
+    .bind(&item_definition_id)
+    .bind(body.quantity)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(Json(json!({
+        "chestItems": chest_items(&state, &player_id, &chest_id).await?,
+        "inventory": inventory_state(&state, &player_id).await?,
+    })))
+}
+
 pub async fn create_hangar_placement(
     State(state): State<AppState>,
     access: AccessUser,
@@ -1179,11 +1484,14 @@ struct RoomBounds {
 
 fn room_bounds(area: BuildArea, assigned_hangar: Option<i32>) -> RoomBounds {
     if area == BuildArea::Apartment {
+        // Procedural hab-room was ~5×5 m. Authored apartment/hab scenes (and the
+        // client placement frame) use spawn-relative storage coords that span a
+        // full corridor — keep this envelope large until scenes author build volumes.
         return RoomBounds {
-            min_right: -6.9,
-            max_right: -1.9,
-            min_forward: 2.6,
-            max_forward: 7.8,
+            min_right: -48.0,
+            max_right: 48.0,
+            min_forward: -48.0,
+            max_forward: 48.0,
             floor: 14.0,
         };
     }
@@ -1272,6 +1580,27 @@ async fn build_state(state: &AppState, player_id: &str, area: BuildArea) -> ApiR
         "inventory": inventory,
         "placements": placements,
     }))
+}
+
+async fn chest_items(state: &AppState, player_id: &str, chest_id: &str) -> ApiResult<Vec<Value>> {
+    sqlx::query(
+        r#"SELECT "itemDefinitionId", "quantity" FROM "PlayerChestItem"
+           WHERE "playerId" = $1 AND "chestId" = $2 AND "quantity" > 0
+           ORDER BY "createdAt""#,
+    )
+    .bind(player_id)
+    .bind(chest_id)
+    .fetch_all(&state.db)
+    .await?
+    .into_iter()
+    .map(|row| -> Result<Value, sqlx::Error> {
+        Ok(json!({
+            "itemDefinitionId": row.try_get::<String, _>("itemDefinitionId")?,
+            "quantity": row.try_get::<i32, _>("quantity")?,
+        }))
+    })
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(ApiError::from)
 }
 
 pub(crate) async fn inventory_state(state: &AppState, player_id: &str) -> ApiResult<Value> {

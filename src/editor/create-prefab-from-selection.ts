@@ -12,7 +12,7 @@ import {
 function frameComponentsForKind(kind: PrefabKind): PrefabEntity['components'] | undefined {
   if (kind === 'station') return [{ type: 'station-frame' }];
   if (kind === 'ship') return [{ type: 'ship-frame' }];
-  if (kind === 'prop') return [{ type: 'prop-frame' }];
+  if (kind === 'placeable') return [{ type: 'prop-frame' }];
   if (kind === 'item') return [{ type: 'item-frame' }];
   return undefined;
 }
@@ -23,7 +23,7 @@ const KIND_BY_COMPONENT_TYPE: Readonly<Record<string, PrefabKind>> = {
   'ship-frame': 'ship',
   'station-frame': 'station',
   'item-frame': 'item',
-  'prop-frame': 'prop',
+  'prop-frame': 'placeable',
   'scene-exit': 'station',
   'hangar-pad': 'station',
   'ship-door': 'ship',
@@ -35,7 +35,7 @@ const KIND_BY_COMPONENT_TYPE: Readonly<Record<string, PrefabKind>> = {
 /**
  * Reads the prefab kind out of the subtree instead of asking. Dragging a
  * GameObject into a folder should just work; the Inspector can correct the kind
- * afterwards, and `prop` is the safe default for plain meshes.
+ * afterwards, and `placeable` is the safe default for plain meshes.
  */
 function inferPrefabKind(entity: EditorEntity): PrefabKind {
   const stack: EditorEntity[] = [entity];
@@ -47,7 +47,7 @@ function inferPrefabKind(entity: EditorEntity): PrefabKind {
     }
     stack.push(...current.children);
   }
-  return 'prop';
+  return 'placeable';
 }
 
 /**

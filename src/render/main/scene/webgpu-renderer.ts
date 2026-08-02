@@ -24,6 +24,11 @@ export async function createWebGpuRenderer(
   ensureNodeRectAreaLights();
 
   const renderer = new WebGPURenderer({
+    // Opaque canvas. Three defaults `alpha: true`, which clears with alpha 0 —
+    // SkyNode then writes bright RGB onto transparent pixels, and Electron
+    // composites them over a black host. Lit terrain (alpha 1) stays visible;
+    // the daytime sky goes pitch black. Planet preview already opts out.
+    alpha: false,
     antialias: renderQuality.antialias,
     canvas,
     logarithmicDepthBuffer: true,
@@ -43,6 +48,12 @@ export async function createWebGpuRenderer(
   // second tone-map to the post result.
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.toneMappingExposure = 1.35;
+  // Transparent-black clear for render targets whose scene has no background —
+  // the post stack's `cloud-deck` pass reads coverage out of the alpha channel,
+  // and a clear alpha of 1 would make every pixel read as fully clouded. The
+  // canvas itself is `alpha: false` and the post graph forces `a = 1` on the
+  // final composite, so this cannot leak into what is presented.
+  renderer.setClearColor(0x000000, 0);
   // Left on unconditionally so shadow quality can change without a reload.
   // Whether anything actually casts is owned per-light by `applyShadowQuality`
   // and `updateSunSystem`; with no caster the shadow pass renders nothing, and

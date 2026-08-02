@@ -19,6 +19,7 @@ import {
   SCENE_LIGHTING_MODES,
   SCENE_UI_SCREENS,
   SHIP_SEAT_ROLES,
+  normalizePrefabKind,
 } from "./schema";
 import {
   assertOnlyFields,
@@ -1272,6 +1273,31 @@ function parseDoorComponent(
   };
 }
 
+function parseChestStorageComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const reach = parseOptionalDoorReach(value, path);
+  return {
+    type: "chest-storage",
+    id: parseString(value.id, `${path}.id`, 64),
+    label:
+      value.label === undefined
+        ? undefined
+        : parseString(value.label, `${path}.label`, 64),
+    trigger: reach.trigger,
+    radius: reach.radius,
+    aimRadius: reach.aimRadius,
+    slotCount:
+      value.slotCount === undefined
+        ? undefined
+        : Math.min(
+            64,
+            Math.max(1, Math.round(parseFiniteNumber(value.slotCount, `${path}.slotCount`))),
+          ),
+  };
+}
+
 /** Shared by `pilot-seat` (legacy) and `ship-seat` — identical field set. */
 function parseSeatSettings(
   value: Record<string, unknown>,
@@ -1360,6 +1386,45 @@ function parseBedComponent(
               ? undefined
               : parseVec2(value.stand, `${path}.stand`),
         };
+}
+
+function parseChairSeatComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const type = "chair-seat" as const;
+  return {
+    type,
+    id: parseString(value.id, `${path}.id`, 64),
+    label:
+      value.label === undefined
+        ? undefined
+        : parseString(value.label, `${path}.label`, 64),
+    trigger: parseShipDoorTrigger(value.trigger, `${path}.trigger`),
+    radius:
+      value.radius === undefined
+        ? undefined
+        : Math.min(
+            10,
+            Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
+          ),
+    aimRadius:
+      value.aimRadius === undefined
+        ? undefined
+        : Math.min(
+            5,
+            Math.max(
+              0.05,
+              parseFiniteNumber(value.aimRadius, `${path}.aimRadius`),
+            ),
+          ),
+    eye:
+      value.eye === undefined ? undefined : parseVec3(value.eye, `${path}.eye`),
+    stand:
+      value.stand === undefined
+        ? undefined
+        : parseVec2(value.stand, `${path}.stand`),
+  };
 }
 
 function parseRampInteractComponent(
@@ -1617,13 +1682,7 @@ function parsePrefabInstanceComponent(
 ): PrefabComponent {
   const kind = value.prefabKind;
   const prefabKind =
-    kind === "station"
-    || kind === "ship"
-    || kind === "site"
-    || kind === "prop"
-    || kind === "item"
-      ? kind
-      : undefined;
+    typeof kind === "string" ? normalizePrefabKind(kind) ?? undefined : undefined;
   return {
     type: "prefab-instance",
     prefabId: parseString(value.prefabId, `${path}.prefabId`, 64),
@@ -1767,9 +1826,11 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "ship-hull": parseShipHullComponent,
   "ship-door": parseShipDoorComponent,
   "door": parseDoorComponent,
+  "chest-storage": parseChestStorageComponent,
   "pilot-seat": parsePilotSeatComponent,
   "ship-seat": parseShipSeatComponent,
   "bed": parseBedComponent,
+  "chair-seat": parseChairSeatComponent,
   "ramp-interact": parseRampInteractComponent,
   "ship-entry": parseShipEntryComponent,
   "cockpit-control": parseCockpitControlComponent,

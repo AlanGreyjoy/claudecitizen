@@ -2,6 +2,7 @@ import { FLIGHT_CONFIG } from "../flight/flight-config";
 import type { LocalOffset } from "../types";
 import type { GameplayCollider } from "../physics/colliders";
 import type { LadderSpec } from "../world/ladders";
+import type { ChairSeatSpec } from "../world/chair-seats";
 import type {
   CockpitControlAction,
   CockpitStatKind,
@@ -345,6 +346,8 @@ export interface ShipLayout {
   beds: ShipBedSpec[];
   /** Climbable ladders in ship-local meters. */
   ladders: LadderSpec[];
+  /** Furniture chairs in ship-local meters (F to sit; no flight). */
+  chairs: ChairSeatSpec[];
   /** Cockpit look-at controls (Hold F + click) baked from cockpit-control markers. */
   cockpitControls: CockpitControlSpec[];
   /** Cockpit instruments (always-on while piloting) baked from cockpit-stat markers. */
@@ -382,6 +385,7 @@ export const DEFAULT_SHIP_LAYOUT: ShipLayout = {
   seats: [],
   beds: [],
   ladders: [],
+  chairs: [],
   cockpitControls: [],
   cockpitStats: [],
   entertainmentSystems: [],

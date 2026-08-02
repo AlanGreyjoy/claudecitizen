@@ -1002,11 +1002,12 @@ body.ed-resize-row * {
 }
 
 /*
- * Ship tab bar. The Ship tab reuses the scene viewport, hierarchy, and
- * inspector for authoring, so this strip is the only chrome it adds: browse a
- * ship, see what is wrong with it, and fly it.
+ * Shared document chrome strip (Ship tab bar + Prefab bar on Scene).
+ * Ship reuses the scene viewport/hierarchy/inspector; this strip is the only
+ * extra chrome — browse/validate/test for ships, identity for other prefabs.
  */
-.ed-ship-bar {
+.ed-ship-bar,
+.ed-prefab-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1029,9 +1030,30 @@ body.ed-resize-row * {
   margin-left: auto;
 }
 
-.ed-ship-select {
+.ed-ship-select,
+.ed-prefab-kind {
   min-width: 160px;
   max-width: 260px;
+}
+
+.ed-prefab-kind {
+  min-width: 100px;
+  max-width: 140px;
+}
+
+.ed-prefab-bar-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.ed-prefab-bar-label {
+  color: var(--ed-muted);
+  font: 600 10px/1 var(--ed-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .ed-ship-name {
@@ -3549,6 +3571,12 @@ body.ed-resize-row * {
   background: rgba(255, 255, 255, 0.05);
 }
 
+.ed-asset-card.is-selected {
+  border-color: var(--ed-focus);
+  background: var(--ed-select);
+  box-shadow: inset 0 0 0 1px var(--ed-focus);
+}
+
 .ed-asset-card.is-drop-target {
   border-color: rgba(255, 206, 111, 0.7);
   background: rgba(255, 206, 111, 0.16);
@@ -4188,6 +4216,25 @@ body.ed-resize-row * {
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.ed-asset-inspector-path {
+  white-space: normal;
+  word-break: break-all;
+}
+
+.ed-asset-inspector-list {
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  color: var(--ed-text);
+  font: 500 11px/1.4 var(--ed-mono);
+  max-height: 240px;
+  overflow: auto;
+}
+
+.ed-asset-inspector-list li {
+  margin: 2px 0;
+  word-break: break-all;
 }
 
 /* Fill the fixed #editor-root. Parent grid uses auto for row 1, so

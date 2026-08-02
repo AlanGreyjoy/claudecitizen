@@ -8,6 +8,8 @@ import type {
 import type { FlightBody } from './flight';
 import type { Vec3 } from './math';
 import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
+import type { HeightPageStats } from '../world/terrain-pages';
+import type { ChairOccupancyState } from '../world/chair-seats';
 
 export interface FogSettings {
   density: number;
@@ -84,7 +86,11 @@ export interface VegetationCacheStats {
 
 export interface GpuMemoryStats {
   geometries: number;
-  programs: number;
+  /**
+   * Draw calls submitted last frame. WebGPU's `Info` tracks no compiled-program
+   * count, so this is the closest per-frame pipeline signal available.
+   */
+  drawCalls: number;
   textures: number;
   /** Covers dedup-eligible (>= 1024px) atlases only — not the whole texture set. */
   estimatedTextureBytes: number;
@@ -103,6 +109,8 @@ export interface AssetCacheStats {
 
 export interface RenderStats {
   surfaceCache: RenderableSurfaceCacheStats;
+  /** Resident band-limited height rasters and how often they answer a probe. */
+  heightPages: HeightPageStats;
   terrain: TileCacheStats;
   vegetation: VegetationCacheStats;
   gpu: GpuMemoryStats;
@@ -232,6 +240,13 @@ export interface SpikeRenderWorld {
   };
   /** Active bunk id while in bed occupancy modes. */
   activeBedId?: string | null;
+  /** Furniture chair occupancy while seated. */
+  chairOccupancy?: ChairOccupancyState | null;
+  /**
+   * When true, keep character pose for focus/camera but do not draw the avatar
+   * (first-person seated modes).
+   */
+  hideCharacter?: boolean;
   timeSeconds?: number;
   shipCameraZoom?: number;
   prompt?: string;

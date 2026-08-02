@@ -13,6 +13,7 @@ import {
   type FoodShopCatalogMode,
   type StationLayoutOverride,
   type StationDoorSpec,
+  type StationChestStorageMarker,
   type StationRoom,
   type StationSpawnPose,
 } from '../station';
@@ -22,6 +23,12 @@ import {
   LADDER_DEFAULT_RADIUS,
   type LadderSpec,
 } from '../ladders';
+import {
+  CHAIR_DEFAULT_AIM_RADIUS,
+  CHAIR_DEFAULT_LABEL,
+  CHAIR_DEFAULT_RADIUS,
+  type ChairSeatSpec,
+} from '../chair-seats';
 import type {
   PrefabComponent,
   PrefabDocument,
@@ -78,6 +85,7 @@ interface FlattenedComponents {
     face: StationDir2;
   }[];
   ladders: LadderSpec[];
+  chairs: ChairSeatSpec[];
   hangarSeeds: {
     hangarId: string;
     padIndex: number;
@@ -166,6 +174,7 @@ interface FlattenedComponents {
     nodes: { name: string; delta: number }[];
   }[];
   doors: StationDoorSpec[];
+  chestStorage: StationChestStorageMarker[];
   npcSpawners: StationNpcSpawnerSpec[];
   npcWaypoints: StationNpcWaypointSpec[];
   npcPlacements: StationNpcPlacementSpec[];
@@ -280,6 +289,37 @@ function collectLadder(
     radius: component.radius ?? LADDER_DEFAULT_RADIUS,
     climbSpeed: component.climbSpeed ?? LADDER_DEFAULT_CLIMB_SPEED,
   });
+}
+
+function collectChairSeat(
+  component: Extract<PrefabComponent, { type: "chair-seat" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
+  const stand = component.stand ?? { x: 0, z: -1.55 };
+  const chair: ChairSeatSpec = {
+    id: component.id || ctx.entity.id,
+    label: component.label ?? CHAIR_DEFAULT_LABEL,
+    seat: { right: ctx.right, up: ctx.up, forward: ctx.forward },
+    // Scene x → station right flips sign (right = -x).
+    eye: {
+      right: ctx.right - eye.x,
+      up: ctx.up + eye.y,
+      forward: ctx.forward + eye.z,
+    },
+    stand: {
+      right: ctx.right - stand.x,
+      forward: ctx.forward + stand.z,
+    },
+    face: sceneToStationDir2(ctx.rotation),
+    trigger: component.trigger ?? "radial",
+    radius: component.radius ?? CHAIR_DEFAULT_RADIUS,
+    aimRadius: component.aimRadius ?? CHAIR_DEFAULT_AIM_RADIUS,
+  };
+  const index = out.chairs.findIndex((entry) => entry.id === chair.id);
+  if (index >= 0) out.chairs[index] = chair;
+  else out.chairs.push(chair);
 }
 
 function collectHangarPad(
@@ -556,6 +596,25 @@ function collectDoor(
   });
 }
 
+function collectChestStorage(
+  component: Extract<PrefabComponent, { type: "chest-storage" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  if (out.chestStorage.some((chest) => chest.id === component.id)) return;
+  out.chestStorage.push({
+    id: component.id,
+    label: component.label ?? "Open chest",
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    trigger: component.trigger ?? "radial",
+    radius: component.radius ?? 1.6,
+    aimRadius: component.aimRadius ?? 0.35,
+    slotCount: Math.max(1, Math.min(64, component.slotCount ?? 20)),
+  });
+}
+
 function collectStationComponent(
   component: PrefabComponent,
   ctx: CollectStationContext,
@@ -596,16 +655,10 @@ function collectStationComponent(
       collectOutfitters(component, ctx, out);
       break;
     case 'food-shop':
-      collectFoodShop(component, ctx, out);
-      break;
     case 'drinks-shop':
-      collectDrinksShop(component, ctx, out);
-      break;
     case 'canteen':
-      collectCanteen(component, ctx, out);
-      break;
     case 'pharmacy':
-      collectPharmacy(component, ctx, out);
+      collectConsumableVendor(component, ctx, out);
       break;
     case 'animation':
       collectAnimation(component, out);
@@ -617,6 +670,20 @@ function collectStationComponent(
     case 'collider':
       break;
   }
+}
+
+function collectConsumableVendor(
+  component: Extract<
+    PrefabComponent,
+    { type: 'food-shop' | 'drinks-shop' | 'canteen' | 'pharmacy' }
+  >,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  if (component.type === 'food-shop') collectFoodShop(component, ctx, out);
+  else if (component.type === 'drinks-shop') collectDrinksShop(component, ctx, out);
+  else if (component.type === 'canteen') collectCanteen(component, ctx, out);
+  else collectPharmacy(component, ctx, out);
 }
 
 function collect(
@@ -653,6 +720,14 @@ function collect(
   };
 
   for (const component of entity.components ?? []) {
+    if (component.type === 'chest-storage') {
+      collectChestStorage(component, ctx, out);
+      continue;
+    }
+    if (component.type === 'chair-seat') {
+      collectChairSeat(component, ctx, out);
+      continue;
+    }
     collectStationComponent(component, ctx, out);
   }
 
@@ -767,6 +842,7 @@ function createEmptyFlattened(): FlattenedComponents {
     rooms: [],
     spawnCandidates: [],
     ladders: [],
+    chairs: [],
     hangarSeeds: [],
     infoSeeds: [],
     sceneExitSeeds: [],
@@ -776,6 +852,7 @@ function createEmptyFlattened(): FlattenedComponents {
     foodShopSeeds: [],
     animationSpecs: [],
     doors: [],
+    chestStorage: [],
     npcSpawners: [],
     npcWaypoints: [],
     npcPlacements: [],
@@ -960,9 +1037,11 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     colliders,
     spawn: buildStationSpawn(out, doc.id),
     ladders: out.ladders,
+    chairs: out.chairs,
     infoMarkers: buildInfoMarkers(out),
     sceneExitMarkers: buildSceneExitMarkers(out),
     doors: out.doors,
+    chestStorage: out.chestStorage,
     avmsMarkers: buildAvmsMarkers(out),
     weaponShops: buildWeaponShops(out),
     outfitters: buildOutfitters(out),

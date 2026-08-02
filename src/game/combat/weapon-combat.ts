@@ -8,6 +8,10 @@ import {
 } from "../../player/character-locomotion";
 import { itemQuantity } from "../../player/inventory/types";
 import { currentWeaponFireMode } from "../../player/weapon-fire";
+import {
+  createRecoilPatternState,
+  crosshairSpreadPx,
+} from "../../player/weapon-recoil";
 import type { HudUpdateParams } from "../../render/effects";
 import type { CharacterInput } from "../types";
 import type { LoopContext } from "../loop-context";
@@ -17,7 +21,15 @@ import {
   fireStateFor,
   updateWeaponCombat as runWeaponCombatUpdate,
   type WeaponCombatActions,
+  type WeaponFeelState,
 } from "./update-weapon-combat";
+
+export interface WeaponCrosshairState {
+  /** Bloom radius, in CSS pixels, from the recoil still on the camera. */
+  spreadPx: number;
+  /** Monotonic shot count; a change drives the crosshair fire pulse. */
+  shotCount: number;
+}
 
 export interface WeaponCombat {
   currentAnimStance: () => ReturnType<typeof stanceIdForWeaponSlot>;
@@ -25,6 +37,7 @@ export interface WeaponCombat {
   activeFirearm: () => ReturnType<typeof resolveActiveFirearm>;
   updateWeaponCombat: (actions: WeaponCombatActions, dt: number) => void;
   currentCombatAmmoHud: () => HudUpdateParams["combatAmmo"];
+  currentCrosshairState: () => WeaponCrosshairState;
   applyWeaponSlotPress: (press: 1 | 2 | 3 | null) => void;
 }
 
@@ -33,6 +46,11 @@ export function createWeaponCombat(
   ctx: LoopContext,
   deps: { inventory: EquippedInventory },
 ): WeaponCombat {
+  const feel: WeaponFeelState = {
+    recoil: createRecoilPatternState(),
+    shotCount: 0,
+  };
+
   function currentAnimStance() {
     if (ctx.activeWeaponSlotId) {
       const loadout = ctx.getInventory()?.loadout ?? ctx.getInventoryLoadout() ?? {};
@@ -59,7 +77,14 @@ export function createWeaponCombat(
   function updateWeaponCombat(actions: WeaponCombatActions, dt: number): void {
     const firearm = activeFirearm();
     if (!firearm) return;
-    runWeaponCombatUpdate(ctx, firearm, actions, dt);
+    runWeaponCombatUpdate(ctx, firearm, actions, feel, dt);
+  }
+
+  function currentCrosshairState(): WeaponCrosshairState {
+    return {
+      shotCount: feel.shotCount,
+      spreadPx: crosshairSpreadPx(ctx.controls.getLookRecoil()),
+    };
   }
 
   function currentCombatAmmoHud(): HudUpdateParams["combatAmmo"] {
@@ -92,6 +117,7 @@ export function createWeaponCombat(
     activeFirearm,
     updateWeaponCombat,
     currentCombatAmmoHud,
+    currentCrosshairState,
     applyWeaponSlotPress,
   };
 }

@@ -169,7 +169,13 @@ async function enterGameplayScene(
   networkTarget: SceneExitTarget | null = null,
 ): Promise<void> {
   const requireAuth = state.options.requireAuth ?? false;
-  const resolved = session ?? (requireAuth ? await getSession() : null);
+  const fromEditor = state.options.fromEditor ?? false;
+  // Editor Play is offline-capable, but reuse a live cookie session when one
+  // already exists so habs can still resolve apartment bootstrap without a
+  // forced login gate.
+  const resolved =
+    session
+    ?? (requireAuth || fromEditor ? await getSession() : null);
   if (requireAuth && !resolved) {
     // Deep link into gameplay before sign-in: park the target and open the
     // entry surface the flow named.

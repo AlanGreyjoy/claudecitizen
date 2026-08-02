@@ -6,6 +6,7 @@ import { createWeaponShop } from '../render/effects/hud/weapon-shop';
 import { createOutfitters } from '../render/effects/hud/outfitters';
 import { createFoodShop } from '../render/effects/hud/food-shop';
 import { createPersonalInventory } from '../render/effects/hud/personal-inventory';
+import { createChestStorage } from '../render/effects/hud/chest-storage';
 import { collectHaloBandElements } from '../render/effects/hud/haloband-dom';
 import { createWorldClient, type WorldClient } from '../net/world-client';
 import type { SceneDocument } from '../world/scenes/schema';
@@ -18,6 +19,7 @@ import {
   fetchMall,
   purchaseMallItem,
 } from '../net/api';
+import { isEditorOfflineBootstrap } from './editor-play-bootstrap';
 import {
   normalizeInventoryState,
   type InventoryState,
@@ -107,6 +109,7 @@ export function loginInstanceForScene(
   // says so, but a player who logged out elsewhere would otherwise resume in
   // the cell they left rather than the one this scene depicts.
   if (scope === 'player') {
+    if (isEditorOfflineBootstrap(bootstrap)) return null;
     const apartment = bootstrap?.spawn.apartmentInstanceId;
     return apartment
       ? { sceneId: scene.id, instanceId: apartment, roomId: 'hab-room', arrival: 'default' }
@@ -122,7 +125,8 @@ export async function connectPlayNetwork(
   scene: SceneDocument | null = null,
   networkTarget: SceneExitTarget | null = null,
 ): Promise<WorldClient | null> {
-  if (!bootstrap) {
+  // Editor offline bootstrap exists only to wire Build Mode — not to join cells.
+  if (!bootstrap || isEditorOfflineBootstrap(bootstrap)) {
     hud.appendChatMessage('SYS', 'Offline dev session.');
     return null;
   }
@@ -307,6 +311,7 @@ export function createPlayPersonalInventory(options: {
   characterAppearance: GameBootstrap['player']['characterAppearance'] | null;
   loopRef: { loop?: ReturnType<typeof createGameLoop> };
   vitalsSessionRef: { current: PlayerVitalsSessionController | null };
+  onWillOpen?: () => void;
 }): ReturnType<typeof createPersonalInventory> {
   const personalInventory = createPersonalInventory(
     {
@@ -329,6 +334,7 @@ export function createPlayPersonalInventory(options: {
       playerControls: options.controls,
       getInventory: options.getInventory,
       characterAppearance: options.characterAppearance,
+      onWillOpen: options.onWillOpen,
       onInventoryResult: (inventory) => {
         const next = normalizeInventoryState(inventory);
         options.setInventory(next);
@@ -343,6 +349,104 @@ export function createPlayPersonalInventory(options: {
     },
   );
   return personalInventory;
+}
+
+export function createPlayChestStorage(options: {
+  controls: ReturnType<typeof createPlayerControls>;
+  getInventory: () => InventoryState | null;
+  setInventory: (inventory: InventoryState) => void;
+  loopRef: { loop?: ReturnType<typeof createGameLoop> };
+  onWillOpen?: () => void;
+}): ReturnType<typeof createChestStorage> {
+  const chestStorage = createChestStorage(
+    {
+      rootEl: requireElement('chest-storage'),
+      titleEl: requireElement('chest-storage-title'),
+      inventoryListEl: requireElement('chest-storage-inventory-list'),
+      chestListEl: requireElement('chest-storage-chest-list'),
+      capacityEl: requireElement('chest-storage-capacity'),
+      statusEl: requireElement('chest-storage-status'),
+      closeBtnEl: requireElement<HTMLButtonElement>('chest-storage-close'),
+    },
+    {
+      playerControls: options.controls,
+      getInventory: options.getInventory,
+      onWillOpen: options.onWillOpen,
+      onInventoryResult: (inventory) => {
+        const next = normalizeInventoryState(inventory);
+        options.setInventory(next);
+        chestStorage.refresh();
+        options.loopRef.loop?.setEquippedLoadout(next.loadout);
+      },
+    },
+  );
+  return chestStorage;
+}
+
+/** Personal inventory + shops + chest, with mutual-close wiring. */
+export function createPlayInventoryOverlayBundle(options: {
+  controls: ReturnType<typeof createPlayerControls>;
+  getInventory: () => InventoryState | null;
+  setInventory: (inventory: InventoryState) => void;
+  getArcBalance: () => number | null;
+  setArcBalance: (balance: number) => void;
+  characterAppearance: GameBootstrap['player']['characterAppearance'] | null;
+  loopRef: { loop?: ReturnType<typeof createGameLoop> };
+  vitalsSessionRef: { current: PlayerVitalsSessionController | null };
+}): {
+  personalInventory: ReturnType<typeof createPlayPersonalInventory>;
+  chestStorage: ReturnType<typeof createPlayChestStorage>;
+  weaponShop: ReturnType<typeof createPlayShops>['weaponShop'];
+  outfitters: ReturnType<typeof createPlayShops>['outfitters'];
+  foodShop: ReturnType<typeof createPlayShops>['foodShop'];
+} {
+  const closers = {
+    weaponShop: null as ReturnType<typeof createPlayShops>['weaponShop'] | null,
+    outfitters: null as ReturnType<typeof createPlayShops>['outfitters'] | null,
+    foodShop: null as ReturnType<typeof createPlayShops>['foodShop'] | null,
+    chestStorage: null as ReturnType<typeof createPlayChestStorage> | null,
+  };
+  const personalInventory = createPlayPersonalInventory({
+    controls: options.controls,
+    getInventory: options.getInventory,
+    setInventory: options.setInventory,
+    characterAppearance: options.characterAppearance,
+    loopRef: options.loopRef,
+    vitalsSessionRef: options.vitalsSessionRef,
+    onWillOpen: () => {
+      closers.chestStorage?.close();
+      closers.weaponShop?.close();
+      closers.outfitters?.close();
+      closers.foodShop?.close();
+    },
+  });
+  const { weaponShop, outfitters, foodShop } = createPlayShops({
+    getArcBalance: options.getArcBalance,
+    getInventory: options.getInventory,
+    onPurchaseResult: (result) => {
+      options.setArcBalance(result.arcBalance);
+      options.setInventory(normalizeInventoryState(result.inventory));
+      personalInventory.refresh();
+      closers.chestStorage?.refresh();
+    },
+  });
+  closers.weaponShop = weaponShop;
+  closers.outfitters = outfitters;
+  closers.foodShop = foodShop;
+  const chestStorage = createPlayChestStorage({
+    controls: options.controls,
+    getInventory: options.getInventory,
+    setInventory: options.setInventory,
+    loopRef: options.loopRef,
+    onWillOpen: () => {
+      personalInventory.close();
+      weaponShop.close();
+      outfitters.close();
+      foodShop.close();
+    },
+  });
+  closers.chestStorage = chestStorage;
+  return { personalInventory, chestStorage, weaponShop, outfitters, foodShop };
 }
 
 export function createPlayShops(options: {

@@ -33,6 +33,7 @@ import { UiIcons } from '../../../ui/icons';
 import { useEditorStore } from '../hooks';
 import { UiIcon } from '../UiIcon';
 import { AddComponentModal } from './AddComponentModal';
+import { AssetInspectorBody } from './AssetInspectorBody';
 import { ComponentFields } from './InspectorComponentFields';
 import {
   CheckboxRow,
@@ -581,6 +582,13 @@ function InspectorBody({
     lastPreviewTarget.current = previewTarget;
   }, [previewTarget, options.audioPreview]);
 
+  const assetFocus = options.assetFocus;
+  if (assetFocus && assetFocus.length > 0) {
+    return (
+      <AssetInspectorBody items={assetFocus} onOpenPrefab={options.onOpenPrefab} />
+    );
+  }
+
   if (selectedIds.length > 1) {
     const removableTypes = collectComponentTypesOnEntities(store, selectedIds);
     return (
@@ -632,7 +640,8 @@ function InspectorBody({
   if (!entity) {
     return (
       <EmptyNote>
-        Nothing selected. Click an object in the scene or the hierarchy.
+        Nothing selected. Click an object in the scene or hierarchy, or an asset
+        in the Project panel.
       </EmptyNote>
     );
   }

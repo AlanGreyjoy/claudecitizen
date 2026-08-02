@@ -3,7 +3,6 @@ import { mountPlayChrome, unmountPlayChrome } from '../app/play-chrome';
 import type { PrefabComponent } from '../world/prefabs/schema';
 import type { SceneDocument } from '../world/scenes/schema';
 import { SCENE_SCHEMA_VERSION } from '../world/scenes/schema';
-import { sceneRequiresAuth } from '../world/scenes/scene-runtime';
 import type { EditorStore } from './document';
 import { createEditorPlayHost } from './play-host';
 import { toSceneDocument } from './serialize';
@@ -93,11 +92,11 @@ export function startEditorPlay(
 
   let sceneHost: SceneHostHandle | null = createSceneHost({
     initialScene: scene,
-    // Entry-flow scenes and player-scoped instances need a real session.
-    // The latter supplies the authoritative apartment catalog and placements
-    // so a directly played hab can exercise its build mode. Prefab stages and
-    // other direct gameplay plays stay offline.
-    requireAuth: sceneRequiresAuth(scene),
+    // Editor Play never blocks on login — same offline contract as Planet Test
+    // Play. Player-scoped habs still run; apartment bootstrap is simply absent
+    // until the editor already holds a session from elsewhere. Shipping auth
+    // belongs to the boot/title flow, not F6.
+    requireAuth: false,
     fromEditor: true,
   });
   let paused = false;

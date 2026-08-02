@@ -112,6 +112,7 @@ function createMockWorld(shipMode: boolean): WorldState {
     prompt: '',
     activeShipId: PLAYER_SHIP_INSTANCE_ID,
     activeBedId: null,
+    chairOccupancy: null,
     transition: null,
     assignedHangar: null,
     ladderClimb: null,

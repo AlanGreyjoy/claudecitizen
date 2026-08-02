@@ -10,6 +10,12 @@ import {
   type WeaponFireState,
 } from "../../player/weapon-fire";
 import { buildBallisticPath } from "../../player/weapon-ballistics";
+import {
+  advanceRecoilPattern,
+  nextRecoilKick,
+  recoilProfileForWeapon,
+  type RecoilPatternState,
+} from "../../player/weapon-recoil";
 import { normalize } from "../../math/vec3";
 import { playSfx } from "../../audio/sfx";
 import { consumeInventoryAmmo } from "../../net/api";
@@ -27,6 +33,13 @@ export interface WeaponCombatActions {
   primaryClickHeld: boolean;
   primaryClickPressed: boolean;
   reloadWeaponPressed: boolean;
+}
+
+/** Presentation-only firing feedback: camera kick and the crosshair pulse. */
+export interface WeaponFeelState {
+  recoil: RecoilPatternState;
+  /** Monotonic; the HUD pulses the crosshair whenever it changes. */
+  shotCount: number;
 }
 
 type WeaponPresentation = NonNullable<
@@ -67,15 +80,33 @@ function shotPathEnd(
   return { ...origin };
 }
 
+function kickCamera(
+  ctx: LoopContext,
+  firearm: ActiveFirearm,
+  feel: WeaponFeelState,
+): void {
+  const kick = nextRecoilKick(
+    feel.recoil,
+    recoilProfileForWeapon({
+      muzzleVelocityMps: firearm.muzzleVelocityMps,
+      roundsPerMinute: firearm.roundsPerMinute,
+    }),
+    Math.random,
+  );
+  ctx.controls.applyLookRecoil(kick.pitchRadians, kick.yawRadians);
+  feel.shotCount += 1;
+}
+
 function presentShot(args: {
   ctx: LoopContext;
   firearm: ActiveFirearm;
   origin: Vec3;
   direction: Vec3;
   event: { fireMode: WeaponFireMode; weaponId: string };
+  feel: WeaponFeelState;
   presentation: WeaponPresentation | null;
 }): WeaponCombatRuntimeEvent {
-  const { ctx, firearm, origin, direction, event, presentation } = args;
+  const { ctx, firearm, origin, direction, event, feel, presentation } = args;
   const path = buildBallisticPath(
     {
       bulletGravityMps2: firearm.bulletGravityMps2,
@@ -94,8 +125,9 @@ function presentShot(args: {
     hit,
     hitDecalUrl: combat?.hitDecalUrl ?? null,
     muzzleFlash: presentation?.muzzleFlash ?? null,
-    tracer: { end: pathEnd, start: origin },
+    tracer: { end: pathEnd, speedMps: firearm.muzzleVelocityMps, start: origin },
   });
+  kickCamera(ctx, firearm, feel);
   if (combat?.fireSoundUrl) playSfx(combat.fireSoundUrl);
   return {
     type: "shot",
@@ -141,6 +173,7 @@ function processFireEvent(args: {
   event: ReturnType<typeof advanceWeaponFire>[number];
   origin: Vec3;
   direction: Vec3;
+  feel: WeaponFeelState;
   presentation: WeaponPresentation | null;
   runtimeEvents: WeaponCombatRuntimeEvent[];
 }): void {
@@ -151,12 +184,13 @@ function processFireEvent(args: {
     event,
     origin,
     direction,
+    feel,
     presentation,
     runtimeEvents,
   } = args;
   if (event.type === "shot") {
     runtimeEvents.push(
-      presentShot({ ctx, firearm, origin, direction, event, presentation }),
+      presentShot({ ctx, firearm, origin, direction, event, feel, presentation }),
     );
     return;
   }
@@ -186,10 +220,12 @@ export function updateWeaponCombat(
   ctx: LoopContext,
   firearm: ActiveFirearm,
   actions: WeaponCombatActions,
+  feel: WeaponFeelState,
   dt: number,
 ): void {
   const inventory = ctx.getInventory();
   if (!inventory) return;
+  advanceRecoilPattern(feel.recoil, dt);
   const state = fireStateFor(ctx, firearm);
   const fireEvents = advanceWeaponFire(state, {
     cycleModePressed: actions.cycleWeaponFireModePressed,
@@ -216,6 +252,7 @@ export function updateWeaponCombat(
       event,
       origin,
       direction,
+      feel,
       presentation,
       runtimeEvents,
     });

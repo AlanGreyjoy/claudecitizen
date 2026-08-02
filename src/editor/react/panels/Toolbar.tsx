@@ -12,7 +12,7 @@ import {
 import type { PlanetListEntry, PrefabListEntry, SceneListEntry } from '../../api';
 import type { EditorEntity, EditorStore } from '../../document';
 import { MENU_CATALOG } from '../../menus/catalog';
-import { PREFAB_KINDS, type PrefabKind } from '../../../world/prefabs/schema';
+import { PREFAB_KIND_LABELS, PREFAB_KINDS, type PrefabKind } from '../../../world/prefabs/schema';
 import { UiIcons } from '../../../ui/icons';
 import { UiIcon } from '../UiIcon';
 import { useEditorStore } from '../hooks';
@@ -56,6 +56,7 @@ export interface ToolbarActions {
   onDeleteScene: (id: string) => void;
   onLoadPlanet: (id: string) => void;
   onOpenSceneSettings: () => void;
+  onOpenPrefabSettings: () => void;
   onDeleteCurrentScene: () => void;
   onOpenProjectSettings: () => void;
   onOpenMenu: (id: string) => void;
@@ -289,7 +290,7 @@ function OpenPrefabPanel({
 
   let emptyText: string | null = null;
   if (prefabs.length === 0) emptyText = 'No saved prefabs';
-  else if (visible.length === 0) emptyText = query ? 'No matches' : `No ${activeKind} prefabs`;
+  else if (visible.length === 0) emptyText = query ? 'No matches' : `No ${PREFAB_KIND_LABELS[activeKind]} prefabs`;
 
   return (
     <div className="ed-open-panel">
@@ -311,7 +312,7 @@ function OpenPrefabPanel({
               setSearchQuery('');
             }}
           >
-            {kind}
+            {PREFAB_KIND_LABELS[kind]}
           </button>
         ))}
       </div>
@@ -545,6 +546,7 @@ function UserMenu({
   onBuildWeb,
   onOpenProject,
   onOpenSceneSettings,
+  onOpenPrefabSettings,
   onDeleteCurrentScene,
   onOpenProjectSettings,
   onExit,
@@ -557,6 +559,7 @@ function UserMenu({
   onBuildWeb: () => void;
   onOpenProject: () => void;
   onOpenSceneSettings: () => void;
+  onOpenPrefabSettings: () => void;
   onDeleteCurrentScene: () => void;
   onOpenProjectSettings: () => void;
   onExit: () => void;
@@ -599,7 +602,7 @@ function UserMenu({
             <span className="ed-menu-item-label">New Scene…</span>
           </button>
           <button type="button" className="ed-menu-item" onClick={() => run(onNew)}>
-            <span className="ed-menu-item-label">New Prefab</span>
+            <span className="ed-menu-item-label">New Prefab…</span>
           </button>
           <div className="ed-menu-sep" />
           <button type="button" className="ed-menu-item" onClick={() => run(onSave)}>
@@ -620,6 +623,9 @@ function UserMenu({
           <div className="ed-menu-sep" />
           <button type="button" className="ed-menu-item" onClick={() => run(onOpenSceneSettings)}>
             <span className="ed-menu-item-label">Scene Settings…</span>
+          </button>
+          <button type="button" className="ed-menu-item" onClick={() => run(onOpenPrefabSettings)}>
+            <span className="ed-menu-item-label">Prefab Settings…</span>
           </button>
           <button
             type="button"
@@ -1143,6 +1149,7 @@ export const Toolbar = forwardRef<ToolbarHandle, ToolbarProps>(function Toolbar(
             onBuildWeb={actions.onBuildWeb}
             onOpenProject={actions.onOpenProject}
             onOpenSceneSettings={actions.onOpenSceneSettings}
+            onOpenPrefabSettings={actions.onOpenPrefabSettings}
             onDeleteCurrentScene={actions.onDeleteCurrentScene}
             onOpenProjectSettings={actions.onOpenProjectSettings}
             onExit={actions.onExit}

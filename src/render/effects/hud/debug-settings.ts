@@ -38,6 +38,12 @@ function parseUrlDebug(): boolean {
   return new URLSearchParams(window.location.search).get('debug') === '1';
 }
 
+/**
+ * Reads persisted debug settings without constructing a controller.
+ *
+ * The renderer needs a couple of these at planet-stack construction, which
+ * happens well before the HUD exists and outside any subscription.
+ */
 function loadStoredSettings(): DebugSettings | null {
   const raw = sessionStorage.getItem(STORAGE_KEY);
   if (!raw) return null;

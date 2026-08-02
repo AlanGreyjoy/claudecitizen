@@ -17,9 +17,11 @@ import { createTransitions } from "./modes/transitions";
 import { createOnFootMode } from "./modes/on-foot";
 import { createInShipMode } from "./modes/in-ship";
 import { createInBedMode } from "./modes/in-bed";
+import { createInChairMode } from "./modes/in-chair";
 import { createOnShipDeckMode } from "./modes/on-ship-deck";
 import { createInStationMode } from "./modes/in-station";
 import type { GameLoopHandle, GameLoopOptions } from "./types";
+import type { LoopContext } from "./loop-context";
 
 export type {
   BuildAreaRuntime,
@@ -27,6 +29,15 @@ export type {
   GameLoopOptions,
   WeaponCombatRuntimeEvent,
 } from "./types";
+
+function closeGameLoopOverlays(ctx: LoopContext): void {
+  ctx.entertainmentSystem?.close();
+  ctx.weaponShop?.close();
+  ctx.outfitters?.close();
+  ctx.foodShop?.close();
+  ctx.personalInventory?.close();
+  ctx.chestStorage?.close();
+}
 
 /**
  * Assembles the play-session game loop from colocated feature modules. The
@@ -52,29 +63,19 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
   const lifecycle = createWorldLifecycle(ctx, { deckPhysics });
 
   const transitions = createTransitions(ctx, { deckPhysics, padInterest });
-  const onFoot = createOnFootMode(ctx, { combat, padInterest, shipSystems });
-  const inShip = createInShipMode(ctx, { prompts });
-  const inBed = createInBedMode(ctx, { prompts });
-  const onShipDeck = createOnShipDeckMode(ctx, {
-    combat,
-    padInterest,
-    shipSystems,
-    prompts,
-  });
-  const inStation = createInStationMode(ctx, {
-    combat,
-    padInterest,
-    shipSystems,
-    prompts,
-    animations,
-    buildTool,
-  });
+  const modeShared = { combat, padInterest, shipSystems };
   const modes = {
-    onFoot,
-    inShip,
-    inBed,
-    onShipDeck,
-    inStation,
+    onFoot: createOnFootMode(ctx, modeShared),
+    inShip: createInShipMode(ctx, { prompts }),
+    inBed: createInBedMode(ctx, { prompts }),
+    inChair: createInChairMode(ctx, { prompts }),
+    onShipDeck: createOnShipDeckMode(ctx, { ...modeShared, prompts }),
+    inStation: createInStationMode(ctx, {
+      ...modeShared,
+      prompts,
+      animations,
+      buildTool,
+    }),
     transitions,
   };
   const renderDeps = { occlusion, sceneSounds, screens, combat, buildTool };
@@ -144,11 +145,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
 
   function stop(): void {
     ctx.running = false;
-    ctx.entertainmentSystem?.close();
-    ctx.weaponShop?.close();
-    ctx.outfitters?.close();
-    ctx.foodShop?.close();
-    ctx.personalInventory?.close();
+    closeGameLoopOverlays(ctx);
     buildTool.detachBuildButton();
     screens.dispose();
     ctx.boostSfx.stop();

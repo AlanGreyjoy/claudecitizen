@@ -33,6 +33,64 @@ export function DoorFields({
   return <DoorLikeFields ctx={ctx} component={component} showDuration />;
 }
 
+export function ChestStorageFields({
+  ctx,
+  component,
+}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'chest-storage' }>>): ReactElement {
+  const { update } = ctx;
+  const trigger = component.trigger ?? 'radial';
+  return (
+    <>
+      <FieldRow label="Id" wide>
+        <TextField value={component.id} onCommit={(id) => update({ ...component, id })} />
+      </FieldRow>
+      <FieldRow label="Label" wide>
+        <TextField
+          value={component.label ?? 'Open chest'}
+          onCommit={(label) => update({ ...component, label })}
+        />
+      </FieldRow>
+      <FieldRow label="Trigger" wide>
+        <SelectField
+          options={['radial', 'raycast']}
+          value={trigger}
+          onCommit={(next) =>
+            update({ ...component, trigger: next as 'radial' | 'raycast' })
+          }
+        />
+      </FieldRow>
+      <FieldRow label={trigger === 'raycast' ? 'Max distance' : 'Radius'} wide>
+        <NumberField
+          value={component.radius ?? 1.6}
+          onCommit={(radius) => update({ ...component, radius: Math.max(0.5, radius) })}
+        />
+      </FieldRow>
+      {trigger === 'raycast' ? (
+        <FieldRow label="Aim radius" wide>
+          <NumberField
+            value={component.aimRadius ?? 0.35}
+            step={0.05}
+            onCommit={(aimRadius) =>
+              update({ ...component, aimRadius: Math.max(0.05, Math.min(5, aimRadius)) })
+            }
+          />
+        </FieldRow>
+      ) : null}
+      <FieldRow label="Slot count" wide>
+        <NumberField
+          value={component.slotCount ?? 20}
+          onCommit={(slotCount) =>
+            update({
+              ...component,
+              slotCount: Math.max(1, Math.min(64, Math.round(slotCount))),
+            })
+          }
+        />
+      </FieldRow>
+    </>
+  );
+}
+
 type DoorLikeComponent =
   | Extract<PrefabComponent, { type: 'ship-door' }>
   | Extract<PrefabComponent, { type: 'door' }>;
@@ -334,6 +392,78 @@ export function BedFields({
           />
         ))}
       </FieldRow>
+      <FieldRow label="Stand XZ">
+        <NumberField
+          value={stand.x}
+          onCommit={(x) => update({ ...component, stand: { ...stand, x } })}
+        />
+        <NumberField
+          value={stand.z}
+          onCommit={(z) => update({ ...component, stand: { ...stand, z } })}
+        />
+        <span />
+      </FieldRow>
+    </>
+  );
+}
+
+export function ChairSeatFields({
+  ctx,
+  component,
+}: ComponentFieldsProps<Extract<PrefabComponent, { type: 'chair-seat' }>>): ReactElement {
+  const { update } = ctx;
+  const eye = component.eye ?? { x: 0, y: 0.87, z: 0.25 };
+  const stand = component.stand ?? { x: 0, z: -1.55 };
+  const trigger = component.trigger ?? 'radial';
+  return (
+    <>
+      <FieldRow label="Id" wide>
+        <TextField value={component.id} onCommit={(id) => update({ ...component, id })} />
+      </FieldRow>
+      <FieldRow label="Label" wide>
+        <TextField
+          value={component.label ?? 'chair'}
+          onCommit={(label) => update({ ...component, label })}
+        />
+      </FieldRow>
+      <FieldRow label="Trigger" wide>
+        <SelectField
+          options={['radial', 'raycast']}
+          value={trigger}
+          onCommit={(next) =>
+            update({ ...component, trigger: next as 'radial' | 'raycast' })
+          }
+        />
+      </FieldRow>
+      <FieldRow label={trigger === 'raycast' ? 'Max distance' : 'Radius'} wide>
+        <NumberField
+          value={component.radius ?? 1.45}
+          onCommit={(radius) => update({ ...component, radius: Math.max(0.5, radius) })}
+        />
+      </FieldRow>
+      {trigger === 'raycast' ? (
+        <FieldRow label="Aim radius" wide>
+          <NumberField
+            value={component.aimRadius ?? 0.35}
+            onCommit={(aimRadius) =>
+              update({ ...component, aimRadius: Math.max(0.05, aimRadius) })
+            }
+          />
+        </FieldRow>
+      ) : null}
+      <FieldRow label="Eye">
+        {(['x', 'y', 'z'] as const).map((axis) => (
+          <NumberField
+            key={axis}
+            value={eye[axis]}
+            onCommit={(next) => update({ ...component, eye: { ...eye, [axis]: next } })}
+          />
+        ))}
+      </FieldRow>
+      <EmptyNote>
+        Marker = character root (floor disc). Eye is the sphere — raise it for
+        first-person height instead of moving the marker. Hold Y to stand.
+      </EmptyNote>
       <FieldRow label="Stand XZ">
         <NumberField
           value={stand.x}

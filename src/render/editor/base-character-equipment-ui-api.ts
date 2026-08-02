@@ -15,11 +15,12 @@ import {
   DEFAULT_CHARACTER_SETTINGS,
   setCharacterSettings,
 } from '../../player/character-settings';
-import { collectDrawnGrip } from '../../world/prefabs/item-runtime';
+import { collectDrawnGrip, suggestProviderSocketId } from '../../world/prefabs/item-runtime';
 import {
   fetchAnimationControllerList,
   saveAnimationController,
 } from '../../editor/api';
+import { showConfirmDialog, showPromptDialog } from '../../editor/dom';
 import { stanceIdForWeaponSlot } from '../../player/inventory/weapon-select';
 import type { SidekickAvatarInstance } from '../characters/sidekick/assemble-avatar';
 import type {
@@ -27,10 +28,191 @@ import type {
   BaseCharacterLeftTab,
   BaseCharacterUiSnapshot,
   CharacterPreviewPose,
+  EquippedBackpackSocketInfo,
   EquipmentGizmoMode,
 } from './base-character-equipment-ui';
 import type { MountEditMode } from './base-character-equipment-transform';
 import { DEFAULT_DRAWN_WEAPON_BONE } from '../../player/equipment/base-character-equipment';
+import type { PrefabEntity } from '../../world/prefabs/schema';
+import type { WeaponSlotType } from '../../types/equipment';
+
+const SLOT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+function equippedSocketsFromEntities(
+  entities: Map<string, PrefabEntity>,
+): EquippedBackpackSocketInfo[] {
+  const sockets: EquippedBackpackSocketInfo[] = [];
+  for (const [id, entity] of entities) {
+    const component = entity.components?.find((entry) => entry.type === 'equipment-socket');
+    if (component?.type === 'equipment-socket') {
+      sockets.push({ id: component.id || id, accepts: component.accepts });
+    } else {
+      sockets.push({ id, accepts: 'rifle' });
+    }
+  }
+  return sockets.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function defaultProviderForWeaponSlot(
+  slots: CharacterEquipmentSlotV1[],
+  slotId: string,
+  weaponSlotType: WeaponSlotType,
+  backpackSockets: EquippedBackpackSocketInfo[],
+): CharacterEquipmentSlotV1['providerSocket'] {
+  if (weaponSlotType !== 'rifle') return undefined;
+  const backpack = slots.find((entry) => entry.kind === 'backpack');
+  if (!backpack) return undefined;
+  const socketId =
+    suggestProviderSocketId(weaponSlotType, slotId, backpackSockets) ?? slotId;
+  return { slotId: backpack.id, socketId };
+}
+
+function inferWeaponSlotType(id: string): WeaponSlotType {
+  if (id === 'sword' || id === 'handgun' || id === 'rifle') return id;
+  if (id.includes('handgun') || id.includes('pistol')) return 'handgun';
+  if (id.includes('sword')) return 'sword';
+  return 'rifle';
+}
+
+async function addEquipmentSlot(ctx: BaseCharacterUiApiContext): Promise<void> {
+  if (!ctx.state.documentState) return;
+  const id = await showPromptDialog({
+    title: 'New equipment slot',
+    message: 'Slot id (lowercase slug, e.g. handgun)',
+    defaultValue: 'handgun',
+    confirmLabel: 'Next',
+  });
+  if (!id || !SLOT_ID_PATTERN.test(id)) {
+    if (id) ctx.setStageStatus('Slot id must be a lowercase slug (a-z, 0-9, -).', true);
+    return;
+  }
+  if (ctx.state.documentState.slots.some((slot) => slot.id === id)) {
+    ctx.setStageStatus(`Slot "${id}" already exists.`, true);
+    return;
+  }
+  const kindRaw = await showPromptDialog({
+    title: 'Slot kind',
+    message: 'Enter "weapon" or "backpack"',
+    defaultValue: 'weapon',
+    confirmLabel: 'Add slot',
+  });
+  if (!kindRaw) return;
+  const kind = kindRaw.toLowerCase() === 'backpack' ? 'backpack' : 'weapon';
+  const weaponSlotType = inferWeaponSlotType(id);
+  const backpackSockets = equippedSocketsFromEntities(ctx.getBackpackSocketEntities());
+  const providerSocket =
+    kind === 'weapon'
+      ? defaultProviderForWeaponSlot(
+          ctx.state.documentState.slots,
+          id,
+          weaponSlotType,
+          backpackSockets,
+        )
+      : undefined;
+  const newSlot: CharacterEquipmentSlotV1 = kind === 'weapon'
+    ? {
+        id,
+        label: id.replace(/-/g, ' '),
+        kind,
+        weaponSlotType,
+        ...(providerSocket ? { providerSocket } : {}),
+      }
+    : { id, label: id.replace(/-/g, ' '), kind };
+  ctx.state.documentState.slots.push(newSlot);
+  ctx.state.documentState.variants['1'].mounts[id] = identityCharacterMount('backAttach');
+  ctx.state.documentState.variants['2'].mounts[id] = identityCharacterMount('backAttach');
+  ctx.state.selectedSlotId = id;
+  ctx.markDirty();
+  void ctx.rebuildEquipmentPreview();
+}
+
+async function deleteEquipmentSlot(
+  ctx: BaseCharacterUiApiContext,
+  slotId: string,
+): Promise<void> {
+  if (!ctx.state.documentState || ctx.state.documentState.slots.length <= 1) return;
+  const slot = ctx.state.documentState.slots.find((entry) => entry.id === slotId);
+  if (!slot) return;
+  const confirmed = await showConfirmDialog({
+    title: 'Delete slot',
+    message: `Delete slot "${slot.label}" from both character types?`,
+    confirmLabel: 'Delete',
+    destructive: true,
+  });
+  if (!confirmed) return;
+  ctx.state.documentState.slots = ctx.state.documentState.slots.filter(
+    (candidate) => candidate.id !== slotId,
+  );
+  delete ctx.state.documentState.variants['1'].mounts[slotId];
+  delete ctx.state.documentState.variants['2'].mounts[slotId];
+  delete ctx.state.documentState.variants['1'].drawnMounts?.[slotId];
+  delete ctx.state.documentState.variants['2'].drawnMounts?.[slotId];
+  for (const candidate of ctx.state.documentState.slots) {
+    if (candidate.requiresSlotId === slotId) delete candidate.requiresSlotId;
+    if (candidate.providerSocket?.slotId === slotId) delete candidate.providerSocket;
+  }
+  ctx.state.assignments.delete(slotId);
+  if (ctx.state.simulateDrawnSlotId === slotId) ctx.state.simulateDrawnSlotId = null;
+  ctx.state.mountEditMode = 'holster';
+  ctx.state.selectedSlotId = ctx.state.documentState.slots[0]?.id ?? '';
+  ctx.markDirty();
+  void ctx.rebuildEquipmentPreview();
+}
+
+async function addControllerStance(ctx: BaseCharacterUiApiContext): Promise<void> {
+  if (!ctx.state.controllerState) return;
+  const id = await showPromptDialog({
+    title: 'New stance',
+    message: 'Stance id (lowercase slug)',
+    defaultValue: 'pistol',
+    confirmLabel: 'Next',
+  });
+  if (!id || !SLOT_ID_PATTERN.test(id)) {
+    if (id) ctx.setStageStatus('Stance id must be a lowercase slug (a-z, 0-9, -).', true);
+    return;
+  }
+  if (ctx.state.controllerState.stances.some((stance) => stance.id === id)) {
+    ctx.setStageStatus(`Stance "${id}" already exists.`, true);
+    return;
+  }
+  const label =
+    (await showPromptDialog({
+      title: 'Stance label',
+      message: 'Display name for this stance',
+      defaultValue: id.replace(/-/g, ' '),
+      confirmLabel: 'Add stance',
+    })) || id;
+  ctx.state.controllerState.stances.push({ id, label });
+  for (const locomotion of ANIMATION_LOCOMOTION_KINDS) {
+    ctx.state.controllerState.states.push({
+      id: `${id}-${locomotionStateSlug(locomotion)}`,
+      label: `${label} ${locomotion}`,
+      locomotion,
+      stanceId: id,
+      clipName: '',
+      sourceId: UAL_ANIMATION_SOURCE_ID,
+    });
+  }
+  ctx.state.selectedStanceId = id;
+  ctx.markControllerDirty();
+}
+
+async function renameControllerStance(ctx: BaseCharacterUiApiContext): Promise<void> {
+  if (!ctx.state.controllerState) return;
+  const stance = ctx.state.controllerState.stances.find(
+    (entry) => entry.id === ctx.state.selectedStanceId,
+  );
+  if (!stance) return;
+  const next = await showPromptDialog({
+    title: 'Rename stance',
+    message: 'Stance label',
+    defaultValue: stance.label,
+    confirmLabel: 'Rename',
+  });
+  if (!next) return;
+  stance.label = next;
+  ctx.markControllerDirty();
+}
 
 const EQUIPMENT_DND_TYPE = 'application/x-claudecitizen-equipment-definition';
 
@@ -75,6 +257,7 @@ export interface BaseCharacterUiApiContext {
   currentMount: () => import('../../player/equipment/base-character-equipment').CharacterBoneMountV1 | null;
   currentDrawnMount: () => import('../../player/equipment/base-character-equipment').CharacterBoneMountV1 | null;
   currentTransformTarget: () => import('./base-character-equipment-transform').EquipmentTransformTarget | null;
+  getBackpackSocketEntities: () => Map<string, PrefabEntity>;
   displayNumber: (value: number) => string;
   transformEulerDegrees: (
     transform: import('../../world/prefabs/schema').PrefabTransform,
@@ -133,6 +316,10 @@ function enterDrawnAuthoring(
   ctx.state.mountEditMode = mode;
   ctx.state.selectedStanceId = stanceIdForWeaponSlot(slot.id);
   ctx.state.simulateDrawnSlotId = slot.id;
+  // Push uiState → closure before markDirty/rebuild. Those paths notify via the
+  // raw closure→ui sync and would otherwise wipe Hand bone / Weapon grip back
+  // to Holster (looks like the buttons do nothing).
+  ctx.notifyUiChange();
   if (!ctx.currentDrawnMount() && ctx.state.documentState) {
     const variant = ctx.state.documentState.variants[String(ctx.state.selectedType) as '1' | '2'];
     variant.drawnMounts ??= {};
@@ -196,6 +383,7 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
       currentMount: ctx.currentMount(),
       currentDrawnMount: ctx.currentDrawnMount(),
       currentTransformTarget: ctx.currentTransformTarget(),
+      equippedBackpackSockets: equippedSocketsFromEntities(ctx.getBackpackSocketEntities()),
       stanceIds:
         ctx.state.controllerState?.stances.map((stance) => stance.id)
         ?? ['unarmed', 'rifle', 'pistol'],
@@ -257,46 +445,8 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
       if (slotId === 'backpack') ctx.state.assignments.delete('rifle-secondary');
       void ctx.rebuildEquipmentPreview();
     },
-    addEquipmentSlot: () => {
-      if (!ctx.state.documentState) return;
-      const id = window.prompt('New slot id (lowercase slug):')?.trim();
-      if (!id || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return;
-      if (ctx.state.documentState.slots.some((slot) => slot.id === id)) return;
-      const kind = window.prompt('Slot kind: weapon or backpack?', 'weapon') === 'backpack'
-        ? 'backpack'
-        : 'weapon';
-      const newSlot: CharacterEquipmentSlotV1 = kind === 'weapon'
-        ? { id, label: id.replace(/-/g, ' '), kind, weaponSlotType: 'rifle' }
-        : { id, label: id.replace(/-/g, ' '), kind };
-      ctx.state.documentState.slots.push(newSlot);
-      ctx.state.documentState.variants['1'].mounts[id] = identityCharacterMount('backAttach');
-      ctx.state.documentState.variants['2'].mounts[id] = identityCharacterMount('backAttach');
-      ctx.state.selectedSlotId = id;
-      ctx.markDirty();
-      void ctx.rebuildEquipmentPreview();
-    },
-    deleteSlot: (slotId) => {
-      if (!ctx.state.documentState || ctx.state.documentState.slots.length <= 1) return;
-      const slot = ctx.state.documentState.slots.find((entry) => entry.id === slotId);
-      if (!slot || !window.confirm(`Delete slot "${slot.label}" from both character types?`)) return;
-      ctx.state.documentState.slots = ctx.state.documentState.slots.filter(
-        (candidate) => candidate.id !== slotId,
-      );
-      delete ctx.state.documentState.variants['1'].mounts[slotId];
-      delete ctx.state.documentState.variants['2'].mounts[slotId];
-      delete ctx.state.documentState.variants['1'].drawnMounts?.[slotId];
-      delete ctx.state.documentState.variants['2'].drawnMounts?.[slotId];
-      for (const candidate of ctx.state.documentState.slots) {
-        if (candidate.requiresSlotId === slotId) delete candidate.requiresSlotId;
-        if (candidate.providerSocket?.slotId === slotId) delete candidate.providerSocket;
-      }
-      ctx.state.assignments.delete(slotId);
-      if (ctx.state.simulateDrawnSlotId === slotId) ctx.state.simulateDrawnSlotId = null;
-      ctx.state.mountEditMode = 'holster';
-      ctx.state.selectedSlotId = ctx.state.documentState.slots[0]?.id ?? '';
-      ctx.markDirty();
-      void ctx.rebuildEquipmentPreview();
-    },
+    addEquipmentSlot: () => addEquipmentSlot(ctx),
+    deleteSlot: (slotId) => deleteEquipmentSlot(ctx, slotId),
     updateSlot: () => {
       ctx.markDirty();
       void ctx.rebuildEquipmentPreview();
@@ -399,37 +549,8 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
         );
       }
     },
-    addStance: () => {
-      if (!ctx.state.controllerState) return;
-      const id = window.prompt('New stance id (lowercase slug):')?.trim();
-      if (!id || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return;
-      if (ctx.state.controllerState.stances.some((stance) => stance.id === id)) return;
-      const label = window.prompt('Stance label:', id.replace(/-/g, ' '))?.trim() || id;
-      ctx.state.controllerState.stances.push({ id, label });
-      for (const locomotion of ANIMATION_LOCOMOTION_KINDS) {
-        ctx.state.controllerState.states.push({
-          id: `${id}-${locomotionStateSlug(locomotion)}`,
-          label: `${label} ${locomotion}`,
-          locomotion,
-          stanceId: id,
-          clipName: '',
-          sourceId: UAL_ANIMATION_SOURCE_ID,
-        });
-      }
-      ctx.state.selectedStanceId = id;
-      ctx.markControllerDirty();
-    },
-    renameStance: () => {
-      if (!ctx.state.controllerState) return;
-      const stance = ctx.state.controllerState.stances.find(
-        (entry) => entry.id === ctx.state.selectedStanceId,
-      );
-      if (!stance) return;
-      const next = window.prompt('Stance label:', stance.label)?.trim();
-      if (!next) return;
-      stance.label = next;
-      ctx.markControllerDirty();
-    },
+    addStance: () => addControllerStance(ctx),
+    renameStance: () => renameControllerStance(ctx),
     assignClipToState: (stateId, clipName) => ctx.assignClipToState(stateId, clipName),
     assignClipFromDroppedUrl: async (stateId, url) => {
       try {

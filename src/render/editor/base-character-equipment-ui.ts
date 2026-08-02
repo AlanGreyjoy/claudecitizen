@@ -16,10 +16,16 @@ import type {
 import type { CharacterSettingsV1 } from '../../player/character-settings';
 import type { WeaponSelectSlotId } from '../../player/inventory/weapon-select';
 import type { PrefabTransform } from '../../world/prefabs/schema';
+import type { WeaponSlotType } from '../../types/equipment';
 import type {
   EquipmentTransformTarget,
   MountEditMode,
 } from './base-character-equipment-transform';
+
+export interface EquippedBackpackSocketInfo {
+  id: string;
+  accepts: WeaponSlotType;
+}
 
 export type BaseCharacterLeftTab = 'equipment' | 'animation' | 'controllers' | 'settings';
 export type CharacterPreviewPose = 'reference' | 'animated';
@@ -68,6 +74,8 @@ export interface BaseCharacterUiSnapshot {
   currentMount: CharacterBoneMountV1 | null;
   currentDrawnMount: CharacterBoneMountV1 | null;
   currentTransformTarget: EquipmentTransformTarget | null;
+  /** Sockets from currently equipped backpack prefab (empty if none). */
+  equippedBackpackSockets: EquippedBackpackSocketInfo[];
   stanceIds: string[];
 }
 
@@ -97,8 +105,8 @@ export interface BaseCharacterEditorUiApi {
   refreshCatalog: () => Promise<void>;
   assignDefinition: (slot: CharacterEquipmentSlotV1, definition: CatalogDefinition) => void;
   clearAssignment: (slotId: string) => void;
-  addEquipmentSlot: () => void;
-  deleteSlot: (slotId: string) => void;
+  addEquipmentSlot: () => Promise<void>;
+  deleteSlot: (slotId: string) => Promise<void>;
   updateSlot: () => void;
   enterDrawnAuthoring: (slot: CharacterEquipmentSlotV1, mode: 'drawn' | 'weapon-grip') => void;
   addHandBoneMount: () => void;
@@ -112,8 +120,8 @@ export interface BaseCharacterEditorUiApi {
   updateMountBone: (bone: string) => void;
   loadController: (id: string) => Promise<void>;
   saveController: () => Promise<void>;
-  addStance: () => void;
-  renameStance: () => void;
+  addStance: () => Promise<void>;
+  renameStance: () => Promise<void>;
   assignClipToState: (stateId: string, clipName: string) => void;
   assignClipFromDroppedUrl: (stateId: string, url: string) => Promise<void>;
   setAnimationClip: (clipName: string) => void;

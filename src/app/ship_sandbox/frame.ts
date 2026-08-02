@@ -7,10 +7,11 @@ import { doorBlends, updateShipRig } from '../../player/ship-rig';
 import { getShipLayout } from '../../player/ship-layout';
 import { getShipRight, worldToShipLocal } from '../../player/ship-interaction';
 import { updateShipPlacement } from '../../render/main/update/sun-system';
-import { MODE_IN_SHIP, MODE_ON_FOOT } from '../../player/modes';
+import { MODE_IN_CHAIR, MODE_IN_SHIP, MODE_ON_FOOT } from '../../player/modes';
 import { updateShipSandboxWalk } from './walk';
 import { updateShipSandboxPilot } from './pilot';
 import { updateShipSandboxInBed } from './bed';
+import { updateShipSandboxInChair } from './chair';
 import { updateShipSandboxTransition } from './transition';
 import { updateShipSandboxGroundFallback } from './ground';
 import { updateShipSandboxCamera } from './camera';
@@ -45,6 +46,8 @@ function updateSandboxSimulation(session: ShipSandboxSession, dt: number): void 
     updateShipSandboxPilot(session, dt, actions);
   } else if (session.mode === 'in-bed') {
     updateShipSandboxInBed(session, actions);
+  } else if (session.mode === 'in-chair') {
+    updateShipSandboxInChair(session, actions);
   } else {
     updateShipSandboxTransition(session, dt);
   }
@@ -59,7 +62,7 @@ function updateOffPilotHud(session: ShipSandboxSession): void {
     flightMode: 'traverse',
     quantum: session.idleQuantum,
   });
-  if (session.mode !== 'in-bed') {
+  if (session.mode !== 'in-bed' && session.mode !== 'in-chair') {
     session.cockpitGazeHud.update({ visible: false });
   }
   session.cockpitSpeedHud.update({ visible: false });
@@ -77,7 +80,7 @@ function updateSandboxScene(session: ShipSandboxSession, dt: number, nowMs: numb
   session.shipModel.group.userData.updateParticles?.(dt);
   session.shipModel.group.userData.updateObjectAnimations?.(dt);
   session.avatar.update(
-    session.mode === 'pilot' || session.mode === 'in-bed'
+    session.mode === 'pilot' || session.mode === 'in-bed' || session.mode === 'in-chair'
       ? null
       : {
           animation: session.character.animation,
@@ -195,14 +198,24 @@ export function runShipSandboxFrame(session: ShipSandboxSession, nowMs: number):
   if (!paused) {
     tryAutoRest(session);
     session.controls.setMode(
-      session.mode === 'pilot' ? MODE_IN_SHIP : session.mode === 'in-bed' ? 'in-bed' : 'on-foot',
+      session.mode === 'pilot'
+        ? MODE_IN_SHIP
+        : session.mode === 'in-bed'
+          ? 'in-bed'
+          : session.mode === 'in-chair'
+            ? MODE_IN_CHAIR
+            : 'on-foot',
     );
     updateSandboxSimulation(session, dt);
     updateOffPilotHud(session);
     updateSandboxScene(session, dt, nowMs);
     updateSandboxAudio(session, dt);
     updateSandboxFps(session, dt, nowMs);
-  } else if (session.mode === 'in-bed' || session.entertainmentSystem.isOpen()) {
+  } else if (
+    session.mode === 'in-bed' ||
+    session.mode === 'in-chair' ||
+    session.entertainmentSystem.isOpen()
+  ) {
     updateShipSandboxCamera(session, frameDt);
     session.camera.updateMatrixWorld();
   }

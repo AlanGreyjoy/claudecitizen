@@ -7,7 +7,11 @@ import {
   resolveOrbitCamera,
 } from '../../../player/character-controller';
 import { getBedEyeLocal, getPilotEyeLocal } from '../../../player/ship-interaction';
-import { add, cross, normalize, rotateAroundAxis, scale } from '../../../math/vec3';
+import { getChairEyeLocal } from '../../../player/chair-sit';
+import { findChairById } from '../../../world/chair-seats';
+import { getShipLayout } from '../../../player/ship-layout';
+import { getStationLayoutOverride, stationDirToWorld, stationLocalToWorld } from '../../../world/station';
+import { add, cross, normalize, rotateAroundAxis, scale, tangentize } from '../../../math/vec3';
 import { v3 } from '../domain/math';
 import type { StationCameraContext } from './camera-rig-types';
 import { clampOffsetToRoom, clampOffsetToShipZone } from './camera-rig-clamp';
@@ -166,6 +170,7 @@ export function updateInBedCameraRig(
   renderScale: number,
   shipUp: Vec3,
   shipForward: Vec3,
+  focusVec: THREE.Vector3,
 ): void {
   clearCameraSmoothing(camera);
 
@@ -176,15 +181,16 @@ export function updateInBedCameraRig(
     }
     camera.fov = (camera.userData.baseFovDeg as number) + esFeel.fovDeltaDeg;
     camera.updateProjectionMatrix();
+    // ES feel is world-absolute; floating-origin camera is focus-relative.
     camera.position.set(
-      esFeel.eye.x * renderScale,
-      esFeel.eye.y * renderScale,
-      esFeel.eye.z * renderScale,
+      (esFeel.eye.x - focusVec.x) * renderScale,
+      (esFeel.eye.y - focusVec.y) * renderScale,
+      (esFeel.eye.z - focusVec.z) * renderScale,
     );
     cameraTarget.set(
-      esFeel.lookTarget.x * renderScale,
-      esFeel.lookTarget.y * renderScale,
-      esFeel.lookTarget.z * renderScale,
+      (esFeel.lookTarget.x - focusVec.x) * renderScale,
+      (esFeel.lookTarget.y - focusVec.y) * renderScale,
+      (esFeel.lookTarget.z - focusVec.z) * renderScale,
     );
     camera.up.copy(v3(shipUp));
     return;
@@ -201,6 +207,78 @@ export function updateInBedCameraRig(
     ? resolveSeatLookForward(shipForward, shipUp, world.seatLook!)
     : shipForward;
   applyShipFrameLookAt(camera, cameraTarget, shipUp, eye, lookForward, renderScale);
+}
+
+export function updateInChairCameraRig(
+  camera: THREE.PerspectiveCamera,
+  cameraTarget: THREE.Vector3,
+  world: SpikeRenderWorld,
+  renderScale: number,
+  shipUp: Vec3,
+  shipForward: Vec3,
+  station: StationCameraContext | null,
+  focusVec: THREE.Vector3,
+): void {
+  clearCameraSmoothing(camera);
+  if (typeof camera.userData.baseFovDeg === 'number') {
+    camera.fov = camera.userData.baseFovDeg;
+    camera.updateProjectionMatrix();
+  }
+
+  const occupancy = world.chairOccupancy ?? null;
+  const eyeLocal = getChairEyeLocal(occupancy);
+  if (!occupancy || !eyeLocal) {
+    updateInBedCameraRig(
+      camera,
+      cameraTarget,
+      world,
+      renderScale,
+      shipUp,
+      shipForward,
+      focusVec,
+    );
+    return;
+  }
+
+  if (occupancy.surface === 'ship') {
+    const chair = findChairById(getShipLayout().chairs, occupancy.chairId);
+    const shipRight = normalize(cross(shipForward, shipUp));
+    const basisForward = normalize(tangentize(shipForward, shipUp));
+    const faceForward = chair
+      ? normalize(
+          add(
+            scale(shipRight, chair.face.right),
+            scale(basisForward, chair.face.forward),
+          ),
+        )
+      : basisForward;
+    const eye = buildShipEye(shipRight, shipUp, shipForward, eyeLocal);
+    const lookForward = seatLookActive(world.seatLook)
+      ? resolveSeatLookForward(faceForward, shipUp, world.seatLook!)
+      : faceForward;
+    applyShipFrameLookAt(camera, cameraTarget, shipUp, eye, lookForward, renderScale);
+    return;
+  }
+
+  const frame = station?.frame;
+  if (!frame) return;
+  const chair = findChairById(
+    getStationLayoutOverride()?.chairs ?? [],
+    occupancy.chairId,
+  );
+  const worldEye = stationLocalToWorld(frame, eyeLocal);
+  const eye = {
+    x: worldEye.x - focusVec.x,
+    y: worldEye.y - focusVec.y,
+    z: worldEye.z - focusVec.z,
+  };
+  const faceForward = chair
+    ? stationDirToWorld(frame, chair.face)
+    : (world.character?.forward ?? frame.forward);
+  const lookForward = seatLookActive(world.seatLook)
+    ? resolveSeatLookForward(faceForward, frame.up, world.seatLook!)
+    : faceForward;
+  applyShipFrameLookAt(camera, cameraTarget, frame.up, eye, lookForward, renderScale);
 }
 
 function updateCockpitCameraRig(

@@ -6,6 +6,7 @@ import {
   createBuildPropColliderRuntime,
   type BuildPropColliderRuntime,
 } from '../player/hangar_build/prop-colliders';
+import type { BuildPersistMode } from '../player/hangar_build/types';
 import { createHangarPropRenderer, type HangarPropRenderer } from '../render/hangar/prop-instances';
 import { createBuildTerminal } from '../render/effects/hud/build-terminal';
 import type { BuildTerminalController } from '../render/effects/hud/build-terminal';
@@ -24,8 +25,10 @@ export function createPlayBuildSystems(options: {
   renderer: SpikeRenderer;
   dom: PlaySessionDom;
   onArcBalanceChange: (balance: number) => void;
+  persist?: BuildPersistMode;
 }): PlayBuildSystems {
   const { bootstrap, renderer, dom, onArcBalanceChange } = options;
+  const persist = options.persist ?? 'api';
   const buildAreas: Partial<Record<BuildArea, BuildAreaRuntime>> = {};
   const buildPropRenderers: HangarPropRenderer[] = [];
   const buildPropColliders: BuildPropColliderRuntime[] = [];
@@ -44,6 +47,7 @@ export function createPlayBuildSystems(options: {
     const controller = createHangarBuildController({
       initialState,
       arcBalance: bootstrap.economy.arcBalance,
+      persist,
       onPlacementsChange: (state) => {
         void propRenderer?.setPlacements(state.placements);
         void propColliders.setPlacements(state.placements);

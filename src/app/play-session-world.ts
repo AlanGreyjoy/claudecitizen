@@ -13,7 +13,6 @@ import {
   stationEntrySourceId,
 } from '../world/systems/runtime';
 import { loadStationEntryDocument } from '../world/systems/station-source';
-import { hydrateSpawnPackFromUrl } from '../cache/spawn-pack';
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station-runtime';
 import {
@@ -309,12 +308,9 @@ export async function loadPlayWorldContext(
     ? planetConfig.planet
     : { ...CLAUDECITIZEN_PLANET, ...planetConfig.planet };
 
-  if (params.spawnSurface) {
-    loading?.setStatus('Seeding spawn tile cache...');
-    await hydrateSpawnPackFromUrl(planetDocument.id);
-  } else {
-    loading?.setStatus('Loading orbital station...');
-  }
+  loading?.setStatus(
+    params.spawnSurface ? 'Loading surface...' : 'Loading orbital station...',
+  );
   loading?.setProgress(0.22);
 
   const { systemDocument, systemStations, primaryStation } = await activatePlayWorldSystem(

@@ -26,7 +26,7 @@ const LISTED_EXTENSIONS = new Set([
   '.m4a',
 ]);
 const PREFAB_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const PREFAB_KINDS = new Set(['station', 'ship', 'site', 'prop', 'item']);
+const PREFAB_KINDS = new Set(['station', 'ship', 'site', 'placeable', 'item', 'prop']);
 const MAX_LISTING_ENTRIES = 20_000;
 
 /** Prefabs are project assets: they live anywhere under an asset root. */
@@ -229,6 +229,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
    */
   async function scanPrefabFiles() {
     const found = new Map();
+    const byStem = new Map();
     const duplicates = [];
     for (const root of PROJECT_ASSET_ROOTS) {
       const rootDir = resolve(projectRoot, root);
@@ -264,7 +265,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
             root,
             path: relative(resolve(projectRoot, root), absolute).split(sep).join('/'),
             absolute,
-            kind: PREFAB_KINDS.has(document.kind) ? document.kind : 'station',
+            kind: document.kind === 'prop' ? 'placeable' : PREFAB_KINDS.has(document.kind) ? document.kind : 'station',
             name:
               typeof document.name === 'string' && document.name.trim()
                 ? document.name.trim()
@@ -276,15 +277,19 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
             continue;
           }
           found.set(id, entry);
+          const stem = dirent.name.slice(0, -PREFAB_FILE_SUFFIX.length);
+          if (PREFAB_ID_PATTERN.test(stem) && !byStem.has(stem)) {
+            byStem.set(stem, entry);
+          }
         }
       }
     }
-    return { found, duplicates };
+    return { found, byStem, duplicates };
   }
 
   async function findPrefabFile(id) {
-    const { found } = await scanPrefabFiles();
-    return found.get(id) ?? null;
+    const { found, byStem } = await scanPrefabFiles();
+    return found.get(id) ?? byStem.get(id) ?? null;
   }
 
   async function listPrefabs() {
@@ -312,6 +317,24 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     const entry = await findPrefabFile(id);
     if (!entry) throw new EditorRepositoryError(`prefab "${id}" not found`, 404);
     const document = await readJson(entry.absolute, `prefab "${id}" not found`);
+    const stem = basename(entry.absolute).slice(0, -PREFAB_FILE_SUFFIX.length);
+    // Plain Project-panel renames used to move the file without rewriting
+    // document.id. Open is keyed by stem — heal the drift so save/list stay
+    // coherent.
+    if (
+      typeof document.id === 'string' &&
+      document.id !== id &&
+      stem === id &&
+      PREFAB_ID_PATTERN.test(document.id)
+    ) {
+      const fromId = document.id;
+      document.id = id;
+      if (typeof document.name !== 'string' || !document.name.trim() || document.name === fromId) {
+        document.name = id;
+      }
+      await writeJson(projectRoot, entry.absolute, document);
+      await rewritePrefabIdReferences(fromId, id, entry.absolute);
+    }
     return { document };
   }
 
@@ -985,6 +1008,44 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     await mkdir(dirname(toAbsolute), { recursive: true });
     await rename(fromAbsolute, toAbsolute);
 
+    // Prefab identity is document.id, and Project opens by filename stem. A
+    // plain filesystem rename of `*.prefab.json` would leave those out of sync
+    // (open 404). Keep id, name, file stem, and prefabId refs together.
+    let rewrittenPrefabIds = [];
+    if (
+      !fromStat.isDirectory() &&
+      fromPath.endsWith(PREFAB_FILE_SUFFIX) &&
+      toPath.endsWith(PREFAB_FILE_SUFFIX)
+    ) {
+      const fromId = basename(fromAbsolute).slice(0, -PREFAB_FILE_SUFFIX.length);
+      const toId = basename(toAbsolute).slice(0, -PREFAB_FILE_SUFFIX.length);
+      if (PREFAB_ID_PATTERN.test(toId)) {
+        let document;
+        try {
+          document = JSON.parse(await readFile(toAbsolute, 'utf8'));
+        } catch {
+          document = null;
+        }
+        const currentId =
+          document && typeof document.id === 'string' ? document.id : fromId;
+        if (document && currentId !== toId) {
+          const { found } = await scanPrefabFiles();
+          const conflict = found.get(toId);
+          if (conflict && conflict.absolute !== toAbsolute) {
+            // Roll back the move — another prefab already owns this id.
+            await rename(toAbsolute, fromAbsolute);
+            throw new EditorRepositoryError(`prefab id "${toId}" is already taken`, 409);
+          }
+          document.id = toId;
+          if (typeof document.name !== 'string' || !document.name.trim() || document.name === currentId) {
+            document.name = toId;
+          }
+          await writeJson(projectRoot, toAbsolute, document);
+          rewrittenPrefabIds = await rewritePrefabIdReferences(currentId, toId, toAbsolute);
+        }
+      }
+    }
+
     const updatedReferences = await rewriteAssetReferences(
       assetUrlFor(root, fromPath),
       assetUrlFor(root, toPath),
@@ -993,7 +1054,7 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
       root,
       path: toPath,
       kind: fromStat.isDirectory() ? 'dir' : 'file',
-      updatedReferences,
+      updatedReferences: [...updatedReferences, ...rewrittenPrefabIds],
     };
   }
 

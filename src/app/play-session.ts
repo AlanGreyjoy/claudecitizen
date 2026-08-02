@@ -30,11 +30,13 @@ import {
 import { createStationPhysics, type StationPhysics } from '../physics/station-physics';
 import { normalizeInventoryState } from '../player/inventory/types';
 import type { AuthSession, GameBootstrap } from '../net/api';
+import type { BuildPersistMode } from '../player/hangar_build/types';
 import type { BuildTerminalController } from '../render/effects/hud/build-terminal';
 import type { HangarPropRenderer } from '../render/hangar/prop-instances';
 import type { BuildPropColliderRuntime } from '../player/hangar_build/prop-colliders';
 import { pickStationFloorPoint } from '../render/hangar/prop-instances';
 import { resolvePlaySessionBootstrap } from './play-session-bootstrap';
+import { isEditorOfflineBootstrap } from './editor-play-bootstrap';
 import { loadPlayWorldContext, type PlayWorldParams } from './play-session-world';
 import { collectPlaySessionDom, requireElement } from './play-session-dom';
 import { getPlayChromeRoot, mountPlayChrome } from './play-chrome';
@@ -93,6 +95,7 @@ interface PlaySessionCleanup {
   outfitters: Awaited<ReturnType<typeof createPlayOverlayStack>>['outfitters'];
   foodShop: Awaited<ReturnType<typeof createPlayOverlayStack>>['foodShop'];
   personalInventory: Awaited<ReturnType<typeof createPlayOverlayStack>>['personalInventory'];
+  chestStorage: Awaited<ReturnType<typeof createPlayOverlayStack>>['chestStorage'];
   buildTerminal: BuildTerminalController | null;
   haloBand: Awaited<ReturnType<typeof createPlayOverlayStack>>['haloBand'];
   vitalsSession: PlayerVitalsSessionController;
@@ -118,6 +121,7 @@ function disposePlaySession(cleanup: PlaySessionCleanup): void {
   cleanup.outfitters.dispose();
   cleanup.foodShop.dispose();
   cleanup.personalInventory.dispose();
+  cleanup.chestStorage.dispose();
   cleanup.buildTerminal?.dispose();
   cleanup.haloBand.dispose();
   cleanup.vitalsSession.stop();
@@ -183,6 +187,8 @@ export interface StartPlaySessionOptions {
   requireAuth?: boolean;
   session?: AuthSession | null;
   bootstrap?: GameBootstrap;
+  /** Editor offline Play uses `local` so Build Mode works without REST. */
+  buildPersist?: BuildPersistMode;
   /** Scene-resolved world config. Skips URL param resolution when provided. */
   worldParams?: PlayWorldParams;
   /** Mid-play portal callback (scene-exit markers). */
@@ -203,6 +209,12 @@ async function warmPlaySpawnSurface(
 ): Promise<void> {
   if (!world.params.spawnSurface) {
     loading?.setStatus('Preparing station interior...');
+    // The normal route to a planet is flying in from space, so this path never
+    // gets the corridor warm-up. Still compile what is already in the scene:
+    // otherwise the station's own materials each block the render thread on a
+    // driver shader compile the first time they enter view.
+    loading?.setStatus('Compiling shaders...');
+    await renderer?.warmRenderPipelines();
     return;
   }
   loading?.setStatus('Warming planet surface...');
@@ -281,6 +293,7 @@ function createPlayGameLoop(options: {
     outfitters: overlays.outfitters,
     foodShop: overlays.foodShop,
     personalInventory: overlays.personalInventory,
+    chestStorage: overlays.chestStorage,
     stationPrefab: world.stationPrefab,
     build: buildTerminal ? { areas: buildAreas, terminal: buildTerminal } : null,
     physics,
@@ -298,12 +311,14 @@ function createPlayGameLoop(options: {
       || overlays.outfitters.isPaused()
       || overlays.foodShop.isPaused()
       || overlays.personalInventory.isPaused()
+      || overlays.chestStorage.isPaused()
       || (buildTerminal?.isPaused() ?? false),
     getInventoryLoadout: () => overlays.economy.getInventoryState()?.loadout ?? {},
     getInventory: () => overlays.economy.getInventoryState(),
     onInventoryUpdate: (inventory) => {
       overlays.economy.setInventoryState(normalizeInventoryState(inventory));
       overlays.personalInventory.refresh();
+      overlays.chestStorage.refresh();
     },
     vitalsSession,
     onRequestScene,
@@ -415,6 +430,7 @@ function initializePlayBuildPhase(options: {
   renderer: SpikeRenderer | null;
   dom: ReturnType<typeof collectPlaySessionDom>;
   onArcBalanceChange: (balance: number) => void;
+  persist?: BuildPersistMode;
 }) {
   const empty = {
     buildTerminal: null as BuildTerminalController | null,
@@ -428,6 +444,7 @@ function initializePlayBuildPhase(options: {
     renderer: options.renderer,
     dom: options.dom,
     onArcBalanceChange: options.onArcBalanceChange,
+    persist: options.persist,
   });
   wireBuildCanvas(
     options.dom,
@@ -452,6 +469,7 @@ function createPlayVitalsSession(options: {
     options.overlays.outfitters.close();
     options.overlays.foodShop.close();
     options.overlays.personalInventory.close();
+    options.overlays.chestStorage.close();
     options.buildTerminal?.close();
     options.overlays.haloBand.close();
   };
@@ -461,7 +479,10 @@ function createPlayVitalsSession(options: {
       thirstReserve01: 1,
       healthReserve01: 1,
     },
-    persistent: options.bootstrap !== null,
+    // Offline editor bootstrap is not a real citizen — vitals sync would fail
+    // and teleport the player to legacy STATION_SPAWN (wrong scene coords).
+    persistent:
+      options.bootstrap !== null && !isEditorOfflineBootstrap(options.bootstrap),
     onLocked: (message) => {
       closeGameplayOverlays();
       options.overlays.hud.appendChatMessage('SYS', message);
@@ -587,6 +608,7 @@ export async function startPlaySession(
     renderer,
     dom,
     onArcBalanceChange: overlays.economy.setArcBalance,
+    persist: options.buildPersist,
   });
   const { buildTerminal, buildAreas, buildPropRenderers, buildPropColliders } = buildSystems;
 
@@ -644,6 +666,7 @@ export async function startPlaySession(
     outfitters: overlays.outfitters,
     foodShop: overlays.foodShop,
     personalInventory: overlays.personalInventory,
+    chestStorage: overlays.chestStorage,
     buildTerminal,
     haloBand: overlays.haloBand,
     vitalsSession,

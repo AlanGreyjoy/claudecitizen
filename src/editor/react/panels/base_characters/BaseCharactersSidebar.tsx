@@ -209,12 +209,12 @@ function ControllerPanel({ api }: BaseCharactersSidebarProps): ReactElement {
               {stance.label}
             </button>
           ))}
-          <button type="button" className="ed-btn" onClick={() => api.addStance()}>
+          <button type="button" className="ed-btn" onClick={() => void api.addStance()}>
             + Stance
           </button>
         </div>
       </label>
-      <button type="button" className="ed-btn" onClick={() => api.renameStance()}>
+      <button type="button" className="ed-btn" onClick={() => void api.renameStance()}>
         Rename
       </button>
       <div className="ed-base-actions">
@@ -444,7 +444,7 @@ function EquipmentTab({ api }: BaseCharactersSidebarProps): ReactElement {
           );
         })}
       </div>
-      <button type="button" className="ed-btn" onClick={() => api.addEquipmentSlot()}>
+      <button type="button" className="ed-btn" onClick={() => void api.addEquipmentSlot()}>
         Add slot
       </button>
     </>

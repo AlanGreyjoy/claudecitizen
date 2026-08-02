@@ -31,7 +31,7 @@ export function sampleLakeMask(seed: number, nx: number, ny: number, nz: number)
   return fbm3d(lakeNoise, nx, ny, nz, 4, 0.5, 2.0, 0.55);
 }
 
-function lakeWaterTableNormalized(): number {
+export function lakeWaterTableNormalized(): number {
   // Inland lake water is a level surface, not a shallow copy of the terrain.
   // Reuse the authored lowland ceiling as the planet-wide lake plane so water
   // classification, shoreline generation, and rendering all agree exactly.

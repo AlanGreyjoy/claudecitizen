@@ -58,16 +58,6 @@ export interface PlanetPhysics {
   dispose: () => void;
 }
 
-function instanceKey(instance: SurfaceSpawnInstance): string {
-  return [
-    instance.layerId,
-    instance.position.x.toFixed(2),
-    instance.position.y.toFixed(2),
-    instance.position.z.toFixed(2),
-    instance.scale.toFixed(2),
-  ].join('|');
-}
-
 function basisFromNormalYaw(
   normal: Vec3,
   yawRadians: number,
@@ -107,14 +97,27 @@ function quaternionAlignBodyYToUp(up: Vec3): RAPIER.Quaternion {
   return quaternionFromBasis(x, y, z);
 }
 
+/**
+ * Layer lookup, memoised on the catalog array's identity.
+ *
+ * The catalog only changes when it is re-authored, but this was rebuilt on
+ * every sync.
+ */
+let cachedLayerSource: readonly PlanetSpawnLayer[] | null = null;
+let cachedLayerById = new Map<string, PlanetSpawnLayer>();
+
 function layerById(
   layers: readonly PlanetSpawnLayer[],
 ): Map<string, PlanetSpawnLayer> {
+  if (layers === cachedLayerSource) return cachedLayerById;
   const map = new Map<string, PlanetSpawnLayer>();
-  if (!Array.isArray(layers)) return map;
-  for (const layer of layers) {
-    if (layer?.id) map.set(layer.id, layer);
+  if (Array.isArray(layers)) {
+    for (const layer of layers) {
+      if (layer?.id) map.set(layer.id, layer);
+    }
   }
+  cachedLayerSource = layers;
+  cachedLayerById = map;
   return map;
 }
 
@@ -137,7 +140,6 @@ function meshVolume(mesh: SurfaceSpawnMeshCollision): number {
 
 interface ActiveColliderEntry {
   collider: RAPIER.Collider;
-  instance: SurfaceSpawnInstance;
   /** Changes when mesh bounds load → forces recreate. */
   shapeSig: string;
 }
@@ -147,7 +149,15 @@ interface PlanetPhysicsState {
   /** Rapier-space origin in world meters (floating origin). */
   physicsOrigin: Vec3;
   player: RapierWorldHandle;
-  active: Map<string, ActiveColliderEntry>;
+  /**
+   * Keyed by instance identity, not by a derived string.
+   *
+   * Instances live in their spawn tile's array and are replaced wholesale when
+   * that tile rebuilds, so object identity is exactly as stable as the data —
+   * and building a `toFixed`-joined key per nearby instance per sync was pure
+   * garbage.
+   */
+  active: Map<SurfaceSpawnInstance, ActiveColliderEntry>;
 }
 
 interface ResolvedShape {
@@ -230,7 +240,6 @@ function rebaseOrigin(state: PlanetPhysicsState, focus: Vec3): void {
 
 function addInstanceCollider(
   state: PlanetPhysicsState,
-  key: string,
   instance: SurfaceSpawnInstance,
   layer: PlanetSpawnLayer,
   mesh: SurfaceSpawnMeshCollision | undefined,
@@ -274,9 +283,8 @@ function addInstanceCollider(
   }
   colliderDesc.setFriction(0.6).setRestitution(0);
   const rapierCollider = world.createCollider(colliderDesc, body);
-  state.active.set(key, {
+  state.active.set(instance, {
     collider: rapierCollider,
-    instance,
     shapeSig: shape.shapeSig,
   });
 }
@@ -296,7 +304,7 @@ function syncNearby(
   const lookup = layerById(layers);
   const meshByUrl = collisionLookup?.meshByAssetUrl;
   const radiusSq = COLLIDER_RADIUS_METERS * COLLIDER_RADIUS_METERS;
-  const wanted = new Map<string, SurfaceSpawnInstance>();
+  const wanted = new Set<SurfaceSpawnInstance>();
 
   for (const instance of instances) {
     const dx = instance.position.x - focus.x;
@@ -305,29 +313,27 @@ function syncNearby(
     if (dx * dx + dy * dy + dz * dz > radiusSq) continue;
     const layer = lookup.get(instance.layerId);
     if (!layer?.enabled || !layer.assetUrl) continue;
-    wanted.set(instanceKey(instance), instance);
+    wanted.add(instance);
   }
 
-  for (const key of [...active.keys()]) {
-    if (!wanted.has(key)) {
-      const entry = active.get(key);
-      if (entry) removeCollider(world, entry.collider);
-      active.delete(key);
-    }
+  for (const [instance, entry] of active) {
+    if (wanted.has(instance)) continue;
+    removeCollider(world, entry.collider);
+    active.delete(instance);
   }
 
-  for (const [key, instance] of wanted) {
+  for (const instance of wanted) {
     const layer = lookup.get(instance.layerId);
     if (!layer) continue;
     const mesh = meshByUrl?.get(layer.assetUrl);
     const shape = resolveShape(layer, mesh);
-    const existing = active.get(key);
+    const existing = active.get(instance);
     if (existing) {
       if (existing.shapeSig === shape.shapeSig) continue;
       removeCollider(world, existing.collider);
-      active.delete(key);
+      active.delete(instance);
     }
-    addInstanceCollider(state, key, instance, layer, mesh);
+    addInstanceCollider(state, instance, layer, mesh);
   }
 }
 
@@ -410,7 +416,7 @@ export function createPlanetPhysics(spawnPosition: Vec3): PlanetPhysics {
     },
     // Player starts at local origin of the physics frame.
     player: createPlayerCharacter(world, { x: 0, y: 0, z: 0 }),
-    active: new Map<string, ActiveColliderEntry>(),
+    active: new Map<SurfaceSpawnInstance, ActiveColliderEntry>(),
   };
 
   const physics: PlanetPhysics = {

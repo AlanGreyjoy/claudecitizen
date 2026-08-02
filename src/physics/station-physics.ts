@@ -25,6 +25,8 @@ export interface StationPhysics {
   world: RAPIER.World;
   player: RapierWorldHandle;
   dynamicColliders: RAPIER.Collider[];
+  /** Parallel to `dynamicColliders` — GameplayCollider.id (placementId:…). */
+  dynamicColliderIds: string[];
   /** Kinematic NPC capsules plus the wander path probe that shares their shape. */
   npcBodies: StationNpcBodies;
   /** Disable (or re-enable) every static collider bound to the given animation/door id. */
@@ -65,6 +67,7 @@ export async function createStationPhysics(
     world,
     player,
     dynamicColliders: [],
+    dynamicColliderIds: [],
     npcBodies: createStationNpcBodies(world, player.playerCollider),
     setDoorColliderEnabled(doorId: string, enabled: boolean) {
       const handles = doorColliderHandles.get(doorId);
@@ -76,6 +79,7 @@ export async function createStationPhysics(
         removeCollider(world, collider);
       }
       physics.dynamicColliders.length = 0;
+      physics.dynamicColliderIds.length = 0;
       physics.npcBodies.dispose();
       removeStaticColliders(world, staticColliders);
       player.dispose();
@@ -93,9 +97,12 @@ export async function syncDynamicColliders(
     removeCollider(physics.world, collider);
   }
   physics.dynamicColliders.length = 0;
+  physics.dynamicColliderIds.length = 0;
   for (const collider of colliders) {
     const rapierCollider = await addCollider(physics.world, collider);
-    if (rapierCollider) physics.dynamicColliders.push(rapierCollider);
+    if (!rapierCollider) continue;
+    physics.dynamicColliders.push(rapierCollider);
+    physics.dynamicColliderIds.push(collider.id);
   }
 }
 

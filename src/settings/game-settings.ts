@@ -2,7 +2,12 @@ import type {
   RenderQualityPreset,
   ShadowQualitySetting,
 } from '../render/main/domain/render-quality';
-import { DEFAULT_GRASS_DISTANCE_METERS } from '../render/vegetation/domain/constants';
+import {
+  DEFAULT_GRASS_DISTANCE_METERS,
+  DEFAULT_TREE_LOD_DISTANCE_METERS,
+  TREE_LOD_DISTANCE_MAX_METERS,
+  TREE_LOD_DISTANCE_MIN_METERS,
+} from '../render/vegetation/domain/constants';
 import {
   normalizeInputSettings,
   type InputSettings,
@@ -24,6 +29,11 @@ export interface GameSettings {
   cloudMode: CloudModeSetting;
   /** Hard radial grass cull distance in meters (default 20). */
   grassRenderDistanceMeters: number;
+  /**
+   * Radius in meters within which trees draw as full GLBs instead of the
+   * imposter cone (default 180). Cost scales with the square of this value.
+   */
+  vegetationDrawDistanceMeters: number;
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;
@@ -39,6 +49,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   shadowQuality: 'auto',
   cloudMode: 'shell',
   grassRenderDistanceMeters: DEFAULT_GRASS_DISTANCE_METERS,
+  vegetationDrawDistanceMeters: DEFAULT_TREE_LOD_DISTANCE_METERS,
   masterVolume: 1,
   sfxVolume: 1,
   musicVolume: 1,
@@ -54,6 +65,16 @@ function clampGrassRenderDistanceMeters(value: unknown): number {
     return DEFAULT_SETTINGS.grassRenderDistanceMeters;
   }
   return Math.max(5, Math.min(80, Math.round(value)));
+}
+
+function clampVegetationDrawDistanceMeters(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_SETTINGS.vegetationDrawDistanceMeters;
+  }
+  return Math.max(
+    TREE_LOD_DISTANCE_MIN_METERS,
+    Math.min(TREE_LOD_DISTANCE_MAX_METERS, Math.round(value)),
+  );
 }
 
 function pickEnum<T extends string>(
@@ -88,6 +109,9 @@ function normalizeSettings(raw: Partial<GameSettings>): GameSettings {
     ),
     grassRenderDistanceMeters: clampGrassRenderDistanceMeters(
       raw.grassRenderDistanceMeters,
+    ),
+    vegetationDrawDistanceMeters: clampVegetationDrawDistanceMeters(
+      raw.vegetationDrawDistanceMeters,
     ),
     masterVolume: clampVolume(raw.masterVolume ?? DEFAULT_SETTINGS.masterVolume),
     sfxVolume: clampVolume(raw.sfxVolume ?? DEFAULT_SETTINGS.sfxVolume),

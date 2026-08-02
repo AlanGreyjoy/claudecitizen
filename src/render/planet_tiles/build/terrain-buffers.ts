@@ -11,11 +11,18 @@ import {
   coastTreatmentMaxHeightMeters,
   oceanWaterLevelMeters,
 } from '../../../world/coastal-profile';
+import { sampleSurfaceClimate } from '../../../world/climate';
 import { getActivePlanetConfig } from '../../../world/planets/runtime';
-import { sampleAnalyticPlanetSurface } from '../../../world/planet-surface';
-import { renderableGridSampleSpacingMeters } from '../../../world/renderable-surface';
 import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../world/terrain-triangulation';
 import {
+  buildTileHeightRaster,
+  rasterSampleIndex,
+  readRasterDetails,
+  type TileHeightRaster,
+} from '../../../world/terrain-raster';
+import {
+  TERRAIN_PACKED_COMPONENTS,
+  TERRAIN_POSITION_COMPONENTS,
   TERRAIN_SKIRT_DEPTH_FACTOR,
   TERRAIN_SKIRT_MAX_DEPTH_METERS,
   TERRAIN_SKIRT_MIN_DEPTH_METERS,
@@ -297,9 +304,11 @@ function writeTriangle(
   const triangleVertices = vertices;
   for (let localVertex = 0; localVertex < 3; localVertex += 1) {
     const sourceVertex = triangleVertices[localVertex];
+    // `grid` is internal scratch and stays tightly packed at 3 components;
+    // only the emitted tile buffers use the padded packed stride.
     const sourceOffset = sourceVertex * 3;
-    const outputOffset = (outputVertex + localVertex) * 3;
-    const packedOffset = (outputVertex + localVertex) * 4;
+    const outputOffset = (outputVertex + localVertex) * TERRAIN_POSITION_COMPONENTS;
+    const packedOffset = (outputVertex + localVertex) * TERRAIN_PACKED_COMPONENTS;
     positions[outputOffset] = gridPositions[sourceOffset];
     positions[outputOffset + 1] = gridPositions[sourceOffset + 1];
     positions[outputOffset + 2] = gridPositions[sourceOffset + 2];
@@ -386,8 +395,8 @@ function writeSkirtTriangle(
   const orientedVertices = [a, b, c];
   for (let localVertex = 0; localVertex < 3; localVertex += 1) {
     const vertex = orientedVertices[localVertex];
-    const outputOffset = (outputVertex + localVertex) * 3;
-    const packedOffset = (outputVertex + localVertex) * 4;
+    const outputOffset = (outputVertex + localVertex) * TERRAIN_POSITION_COMPONENTS;
+    const packedOffset = (outputVertex + localVertex) * TERRAIN_PACKED_COMPONENTS;
     buffers.positions[outputOffset] = vertex.x;
     buffers.positions[outputOffset + 1] = vertex.y;
     buffers.positions[outputOffset + 2] = vertex.z;
@@ -526,10 +535,21 @@ function appendTerrainSkirts(
   return outputVertex;
 }
 
+/**
+ * Builds the tile's vertex grid from an already-evaluated height raster.
+ *
+ * The raster holds exactly the corners this loop needs, produced by the same
+ * `sampleSurfaceHeightDetails` call at the same grid coordinates with the same
+ * band limit. Reading them back rather than re-evaluating means the mesh and
+ * the foot sampler are looking at one set of numbers, and it halves the cost of
+ * bringing a tile online — the field used to be evaluated once here and again
+ * on the main thread the first time anything walked on the tile.
+ */
 function buildTerrainGrid(
   info: TileInfo,
   planet: Planet,
   seed: number,
+  raster: TileHeightRaster,
 ): TerrainGrid {
   const { u0, u1, v0, v1 } = info.bounds;
   const gridWidth = TILE_SEGMENTS + 1;
@@ -538,11 +558,6 @@ function buildTerrainGrid(
   const colors = new Float32Array(gridVertexCount * 3);
   const rockAffinity = new Float32Array(gridVertexCount);
   let gridVertex = 0;
-  // Every vertex in this tile shares one LOD band limit and one options object;
-  // rebuilding both per vertex cost 625 allocations and 625 pow() calls a tile.
-  const sampleOptions = {
-    sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, info.level),
-  };
   const samplePosition: Vec3 = { x: 0, y: 0, z: 0 };
 
   for (let iy = 0; iy <= TILE_SEGMENTS; iy += 1) {
@@ -553,14 +568,15 @@ function buildTerrainGrid(
       samplePosition.x = direction.x * planet.radiusMeters;
       samplePosition.y = direction.y * planet.radiusMeters;
       samplePosition.z = direction.z * planet.radiusMeters;
-      // The visible-frame sampler would fetch four heights to reconstruct a
-      // normal that this builder discards before calculating flat facet
-      // normals, so sample the analytic height once here.
-      const surface = sampleAnalyticPlanetSurface(
+      const heightDetails = readRasterDetails(raster, rasterSampleIndex(ix, iy));
+      // Climate still has to be evaluated per corner: it drives palette colour
+      // and rock affinity, neither of which the height raster carries.
+      const surface = sampleSurfaceClimate(
         planet,
         seed,
         samplePosition,
-        sampleOptions,
+        heightDetails.heightMeters,
+        heightDetails,
       );
       const offset = gridVertex * 3;
 
@@ -585,11 +601,14 @@ function triangulateTerrainGrid(
   seed: number,
 ): TerrainTileBuffers {
   const buffers: TerrainTileBuffers = {
-    // x4, not x3 — see TerrainTileBuffers: WebGPU has no 3-wide packed vertex
-    // format and requires a stride that is a multiple of 4.
-    colors: new Uint8Array(TERRAIN_TILE_VERTEX_COUNT * 4),
-    normals: new Int16Array(TERRAIN_TILE_VERTEX_COUNT * 4),
-    positions: new Float32Array(TERRAIN_TILE_VERTEX_COUNT * 3),
+    // Packed attributes are 4-wide, not 3 — see TerrainTileBuffers: WebGPU has
+    // no 3-wide packed vertex format and requires a stride that is a multiple
+    // of 4. `isValidTerrainTileBuffers` asserts these widths in the validator.
+    colors: new Uint8Array(TERRAIN_TILE_VERTEX_COUNT * TERRAIN_PACKED_COMPONENTS),
+    normals: new Int16Array(TERRAIN_TILE_VERTEX_COUNT * TERRAIN_PACKED_COMPONENTS),
+    positions: new Float32Array(
+      TERRAIN_TILE_VERTEX_COUNT * TERRAIN_POSITION_COMPONENTS,
+    ),
   };
   const context = { buffers, grid, info, seed };
   let outputVertex = 0;
@@ -638,11 +657,57 @@ function triangulateTerrainGrid(
   return buffers;
 }
 
+export interface TerrainTileBuild {
+  raster: TileHeightRaster;
+  /**
+   * Per-grid-corner RGB, three floats each, in grid order.
+   *
+   * The CPU triangulator folds these into per-face vertex colours and drops
+   * them; the shared-grid renderer uploads them as-is and lets the fragment
+   * stage pick a flat colour per triangle.
+   */
+  gridColors: Float32Array;
+}
+
+/**
+ * Evaluates a tile's band-limited height field once and packages it for the
+ * shared-grid renderer, the page table, foot placement and the disk cache.
+ */
+export function buildTerrainTile(
+  info: TileInfo,
+  planet: Planet,
+  seed: number,
+): TerrainTileBuild {
+  refreshPaletteColors();
+  const raster = buildTileHeightRaster(
+    { face: info.face, level: info.level, x: info.x, y: info.y },
+    planet,
+    seed,
+  );
+  const grid = buildTerrainGrid(info, planet, seed, raster);
+  return { raster, gridColors: grid.colors };
+}
+
+/**
+ * Triangulated tile mesh — the CPU reference model, not a render path.
+ *
+ * Nothing in `src/` calls this any more: the shared grid displaces one geometry
+ * from the height atlas, so per-tile vertex buffers are never built at runtime.
+ * It stays because `npm run terrain:validate` needs concrete triangles to check
+ * skirt winding, mixed-LOD gaps and mesh-vs-foot agreement against, and because
+ * it is the surface `tile-vertex.ts` is asserted to reproduce. Keep it in step
+ * with the shader; do not wire it back into streaming.
+ */
 export function buildTerrainTileBuffers(
   info: TileInfo,
   planet: Planet,
   seed: number,
 ): TerrainTileBuffers {
   refreshPaletteColors();
-  return triangulateTerrainGrid(buildTerrainGrid(info, planet, seed), info, seed);
+  const raster = buildTileHeightRaster(
+    { face: info.face, level: info.level, x: info.x, y: info.y },
+    planet,
+    seed,
+  );
+  return triangulateTerrainGrid(buildTerrainGrid(info, planet, seed, raster), info, seed);
 }

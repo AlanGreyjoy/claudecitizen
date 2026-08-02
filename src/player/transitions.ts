@@ -47,7 +47,7 @@ function zeroVelocity() {
 }
 
 function transitionAnimation(type: TransitionType): string {
-  if (type === 'sit' || type === 'lie') return 'Sitting_Enter';
+  if (type === 'sit' || type === 'lie' || type === 'chair-sit') return 'Sitting_Enter';
   return 'Sitting_Exit';
 }
 
@@ -96,6 +96,7 @@ export function beginSitTransition(world: WorldState): void {
   world.mode = MODE_ENTERING_SHIP;
   world.prompt = '';
   world.activeBedId = null;
+  world.chairOccupancy = null;
   world.transition = {
     duration: SIT_TRANSITION_SECONDS,
     elapsed: 0,
@@ -141,6 +142,7 @@ export function beginLieTransition(world: WorldState, bedId: string): void {
   world.mode = MODE_ENTERING_BED;
   world.prompt = '';
   world.activeBedId = bedId;
+  world.chairOccupancy = null;
   world.transition = {
     duration: LIE_TRANSITION_SECONDS,
     elapsed: 0,

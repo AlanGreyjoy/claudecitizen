@@ -68,6 +68,32 @@ export interface InstancedAssetCatalog extends VegetationAssetCatalog {
   trees: InstancedAsset[];
 }
 
+/**
+ * True when the albedo (or dedicated alpha) texture can drive a cutout.
+ * JPEG bark stays RGB and is left alone; leaf atlases are RGBA PNGs.
+ */
+function textureProvidesAlpha(texture: THREE.Texture | null | undefined): boolean {
+  if (!texture) return false;
+  return (
+    texture.format === THREE.RGBAFormat ||
+    texture.format === THREE.RGBAIntegerFormat
+  );
+}
+
+/**
+ * Unity / some GLTF exporters leave foliage as `alphaMode: OPAQUE` even when
+ * the leaf atlas is RGBA cutout. Without MASK, the full billboard quads draw
+ * (Azure Nature autumn leaves → solid red cards). Force the glTF MASK default
+ * when alpha is present and the material was not already authored as blend.
+ */
+function ensureFoliageAlphaCutout(material: THREE.MeshStandardMaterial): void {
+  if (material.alphaTest > 0 || material.transparent) return;
+  if (!textureProvidesAlpha(material.map) && !material.alphaMap) return;
+  material.alphaTest = 0.5;
+  material.transparent = false;
+  material.depthWrite = true;
+}
+
 function configureMaterial(
   material: THREE.Material | undefined,
 ): THREE.Material {
@@ -82,9 +108,48 @@ function configureMaterial(
   if (meshMaterial.emissiveMap)
     meshMaterial.emissiveMap.colorSpace = THREE.SRGBColorSpace;
   if (meshMaterial.alphaMap)
-    meshMaterial.alphaMap.colorSpace = THREE.SRGBColorSpace;
+    meshMaterial.alphaMap.colorSpace = THREE.NoColorSpace;
   meshMaterial.side = THREE.DoubleSide;
+  ensureFoliageAlphaCutout(meshMaterial);
   return meshMaterial;
+}
+
+/**
+ * Unity / DCC exports often ship every LOD as sibling meshes (`Foo_LOD0` …
+ * `Foo_LOD3`). Instancing treats each mesh as a draw part, so keeping them all
+ * stacks every LOD on every instance (and casts shadows ×N). When any LOD
+ * suffix is present, keep only the finest level (lowest index).
+ */
+const UNITY_LOD_NAME = /(?:^|[_-\s])LOD[_-]?(\d+)\b/i;
+
+function unityLodIndex(name: string): number | null {
+  const match = UNITY_LOD_NAME.exec(name);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+function collectRenderableMeshes(root: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((child) => {
+    if (child instanceof THREE.Mesh) meshes.push(child);
+  });
+
+  let finestLod: number | null = null;
+  for (const mesh of meshes) {
+    const lod = unityLodIndex(mesh.name);
+    if (lod == null) continue;
+    if (finestLod == null || lod < finestLod) finestLod = lod;
+  }
+  if (finestLod == null) return meshes;
+
+  const kept = meshes.filter((mesh) => unityLodIndex(mesh.name) === finestLod);
+  if (kept.length === 0) return meshes;
+  if (kept.length < meshes.length) {
+    console.info(
+      `ClaudeCitizen vegetation: using LOD${finestLod} only (${kept.length}/${meshes.length} meshes) from "${root.name || 'gltf'}".`,
+    );
+  }
+  return kept;
 }
 
 export function extractInstancedAsset(
@@ -95,9 +160,7 @@ export function extractInstancedAsset(
   const parts: InstancedAssetPart[] = [];
   const bounds = new THREE.Box3();
 
-  gltf.scene.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-
+  for (const child of collectRenderableMeshes(gltf.scene)) {
     const geometry = child.geometry.clone();
     geometry.applyMatrix4(child.matrixWorld);
     geometry.computeBoundingBox();
@@ -107,7 +170,7 @@ export function extractInstancedAsset(
       ? child.material.map(configureMaterial)
       : configureMaterial(child.material);
     parts.push({ geometry, material });
-  });
+  }
 
   if (windProfile && !bounds.isEmpty()) {
     const profile = WIND_PROFILES[windProfile];

@@ -1,10 +1,13 @@
-import type * as THREE from 'three';
-import type { Planet, TerrainTileBuffers, TileInfo } from '../../../types';
-import { loadTerrainTile } from '../../../cache/terrain-tile-cache';
+import type { Planet, TileInfo } from '../../../types';
+import {
+  loadTerrainTile,
+  type LoadedTerrainTile,
+} from '../../../cache/terrain-tile-cache';
+import { installHeightPage } from '../../../world/terrain-pages';
+import type { TerrainGridRenderer } from '../render/terrain-grid-renderer';
 import { MIN_LEVEL } from '../domain/constants';
 import { parentTileInfo, tileKey } from '../domain/tile-info';
 import type { ResolvedTile, TileMeshEntry } from '../domain/types';
-import { createReadyMesh } from '../render/tile-geometry';
 import type { MeshCacheBuildOps } from './mesh-cache-build';
 
 /** Fine underfoot LODs skip waiting on IDB before the worker starts. */
@@ -15,11 +18,10 @@ export interface MeshCacheDiskCtx {
   confirmedDiskMisses: Set<string>;
   diskLoadsInFlight: Set<string>;
   frameNumber: number;
-  material: THREE.Material;
+  gridRenderer: TerrainGridRenderer;
   meshCache: Map<string, TileMeshEntry>;
   planet: Planet;
   seed: number;
-  tileGroup: THREE.Group;
 }
 
 export interface MeshCacheDiskOps {
@@ -31,7 +33,7 @@ export interface MeshCacheDiskOps {
   completeTerrainDiskLoad: (
     key: string,
     info: TileInfo,
-    buffers: TerrainTileBuffers | null,
+    loaded: LoadedTerrainTile | null,
   ) => void;
   peekTerrainDiskUpgrade: (info: TileInfo) => void;
   retainUnresolvedTile: (info: TileInfo, key: string) => void;
@@ -51,7 +53,6 @@ export function createMeshCacheDiskOps(
     if (existing) {
       existing.info = info;
       existing.lastUsedFrame = ctx.frameNumber;
-      existing.mesh = null;
       existing.buildId = null;
       existing.status = 'pending';
       return;
@@ -60,7 +61,6 @@ export function createMeshCacheDiskOps(
       buildId: null,
       info,
       lastUsedFrame: ctx.frameNumber,
-      mesh: null,
       status: 'pending',
     });
     updateCachePeak();
@@ -69,14 +69,15 @@ export function createMeshCacheDiskOps(
   function completeTerrainDiskLoad(
     key: string,
     info: TileInfo,
-    buffers: TerrainTileBuffers | null,
+    loaded: LoadedTerrainTile | null,
   ): void {
     const entry = ctx.meshCache.get(key);
     if (!entry || entry.status !== 'loading-disk') return;
 
-    if (buffers) {
+    if (loaded) {
       ctx.confirmedDiskMisses.delete(key);
-      entry.mesh = createReadyMesh(info, buffers, ctx.material, ctx.tileGroup);
+      installHeightPage(loaded.raster);
+      ctx.gridRenderer.installTile(info, loaded.raster, loaded.gridColors);
       entry.status = 'ready';
       ctx.cacheStats.diskHits += 1;
       updateCachePeak();
@@ -92,7 +93,6 @@ export function createMeshCacheDiskOps(
     ctx.confirmedDiskMisses.add(key);
     entry.status = 'pending';
     entry.buildId = null;
-    entry.mesh = null;
     entry.lastUsedFrame = ctx.frameNumber;
   }
 
@@ -115,7 +115,6 @@ export function createMeshCacheDiskOps(
       buildId: null,
       info,
       lastUsedFrame: ctx.frameNumber,
-      mesh: null,
       status: 'loading-disk',
     });
     ctx.diskLoadsInFlight.add(key);
@@ -140,7 +139,7 @@ export function createMeshCacheDiskOps(
       .then((stored) => {
         ctx.diskLoadsInFlight.delete(key);
         const entry = ctx.meshCache.get(key);
-        if (!entry || entry.mesh) {
+        if (!entry || entry.status === 'ready') {
           if (stored) ctx.cacheStats.diskHits += 1;
           else ctx.cacheStats.diskMisses += 1;
           return;
@@ -153,7 +152,8 @@ export function createMeshCacheDiskOps(
         ctx.confirmedDiskMisses.delete(key);
         build.discardPendingQueueForKey(key, entry.buildId ?? null);
         entry.buildId = null;
-        entry.mesh = createReadyMesh(info, stored, ctx.material, ctx.tileGroup);
+        installHeightPage(stored.raster);
+        ctx.gridRenderer.installTile(info, stored.raster, stored.gridColors);
         entry.status = 'ready';
         entry.lastUsedFrame = ctx.frameNumber;
         ctx.cacheStats.diskHits += 1;
@@ -192,7 +192,7 @@ export function createMeshCacheDiskOps(
     if (existing) {
       existing.lastUsedFrame = ctx.frameNumber;
       if (
-        !existing.mesh &&
+        existing.status !== 'ready' &&
         existing.status !== 'loading-disk' &&
         build.maySyncBuild(info)
       ) {
@@ -245,8 +245,8 @@ export function createMeshCacheResolveOps(
     return searchChain;
   }
 
-  function resolvedTile(info: TileInfo, key: string, mesh: THREE.Mesh | null): ResolvedTile {
-    return { info, key, mesh };
+  function resolvedTile(info: TileInfo, key: string, ready: boolean): ResolvedTile {
+    return { info, key, ready };
   }
 
   function tryResolveTargetTile(
@@ -255,8 +255,9 @@ export function createMeshCacheResolveOps(
     targetEntry: TileMeshEntry | undefined,
     buildBudget: { remaining: number },
   ): ResolvedTile | null {
-    if (!targetEntry || targetEntry.status === 'loading-disk' || targetEntry.mesh) {
-      return targetEntry?.mesh ? resolvedTile(target, targetKey, targetEntry.mesh) : null;
+    const targetReady = targetEntry?.status === 'ready';
+    if (!targetEntry || targetEntry.status === 'loading-disk' || targetReady) {
+      return targetReady ? resolvedTile(target, targetKey, true) : null;
     }
     if (!build.maySyncBuild(target)) {
       if (build.hasWorkers() && target.level > 0 && !targetEntry.buildId) {
@@ -269,16 +270,18 @@ export function createMeshCacheResolveOps(
       return null;
     }
     const builtEntry = build.tryBuildTileMeshSync(target, buildBudget);
-    return builtEntry?.mesh ? resolvedTile(target, targetKey, builtEntry.mesh) : null;
+    return builtEntry?.status === 'ready'
+      ? resolvedTile(target, targetKey, true)
+      : null;
   }
 
-  function findAncestorMesh(candidates: TileInfo[]): ResolvedTile | null {
+  function findReadyAncestor(candidates: TileInfo[]): ResolvedTile | null {
     for (const candidate of candidates) {
       const key = tileKey(candidate.face, candidate.level, candidate.x, candidate.y);
       const entry = ctx.meshCache.get(key);
-      if (!entry?.mesh) continue;
+      if (entry?.status !== 'ready') continue;
       entry.lastUsedFrame = ctx.frameNumber;
-      return resolvedTile(candidate, key, entry.mesh);
+      return resolvedTile(candidate, key, true);
     }
     return null;
   }
@@ -296,9 +299,9 @@ export function createMeshCacheResolveOps(
       fallbackInfo.y,
     );
     const fallbackEntry = ctx.meshCache.get(fallbackKey);
-    if (fallbackEntry?.mesh) {
+    if (fallbackEntry?.status === 'ready') {
       fallbackEntry.lastUsedFrame = ctx.frameNumber;
-      return resolvedTile(fallbackInfo, fallbackKey, fallbackEntry.mesh);
+      return resolvedTile(fallbackInfo, fallbackKey, true);
     }
 
     const fallbackQueuedInWorker =
@@ -309,12 +312,12 @@ export function createMeshCacheResolveOps(
       fallbackQueuedInWorker || !build.maySyncBuild(fallbackInfo)
         ? null
         : build.tryBuildTileMeshSync(fallbackInfo, buildBudget);
-    if (builtFallbackEntry?.mesh) {
-      return resolvedTile(fallbackInfo, fallbackKey, builtFallbackEntry.mesh);
+    if (builtFallbackEntry?.status === 'ready') {
+      return resolvedTile(fallbackInfo, fallbackKey, true);
     }
 
     disk.startTerrainDiskLoad(fallbackInfo);
-    return resolvedTile(fallbackInfo, fallbackKey, null);
+    return resolvedTile(fallbackInfo, fallbackKey, false);
   }
 
   function requestBestAvailableTile(
@@ -330,7 +333,7 @@ export function createMeshCacheResolveOps(
       targetEntry = disk.beginBudgetedSelectedTileLoad(target, buildBudget);
     }
     const immediateParent = searchChain[1];
-    if (!targetEntry?.mesh && immediateParent) {
+    if (targetEntry?.status !== 'ready' && immediateParent) {
       disk.beginBudgetedSelectedTileLoad(immediateParent, buildBudget);
     }
     if (targetEntry) targetEntry.lastUsedFrame = ctx.frameNumber;
@@ -338,7 +341,7 @@ export function createMeshCacheResolveOps(
     const targetResolved = tryResolveTargetTile(target, targetKey, targetEntry, buildBudget);
     if (targetResolved) return targetResolved;
 
-    const ancestorResolved = findAncestorMesh(searchChain.slice(1));
+    const ancestorResolved = findReadyAncestor(searchChain.slice(1));
     if (ancestorResolved) return ancestorResolved;
 
     return resolveFallbackTile(searchChain, buildBudget);

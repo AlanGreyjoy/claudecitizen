@@ -30,6 +30,12 @@ import {
   LADDER_DEFAULT_RADIUS,
   type LadderSpec,
 } from "../ladders";
+import {
+  CHAIR_DEFAULT_AIM_RADIUS,
+  CHAIR_DEFAULT_LABEL,
+  CHAIR_DEFAULT_RADIUS,
+  type ChairSeatSpec,
+} from "../chair-seats";
 import type {
   PrefabComponent,
   PrefabDocument,
@@ -87,6 +93,7 @@ interface CollectedShip {
   seats: ShipSeatSpec[];
   beds: ShipBedSpec[];
   ladders: LadderSpec[];
+  chairs: ChairSeatSpec[];
   cockpitControls: CockpitControlSpec[];
   cockpitStats: CockpitStatSpec[];
   entertainmentSystems: EntertainmentSystemSpec[];
@@ -935,6 +942,59 @@ function collectBeds(
   }
 }
 
+/**
+ * Walks the entity tree for furniture chair markers (works with ship-controller
+ * hulls). Marker chairs replace any earlier entry with the same id.
+ */
+function collectChairs(
+  entity: PrefabEntity,
+  transforms: Map<string, EntityWorldTransform>,
+  out: CollectedShip,
+): void {
+  for (const component of entity.components ?? []) {
+    if (component.type !== "chair-seat") continue;
+    const transform = transforms.get(entity.id);
+    const point = resolveEntityShipPoint(entity.id, transforms);
+    if (!point || !transform) {
+      console.warn(
+        `Ship chair "${component.id}" entity "${entity.id}" has no transform.`,
+      );
+      continue;
+    }
+    const position = transform.position;
+    const eye = component.eye ?? DEFAULT_SEAT_EYE;
+    const stand = component.stand ?? DEFAULT_SEAT_STAND;
+    const chair: ChairSeatSpec = {
+      id: component.id || entity.id,
+      label: component.label ?? CHAIR_DEFAULT_LABEL,
+      seat: {
+        right: point.right,
+        up: point.up,
+        forward: point.forward,
+      },
+      eye: {
+        right: -(position.x + eye.x),
+        up: position.y + eye.y,
+        forward: position.z + eye.z,
+      },
+      stand: {
+        right: -(position.x + stand.x),
+        forward: position.z + stand.z,
+      },
+      face: sceneToShipDir2(transform.rotation),
+      trigger: component.trigger ?? "radial",
+      radius: component.radius ?? CHAIR_DEFAULT_RADIUS,
+      aimRadius: component.aimRadius ?? CHAIR_DEFAULT_AIM_RADIUS,
+    };
+    const index = out.chairs.findIndex((entry) => entry.id === chair.id);
+    if (index >= 0) out.chairs[index] = chair;
+    else out.chairs.push(chair);
+  }
+  for (const child of entity.children ?? []) {
+    collectChairs(child, transforms, out);
+  }
+}
+
 /** Marker +Z as a unit ship-local 2D direction (x flips into ship right). */
 function sceneToShipDir2(rotation: Quat): { right: number; forward: number } {
   const forward = rotateVec3ByQuat(vec3(0, 0, 1), rotation);
@@ -1266,6 +1326,7 @@ function createEmptyCollectedShip(): CollectedShip {
     seats: [],
     beds: [],
     ladders: [],
+    chairs: [],
     cockpitControls: [],
     cockpitStats: [],
     entertainmentSystems: [],
@@ -1302,6 +1363,7 @@ function populateCollectedShipFromPrefab(
   collectShipEntries(doc.root, transforms, out);
   collectShipSeats(doc.root, transforms, out);
   collectBeds(doc.root, transforms, out);
+  collectChairs(doc.root, transforms, out);
   collectLadders(doc.root, transforms, out);
 }
 
@@ -1430,6 +1492,7 @@ async function finalizeShipLayout(
     seats: out.seats,
     beds: out.beds,
     ladders: out.ladders,
+    chairs: out.chairs,
     cockpitControls: out.cockpitControls,
     cockpitStats: out.cockpitStats,
     entertainmentSystems: out.entertainmentSystems,

@@ -11,6 +11,7 @@ import { createViewportPicking } from "./viewport-picking";
 import { createViewportScene } from "./viewport-scene";
 import { createViewportSelection } from "./viewport-selection";
 import { createViewportShipPreview } from "./viewport-ship-preview";
+import { createViewportSocketPreview } from "./viewport-socket-preview";
 import { createViewportSnap } from "./viewport-snap";
 import { createViewFocus } from "./viewport-view-focus";
 import type {
@@ -56,6 +57,9 @@ export function createEditorViewport(
   const selectionRef: {
     current: ReturnType<typeof createViewportSelection> | null;
   } = { current: null };
+  const socketPreviewRef: {
+    current: ReturnType<typeof createViewportSocketPreview> | null;
+  } = { current: null };
 
   const graph = createViewportEntityGraph({
     store,
@@ -71,6 +75,9 @@ export function createEditorViewport(
     },
     applyShipPreview: shipPreview.apply,
     resetShipPreviewWarnings: shipPreview.resetMissingWarnings,
+    applySocketWeaponPreview(options) {
+      socketPreviewRef.current?.apply(options);
+    },
     registerParticleHandle: particles.register,
     registerParticlePrefabRoot: particles.registerPrefabRoot,
     disposeParticleHandles: particles.disposeAll,
@@ -78,6 +85,8 @@ export function createEditorViewport(
     disposeParticlePrefabRootsForEntity: particles.disposePrefabRootsForEntity,
     discardParticlePrefabRoot: particles.discardPrefabRoot,
   });
+
+  socketPreviewRef.current = createViewportSocketPreview(store, graph.objectsById);
 
   const glbQueries = createViewportGlbQueries(
     store,
@@ -213,6 +222,17 @@ export function createEditorViewport(
     if (disposed) return;
     requestAnimationFrame(animate);
     if (!backendReady) return;
+    // Hidden tabs (Planet Authoring, etc.) and Play Mode must not keep a second
+    // WebGPURenderer submitting frames — concurrent devices stall takram
+    // atmosphere LUT compute and produce a black daytime sky in Test Play.
+    if (
+      playMode
+      || container.classList.contains('is-hidden')
+      || container.clientWidth < 1
+      || container.clientHeight < 1
+    ) {
+      return;
+    }
     const dt = Math.min(frameClock.getDelta(), 0.1);
     // OrbitControls.update() re-seats the camera from its own spherical state,
     // so it must not run while the flythrough owns the camera.
@@ -258,6 +278,9 @@ export function createEditorViewport(
     setShipPreview(state: ShipPreviewState) {
       shipPreview.setState(state);
     },
+    setSocketWeaponPreview(enabled: boolean) {
+      socketPreviewRef.current?.setEnabled(enabled);
+    },
     focusSelection: selection.focusSelection,
     getViewFocusPosition: viewFocus.getViewFocusPosition,
     getGlbNodePrefabPosition: glbQueries.getGlbNodePrefabPosition,
@@ -273,6 +296,8 @@ export function createEditorViewport(
       disposed = true;
       flythrough.dispose();
       unsubscribe();
+      socketPreviewRef.current?.dispose();
+      socketPreviewRef.current = null;
       particles.disposeAll();
       snap.dispose();
       drop.dispose();

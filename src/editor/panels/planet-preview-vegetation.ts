@@ -6,8 +6,8 @@ import {
   canPlaceWithGap,
   createPlacementGrid,
   registerPlacement,
-} from '../../render/vegetation/domain/placement-grid';
-import { clamp01, hash01, lerp } from '../../render/vegetation/domain/hash';
+} from '../../world/surface_spawns/placement-grid';
+import { clamp01, hash01, lerp } from '../../world/surface_spawns/hash';
 import { composeInstanceMatrix } from '../../render/vegetation/domain/instance-matrix';
 import type { StoredVegetationInstance } from '../../render/vegetation/domain/storage';
 import {
@@ -253,7 +253,6 @@ function addInstancedMeshes(
   instances: StoredVegetationInstance[],
   castShadow: boolean,
   windMaterialFactory: InstancedWindMaterialFactory | undefined,
-  ownedMaterials: Set<THREE.Material>,
 ): void {
   if (assets.length === 0 || instances.length === 0) return;
   const packed = packByVariant(instances, assets.length);
@@ -278,11 +277,12 @@ function addInstancedMeshes(
         const sourceMaterials = Array.isArray(mesh.material)
           ? mesh.material
           : [mesh.material];
-        const convertedMaterials = sourceMaterials.map((source) => {
-          const converted = windMaterialFactory(source, mesh.instanceMatrix);
-          if (converted !== source) ownedMaterials.add(converted);
-          return converted;
-        });
+        // Wind materials are cached per source material and shared across every
+        // mesh drawing that asset, so the preview must not take ownership of
+        // them — disposing one would blank the same asset elsewhere.
+        const convertedMaterials = sourceMaterials.map((source) =>
+          windMaterialFactory(source),
+        );
         mesh.material = Array.isArray(mesh.material)
           ? convertedMaterials
           : convertedMaterials[0]!;
@@ -333,7 +333,6 @@ export function buildPreviewVegetation(
         catalog,
       );
       const group = new THREE.Group();
-      const ownedMaterials = new Set<THREE.Material>();
       group.name = 'planet-preview-vegetation';
       addInstancedMeshes(
         group,
@@ -341,7 +340,6 @@ export function buildPreviewVegetation(
         grass,
         false,
         renderOptions.windMaterialFactory,
-        ownedMaterials,
       );
       addInstancedMeshes(
         group,
@@ -349,7 +347,6 @@ export function buildPreviewVegetation(
         trees,
         true,
         renderOptions.windMaterialFactory,
-        ownedMaterials,
       );
 
       onReady({
@@ -364,8 +361,9 @@ export function buildPreviewVegetation(
           while (group.children.length > 0) {
             group.remove(group.children[0]!);
           }
-          ownedMaterials.forEach((material) => material.dispose());
-          ownedMaterials.clear();
+          // Converted wind materials are cached per source material and shared,
+          // so they are not this preview's to dispose. `disposeInstancedAssets`
+          // still releases the refcounted source materials and textures.
           disposeInstancedAssets(catalog.grass);
           disposeInstancedAssets(catalog.trees);
         },

@@ -14,6 +14,7 @@ import type { WorldState } from '../../../player/world-state';
 import { getActiveShip, getActiveShipBody } from '../../../player/world-state';
 import { flightModeLabel } from '../../../flight/flight-modes';
 import type { Planet, PlanetSurfaceSample, RenderStats, Vec3 } from '../../../types';
+import type { FpsReadout } from './fps-counter';
 
 export interface StatsPanelElements {
   promptEl: HTMLElement;
@@ -31,6 +32,18 @@ export interface StatsPanelUpdateParams {
   rendererMode: string | undefined;
   planet: Planet;
   isPointerLocked: boolean;
+  fps: FpsReadout | null;
+}
+
+function buildFrameReadouts(fps: FpsReadout | null): [string, string][] {
+  if (!fps || fps.fps <= 0) return [];
+  // Mean FPS hides hitches by construction; the 1% low and worst frame are the
+  // numbers that move when terrain or vegetation stalls the main thread.
+  return [
+    ['FPS', Math.round(fps.fps).toString()],
+    ['1% low', Math.round(fps.onePercentLow).toString()],
+    ['Worst frame', `${fps.worstFrameMs.toFixed(1)} ms`],
+  ];
 }
 
 function isShipMode(mode: string): boolean {
@@ -65,7 +78,7 @@ function buildMemoryReadouts(renderStats: RenderStats): [string, string][] {
     .map(([name, count]) => `${name} ${count}`)
     .join(' / ');
   return [
-    ['GPU', `geo ${gpu.geometries} / tex ${gpu.textures} / prog ${gpu.programs}`],
+    ['GPU', `geo ${gpu.geometries} / tex ${gpu.textures} / draws ${gpu.drawCalls}`],
     [
       'Tex Mem',
       `${formatBytes(gpu.estimatedTextureBytes)} est (>=1k atlases), ${gpu.pendingSourceReleases} pending`,
@@ -92,6 +105,13 @@ function buildCacheReadouts(renderStats: RenderStats | null): [string, string][]
     [
       'Height Cache',
       `${renderStats.surfaceCache.entries.toLocaleString()} / ${renderStats.surfaceCache.limit.toLocaleString()}`,
+    ],
+    // Page hits are grid corners served from a terrain worker's own evaluation
+    // instead of being recomputed on the main thread. A high miss rate while
+    // walking means tiles are being evicted out from under the sampler.
+    [
+      'Height Pages',
+      `${renderStats.heightPages.pages} res, ${renderStats.heightPages.hits.toLocaleString()} hit / ${renderStats.heightPages.misses.toLocaleString()} miss`,
     ],
     // The one readout that says whether a stall is scheduling or generation:
     // a low average with workers on means the queue is the problem, a high
@@ -208,8 +228,65 @@ function resolveStatusMessage(
   ) ?? 'Low atmosphere. Mouse steer, Q/E roll, A/D strafe, and Shift boost should feel much closer to a real 3d game.';
 }
 
+interface ReadoutRow {
+  row: HTMLElement;
+  valueEl: HTMLElement;
+  value: string;
+}
+
 export function createStatsPanel(elements: StatsPanelElements) {
   let peakAltitudeMeters = 0;
+  // Rows are reused across frames and only their value text is rewritten.
+  const rowsByLabel = new Map<string, ReadoutRow>();
+  let lastLabelSignature = '';
+
+  function createRow(label: string): ReadoutRow {
+    const row = document.createElement('div');
+    row.className = 'readout';
+    const labelEl = document.createElement('div');
+    labelEl.className = 'readout-label';
+    labelEl.textContent = label;
+    const valueEl = document.createElement('div');
+    valueEl.className = 'readout-value';
+    row.append(labelEl, valueEl);
+    return { row, valueEl, value: '\u0000' };
+  }
+
+  /**
+   * Updates the readout list in place.
+   *
+   * This used to assign `innerHTML` from a template every frame, which destroys
+   * and reparses ~20 rows and forces a full style recalculation and layout —
+   * while the panel is open, which is precisely when someone is watching the
+   * frame counter. Rows are now built once and only changed text is written, so
+   * a steady frame touches the DOM only where a number actually moved. Values
+   * go through `textContent` rather than markup interpolation, which also means
+   * a biome or prompt string can no longer inject HTML.
+   */
+  function renderReadouts(entries: [string, string][]): void {
+    let signature = '';
+    for (const [label] of entries) signature += `${label}|`;
+    if (signature !== lastLabelSignature) {
+      lastLabelSignature = signature;
+      elements.readoutsEl.replaceChildren(
+        ...entries.map(([label]) => {
+          let cached = rowsByLabel.get(label);
+          if (!cached) {
+            cached = createRow(label);
+            rowsByLabel.set(label, cached);
+          }
+          return cached.row;
+        }),
+      );
+    }
+
+    for (const [label, value] of entries) {
+      const cached = rowsByLabel.get(label);
+      if (!cached || cached.value === value) continue;
+      cached.value = value;
+      cached.valueEl.textContent = value;
+    }
+  }
 
   function update({
     world,
@@ -221,6 +298,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
     rendererMode,
     planet,
     isPointerLocked,
+    fps,
   }: StatsPanelUpdateParams): void {
     const subjectPosition =
       world.mode === MODE_IN_SHIP
@@ -234,8 +312,9 @@ export function createStatsPanel(elements: StatsPanelElements) {
       100 - Math.max(0, focusSurface.altitudeMeters / planet.atmosphereHeightMeters) * 100,
     );
 
-    elements.readoutsEl.innerHTML = [
+    renderReadouts([
       ['Mode', modeLabel(world.shipExteriorWalk ? MODE_ON_FOOT : world.mode)],
+      ...buildFrameReadouts(fps),
       ...buildFlightReadouts(world),
       ['Altitude', `${Math.round(focusSurface.altitudeMeters).toLocaleString()} m`],
       ['Speed', `${Math.round(speed).toLocaleString()} m/s`],
@@ -247,15 +326,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
       ['Peak', `${Math.round(peakAltitudeMeters).toLocaleString()} m`],
       ...buildVitalsReadouts(world),
       ...buildCacheReadouts(renderStats),
-    ]
-      .map(
-        ([label, value]) => `
-        <div class="readout">
-          <div class="readout-label">${label}</div>
-          <div class="readout-value">${value}</div>
-        </div>`,
-      )
-      .join('');
+    ]);
 
     elements.promptEl.textContent = world.prompt;
     elements.statusEl.textContent = resolveStatusMessage(

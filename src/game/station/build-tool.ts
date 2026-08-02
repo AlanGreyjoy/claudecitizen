@@ -1,6 +1,7 @@
 import { MODE_IN_STATION } from "../../player/modes";
 import type { StationCharacterState } from "../../player/station-walk";
 import type { BuildArea } from "../../net/api";
+import { stationPlacementBlocked } from "../../physics/station-placement";
 import type { BuildAreaRuntime } from "../types";
 import type { LoopContext } from "../loop-context";
 import {
@@ -11,6 +12,7 @@ import {
 export interface BuildTool {
   buildRuntimes: () => BuildAreaRuntime[];
   buildRuntimeForArea: (area: BuildArea) => BuildAreaRuntime | null;
+  buildRuntimeForCurrentRoom: () => BuildAreaRuntime | null;
   activeBuildRuntime: () => BuildAreaRuntime | null;
   syncBuildPropsVisuals: (runtime: BuildAreaRuntime) => Promise<void>;
   updateBuildTool: (runtime: BuildAreaRuntime) => void;
@@ -26,12 +28,37 @@ function buildAreaForCurrentRoom(ctx: LoopContext): BuildArea | null {
   return null;
 }
 
+function wireEnvironmentProbe(
+  ctx: LoopContext,
+  runtime: BuildAreaRuntime,
+): void {
+  runtime.controller.setEnvironmentProbe(async ({ prefabId, transform, excludePlacementId }) => {
+    if (!ctx.physics) return false;
+    await runtime.propColliders.ensurePrefabColliders(prefabId);
+    const runtimeTransform = runtime.placementFrame.toRuntime(transform);
+    const colliders = runtime.propColliders.collidersAtRuntimeTransform(
+      prefabId,
+      runtimeTransform,
+    );
+    if (!colliders || colliders.length === 0) {
+      // Placeable props always author a collider — refuse until bake is ready
+      // rather than silently accepting a clip.
+      return true;
+    }
+    return stationPlacementBlocked(ctx.physics, colliders, { excludePlacementId });
+  });
+}
+
 /** Hangar/apartment build tool: prop ghost placement + HUD build button. */
 export function createBuildTool(ctx: LoopContext): BuildTool {
   function buildRuntimes(): BuildAreaRuntime[] {
     return [ctx.build?.areas.hangar, ctx.build?.areas.apartment].filter(
       (runtime): runtime is BuildAreaRuntime => Boolean(runtime),
     );
+  }
+
+  for (const runtime of buildRuntimes()) {
+    wireEnvironmentProbe(ctx, runtime);
   }
 
   function buildRuntimeForArea(area: BuildArea): BuildAreaRuntime | null {
@@ -71,6 +98,7 @@ export function createBuildTool(ctx: LoopContext): BuildTool {
   return {
     buildRuntimes,
     buildRuntimeForArea,
+    buildRuntimeForCurrentRoom,
     activeBuildRuntime,
     syncBuildPropsVisuals: (runtime) => syncBuildPropsVisuals(ctx, runtime),
     updateBuildTool: (runtime) => runUpdateBuildTool(ctx, runtime),

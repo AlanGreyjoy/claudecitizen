@@ -1,5 +1,6 @@
 import {
   MODE_IN_BED,
+  MODE_IN_CHAIR,
   MODE_IN_SHIP,
   MODE_IN_STATION,
   MODE_ON_FOOT,
@@ -10,6 +11,7 @@ import type { CameraState, CharacterInput, FrameActions } from "../types";
 import type { OnFootMode } from "./on-foot";
 import type { InShipMode } from "./in-ship";
 import type { InBedMode } from "./in-bed";
+import type { InChairMode } from "./in-chair";
 import type { OnShipDeckMode } from "./on-ship-deck";
 import type { InStationMode } from "./in-station";
 import type { Transitions } from "./transitions";
@@ -18,6 +20,7 @@ export interface ModeHandlers {
   onFoot: OnFootMode;
   inShip: InShipMode;
   inBed: InBedMode;
+  inChair: InChairMode;
   onShipDeck: OnShipDeckMode;
   inStation: InStationMode;
   transitions: Transitions;
@@ -44,6 +47,9 @@ export function dispatchMode(
       return modes.inShip.updateInShipMode({ actions, camera, dt });
     case MODE_IN_BED:
       modes.inBed.updateInBedMode(actions);
+      return false;
+    case MODE_IN_CHAIR:
+      modes.inChair.updateInChairMode(actions);
       return false;
     case MODE_ON_SHIP_DECK:
       modes.onShipDeck.updateOnShipDeckMode({ characterInput, actions, dt });

@@ -31,7 +31,10 @@ export type SandboxMode =
   | 'standing'
   | 'lying'
   | 'in-bed'
-  | 'getting-up';
+  | 'getting-up'
+  | 'chair-sitting'
+  | 'in-chair'
+  | 'chair-standing';
 
 export interface SandboxTransition {
   start: Pose;
@@ -54,6 +57,7 @@ export interface ShipSandboxSession {
   shipPhysics: ShipPhysics | null;
   prompt: string;
   activeBedId: string | null;
+  activeChairId: string | null;
   /** Set while attached to a ladder; replaces deck locomotion for the frame. */
   ladderClimb: LadderClimbState | null;
   transition: SandboxTransition | null;

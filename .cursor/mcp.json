@@ -1,11 +1,5 @@
 {
   "mcpServers": {
-    "asteron-engine": {
-      "type": "stdio",
-      "command": "node",
-      "args": [
-        "${workspaceFolder}/tools/asteron-mcp/src/index.mjs"
-      ]
-    }
+    
   }
 }

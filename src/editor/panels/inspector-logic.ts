@@ -5,6 +5,7 @@ import type { Vec3 } from '../../types';
 import type { EditorAudioPreviewController } from '../audio-preview';
 import type { ParticlePreviewControls } from './particle-preview';
 import type { NodeBounds } from '../component-actions';
+import type { AssetInspectorItem } from './project-logic';
 
 export const FLOOR_OPTIONS: StationFloorId[] = ['hab', 'lobby', 'hangar'];
 
@@ -154,6 +155,10 @@ export interface InspectorPanelOptions {
   onPlayShipCanopyPreview?: () => void;
   /** Jump to a material row in the Material Manager tab. */
   onOpenMaterial?: (target: { entityId: string; material: string }) => void;
+  /** Project asset-grid selection; when non-empty, inspector shows asset properties. */
+  assetFocus?: readonly AssetInspectorItem[];
+  /** Open a prefab document from the asset inspector. */
+  onOpenPrefab?: (prefabId: string) => void;
 }
 
 export type TransformFieldKey = 'position' | 'rotation' | 'scale';

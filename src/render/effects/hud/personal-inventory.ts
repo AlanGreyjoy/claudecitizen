@@ -55,6 +55,8 @@ export interface PersonalInventoryCallbacks {
     inventory: InventoryState;
     vitals: PlayerSurvivalVitals;
   }) => void;
+  /** Close sibling overlays (chest / shops) before opening. */
+  onWillOpen?: () => void;
   characterAppearance?: PlayerCharacterAppearanceV1 | null;
 }
 
@@ -236,6 +238,7 @@ export function createPersonalInventory(
     avatarPreview.setActive(open);
     if (open) {
       document.exitPointerLock?.();
+      callbacks.onWillOpen?.();
       callbacks.playerControls.setInputSuppressed(true);
       refreshBindingCodes();
       renderAll();

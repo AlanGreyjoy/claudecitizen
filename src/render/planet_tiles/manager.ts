@@ -5,9 +5,9 @@ import {
   sampleRenderablePlanetSurface,
 } from '../../world/planet-surface';
 import { createTileMeshCache } from './cache/mesh-cache';
-import { createTerrainMaterial } from './render/terrain-material';
 import {
   MAX_CACHED_TILES,
+  MAX_FALLBACK_SUPPRESSION_LEVELS,
   MAX_LEVEL,
   MIN_LEVEL,
   PLANET_RENDER_SCALE,
@@ -18,18 +18,20 @@ import { planApproachPrefetch } from './domain/approach-prefetch';
 import { collectTilesNearPosition } from './domain/spawn-tiles';
 import {
   finestSelectedTileLevel,
-  hasSelectedTileAncestor,
+  retainFallbackAncestors,
+  selectedTileAncestorLevel,
 } from './domain/tile-coverage';
+import { EDGE_NEIGHBOUR_ABSENT, resolveEdgeDeltas } from './domain/edge-deltas';
+import {
+  createTerrainGridRenderer,
+  type TerrainGridTile,
+} from './render/terrain-grid-renderer';
 import { tileKey } from './domain/tile-info';
 import {
   visitSelectedTiles,
   type TileSelectionView,
 } from './domain/selection';
 import type { ResolvedTile, TileManagerUpdateResult } from './domain/types';
-import {
-  updateTerrainSeamStitching,
-  type TerrainSeamTile,
-} from './render/seam-stitching';
 
 const APPROACH_PREFETCH_INTERVAL_FRAMES = 12;
 /** Total speculative starts across every look-ahead focus in one pass. */
@@ -59,35 +61,28 @@ export interface PlanetTileManager {
   waitUntilReady: (keys: readonly string[], timeoutMs: number) => Promise<number>;
 }
 
-export interface PlanetTileManagerOptions {
-  /** WebGPU runtime injects the TSL terrain material during the renderer flip. */
-  materialFactory?: () => THREE.Material;
-}
-
 export function createPlanetTileManager(
   scene: THREE.Scene,
   planet: Planet,
   seed: number,
-  options: PlanetTileManagerOptions = {},
 ): PlanetTileManager {
   const tileGroup = new THREE.Group();
   tileGroup.scale.setScalar(PLANET_RENDER_SCALE);
   scene.add(tileGroup);
 
-  const material = options.materialFactory?.() ?? createTerrainMaterial();
+  // Shares the tile group's floating-origin transform and render scale, so the
+  // shader can work in anchor-relative metres exactly as per-tile geometry did.
+  const gridRenderer = createTerrainGridRenderer(planet);
+  tileGroup.add(gridRenderer.object);
 
-  const meshCache = createTileMeshCache({
-    material,
-    planet,
-    seed,
-    tileGroup,
-  });
+  const meshCache = createTileMeshCache({ planet, seed, gridRenderer });
 
-  const activeKeys = new Set<string>();
   let frameNumber = 0;
   let lastApproachPrefetchFrame = -APPROACH_PREFETCH_INTERVAL_FRAMES;
   let previousSplitKeys = new Set<string>();
-  let terrainSeamConfiguration = '';
+  // Geomorph needs a wall-clock delta and `update` is not given one. Clamped so
+  // a stall or a tab restore cannot snap every blending tile to full detail.
+  let lastUpdateMs: number | null = null;
 
   function runApproachPrefetch(
     bodyPosition: Vec3,
@@ -133,6 +128,10 @@ export function createPlanetTileManager(
     options?: PlanetTileUpdateOptions,
   ): TileManagerUpdateResult {
     frameNumber += 1;
+    const nowMs = performance.now();
+    const deltaSeconds =
+      lastUpdateMs === null ? 0 : Math.min(0.25, Math.max(0, (nowMs - lastUpdateMs) / 1000));
+    lastUpdateMs = nowMs;
     meshCache.setFrameNumber(frameNumber);
     meshCache.setFocusPosition(bodyPosition);
     meshCache.resetFrameCounters();
@@ -142,9 +141,13 @@ export function createPlanetTileManager(
     // Without this, pending underfoot tiles are the first capacity evictions
     // and the worker never finishes them.
     const keepKeys = new Set<string>();
+    // Kept apart from `keepKeys` so the "present implies whole chain present"
+    // invariant that lets `retainFallbackAncestors` stop early stays true —
+    // `keepKeys` also holds selected and resolved keys, which carry no chain.
+    const ancestorKeys = new Set<string>();
     const requestedTiles: TileInfo[] = [];
     const renderedTiles: TileInfo[] = [];
-    const renderedSeamTiles: TerrainSeamTile[] = [];
+    const renderedGridTiles: TerrainGridTile[] = [];
     const resolvedCandidates = new Map<string, ResolvedTile>();
     const nextSplitKeys = new Set<string>();
 
@@ -155,8 +158,11 @@ export function createPlanetTileManager(
       (info) => {
         requestedTiles.push(info);
         keepKeys.add(tileKey(info.face, info.level, info.x, info.y));
+        // Ancestors are this tile's fallback ladder. Keeping them resident is
+        // what stops a momentarily-unready tile from resolving to a root.
+        retainFallbackAncestors(info, planet, ancestorKeys);
         const resolved = meshCache.requestBestAvailableTile(info, buildBudget);
-        if (!resolved.mesh) return;
+        if (!resolved.ready) return;
         resolvedCandidates.set(resolved.key, resolved);
         keepKeys.add(resolved.key);
       },
@@ -174,26 +180,52 @@ export function createPlanetTileManager(
       // skirts still turns a cold-cache refinement into visible walls.
       // Keep the coarsest complete cover until every request in that subtree
       // can resolve without the fallback ancestor.
-      if (hasSelectedTileAncestor(resolved.info, selectedKeys)) continue;
-      resolved.mesh!.material = material;
-      resolved.mesh!.renderOrder = 0;
-      resolved.mesh!.visible = true;
+      //
+      // Bounded, though. That rule is right for a refinement step or two, but
+      // an ancestor many levels coarser is not a "cover" at ground level — it
+      // is a planet-scale triangle that suppresses every ready tile beneath it
+      // and puts the camera inside or above the terrain for as long as one
+      // sibling stays unready. Past the gap limit, let the fine tiles keep
+      // rendering; a seam is cheap next to the whole surface vanishing.
+      const ancestorLevel = selectedTileAncestorLevel(resolved.info, selectedKeys);
+      const suppressed =
+        ancestorLevel >= 0 &&
+        resolved.info.level - ancestorLevel <= MAX_FALLBACK_SUPPRESSION_LEVELS;
+      if (suppressed) continue;
+      if (!gridRenderer.hasTile(resolved.key)) continue;
+      renderedGridTiles.push({
+        info: resolved.info,
+        key: resolved.key,
+        // Overwritten below, but the placeholder is the fail-safe value: it
+        // keeps every skirt drawn if a tile ever reaches the renderer without
+        // its deltas resolved.
+        edgeDeltas: [
+          EDGE_NEIGHBOUR_ABSENT,
+          EDGE_NEIGHBOUR_ABSENT,
+          EDGE_NEIGHBOUR_ABSENT,
+          EDGE_NEIGHBOUR_ABSENT,
+        ],
+      });
       renderedTiles.push(resolved.info);
-      renderedSeamTiles.push({ info: resolved.info, mesh: resolved.mesh! });
       selectedKeys.add(resolved.key);
     }
 
-    const nextTerrainSeamConfiguration = renderedSeamTiles
-      .map(
-        ({ info, mesh }) =>
-          `${tileKey(info.face, info.level, info.x, info.y)}@${mesh.uuid}`,
-      )
-      .sort()
-      .join('|');
-    if (nextTerrainSeamConfiguration !== terrainSeamConfiguration) {
-      updateTerrainSeamStitching(renderedSeamTiles, planet, seed);
-      terrainSeamConfiguration = nextTerrainSeamConfiguration;
+    // Edge deltas need the full rendered set, so they resolve after the loop.
+    // This is what replaces seam stitching: the coarser neighbour's straight
+    // edge is folded onto in the vertex shader rather than by rewriting vertex
+    // positions and recomputing normals on the CPU every time the LOD
+    // configuration changed — which also flipped the geometry's normal
+    // attribute between two formats and forced a pipeline rebuild each way.
+    for (const tile of renderedGridTiles) {
+      resolveEdgeDeltas(
+        tile.info,
+        selectedKeys,
+        tile.edgeDeltas as [number, number, number, number],
+      );
     }
+    // Same focus the tile group is about to be centred on, so the per-instance
+    // tile offsets and the group transform cancel instead of compounding.
+    gridRenderer.setVisibleTiles(renderedGridTiles, deltaSeconds, bodyPosition);
 
     runApproachPrefetch(bodyPosition, surface.altitudeMeters, options?.velocity);
 
@@ -202,10 +234,7 @@ export function createPlanetTileManager(
       setFootSurfaceSampleLevel(footLevel);
     }
 
-    meshCache.hideInactiveMeshes(selectedKeys, activeKeys);
-
-    activeKeys.clear();
-    for (const key of selectedKeys) activeKeys.add(key);
+    for (const key of ancestorKeys) keepKeys.add(key);
     meshCache.evictTileMeshes(keepKeys);
 
     tileGroup.position.set(
@@ -252,7 +281,7 @@ export function createPlanetTileManager(
 
   function dispose(): void {
     meshCache.dispose();
-    material.dispose();
+    gridRenderer.dispose();
     scene.remove(tileGroup);
   }
 

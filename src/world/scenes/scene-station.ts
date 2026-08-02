@@ -27,6 +27,8 @@ const STATION_COMPONENT_TYPES = new Set<PrefabComponent['type']>([
   'drinks-shop',
   'canteen',
   'animation',
+  'door',
+  'chest-storage',
   'station-frame',
   'collider',
 ]);

@@ -1,4 +1,4 @@
-import { MODE_IN_BED, MODE_IN_SHIP, MODE_ON_FOOT } from "../../player/modes";
+import { MODE_IN_BED, MODE_IN_CHAIR, MODE_IN_SHIP, MODE_ON_FOOT } from "../../player/modes";
 import type { LoopContext } from "../loop-context";
 import type { WeaponCombat } from "../combat/weapon-combat";
 import type { ShipSystems } from "../ship/systems";
@@ -23,9 +23,12 @@ export interface SimTickResult {
   abortFrame: boolean;
 }
 
-function controlsModeForWorld(mode: string): typeof MODE_IN_SHIP | typeof MODE_IN_BED | typeof MODE_ON_FOOT {
+function controlsModeForWorld(
+  mode: string,
+): typeof MODE_IN_SHIP | typeof MODE_IN_BED | typeof MODE_IN_CHAIR | typeof MODE_ON_FOOT {
   if (mode === MODE_IN_SHIP) return MODE_IN_SHIP;
   if (mode === MODE_IN_BED) return MODE_IN_BED;
+  if (mode === MODE_IN_CHAIR) return MODE_IN_CHAIR;
   return MODE_ON_FOOT;
 }
 

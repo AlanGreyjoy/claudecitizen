@@ -25,7 +25,6 @@
     "transcode:textures": "node scripts/transcode_project_textures.mjs",
     "typecheck": "tsc --noEmit",
     "terrain:validate": "tsx scripts/validate_terrain_system.ts",
-    "bake:spawn-tiles": "tsx scripts/bake_spawn_tiles.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "mcp:asteron": "node tools/asteron-mcp/src/index.mjs",

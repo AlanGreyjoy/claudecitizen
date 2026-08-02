@@ -1,55 +1,66 @@
-import type { Planet, TerrainTileBuffers } from '../types';
-import { isValidTerrainTileBuffers } from '../render/planet_tiles/domain/buffer-validation';
+import type { CubeFace, Planet } from '../types';
+import {
+  isValidTileHeightRaster,
+  type TileHeightRaster,
+} from '../world/terrain-raster';
 import { terrainStorageKey } from './cache-keys';
 import { getCachedTile, putCachedTile } from './tile-cache-store';
 
+/**
+ * What a terrain tile costs on disk.
+ *
+ * Records used to hold the triangulated mesh — positions, packed normals and
+ * packed vertex colours, ~110 KB per tile — because the renderer drew per-tile
+ * geometry. The shared grid displaces one shared geometry from the height
+ * atlas, so the mesh is derivable and no longer worth storing: a record is now
+ * the raster the worker evaluated plus its grid colours — ~37 KB against ~150
+ * KB — with the same cut in structured-clone cost on the main thread.
+ */
 export interface StoredTerrainTile {
-  colors: Uint8Array;
-  normals: Int16Array;
-  positions: Float32Array;
+  raster: TileHeightRaster;
+  /** Per-grid-corner RGB, three floats each, in grid order. */
+  gridColors: Float32Array;
 }
 
-export function toStoredTerrainTile(buffers: TerrainTileBuffers): StoredTerrainTile {
-  return {
-    colors: buffers.colors,
-    normals: buffers.normals,
-    positions: buffers.positions,
-  };
-}
-
-export function fromStoredTerrainTile(stored: StoredTerrainTile): TerrainTileBuffers {
-  return {
-    colors: stored.colors,
-    normals: stored.normals,
-    positions: stored.positions,
-  };
+export interface LoadedTerrainTile {
+  raster: TileHeightRaster;
+  gridColors: Float32Array;
 }
 
 export async function loadTerrainTile(
   planet: Planet,
   seed: number,
-  face: Parameters<typeof terrainStorageKey>[2],
+  face: CubeFace,
   level: number,
   x: number,
   y: number,
-): Promise<TerrainTileBuffers | null> {
+): Promise<LoadedTerrainTile | null> {
   const key = terrainStorageKey(planet, seed, face, level, x, y);
   const stored = await getCachedTile<StoredTerrainTile>(key);
-  if (!stored?.positions?.length) return null;
-  const buffers = fromStoredTerrainTile(stored);
-  if (!isValidTerrainTileBuffers(buffers)) return null;
-  return buffers;
+  if (!stored) return null;
+  if (!isValidTileHeightRaster(stored.raster)) return null;
+  if (!(stored.gridColors instanceof Float32Array)) return null;
+  return { raster: stored.raster, gridColors: stored.gridColors };
+}
+
+/** Everything a built tile contributes to the cache record. */
+export interface TerrainTilePayload {
+  raster: TileHeightRaster;
+  gridColors: Float32Array;
 }
 
 export function saveTerrainTile(
   planet: Planet,
   seed: number,
-  face: Parameters<typeof terrainStorageKey>[2],
+  face: CubeFace,
   level: number,
   x: number,
   y: number,
-  buffers: TerrainTileBuffers,
+  payload: TerrainTilePayload,
 ): void {
   const key = terrainStorageKey(planet, seed, face, level, x, y);
-  void putCachedTile(key, toStoredTerrainTile(buffers)).catch(() => {});
+  void putCachedTile(key, {
+    raster: payload.raster,
+    gridColors: payload.gridColors,
+  } satisfies StoredTerrainTile).catch(() => {});
 }

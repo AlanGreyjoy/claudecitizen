@@ -4,19 +4,16 @@ import {
   MeshLambertNodeMaterial,
   MeshPhysicalNodeMaterial,
   MeshStandardNodeMaterial,
-  type StorageInstancedBufferAttribute,
 } from 'three/webgpu';
 import {
   clamp,
   cos,
-  instanceIndex,
   positionGeometry,
+  positionLocal,
   sin,
-  storage,
   time,
   uniform,
   vec3,
-  vec4,
 } from 'three/tsl';
 import {
   getWindMaterialOptions,
@@ -81,40 +78,62 @@ function createMatchingNodeMaterial(
 }
 
 /**
+ * One converted node material per source material, shared by every
+ * `InstancedMesh` that draws it.
+ *
+ * This cache is load-bearing for frame pacing, not just for memory. A node
+ * material's program cache key is `NodeMaterial.customProgramCacheKey()`, which
+ * hashes `getCacheKey()` of every assigned node child — and `Node.customCacheKey()`
+ * returns `this.id`, a globally unique per-node-instance number. So two
+ * materials built from identical TSL still hash differently, miss
+ * `Nodes.nodeBuilderCache`, and each trigger a full WGSL build plus a
+ * *synchronous* `device.createRenderPipeline`. Per-mesh materials therefore
+ * meant a driver shader compile every time a vegetation tile streamed in.
+ */
+const windMaterialBySource = new WeakMap<THREE.Material, THREE.Material>();
+
+/**
  * Creates the TSL equivalent of the legacy vegetation wind patch.
  *
- * This runs after an `InstancedMesh` is allocated. Binding the node graph to
- * that mesh's instance buffer preserves the legacy transform order exactly:
- * bend in asset-local space first, then apply instance scale/rotation/position.
+ * Unlike the WebGL patch, this does **not** bind the mesh's instance matrix.
+ * `NodeMaterial.setupPosition` runs three's own `instancedMesh()` node before
+ * it evaluates `positionNode`, so `positionLocal` already holds the
+ * instance-transformed position by the time this graph is reached. Letting
+ * three own the instance transform is what keeps the graph free of per-mesh
+ * nodes — three's `InstanceNode` is pushed on the builder stack rather than
+ * assigned as a material child, so its storage binding never enters the
+ * program cache key.
+ *
  * The built-in TSL `time` node keeps WebGPU previews animated without coupling
  * their render loop to the WebGL wind uniform.
  */
 export const createWebGpuWindMaterial: InstancedWindMaterialFactory = (
   source,
-  instanceMatrix,
 ) => {
+  const cached = windMaterialBySource.get(source);
+  if (cached) return cached;
+
   const options = getWindMaterialOptions(source);
   if (!options) return source;
 
   const material = createMatchingNodeMaterial(source);
   if (!material) return source;
 
-  // Read the live matrix attribute through a storage binding. A second vertex
-  // binding can exceed WebGPU's portable eight-buffer limit on rich GLTFs, and
-  // a copied attribute wrapper would not follow later matrix version updates.
-  const instanceMatrixNode = storage(
-    instanceMatrix as unknown as StorageInstancedBufferAttribute,
-    'mat4',
-    Math.max(instanceMatrix.count, 1),
-  )
-    .toReadOnly()
-    .element(instanceIndex);
   const heightInv = uniform(1 / options.referenceHeight);
   const speed = uniform(options.speed ?? 1);
   const strength = uniform(options.strength);
 
+  // Bend ramps from 0 at the asset's base to full at its reference height, so
+  // plants stay rooted and only their tops move.
   const windBend = clamp(positionGeometry.y.mul(heightInv), 0, 1).pow(2);
-  const windRef = instanceMatrixNode[3].xyz;
+  // Phase reference. The WebGL path reads the instance translation directly;
+  // here the instance matrix is three's to own, so the plant's own geometry
+  // offset is subtracted back out of the already-instanced position. The
+  // residual is the instance origin up to the asset's own extent, which is
+  // ample to decorrelate neighbouring plants — and any leftover variation is
+  // scaled by `windBend`, so it vanishes at the base where it would be visible
+  // as shear.
+  const windRef = positionLocal.sub(positionGeometry);
   const windPhase = windRef.dot(vec3(0.317, 0.171, 0.233));
   const windTime = time.mul(speed).add(windPhase);
   const swayX = sin(windTime)
@@ -124,16 +143,17 @@ export const createWebGpuWindMaterial: InstancedWindMaterialFactory = (
   const swayZ = cos(windTime.mul(0.79).add(2.3))
     .mul(0.5)
     .add(sin(windTime.mul(1.53).add(0.9)).mul(0.3));
-  const localOffset = vec4(
-    swayX.mul(windBend).mul(strength),
-    0,
-    swayZ.mul(windBend).mul(strength).mul(0.7),
-    0,
-  );
 
-  material.positionNode = instanceMatrixNode
-    .mul(vec4(positionGeometry, 1))
-    .add(instanceMatrixNode.mul(localOffset))
-    .xyz;
+  // Displacement is applied in the instanced frame. Vegetation instances are
+  // composed with uniform scale and a yaw about the surface normal, so the
+  // horizontal sway axes survive the transform without needing its basis.
+  material.positionNode = positionLocal.add(
+    vec3(
+      swayX.mul(windBend).mul(strength),
+      0,
+      swayZ.mul(windBend).mul(strength).mul(0.7),
+    ),
+  );
+  windMaterialBySource.set(source, material);
   return material;
 };

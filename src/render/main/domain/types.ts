@@ -12,6 +12,7 @@ import type {
   Vec3,
 } from '../../../types';
 import type { InventoryState } from '../../../player/inventory/types';
+import type { WeaponSurfaceKind } from '../../../player/weapon-ballistics';
 import type { Camera, Object3D } from 'three';
 
 /**
@@ -42,11 +43,12 @@ export interface ActiveWeaponWorldPose {
 }
 
 export interface WeaponCombatShotPresentation {
-  hit: { normal: Vec3; point: Vec3 } | null;
+  /** `surfaceKind` picks the impact tint: sparks on hull, dust on dirt. */
+  hit: { normal: Vec3; point: Vec3; surfaceKind?: WeaponSurfaceKind } | null;
   hitDecalUrl: string | null;
   muzzleFlash: WeaponMarkerWorldPose | null;
   /** Barrel-end → hit (or max-range end) for cosmetic tracer streaks. */
-  tracer: { end: Vec3; start: Vec3 } | null;
+  tracer: { end: Vec3; speedMps?: number; start: Vec3 } | null;
 }
 
 export interface SpikeRenderer {
@@ -63,6 +65,8 @@ export interface SpikeRenderer {
     focus: Vec3,
     radiusMeters: number,
   ) => SurfaceSpawnInstance[];
+  /** Changes only when the resident spawn instance set does. */
+  getSurfaceSpawnRevision: () => number;
   getSurfaceSpawnLayers: () => readonly PlanetSpawnLayer[];
   getSurfaceSpawnCatalog: () => PlanetSpawnCatalog;
   getSurfaceSpawnMeshCollisions: () => ReadonlyMap<string, SurfaceSpawnMeshCollision>;
@@ -115,6 +119,13 @@ export interface SpikeRenderer {
       onProgress?: (fraction: number, label: string) => void;
     },
   ) => Promise<void>;
+  /**
+   * Build render pipelines for everything currently in the scene. Call while a
+   * loading screen is up: three only takes the async pipeline-creation path via
+   * `compileAsync`, so anything not warmed here compiles synchronously on the
+   * render thread the first frame it becomes visible.
+   */
+  warmRenderPipelines: () => Promise<void>;
   getStationRoot: () => Object3D;
   getActiveShipGroup: () => Object3D;
   getCamera: () => Camera;

@@ -394,6 +394,48 @@ export function equipInventoryItem(
   });
 }
 
+export interface ChestContentsResponse {
+  items: PlayerItemStack[];
+  inventory: InventoryState;
+}
+
+export interface ChestTransferResponse {
+  chestItems: PlayerItemStack[];
+  inventory: InventoryState;
+}
+
+/** Load personal stash contents for a chest id. */
+export function fetchChestContents(chestId: string): Promise<ChestContentsResponse> {
+  return requestJson<ChestContentsResponse>(
+    `/game/chest/${encodeURIComponent(chestId)}`,
+    { method: 'GET' },
+  );
+}
+
+/** Move quantity from personal inventory into a personal chest stash. */
+export function depositChestItem(
+  chestId: string,
+  itemDefinitionId: string,
+  quantity: number,
+): Promise<ChestTransferResponse> {
+  return requestJson<ChestTransferResponse>('/game/chest/deposit', {
+    method: 'POST',
+    body: JSON.stringify({ chestId, itemDefinitionId, quantity }),
+  });
+}
+
+/** Move quantity from a personal chest stash into inventory. */
+export function withdrawChestItem(
+  chestId: string,
+  itemDefinitionId: string,
+  quantity: number,
+): Promise<ChestTransferResponse> {
+  return requestJson<ChestTransferResponse>('/game/chest/withdraw', {
+    method: 'POST',
+    body: JSON.stringify({ chestId, itemDefinitionId, quantity }),
+  });
+}
+
 // --- Item Mall and AsteronCredits -----------------------------------------
 
 export interface CreditPacksResponse {

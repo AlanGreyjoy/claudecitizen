@@ -12,7 +12,7 @@ import {
   VEGETATION_CACHE_STALE_FRAMES,
   VEGETATION_MIN_TILE_LEVEL,
 } from '../domain/constants';
-import { tileKey } from '../domain/hash';
+import { tileKey } from '../../planet_tiles/domain/tile-key';
 import { collectLandingGroveData } from '../domain/landing-grove-data';
 import { collectTileVegetationData } from '../domain/tile-data';
 import { createVegetationWorkerPool } from './tile-worker-pool';

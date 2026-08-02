@@ -23,6 +23,7 @@ export type ResolvedLoopContextOptions = Required<
     | "outfitters"
     | "foodShop"
     | "personalInventory"
+    | "chestStorage"
     | "build"
     | "physics"
     | "stationPrefab"
@@ -79,6 +80,7 @@ function resolveUiOptions(options: GameLoopOptions) {
     outfitters: options.outfitters ?? null,
     foodShop: options.foodShop ?? null,
     personalInventory: options.personalInventory ?? null,
+    chestStorage: options.chestStorage ?? null,
   };
 }
 

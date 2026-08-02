@@ -30,6 +30,7 @@ import type { WeaponShopController } from "../render/effects/hud/weapon-shop";
 import type { OutfittersController } from "../render/effects/hud/outfitters";
 import type { FoodShopController } from "../render/effects/hud/food-shop";
 import type { PersonalInventoryController } from "../render/effects/hud/personal-inventory";
+import type { ChestStorageController } from "../render/effects/hud/chest-storage";
 import type { PlayerVitalsSessionController } from "../app/player-vitals-session";
 import type { HudUpdateParams } from "../render/effects";
 import type { PrefabDocument } from "../world/prefabs/schema";
@@ -90,6 +91,7 @@ export interface LoopContext {
   readonly outfitters: OutfittersController | null;
   readonly foodShop: FoodShopController | null;
   readonly personalInventory: PersonalInventoryController | null;
+  readonly chestStorage: ChestStorageController | null;
   readonly build: BuildRuntime | null;
   readonly physics: StationPhysics | null;
   readonly stationPrefab: PrefabDocument | null;
@@ -183,6 +185,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     outfitters: resolved.outfitters,
     foodShop: resolved.foodShop,
     personalInventory: resolved.personalInventory,
+    chestStorage: resolved.chestStorage,
     build: resolved.build,
     physics: resolved.physics,
     stationPrefab: resolved.stationPrefab,

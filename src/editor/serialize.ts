@@ -133,7 +133,7 @@ export function entityFromJson(prefabEntity: PrefabEntity): EditorEntity {
 function frameComponentsForKind(kind: PrefabKind): PrefabEntity['components'] | undefined {
   if (kind === 'station') return [{ type: 'station-frame' }];
   if (kind === 'ship') return [{ type: 'ship-frame' }];
-  if (kind === 'prop') return [{ type: 'prop-frame' }];
+  if (kind === 'placeable') return [{ type: 'prop-frame' }];
   if (kind === 'item') return [{ type: 'item-frame' }];
   return undefined;
 }

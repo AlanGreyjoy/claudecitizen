@@ -41,6 +41,13 @@ import {
 const EXIT_SEAT_HOLD_SECONDS = 0.5;
 const FLIGHT_MODE_TAP_THRESHOLD_SECONDS = 0.25;
 const SEAT_LOOK_SNAP_HALF_LIFE_SECONDS = 0.35;
+/**
+ * Weapon recoil rides on top of the aim rather than being written into it, so
+ * it decays back to where the player was pointing instead of permanently
+ * dragging the camera skyward over a magazine.
+ */
+const RECOIL_RECOVERY_HALF_LIFE_SECONDS = 0.085;
+const RECOIL_SETTLE_RADIANS = 1e-5;
 const SEAT_LOOK_YAW_SENSITIVITY = 0.0035;
 const SEAT_LOOK_PITCH_SENSITIVITY = 0.0028;
 const ORBIT_GAMEPAD_YAW_RATE = 2.4;
@@ -93,6 +100,12 @@ interface ShipLookState {
   targetZoomDistance: number;
 }
 
+/** Additive, self-recovering camera offset driven by weapon fire. */
+interface LookRecoilState {
+  pitchRadians: number;
+  yawRadians: number;
+}
+
 interface ControlsState {
   canvas: HTMLCanvasElement;
   onReset?: () => void;
@@ -107,6 +120,7 @@ interface ControlsState {
   primaryClickHeld: boolean;
   secondaryClickHeld: boolean;
   orbitLook: OrbitLookState;
+  lookRecoil: LookRecoilState;
   shipLook: ShipLookState;
   mode: ControlsMode;
   shipCameraView: ShipCameraView;
@@ -292,7 +306,7 @@ function isSeatLookActive(state: ControlsState): boolean {
 }
 
 function isBedLookActive(state: ControlsState): boolean {
-  return state.mode === 'in-bed';
+  return state.mode === 'in-bed' || state.mode === 'in-chair';
 }
 
 function isHeadLookActive(state: ControlsState): boolean {
@@ -411,7 +425,7 @@ function onMouseMove(state: ControlsState, event: MouseEvent): void {
     );
     return;
   }
-  if (state.mode === 'in-bed') {
+  if (state.mode === 'in-bed' || state.mode === 'in-chair') {
     state.seatLook.targetYawRadians -=
       event.movementX * SEAT_LOOK_YAW_SENSITIVITY * lookSensitivity;
     state.seatLook.targetPitchRadians = clampPitch(
@@ -479,7 +493,7 @@ function onWheel(state: ControlsState, event: WheelEvent): void {
     state.shipLook.targetZoomDistance = applyShipWheelZoom(state.shipLook.targetZoomDistance, delta);
     return;
   }
-  if (state.mode === 'in-bed') return;
+  if (state.mode === 'in-bed' || state.mode === 'in-chair') return;
   state.orbitLook.targetZoomDistance = applyWheelZoom(state.orbitLook.targetZoomDistance, delta);
 }
 
@@ -503,7 +517,12 @@ function updateQuantumEngageHold(state: ControlsState): boolean {
 }
 
 function updateExitSeatHold(state: ControlsState): boolean {
-  if ((state.mode !== 'in-ship' && state.mode !== 'in-bed') || !isExitSeatHeld(state)) {
+  if (
+    (state.mode !== 'in-ship' &&
+      state.mode !== 'in-bed' &&
+      state.mode !== 'in-chair') ||
+    !isExitSeatHeld(state)
+  ) {
     state.yHeldSinceMs = null;
     state.exitSeatTriggered = false;
     return false;
@@ -614,7 +633,7 @@ function consumeActions(state: ControlsState) {
 }
 
 function updateContinuousDeviceLook(state: ControlsState, dt: number): void {
-  if (dt <= 0 || state.mode === 'in-ship' || state.mode === 'in-bed') return;
+  if (dt <= 0 || state.mode === 'in-ship' || state.mode === 'in-bed' || state.mode === 'in-chair') return;
   const yaw = readProfileAnalog(state, 'controller', 'yaw');
   const pitch = readProfileAnalog(state, 'controller', 'pitch');
   if (yaw === 0 && pitch === 0) return;
@@ -627,7 +646,7 @@ function updateContinuousDeviceLook(state: ControlsState, dt: number): void {
 
 function updateSeatLookSnap(state: ControlsState, dt: number): void {
   // Bed look stays where you left it (SC head cam); only snap cockpit free-look.
-  if (isHeadLookActive(state) || state.mode === 'in-bed') return;
+  if (isHeadLookActive(state) || state.mode === 'in-bed' || state.mode === 'in-chair') return;
   if (state.seatLook.yawRadians === 0 && state.seatLook.pitchRadians === 0) return;
   const decay = Math.exp((-dt * Math.LN2) / SEAT_LOOK_SNAP_HALF_LIFE_SECONDS);
   state.seatLook.yawRadians *= decay;
@@ -644,6 +663,19 @@ function updateSeatLookSnap(state: ControlsState, dt: number): void {
   }
 }
 
+function updateLookRecoil(state: ControlsState, dt: number): void {
+  if (dt <= 0) return;
+  const decay = Math.exp((-dt * Math.LN2) / RECOIL_RECOVERY_HALF_LIFE_SECONDS);
+  state.lookRecoil.pitchRadians *= decay;
+  state.lookRecoil.yawRadians *= decay;
+  if (Math.abs(state.lookRecoil.pitchRadians) < RECOIL_SETTLE_RADIANS) {
+    state.lookRecoil.pitchRadians = 0;
+  }
+  if (Math.abs(state.lookRecoil.yawRadians) < RECOIL_SETTLE_RADIANS) {
+    state.lookRecoil.yawRadians = 0;
+  }
+}
+
 function sampleCameraState(state: ControlsState, dt = 0) {
   state.orbitLook.zoomDistance = updateSmoothZoom(
     state.orbitLook.zoomDistance,
@@ -657,6 +689,7 @@ function sampleCameraState(state: ControlsState, dt = 0) {
   );
   updateContinuousDeviceLook(state, dt);
   updateSeatLookSnap(state, dt);
+  updateLookRecoil(state, dt);
 
   if (dt > 0) {
     const mouseSmoothness = 35;
@@ -678,11 +711,14 @@ function sampleCameraState(state: ControlsState, dt = 0) {
   }
 
   return {
-    pitchRadians: state.orbitLook.pitchRadians,
+    pitchRadians: clampPitch(
+      state.orbitLook.pitchRadians + state.lookRecoil.pitchRadians,
+      ORBIT_PITCH_LIMIT,
+    ),
     seatLook: { pitchRadians: state.seatLook.pitchRadians, yawRadians: state.seatLook.yawRadians },
     shipCameraView: state.shipCameraView,
     shipZoomDistance: state.shipLook.zoomDistance,
-    yawRadians: state.orbitLook.yawRadians,
+    yawRadians: state.orbitLook.yawRadians + state.lookRecoil.yawRadians,
     zoomDistance: state.orbitLook.zoomDistance,
   };
 }
@@ -721,9 +757,10 @@ function setControlsMode(state: ControlsState, nextMode: ControlsMode): void {
   // Taking the pilot seat always starts in the cockpit view.
   if (nextMode === 'in-ship' && state.mode !== 'in-ship') state.shipCameraView = 'cockpit';
   if (
-    (state.mode === 'in-ship' || state.mode === 'in-bed') &&
+    (state.mode === 'in-ship' || state.mode === 'in-bed' || state.mode === 'in-chair') &&
     nextMode !== 'in-ship' &&
-    nextMode !== 'in-bed'
+    nextMode !== 'in-bed' &&
+    nextMode !== 'in-chair'
   ) {
     resetSeatLookState(state);
   }
@@ -741,6 +778,8 @@ function setOrbitFacing(state: ControlsState, yawRadians: number, pitchRadians =
   );
   state.orbitLook.targetYawRadians = state.orbitLook.yawRadians;
   state.orbitLook.targetPitchRadians = state.orbitLook.pitchRadians;
+  state.lookRecoil.pitchRadians = 0;
+  state.lookRecoil.yawRadians = 0;
 }
 
 interface PlayerControlsOptions {
@@ -772,6 +811,7 @@ function createControlsState(
       zoomDistance: DEFAULT_CAMERA_ZOOM,
       targetZoomDistance: DEFAULT_CAMERA_ZOOM,
     },
+    lookRecoil: { pitchRadians: 0, yawRadians: 0 },
     shipLook: {
       zoomDistance: DEFAULT_SHIP_CAMERA_ZOOM,
       targetZoomDistance: DEFAULT_SHIP_CAMERA_ZOOM,
@@ -847,6 +887,15 @@ export function createPlayerControls(canvas: HTMLCanvasElement, { onReset }: Pla
       return !state.inputSuppressed && state.secondaryClickHeld && document.pointerLockElement === canvas;
     },
     isSeatLookActive: () => isSeatLookActive(state),
+    /** Weapon kick. Rides on top of aim and decays back on its own. */
+    applyLookRecoil(pitchRadians: number, yawRadians: number) {
+      state.lookRecoil.pitchRadians += pitchRadians;
+      state.lookRecoil.yawRadians += yawRadians;
+    },
+    getLookRecoil: (): { pitchRadians: number; yawRadians: number } => ({
+      pitchRadians: state.lookRecoil.pitchRadians,
+      yawRadians: state.lookRecoil.yawRadians,
+    }),
     sampleCameraState: (dt = 0) => sampleCameraState(state, dt),
     sampleCharacterInput: () => sampleCharacterInput(state),
     sampleFlightInput: () => sampleFlightInput(state),

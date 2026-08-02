@@ -14,6 +14,20 @@ import type { ToolbarGizmoMode, ToolbarHandle } from './panels/Toolbar';
 import type { TabEditorHandles } from './TabEditorHosts';
 import type { SceneEditorTab } from './types';
 
+/**
+ * Tear down every tab preview WebGPU device *before* Play creates its own
+ * renderer. `setPlaying(true)` only reaches TabEditorHosts after React commits
+ * — too late for Planet Authoring Test Play. Planet preview `deactivate`
+ * disposes its adapter (not just RAF); a concurrent device stalls takram
+ * atmosphere LUT fill and leaves a black sky over lit terrain.
+ */
+function pauseTabPreviews(handles: TabEditorHandles): void {
+  handles.baseCharacterEditor?.deactivate();
+  handles.planetAuthoringEditor?.deactivate();
+  handles.systemMapEditor?.deactivate();
+  handles.menuManagerEditor?.deactivate();
+}
+
 export type EditorAppSessionArgs = {
   store: EditorStore;
   audioPreview: EditorAudioPreviewController;
@@ -24,6 +38,7 @@ export type EditorAppSessionArgs = {
   setPaused: (v: boolean) => void;
   setBuilding: (v: boolean) => void;
   setSceneSettingsOpen: (v: boolean) => void;
+  setPrefabSettingsOpen: (v: boolean) => void;
   setProjectSettingsOpen: (v: boolean) => void;
   setTabState: (v: SceneEditorTab) => void;
   setTab: (next: SceneEditorTab) => void;
@@ -109,6 +124,7 @@ export function useEditorAppSession(args: EditorAppSessionArgs) {
     setPaused,
     setBuilding,
     setSceneSettingsOpen,
+    setPrefabSettingsOpen,
     setProjectSettingsOpen,
     setTabState,
     setTab,
@@ -141,6 +157,9 @@ const togglePlay = useCallback(async () => {
 
   const current = tabRef.current;
   audioPreview.stop();
+  // Imperative pause before resolvePlayLaunch — that path may call
+  // startPlanetSurfaceTest synchronously, which creates the game WebGPU device.
+  pauseTabPreviews(tabHandlesRef.current);
   const launch = await resolvePlayLaunch({
     tab: current,
     handles: tabHandlesRef.current,
@@ -172,6 +191,7 @@ const startPlanetAuthoringPlay = useCallback(() => {
     return;
   }
   audioPreview.stop();
+  pauseTabPreviews(tabHandlesRef.current);
   playSessionRef.current = startPlanetSurfaceTest(planetId);
   setPaused(false);
   setPlaying(true);
@@ -240,11 +260,19 @@ const openSceneSettings = useCallback(() => {
     return;
   }
   setSceneSettingsOpen(true);
-}, [store]);
+}, [store, setSceneSettingsOpen]);
+
+const openPrefabSettings = useCallback(() => {
+  if (store.getState().documentType !== 'prefab') {
+    showToast('Open a prefab to edit Prefab Settings.', true);
+    return;
+  }
+  setPrefabSettingsOpen(true);
+}, [store, setPrefabSettingsOpen]);
 
 const openProjectSettings = useCallback(() => {
   setProjectSettingsOpen(true);
-}, []);
+}, [setProjectSettingsOpen]);
 
 const setGizmoMode = useCallback(
   (mode: ToolbarGizmoMode) => {
@@ -290,6 +318,7 @@ const toolbarActions = useMemo(
       void tabHandlesRef.current.planetAuthoringEditor?.loadPlanet(id);
     },
     onOpenSceneSettings: openSceneSettings,
+    onOpenPrefabSettings: openPrefabSettings,
     onDeleteCurrentScene: () => {
       void deleteCurrentScene();
     },
@@ -320,6 +349,7 @@ const toolbarActions = useMemo(
     newSceneDocument,
     onSave,
     openSceneSettings,
+    openPrefabSettings,
     openProjectSettings,
     loadById,
     loadSceneById,
@@ -347,6 +377,7 @@ const toolbarActions = useMemo(
     exitToTitle,
     onSave,
     openSceneSettings,
+    openPrefabSettings,
     openProjectSettings,
     setGizmoMode,
     toolbarActions,

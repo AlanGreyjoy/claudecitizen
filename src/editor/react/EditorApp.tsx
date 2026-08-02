@@ -35,6 +35,7 @@ import { useEditorAppDocuments } from './use-editor-app-documents';
 import { useEditorAppEffects } from './use-editor-app-effects';
 import { useEditorAppSave } from './use-editor-app-save';
 import { useEditorAppSession } from './use-editor-app-session';
+import { useEditorDocModals } from './use-editor-doc-modals';
 
 function playSurvivesTabChange(current: SceneEditorTab, next: SceneEditorTab): boolean {
   if (current === 'ship') return next === 'ship';
@@ -111,9 +112,7 @@ export function EditorApp(): ReactElement {
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
   const [building, setBuilding] = useState(false);
-  const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
-  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
-  const [newSceneOpen, setNewSceneOpen] = useState(false);
+  const docModals = useEditorDocModals();
   /** Deploy → Front End… / Backend…. Self-contained modals; no store plumbing needed. */
   const [deployTarget, setDeployTarget] = useState<DeployTarget | null>(null);
   const [multiplayerDebugOpen, setMultiplayerDebugOpen] = useState(false);
@@ -292,6 +291,7 @@ export function EditorApp(): ReactElement {
     deleteSceneById,
     deleteCurrentScene,
     newDocument,
+    createPrefabDocument,
     newSceneDocument,
     newShipDocument,
     openShipById,
@@ -306,7 +306,8 @@ export function EditorApp(): ReactElement {
     playingRef,
     stopInEditorPlay,
     setTab,
-    setNewSceneOpen,
+    setNewSceneOpen: docModals.setNewSceneOpen,
+    setNewPrefabOpen: docModals.setNewPrefabOpen,
     confirmLeaveDocument,
     clearIsolation,
     confirmBaseDiscardIfNeeded,
@@ -324,6 +325,7 @@ export function EditorApp(): ReactElement {
     exitToTitle,
     onSave,
     openSceneSettings,
+    openPrefabSettings,
     openProjectSettings,
     setGizmoMode,
     toolbarActions,
@@ -336,8 +338,9 @@ export function EditorApp(): ReactElement {
     setPlaying,
     setPaused,
     setBuilding,
-    setSceneSettingsOpen,
-    setProjectSettingsOpen,
+    setSceneSettingsOpen: docModals.setSceneSettingsOpen,
+    setPrefabSettingsOpen: docModals.setPrefabSettingsOpen,
+    setProjectSettingsOpen: docModals.setProjectSettingsOpen,
     setTabState,
     setTab,
     tabRef,
@@ -383,6 +386,7 @@ export function EditorApp(): ReactElement {
     newDocument,
     onSave,
     openSceneSettings,
+    openPrefabSettings,
     deleteCurrentScene,
     openProjectSettings,
     openDeployFrontend: () => setDeployTarget('client'),
@@ -487,13 +491,10 @@ export function EditorApp(): ReactElement {
       togglePlay={() => void togglePlay()}
       startPlanetAuthoringPlay={startPlanetAuthoringPlay}
       createPrefabsInFolder={createPrefabsInFolder}
-      newSceneOpen={newSceneOpen}
-      setNewSceneOpen={setNewSceneOpen}
+      docModals={docModals}
       createSceneFromTemplate={createSceneFromTemplate}
-      sceneSettingsOpen={sceneSettingsOpen}
-      setSceneSettingsOpen={setSceneSettingsOpen}
-      projectSettingsOpen={projectSettingsOpen}
-      setProjectSettingsOpen={setProjectSettingsOpen}
+      createPrefabDocument={createPrefabDocument}
+      refreshPrefabList={refreshPrefabList}
     />
     <EditorAppModals
       deployTarget={deployTarget}

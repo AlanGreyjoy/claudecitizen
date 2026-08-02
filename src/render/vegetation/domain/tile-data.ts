@@ -19,14 +19,14 @@ import {
   grassSampleMultiplier,
   treeSampleMultiplier,
 } from './constants';
-import { clamp01, hash01, lerp, scaledSampleCount } from './hash';
+import { clamp01, hash01, lerp, scaledSampleCount } from '../../../world/surface_spawns/hash';
 import { composeInstanceMatrix } from './instance-matrix';
 import { grassScaleCoverageMultiplier } from '../settings';
 import {
   canPlaceWithGap,
   createPlacementGrid,
   registerPlacement,
-} from './placement-grid';
+} from '../../../world/surface_spawns/placement-grid';
 import { createAnchorFromTile, type SurfaceAnchor } from './surface-anchor';
 import type { StoredVegetationInstance, StoredVegetationTile } from './storage';
 

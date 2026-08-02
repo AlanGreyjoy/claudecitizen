@@ -4,6 +4,9 @@ import type {
   PropDefinitionEntry,
 } from '../../net/api';
 
+/** Where hangar/apartment Build Mode writes purchase / place / move / delete. */
+export type BuildPersistMode = 'api' | 'local';
+
 export type BuildToolMode = 'catalog' | 'place' | 'move' | 'delete';
 
 export interface BuildGhostTransform {

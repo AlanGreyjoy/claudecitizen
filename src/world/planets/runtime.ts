@@ -9,6 +9,7 @@ import {
   type PlanetHeightRecipe,
   type PlanetHydrologyRecipe,
   type PlanetRegionRecipe,
+  type PlanetSkyRecipe,
 } from './schema';
 
 /**
@@ -27,6 +28,8 @@ export interface PlanetRuntimeConfig {
   hydrology: PlanetHydrologyRecipe;
   biomes: PlanetBiomeRecipe;
   palette: PlanetSurfacePalette;
+  /** Day/night presentation. Read by render/, never by terrain generation. */
+  sky: PlanetSkyRecipe;
   /** Shallow ocean blend color (hex). */
   oceanShallow: string;
 }
@@ -44,6 +47,7 @@ function configFromDocument(document: PlanetDocument): PlanetRuntimeConfig {
     hydrology: document.hydrology,
     biomes: document.biomes,
     palette: document.palette,
+    sky: document.sky,
     oceanShallow: '#3f7898',
   };
 }

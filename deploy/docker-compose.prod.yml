@@ -33,6 +33,12 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@claude-citizen.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in deploy/.env}
       PAYMENTS_ENCRYPTION_KEY: ${PAYMENTS_ENCRYPTION_KEY:?set PAYMENTS_ENCRYPTION_KEY in deploy/.env}
+      # Player Discord OAuth. Empty disables the title-screen Discord button path
+      # (`/auth/discord/start` returns 400). Redirect must match the Discord app
+      # and defaults to `{API_PUBLIC_URL}/auth/discord/callback` in the server.
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-}
       RUN_MIGRATIONS: "true"
       # Public H3 endpoint the client dials for the world simulation. UDP, and
       # a different port than the API — it is not proxied by Caddy.

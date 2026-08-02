@@ -20,3 +20,8 @@ export type PlanetAuthoringSpawnSectionProps = PlanetAuthoringSectionProps & {
   onMarkSpawnCatalogDirty: () => void;
   onRebuildForm: () => void;
 };
+
+/** Cloud decks add and remove layers, so the form has to rebuild. */
+export type PlanetAuthoringCloudSectionProps = PlanetAuthoringSectionProps & {
+  onRebuildForm: () => void;
+};

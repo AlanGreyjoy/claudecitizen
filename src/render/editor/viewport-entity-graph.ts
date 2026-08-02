@@ -149,6 +149,7 @@ export interface ViewportEntityGraphDeps {
   syncSelectionHighlight: () => void;
   applyShipPreview: (options?: { quiet?: boolean }) => void;
   resetShipPreviewWarnings: () => void;
+  applySocketWeaponPreview: (options?: { quiet?: boolean }) => void;
   registerParticleHandle: (entityId: string, handle: ParticleSystemHandle) => void;
   registerParticlePrefabRoot: (entityId: string, root: THREE.Group) => void;
   disposeParticleHandles: () => void;
@@ -176,6 +177,7 @@ export function createViewportEntityGraph(
     syncSelectionHighlight,
     applyShipPreview,
     resetShipPreviewWarnings,
+    applySocketWeaponPreview,
     registerParticleHandle, registerParticlePrefabRoot,
     disposeParticleHandles, disposeParticleHandlesForEntity,
     disposeParticlePrefabRootsForEntity, discardParticlePrefabRoot,
@@ -258,6 +260,7 @@ export function createViewportEntityGraph(
     if (generation !== buildGeneration || pendingModelLoads > 0) return;
     syncSelectionHighlight();
     applyShipPreview({ quiet: false });
+    applySocketWeaponPreview({ quiet: false });
   }
 
   const materialPreview = createViewportMaterialPreview(objectsById);
@@ -528,7 +531,10 @@ export function createViewportEntityGraph(
     syncShipSeatHelpers();
     syncSelectionHighlight();
     // Defer articulation preview until async GLBs finish (settled apply in load finally).
-    if (pendingModelLoads === 0) applyShipPreview({ quiet: false });
+    if (pendingModelLoads === 0) {
+      applyShipPreview({ quiet: false });
+      applySocketWeaponPreview({ quiet: false });
+    }
   }
 
   /**
@@ -612,6 +618,7 @@ export function createViewportEntityGraph(
     selectionBoxes.forEach((box) => box.update());
     syncSelectionHighlight();
     applyShipPreview({ quiet: true });
+    applySocketWeaponPreview({ quiet: true });
   }
 
   return {

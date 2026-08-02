@@ -59,7 +59,20 @@
           aria-label="Open debug menu"
           aria-expanded="false"
           aria-controls="hud-debug-menu"
+          title="Debug menu"
         >
+          <!--
+            The button was empty, so it rendered as a blank 44px box in the
+            bottom-right corner and read as scenery rather than a control — the
+            performance stats panel is only reachable through it (or `?debug=1`,
+            which in-editor Test Play cannot pass). `.sc-hud-debug-btn svg` was
+            already styled for a glyph that did not exist.
+          -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M9 5.5a3 3 0 0 1 6 0" stroke-linecap="round" />
+            <rect x="7.5" y="7.5" width="9" height="11" rx="4.5" />
+            <path d="M7.5 11H4M7.5 15H4.5M16.5 11H20M16.5 15H19.5M12 8v10" stroke-linecap="round" />
+          </svg>
         </button>
         <div class="sc-hud-debug-menu" id="hud-debug-menu" role="menu">
           <p class="sc-hud-debug-menu-title">Debug Overlays</p>
@@ -164,7 +177,13 @@
         <div class="sc-flight-reticle-aim"></div>
         <div class="sc-flight-reticle-nose"></div>
       </div>
-      <div id="weapon-crosshair" class="sc-weapon-crosshair" aria-hidden="true"></div>
+      <div id="weapon-crosshair" class="sc-weapon-crosshair" aria-hidden="true">
+        <span class="sc-weapon-crosshair-bar" data-crosshair-bar="up"></span>
+        <span class="sc-weapon-crosshair-bar" data-crosshair-bar="down"></span>
+        <span class="sc-weapon-crosshair-bar" data-crosshair-bar="left"></span>
+        <span class="sc-weapon-crosshair-bar" data-crosshair-bar="right"></span>
+        <span class="sc-weapon-crosshair-dot"></span>
+      </div>
       <div id="combat-ammo" class="sc-combat-ammo" aria-hidden="true">
         <div class="sc-combat-ammo-mode" data-combat-fire-mode>SEMI</div>
         <div class="sc-combat-ammo-count">
@@ -291,6 +310,18 @@
                   max="80"
                   step="1"
                   value="20"
+                />
+              </div>
+              <div class="sc-game-menu-slider">
+                <span class="sc-game-menu-slider-label">Vegetation Distance</span>
+                <span class="sc-game-menu-slider-value" id="game-menu-vegetation-distance-value">180 m</span>
+                <input
+                  type="range"
+                  id="game-menu-vegetation-distance"
+                  min="40"
+                  max="400"
+                  step="10"
+                  value="180"
                 />
               </div>
             </section>
@@ -783,6 +814,50 @@
               <span>/ — search</span>
               <span>Drag — exact slot</span>
               <span>Esc / I — close</span>
+            </div>
+          </footer>
+        </div>
+      </div>
+      <div
+        class="sc-chest-storage"
+        id="chest-storage"
+        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="chest-storage-title"
+        aria-modal="true"
+      >
+        <div class="sc-chest-storage-backdrop" aria-hidden="true"></div>
+        <div class="sc-chest-storage-shell">
+          <header class="sc-chest-storage-header">
+            <h2 class="sc-chest-storage-title" id="chest-storage-title">Chest</h2>
+            <div class="sc-chest-storage-header-tools">
+              <span class="sc-chest-storage-capacity" id="chest-storage-capacity">—</span>
+              <button
+                type="button"
+                class="sc-chest-storage-close"
+                id="chest-storage-close"
+                aria-label="Close chest"
+              >
+                ✕
+              </button>
+            </div>
+          </header>
+          <div class="sc-chest-storage-panes">
+            <section class="sc-chest-storage-pane" aria-label="Inventory">
+              <h3 class="sc-chest-storage-pane-title">Inventory</h3>
+              <div class="sc-chest-storage-list" id="chest-storage-inventory-list"></div>
+            </section>
+            <section class="sc-chest-storage-pane" aria-label="Chest">
+              <h3 class="sc-chest-storage-pane-title">Chest</h3>
+              <div class="sc-chest-storage-list" id="chest-storage-chest-list"></div>
+            </section>
+          </div>
+          <footer class="sc-chest-storage-footer">
+            <p class="sc-chest-storage-status" id="chest-storage-status" data-kind="info"></p>
+            <div class="sc-chest-storage-hints">
+              <span>Click — move 1</span>
+              <span>Shift-click — whole stack</span>
+              <span>Esc — close</span>
             </div>
           </footer>
         </div>

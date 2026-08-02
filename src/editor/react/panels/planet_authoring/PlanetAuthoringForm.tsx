@@ -2,8 +2,16 @@ import { useCallback, type ReactElement } from 'react';
 import type { PlanetDocument } from '../../../../world/planets/schema';
 import { PlanetSection } from './Fields';
 import { BiomeSection } from './BiomeSection';
+import { CloudsSection } from './CloudsSection';
 import { IdentitySection } from './IdentitySection';
 import { PaletteSection } from './PaletteSection';
+import {
+  MoonSection,
+  NightSection,
+  SkyAtmosphereSection,
+  StarsSection,
+  SunSection,
+} from './SkySection';
 import { SpawnsSection } from './SpawnsSection';
 import {
   HeightRecipeSection,
@@ -77,6 +85,22 @@ export function PlanetAuthoringForm({
         />,
       )}
       {section('Surface Palette', <PaletteSection doc={doc} onMarkDirty={onMarkDirty} />)}
+      {section(
+        'Sky & Atmosphere',
+        <SkyAtmosphereSection doc={doc} onMarkDirty={onMarkDirty} />,
+      )}
+      {section('Sun', <SunSection doc={doc} onMarkDirty={onMarkDirty} />)}
+      {section('Moon', <MoonSection doc={doc} onMarkDirty={onMarkDirty} />)}
+      {section(
+        'Clouds',
+        <CloudsSection
+          doc={doc}
+          onMarkDirty={onMarkDirty}
+          onRebuildForm={onRebuildForm}
+        />,
+      )}
+      {section('Stars', <StarsSection doc={doc} onMarkDirty={onMarkDirty} />)}
+      {section('Night', <NightSection doc={doc} onMarkDirty={onMarkDirty} />)}
       {section(
         'Spawn Catalog',
         <SpawnsSection

@@ -18,7 +18,18 @@ const PROBE_DIRECTIONS: Vec3[] = [
   vec3(-0.19, 0.04, -0.93),
 ].map(normalize);
 
-const fingerprintCache = new Map<string, string>();
+/**
+ * Fingerprints keyed by the active config *object*, then by the scalar planet
+ * inputs.
+ *
+ * This used to build its cache key by `JSON.stringify`-ing four sections of the
+ * planet document — before the lookup, so the memo saved the probing but not
+ * the stringify. `terrainStorageKey` calls this on every tile load and every
+ * tile save, which is the hot streaming path. `activeConfig` is replaced
+ * wholesale by `activatePlanetDocument`, so its identity is an exact and free
+ * substitute for hashing its contents.
+ */
+const fingerprintCache = new WeakMap<object, Map<string, string>>();
 
 function fnv1a32(text: string): string {
   let hash = 0x811c9dc5;
@@ -30,19 +41,21 @@ function fnv1a32(text: string): string {
 }
 
 export function terrainFingerprint(planet: Planet, seed: number): string {
-  const { biomes, height, hydrology, planetId, regions } = getActivePlanetConfig();
+  const config = getActivePlanetConfig();
+  const { biomes, planetId } = config;
   const cacheKey = [
     planetId,
     planet.name ?? 'planet',
     planet.radiusMeters,
     planet.terrainAmplitudeMeters,
     seed,
-    JSON.stringify(height),
-    JSON.stringify(regions),
-    JSON.stringify(hydrology),
-    JSON.stringify(biomes),
   ].join(':');
-  const cached = fingerprintCache.get(cacheKey);
+  let byPlanet = fingerprintCache.get(config);
+  if (!byPlanet) {
+    byPlanet = new Map<string, string>();
+    fingerprintCache.set(config, byPlanet);
+  }
+  const cached = byPlanet.get(cacheKey);
   if (cached) return cached;
 
   const probedHeights = PROBE_DIRECTIONS.map((direction) => {
@@ -59,6 +72,6 @@ export function terrainFingerprint(planet: Planet, seed: number): string {
   const fingerprint = fnv1a32(
     `${JSON.stringify(biomes)}|${probedHeights.join('|')}`,
   );
-  fingerprintCache.set(cacheKey, fingerprint);
+  byPlanet.set(cacheKey, fingerprint);
   return fingerprint;
 }

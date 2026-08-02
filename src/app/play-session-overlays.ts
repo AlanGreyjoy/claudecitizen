@@ -12,6 +12,7 @@ import type { SceneDocument } from '../world/scenes/schema';
 import type { SceneExitTarget } from '../game/station/scene-exit';
 import type { PlaySessionDom } from './play-session-dom';
 import type { PlayerVitalsSessionController } from './player-vitals-session';
+import { isEditorOfflineBootstrap } from './editor-play-bootstrap';
 import {
   connectPlayNetwork,
   createPlayAvmsTerminal,
@@ -20,8 +21,7 @@ import {
   createPlayHaloBand,
   createPlayHud,
   createPlayMallCallbacks,
-  createPlayPersonalInventory,
-  createPlayShops,
+  createPlayInventoryOverlayBundle,
 } from './play-session-overlays-helpers';
 
 export interface PlayOverlayEconomy {
@@ -39,10 +39,11 @@ export interface PlayOverlayStack {
   gameMenu: ReturnType<typeof createPlayGameMenu>;
   avmsTerminal: ReturnType<typeof createPlayAvmsTerminal>;
   entertainmentSystem: ReturnType<typeof createPlayEntertainmentSystem>;
-  weaponShop: ReturnType<typeof createPlayShops>['weaponShop'];
-  outfitters: ReturnType<typeof createPlayShops>['outfitters'];
-  foodShop: ReturnType<typeof createPlayShops>['foodShop'];
-  personalInventory: ReturnType<typeof createPlayPersonalInventory>;
+  weaponShop: ReturnType<typeof createPlayInventoryOverlayBundle>['weaponShop'];
+  outfitters: ReturnType<typeof createPlayInventoryOverlayBundle>['outfitters'];
+  foodShop: ReturnType<typeof createPlayInventoryOverlayBundle>['foodShop'];
+  personalInventory: ReturnType<typeof createPlayInventoryOverlayBundle>['personalInventory'];
+  chestStorage: ReturnType<typeof createPlayInventoryOverlayBundle>['chestStorage'];
   networkClient: WorldClient | null;
   economy: PlayOverlayEconomy;
 }
@@ -88,18 +89,20 @@ export async function createPlayOverlayStack(options: {
     options.scene,
     options.networkTarget ?? null,
   );
-  // Offline / editor-preview sessions have no bootstrap, so the Mall tab stays hidden.
-  const mallCallbacks = bootstrap
-    ? createPlayMallCallbacks({
-        getCreditBalance: () => creditBalance,
-        setCreditBalance: (balance) => { creditBalance = balance; },
-        getInventory: () => inventoryState,
-        onInventoryChanged: (inventory) => {
-          inventoryState = normalizeInventoryState(inventory);
-          personalInventory.refresh();
-        },
-      })
-    : undefined;
+  // Offline / editor-preview sessions have no live citizen, so Mall stays hidden.
+  let personalInventoryRefresh: (() => void) | null = null;
+  const mallCallbacks =
+    bootstrap && !isEditorOfflineBootstrap(bootstrap)
+      ? createPlayMallCallbacks({
+          getCreditBalance: () => creditBalance,
+          setCreditBalance: (balance) => { creditBalance = balance; },
+          getInventory: () => inventoryState,
+          onInventoryChanged: (inventory) => {
+            inventoryState = normalizeInventoryState(inventory);
+            personalInventoryRefresh?.();
+          },
+        })
+      : undefined;
   haloBand = createPlayHaloBand(
     dom,
     controls,
@@ -113,26 +116,23 @@ export async function createPlayOverlayStack(options: {
   const avmsTerminal = createPlayAvmsTerminal(dom);
   const entertainmentSystem = createPlayEntertainmentSystem();
 
-  const personalInventory = createPlayPersonalInventory({
+  const {
+    personalInventory,
+    chestStorage,
+    weaponShop,
+    outfitters,
+    foodShop,
+  } = createPlayInventoryOverlayBundle({
     controls,
     getInventory: () => inventoryState,
     setInventory: (inventory) => { inventoryState = inventory; },
+    getArcBalance: () => arcBalance,
+    setArcBalance: (balance) => { arcBalance = balance; },
     characterAppearance,
     loopRef,
     vitalsSessionRef,
   });
-
-  const onPurchaseResult = (result: { arcBalance: number; inventory: unknown }) => {
-    arcBalance = result.arcBalance;
-    inventoryState = normalizeInventoryState(result.inventory);
-    personalInventory.refresh();
-  };
-
-  const { weaponShop, outfitters, foodShop } = createPlayShops({
-    getArcBalance: () => arcBalance,
-    getInventory: () => inventoryState,
-    onPurchaseResult,
-  });
+  personalInventoryRefresh = () => personalInventory.refresh();
 
   return {
     hud,
@@ -144,6 +144,7 @@ export async function createPlayOverlayStack(options: {
     outfitters,
     foodShop,
     personalInventory,
+    chestStorage,
     networkClient,
     economy: {
       getArcBalance: () => arcBalance,

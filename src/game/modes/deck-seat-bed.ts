@@ -1,18 +1,21 @@
 import {
   bedInteractPrompt,
   nearestBed,
+  nearestChair,
   nearestSeat,
   resolveDoorInteractAim,
   seatInteractPrompt,
+  chairInteractPromptFromDeck,
   type DeckCharacterState,
 } from "../../player/ship-deck";
 import { beginLieTransition, beginSitTransition } from "../../player/transitions";
+import { beginChairSitTransition } from "../../player/chair-sit";
 import type { getActiveShipBody } from "../../player/world-state";
 import type { FrameActions } from "../types";
 import type { LoopContext } from "../loop-context";
 import type { Prompts } from "../station/prompts";
 
-/** Seat/bed prompts. Returns true when the interaction owns the prompt. */
+/** Seat/bed/chair prompts. Returns true when the interaction owns the prompt. */
 export function tryDeckSeatOrBed(
   ctx: LoopContext,
   shipBody: ReturnType<typeof getActiveShipBody>,
@@ -37,6 +40,18 @@ export function tryDeckSeatOrBed(
     ctx.world.cameraOrbit.pitchRadians,
     ctx.world.cameraOrbit.zoomDistance,
   );
+  const chairNearby = nearestChair(deckLocal, doorAim);
+  if (chairNearby) {
+    ctx.world.prompt = chairInteractPromptFromDeck(
+      chairNearby,
+      prompts.keyLabel("interact"),
+    );
+    if (actions.interactPressed) {
+      beginChairSitTransition(ctx.world, "ship", chairNearby.id);
+    }
+    return true;
+  }
+
   const bedNearby = nearestBed(deckLocal, doorAim);
   if (!bedNearby) return false;
   ctx.world.prompt = bedInteractPrompt(bedNearby, prompts.keyLabel("interact"));

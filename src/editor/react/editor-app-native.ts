@@ -52,6 +52,7 @@ export type NativeCommandHandlers = {
   save: () => void;
   openBrowse: (panel: BrowsePanelKind) => void;
   openSceneSettings: () => void;
+  openPrefabSettings: () => void;
   deleteScene: () => void;
   openProjectSettings: () => void;
   undo: () => void;
@@ -84,6 +85,7 @@ export function dispatchNativeCommand(
     'open-planet': () => handlers.openBrowse('planet'),
     'open-menu': () => handlers.openBrowse('menu'),
     'open-scene-settings': handlers.openSceneSettings,
+    'open-prefab-settings': handlers.openPrefabSettings,
     'delete-scene': handlers.deleteScene,
     'open-project-settings': handlers.openProjectSettings,
     // Electron menu accelerators fire even while an <input> is focused —

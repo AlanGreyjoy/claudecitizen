@@ -45,11 +45,6 @@ desktop.ini
 *.local
 .cache/
 
-# Generated spawn-corridor tile packs (run npm run bake:spawn-tiles)
-public/cache/spawn/*.bin
-public/cache/spawn/*.json
-!public/cache/spawn/README.md
-
 # Proprietary / project-local packs (never commit binaries).
 # When this checkout is opened as an AsteronEngine project, drop importable
 # GLBs under ./assets/ — that tree is project-scoped, not an engine library.
@@ -67,3 +62,7 @@ public/assets/protected/**
 docs/build/
 docs/.docusaurus/
 .netlify/
+
+# Generated catalog artifacts (weapon icons, seed SQL). Regenerate with
+# scripts/bake_weapon_icons.mjs + scripts/seed_weapon_catalog.mjs.
+build/

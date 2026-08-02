@@ -1,24 +1,44 @@
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
-import * as THREE from 'three';
 import { normalize } from '../src/math/vec3';
-import { buildSurfaceWaterGeometry } from '../src/render/effects/lake_water/build/buffers';
+import {
+  SHORE_PADDING_METERS,
+  buildSurfaceWaterGeometry,
+} from '../src/render/effects/lake_water/build/buffers';
 import { buildTerrainTileBuffers } from '../src/render/planet_tiles/build/terrain-buffers';
 import { createTileMeshCache } from '../src/render/planet_tiles/cache/mesh-cache';
 import { isValidTerrainTileBuffers } from '../src/render/planet_tiles/domain/buffer-validation';
 import {
+  TERRAIN_PACKED_COMPONENTS,
   TERRAIN_SKIRT_VERTICES_PER_SEGMENT,
+  MAX_FALLBACK_SUPPRESSION_LEVELS,
   TERRAIN_SKIRT_MIN_DEPTH_METERS,
   TERRAIN_SURFACE_VERTEX_COUNT,
   TILE_SEGMENTS,
 } from '../src/render/planet_tiles/domain/constants';
+import {
+  EDGE_NEIGHBOUR_ABSENT,
+  resolveEdgeDeltas,
+} from '../src/render/planet_tiles/domain/edge-deltas';
+import {
+  retainFallbackAncestors,
+  selectedTileAncestorLevel,
+} from '../src/render/planet_tiles/domain/tile-coverage';
+import {
+  cubeFaceBasis,
+  edgeMorphedHeight,
+  geomorphHeight,
+  tileEdgeMask,
+  tileVertexPosition,
+  tileVertexRelativePosition,
+} from '../src/render/planet_tiles/domain/tile-vertex';
 import { visitSelectedTiles } from '../src/render/planet_tiles/domain/selection';
 import {
   makeTileInfo,
   parentTileInfo,
   tileKey,
 } from '../src/render/planet_tiles/domain/tile-info';
-import { createTerrainMaterial } from '../src/render/planet_tiles/render/terrain-material';
+import { createTerrainGridRenderer } from '../src/render/planet_tiles/render/terrain-grid-renderer';
 import type {
   CubeFace,
   SurfaceWaterBuffers,
@@ -29,7 +49,11 @@ import type {
 } from '../src/types';
 import { findSurfaceDestination } from '../src/world/biome-teleport';
 import { sampleSurfaceClimate } from '../src/world/climate';
-import { OCEAN_WATER_LEVEL_METERS } from '../src/world/coastal-profile';
+import {
+  OCEAN_WATER_LEVEL_METERS,
+  oceanWaterLevelMeters,
+} from '../src/world/coastal-profile';
+import { lakeWaterTableNormalized } from '../src/world/lakes';
 import { cartesianFromLatLonAlt } from '../src/world/coordinates';
 import {
   CUBE_FACES,
@@ -46,8 +70,19 @@ import {
   RENDER_SURFACE_SEGMENTS,
   renderableCellSampleSpacingMeters,
   renderableGridSampleSpacingMeters,
+  resetRenderableHeightCache,
+  sampleRenderableSurfaceHeight,
   sampleVisibleSurfaceFrame,
 } from '../src/world/renderable-surface';
+import { clearHeightPages, installHeightPage } from '../src/world/terrain-pages';
+import {
+  buildTileHeightRaster,
+  isValidTileHeightRaster,
+  rasterMayContainWater,
+  rasterSampleIndex,
+  readRasterDetails,
+  readRasterHeight,
+} from '../src/world/terrain-raster';
 import { getRiverNetworkDiagnostics } from '../src/world/rivers';
 import { terrainCellUsesNorthwestSoutheastDiagonal } from '../src/world/terrain-triangulation';
 
@@ -117,6 +152,13 @@ interface TerrainValidationSummary {
   finestSelectedTiles: number;
   finestSkirtDepthMeters: number;
   finestTriangleSpanMeters: number;
+  heightPageCheckedCorners: number;
+  heightPageCheckedProbes: number;
+  worstFallbackLevelGap: number;
+  maxVertexPositionErrorMeters: number;
+  maxEdgeMorphErrorMeters: number;
+  maxFloat32VertexErrorMeters: number;
+  naiveFloat32VertexErrorMeters: number;
   horizonTileCounts: number[];
   highlandProbeHeightMeters: number;
   highlandSelectedLevel: number;
@@ -128,9 +170,26 @@ interface TerrainValidationSummary {
   maxLakeSurfStrength: number;
   maxLakeSurfaceLevelErrorMeters: number;
   maxMixedLodGapToSkirtRatio: number;
+  /** Which contact produced the worst ratio — the skirt-depth tuning budget. */
+  maxMixedLodGapContext: string;
+  /** Worst gap and the depth covering it, per covering tile level. */
+  skirtGapByLevel: Record<string, { gapMeters: number; depthMeters: number }>;
+  /** Share of skirt edges the vertex shader collapses to degenerates. */
+  suppressedSkirtEdgeFraction: number;
+  suppressedSkirtEdges: number;
+  skirtEdgesTotal: number;
+  skirtEdgesCrossFace: number;
   maxGroundMeshFootHeightErrorMeters: number;
   maxMeshFootHeightErrorMeters: number;
   maxSameLodSeamErrorMeters: number;
+  /**
+   * Which same-LOD contact produced that error. Same-face contacts are
+   * bit-identical; only cube-boundary contacts can be non-zero, and the skirt
+   * suppression in `terrain-node-material.ts` depends on that staying true.
+   */
+  maxSameLodSeamContext: string;
+  /** Same-face same-LOD seam error per level — the skirt-suppression budget. */
+  sameLodSameFaceSeamErrorByLevel: Record<string, number>;
   maxVisibleFrameHeightErrorMeters: number;
   minimumSkirtFrontFacingDot: number;
   minimumGroundMeshFootNormalDot: number;
@@ -240,6 +299,7 @@ function validateLevelLakeSurfaces(): {
   );
   const waterBuffers = buildSurfaceWaterGeometry(waterInfo, planet, seed);
   assert.ok(waterBuffers, 'generated lake emitted no water geometry');
+  assertWaterSkipAgrees(waterInfo, 'lake tile');
   const maxLakeSurfStrength = maxSurfStrength(waterBuffers);
   assert.equal(maxLakeSurfStrength, 0, 'inland lake emitted ocean surf');
   return {
@@ -406,6 +466,7 @@ function validateCoastDestination(): {
   );
   const waterBuffers = buildSurfaceWaterGeometry(waterInfo, planet, seed);
   assert.ok(waterBuffers, 'raised shoreline emitted no water geometry');
+  assertWaterSkipAgrees(waterInfo, 'ocean coast tile');
   assert.ok(maxSurfStrength(waterBuffers) > 0, 'ocean coast emitted no surf');
   let maxCoastWaterSurfaceLevelErrorMeters = 0;
   for (let offset = 0; offset < waterBuffers.positions.length; offset += 3) {
@@ -501,14 +562,13 @@ function validateFallbackCoverage(selected: TileInfo[]): {
   }
   assert.equal(minimumLevel, 0, 'fallback coverage did not reach a root tile');
 
-  const material = createTerrainMaterial();
-  const tileGroup = new THREE.Group();
-  const cache = createTileMeshCache({ material, planet, seed, tileGroup });
+  const gridRenderer = createTerrainGridRenderer(planet);
+  const cache = createTileMeshCache({ gridRenderer, planet, seed });
   try {
     const target = selected.find((info) => info.level === RENDER_SURFACE_LEVEL);
     assert.ok(target, 'fallback validation had no finest-level target');
     const coldFallback = cache.requestBestAvailableTile(target, { remaining: 0 });
-    assert.ok(coldFallback.mesh, 'cold cache returned a terrain hole');
+    assert.ok(coldFallback.ready, 'cold cache returned a terrain hole');
     assert.equal(coldFallback.info.level, 0, 'cold cache did not resolve to a root tile');
 
     cache.setFrameNumber(10_000);
@@ -526,7 +586,7 @@ function validateFallbackCoverage(selected: TileInfo[]): {
     const postEvictionFallback = cache.requestBestAvailableTile(oppositeTarget, {
       remaining: 0,
     });
-    assert.ok(postEvictionFallback.mesh, 'post-eviction cache returned a terrain hole');
+    assert.ok(postEvictionFallback.ready, 'post-eviction cache returned a terrain hole');
     assert.equal(postEvictionFallback.info.level, 0);
     return {
       coldCacheFallbackLevel: coldFallback.info.level,
@@ -535,7 +595,7 @@ function validateFallbackCoverage(selected: TileInfo[]): {
     };
   } finally {
     cache.dispose();
-    material.dispose();
+    gridRenderer.dispose();
   }
 }
 
@@ -830,7 +890,7 @@ function edgeSkirtNormalAtCoordinate(
     TERRAIN_SURFACE_VERTEX_COUNT +
     (edgeIndex * TILE_SEGMENTS + segment) * TERRAIN_SKIRT_VERTICES_PER_SEGMENT +
     sideOffset;
-  const offset = vertex * 3;
+  const offset = vertex * TERRAIN_PACKED_COMPONENTS;
   return normalize({
     x: buffers.normals[offset],
     y: buffers.normals[offset + 1],
@@ -1077,10 +1137,19 @@ function sameLodBoundaryCandidates(
   );
 }
 
-function validateSameLodSeams(): { contacts: number; maximumErrorMeters: number } {
+function validateSameLodSeams(): {
+  contacts: number;
+  maximumErrorContext: string;
+  maximumErrorMeters: number;
+  sameFaceErrorByLevel: Record<string, number>;
+} {
   let contacts = 0;
   let maximumErrorMeters = 0;
   let maximumErrorContext = '';
+  // Tracked separately from the aggregate: skirt suppression only collapses
+  // same-face, same-level edges, so it is that number — not the cube-boundary
+  // one — that bounds the crack suppression can expose.
+  const sameFaceErrorByLevel = new Map<number, number>();
 
   const compare = (comparison: SameLodSeamComparison): void => {
     const {
@@ -1121,6 +1190,12 @@ function validateSameLodSeams(): { contacts: number; maximumErrorMeters: number 
         coordinate,
       );
       const errorMeters = pointDistance(leftPoint, rightPoint);
+      if (left.face === right.face) {
+        sameFaceErrorByLevel.set(
+          left.level,
+          Math.max(sameFaceErrorByLevel.get(left.level) ?? 0, errorMeters),
+        );
+      }
       if (errorMeters <= maximumErrorMeters) continue;
       maximumErrorMeters = errorMeters;
       maximumErrorContext = [
@@ -1196,7 +1271,16 @@ function validateSameLodSeams(): { contacts: number; maximumErrorMeters: number 
     maximumErrorMeters < 0.5,
     `same-LOD seam error reached ${maximumErrorMeters.toFixed(3)} m at ${maximumErrorContext}`,
   );
-  return { contacts, maximumErrorMeters };
+  return {
+    contacts,
+    maximumErrorContext,
+    maximumErrorMeters,
+    sameFaceErrorByLevel: Object.fromEntries(
+      [...sameFaceErrorByLevel.entries()]
+        .sort((left, right) => left[0] - right[0])
+        .map(([level, error]) => [`L${level}`, error]),
+    ),
+  };
 }
 
 function makeBoundaryTile(
@@ -1227,9 +1311,35 @@ function interpolatedCoarseRadius(
   return Math.hypot(point.x, point.y, point.z);
 }
 
-function validateMixedLodSkirts(selected: TileInfo[]): {
+/**
+ * Worst radial gap a skirt has to cover, bucketed by the covering tile's level.
+ *
+ * The aggregate ratio hides which levels are actually tight: it is dominated by
+ * the coarse contacts, where depth follows `cellSpan * factor`. The per-level
+ * gaps are what `TERRAIN_SKIRT_MIN_DEPTH_METERS` has to clear at the fine
+ * levels, where the floor is the binding term instead.
+ */
+type SkirtGapByLevel = Map<number, { gapMeters: number; depthMeters: number }>;
+
+function recordLevelGap(
+  byLevel: SkirtGapByLevel,
+  level: number,
+  gapMeters: number,
+  depthMeters: number,
+): void {
+  const existing = byLevel.get(level);
+  if (!existing || gapMeters > existing.gapMeters) {
+    byLevel.set(level, { gapMeters, depthMeters });
+  }
+}
+
+function validateMixedLodSkirts(
+  selected: TileInfo[],
+  gapByLevel: SkirtGapByLevel,
+): {
   contacts: number;
   maximumRatio: number;
+  maximumRatioContext: string;
   minimumFrontFacingDot: number;
 } {
   let contacts = 0;
@@ -1334,7 +1444,14 @@ function validateMixedLodSkirts(selected: TileInfo[]): {
         coordinate,
       );
       const gap = Math.abs(fineRadius - coarseRadius);
-      const coveringDepth = fineRadius >= coarseRadius ? fineDepth : coarseDepth;
+      const fineIsCoveringHere = fineRadius >= coarseRadius;
+      const coveringDepth = fineIsCoveringHere ? fineDepth : coarseDepth;
+      recordLevelGap(
+        gapByLevel,
+        fineIsCoveringHere ? fine.level : coarse.level,
+        gap,
+        coveringDepth,
+      );
       const ratio = gap / Math.max(coveringDepth, 1e-9);
       if (ratio > maximumRatio) {
         maximumRatio = ratio;
@@ -1416,7 +1533,72 @@ function validateMixedLodSkirts(selected: TileInfo[]): {
     minimumFrontFacingDot > 1e-6,
     `covering skirt became edge-on from both adjacent tile views (${minimumFrontFacingDot})`,
   );
-  return { contacts, maximumRatio, minimumFrontFacingDot };
+  return { contacts, maximumRatio, maximumRatioContext, minimumFrontFacingDot };
+}
+
+/**
+ * How many skirt edges the vertex shader collapses on a real selection.
+ *
+ * `terrain-node-material.ts` drops the wall on any edge whose delta is exactly
+ * 0 — a same-level, same-face neighbour in the rendered set. This measures the
+ * payoff and, more importantly, pins the two ways it can silently break: a
+ * suppression rate of zero means the optimisation stopped firing and every tile
+ * is paying for four invisible walls again, and a cross-face edge that ever
+ * reports 0 means a seam the morph cannot model just lost its only cover.
+ */
+function validateSkirtSuppression(selections: TileInfo[][]): {
+  crossFaceEdges: number;
+  suppressedEdgeFraction: number;
+  suppressedEdges: number;
+  totalEdges: number;
+} {
+  const deltas: [number, number, number, number] = [0, 0, 0, 0];
+  let crossFaceEdges = 0;
+  let suppressedEdges = 0;
+  let totalEdges = 0;
+  for (const selected of selections) {
+    const renderedKeys = new Set(
+      selected.map((info) => tileKey(info.face, info.level, info.x, info.y)),
+    );
+    for (const info of selected) {
+      resolveEdgeDeltas(info, renderedKeys, deltas);
+      const tilesPerAxis = 2 ** info.level;
+      // Edge order is `edge-deltas`': top, right, bottom, left.
+      const atFaceBoundary = [
+        info.y === 0,
+        info.x === tilesPerAxis - 1,
+        info.y === tilesPerAxis - 1,
+        info.x === 0,
+      ];
+      for (let edge = 0; edge < 4; edge += 1) {
+        totalEdges += 1;
+        if (atFaceBoundary[edge]) {
+          crossFaceEdges += 1;
+          assert.equal(
+            deltas[edge],
+            EDGE_NEIGHBOUR_ABSENT,
+            `cross-face edge ${edge} of L${info.level} ${info.face} ${info.x},${info.y} resolved a neighbour it cannot model`,
+          );
+          continue;
+        }
+        if (deltas[edge] === 0) suppressedEdges += 1;
+      }
+    }
+  }
+  assert.ok(
+    crossFaceEdges > 0,
+    'no cube-boundary tile was exercised — the cross-face assertion never ran',
+  );
+  assert.ok(
+    suppressedEdges > 0,
+    'no skirt edge was suppressed — every tile is drawing four invisible walls',
+  );
+  return {
+    crossFaceEdges,
+    suppressedEdgeFraction: suppressedEdges / Math.max(totalEdges, 1),
+    suppressedEdges,
+    totalEdges,
+  };
 }
 
 function validateTerrainTile(
@@ -1429,9 +1611,9 @@ function validateTerrainTile(
   const buffers = buildTerrainTileBuffers(finest, planet, seed);
   assert.ok(isValidTerrainTileBuffers(buffers));
   for (
-    let offset = TERRAIN_SURFACE_VERTEX_COUNT * 3;
+    let offset = TERRAIN_SURFACE_VERTEX_COUNT * TERRAIN_PACKED_COMPONENTS;
     offset < buffers.normals.length;
-    offset += 3
+    offset += TERRAIN_PACKED_COMPONENTS
   ) {
     assert.notDeepEqual(
       [buffers.normals[offset], buffers.normals[offset + 1], buffers.normals[offset + 2]],
@@ -1453,7 +1635,448 @@ function validateTerrainTile(
   return { finestSkirtDepthMeters, finestTriangleSpanMeters };
 }
 
-function main(): TerrainValidationSummary {
+/**
+ * The paged height field must be the *same* field, not a close one.
+ *
+ * Two independent claims are checked:
+ *  1. A tile's raster reproduces `sampleSurfaceHeightDetails` exactly at every
+ *     grid corner — strict equality, no tolerance. The raster is built from the
+ *     global grid coordinate while the mesh builder walks tile bounds; those are
+ *     algebraically equal but not automatically bit-equal, and any drift lands
+ *     straight in the mesh-vs-foot budget.
+ *  2. Sampling through a resident page returns exactly what the analytic path
+ *     returns. This is the property that lets foot placement, vegetation and
+ *     colliders read pages without diverging from the rendered mesh.
+ */
+function validateHeightPageAgreement(selected: TileInfo[]): {
+  checkedCorners: number;
+  checkedProbes: number;
+} {
+  const tile =
+    selected.find((info) => info.level === RENDER_SURFACE_LEVEL) ?? selected[0];
+  assert.ok(tile, 'no tile available for height page validation');
+
+  const raster = buildTileHeightRaster(
+    { face: tile.face, level: tile.level, x: tile.x, y: tile.y },
+    planet,
+    seed,
+  );
+  assert.ok(isValidTileHeightRaster(raster), 'raster failed its own shape check');
+
+  const cellsPerFace = 2 ** tile.level * TILE_SEGMENTS;
+  const sampleOptions = {
+    sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, tile.level),
+  };
+  let checkedCorners = 0;
+  for (let row = 0; row <= TILE_SEGMENTS; row += 1) {
+    const v = -1 + ((tile.y * TILE_SEGMENTS + row) * 2) / cellsPerFace;
+    for (let column = 0; column <= TILE_SEGMENTS; column += 1) {
+      const u = -1 + ((tile.x * TILE_SEGMENTS + column) * 2) / cellsPerFace;
+      const direction = directionFromCubeFace(tile.face, u, v);
+      const expected = sampleSurfaceHeightDetails(
+        planet,
+        seed,
+        {
+          x: direction.x * planet.radiusMeters,
+          y: direction.y * planet.radiusMeters,
+          z: direction.z * planet.radiusMeters,
+        },
+        sampleOptions,
+      );
+      const actual = readRasterDetails(raster, rasterSampleIndex(column, row));
+      assert.equal(actual.heightMeters, expected.heightMeters);
+      assert.equal(actual.lakeMask, expected.lakeMask);
+      assert.equal(actual.mountainRegion, expected.mountainRegion);
+      assert.equal(
+        actual.preRiverElevationNormalized,
+        expected.preRiverElevationNormalized,
+      );
+      assert.equal(actual.riverStrength, expected.riverStrength);
+      assert.equal(
+        actual.riverWaterLevelNormalized ?? null,
+        expected.riverWaterLevelNormalized ?? null,
+      );
+      checkedCorners += 1;
+    }
+  }
+
+  // Probe interior points both ways. Clearing the memo between passes is what
+  // forces the second pass to actually resolve through the page table.
+  const probes: Vec3[] = [];
+  for (let index = 0; index < 64; index += 1) {
+    const fractionU = ((index * 37) % 61) / 61;
+    const fractionV = ((index * 23) % 59) / 59;
+    const u = tile.bounds.u0 + (tile.bounds.u1 - tile.bounds.u0) * fractionU;
+    const v = tile.bounds.v0 + (tile.bounds.v1 - tile.bounds.v0) * fractionV;
+    const direction = directionFromCubeFace(tile.face, u, v);
+    probes.push({
+      x: direction.x * planet.radiusMeters,
+      y: direction.y * planet.radiusMeters,
+      z: direction.z * planet.radiusMeters,
+    });
+  }
+
+  clearHeightPages();
+  resetRenderableHeightCache();
+  const analytic = probes.map((probe) =>
+    sampleRenderableSurfaceHeight(planet, seed, probe, tile.level),
+  );
+
+  installHeightPage(raster);
+  resetRenderableHeightCache();
+  const paged = probes.map((probe) =>
+    sampleRenderableSurfaceHeight(planet, seed, probe, tile.level),
+  );
+  clearHeightPages();
+  resetRenderableHeightCache();
+
+  for (let index = 0; index < probes.length; index += 1) {
+    assert.equal(
+      paged[index],
+      analytic[index],
+      `paged sample diverged from analytic at probe ${index}`,
+    );
+  }
+
+  return { checkedCorners, checkedProbes: probes.length };
+}
+
+/**
+ * A tile that goes momentarily unready must fall back to a *near* ancestor.
+ *
+ * Reproduces the ground-level failure: build the selection, keep only the
+ * selected keys alive (which is what eviction used to do), then ask for a tile
+ * whose own mesh is missing. Before ancestors were retained this resolved to a
+ * level-0 root — one sixth of the planet — and the suppression rule then hid
+ * every ready tile beneath it, which is what read as the surface blinking out.
+ */
+/**
+ * The GPU displacement math must land vertices exactly where the CPU builder
+ * puts them.
+ *
+ * `tile-vertex.ts` is the reference implementation the terrain vertex shader
+ * transliterates. Asserting it against `buildTerrainGrid`'s own output is the
+ * only way to check a GPU displacement path without a GPU — and it is the
+ * check that keeps the rendered surface on the sampled surface, which is the
+ * whole mesh-vs-foot invariant.
+ */
+/**
+ * The decomposed vertex position, evaluated the way a shader would.
+ *
+ * `Math.fround` after every operation is float32 arithmetic: this is a literal
+ * simulation of the WGSL the material emits, and the only way to check that the
+ * precision argument in `tileVertexRelativePosition` actually holds. Keep it a
+ * transliteration of that function and of `terrain-node-material.ts` — if the
+ * three drift apart this stops testing anything.
+ */
+function float32RelativePosition(
+  tile: TileInfo,
+  column: number,
+  row: number,
+  heightMeters: number,
+): { x: number; y: number; z: number } {
+  const f = Math.fround;
+  const { axis, uAxis, vAxis } = cubeFaceBasis(tile.face);
+  const cellsPerFace = f(f(2 ** tile.level) * TILE_SEGMENTS);
+  const half = TILE_SEGMENTS / 2;
+  const centerU = f(-1 + f(f(f(tile.x * TILE_SEGMENTS) + half) * 2) / cellsPerFace);
+  const centerV = f(-1 + f(f(f(tile.y * TILE_SEGMENTS) + half) * 2) / cellsPerFace);
+  const deltaU = f(f(f(column - half) * 2) / cellsPerFace);
+  const deltaV = f(f(f(row - half) * 2) / cellsPerFace);
+
+  const c0 = [
+    f(axis.x + f(f(uAxis.x * centerU) + f(vAxis.x * centerV))),
+    f(axis.y + f(f(uAxis.y * centerU) + f(vAxis.y * centerV))),
+    f(axis.z + f(f(uAxis.z * centerU) + f(vAxis.z * centerV))),
+  ];
+  const d = [
+    f(f(uAxis.x * deltaU) + f(vAxis.x * deltaV)),
+    f(f(uAxis.y * deltaU) + f(vAxis.y * deltaV)),
+    f(f(uAxis.z * deltaU) + f(vAxis.z * deltaV)),
+  ];
+
+  const lengthSquared = f(f(c0[0] * c0[0]) + f(f(c0[1] * c0[1]) + f(c0[2] * c0[2])));
+  const inverseLength = f(1 / f(Math.sqrt(lengthSquared)));
+  const c0DotD = f(f(c0[0] * d[0]) + f(f(c0[1] * d[1]) + f(c0[2] * d[2])));
+  const dDotD = f(f(d[0] * d[0]) + f(f(d[1] * d[1]) + f(d[2] * d[2])));
+  const s = f(f(f(c0DotD * 2) + dDotD) / lengthSquared);
+  const r = f(Math.sqrt(f(1 + s)));
+  const q = f(1 / r);
+  const qMinusOne = f(-s / f(r * f(r + 1)));
+
+  const deltaDirection = c0.map((value, index) =>
+    f(f(f(value * qMinusOne) + f(d[index] * q)) * inverseLength),
+  );
+  const direction = c0.map((value, index) =>
+    f(f(value * inverseLength) + deltaDirection[index]),
+  );
+  const components = direction.map((value, index) =>
+    f(f(deltaDirection[index] * planet.radiusMeters) + f(value * heightMeters)),
+  );
+  return { x: components[0], y: components[1], z: components[2] };
+}
+
+function validateTileVertexMath(selected: TileInfo[]): {
+  maxVertexPositionErrorMeters: number;
+  maxEdgeMorphErrorMeters: number;
+  maxFloat32VertexErrorMeters: number;
+  naiveFloat32VertexErrorMeters: number;
+} {
+  const tile =
+    selected.find((info) => info.level === RENDER_SURFACE_LEVEL) ?? selected[0];
+  assert.ok(tile, 'no tile available for vertex math validation');
+
+  const raster = buildTileHeightRaster(
+    { face: tile.face, level: tile.level, x: tile.x, y: tile.y },
+    planet,
+    seed,
+  );
+  const buffers = buildTerrainTileBuffers(tile, planet, seed);
+
+  // Reconstruct the surface grid the same way the mesh builder does, then check
+  // the pure function reproduces it corner for corner.
+  let maxVertexPositionErrorMeters = 0;
+  for (let row = 0; row <= TILE_SEGMENTS; row += 1) {
+    for (let column = 0; column <= TILE_SEGMENTS; column += 1) {
+      const height = readRasterHeight(raster, rasterSampleIndex(column, row));
+      const expectedDirection = directionFromCubeFace(
+        tile.face,
+        tile.bounds.u0 +
+          ((tile.bounds.u1 - tile.bounds.u0) * column) / TILE_SEGMENTS,
+        tile.bounds.v0 + ((tile.bounds.v1 - tile.bounds.v0) * row) / TILE_SEGMENTS,
+      );
+      const surfaceRadius = planet.radiusMeters + height;
+      const expected = {
+        x: expectedDirection.x * surfaceRadius - tile.centerPosition.x,
+        y: expectedDirection.y * surfaceRadius - tile.centerPosition.y,
+        z: expectedDirection.z * surfaceRadius - tile.centerPosition.z,
+      };
+      const actual = tileVertexPosition(tile, planet, column, row, height);
+      maxVertexPositionErrorMeters = Math.max(
+        maxVertexPositionErrorMeters,
+        Math.hypot(actual.x - expected.x, actual.y - expected.y, actual.z - expected.z),
+      );
+    }
+  }
+  assert.ok(
+    maxVertexPositionErrorMeters < 1e-6,
+    `GPU vertex math drifted ${maxVertexPositionErrorMeters} m from the CPU grid`,
+  );
+
+  // The shader does not get float64. Displacing a tile is `direction * (radius +
+  // height) - tileCentre`, and in float32 both terms are ~6.37e6, where the
+  // representable spacing is half a metre — so the obvious formulation quantises
+  // every vertex of a 3 m quad onto a half-metre lattice. Check that the
+  // decomposition the shader actually uses does not, and measure the naive form
+  // alongside it so the gap is visible rather than asserted on faith.
+  let maxFloat32VertexErrorMeters = 0;
+  let naiveFloat32VertexErrorMeters = 0;
+  for (let row = 0; row <= TILE_SEGMENTS; row += 1) {
+    for (let column = 0; column <= TILE_SEGMENTS; column += 1) {
+      const height = readRasterHeight(raster, rasterSampleIndex(column, row));
+      const truth = tileVertexPosition(tile, planet, column, row, height);
+      const decomposed = float32RelativePosition(tile, column, row, height);
+      maxFloat32VertexErrorMeters = Math.max(
+        maxFloat32VertexErrorMeters,
+        Math.hypot(
+          decomposed.x - truth.x,
+          decomposed.y - truth.y,
+          decomposed.z - truth.z,
+        ),
+      );
+
+      const direction = directionFromCubeFace(
+        tile.face,
+        tile.bounds.u0 +
+          ((tile.bounds.u1 - tile.bounds.u0) * column) / TILE_SEGMENTS,
+        tile.bounds.v0 + ((tile.bounds.v1 - tile.bounds.v0) * row) / TILE_SEGMENTS,
+      );
+      const radius = Math.fround(planet.radiusMeters + height);
+      const naive = {
+        x: Math.fround(
+          Math.fround(Math.fround(direction.x) * radius) -
+            Math.fround(tile.centerPosition.x),
+        ),
+        y: Math.fround(
+          Math.fround(Math.fround(direction.y) * radius) -
+            Math.fround(tile.centerPosition.y),
+        ),
+        z: Math.fround(
+          Math.fround(Math.fround(direction.z) * radius) -
+            Math.fround(tile.centerPosition.z),
+        ),
+      };
+      naiveFloat32VertexErrorMeters = Math.max(
+        naiveFloat32VertexErrorMeters,
+        Math.hypot(naive.x - truth.x, naive.y - truth.y, naive.z - truth.z),
+      );
+    }
+  }
+  // A quad at the finest LOD spans a few metres; a centimetre of vertex noise is
+  // invisible, and anything approaching the naive form's error is not.
+  assert.ok(
+    maxFloat32VertexErrorMeters < 0.02,
+    `float32 vertex placement drifted ${maxFloat32VertexErrorMeters} m — the shader will visibly quantise`,
+  );
+
+  // The reference function and its float32 twin must agree, or the twin is
+  // testing something the shader does not do.
+  const referenceSample = tileVertexRelativePosition(tile, planet, 5, 7, 123.5);
+  const referenceTruth = tileVertexPosition(tile, planet, 5, 7, 123.5);
+  assert.ok(
+    Math.hypot(
+      referenceSample.relative.x - referenceTruth.x,
+      referenceSample.relative.y - referenceTruth.y,
+      referenceSample.relative.z - referenceTruth.z,
+    ) < 1e-6,
+    'decomposed vertex position disagrees with the direct form',
+  );
+
+  // Geomorph endpoints must be exact, or an idle tile would sit slightly off
+  // its own surface and foot placement would disagree with what is drawn.
+  assert.equal(geomorphHeight(123.5, -40.25, 1), 123.5);
+  assert.equal(geomorphHeight(123.5, -40.25, 0), -40.25);
+
+  // Edge morph must reproduce the coarser neighbour's straight edge segment:
+  // even indices keep their own height, odd indices land on the midpoint.
+  const edgeHeights = (index: number) =>
+    readRasterHeight(raster, rasterSampleIndex(index, 0));
+  let maxEdgeMorphErrorMeters = 0;
+  for (let index = 0; index <= TILE_SEGMENTS; index += 1) {
+    const morphed = edgeMorphedHeight(index, 1, edgeHeights);
+    if (index % 2 === 0) {
+      maxEdgeMorphErrorMeters = Math.max(
+        maxEdgeMorphErrorMeters,
+        Math.abs(morphed - edgeHeights(index)),
+      );
+      continue;
+    }
+    const expected = (edgeHeights(index - 1) + edgeHeights(index + 1)) * 0.5;
+    maxEdgeMorphErrorMeters = Math.max(
+      maxEdgeMorphErrorMeters,
+      Math.abs(morphed - expected),
+    );
+  }
+  assert.ok(
+    maxEdgeMorphErrorMeters < 1e-9,
+    `edge morph drifted ${maxEdgeMorphErrorMeters} m from the coarse edge`,
+  );
+
+  // A vertex not on an edge must never be touched by edge morphing.
+  assert.equal(tileEdgeMask(1, 1), 0);
+  assert.equal(tileEdgeMask(0, 0), 1 | 8);
+  assert.equal(tileEdgeMask(TILE_SEGMENTS, TILE_SEGMENTS), 2 | 4);
+
+  assert.ok(buffers.positions.length > 0, 'CPU builder produced no positions');
+  return {
+    maxVertexPositionErrorMeters,
+    maxEdgeMorphErrorMeters,
+    maxFloat32VertexErrorMeters,
+    naiveFloat32VertexErrorMeters,
+  };
+}
+
+/**
+ * The water manager skips building a tile whose terrain raster proves it holds
+ * no water. A false negative there does not degrade quality, it deletes a lake —
+ * so every tile the builder actually produces geometry for must be one the
+ * cheap test would have let through.
+ */
+function assertWaterSkipAgrees(info: TileInfo, label: string): void {
+  const raster = buildTileHeightRaster(
+    { face: info.face, level: info.level, x: info.x, y: info.y },
+    planet,
+    seed,
+  );
+  assert.ok(
+    rasterMayContainWater(
+      raster,
+      Math.max(
+        oceanWaterLevelMeters(),
+        lakeWaterTableNormalized() * planet.terrainAmplitudeMeters,
+      ),
+      SHORE_PADDING_METERS,
+    ),
+    `${label} produced water geometry but the raster water test would have skipped it`,
+  );
+}
+
+/** Lets an in-flight disk lookup settle so the next request can build. */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function validateNearAncestorFallback(selected: TileInfo[]): Promise<{
+  worstFallbackLevelGap: number;
+}> {
+  const target = selected.find((info) => info.level === RENDER_SURFACE_LEVEL);
+  assert.ok(target, 'no finest-level tile for ancestor fallback validation');
+
+  const gridRenderer = createTerrainGridRenderer(planet);
+  const cache = createTileMeshCache({ gridRenderer, planet, seed });
+  try {
+    // Warm the ladder the way a frame does, then retain it the way the manager
+    // now does, and evict everything else.
+    const ancestorKeys = new Set<string>();
+    retainFallbackAncestors(target, planet, ancestorKeys);
+    let current: TileInfo | null = parentTileInfo(target, planet);
+    while (current) {
+      // First request registers the tile and starts its disk lookup; the entry
+      // sits in 'loading-disk' until that settles, and only then may the second
+      // request build it synchronously. One sync build is allowed per frame, so
+      // reset the frame counters for each rung.
+      cache.resetFrameCounters();
+      cache.requestBestAvailableTile(current, { remaining: 64 });
+      await settle();
+      cache.resetFrameCounters();
+      cache.requestBestAvailableTile(current, { remaining: 64 });
+      current = parentTileInfo(current, planet);
+    }
+
+    const warmedReady = cache.countEntries('ready');
+    cache.setFrameNumber(10_000);
+    cache.evictTileMeshes(new Set(ancestorKeys));
+    const retainedReady = cache.countEntries('ready');
+
+    const resolved = cache.requestBestAvailableTile(target, { remaining: 0 });
+    assert.ok(
+      warmedReady > CUBE_FACES.length,
+      `ancestor ladder never built (ready=${warmedReady}); ` +
+        'the harness is not exercising the fallback path',
+    );
+    assert.ok(
+      retainedReady > CUBE_FACES.length,
+      `retained ancestors were evicted (ready ${warmedReady} -> ${retainedReady})`,
+    );
+    assert.ok(resolved.ready, 'retained-ancestor fallback returned a terrain hole');
+    const gap = target.level - resolved.info.level;
+    assert.ok(
+      gap <= MAX_FALLBACK_SUPPRESSION_LEVELS,
+      `unready tile fell back ${gap} levels (to L${resolved.info.level}); ` +
+        'retained ancestors should have caught it within ' +
+        `${MAX_FALLBACK_SUPPRESSION_LEVELS}`,
+    );
+
+    // And the suppression rule must not let a far-coarser cover hide a ready
+    // fine tile, which is the second half of the failure.
+    const rootKeys = new Set([tileKey(target.face, 0, 0, 0)]);
+    assert.equal(
+      selectedTileAncestorLevel(target, rootKeys),
+      0,
+      'root should still be recognised as an ancestor',
+    );
+    assert.ok(
+      target.level - 0 > MAX_FALLBACK_SUPPRESSION_LEVELS,
+      'a root cover must fall outside the suppression gap at the finest level',
+    );
+    return { worstFallbackLevelGap: gap };
+  } finally {
+    cache.dispose();
+    gridRenderer.dispose();
+  }
+}
+
+async function main(): Promise<TerrainValidationSummary> {
   const representativeDirection = normalize({ x: 1, y: 0.13, z: -0.22 });
   const representativeBody = bodyPositionAt(representativeDirection, 2);
   selectedTilesForBody(representativeBody, 2);
@@ -1502,11 +2125,16 @@ function main(): TerrainValidationSummary {
   ];
   let contacts = 0;
   let maximumRatio = 0;
+  let maximumRatioContext = '';
   let minimumFrontFacingDot = 1;
+  const skirtGapByLevel: SkirtGapByLevel = new Map();
   for (const seamSelection of seamSelections) {
-    const result = validateMixedLodSkirts(seamSelection);
+    const result = validateMixedLodSkirts(seamSelection, skirtGapByLevel);
     contacts += result.contacts;
-    maximumRatio = Math.max(maximumRatio, result.maximumRatio);
+    if (result.maximumRatio > maximumRatio) {
+      maximumRatio = result.maximumRatio;
+      maximumRatioContext = result.maximumRatioContext;
+    }
     minimumFrontFacingDot = Math.min(
       minimumFrontFacingDot,
       result.minimumFrontFacingDot,
@@ -1514,6 +2142,12 @@ function main(): TerrainValidationSummary {
   }
   const { finestSkirtDepthMeters, finestTriangleSpanMeters } =
     validateTerrainTile(selected);
+  // Includes the seam selections: those are the ones positioned to straddle
+  // cube edges, so they are what exercises the cross-face assertion.
+  const skirtSuppression = validateSkirtSuppression([selected, ...seamSelections]);
+  const heightPages = validateHeightPageAgreement(selected);
+  const nearAncestor = await validateNearAncestorFallback(selected);
+  const vertexMath = validateTileVertexMath(selected);
 
   return {
     coastTeleportHeightMeters: coastTeleport.coastTeleportHeightMeters,
@@ -1525,6 +2159,13 @@ function main(): TerrainValidationSummary {
     fallbackChainMinimumLevel: fallbackCoverage.fallbackChainMinimumLevel,
     finestSelectedTiles,
     finestSkirtDepthMeters,
+    heightPageCheckedCorners: heightPages.checkedCorners,
+    heightPageCheckedProbes: heightPages.checkedProbes,
+    worstFallbackLevelGap: nearAncestor.worstFallbackLevelGap,
+    maxVertexPositionErrorMeters: vertexMath.maxVertexPositionErrorMeters,
+    maxEdgeMorphErrorMeters: vertexMath.maxEdgeMorphErrorMeters,
+    maxFloat32VertexErrorMeters: vertexMath.maxFloat32VertexErrorMeters,
+    naiveFloat32VertexErrorMeters: vertexMath.naiveFloat32VertexErrorMeters,
     finestTriangleSpanMeters,
     highlandProbeHeightMeters: highlandGroundDetail.heightMeters,
     highlandSelectedLevel: highlandGroundDetail.selectedLevel,
@@ -1542,7 +2183,25 @@ function main(): TerrainValidationSummary {
       coastTeleport.maxCoastWaterSurfaceLevelErrorMeters,
     maxMeshFootHeightErrorMeters: meshFootAgreement.maximumHeightErrorMeters,
     maxMixedLodGapToSkirtRatio: maximumRatio,
+    maxMixedLodGapContext: maximumRatioContext,
+    skirtGapByLevel: Object.fromEntries(
+      [...skirtGapByLevel.entries()]
+        .sort((left, right) => left[0] - right[0])
+        .map(([level, entry]) => [
+          `L${level}`,
+          {
+            depthMeters: Number(entry.depthMeters.toFixed(2)),
+            gapMeters: Number(entry.gapMeters.toFixed(2)),
+          },
+        ]),
+    ),
+    suppressedSkirtEdgeFraction: skirtSuppression.suppressedEdgeFraction,
+    suppressedSkirtEdges: skirtSuppression.suppressedEdges,
+    skirtEdgesTotal: skirtSuppression.totalEdges,
+    skirtEdgesCrossFace: skirtSuppression.crossFaceEdges,
     maxSameLodSeamErrorMeters: sameLodSeams.maximumErrorMeters,
+    maxSameLodSeamContext: sameLodSeams.maximumErrorContext,
+    sameLodSameFaceSeamErrorByLevel: sameLodSeams.sameFaceErrorByLevel,
     maxUniformLodSpacingErrorMeters,
     maxVisibleFrameHeightErrorMeters,
     minimumSkirtFrontFacingDot: minimumFrontFacingDot,
@@ -1555,4 +2214,9 @@ function main(): TerrainValidationSummary {
   };
 }
 
-console.log(JSON.stringify(main(), null, 2));
+main()
+  .then((summary) => console.log(JSON.stringify(summary, null, 2)))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

@@ -20,7 +20,9 @@ export function createTileBuildWorker(): Worker | null {
 export function terrainWorkerPoolSize(): number {
   if (typeof navigator === 'undefined') return 2;
   const cores = navigator.hardwareConcurrency || 4;
-  return Math.min(6, Math.max(2, cores - 4));
+  // Reserve the main thread and one core of headroom, then leave room for the
+  // vegetation pool (see vegetationWorkerPoolSize) and the spawn worker.
+  return Math.min(6, Math.max(2, cores - 3 - Math.min(3, Math.max(1, Math.floor((cores - 2) / 3)))));
 }
 
 export function createTileBuildWorkers(count = terrainWorkerPoolSize()): Worker[] {

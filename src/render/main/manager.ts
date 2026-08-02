@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import type {
   Planet,
   RenderStats,
@@ -8,7 +9,6 @@ import type {
   SurfaceSpawnMeshCollision,
   Vec3,
 } from '../../types';
-import { distance } from '../../math/vec3';
 import { createCharacterAvatar } from './scene/character-avatar';
 import { createCloudShell, createPlanetSurfaceWaterManager } from '../effects';
 import { createPlanetTileManager, PLANET_RENDER_SCALE } from '../planet_tiles';
@@ -21,12 +21,10 @@ import { createWebGpuWindMaterial } from '../vegetation/render/wind-node-materia
 import { createWebGpuParticleMaterial } from '../particles/node-material';
 import { createSurfaceSpawnManager } from '../surface_spawns';
 import { applyRenderQualitySettings } from './domain/apply-render-quality';
-import { DAY_LENGTH_SECONDS, SURFACE_MAX_PIXEL_RATIO } from './domain/constants';
+import { SURFACE_MAX_PIXEL_RATIO } from './domain/constants';
+import { resolveSkyPalette, resolveSkyRecipe } from './domain/sky-recipe';
 import type { SpikeRenderer, TimeOverride } from './domain/types';
 import { getStationFrame, type StationFrame } from '../../world/station';
-import {
-  createPrefabStationGroup,
-} from '../prefabs/prefab-renderer';
 import type { PrefabDocument } from '../../world/prefabs/schema';
 import {
   DEFAULT_SCENE_ENVIRONMENT,
@@ -42,6 +40,8 @@ import { createShipRenderPool } from './scene/ship-render-pool';
 import { createRemotePresenceRenderer } from './scene/remote-presence';
 import { createStationNpcRenderer } from './scene/station-npcs';
 import { createStationModel } from './scene/station-model';
+import { createSecondaryStationLoader } from './scene/secondary-stations';
+import { createPrefabStationGroup } from '../prefabs/prefab-renderer';
 import {
   applyShadowQuality,
   createMainCamera,
@@ -51,7 +51,6 @@ import {
 } from './scene/scene-lighting';
 import type { MainPostStack } from './post/types';
 import { createWebGpuRenderer } from './scene/webgpu-renderer';
-import { createWebGpuTerrainMaterial } from '../planet_tiles/render/terrain-material';
 import { createWebGpuSurfaceWaterMaterial } from '../effects/lake_water/render/node-material';
 import { createWebGpuCloudShellMaterial } from '../effects/clouds/shell-node-material';
 import { createWebGpuHyperspaceMaterial } from '../effects/quantum-bubble-node-material';
@@ -73,6 +72,7 @@ import {
 } from '../../settings/game-settings';
 import { createMuzzleFlashRenderer } from '../effects/muzzle-flash';
 import { createHitDecalRenderer } from '../effects/hit-decals';
+import { createImpactBurstRenderer } from '../effects/impact-burst';
 import { createTracerRenderer } from '../effects/tracers';
 import {
   executeSpikeRenderFrame,
@@ -118,9 +118,75 @@ function applyLiveRenderQuality(
 }
 
 // A full protected station can carry multiple gigabytes of decoded atlas data.
-// Distant stations already have System Map/nav markers, so load their detailed
-// prefab only once the player is close enough for the mesh to matter.
-const SECONDARY_STATION_LOAD_DISTANCE_METERS = 75_000;
+
+/**
+ * Six cube-face views used to warm render pipelines over the whole sphere.
+ *
+ * `up` cannot be parallel to `forward` or `lookAt` degenerates, so the two
+ * vertical views tilt their up vector onto Z the way a cube camera does.
+ */
+const PIPELINE_WARM_VIEWS: ReadonlyArray<{ forward: Vec3; up: Vec3 }> = [
+  { forward: { x: 1, y: 0, z: 0 }, up: { x: 0, y: 1, z: 0 } },
+  { forward: { x: -1, y: 0, z: 0 }, up: { x: 0, y: 1, z: 0 } },
+  { forward: { x: 0, y: 0, z: 1 }, up: { x: 0, y: 1, z: 0 } },
+  { forward: { x: 0, y: 0, z: -1 }, up: { x: 0, y: 1, z: 0 } },
+  { forward: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 } },
+  { forward: { x: 0, y: -1, z: 0 }, up: { x: 0, y: 0, z: 1 } },
+];
+
+/**
+ * Builds render pipelines for everything around the camera, off the critical path.
+ *
+ * Without this, three takes the synchronous `device.createRenderPipeline` path
+ * (`compileAsync` is the only thing that opts into the async branch), so the
+ * first frame that brings a material variant into view blocks the render thread
+ * on a driver shader compile — a ~300 ms freeze while the frame counter still
+ * reads healthy.
+ *
+ * The sweep is the point. `compileAsync` runs the *same frustum cull as a real
+ * render* (`Renderer._projectObject` gates on
+ * `frustum.intersectsObject( object, camera )`), so warming with the live camera
+ * compiles only what is already on screen and leaves everything behind the
+ * player cold. The symptom is unmistakable: panning left stalls once, panning
+ * back and forth across that arc is then free, a little further left stalls
+ * again, and after a full turn the scene is finally smooth — each stall being
+ * one direction's pipelines compiling for the first time.
+ *
+ * Six 90-degree views from the camera's position cover the whole sphere, so a
+ * turn finds everything compiled. The renderer caches pipelines, so the five
+ * extra passes only pay for what the earlier ones did not reach.
+ *
+ * Shadow-caster variants are still not covered: `compileAsync` walks only the
+ * opaque and transparent lists for the given camera and never traverses shadow
+ * maps, and three exposes no public API to precompile them.
+ */
+async function warmPipelinesAround(
+  renderer: WebGPURenderer,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+): Promise<void> {
+  const warmCamera = new THREE.PerspectiveCamera(90, 1, camera.near, camera.far);
+  // The layer mask must match, or `_projectObject`'s `object.layers.test` drops
+  // exactly the objects the live camera would have drawn.
+  warmCamera.layers.mask = camera.layers.mask;
+  try {
+    for (const view of PIPELINE_WARM_VIEWS) {
+      warmCamera.position.copy(camera.position);
+      warmCamera.up.set(view.up.x, view.up.y, view.up.z);
+      warmCamera.lookAt(
+        camera.position.x + view.forward.x,
+        camera.position.y + view.forward.y,
+        camera.position.z + view.forward.z,
+      );
+      warmCamera.updateMatrixWorld(true);
+      await renderer.compileAsync(scene, warmCamera);
+    }
+  } catch (error) {
+    // Never let a warm-up failure block entering the world; the pipelines will
+    // just compile lazily as they did before.
+    console.warn('ClaudeCitizen pipeline warm-up failed', error);
+  }
+}
 
 // Interior scenes have no surface-spawn manager, so the debug/query surface of
 // the renderer answers with empties instead of forcing every caller to branch.
@@ -190,6 +256,7 @@ function resolveSpikeEnvironmentOptions(options?: SpikeRendererOptions): {
  */
 function createPlanetRenderStack(
   scene: THREE.Scene,
+  cloudScene: THREE.Scene,
   planet: Planet,
   seed: number,
   renderScale: number,
@@ -204,9 +271,7 @@ function createPlanetRenderStack(
   });
   quantumBubble.enableRenderLayer(QUANTUM_RENDER_LAYER);
   return {
-    tileManager: createPlanetTileManager(scene, planet, seed, {
-      materialFactory: createWebGpuTerrainMaterial,
-    }),
+    tileManager: createPlanetTileManager(scene, planet, seed),
     vegetationManager: createPlanetVegetationManager(
       scene,
       planet,
@@ -216,8 +281,15 @@ function createPlanetRenderStack(
       createWebGpuWindMaterial,
     ),
     surfaceSpawnManager: createSurfaceSpawnManager(scene, planet, seed, renderScale),
-    cloudShell: createCloudShell(scene, planet, seed, renderScale, {
+    // Into `cloudScene`, not `scene` — the deck is composited into the sky by
+    // the post stack's `cloud-deck` pass. See the note on the material.
+    cloudShell: createCloudShell(cloudScene, seed, renderScale, {
       materialFactory: createWebGpuCloudShellMaterial,
+      clouds: resolveSkyRecipe().clouds,
+      luminanceScale: resolveSkyPalette(resolveSkyRecipe()).cloudLuminanceScale,
+      hazeExtinctionPerMeter:
+        resolveSkyPalette(resolveSkyRecipe()).hazeExtinctionPerMeter,
+      planetRadiusMeters: planet.radiusMeters,
     }),
     surfaceWaterManager: createPlanetSurfaceWaterManager(scene, planet, seed, renderScale, {
       materialFactory: createWebGpuSurfaceWaterMaterial,
@@ -240,6 +312,11 @@ export async function createSpikeRenderer(
   const { rendererMode, renderer } = await createWebGpuRenderer(canvas);
 
   const scene = createMainScene();
+  // Holds the cloud deck and nothing else. It is rendered by its own post pass
+  // and composited into the sky, so it must stay out of the gameplay scene's
+  // depth, AO, and fog. `background` stays null: the pass relies on the
+  // renderer's transparent-black clear to carry cloud coverage in alpha.
+  const cloudScene = new THREE.Scene();
   const defaultFog = scene.fog as THREE.Fog;
   // TEMP DIAGNOSTIC: expose scene + camera for live inspection.
   window.__spikeScene = scene;
@@ -262,12 +339,13 @@ export async function createSpikeRenderer(
   enableRenderLayer(lighting.moonLight, QUANTUM_RENDER_LAYER);
 
   const renderScale = PLANET_RENDER_SCALE;
-  const muzzleFlashRenderer = createMuzzleFlashRenderer(scene, renderScale);
+  const muzzleFlashRenderer = createMuzzleFlashRenderer(scene, renderScale, camera);
   const hitDecalRenderer = createHitDecalRenderer(scene, renderScale);
-  const tracerRenderer = createTracerRenderer(scene, renderScale);
+  const impactBurstRenderer = createImpactBurstRenderer(scene, renderScale, camera);
+  const tracerRenderer = createTracerRenderer(scene, renderScale, camera);
 
   const planetStack = planetEnabled
-    ? createPlanetRenderStack(scene, planet, seed, renderScale)
+    ? createPlanetRenderStack(scene, cloudScene, planet, seed, renderScale)
     : null;
   const tileManager = planetStack?.tileManager ?? null;
   const vegetationManager = planetStack?.vegetationManager ?? null;
@@ -281,10 +359,14 @@ export async function createSpikeRenderer(
   vegetationManager?.setGrassRenderDistanceMeters(
     initialGameSettings.grassRenderDistanceMeters,
   );
+  vegetationManager?.setTreeLodDistanceMeters(
+    initialGameSettings.vegetationDrawDistanceMeters,
+  );
 
-  const postStack = createWebGpuMainPostStack(
+  const postStack = await createWebGpuMainPostStack(
     renderer,
     scene,
+    cloudScene,
     camera,
     planet,
     lighting.sun,
@@ -305,28 +387,18 @@ export async function createSpikeRenderer(
     : createStationModel(renderScale);
   scene.add(stationMesh);
 
-  const additionalStationMeshes = (options?.additionalStations ?? []).map((entry) => ({
-    ...entry,
-    mesh: null as THREE.Group | null,
-  }));
-
-  function ensureAdditionalStationMesh(
-    entry: (typeof additionalStationMeshes)[number],
-    focusPosition: Vec3,
-  ): THREE.Group | null {
-    if (entry.mesh) return entry.mesh;
-    if (distance(entry.frame.origin, focusPosition) > SECONDARY_STATION_LOAD_DISTANCE_METERS) {
-      return null;
-    }
-
-    entry.mesh = createPrefabStationGroup(entry.prefab, renderScale, {
+  const secondaryStations = createSecondaryStationLoader({
+    scene,
+    renderScale,
+    stations: options?.additionalStations ?? [],
+    getShadowSettings: () => ({
       localLightShadowMapSize: renderQuality.localLightShadowMapSize,
       localLightShadowsEnabled: renderQuality.localLightShadowsEnabled,
-      particleMaterialFactory: createWebGpuParticleMaterial,
-    });
-    scene.add(entry.mesh);
-    return entry.mesh;
-  }
+    }),
+    particleMaterialFactory: createWebGpuParticleMaterial,
+  });
+  const additionalStationMeshes = secondaryStations.entries;
+  const ensureAdditionalStationMesh = secondaryStations.ensure;
 
   const avatar = createCharacterAvatar(
     scene,
@@ -358,7 +430,7 @@ export async function createSpikeRenderer(
     if (timeOverride === 'auto') return nowSeconds;
     let theta = Math.atan2(up.y * 0.364 + up.z * 0.939, up.x);
     if (timeOverride === 'night') theta += Math.PI;
-    return (theta / (Math.PI * 2)) * DAY_LENGTH_SECONDS;
+    return (theta / (Math.PI * 2)) * resolveSkyRecipe().dayLengthSeconds;
   }
 
   let lastResizeWidth = canvas.clientWidth || 1;
@@ -377,9 +449,25 @@ export async function createSpikeRenderer(
     postStack.resize(width, height, pixelRatio);
   }
 
+  /**
+   * Hovering exactly at the atmosphere boundary must not toggle the pixel ratio.
+   *
+   * The surface cap changes the target pixel ratio, and changing that
+   * reallocates the whole post chain. On a bare threshold, drifting across
+   * `atmosphereHeightMeters` does that every frame. A 4% band means leaving
+   * costs an unambiguous climb.
+   */
+  const SURFACE_PIXEL_RATIO_EXIT_FACTOR = 1.04;
+  let treatAsOnSurface = true;
+
   function syncSurfacePixelRatio(altitudeMeters: number): void {
     lastSurfaceAltitudeMeters = altitudeMeters;
-    const onSurface = altitudeMeters < planet.atmosphereHeightMeters;
+    const exitAltitude =
+      planet.atmosphereHeightMeters * SURFACE_PIXEL_RATIO_EXIT_FACTOR;
+    treatAsOnSurface = treatAsOnSurface
+      ? altitudeMeters < exitAltitude
+      : altitudeMeters < planet.atmosphereHeightMeters;
+    const onSurface = treatAsOnSurface;
     const maxPixelRatio = onSurface
       ? Math.min(renderQuality.maxPixelRatio, SURFACE_MAX_PIXEL_RATIO)
       : renderQuality.maxPixelRatio;
@@ -425,6 +513,7 @@ export async function createSpikeRenderer(
     const next = (event as CustomEvent<GameSettings>).detail ?? loadGameSettings();
     cloudMode = next.cloudMode;
     vegetationManager?.setGrassRenderDistanceMeters(next.grassRenderDistanceMeters);
+    vegetationManager?.setTreeLodDistanceMeters(next.vegetationDrawDistanceMeters);
     const signature = renderQualitySignature(next);
     if (signature === appliedQualitySignature) return;
     appliedQualitySignature = signature;
@@ -446,6 +535,7 @@ export async function createSpikeRenderer(
     stationNpcs,
     muzzleFlashRenderer,
     hitDecalRenderer,
+    impactBurstRenderer,
     tracerRenderer,
     lighting,
     renderer,
@@ -486,6 +576,9 @@ export async function createSpikeRenderer(
     getNearbySurfaceSpawns(focus, radiusMeters) {
       return surfaceSpawnManager?.getNearbyInstances(focus, radiusMeters) ?? [];
     },
+    getSurfaceSpawnRevision() {
+      return surfaceSpawnManager?.getInstanceRevision() ?? 0;
+    },
     getSurfaceSpawnLayers() {
       return surfaceSpawnManager?.getLayers() ?? [];
     },
@@ -525,11 +618,14 @@ export async function createSpikeRenderer(
         vegetationKeys,
         timeoutMs * 0.3,
       );
+      onProgress?.(0.9, 'Compiling shaders...');
+      await warmPipelinesAround(renderer, scene, camera);
       onProgress?.(1, 'Spawn corridor ready');
       console.info(
         `ClaudeCitizen spawn warm: terrain ${terrainReady}/${terrainKeys.length}, veg ${vegetationReady}/${vegetationKeys.length}.`,
       );
     },
+    warmRenderPipelines: () => warmPipelinesAround(renderer, scene, camera),
     setFogSettings(settings) {
       postStack.setFogSettings(settings);
     },
@@ -590,6 +686,11 @@ export async function createSpikeRenderer(
       if (shot.muzzleFlash) muzzleFlashRenderer.spawn(shot.muzzleFlash);
       if (shot.tracer) tracerRenderer.spawn(shot.tracer);
       if (shot.hit) {
+        impactBurstRenderer.spawn({
+          normal: shot.hit.normal,
+          point: shot.hit.point,
+          surfaceKind: shot.hit.surfaceKind ?? 'other',
+        });
         hitDecalRenderer.spawn({
           normal: shot.hit.normal,
           point: shot.hit.point,
@@ -598,6 +699,7 @@ export async function createSpikeRenderer(
       }
     },
     dispose() {
+      secondaryStations.dispose();
       window.removeEventListener(GAME_SETTINGS_CHANGED_EVENT, handleGameSettingsChanged);
       planetStack?.cloudShell.dispose();
       planetStack?.surfaceWaterManager.dispose();
@@ -610,6 +712,7 @@ export async function createSpikeRenderer(
       avatar.dispose();
       muzzleFlashRenderer.dispose();
       hitDecalRenderer.dispose();
+      impactBurstRenderer.dispose();
       tracerRenderer.dispose();
       shipRenderPool.dispose();
       // Station groups were added to the scene and never removed. Their clones

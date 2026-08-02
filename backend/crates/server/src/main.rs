@@ -123,6 +123,9 @@ fn router(state: AppState) -> Result<Router> {
             post(game::consume_inventory_ammo),
         )
         .route("/game/inventory/equip", post(game::equip_inventory_item))
+        .route("/game/chest/deposit", post(game::deposit_chest_item))
+        .route("/game/chest/withdraw", post(game::withdraw_chest_item))
+        .route("/game/chest/{chest_id}", get(game::get_chest_contents))
         .route("/game/hangar/build", get(game::get_hangar_build))
         .route("/game/apartment/build", get(game::get_apartment_build))
         .route("/game/hangar/purchase", post(game::purchase_hangar_prop))

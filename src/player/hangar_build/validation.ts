@@ -3,6 +3,7 @@ import {
   HANGAR_PAD_HALF_METERS,
   HANGARS,
   STATION_ROOMS,
+  getStationLayoutOverride,
   type StationRoom,
 } from '../../world/station';
 import type { BuildArea } from '../../net/api';
@@ -21,6 +22,16 @@ const DEFAULT_PROP_FOOTPRINT = 0.75;
 const PAD_CLEARANCE_MARGIN = 0.5;
 
 const APARTMENT_ROOM_ID = 'hab-room';
+
+/**
+ * Authored hab/hangar scenes (BlackMarketHab, etc.) have no StationRoom AABB that
+ * matches the mesh. Procedural `hab-room` is a ~5×5 m box — enforcing it makes
+ * Build Mode only accept clicks near the spawn tile. Skip that clamp when a
+ * layout override is active; overlap (+ hangar pad) checks still apply.
+ */
+function shouldEnforceProceduralRoomBounds(): boolean {
+  return getStationLayoutOverride() === null;
+}
 
 function defaultHangarIndex(): number {
   return 2;
@@ -120,6 +131,10 @@ export function validateClientPlacement(params: {
   allowRotateY: boolean;
   snapGridM: number | null;
   existingPlacements: PlacementTransform[];
+  /** When true, skip fixed footprint prop–prop AABB (Rapier handles it). */
+  skipPropOverlap?: boolean;
+  /** Station/hangar collider probe already reported a hit. */
+  environmentBlocked?: boolean;
 }): { ok: true; transform: PlacementTransform } | { ok: false; message: string } {
   const room = buildRoomForArea(params.area, params.hangarIndex);
   let snapped = snapTransform(
@@ -133,7 +148,7 @@ export function validateClientPlacement(params: {
     rotationY: normalizeRotationY(snapped.rotationY, params.allowRotateY),
   };
 
-  if (!isInsideHangarRoom(snapped, room)) {
+  if (shouldEnforceProceduralRoomBounds() && !isInsideHangarRoom(snapped, room)) {
     return {
       ok: false,
       message: params.area === 'apartment' ? 'Outside apartment bounds.' : 'Outside hangar bay bounds.',
@@ -142,9 +157,14 @@ export function validateClientPlacement(params: {
   if (params.area === 'hangar' && overlapsShipPad(snapped, params.hangarIndex)) {
     return { ok: false, message: 'Too close to the ship pad.' };
   }
-  for (const existing of params.existingPlacements) {
-    if (boxesOverlap(snapped, existing)) {
-      return { ok: false, message: 'Overlaps another prop.' };
+  if (params.environmentBlocked) {
+    return { ok: false, message: 'Blocked by station geometry.' };
+  }
+  if (!params.skipPropOverlap) {
+    for (const existing of params.existingPlacements) {
+      if (boxesOverlap(snapped, existing)) {
+        return { ok: false, message: 'Overlaps another prop.' };
+      }
     }
   }
   return { ok: true, transform: snapped };

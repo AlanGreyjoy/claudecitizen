@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import type { CharacterRenderState, SpikeRenderWorld, Vec3 } from '../../../types';
 import {
   MODE_IN_BED,
+  MODE_IN_CHAIR,
   MODE_IN_STATION,
   MODE_ON_SHIP_DECK,
 } from '../../../player/modes';
 import {
   updateCharacterOrbitCameraRig,
   updateInBedCameraRig,
+  updateInChairCameraRig,
   updateInShipCameraRig,
 } from './camera-rig-modes';
 import type { StationCameraContext } from './camera-rig-types';
@@ -73,14 +75,35 @@ export function updateCameraRig(
   const onShipDeckInterior = mode === MODE_ON_SHIP_DECK && !shipExteriorWalk;
   const weaponAimZoom01 = resolveWeaponAimZoom01(camera, world, dt);
 
+  const chairOnShip =
+    mode === MODE_IN_CHAIR && world.chairOccupancy?.surface === 'ship';
+  const focusUsesShip =
+    mode === 'in-ship' || mode === MODE_IN_BED || chairOnShip;
   const focusPosition =
-    mode === 'in-ship' || mode === MODE_IN_BED || !character
-      ? world.ship.position
-      : character.position;
+    focusUsesShip || !character ? world.ship.position : character.position;
   const focusVec = new THREE.Vector3(focusPosition.x, focusPosition.y, focusPosition.z);
 
   if (mode === MODE_IN_BED) {
-    updateInBedCameraRig(camera, cameraTarget, world, renderScale, shipUp, shipForward);
+    updateInBedCameraRig(
+      camera,
+      cameraTarget,
+      world,
+      renderScale,
+      shipUp,
+      shipForward,
+      focusVec,
+    );
+  } else if (mode === MODE_IN_CHAIR) {
+    updateInChairCameraRig(
+      camera,
+      cameraTarget,
+      world,
+      renderScale,
+      shipUp,
+      shipForward,
+      station,
+      focusVec,
+    );
   } else if (mode === 'in-ship' || !character) {
     updateInShipCameraRig({
       camera,
@@ -139,15 +162,17 @@ export function updateSpeedBlur(
   }
 
   const focusVelocity =
-    mode === 'in-ship' || mode === MODE_IN_BED
+    mode === 'in-ship' ||
+    mode === MODE_IN_BED ||
+    (mode === MODE_IN_CHAIR && world.chairOccupancy?.surface === 'ship')
       ? ship.velocity
-      : (character as CharacterRenderState & { velocity?: Vec3 })!.velocity;
+      : (character as CharacterRenderState & { velocity?: Vec3 } | null)?.velocity;
   const speed = focusVelocity ? Math.hypot(focusVelocity.x, focusVelocity.y, focusVelocity.z) : 0;
 
   if (mode === 'in-ship') {
     const t = Math.max(0, Math.min(1, (speed - 120) / 1000));
     setStrength(t * 0.045);
-  } else if (mode === MODE_IN_BED) {
+  } else if (mode === MODE_IN_BED || mode === MODE_IN_CHAIR) {
     setStrength(0);
   } else {
     const t = Math.max(0, Math.min(1, (speed - 6) / 10));

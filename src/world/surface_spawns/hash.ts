@@ -1,3 +1,10 @@
+/**
+ * Placement hash shared by surface spawns and vegetation.
+ *
+ * These two systems scatter against the same surface and must not drift apart:
+ * a second copy of this function lived under `render/vegetation/domain/` and
+ * was kept byte-identical by hand.
+ */
 export function hash01(seed: number, ...values: number[]): number {
   let state = seed >>> 0;
   for (const value of values) {
@@ -5,6 +12,9 @@ export function hash01(seed: number, ...values: number[]): number {
     state = Math.imul(state ^ (state >>> 16), 0x45d9f3b);
     state >>>= 0;
   }
+  // murmur3 fmix32 finalizer: without full avalanche, calls that differ only
+  // in the final salt (e.g. u vs v jitter) produce correlated outputs, which
+  // made vegetation line up in visible diagonal rows.
   state ^= state >>> 16;
   state = Math.imul(state, 0x85ebca6b) >>> 0;
   state ^= state >>> 13;

@@ -476,6 +476,18 @@ async function proxyBackendRequest(repository, request, backendPath, fetcher) {
     ]) {
       forwarded.delete(name);
     }
+    // Fetch forbids a body on null-body statuses (204/205/304/…). Passing even an
+    // empty Buffer into `new Response` throws, which used to surface every
+    // successful DELETE as a spurious 502 Bad Gateway.
+    const nullBodyStatus = [101, 103, 204, 205, 304].includes(response.status);
+    if (nullBodyStatus) {
+      forwarded.delete('content-type');
+      return new Response(null, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: forwarded,
+      });
+    }
     const body = Buffer.from(await response.arrayBuffer());
     forwarded.set('content-length', String(body.byteLength));
     return new Response(body, {
@@ -734,12 +746,16 @@ function installEditorApplicationMenu({
         },
         { type: 'separator' },
         {
-          label: 'New Prefab',
+          label: 'New Prefab…',
           click: () => sendEditorCommand(getWindow, 'new-prefab'),
         },
         {
           label: 'Open Prefab…',
           click: () => sendEditorCommand(getWindow, 'open-prefab'),
+        },
+        {
+          label: 'Prefab Settings…',
+          click: () => sendEditorCommand(getWindow, 'open-prefab-settings'),
         },
         { type: 'separator' },
         {

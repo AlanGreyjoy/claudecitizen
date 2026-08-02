@@ -1,27 +1,33 @@
 import {
   cloneColliderWithTransform,
   placementMatrix,
+  preloadMeshColliders,
   type GameplayCollider,
 } from "../../physics/colliders";
 import type { HangarPlacementEntry } from "../../net/api";
 import { loadPrefabDocument } from "../../world/prefabs/loader";
 import { buildPrefabColliders } from "../../physics/prefab-colliders";
 import type { BuildPlacementFrame } from "./placement-frame";
+import type { PlacementTransform } from "./validation";
 
 export function createBuildPropColliderRuntime(options: {
   placementFrame?: BuildPlacementFrame;
 } = {}) {
-  const prefabColliders = new Map<string, Promise<GameplayCollider[]>>();
+  const prefabColliderPromises = new Map<string, Promise<GameplayCollider[]>>();
+  const prefabColliderCache = new Map<string, GameplayCollider[]>();
   let colliders: GameplayCollider[] = [];
   let generation = 0;
 
   function loadPrefabColliders(prefabId: string): Promise<GameplayCollider[]> {
-    let pending = prefabColliders.get(prefabId);
+    let pending = prefabColliderPromises.get(prefabId);
     if (!pending) {
-      pending = loadPrefabDocument(prefabId).then(async (doc) =>
-        doc ? await buildPrefabColliders(doc) : [],
-      );
-      prefabColliders.set(prefabId, pending);
+      pending = loadPrefabDocument(prefabId).then(async (doc) => {
+        const baked = doc ? await buildPrefabColliders(doc) : [];
+        await preloadMeshColliders(baked);
+        prefabColliderCache.set(prefabId, baked);
+        return baked;
+      });
+      prefabColliderPromises.set(prefabId, pending);
     }
     return pending;
   }
@@ -55,12 +61,35 @@ export function createBuildPropColliderRuntime(options: {
 
   return {
     setPlacements,
+    ensurePrefabColliders(prefabId: string): Promise<GameplayCollider[]> {
+      return loadPrefabColliders(prefabId);
+    },
+    getPrefabColliders(prefabId: string): GameplayCollider[] | null {
+      return prefabColliderCache.get(prefabId) ?? null;
+    },
+    /**
+     * Bake source prefab colliders at a runtime station-local placement.
+     * Returns null when the prefab has not been loaded yet.
+     */
+    collidersAtRuntimeTransform(
+      prefabId: string,
+      runtimeTransform: PlacementTransform,
+      idPrefix = "ghost",
+    ): GameplayCollider[] | null {
+      const source = prefabColliderCache.get(prefabId);
+      if (!source) return null;
+      const matrix = placementMatrix(runtimeTransform);
+      return source.map((collider) =>
+        cloneColliderWithTransform(collider, matrix, idPrefix),
+      );
+    },
     getColliders(): GameplayCollider[] {
       return colliders;
     },
     dispose(): void {
       colliders = [];
-      prefabColliders.clear();
+      prefabColliderPromises.clear();
+      prefabColliderCache.clear();
     },
   };
 }

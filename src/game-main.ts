@@ -1,3 +1,5 @@
+// Before any import that can pull `@takram/three-atmosphere` (LUT idle bind).
+import './render/main/post/atmosphere-idle-bypass';
 import { passRequiredWebGpuStartupGate } from './app/required-webgpu-gate';
 
 /**

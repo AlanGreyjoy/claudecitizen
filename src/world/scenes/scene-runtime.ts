@@ -104,7 +104,7 @@ export interface ScenePlayConfig {
   prefabInstances: Array<{
     entityId: string;
     prefabId: string;
-    prefabKind?: 'station' | 'ship' | 'site' | 'prop' | 'item';
+    prefabKind?: 'station' | 'ship' | 'site' | 'placeable' | 'item';
     transform: PrefabEntity['transform'];
   }>;
   /** UI surfaces the scene mounts, in document order. */

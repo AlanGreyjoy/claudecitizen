@@ -6,7 +6,7 @@ import type {
   Vec3,
   WaterBody,
 } from '../../../../types';
-import { distance, scale } from '../../../../math/vec3';
+import { scale } from '../../../../math/vec3';
 import { directionFromCubeFace } from '../../../../world/cube-sphere';
 import { oceanWaterLevelMeters } from '../../../../world/coastal-profile';
 import { terrainCellUsesNorthwestSoutheastDiagonal } from '../../../../world/terrain-triangulation';
@@ -20,7 +20,7 @@ import {
 } from '../../../../world/renderable-surface';
 
 const TILE_SEGMENTS = RENDER_SURFACE_SEGMENTS;
-const SHORE_PADDING_METERS = 28;
+export const SHORE_PADDING_METERS = 28;
 // Shore foam is a near-surface detail. At coarse flight/orbital LODs one grid
 // cell can cover kilometres, so a cell-based foam ribbon becomes a giant white
 // polygon. Fade the effect in metres and omit unresolved partial shore cells.
@@ -220,122 +220,6 @@ function waterSurfaceForSample(surface: PlanetSurfaceSample): WaterSurfaceSpec |
   consider('lake', surface.lakeWaterLevelMeters);
   consider('river', surface.riverWaterLevelMeters);
   return result;
-}
-
-function isShorePadded(surface: PlanetSurfaceSample): boolean {
-  return waterSurfaceForSample(surface) != null;
-}
-
-function tileBounds(level: number, x: number, y: number) {
-  const tileCount = 2 ** level;
-  const step = 2 / tileCount;
-  const u0 = -1 + x * step;
-  const v0 = -1 + y * step;
-  return {
-    u0,
-    u1: u0 + step,
-    v0,
-    v1: v0 + step,
-  };
-}
-
-export function makeSurfaceWaterTileInfo(
-  face: TileInfo['face'],
-  level: number,
-  x: number,
-  y: number,
-  planet: Planet,
-): TileInfo {
-  const bounds = tileBounds(level, x, y);
-  const centerDirection = directionFromCubeFace(
-    face,
-    (bounds.u0 + bounds.u1) * 0.5,
-    (bounds.v0 + bounds.v1) * 0.5,
-  );
-  const cornerA = scale(directionFromCubeFace(face, bounds.u0, bounds.v0), planet.radiusMeters);
-  const cornerB = scale(directionFromCubeFace(face, bounds.u1, bounds.v1), planet.radiusMeters);
-  const centerPosition = scale(centerDirection, planet.radiusMeters);
-  return {
-    bounds,
-    centerDirection,
-    centerPosition,
-    face,
-    level,
-    spanMeters: distance(cornerA, cornerB),
-    x,
-    y,
-  };
-}
-
-function tileKey(face: TileInfo['face'], level: number, x: number, y: number): string {
-  return `${face}:${level}:${x}:${y}`;
-}
-
-function inFaceNeighborTileInfos(info: TileInfo, planet: Planet): TileInfo[] {
-  const tileCount = 2 ** info.level;
-  const neighbors: TileInfo[] = [];
-  const deltas: [number, number][] = [
-    [-1, 0],
-    [1, 0],
-    [0, -1],
-    [0, 1],
-  ];
-
-  for (const [dx, dy] of deltas) {
-    const nx = info.x + dx;
-    const ny = info.y + dy;
-    if (nx < 0 || ny < 0 || nx >= tileCount || ny >= tileCount) continue;
-    neighbors.push(makeSurfaceWaterTileInfo(info.face, info.level, nx, ny, planet));
-  }
-
-  return neighbors;
-}
-
-export function tileHasSurfaceWater(info: TileInfo, planet: Planet, seed: number): boolean {
-  const { u0, u1, v0, v1 } = info.bounds;
-  const stride = Math.max(1, Math.floor(TILE_SEGMENTS / 6));
-
-  for (let iy = 0; iy <= TILE_SEGMENTS; iy += stride) {
-    const v = v0 + ((v1 - v0) * iy) / TILE_SEGMENTS;
-    for (let ix = 0; ix <= TILE_SEGMENTS; ix += stride) {
-      const u = u0 + ((u1 - u0) * ix) / TILE_SEGMENTS;
-      const direction = directionFromCubeFace(info.face, u, v);
-      const surface = samplePlanetSurface(
-        planet,
-        seed,
-        scale(direction, planet.radiusMeters),
-        {
-          sampleSpacingMeters: renderableGridSampleSpacingMeters(planet, info.level),
-        },
-      );
-      if (isShorePadded(surface)) return true;
-    }
-  }
-
-  return false;
-}
-
-export function expandSurfaceWaterTiles(
-  selectedTiles: TileInfo[],
-  planet: Planet,
-  seed: number,
-): TileInfo[] {
-  const expanded = new Map<string, TileInfo>();
-
-  for (const info of selectedTiles) {
-    expanded.set(tileKey(info.face, info.level, info.x, info.y), info);
-  }
-
-  for (const info of selectedTiles) {
-    if (!tileHasSurfaceWater(info, planet, seed)) continue;
-
-    for (const neighbor of inFaceNeighborTileInfos(info, planet)) {
-      const key = tileKey(neighbor.face, neighbor.level, neighbor.x, neighbor.y);
-      if (!expanded.has(key)) expanded.set(key, neighbor);
-    }
-  }
-
-  return [...expanded.values()];
 }
 
 interface GridSampleLocation {

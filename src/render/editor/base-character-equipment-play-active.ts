@@ -9,7 +9,6 @@ import {
 } from '../../player/inventory/weapon-select';
 import { applyPlayTestAnimationLayers, buildPlayTestAnimationStateKey } from './base-character-equipment-play-test';
 import {
-  PLAY_TEST_DEFAULT_ASSIGNMENTS,
   createPlayTestCharacterState,
   equipDefaultPlayTestLoadout,
   type PlayTestSessionContext,
@@ -54,14 +53,13 @@ export function renderPlayTestHud(
   ctx.stage.classList.toggle('is-play-testing', ctx.getPlayTestActive());
   if (!ctx.getPlayTestActive()) return;
   if (ctx.playTestWeaponButtons.size === 0) {
-    for (const entry of PLAY_TEST_DEFAULT_ASSIGNMENTS) {
-      if (entry.slotId === 'backpack') continue;
-      const slotId = entry.slotId;
-      const weaponButton = button(`${WEAPON_SELECT_SLOT_IDS.indexOf(slotId) + 1} ${entry.definition.name}`, () => {
+    for (const slotId of WEAPON_SELECT_SLOT_IDS) {
+      const label = ctx.getAssignments().get(slotId)?.name ?? slotId;
+      const weaponButton = button(`${WEAPON_SELECT_SLOT_IDS.indexOf(slotId) + 1} ${label}`, () => {
         void selectPlayTestWeapon(slotId);
       });
       weaponButton.className = 'ed-base-playtest-weapon';
-      weaponButton.title = `Draw ${entry.definition.name}; press again to holster`;
+      weaponButton.title = `Draw the ${slotId} item; press again to holster`;
       ctx.playTestWeaponButtons.set(slotId, weaponButton);
       ctx.playTestHudLoadout.append(weaponButton);
     }

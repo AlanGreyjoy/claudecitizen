@@ -24,16 +24,17 @@ export interface WindMaterialOptions {
 }
 
 /**
- * Converts one wind-enabled source material for a particular instance buffer.
+ * Converts one wind-enabled source material into its renderer-specific form.
  *
- * The game still renders through WebGL and therefore keeps the legacy
- * `onBeforeCompile` material in place. WebGPU-only surfaces can inject a
- * node-material factory at the point where their `InstancedMesh` exists, which
- * gives the factory access to the exact instance transforms used by that mesh.
+ * Implementations must be **many-to-one**: the same source material has to map
+ * to the same returned material every time, because the result is shared by
+ * every `InstancedMesh` drawing that asset. Returning a fresh material per mesh
+ * gives each mesh its own program cache key under WebGPU, which turns every
+ * streamed vegetation tile into a synchronous shader compile. Callers therefore
+ * must not dispose the returned material with the mesh.
  */
 export type InstancedWindMaterialFactory = (
   material: THREE.Material,
-  instanceMatrix: THREE.InstancedBufferAttribute,
 ) => THREE.Material;
 
 export const sharedWindTime: THREE.IUniform<number> = { value: 0 };

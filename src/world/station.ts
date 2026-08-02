@@ -4,6 +4,7 @@ import { DEFAULT_SPAWN_SITE } from './landing-sites';
 import type { LandingSiteHint, Planet, Vec3 } from '../types';
 import type { GameplayCollider } from '../physics/colliders';
 import type { LadderSpec } from './ladders';
+import type { ChairSeatSpec } from './chair-seats';
 import type { PrefabSoundSpec } from './prefabs/sound-runtime';
 import type {
   StationNpcPlacementSpec,
@@ -477,6 +478,20 @@ export interface StationDoorSpec {
   closeSoundUrl?: string;
 }
 
+/** Personal stash chest baked from a `chest-storage` component. */
+export interface StationChestStorageMarker {
+  id: string;
+  label: string;
+  right: number;
+  up: number;
+  forward: number;
+  trigger: StationDoorTrigger;
+  radius: number;
+  aimRadius: number;
+  /** Max distinct item stacks (client UX; server hard-caps at 64). */
+  slotCount: number;
+}
+
 export interface StationAvmsMarker {
   id: string;
   floorId: StationFloorId;
@@ -561,11 +576,15 @@ export interface StationLayoutOverride {
   spawn: StationSpawnPose;
   /** Climbable ladders in station-local meters. */
   ladders: LadderSpec[];
+  /** Furniture chairs in station-local meters (F to sit). */
+  chairs: ChairSeatSpec[];
   infoMarkers: StationInfoMarker[];
   /** F-key portals that load another scene (hab → station). */
   sceneExitMarkers: StationSceneExitMarker[];
   /** Self-contained F-key doors from `door` components. */
   doors: StationDoorSpec[];
+  /** Personal stash chests from `chest-storage` components. */
+  chestStorage: StationChestStorageMarker[];
   avmsMarkers: StationAvmsMarker[];
   weaponShops: StationWeaponShopMarker[];
   outfitters: StationOutfittersMarker[];
@@ -601,6 +620,35 @@ export function getStationColliders(): GameplayCollider[] {
 export function getStationRoom(roomId: string): StationRoom | null {
   const rooms = layoutOverride?.rooms ?? STATION_ROOMS;
   return rooms.find((room) => room.id === roomId) ?? null;
+}
+
+export function getStationRooms(): StationRoom[] {
+  return layoutOverride?.rooms ?? STATION_ROOMS;
+}
+
+/**
+ * Pick the walk-volume room that contains a station-local point. Keeps
+ * `previousRoomId` when outside every AABB (doorways / gaps).
+ */
+export function resolveStationRoomIdAtLocal(
+  local: { right: number; up: number; forward: number },
+  previousRoomId: string,
+  rooms: StationRoom[] = getStationRooms(),
+): string {
+  for (const room of rooms) {
+    if (
+      local.right < room.minRight
+      || local.right > room.maxRight
+      || local.forward < room.minForward
+      || local.forward > room.maxForward
+    ) {
+      continue;
+    }
+    const maxUp = room.floorUp + room.height;
+    if (local.up < room.floorUp - 0.5 || local.up > maxUp) continue;
+    return room.id;
+  }
+  return previousRoomId;
 }
 
 export interface HangarRestSample {

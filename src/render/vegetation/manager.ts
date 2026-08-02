@@ -8,9 +8,10 @@ import type {
 } from '../../types';
 import {
   configureGrassDistanceMeters,
+  configureTreeLodDistanceMeters,
   getGrassDistanceMeters,
+  getTreeLodDistanceMeters,
   GRASS_RADIUS_UPDATE_MIN_MOVE_METERS,
-  TREE_LOD_DISTANCE_METERS,
   TREE_LOD_UPDATE_MIN_MOVE_METERS,
 } from './domain/constants';
 import {
@@ -58,6 +59,7 @@ export interface PlanetVegetationManager {
   setVisible: (visible: boolean) => void;
   setLayerVisible: (layers: { grass?: boolean; trees?: boolean }) => void;
   setGrassRenderDistanceMeters: (meters: number) => void;
+  setTreeLodDistanceMeters: (meters: number) => void;
   setSettings: (nextSettings: Partial<VegetationSettings>) => void;
   update: (
     bodyPosition: Vec3,
@@ -103,7 +105,7 @@ export function createPlanetVegetationManager(
   const treeLodUpdateMinMoveSq =
     TREE_LOD_UPDATE_MIN_MOVE_METERS * TREE_LOD_UPDATE_MIN_MOVE_METERS;
   const treeLodNearCheckRadius =
-    TREE_LOD_DISTANCE_METERS + TREE_LOD_UPDATE_MIN_MOVE_METERS;
+    getTreeLodDistanceMeters() + TREE_LOD_UPDATE_MIN_MOVE_METERS;
   const grassRadiusUpdateMinMoveSq =
     GRASS_RADIUS_UPDATE_MIN_MOVE_METERS * GRASS_RADIUS_UPDATE_MIN_MOVE_METERS;
   let resolveAssetsReady: (() => void) | null = null;
@@ -307,6 +309,13 @@ export function createPlanetVegetationManager(
     shared.lastGrassFocus = null;
   }
 
+  function setTreeLodDistanceMeters(meters: number): void {
+    const previous = getTreeLodDistanceMeters();
+    configureTreeLodDistanceMeters(meters);
+    if (getTreeLodDistanceMeters() === previous) return;
+    shared.lastTreeLodFocus = null;
+  }
+
   function setLayerVisible(layers: { grass?: boolean; trees?: boolean }): void {
     if (layers.grass !== undefined && layers.grass !== shared.grassLayerVisible) {
       shared.grassLayerVisible = layers.grass;
@@ -339,6 +348,7 @@ export function createPlanetVegetationManager(
     },
     setLayerVisible,
     setGrassRenderDistanceMeters,
+    setTreeLodDistanceMeters,
     setSettings,
     update(bodyPosition, selectedTiles, altitudeMeters, timeSeconds) {
       return frameUpdate.update(bodyPosition, selectedTiles, altitudeMeters, timeSeconds);

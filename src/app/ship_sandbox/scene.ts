@@ -114,7 +114,7 @@ export async function createShipSandboxScene(
   // needs its LTC tables installed separately from the WebGL one.
   ensureNodeRectAreaLights();
 
-  const renderer = new WebGPURenderer({ antialias: true, canvas });
+  const renderer = new WebGPURenderer({ alpha: false, antialias: true, canvas });
   // Do not dispose a rejected pre-init renderer: three's pre-init disposal path
   // can re-enter init(). The boot gate owns failure presentation.
   await initRequiredWebGpu(renderer);

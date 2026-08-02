@@ -1,6 +1,7 @@
 import type { Planet } from './planet';
 import type { SurfaceWaterBuffers, TileInfo } from './terrain';
 import type { PlanetDocument } from '../world/planets/schema';
+import type { TileHeightRaster } from '../world/terrain-raster';
 
 export interface TileWorkerInMessage {
   buildId: number;
@@ -17,9 +18,18 @@ export interface TileWorkerSuccessMessage {
   buildMs: number;
   buildId: number;
   key: string;
-  positions: Float32Array;
-  colors: Uint8Array;
-  normals: Int16Array;
+  /**
+   * Band-limited height field on the shared renderable grid.
+   *
+   * This and `gridColors` are the whole tile now — the shared grid displaces one
+   * geometry from them, foot placement samples them through the page table, and
+   * they are what gets persisted. A tile used to also ship ~110 KB of positions,
+   * normals and vertex colours on top of this; dropping them cuts the transfer
+   * and the structured clone to roughly a third.
+   */
+  raster: TileHeightRaster;
+  /** Per-grid-corner RGB for the shared-grid renderer's colour atlas. */
+  gridColors: Float32Array;
 }
 
 export interface TileWorkerErrorMessage {

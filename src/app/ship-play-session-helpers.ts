@@ -263,6 +263,7 @@ export function buildShipSandboxSession(options: {
     shipPhysics: options.shipPhysics,
     prompt: '',
     activeBedId: null,
+    activeChairId: null,
     ladderClimb: null,
     transition: null,
     autoRestPending: options.layout.restHeightMeters === null,
