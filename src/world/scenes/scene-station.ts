@@ -80,6 +80,24 @@ export function sceneHasStationContent(scene: SceneDocument): boolean {
 }
 
 /**
+ * Prefab instances all embed the same nested entity ids. Remap them under the
+ * host id so marker collect / door bake / NPC graphs do not collide across
+ * copies of the same placeable.
+ */
+function remapPrefabEntityIds(entity: PrefabEntity, idPrefix: string): PrefabEntity {
+  const remapped: PrefabEntity = {
+    ...entity,
+    id: `${idPrefix}/${entity.id}`,
+  };
+  if (entity.children?.length) {
+    remapped.children = entity.children.map((child) =>
+      remapPrefabEntityIds(child, idPrefix),
+    );
+  }
+  return remapped;
+}
+
+/**
  * Rewrites one GameObject into a prefab entity. A `prefab-instance` keeps its
  * scene transform and gains the referenced prefab's root as a child, so a
  * placed prefab behaves exactly like the same geometry authored inline.
@@ -92,7 +110,7 @@ async function compileEntity(entity: PrefabEntity): Promise<PrefabEntity | null>
   if (instance) {
     const doc = await loadPrefabDocument(instance.prefabId);
     // A missing prefab must never block spawn: the rest of the scene still plays.
-    if (doc) children.push(doc.root);
+    if (doc) children.push(remapPrefabEntityIds(doc.root, entity.id));
     else console.warn(`Scene prefab-instance "${instance.prefabId}" not found; skipping.`);
   }
 

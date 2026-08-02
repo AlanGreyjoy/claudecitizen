@@ -22,6 +22,7 @@ import type { PlanetSkyRecipe } from '../../../world/planets/sky-schema';
 import { resolveSkyPalette, resolveSkyRecipe } from '../domain/sky-recipe';
 import { createMoonSurfaceTexture } from '../scene/moon-texture';
 import type { MainPostEnvironmentFrame } from './types';
+import { atmosphereWork } from './atmosphere-work-counters';
 // Vite rewrites `?url` to a fetchable asset path under both editor HMR and
 // Build Web. `new URL(..., import.meta.url)` alone has failed under
 // `cceditor://` and poisoned the catalog with an empty buffer.
@@ -260,6 +261,7 @@ export function createWebGpuAtmospherePost(
     if (gpu == null || lutNode.version === lutNode.currentVersion) return;
     if (lutNode.textures == null || lutNode.updating) return;
     lutNode.currentVersion = lutNode.version;
+    atmosphereWork.lutFills += 1;
     void lutNode.updateTextures(gpu).catch((error: unknown) => {
       lutNode.currentVersion = undefined;
       console.error('[atmosphere] LUT fill failed.', error);
@@ -334,6 +336,7 @@ export function createWebGpuAtmospherePost(
     frame: MainPostEnvironmentFrame,
     pixelRatio: number,
   ): void {
+    atmosphereWork.frames += 1;
     const inverseRenderScale = 1 / Math.max(frame.renderScale, 0.000001);
     frame.camera.getWorldPosition(cameraWorldPosition);
     frame.camera.getWorldQuaternion(cameraWorldQuaternion);
@@ -388,6 +391,7 @@ export function createWebGpuAtmospherePost(
     // can miss the atmosphere camera when the NodeFrame only carries the game
     // camera, leaving a black atlas and a starless night.
     if (stars.intensity > 0) {
+      atmosphereWork.starFills += 1;
       starsNode.updateBefore({
         renderer,
         camera: atmosphereCamera,

@@ -1,0 +1,16 @@
+---
+description: Player game loop — Hab → Station → AVMS → Hangar → Open Space; read full architecture doc
+alwaysApply: true
+---
+
+# Game loop architecture (pointer)
+
+Full draft: [`docs/docs/architecture/game-loop.md`](../../docs/docs/architecture/game-loop.md).
+
+**Summary:** A Station owns its Hab + Hangar. Hab/Hangar are per-player instances
+(placeable build; team can follow in). Happy path: Hab → Station (`scene-exit`) →
+AVMS call ship / To Hangar → Hangar → Open Space (`scene-exit` via Station marker
+`HANGAR-OPEN-SPACE-EXIT`). Travel stays scene-based — no second teleporter system.
+
+When changing station/hab/hangar/AVMS/`scene-exit` flow, read the full doc first.
+Also listed in `AGENTS.md`.

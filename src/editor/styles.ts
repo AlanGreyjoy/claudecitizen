@@ -937,6 +937,7 @@ body.ed-resize-row * {
 .ed-scene-body > .ed-planet-authoring-host,
 .ed-scene-body > .ed-system-map-host,
 .ed-scene-body > .ed-menu-manager-host,
+.ed-scene-body > .ed-stations-host,
 .ed-scene-body > .ed-server-console-host {
   position: absolute;
   inset: 0;
@@ -1130,6 +1131,7 @@ body.ed-resize-row * {
 /* System Map / Menu Manager / Server hide Project + Console + asset browser. */
 #editor-root.is-system-map .ed-main,
 #editor-root.is-menu-manager .ed-main,
+#editor-root.is-stations .ed-main,
 #editor-root.is-server .ed-main,
 .ed-main.is-server-tab {
   grid-template-rows: minmax(0, 1fr);
@@ -1139,6 +1141,8 @@ body.ed-resize-row * {
 #editor-root.is-system-map .ed-bottom-dock,
 #editor-root.is-menu-manager .ed-project-splitter,
 #editor-root.is-menu-manager .ed-bottom-dock,
+#editor-root.is-stations .ed-project-splitter,
+#editor-root.is-stations .ed-bottom-dock,
 #editor-root.is-server .ed-project-splitter,
 #editor-root.is-server .ed-bottom-dock,
 .ed-main.is-server-tab .ed-project-splitter,
@@ -1152,6 +1156,23 @@ body.ed-resize-row * {
 .ed-main.is-server-tab {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
+}
+
+#editor-root.is-stations .ed-main {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+#editor-root.is-stations .ed-scene-shell {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+
+#editor-root.is-stations .ed-hierarchy-panel,
+#editor-root.is-stations .ed-hierarchy-splitter,
+#editor-root.is-stations .ed-inspector-panel,
+#editor-root.is-stations .ed-inspector-splitter {
+  display: none;
 }
 
 /* Scene shell is normally column 3; with a 1-col template it must move to 1
@@ -1621,7 +1642,9 @@ body.ed-resize-row * {
 /* Left-only tab editors: keep hierarchy chrome, drop empty inspector column. */
 #editor-root.is-planet-authoring .ed-main,
 #editor-root.is-system-map .ed-main,
-#editor-root.is-menu-manager .ed-main {
+#editor-root.is-menu-manager .ed-main,
+#editor-root.is-planets .ed-main,
+#editor-root.is-star-map .ed-main {
   grid-template-columns:
     var(--ed-hierarchy-width, 264px)
     4px
@@ -1633,14 +1656,102 @@ body.ed-resize-row * {
 #editor-root.is-system-map .ed-inspector-panel,
 #editor-root.is-system-map .ed-inspector-splitter,
 #editor-root.is-menu-manager .ed-inspector-panel,
-#editor-root.is-menu-manager .ed-inspector-splitter {
+#editor-root.is-menu-manager .ed-inspector-splitter,
+#editor-root.is-planets .ed-inspector-panel,
+#editor-root.is-planets .ed-inspector-splitter,
+#editor-root.is-star-map .ed-inspector-panel,
+#editor-root.is-star-map .ed-inspector-splitter {
   display: none;
 }
 
 .ed-planet-authoring-host,
 .ed-system-map-host,
-.ed-menu-manager-host {
+.ed-menu-manager-host,
+.ed-stations-host {
   background: var(--ed-viewport);
+}
+
+.ed-stations-host {
+  overflow: auto;
+}
+
+.ed-stations-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+
+.ed-stations-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ed-stations-copy {
+  margin: -4px 0 0;
+  color: var(--ed-muted);
+  font: 500 11px/1.45 var(--ed-font);
+}
+
+.ed-stations-message {
+  padding: 16px;
+  border: 1px solid var(--ed-line-soft);
+  border-radius: 4px;
+  background: var(--ed-raised);
+  color: var(--ed-muted);
+  font: 500 11px/1.45 var(--ed-font);
+}
+
+.ed-stations-message.is-error {
+  border-color: var(--ed-danger);
+  color: var(--ed-danger);
+}
+
+.ed-stations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.ed-station-card {
+  display: grid;
+  gap: 7px;
+  min-height: 118px;
+  padding: 14px;
+  border: 1px solid var(--ed-line-soft);
+  border-radius: 4px;
+  background: var(--ed-raised);
+  color: var(--ed-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-station-card:hover {
+  border-color: var(--ed-focus);
+  background: var(--ed-select);
+}
+
+.ed-station-card-name {
+  color: var(--ed-text-strong);
+  font: 700 12px/1.25 var(--ed-font);
+}
+
+.ed-station-card-id {
+  overflow: hidden;
+  color: var(--ed-muted);
+  font: 500 10px/1.2 var(--ed-mono, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-station-card-action {
+  margin-top: auto;
+  color: var(--ed-focus);
+  font: 700 9px/1 var(--ed-font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .ed-hierarchy-panel > .ed-planet-sidebar,

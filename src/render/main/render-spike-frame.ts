@@ -54,6 +54,7 @@ import type { createImpactBurstRenderer } from '../effects/impact-burst';
 import type { createTracerRenderer } from '../effects/tracers';
 import type { createSceneLighting } from './scene/scene-lighting';
 import type { SecondaryStationEntry } from './scene/secondary-stations';
+import { recordSubmitMs } from './frame-timing';
 
 const DAY_NIGHT_FADE_START_METERS = 18_000;
 const QUANTUM_RENDER_LAYER = 1;
@@ -716,11 +717,13 @@ function presentRenderOutput(
     );
     return;
   }
+  const submitStart = performance.now();
   if (quantumState.phase === 'dropOut') {
     deps.renderer.render(deps.scene, deps.camera);
-    return;
+  } else {
+    deps.postStack.render(dt);
   }
-  deps.postStack.render(dt);
+  recordSubmitMs(performance.now() - submitStart);
 }
 
 /** Muzzle flashes, tracers, impacts and decals all share the focus rebase. */

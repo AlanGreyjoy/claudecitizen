@@ -15,6 +15,7 @@ import { hasSelectedTileAncestor } from '../../planet_tiles/domain/tile-coverage
 import { updateVegetationWind } from './wind';
 import type { VegetationRenderGroup } from './vegetation-group';
 import type { VegetationTileEntry } from '../cache/tile-runtime';
+import { recordVegetationBuilds } from '../../main/frame-timing';
 
 interface ResolvedVegetationTile {
   key: string;
@@ -48,8 +49,14 @@ export interface VegetationFrameCtx {
     tileInfo: TileInfo;
   };
   startAssetCatalogLoad: () => void;
-  assetsLoading: boolean;
-  assetsReady: boolean;
+  /**
+   * Getters, not booleans. These were plain fields filled from a `{...shared}`
+   * spread, which snapshots the values at construction — both stayed `false`
+   * for the life of the manager, so the guard below re-kicked the asset load
+   * every single frame and the catalog never latched as ready.
+   */
+  getAssetsLoading: () => boolean;
+  getAssetsReady: () => boolean;
   cacheStats: {
     diskHits: number;
     diskMisses: number;
@@ -244,10 +251,11 @@ export function createVegetationFrameUpdate(ctx: VegetationFrameCtx) {
     const selectedKeys = new Set<string>();
     const keepKeys = new Set<string>();
     const vegetationInRange = isVegetationVisibleAtAltitude(altitudeMeters);
-    if (vegetationInRange && !ctx.assetsReady && !ctx.assetsLoading) {
+    const assetsReady = ctx.getAssetsReady();
+    if (vegetationInRange && !assetsReady && !ctx.getAssetsLoading()) {
       ctx.startAssetCatalogLoad();
     }
-    const vegetationVisible = vegetationInRange && ctx.assetsReady;
+    const vegetationVisible = vegetationInRange && assetsReady;
 
     if (vegetationVisible) {
       selectVisibleVegetationTiles(
@@ -278,6 +286,9 @@ export function createVegetationFrameUpdate(ctx: VegetationFrameCtx) {
       refreshLandingGroveLayers(bodyPosition, selectedKeys, newlyVisibleKeys);
     }
 
+    // Lets the frame timer attribute a stall to tile construction vs a shader
+    // compile, which look identical from the outside.
+    recordVegetationBuilds(ctx.builtThisFrame);
     return {
       activeTiles: selectedKeys.size,
       builtThisFrame: ctx.builtThisFrame,

@@ -21,6 +21,7 @@ export interface PlaySessionDom {
   tutorialBannerEl: HTMLElement | null;
   promptEl: HTMLElement;
   readoutsEl: HTMLElement;
+  readoutsCopyBtn: HTMLButtonElement;
   statusEl: HTMLElement;
   controlsEl: HTMLElement;
   interactPromptEl: HTMLElement;
@@ -52,6 +53,7 @@ export interface PlaySessionDom {
   avmsStatusEl: HTMLElement;
   avmsDeliverBtn: HTMLButtonElement;
   avmsStoreBtn: HTMLButtonElement;
+  avmsHangarBtn: HTMLButtonElement;
   avmsCloseBtn: HTMLButtonElement;
   avmsPowerBtn: HTMLButtonElement;
   buildTerminalEl: HTMLElement;
@@ -87,6 +89,7 @@ export function collectPlaySessionDom(root: ParentNode = document): PlaySessionD
     tutorialBannerEl: root.querySelector<HTMLElement>('#hud-tutorial-banner'),
     promptEl: requireElement<HTMLElement>('prompt'),
     readoutsEl: requireElement<HTMLElement>('readouts'),
+    readoutsCopyBtn: requireElement<HTMLButtonElement>('readouts-copy'),
     statusEl: requireElement<HTMLElement>('status'),
     controlsEl: requireElement<HTMLElement>('hud-controls'),
     interactPromptEl: requireElement<HTMLElement>('interact-prompt'),
@@ -118,6 +121,7 @@ export function collectPlaySessionDom(root: ParentNode = document): PlaySessionD
     avmsStatusEl: requireElement<HTMLElement>('avms-status'),
     avmsDeliverBtn: requireElement<HTMLButtonElement>('avms-deliver-btn'),
     avmsStoreBtn: requireElement<HTMLButtonElement>('avms-store-btn'),
+    avmsHangarBtn: requireElement<HTMLButtonElement>('avms-hangar-btn'),
     avmsCloseBtn: requireElement<HTMLButtonElement>('avms-close-btn'),
     avmsPowerBtn: requireElement<HTMLButtonElement>('avms-power-btn'),
     buildTerminalEl: requireElement<HTMLElement>('build-terminal'),

@@ -291,26 +291,37 @@ export function NumberField({
   );
 }
 
+export type SelectFieldOption = string | { value: string; label: string };
+
+function normalizeSelectOptions(
+  options: readonly SelectFieldOption[],
+): Array<{ value: string; label: string }> {
+  return options.map((option) =>
+    typeof option === 'string' ? { value: option, label: option } : option,
+  );
+}
+
 export function SelectField({
   options,
   value,
   onCommit,
   className,
 }: {
-  options: readonly string[];
+  options: readonly SelectFieldOption[];
   value: string;
   onCommit: (next: string) => void;
   className?: string;
 }): ReactElement {
+  const normalized = normalizeSelectOptions(options);
   return (
     <select
       className={className ?? 'ed-select'}
       value={value}
       onChange={(event) => onCommit(event.currentTarget.value)}
     >
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
+      {normalized.map((option) => (
+        <option key={option.value || '__empty__'} value={option.value}>
+          {option.label}
         </option>
       ))}
     </select>

@@ -492,13 +492,30 @@ export interface StationChestStorageMarker {
   slotCount: number;
 }
 
+/** Station AVMS vendor screen (gaze + F), baked from avms-terminal components. */
 export interface StationAvmsMarker {
   id: string;
-  floorId: StationFloorId;
+  label: string;
   right: number;
   up: number;
   forward: number;
-  radius: number;
+  /**
+   * Screen orientation in station-group space (prefab/scene quat).
+   * Plane faces local +Z.
+   */
+  rotation: { x: number; y: number; z: number; w: number };
+  gazeRadius: number;
+  maxDistance: number;
+  screenWidth: number;
+  screenHeight: number;
+  /**
+   * Hangar shortcut authored on the component. Empty `hangarSceneId` means the
+   * terminal has no hangar button — engine code never names a project scene.
+   */
+  hangarSceneId: string;
+  hangarLabel: string;
+  hangarInstanceId: string;
+  hangarRoomId: string;
 }
 
 /** Station weapon vendor screen (gaze + F), baked from weapon-shop components. */

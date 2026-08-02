@@ -38,6 +38,21 @@ import { ViewportHost } from './ViewportHost';
 import type { usePrefabIsolation } from './use-prefab-isolation';
 import type { EditorDocModals } from './use-editor-doc-modals';
 
+const HIERARCHY_HIDDEN_TABS: readonly SceneEditorTab[] = [
+  'base-characters',
+  'planets',
+  'stations',
+  'star-map',
+  'planet-authoring',
+  'system-map',
+  'menu-manager',
+  'server',
+];
+
+function hidesHierarchyForTab(tab: SceneEditorTab): boolean {
+  return HIERARCHY_HIDDEN_TABS.includes(tab);
+}
+
 export type EditorWorkspaceProps = {
   store: EditorStore;
   audioPreview: EditorAudioPreviewController;
@@ -60,6 +75,7 @@ export type EditorWorkspaceProps = {
   tabHandlesRef: MutableRefObject<TabEditorHandles>;
   toolbarActions: React.ComponentProps<typeof Toolbar>['actions'];
   onTabHandles: (handles: TabEditorHandles) => void;
+  onOpenStation: (id: string) => void | Promise<void>;
   duplicateGlbNode: (entityId: string, nodeUuid: string) => void;
   extractGlbNode: (entityId: string, nodeUuid: string, targetParentId: string | null) => boolean;
   refreshPrefabLibrary: () => void;
@@ -100,6 +116,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
     tabHandlesRef,
     toolbarActions,
     onTabHandles,
+    onOpenStation,
     duplicateGlbNode,
     extractGlbNode,
     refreshPrefabLibrary,
@@ -196,15 +213,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
       >
         <div ref={hierarchyPanelRef} className="ed-panel ed-hierarchy-panel">
           <div
-            className={`ed-panel-swap${
-              tab === 'base-characters' ||
-              tab === 'planet-authoring' ||
-              tab === 'system-map' ||
-              tab === 'menu-manager' ||
-              tab === 'server'
-                ? ' is-hidden'
-                : ''
-            }`}
+            className={`ed-panel-swap${hidesHierarchyForTab(tab) ? ' is-hidden' : ''}`}
           >
             <HierarchyPanel
               store={store}
@@ -276,6 +285,14 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
             onOpenShipTab={() => setTab('ship')}
             onRenamed={() => void refreshPrefabList()}
             onSocketWeaponPreviewChange={onSocketWeaponPreviewChange}
+            isolationActive={Boolean(isolationUi)}
+            onExitPrefab={() => {
+              if (isolationUi) {
+                void requestExitIsolation();
+                return;
+              }
+              toolbarRef.current?.openBrowsePanel('scene');
+            }}
           />
           <ShipPanel
             ref={shipEditorRef}
@@ -321,6 +338,7 @@ export function EditorWorkspace(props: EditorWorkspaceProps): ReactElement {
               playing={playing}
               onHandles={onTabHandles}
               onPlanetTestPlay={startPlanetAuthoringPlay}
+              onOpenStation={onOpenStation}
             />
           </div>
         </div>

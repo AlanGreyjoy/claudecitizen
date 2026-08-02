@@ -565,7 +565,35 @@ export type PrefabComponent =
       /** Max distinct item stacks in the chest (default 20, clamp 1..64). */
       slotCount?: number;
     }
-  | { type: "avms-terminal"; id: string; radius: number; floorId: StationFloorId }
+  /**
+   * Asteron Vehicle Management System screen (gaze + F while on foot).
+   * Empty marker position is the gaze / powered-screen anchor.
+   */
+  | {
+      type: "avms-terminal";
+      id: string;
+      /** Prompt when gazing (default "AVMS terminal"). */
+      label?: string;
+      /** Max perpendicular distance from the camera ray to count as a gaze hit (m). */
+      gazeRadius?: number;
+      /** Max distance from the camera to the marker (m). */
+      maxDistance?: number;
+      /** Powered screen plane width in meters (visual only). */
+      screenWidth?: number;
+      /** Powered screen plane height in meters (visual only). */
+      screenHeight?: number;
+      /**
+       * Scene document the hangar button loads. Empty hides the button — the
+       * engine cannot name a project's scenes, so the destination is authored.
+       */
+      hangarSceneId?: string;
+      /** Hangar button label (default "To Hangar"). */
+      hangarLabel?: string;
+      /** Authoritative cell for the hangar scene (`@hangar`, `station:public`, …). */
+      hangarInstanceId?: string;
+      /** Room the player arrives in (default "lobby"). */
+      hangarRoomId?: string;
+    }
   /**
    * Station weapon vendor screen (gaze + F while on foot). Empty marker
    * position is the gaze / powered-screen anchor in station space.

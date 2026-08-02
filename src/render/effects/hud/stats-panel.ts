@@ -14,11 +14,19 @@ import type { WorldState } from '../../../player/world-state';
 import { getActiveShip, getActiveShipBody } from '../../../player/world-state';
 import { flightModeLabel } from '../../../flight/flight-modes';
 import type { Planet, PlanetSurfaceSample, RenderStats, Vec3 } from '../../../types';
+import {
+  getDedupCallsByOwner,
+  getLargestTextures,
+  getTextureBytesByOwner,
+} from '../../assets/texture-dedup';
+import { getAtmosphereWorkCounters } from '../../main/post/atmosphere-work-counters';
+import { getFrameTimingSnapshot, resetWorstFrame } from '../../main/frame-timing';
 import type { FpsReadout } from './fps-counter';
 
 export interface StatsPanelElements {
   promptEl: HTMLElement;
   readoutsEl: HTMLElement;
+  readoutsCopyBtn: HTMLButtonElement;
   statusEl: HTMLElement;
 }
 
@@ -234,11 +242,127 @@ interface ReadoutRow {
   value: string;
 }
 
+/**
+ * The editor renderer runs on a custom `cceditor://` origin, which is not a
+ * secure context, so `navigator.clipboard` can be missing outright. Fall back
+ * to the selection-based copy rather than silently doing nothing.
+ */
+async function writeClipboardText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path */
+  }
+  const scratch = document.createElement('textarea');
+  scratch.value = text;
+  scratch.setAttribute('readonly', '');
+  scratch.style.position = 'fixed';
+  scratch.style.opacity = '0';
+  document.body.append(scratch);
+  scratch.select();
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  }
+  scratch.remove();
+  return copied;
+}
+
+/**
+ * "Tex Mem: 2.5 GB" says there is a problem but not which asset caused it.
+ * These two blocks name it. Both sort the registry, so they run only on the
+ * copy click, never per frame.
+ */
+function buildTextureBlame(): string[] {
+  const lines: string[] = ['', 'Top textures by resident bytes:'];
+  for (const texture of getLargestTextures(10)) {
+    const owners = texture.owners.join(', ') || '(no owner)';
+    lines.push(
+      `  ${formatBytes(texture.bytes)}  ${texture.width}x${texture.height}  ${texture.name}  <- ${owners}`,
+    );
+  }
+  lines.push('', 'Resident texture bytes by asset:');
+  for (const { bytes, owner } of getTextureBytesByOwner().slice(0, 10)) {
+    lines.push(`  ${formatBytes(bytes)}  ${owner}`);
+  }
+  // Anything above 1 call is being re-processed after its first load.
+  lines.push('', 'Dedup calls by asset (should be 1 each):');
+  for (const { calls, examined, owner } of getDedupCallsByOwner().slice(0, 10)) {
+    lines.push(`  ${calls} calls, ${examined} examined  ${owner}`);
+  }
+  return lines;
+}
+
+function buildSnapshotText(
+  entries: readonly [string, string][],
+  rendererMode: string | undefined,
+  status: string,
+): string {
+  const lines = [
+    'ClaudeCitizen perf snapshot',
+    `Renderer: ${rendererMode ?? 'unknown'}`,
+    // Resolution and DPR decide how much of a frame budget the GPU work even
+    // has; a snapshot without them is not diagnosable.
+    `Viewport: ${window.innerWidth}x${window.innerHeight} css @ dpr ${window.devicePixelRatio.toFixed(2)}`,
+    '',
+  ];
+  for (const [label, value] of entries) lines.push(`${label}: ${value}`);
+  const timing = getFrameTimingSnapshot();
+  lines.push(
+    '',
+    // If `outside js` dominates, the frame is not being spent in our code and
+    // profiling the call tree is the wrong move.
+    `Frame ms (avg of ${timing.frames}): total ${timing.totalMs.toFixed(1)} (p95 ${timing.totalP95Ms.toFixed(1)})` +
+      ` = sim ${timing.simMs.toFixed(1)} + render ${timing.renderMs.toFixed(1)}` +
+      ` + outside js ${timing.outsideJsMs.toFixed(1)}`,
+    `  of which graphics submit ${timing.submitMs.toFixed(1)} ms` +
+      ` (scene update ${Math.max(0, timing.renderMs - timing.submitMs).toFixed(1)} ms)`,
+    // Builds > 0 on the worst frame means tile construction; builds 0 with a
+    // large render time means a shader variant compiled on first view.
+    `Worst frame: ${timing.worstTotalMs.toFixed(1)} ms total,` +
+      ` ${timing.worstRenderMs.toFixed(1)} ms render, ${timing.worstBuilds} veg builds`,
+  );
+  const work = getAtmosphereWorkCounters();
+  lines.push(
+    // Both fills are supposed to be rare. Tracking the frame count means they
+    // are running inline every frame on the main thread.
+    `Atmosphere work: ${work.lutFills} LUT fills / ${work.starFills} star fills / ${work.frames} frames`,
+  );
+  lines.push(...buildTextureBlame());
+  if (status) lines.push('', `Status: ${status}`);
+  return lines.join('\n');
+}
+
 export function createStatsPanel(elements: StatsPanelElements) {
   let peakAltitudeMeters = 0;
   // Rows are reused across frames and only their value text is rewritten.
   const rowsByLabel = new Map<string, ReadoutRow>();
   let lastLabelSignature = '';
+  let lastEntries: [string, string][] = [];
+  let lastRendererMode: string | undefined;
+  let lastStatus = '';
+  let copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+  elements.readoutsCopyBtn.addEventListener('click', () => {
+    const label = 'Copy stats';
+    const text = buildSnapshotText(lastEntries, lastRendererMode, lastStatus);
+    // Worst-frame is a high-water mark; clearing it on copy means the next
+    // snapshot reports the worst stall *since this one*, not the load spike.
+    resetWorstFrame();
+    void writeClipboardText(text).then((copied) => {
+      elements.readoutsCopyBtn.textContent = copied ? 'Copied' : 'Copy failed';
+      if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer);
+      copyFeedbackTimer = setTimeout(() => {
+        elements.readoutsCopyBtn.textContent = label;
+        copyFeedbackTimer = null;
+      }, 1_500);
+    });
+  });
 
   function createRow(label: string): ReadoutRow {
     const row = document.createElement('div');
@@ -264,6 +388,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
    * a biome or prompt string can no longer inject HTML.
    */
   function renderReadouts(entries: [string, string][]): void {
+    lastEntries = entries;
     let signature = '';
     for (const [label] of entries) signature += `${label}|`;
     if (signature !== lastLabelSignature) {
@@ -329,7 +454,8 @@ export function createStatsPanel(elements: StatsPanelElements) {
     ]);
 
     elements.promptEl.textContent = world.prompt;
-    elements.statusEl.textContent = resolveStatusMessage(
+    lastRendererMode = rendererMode;
+    lastStatus = resolveStatusMessage(
       world,
       shipSurface,
       planet,
@@ -338,6 +464,7 @@ export function createStatsPanel(elements: StatsPanelElements) {
       rendererMode,
       isPointerLocked,
     );
+    elements.statusEl.textContent = lastStatus;
   }
 
   return {

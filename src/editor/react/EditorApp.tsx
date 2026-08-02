@@ -39,7 +39,9 @@ import { useEditorDocModals } from './use-editor-doc-modals';
 
 function playSurvivesTabChange(current: SceneEditorTab, next: SceneEditorTab): boolean {
   if (current === 'ship') return next === 'ship';
-  if (current === 'planet-authoring') return next === 'planet-authoring';
+  if (current === 'planets' || current === 'planet-authoring') {
+    return next === 'planets' || next === 'planet-authoring';
+  }
   return next === 'scene' || next === 'material-manager';
 }
 
@@ -88,11 +90,81 @@ function useEditorRootTabClass(tab: SceneEditorTab): void {
     if (!root) return;
     root.classList.toggle('is-ship', tab === 'ship');
     root.classList.toggle('is-base-characters', tab === 'base-characters');
+    root.classList.toggle(
+      'is-planets',
+      tab === 'planets' || tab === 'planet-authoring',
+    );
+    root.classList.toggle('is-stations', tab === 'stations');
+    root.classList.toggle(
+      'is-star-map',
+      tab === 'star-map' || tab === 'system-map',
+    );
+    // Keep the old class names for project CSS overrides and old snapshots.
     root.classList.toggle('is-planet-authoring', tab === 'planet-authoring');
     root.classList.toggle('is-system-map', tab === 'system-map');
     root.classList.toggle('is-menu-manager', tab === 'menu-manager');
     root.classList.toggle('is-server', tab === 'server');
   }, [tab]);
+}
+
+type EditorTabDockingArgs = {
+  tab: SceneEditorTab;
+  tabHandles: TabEditorHandles;
+  hierarchyPanelRef: RefObject<HTMLDivElement | null>;
+  inspectorPanelRef: RefObject<HTMLDivElement | null>;
+};
+
+function useEditorTabDocking({
+  tab,
+  tabHandles,
+  hierarchyPanelRef,
+  inspectorPanelRef,
+}: EditorTabDockingArgs): void {
+  useEffect(() => {
+    const hierarchy = hierarchyPanelRef.current;
+    const inspector = inspectorPanelRef.current;
+    if (!hierarchy) return;
+
+    const docked: HTMLElement[] = [];
+    const dockLeft = (panel: HTMLElement): void => {
+      if (panel.parentElement !== hierarchy) hierarchy.append(panel);
+      docked.push(panel);
+    };
+    const dockRight = (panel: HTMLElement): void => {
+      if (!inspector) return;
+      if (panel.parentElement !== inspector) inspector.append(panel);
+      docked.push(panel);
+    };
+
+    if (tab === 'base-characters' && tabHandles.baseCharacterEditor) {
+      dockLeft(tabHandles.baseCharacterEditor.getLeftPanel());
+      dockRight(tabHandles.baseCharacterEditor.getRightPanel());
+    } else if (
+      (tab === 'planets' || tab === 'planet-authoring') &&
+      tabHandles.planetAuthoringEditor
+    ) {
+      dockLeft(tabHandles.planetAuthoringEditor.getLeftPanel());
+    } else if (
+      (tab === 'star-map' || tab === 'system-map') &&
+      tabHandles.systemMapEditor
+    ) {
+      dockLeft(tabHandles.systemMapEditor.getLeftPanel());
+    } else if (tab === 'menu-manager' && tabHandles.menuManagerEditor) {
+      dockLeft(tabHandles.menuManagerEditor.getLeftPanel());
+    }
+
+    return () => {
+      for (const panel of docked) panel.remove();
+    };
+  }, [
+    tab,
+    hierarchyPanelRef,
+    inspectorPanelRef,
+    tabHandles.baseCharacterEditor,
+    tabHandles.planetAuthoringEditor,
+    tabHandles.systemMapEditor,
+    tabHandles.menuManagerEditor,
+  ]);
 }
 
 export function EditorApp(): ReactElement {
@@ -180,43 +252,7 @@ export function EditorApp(): ReactElement {
 
   // Dock tab-editor sidebars into Scene hierarchy/inspector so scene tabs sit
   // between them (same chrome as Scene).
-  useEffect(() => {
-    const hierarchy = hierarchyPanelRef.current;
-    const inspector = inspectorPanelRef.current;
-    if (!hierarchy) return;
-
-    const docked: HTMLElement[] = [];
-    const dockLeft = (panel: HTMLElement): void => {
-      if (panel.parentElement !== hierarchy) hierarchy.append(panel);
-      docked.push(panel);
-    };
-    const dockRight = (panel: HTMLElement): void => {
-      if (!inspector) return;
-      if (panel.parentElement !== inspector) inspector.append(panel);
-      docked.push(panel);
-    };
-
-    if (tab === 'base-characters' && tabHandles.baseCharacterEditor) {
-      dockLeft(tabHandles.baseCharacterEditor.getLeftPanel());
-      dockRight(tabHandles.baseCharacterEditor.getRightPanel());
-    } else if (tab === 'planet-authoring' && tabHandles.planetAuthoringEditor) {
-      dockLeft(tabHandles.planetAuthoringEditor.getLeftPanel());
-    } else if (tab === 'system-map' && tabHandles.systemMapEditor) {
-      dockLeft(tabHandles.systemMapEditor.getLeftPanel());
-    } else if (tab === 'menu-manager' && tabHandles.menuManagerEditor) {
-      dockLeft(tabHandles.menuManagerEditor.getLeftPanel());
-    }
-
-    return () => {
-      for (const panel of docked) panel.remove();
-    };
-  }, [
-    tab,
-    tabHandles.baseCharacterEditor,
-    tabHandles.planetAuthoringEditor,
-    tabHandles.systemMapEditor,
-    tabHandles.menuManagerEditor,
-  ]);
+  useEditorTabDocking({ tab, tabHandles, hierarchyPanelRef, inspectorPanelRef });
 
   const setTab = useCallback((next: SceneEditorTab) => {
     const handles = tabHandlesRef.current;
@@ -225,13 +261,17 @@ export function EditorApp(): ReactElement {
       return;
     }
     if (
-      current === 'planet-authoring' &&
+      (current === 'planets' || current === 'planet-authoring') &&
       next !== current &&
       !handles.planetAuthoringEditor?.canLeave()
     ) {
       return;
     }
-    if (current === 'system-map' && next !== current && !handles.systemMapEditor?.canLeave()) {
+    if (
+      (current === 'star-map' || current === 'system-map') &&
+      next !== current &&
+      !handles.systemMapEditor?.canLeave()
+    ) {
       return;
     }
     if (playingRef.current && !playSurvivesTabChange(current, next)) {
@@ -480,6 +520,7 @@ export function EditorApp(): ReactElement {
       tabHandlesRef={tabHandlesRef}
       toolbarActions={toolbarActions}
       onTabHandles={onTabHandles}
+      onOpenStation={loadById}
       duplicateGlbNode={duplicateGlbNode}
       extractGlbNode={extractGlbNode}
       refreshPrefabLibrary={refreshPrefabLibrary}

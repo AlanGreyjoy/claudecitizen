@@ -111,6 +111,15 @@ Do not add a second place that decides the entry order, and do not re-key it off
 `scene.kind`. A legacy project whose `title` scene still carries the
 `game-manager` keeps working; that is back-compat, not the pattern to copy.
 
+### Player game loop (station family)
+
+After boot lands the player in a starting hab, in-play travel follows the station
+family model: **Hab → Station → AVMS → Hangar → Open Space**. Each Station owns
+its Hab and Hangar; Hab/Hangar are per-player instances (placeable build; team
+follow-in). Full draft (diagrams + invariants):
+`docs/docs/architecture/game-loop.md`. Thin Cursor pointer:
+`.cursor/rules/game-loop-architecture.mdc`.
+
 ## Project settings and backend config
 
 `asteron.project.json` at the project root holds `name`, `backendUrl` (release /
@@ -391,6 +400,15 @@ Invariants — do not work around these:
 Docs: `docs/docs/server-console/payments.md`.
 
 ### Authoritative multiplayer
+
+**Multiplayer is designed in parallel, never bolted on later.** Every gameplay
+feature, state change, interaction outcome, scene travel path, and entity that
+peers must see or affect must answer up front: who owns the truth (cell vs
+client), what intents/snapshots carry it, and how a second player observes it.
+Local-only stubs are fine for cosmetics that stay non-authoritative (see
+friendly station NPCs); they are not an excuse to defer authority, replication,
+or presence for real gameplay. "We'll add multiplayer later" is rejected the
+same way unbounded main-thread work is.
 
 Replication is a three-stage pipeline; the stages own different things and
 conflating any two of them has already cost a launch.
@@ -749,6 +767,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/IFCS symptoms) |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab editor skill |
 | `.cursor/skills/prd/SKILL.md` | PRD handoff packs under `prds/<slug>/` (README, PRD, phases, checklist) |
+| `docs/docs/architecture/game-loop.md` | Player game loop draft: Hab → Station → AVMS → Hangar → Open Space |
+| `.cursor/rules/game-loop-architecture.mdc` | Thin always-on pointer to the game-loop architecture doc |
 
 ## Utility scripts
 

@@ -17,6 +17,10 @@ export type PrefabBarProps = {
   onSave: () => void;
   onOpenShipTab?: () => void;
   onRenamed?: () => void;
+  /** Leave prefab mode (isolation → scene, or Open Scene when bare). */
+  onExitPrefab?: () => void | Promise<void>;
+  /** When true, Exit returns to the suspended scene (Esc). */
+  isolationActive?: boolean;
   /** Item prefabs: spawn preview weapons on equipment-socket empties. */
   onSocketWeaponPreviewChange?: (enabled: boolean) => void;
 };
@@ -45,6 +49,8 @@ export function PrefabBar({
   onSave,
   onOpenShipTab,
   onRenamed,
+  onExitPrefab,
+  isolationActive = false,
   onSocketWeaponPreviewChange,
 }: PrefabBarProps): ReactElement | null {
   useEditorStore(store, ['document', 'structure']);
@@ -171,8 +177,8 @@ export function PrefabBar({
         {slugPreview}.prefab.json
       </span>
 
-      {docState.kind === 'ship' && onOpenShipTab ? (
-        <div className="ed-ship-group ed-ship-test">
+      <div className="ed-ship-group ed-ship-test">
+        {docState.kind === 'ship' && onOpenShipTab ? (
           <button
             type="button"
             className="ed-btn ed-btn-accent"
@@ -181,13 +187,11 @@ export function PrefabBar({
           >
             Ship tab →
           </button>
-        </div>
-      ) : null}
+        ) : null}
 
-      {docState.kind === 'item' &&
-      onSocketWeaponPreviewChange &&
-      documentHasEquipmentSockets(store) ? (
-        <div className="ed-ship-group ed-ship-test">
+        {docState.kind === 'item' &&
+        onSocketWeaponPreviewChange &&
+        documentHasEquipmentSockets(store) ? (
           <button
             type="button"
             className={`ed-btn${socketPreview ? ' is-active' : ''}`}
@@ -200,8 +204,24 @@ export function PrefabBar({
           >
             {socketPreview ? 'Hide socket weapons' : 'Preview weapons on sockets'}
           </button>
-        </div>
-      ) : null}
+        ) : null}
+
+        {onExitPrefab ? (
+          <button
+            type="button"
+            className="ed-btn"
+            onClick={() => void onExitPrefab()}
+            disabled={renaming}
+            title={
+              isolationActive
+                ? 'Return to scene (Esc)'
+                : 'Open a scene to leave prefab editing'
+            }
+          >
+            Exit Prefab
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

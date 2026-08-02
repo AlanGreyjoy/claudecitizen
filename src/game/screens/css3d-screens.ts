@@ -2,6 +2,7 @@ import { createEntertainmentScreen } from "../../render/effects/entertainment-sc
 import { createWeaponShopScreen } from "../../render/effects/weapon-shop-screen";
 import { createOutfittersScreen } from "../../render/effects/outfitters-screen";
 import { createFoodShopScreen } from "../../render/effects/food-shop-screen";
+import { createAvmsTerminalScreen } from "../../render/effects/avms-terminal-screen";
 import { MODE_IN_BED, MODE_IN_STATION } from "../../player/modes";
 import type { LoopContext } from "../loop-context";
 
@@ -18,16 +19,33 @@ interface ScreenLike {
   dispose: () => void;
 }
 
+interface ScreenFactoryOptions {
+  panelEl: HTMLElement;
+  overlayParent?: HTMLElement;
+}
+
+/**
+ * CSS3D flat hosts use position:fixed + z-index ~220. In editor Play they must
+ * live under `#editor-play-host` (z-index 260 + containing transform) — mounting
+ * on `document.body` puts the panel *under* the opaque play host, so F opens a
+ * paused shop you cannot see (looks like a freeze until Esc).
+ */
+function resolveOverlayParent(): HTMLElement {
+  return document.getElementById("editor-play-host") ?? document.body;
+}
+
 function mountScreen<T extends ScreenLike>(
   bezelId: string,
   className: string,
-  factory: (opts: { panelEl: HTMLElement }) => T,
+  factory: (opts: ScreenFactoryOptions) => T,
   onResize: () => void,
 ): T | null {
   const bezelEl =
     document.getElementById(bezelId) ??
     document.querySelector<HTMLElement>(className);
-  const screen = bezelEl ? factory({ panelEl: bezelEl }) : null;
+  const screen = bezelEl
+    ? factory({ panelEl: bezelEl, overlayParent: resolveOverlayParent() })
+    : null;
   if (screen) window.addEventListener("resize", onResize);
   return screen;
 }
@@ -52,6 +70,7 @@ export function createScreens(ctx: LoopContext): Css3dScreens {
   const onWeaponShopResize = () => ctx.weaponShopScreen?.resize();
   const onOutfittersResize = () => ctx.outfittersScreen?.resize();
   const onFoodShopResize = () => ctx.foodShopScreen?.resize();
+  const onAvmsResize = () => ctx.avmsTerminalScreen?.resize();
 
   ctx.esScreen = mountScreen(
     "es-bezel",
@@ -77,6 +96,12 @@ export function createScreens(ctx: LoopContext): Css3dScreens {
     createFoodShopScreen,
     onFoodShopResize,
   );
+  ctx.avmsTerminalScreen = mountScreen(
+    "avms-bezel",
+    ".sc-avms-bezel",
+    createAvmsTerminalScreen,
+    onAvmsResize,
+  );
 
   function renderAfterWebGl(): void {
     const renderer = ctx.renderer;
@@ -101,6 +126,11 @@ export function createScreens(ctx: LoopContext): Css3dScreens {
       ctx.world.mode === MODE_IN_STATION || Boolean(ctx.foodShop?.isOpen()),
       renderer,
     );
+    renderScreenIfActive(
+      ctx.avmsTerminalScreen,
+      ctx.world.mode === MODE_IN_STATION || Boolean(ctx.avmsTerminal?.isOpen()),
+      renderer,
+    );
   }
 
   function dispose(): void {
@@ -108,10 +138,12 @@ export function createScreens(ctx: LoopContext): Css3dScreens {
     window.removeEventListener("resize", onWeaponShopResize);
     window.removeEventListener("resize", onOutfittersResize);
     window.removeEventListener("resize", onFoodShopResize);
+    window.removeEventListener("resize", onAvmsResize);
     ctx.esScreen?.dispose();
     ctx.weaponShopScreen?.dispose();
     ctx.outfittersScreen?.dispose();
     ctx.foodShopScreen?.dispose();
+    ctx.avmsTerminalScreen?.dispose();
   }
 
   return { renderAfterWebGl, dispose };

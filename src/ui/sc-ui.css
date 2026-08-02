@@ -583,6 +583,24 @@ canvas {
   color: var(--muted);
 }
 
+.readout-copy {
+  margin-top: 10px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 11px/1.4 var(--sc-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.readout-copy:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .readout-grid {
   margin-top: 12px;
   display: grid;
@@ -1819,7 +1837,67 @@ kbd {
 }
 
 /* —— AVMS / Build terminal (ES-style flat panel, matches weapon shop) —— */
-.sc-avms {
+.sc-avms-css3d {
+  position: fixed !important;
+  inset: 0 !important;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 186;
+}
+
+.sc-avms-flat-host {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(4, 8, 16, 0.35);
+}
+
+.sc-avms-flat-host.is-active {
+  display: flex;
+  pointer-events: auto;
+}
+
+/* World AVMS: host is empty; bezel lives in CSS3D / flat host. */
+.sc-avms.sc-avms-world {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 1;
+  visibility: visible;
+  background: none;
+  inset: auto;
+  z-index: auto;
+  display: block;
+}
+
+/* Legacy lobby terminal open: bezel still parented under host (no CSS3D flat). */
+.sc-avms.sc-avms-world.is-open:has(> .sc-avms-bezel) {
+  position: fixed;
+  inset: 0;
+  z-index: 290;
+  width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  background: rgba(4, 8, 16, 0.35);
+}
+
+.sc-avms.sc-avms-world.is-open:has(> .sc-avms-bezel) > .sc-avms-bezel {
+  opacity: 1;
+  pointer-events: auto;
+  width: min(960px, 92vw);
+  height: min(540px, 82vh);
+}
+
+.sc-avms.sc-build {
   position: fixed;
   inset: 0;
   z-index: 290;
@@ -1830,7 +1908,7 @@ kbd {
   background: rgba(4, 8, 16, 0.35);
 }
 
-.sc-avms.is-open {
+.sc-avms.sc-build.is-open {
   display: flex;
   pointer-events: auto;
 }
@@ -1838,8 +1916,8 @@ kbd {
 .sc-avms-bezel {
   position: relative;
   box-sizing: border-box;
-  width: min(960px, 92vw);
-  height: min(540px, 82vh);
+  width: 960px;
+  height: 540px;
   padding: 10px;
   border-radius: 10px;
   background: linear-gradient(160deg, #1a2230 0%, #0b1018 55%, #121820 100%);
@@ -1847,6 +1925,26 @@ kbd {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 48px rgba(0, 0, 0, 0.55);
   color: #d8e8f8;
   font-family: var(--sc-font, "Rajdhani", sans-serif);
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: center center;
+}
+
+.sc-avms-bezel.is-powered,
+.sc-avms.is-open .sc-avms-bezel,
+.sc-avms.sc-build .sc-avms-bezel {
+  opacity: 1;
+}
+
+.sc-avms-bezel.is-flat-interactive {
+  pointer-events: auto;
+  width: min(960px, 92vw);
+  height: min(540px, 82vh);
+}
+
+.sc-avms.sc-build .sc-avms-bezel {
+  width: min(960px, 92vw);
+  height: min(540px, 82vh);
   pointer-events: auto;
 }
 
@@ -3620,6 +3718,7 @@ kbd {
 .sc-weapon-shop.is-embedded,
 .sc-food-shop.is-embedded,
 .sc-outfitters.is-embedded,
+.sc-avms.is-embedded,
 .sc-es.is-embedded {
   position: absolute;
   inset: 0;
@@ -3637,6 +3736,7 @@ kbd {
 .sc-weapon-shop.is-embedded .sc-weapon-shop-bezel,
 .sc-food-shop.is-embedded .sc-food-shop-bezel,
 .sc-outfitters.is-embedded .sc-outfitters-bezel,
+.sc-avms.is-embedded .sc-avms-bezel,
 .sc-es.is-embedded .sc-es-bezel {
   position: relative;
   width: min(960px, 96%);

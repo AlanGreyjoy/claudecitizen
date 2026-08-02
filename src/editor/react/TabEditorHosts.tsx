@@ -11,6 +11,7 @@ import {
   SystemMapPanel,
   type SystemMapEditor,
 } from './panels/SystemMapPanel';
+import { StationsPanel } from './panels/StationsPanel';
 import {
   MenuManagerPanel,
   type MenuManagerEditor,
@@ -31,6 +32,7 @@ type TabEditorHostsProps = {
   playing: boolean;
   onHandles: (handles: TabEditorHandles) => void;
   onPlanetTestPlay: () => void;
+  onOpenStation: (id: string) => void | Promise<void>;
 };
 
 /**
@@ -48,6 +50,7 @@ export function TabEditorHosts({
   playing,
   onHandles,
   onPlanetTestPlay,
+  onOpenStation,
 }: TabEditorHostsProps): ReactElement {
   const baseCharacterRef = useRef<BaseCharacterEquipmentEditor | null>(null);
   const planetRef = useRef<PlanetAuthoringEditor | null>(null);
@@ -91,13 +94,13 @@ export function TabEditorHosts({
       h.baseCharacterEditor?.deactivate();
     }
 
-    if (tab === 'planet-authoring' && !playing) {
+    if ((tab === 'planets' || tab === 'planet-authoring') && !playing) {
       h.planetAuthoringEditor?.activate();
     } else {
       h.planetAuthoringEditor?.deactivate();
     }
 
-    if (tab === 'system-map' && !playing) {
+    if ((tab === 'star-map' || tab === 'system-map') && !playing) {
       h.systemMapEditor?.activate();
     } else {
       h.systemMapEditor?.deactivate();
@@ -132,12 +135,16 @@ export function TabEditorHosts({
       />
       <PlanetAuthoringPanel
         ref={planetRef}
-        hidden={tab !== 'planet-authoring'}
+        hidden={tab !== 'planets' && tab !== 'planet-authoring'}
         onTestPlay={onPlanetTestPlay}
+      />
+      <StationsPanel
+        hidden={tab !== 'stations'}
+        onOpenStation={onOpenStation}
       />
       <SystemMapPanel
         ref={systemRef}
-        hidden={tab !== 'system-map'}
+        hidden={tab !== 'star-map' && tab !== 'system-map'}
       />
       <MenuManagerPanel
         ref={menuManagerRef}

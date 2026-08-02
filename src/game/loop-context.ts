@@ -21,6 +21,7 @@ import type { EntertainmentScreenHandle } from "../render/effects/entertainment-
 import type { WeaponShopScreenHandle } from "../render/effects/weapon-shop-screen";
 import type { OutfittersScreenHandle } from "../render/effects/outfitters-screen";
 import type { FoodShopScreenHandle } from "../render/effects/food-shop-screen";
+import type { AvmsTerminalScreenHandle } from "../render/effects/avms-terminal-screen";
 import type { SpikeRenderer } from "../render/main";
 import type { WorldClient } from "../net/world-client";
 import type { GameBootstrap } from "../net/api";
@@ -142,6 +143,7 @@ export interface LoopContext {
   weaponShopScreen: WeaponShopScreenHandle | null;
   outfittersScreen: OutfittersScreenHandle | null;
   foodShopScreen: FoodShopScreenHandle | null;
+  avmsTerminalScreen: AvmsTerminalScreenHandle | null;
 }
 
 /**
@@ -234,5 +236,6 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     weaponShopScreen: null,
     outfittersScreen: null,
     foodShopScreen: null,
+    avmsTerminalScreen: null,
   };
 }

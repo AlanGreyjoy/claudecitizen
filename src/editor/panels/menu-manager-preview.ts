@@ -326,6 +326,7 @@ function mountOutfitters(
 
 function mountAvms(previewHost: HTMLElement): MountedMenuPreview {
   const rootEl = clonePlayMenuTemplate('avms-terminal');
+  requireOrig(rootEl, 'avms-bezel').classList.add('is-flat-interactive', 'is-powered');
   previewHost.append(rootEl);
   const controller = createAvmsTerminal({
     rootEl,
@@ -339,6 +340,7 @@ function mountAvms(previewHost: HTMLElement): MountedMenuPreview {
     statusEl: requireOrig(rootEl, 'avms-status'),
     deliverBtnEl: requireOrig(rootEl, 'avms-deliver-btn'),
     storeBtnEl: requireOrig(rootEl, 'avms-store-btn'),
+    hangarBtnEl: requireOrig(rootEl, 'avms-hangar-btn'),
     closeBtnEl: requireOrig<HTMLButtonElement>(rootEl, 'avms-close-btn'),
     powerBtnEl: requireOrig<HTMLButtonElement>(rootEl, 'avms-power-btn'),
   });

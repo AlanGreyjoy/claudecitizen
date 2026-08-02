@@ -3,6 +3,10 @@ export type SceneEditorTab =
   | 'material-manager'
   | 'ship'
   | 'base-characters'
+  | 'planets'
+  | 'stations'
+  | 'star-map'
+  // Legacy ids remain valid for HMR snapshots and previously bookmarked URLs.
   | 'planet-authoring'
   | 'system-map'
   | 'menu-manager'
@@ -13,8 +17,9 @@ export const SCENE_EDITOR_TABS: ReadonlyArray<{ id: SceneEditorTab; label: strin
   { id: 'material-manager', label: 'Material Manager' },
   { id: 'ship', label: 'Ship' },
   { id: 'base-characters', label: 'Base Characters' },
-  { id: 'planet-authoring', label: 'Planet Authoring' },
-  { id: 'system-map', label: 'System Map' },
+  { id: 'planets', label: 'Planets' },
+  { id: 'stations', label: 'Stations' },
+  { id: 'star-map', label: 'Star Map' },
   { id: 'menu-manager', label: 'Menu Manager' },
   { id: 'server', label: 'Server' },
 ];

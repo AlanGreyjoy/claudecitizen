@@ -359,8 +359,12 @@ export function useEditorAppDocuments(args: EditorAppDocumentsArgs) {
     const documentIsActive =
       current === 'scene' || current === 'material-manager' || current === 'ship';
     if (!documentIsActive && store.isDirty() && !(await saveCurrent())) return false;
-    if (current === 'system-map') return handles.systemMapEditor?.save() ?? false;
-    if (current === 'planet-authoring') return handles.planetAuthoringEditor?.save() ?? false;
+    if (current === 'star-map' || current === 'system-map') {
+      return handles.systemMapEditor?.save() ?? false;
+    }
+    if (current === 'planets' || current === 'planet-authoring') {
+      return handles.planetAuthoringEditor?.save() ?? false;
+    }
     if (current === 'base-characters') {
       await handles.baseCharacterEditor?.save();
       return true;

@@ -127,6 +127,8 @@ Cache versions live in `src/cache/cache-keys.ts`. Planet JSON edits invalidate a
 
 ### Multiplayer invariants
 
+**Plan multiplayer in parallel with every gameplay feature** — authority, intents, and peer visibility ship with the change, not as a later bolt-on. Full rule in AGENTS.md "Authoritative multiplayer".
+
 `backend/crates/sim-core/` is shared between native Rapier authority and browser WASM prediction. `proto/world.proto` is the canonical wire contract over WebTransport (reliable streams for control/reconciliation, datagrams for intents/snapshots). Cells are single-writer, leased through Redis, fenced by a PostgreSQL epoch. Do not add a WebSocket fallback, a second backend, client-authoritative outcomes, or a second prediction implementation.
 
 ## Live editor context via MCP
@@ -140,4 +142,5 @@ The `asteron-engine` MCP server (`.mcp.json` → `tools/asteron-mcp/`) reads `~/
 - SQLx owns all schema history: append SQL under `backend/migrations/`. No second ORM or migration system.
 - GLB nodes, animations, and colliders bind **by node name**. A name mismatch fails silently (node doesn't move, collider doesn't bind) — `scripts/inspect_glb.mjs` dumps the real names, and `prefab-renderer.ts` logs "could not find node" warnings.
 - Performance is a product constraint, not a polish pass. Main thread is sacred: heavy work goes to workers or spreads across frames. If a change can freeze the tab or tank server tick rate, bound it before shipping.
+- Multiplayer is designed in parallel — do not defer authority/replication for shared gameplay ("add MP later" is rejected).
 - Update `AGENTS.md` alongside this file when architecture boundaries change — `.cursor/rules/agent-conventions.mdc` defers to it.

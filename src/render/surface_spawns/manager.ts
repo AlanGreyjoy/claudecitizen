@@ -87,6 +87,8 @@ export function createSurfaceSpawnManager(
 ): SurfaceSpawnManager {
   const root = new THREE.Group();
   root.name = 'surface-spawns';
+  // Match vegetation: this root carries the moving floating-origin offset;
+  // each streamed tile owns its anchor and local instance matrices.
   root.scale.setScalar(renderScale);
   root.position.set(0, 0, 0);
   scene.add(root);
@@ -138,7 +140,9 @@ export function createSurfaceSpawnManager(
     getLayers: () => layers,
     getVisible: () => visible,
     meshCollisions,
+    planet,
     root,
+    seed,
     tileCache,
   });
 
@@ -338,7 +342,8 @@ export function createSurfaceSpawnManager(
           mesh.getMatrixAt(0, m);
           const pos = new THREE.Vector3().setFromMatrixPosition(m);
           root.updateMatrixWorld(true);
-          pos.applyMatrix4(root.matrixWorld);
+          mesh.updateMatrixWorld(true);
+          pos.applyMatrix4(mesh.matrixWorld);
           sampleRenderPos = { x: pos.x, y: pos.y, z: pos.z };
         }
       }
@@ -369,22 +374,30 @@ export function createSurfaceSpawnManager(
     getNearbyInstances(focus, radiusMeters) {
       const radiusSq = radiusMeters * radiusMeters;
       const nearby: SurfaceSpawnInstance[] = [];
-      for (const instance of batch.collectActiveInstances()) {
-        const dx = instance.position.x - focus.x;
-        const dy = instance.position.y - focus.y;
-        const dz = instance.position.z - focus.z;
-        if (dx * dx + dy * dy + dz * dz <= radiusSq) nearby.push(instance);
+      for (const entry of tileCache.values()) {
+        if (entry.status !== 'ready' || entry.instances.length === 0) continue;
+        // Reject whole tiles before touching their instances — collider resync
+        // runs on the walk loop and the cache holds far more than it needs.
+        const reach = radiusMeters + entry.tileInfo.spanMeters;
+        if (distance(focus, entry.tileInfo.centerPosition) > reach) continue;
+        for (const instance of entry.instances) {
+          const dx = instance.position.x - focus.x;
+          const dy = instance.position.y - focus.y;
+          const dz = instance.position.z - focus.z;
+          if (dx * dx + dy * dy + dz * dz <= radiusSq) nearby.push(instance);
+        }
       }
       return nearby;
     },
     update(bodyPosition, selectedTiles, altitudeMeters) {
       frameNumber += 1;
       lastFocus = bodyPosition;
+      batch.updateFloatingOrigin(bodyPosition);
       root.visible = visible && altitudeMeters < VISIBLE_ALTITUDE_METERS;
       if (!root.visible || layers.length === 0) {
-        for (const state of batchStates.values()) {
-          for (const mesh of state.meshes) mesh.count = 0;
-        }
+        // Zeroes every tile's counts *and* forgets what was composed, so the
+        // first visible frame rewrites instead of showing empty meshes.
+        batch.hideAllTiles();
         return;
       }
 

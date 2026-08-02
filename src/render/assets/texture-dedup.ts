@@ -214,7 +214,32 @@ export function deduplicateObjectTextures(
 
   examinedTotal += examined;
   reusedTotal += reused;
+  const owner = options?.owner ?? '(no owner)';
+  const call = dedupCallsByOwner.get(owner);
+  if (call) {
+    call.calls += 1;
+    call.examined += examined;
+  } else {
+    dedupCallsByOwner.set(owner, { calls: 1, examined });
+  }
   return { examined, reused };
+}
+
+/**
+ * Dedup is a load-time step: one call per asset url, ever. A count that climbs
+ * with frame count means that asset is being re-loaded or re-processed every
+ * frame, which is a cache that is not holding.
+ */
+const dedupCallsByOwner = new Map<string, { calls: number; examined: number }>();
+
+export function getDedupCallsByOwner(): {
+  calls: number;
+  examined: number;
+  owner: string;
+}[] {
+  return [...dedupCallsByOwner]
+    .map(([owner, value]) => ({ ...value, owner }))
+    .sort((a, b) => b.calls - a.calls);
 }
 
 /**
@@ -251,6 +276,48 @@ export function releaseTextureOwner(owner: string): { bytesFreed: number; dispos
   }
   if (totalEstimatedBytes < 0) totalEstimatedBytes = 0;
   return { bytesFreed, disposed };
+}
+
+export interface LargestTextureEntry {
+  bytes: number;
+  height: number;
+  name: string;
+  owners: string[];
+  width: number;
+}
+
+/**
+ * Resident textures ranked by estimated bytes, with the asset urls that hold
+ * them. Sorting the registry is not frame work — call this from a debug readout
+ * on demand, never per frame.
+ */
+export function getLargestTextures(limit = 10): LargestTextureEntry[] {
+  const ranked: LargestTextureEntry[] = [];
+  for (const entry of canonicalTextures.values()) {
+    const { height, width } = imageDimensions(entry.texture);
+    ranked.push({
+      bytes: entry.estimatedBytes,
+      height,
+      name: entry.texture.name || '(unnamed)',
+      owners: [...entry.owners],
+      width,
+    });
+  }
+  ranked.sort((a, b) => b.bytes - a.bytes);
+  return ranked.slice(0, limit);
+}
+
+/** Resident bytes grouped by owning asset url — shared textures count once per owner. */
+export function getTextureBytesByOwner(): { bytes: number; owner: string }[] {
+  const byOwner = new Map<string, number>();
+  for (const entry of canonicalTextures.values()) {
+    for (const owner of entry.owners) {
+      byOwner.set(owner, (byOwner.get(owner) ?? 0) + entry.estimatedBytes);
+    }
+  }
+  return [...byOwner]
+    .map(([owner, bytes]) => ({ bytes, owner }))
+    .sort((a, b) => b.bytes - a.bytes);
 }
 
 export function getTextureDedupSnapshot(): TextureDedupSnapshot {

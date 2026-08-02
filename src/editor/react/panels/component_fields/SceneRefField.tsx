@@ -15,12 +15,15 @@ export function SceneRefField({
   onCommit,
   emptyLabel = '(none)',
   excludeSceneId,
+  excludeSceneIds = [],
   extraOptions = [],
 }: {
   value: string;
   onCommit: (sceneId: string) => void;
   emptyLabel?: string;
   excludeSceneId?: string;
+  /** Extra scene ids to hide (e.g. Game Manager open-space doc when `@space` is offered). */
+  excludeSceneIds?: readonly string[];
   /** Non-scene tokens offered above the list, e.g. `@space`. */
   extraOptions?: Array<{ id: string; name: string }>;
 }): ReactElement {
@@ -40,7 +43,12 @@ export function SceneRefField({
     };
   }, []);
 
-  const options = scenes.filter((entry) => entry.id !== excludeSceneId);
+  const excluded = new Set(
+    [excludeSceneId, ...excludeSceneIds].filter(
+      (id): id is string => typeof id === 'string' && id.length > 0,
+    ),
+  );
+  const options = scenes.filter((entry) => !excluded.has(entry.id));
   // A saved id the list does not know about (renamed, deleted, or authored
   // before the scene existed) is still the authored value: show it rather than
   // rendering someone else's scene as if it were the selection.

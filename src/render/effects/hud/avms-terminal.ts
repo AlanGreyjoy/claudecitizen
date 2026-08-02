@@ -14,6 +14,7 @@ export interface AvmsTerminalElements {
   statusEl: HTMLElement;
   deliverBtnEl: HTMLButtonElement;
   storeBtnEl: HTMLButtonElement;
+  hangarBtnEl: HTMLButtonElement;
   closeBtnEl: HTMLButtonElement;
   powerBtnEl?: HTMLButtonElement;
 }
@@ -23,6 +24,11 @@ export interface AvmsOpenOptions {
   onDeliver: (ship: AvmsShipRecord) => Promise<void>;
   canStore: boolean;
   onStore: () => Promise<void>;
+  onClose?: () => void;
+  /** Button label; the button stays hidden unless `onHangar` is supplied too. */
+  hangarLabel?: string;
+  /** Travel to the authored hangar scene. Closes the panel — the session is rebuilt. */
+  onHangar?: () => void;
 }
 
 function formatPercent(current: number, max: number): string {
@@ -44,6 +50,8 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
   let canStore = false;
   let onDeliver: AvmsOpenOptions['onDeliver'] | null = null;
   let onStore: AvmsOpenOptions['onStore'] | null = null;
+  let onClose: (() => void) | null = null;
+  let onHangar: (() => void) | null = null;
 
   function setStatus(message: string, kind: 'info' | 'error' | 'ok' = 'info'): void {
     elements.statusEl.textContent = message;
@@ -135,6 +143,8 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       );
       elements.deliverBtnEl.disabled = ships.length === 0 || delivering || storing;
       elements.storeBtnEl.disabled = !canStore || delivering || storing;
+      elements.hangarBtnEl.hidden = !onHangar;
+      elements.hangarBtnEl.disabled = !onHangar;
       const focusEl = elements.powerBtnEl ?? elements.closeBtnEl;
       focusEl.focus({ preventScroll: true });
       return;
@@ -144,7 +154,12 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
     canStore = false;
     onDeliver = null;
     onStore = null;
+    onHangar = null;
+    elements.hangarBtnEl.hidden = true;
     (elements.powerBtnEl ?? elements.closeBtnEl).blur();
+    const closeCb = onClose;
+    onClose = null;
+    closeCb?.();
   }
 
   async function handleDeliver(): Promise<void> {
@@ -186,9 +201,21 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
     }
   }
 
+  /**
+   * Travel closes the panel first: the scene switch tears down this session, so
+   * the request has to be read off before `setOpen(false)` clears the handlers.
+   */
+  function handleHangar(): void {
+    if (delivering || storing || !onHangar) return;
+    const travel = onHangar;
+    setOpen(false);
+    travel();
+  }
+
   elements.deliverBtnEl.addEventListener('click', () => {
     void handleDeliver();
   });
+  elements.hangarBtnEl.addEventListener('click', () => handleHangar());
   elements.storeBtnEl.addEventListener('click', () => {
     void handleStore();
   });
@@ -225,6 +252,9 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
       canStore = options.canStore;
       onDeliver = options.onDeliver;
       onStore = options.onStore;
+      onClose = options.onClose ?? null;
+      onHangar = options.onHangar ?? null;
+      elements.hangarBtnEl.textContent = options.hangarLabel?.trim() || 'To Hangar';
       setOpen(true);
     },
   };

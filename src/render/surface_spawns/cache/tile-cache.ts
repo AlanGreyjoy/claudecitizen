@@ -11,6 +11,21 @@ import {
 
 export type { StoredSurfaceSpawnTile } from '../domain/storage';
 
+/**
+ * The hash is ~18 toFixed() strings per catalog entry and both key builders run
+ * on every streamed tile. Catalogs are replaced wholesale on edit, so identity
+ * is a safe memo key.
+ */
+const hashByCatalog = new WeakMap<PlanetSpawnCatalog, string>();
+
+function catalogHash(catalog: PlanetSpawnCatalog): string {
+  const cached = hashByCatalog.get(catalog);
+  if (cached !== undefined) return cached;
+  const hash = hashSurfaceSpawnCatalog(catalog);
+  hashByCatalog.set(catalog, hash);
+  return hash;
+}
+
 export async function loadSurfaceSpawnTile(
   planet: Planet,
   seed: number,
@@ -23,7 +38,7 @@ export async function loadSurfaceSpawnTile(
   const key = surfaceSpawnStorageKey(
     planet,
     seed,
-    hashSurfaceSpawnCatalog(catalog),
+    catalogHash(catalog),
     face,
     level,
     x,
@@ -47,7 +62,7 @@ export function saveSurfaceSpawnTile(
   const key = surfaceSpawnStorageKey(
     planet,
     seed,
-    hashSurfaceSpawnCatalog(catalog),
+    catalogHash(catalog),
     face,
     level,
     x,

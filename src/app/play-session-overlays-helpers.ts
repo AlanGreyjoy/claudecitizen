@@ -65,6 +65,7 @@ export function createPlayHud(
       tutorialBannerEl: dom.tutorialBannerEl,
       promptEl: dom.promptEl,
       readoutsEl: dom.readoutsEl,
+      readoutsCopyBtn: dom.readoutsCopyBtn,
       statusEl: dom.statusEl,
       controlsEl: dom.controlsEl,
       interactPromptEl: dom.interactPromptEl,
@@ -81,7 +82,14 @@ export function createPlayHud(
       onChatSend: (text) => getNetworkClient()?.sendChat(text),
       onTimeOverrideChange: (mode) => renderer?.setTimeOverride(mode),
       onSsaoSettingsChange: (settings) => renderer?.setSsaoSettings(settings),
-      onVegetationLayersChange: (layers) => renderer?.setVegetationLayers(layers),
+      onVegetationLayersChange: (layers) => {
+        renderer?.setVegetationLayers(layers);
+        // Pipelines are warmed once at spawn, over what was visible then.
+        // Switching a layer back on introduces material variants that were
+        // never in view for that sweep, so without this the driver compiles
+        // them synchronously the first time each direction is looked at.
+        void renderer?.warmRenderPipelines();
+      },
     },
   );
 }
@@ -274,6 +282,7 @@ export function createPlayAvmsTerminal(dom: PlaySessionDom): ReturnType<typeof c
     statusEl: dom.avmsStatusEl,
     deliverBtnEl: dom.avmsDeliverBtn,
     storeBtnEl: dom.avmsStoreBtn,
+    hangarBtnEl: dom.avmsHangarBtn,
     closeBtnEl: dom.avmsCloseBtn,
     powerBtnEl: dom.avmsPowerBtn,
   });

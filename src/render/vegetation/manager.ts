@@ -201,18 +201,28 @@ export function createPlanetVegetationManager(
     );
   }
 
-  const frameUpdate = createVegetationFrameUpdate({
-    ...shared,
-    assetsLoading,
-    countReadyEntries: tileRuntime.countReadyEntries,
-    drainBuildQueue: tileRuntime.drainBuildQueue,
-    evictVegetation: tileRuntime.evictVegetation,
-    grassRadiusUpdateMinMoveSq,
-    renderScale,
-    resolveBestAvailableVegetation: tileRuntime.resolveBestAvailableVegetation,
-    startAssetCatalogLoad,
-    treeLodUpdateMinMoveSq,
-  });
+  // `Object.assign(shared, ...)` — NOT `{...shared, ...}`. The tile runtime
+  // already holds `shared` by reference, so a spread would hand the frame
+  // update a private copy: its `frameNumber += 1` would never reach the
+  // runtime's staleness check, and `setLayerVisibility` writing
+  // `shared.treesLayerVisible` would never reach the frame update. Both views
+  // must be the same object.
+  const frameUpdate = createVegetationFrameUpdate(
+    Object.assign(shared, {
+      // Getters, not values: these two are manager-local `let`s, so even on the
+      // shared object a copied boolean would freeze at construction.
+      getAssetsLoading: () => assetsLoading,
+      getAssetsReady: () => assetsReady,
+      countReadyEntries: tileRuntime.countReadyEntries,
+      drainBuildQueue: tileRuntime.drainBuildQueue,
+      evictVegetation: tileRuntime.evictVegetation,
+      grassRadiusUpdateMinMoveSq,
+      renderScale,
+      resolveBestAvailableVegetation: tileRuntime.resolveBestAvailableVegetation,
+      startAssetCatalogLoad,
+      treeLodUpdateMinMoveSq,
+    }),
+  );
 
   async function waitForAssets(timeoutMs = 15_000): Promise<boolean> {
     if (assetsReady) return true;

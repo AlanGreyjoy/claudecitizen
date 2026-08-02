@@ -75,7 +75,10 @@ async function resolvePlayLaunch(args: {
   shipTestEnv: ShipTestEnv;
 }): Promise<PlayLaunch> {
   const { tab, handles, store, shipTestEnv } = args;
-  if (tab === 'system-map' && !(await handles.systemMapEditor?.save())) {
+  if (
+    (tab === 'star-map' || tab === 'system-map') &&
+    !(await handles.systemMapEditor?.save())
+  ) {
     return { kind: 'abort' };
   }
   if (tab === 'base-characters') {
@@ -98,7 +101,7 @@ async function resolvePlayLaunch(args: {
       setViewportPlayMode: true,
     };
   }
-  if (tab === 'planet-authoring') {
+  if (tab === 'planets' || tab === 'planet-authoring') {
     if (!(await handles.planetAuthoringEditor?.save())) return { kind: 'abort' };
     const planetId = handles.planetAuthoringEditor?.getDocument()?.id;
     if (!planetId) {
@@ -171,7 +174,12 @@ const togglePlay = useCallback(async () => {
     showToast(launch.message, launch.error === true);
     return;
   }
-  if (current !== 'scene' && current !== 'ship' && current !== 'planet-authoring') {
+  if (
+    current !== 'scene' &&
+    current !== 'ship' &&
+    current !== 'planets' &&
+    current !== 'planet-authoring'
+  ) {
     setTabState('scene');
   }
   if (launch.setViewportPlayMode) viewportRef.current?.setPlayMode(true);
@@ -314,7 +322,7 @@ const toolbarActions = useMemo(
     onLoadScene: (id: string) => void loadSceneById(id),
     onDeleteScene: (id: string) => void deleteSceneById(id),
     onLoadPlanet: (id: string) => {
-      setTab('planet-authoring');
+      setTab('planets');
       void tabHandlesRef.current.planetAuthoringEditor?.loadPlanet(id);
     },
     onOpenSceneSettings: openSceneSettings,

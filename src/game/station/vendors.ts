@@ -1,5 +1,6 @@
 import {
   getStationLayoutOverride,
+  type StationAvmsMarker,
   type StationFoodShopMarker,
   type StationOutfittersMarker,
   type StationWeaponShopMarker,
@@ -32,19 +33,29 @@ import {
   resolveFoodShopGazeTarget,
   type FoodShopGazeHit,
 } from "../../player/food-shop-gaze";
+import {
+  avmsTerminalLabel,
+  avmsTerminalWorldPosition,
+  resolveAvmsTerminalGazeTarget,
+  type AvmsTerminalGazeHit,
+} from "../../player/avms-terminal-gaze";
 import type { LoopContext } from "../loop-context";
 import type { FrameActions } from "../types";
+import type { BuildTool } from "./build-tool";
+import { openAvmsTerminal } from "./avms-actions";
 
 interface VendorLayout {
   shops: StationWeaponShopMarker[];
   outfittersShops: StationOutfittersMarker[];
   foodShops: StationFoodShopMarker[];
+  avmsTerminals: StationAvmsMarker[];
 }
 
 interface VendorHits {
   shopHit: WeaponShopGazeHit | null;
   outfittersHit: OutfittersGazeHit | null;
   foodShopHit: FoodShopGazeHit | null;
+  avmsHit: AvmsTerminalGazeHit | null;
 }
 
 function powerDownVendorScreens(ctx: LoopContext): void {
@@ -54,6 +65,8 @@ function powerDownVendorScreens(ctx: LoopContext): void {
   ctx.outfittersScreen?.setPowered(false);
   ctx.foodShopScreen?.setInteractive(false);
   ctx.foodShopScreen?.setPowered(false);
+  ctx.avmsTerminalScreen?.setInteractive(false);
+  ctx.avmsTerminalScreen?.setPowered(false);
 }
 
 function readVendorLayout(): VendorLayout {
@@ -62,6 +75,7 @@ function readVendorLayout(): VendorLayout {
     shops: layout?.weaponShops ?? [],
     outfittersShops: layout?.outfitters ?? [],
     foodShops: layout?.foodShops ?? [],
+    avmsTerminals: layout?.avmsMarkers ?? [],
   };
 }
 
@@ -89,6 +103,16 @@ function collectVendorHotspots(
       worldPosition: foodShopWorldPosition(ctx.stationFrame, shop),
       maxDistance: Math.min(shop.maxDistance, SCREEN_HOTSPOT_MAX_DISTANCE_METERS),
       worldNormal: screenWorldNormal(ctx.stationFrame, shop.rotation),
+    });
+  }
+  for (const terminal of layout.avmsTerminals) {
+    anchors.push({
+      worldPosition: avmsTerminalWorldPosition(ctx.stationFrame, terminal),
+      maxDistance: Math.min(
+        terminal.maxDistance,
+        SCREEN_HOTSPOT_MAX_DISTANCE_METERS,
+      ),
+      worldNormal: screenWorldNormal(ctx.stationFrame, terminal.rotation),
     });
   }
   return anchors;
@@ -144,6 +168,12 @@ function resolveVendorHits(ctx: LoopContext, layout: VendorLayout): VendorHits {
       shopEye,
       walkView.forward,
     ),
+    avmsHit: resolveAvmsTerminalGazeTarget(
+      layout.avmsTerminals,
+      ctx.stationFrame,
+      shopEye,
+      walkView.forward,
+    ),
   };
 }
 
@@ -185,29 +215,36 @@ function syncVendorScreenSpecs(
     list: layout.foodShops,
     hitSpec: hits.foodShopHit?.shop,
   });
+  syncOneVendorScreen({
+    screen: ctx.avmsTerminalScreen,
+    renderer: ctx.renderer,
+    list: layout.avmsTerminals,
+    hitSpec: hits.avmsHit?.terminal,
+  });
 }
 
 function anyVendorOpen(ctx: LoopContext): boolean {
   return (
     Boolean(ctx.weaponShop?.isOpen()) ||
     Boolean(ctx.outfitters?.isOpen()) ||
-    Boolean(ctx.foodShop?.isOpen())
+    Boolean(ctx.foodShop?.isOpen()) ||
+    Boolean(ctx.avmsTerminal?.isOpen())
   );
 }
 
+function otherVendorOpen(ctx: LoopContext, except: "weapon" | "outfitters" | "food" | "avms"): boolean {
+  if (except !== "weapon" && ctx.weaponShop?.isOpen()) return true;
+  if (except !== "outfitters" && ctx.outfitters?.isOpen()) return true;
+  if (except !== "food" && ctx.foodShop?.isOpen()) return true;
+  if (except !== "avms" && ctx.avmsTerminal?.isOpen()) return true;
+  return false;
+}
+
 function tryOpenWeaponShop(ctx: LoopContext, shopHit: WeaponShopGazeHit): boolean {
-  if (
-    !ctx.weaponShop ||
-    ctx.weaponShop.isOpen() ||
-    ctx.outfitters?.isOpen() ||
-    ctx.foodShop?.isOpen()
-  ) {
+  if (!ctx.weaponShop || ctx.weaponShop.isOpen() || otherVendorOpen(ctx, "weapon")) {
     return false;
   }
-  ctx.outfittersScreen?.setInteractive(false);
-  ctx.outfittersScreen?.setPowered(false);
-  ctx.foodShopScreen?.setInteractive(false);
-  ctx.foodShopScreen?.setPowered(false);
+  powerDownVendorScreens(ctx);
   ctx.weaponShopScreen?.setPowered(true);
   ctx.weaponShopScreen?.setInteractive(true);
   ctx.weaponShop.open({
@@ -222,18 +259,10 @@ function tryOpenWeaponShop(ctx: LoopContext, shopHit: WeaponShopGazeHit): boolea
 }
 
 function tryOpenOutfitters(ctx: LoopContext, hit: OutfittersGazeHit): boolean {
-  if (
-    !ctx.outfitters ||
-    ctx.outfitters.isOpen() ||
-    ctx.weaponShop?.isOpen() ||
-    ctx.foodShop?.isOpen()
-  ) {
+  if (!ctx.outfitters || ctx.outfitters.isOpen() || otherVendorOpen(ctx, "outfitters")) {
     return false;
   }
-  ctx.weaponShopScreen?.setInteractive(false);
-  ctx.weaponShopScreen?.setPowered(false);
-  ctx.foodShopScreen?.setInteractive(false);
-  ctx.foodShopScreen?.setPowered(false);
+  powerDownVendorScreens(ctx);
   ctx.outfittersScreen?.setPowered(true);
   ctx.outfittersScreen?.setInteractive(true);
   ctx.outfitters.open({
@@ -248,18 +277,10 @@ function tryOpenOutfitters(ctx: LoopContext, hit: OutfittersGazeHit): boolean {
 }
 
 function tryOpenFoodShop(ctx: LoopContext, hit: FoodShopGazeHit): boolean {
-  if (
-    !ctx.foodShop ||
-    ctx.foodShop.isOpen() ||
-    ctx.weaponShop?.isOpen() ||
-    ctx.outfitters?.isOpen()
-  ) {
+  if (!ctx.foodShop || ctx.foodShop.isOpen() || otherVendorOpen(ctx, "food")) {
     return false;
   }
-  ctx.weaponShopScreen?.setInteractive(false);
-  ctx.weaponShopScreen?.setPowered(false);
-  ctx.outfittersScreen?.setInteractive(false);
-  ctx.outfittersScreen?.setPowered(false);
+  powerDownVendorScreens(ctx);
   ctx.foodShopScreen?.setPowered(true);
   ctx.foodShopScreen?.setInteractive(true);
   ctx.foodShop.open({
@@ -273,15 +294,39 @@ function tryOpenFoodShop(ctx: LoopContext, hit: FoodShopGazeHit): boolean {
   return true;
 }
 
+function tryOpenAvms(
+  ctx: LoopContext,
+  buildTool: BuildTool,
+  terminal: StationAvmsMarker,
+): boolean {
+  if (!ctx.avmsTerminal || ctx.avmsTerminal.isOpen() || otherVendorOpen(ctx, "avms")) {
+    return false;
+  }
+  powerDownVendorScreens(ctx);
+  ctx.avmsTerminalScreen?.setPowered(true);
+  ctx.avmsTerminalScreen?.setInteractive(true);
+  openAvmsTerminal(ctx, buildTool, {
+    terminal,
+    onClose: () => {
+      ctx.avmsTerminalScreen?.setInteractive(false);
+      ctx.avmsTerminalScreen?.setPowered(false);
+    },
+  });
+  ctx.world.prompt = "";
+  return true;
+}
+
 function tryOpenAnyVendor(
   ctx: LoopContext,
   actions: FrameActions,
   hits: VendorHits,
+  buildTool: BuildTool,
 ): boolean {
   if (!actions.interactPressed) return false;
   if (hits.shopHit && tryOpenWeaponShop(ctx, hits.shopHit)) return true;
   if (hits.outfittersHit && tryOpenOutfitters(ctx, hits.outfittersHit)) return true;
   if (hits.foodShopHit && tryOpenFoodShop(ctx, hits.foodShopHit)) return true;
+  if (hits.avmsHit && tryOpenAvms(ctx, buildTool, hits.avmsHit.terminal)) return true;
   return false;
 }
 
@@ -307,6 +352,13 @@ function promptForVendorGaze(
     ctx.world.prompt = pressInteractPrompt(foodShopLabel(hits.foodShopHit.shop));
     return true;
   }
+  if (hits.avmsHit) {
+    powerDownVendorScreens(ctx);
+    ctx.world.prompt = pressInteractPrompt(
+      avmsTerminalLabel(hits.avmsHit.terminal),
+    );
+    return true;
+  }
   return false;
 }
 
@@ -315,13 +367,14 @@ export function handleStationVendors(
   ctx: LoopContext,
   actions: FrameActions,
   pressInteractPrompt: (label: string) => string,
+  buildTool: BuildTool,
 ): boolean {
   const layout = readVendorLayout();
   updateVendorHeadLook(ctx, layout);
   const hits = resolveVendorHits(ctx, layout);
   syncVendorScreenSpecs(ctx, layout, hits);
 
-  if (tryOpenAnyVendor(ctx, actions, hits)) return true;
+  if (tryOpenAnyVendor(ctx, actions, hits, buildTool)) return true;
   if (anyVendorOpen(ctx)) {
     ctx.world.prompt = "";
     return true;

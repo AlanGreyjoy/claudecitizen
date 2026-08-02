@@ -121,11 +121,19 @@ interface FlattenedComponents {
   }[];
   avmsSeeds: {
     id: string;
-    radius: number;
-    floorId: StationFloorId;
+    label: string;
     right: number;
     up: number;
     forward: number;
+    rotation: Quat;
+    gazeRadius: number;
+    maxDistance: number;
+    screenWidth: number;
+    screenHeight: number;
+    hangarSceneId: string;
+    hangarLabel: string;
+    hangarInstanceId: string;
+    hangarRoomId: string;
   }[];
   weaponShopSeeds: {
     id: string;
@@ -384,18 +392,32 @@ function collectSceneExit(
   });
 }
 
+/** Vendor component ids repeat across placeable instances; entity id scopes them. */
+function vendorMarkerId(componentId: string | undefined, entityId: string): string {
+  const base = componentId?.trim() || entityId;
+  return base === entityId ? base : `${base}@${entityId}`;
+}
+
 function collectAvmsTerminal(
   component: Extract<PrefabComponent, { type: "avms-terminal" }>,
   ctx: CollectStationContext,
   out: FlattenedComponents,
 ): void {
   out.avmsSeeds.push({
-    id: component.id,
-    radius: component.radius,
-    floorId: component.floorId,
+    id: vendorMarkerId(component.id, ctx.entity.id),
+    label: component.label?.trim() || "AVMS terminal",
     right: ctx.right,
     up: ctx.up,
     forward: ctx.forward,
+    rotation: ctx.rotation,
+    gazeRadius: component.gazeRadius ?? DEFAULT_WEAPON_SHOP_GAZE_RADIUS,
+    maxDistance: component.maxDistance ?? DEFAULT_WEAPON_SHOP_MAX_DISTANCE,
+    screenWidth: component.screenWidth ?? DEFAULT_WEAPON_SHOP_SCREEN_WIDTH,
+    screenHeight: component.screenHeight ?? DEFAULT_WEAPON_SHOP_SCREEN_HEIGHT,
+    hangarSceneId: component.hangarSceneId?.trim() ?? "",
+    hangarLabel: component.hangarLabel?.trim() || "To Hangar",
+    hangarInstanceId: component.hangarInstanceId?.trim() ?? "",
+    hangarRoomId: component.hangarRoomId?.trim() || "lobby",
   });
 }
 
@@ -405,7 +427,7 @@ function collectWeaponShop(
   out: FlattenedComponents,
 ): void {
   out.weaponShopSeeds.push({
-    id: component.id || ctx.entity.id,
+    id: vendorMarkerId(component.id, ctx.entity.id),
     label: component.label?.trim() || 'Browse weapons',
     right: ctx.right,
     up: ctx.up,
@@ -425,7 +447,7 @@ function collectOutfitters(
   out: FlattenedComponents,
 ): void {
   out.outfittersSeeds.push({
-    id: component.id || ctx.entity.id,
+    id: vendorMarkerId(component.id, ctx.entity.id),
     label: component.label?.trim() || 'Browse outfitters',
     right: ctx.right,
     up: ctx.up,
@@ -476,7 +498,7 @@ function collectFoodShop(
 ): void {
   collectFoodShopSeed(
     {
-      id: component.id || ctx.entity.id,
+      id: vendorMarkerId(component.id, ctx.entity.id),
       label: component.label?.trim() || 'Browse food',
       catalogMode: 'food',
       itemDefinitionIds: component.itemDefinitionIds,
@@ -497,7 +519,7 @@ function collectDrinksShop(
 ): void {
   collectFoodShopSeed(
     {
-      id: component.id || ctx.entity.id,
+      id: vendorMarkerId(component.id, ctx.entity.id),
       label: component.label?.trim() || 'Browse drinks',
       catalogMode: 'drinks',
       itemDefinitionIds: component.itemDefinitionIds,
@@ -518,7 +540,7 @@ function collectCanteen(
 ): void {
   collectFoodShopSeed(
     {
-      id: component.id || ctx.entity.id,
+      id: vendorMarkerId(component.id, ctx.entity.id),
       label: component.label?.trim() || 'Browse food & drinks',
       catalogMode: 'both',
       itemDefinitionIds: component.itemDefinitionIds,
@@ -539,7 +561,7 @@ function collectPharmacy(
 ): void {
   collectFoodShopSeed(
     {
-      id: component.id || ctx.entity.id,
+      id: vendorMarkerId(component.id, ctx.entity.id),
       label: component.label?.trim() || 'Browse pharmacy',
       catalogMode: 'medical',
       itemDefinitionIds: component.itemDefinitionIds,
@@ -919,23 +941,62 @@ function buildSceneExitMarkers(out: FlattenedComponents): StationSceneExitMarker
   }));
 }
 
+/**
+ * Placeable prefab instances reuse the same authored component ids (and the
+ * same nested entity ids when scene-compiled). Dropping duplicates would leave
+ * only the first machine interactive — Black Market's six AVMS copies all
+ * ship as `avms-1`. Keep every seed; uniquify the id on collision.
+ */
+function allocateUniqueMarkerId(used: Set<string>, preferred: string): string {
+  if (!used.has(preferred)) {
+    used.add(preferred);
+    return preferred;
+  }
+  let n = 2;
+  let id = `${preferred}#${n}`;
+  while (used.has(id)) {
+    n += 1;
+    id = `${preferred}#${n}`;
+  }
+  used.add(id);
+  return id;
+}
+
 function buildAvmsMarkers(out: FlattenedComponents): StationAvmsMarker[] {
-  return out.avmsSeeds.map((seed) => ({
-    id: seed.id,
-    floorId: seed.floorId,
-    right: seed.right,
-    up: seed.up,
-    forward: seed.forward,
-    radius: seed.radius,
-  }));
+  const markers: StationAvmsMarker[] = [];
+  const usedIds = new Set<string>();
+  for (const seed of out.avmsSeeds) {
+    markers.push({
+      id: allocateUniqueMarkerId(usedIds, seed.id),
+      label: seed.label,
+      right: seed.right,
+      up: seed.up,
+      forward: seed.forward,
+      rotation: {
+        x: seed.rotation.x,
+        y: seed.rotation.y,
+        z: seed.rotation.z,
+        w: seed.rotation.w,
+      },
+      gazeRadius: seed.gazeRadius,
+      maxDistance: seed.maxDistance,
+      screenWidth: seed.screenWidth,
+      screenHeight: seed.screenHeight,
+      hangarSceneId: seed.hangarSceneId,
+      hangarLabel: seed.hangarLabel,
+      hangarInstanceId: seed.hangarInstanceId,
+      hangarRoomId: seed.hangarRoomId,
+    });
+  }
+  return markers;
 }
 
 function buildWeaponShops(out: FlattenedComponents): StationWeaponShopMarker[] {
   const weaponShops: StationWeaponShopMarker[] = [];
+  const usedIds = new Set<string>();
   for (const seed of out.weaponShopSeeds) {
-    if (weaponShops.some((shop) => shop.id === seed.id)) continue;
     weaponShops.push({
-      id: seed.id,
+      id: allocateUniqueMarkerId(usedIds, seed.id),
       label: seed.label,
       right: seed.right,
       up: seed.up,
@@ -958,10 +1019,10 @@ function buildWeaponShops(out: FlattenedComponents): StationWeaponShopMarker[] {
 
 function buildOutfitters(out: FlattenedComponents): StationOutfittersMarker[] {
   const outfitters: StationOutfittersMarker[] = [];
+  const usedIds = new Set<string>();
   for (const seed of out.outfittersSeeds) {
-    if (outfitters.some((shop) => shop.id === seed.id)) continue;
     outfitters.push({
-      id: seed.id,
+      id: allocateUniqueMarkerId(usedIds, seed.id),
       label: seed.label,
       right: seed.right,
       up: seed.up,
@@ -984,10 +1045,10 @@ function buildOutfitters(out: FlattenedComponents): StationOutfittersMarker[] {
 
 function buildFoodShops(out: FlattenedComponents): StationFoodShopMarker[] {
   const foodShops: StationFoodShopMarker[] = [];
+  const usedIds = new Set<string>();
   for (const seed of out.foodShopSeeds) {
-    if (foodShops.some((shop) => shop.id === seed.id)) continue;
     foodShops.push({
-      id: seed.id,
+      id: allocateUniqueMarkerId(usedIds, seed.id),
       label: seed.label,
       catalogMode: seed.catalogMode,
       right: seed.right,

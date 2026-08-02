@@ -217,8 +217,21 @@ useEffect(() => {
     return;
   }
   if (tabParam === 'ship') setTab('ship');
-  if (tabParam === 'planet') setTab('planet-authoring');
-  if (tabParam === 'system') setTab('system-map');
+  if (
+    tabParam === 'planet' ||
+    tabParam === 'planets' ||
+    tabParam === 'planet-authoring'
+  ) {
+    setTab('planets');
+  }
+  if (
+    tabParam === 'system' ||
+    tabParam === 'star-map' ||
+    tabParam === 'system-map'
+  ) {
+    setTab('star-map');
+  }
+  if (tabParam === 'stations') setTab('stations');
   if (tabParam === 'menu') {
     setTab('menu-manager');
     const menuId = bootParams.get('menu');

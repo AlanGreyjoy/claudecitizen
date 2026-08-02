@@ -22,6 +22,10 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 **Treat every change as a frame-budget decision.** Aim for sustained interactive framerate; profile when unsure; prefer bounded, incremental work over "do it all now" loops.
 
+## Multiplayer — design in parallel
+
+**Do not ship gameplay that assumes a single local player and promise multiplayer later.** Authority, intents, replication, and peer visibility are planned with the feature — same change set or an explicit adjacent slice — not as a follow-up rewrite. Ask before coding: cell vs client ownership, wire path (`proto/world.proto` / WebTransport), and what a second player sees. Local-only cosmetics may stay non-authoritative (AGENTS.md friendly NPCs); real outcomes, travel, inventory, combat, and shared world state must not. Full invariants: AGENTS.md "Authoritative multiplayer".
+
 ### When performance matters (always)
 
 - Game loop, render path, terrain/LOD, vegetation, ship/station loading
@@ -57,13 +61,15 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 ## Quick triggers
 
-- New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`)
+- New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`) — and plan multiplayer authority/replication in parallel (AGENTS.md "Authoritative multiplayer"); never "add MP later"
+- Gameplay state / interactions / scene travel / shared entities → who owns truth, what peers see; Debug → Multiplayer for presence checks
 - Friendly station NPCs / waypoint routes / population definitions → `src/npc/` plus AGENTS.md "Friendly station NPCs"
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache-keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / scene / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (Electron desktop)"
 - Ship flight / mass / thrust / IFCS / dual-reticle / Preview Ship flight → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, and AGENTS.md "Ship flight"
+- Hab / Station / Hangar / AVMS / `scene-exit` player loop → `docs/docs/architecture/game-loop.md` (AGENTS.md "Player game loop")
 - PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 
@@ -78,3 +84,4 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - Do not start bare Vite or backend watchers. Editor HMR is `npm run editor:dev` (Electron owns Vite). Do not run `npm run dev:server`, standalone `vite`, `tsx watch`, or similar unless explicitly asked. If server context is needed, check existing ports/processes or ask first.
 - `npm run dev:server` is the Watchexec rebuild/restart loop; `npm run start:server` runs the Rust backend once. Agents still must not start either without explicit authorization.
 - **If it can freeze the tab or tank server tick rate, fix or bound it before shipping**
+- **If peers must see or affect it, design authority and replication with the feature — not after**

@@ -147,6 +147,9 @@
       <section class="hud sc-debug-panel" id="hud-stats" aria-live="polite">
         <h1>ClaudeCitizen Spike</h1>
         <p class="muted">World-scale procedural planet, one ship, surface to orbit.</p>
+        <button type="button" class="readout-copy" id="readouts-copy">
+          Copy stats
+        </button>
         <div class="readout-grid" id="readouts"></div>
         <div class="controls" id="hud-controls">
           <div><kbd>Click</kbd> lock mouse</div>
@@ -393,7 +396,7 @@
         </div>
       </div>
       <div
-        class="sc-avms"
+        class="sc-avms sc-avms-world"
         id="avms-terminal"
         aria-hidden="true"
         role="dialog"
@@ -450,6 +453,9 @@
                 </button>
                 <button class="sc-avms-store" type="button" id="avms-store-btn">
                   Store Ship
+                </button>
+                <button class="sc-avms-store" type="button" id="avms-hangar-btn" hidden>
+                  To Hangar
                 </button>
               </div>
             </div>

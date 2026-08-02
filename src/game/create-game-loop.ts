@@ -22,6 +22,11 @@ import { createOnShipDeckMode } from "./modes/on-ship-deck";
 import { createInStationMode } from "./modes/in-station";
 import type { GameLoopHandle, GameLoopOptions } from "./types";
 import type { LoopContext } from "./loop-context";
+import {
+  recordFrameStart,
+  recordRenderMs,
+  recordSimMs,
+} from "../render/main/frame-timing";
 
 export type {
   BuildAreaRuntime,
@@ -94,6 +99,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
   function frame(nowMs: number): void {
     if (!ctx.running) return;
 
+    recordFrameStart(performance.now());
     const paused = ctx.isPaused?.() ?? false;
     const frameDt = Math.min((nowMs - ctx.lastMs) / 1000, 1 / 30);
     const dt = paused ? 0 : frameDt;
@@ -112,7 +118,9 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
     let weaponPoseAiming = lastWeaponPoseAiming;
 
     if (!paused) {
+      const simStart = performance.now();
       const tick = runSimulationTick(ctx, simDeps, dt);
+      recordSimMs(performance.now() - simStart);
       camera = tick.camera;
       weaponPoseAiming = tick.weaponPoseAiming;
       lastWeaponPoseAiming = weaponPoseAiming;
@@ -121,6 +129,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
 
     // Freeze render clock while paused so camera smooth / ADS zoom stay put.
     const renderNowMs = paused && lastUnpausedNowMs > 0 ? lastUnpausedNowMs : nowMs;
+    const renderStart = performance.now();
     renderFrame(ctx, renderDeps, {
       nowMs: renderNowMs,
       camera,
@@ -129,6 +138,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
       dt,
       paused,
     });
+    recordRenderMs(performance.now() - renderStart);
 
     requestAnimationFrame(frame);
   }

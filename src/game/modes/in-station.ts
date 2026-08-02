@@ -163,7 +163,14 @@ export function createInStationMode(
       return;
     }
 
-    if (handleStationVendors(ctx, input.actions, deps.prompts.pressInteractPrompt)) {
+    if (
+      handleStationVendors(
+        ctx,
+        input.actions,
+        deps.prompts.pressInteractPrompt,
+        deps.buildTool,
+      )
+    ) {
       return;
     }
 

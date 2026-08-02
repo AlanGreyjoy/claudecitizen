@@ -30,7 +30,10 @@ export function restoreSnapshot(
   if (snapshot.subSelection) {
     store.setSubSelection(snapshot.subSelection.entityId, snapshot.subSelection.nodeUuid);
   }
-  const known = SCENE_EDITOR_TABS.some((entry) => entry.id === snapshot.tab);
+  const known =
+    SCENE_EDITOR_TABS.some((entry) => entry.id === snapshot.tab) ||
+    snapshot.tab === 'planet-authoring' ||
+    snapshot.tab === 'system-map';
   return known ? snapshot.tab : 'scene';
 }
 

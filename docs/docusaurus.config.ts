@@ -113,6 +113,10 @@ const config: Config = {
               to: '/server-console',
             },
             {
+              label: 'Architecture',
+              to: '/architecture',
+            },
+            {
               label: 'Engineering',
               to: '/engineering',
             },

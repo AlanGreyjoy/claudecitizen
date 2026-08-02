@@ -1,4 +1,4 @@
-import { type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { PrefabComponent, SceneExitTrigger } from '../../../../world/prefabs/schema';
 import { SCENE_EXIT_TRIGGERS } from '../../../../world/prefabs/schema';
 import type { StationFloorId } from '../../../../world/station';
@@ -10,6 +10,14 @@ import {
 } from '../../../../world/ladders';
 import type { ComponentFieldsProps } from './context';
 import { SceneRefField } from './SceneRefField';
+import {
+  fetchOpenSpaceSceneId,
+  networkInstanceOptions,
+  patchSceneExitTarget,
+  patchSceneExitTrigger,
+  STATION_PUBLIC_INSTANCE,
+  type SceneExitComponent,
+} from './scene-exit-fields';
 import {
   AssetUrlField,
   CheckboxRow,
@@ -32,11 +40,47 @@ const SCENE_EXIT_TRIGGER_OPTIONS = [...SCENE_EXIT_TRIGGERS];
  */
 const SPACE_EXIT_OPTION = [{ id: '@space', name: 'Open Space (Game Manager)' }];
 
+function useOpenSpaceSceneId(): string {
+  const [openSpaceSceneId, setOpenSpaceSceneId] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    void fetchOpenSpaceSceneId().then((id) => {
+      if (!cancelled) setOpenSpaceSceneId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return openSpaceSceneId;
+}
+
+/** Rewrite a literal open-space scene id to the `@space` token once it is known. */
+function useMigrateOpenSpaceTarget(
+  component: SceneExitComponent,
+  update: (next: PrefabComponent) => void,
+  openSpaceSceneId: string,
+): void {
+  const componentRef = useRef(component);
+  componentRef.current = component;
+  useEffect(() => {
+    const current = componentRef.current;
+    if (!openSpaceSceneId || current.sceneId !== openSpaceSceneId) return;
+    update(patchSceneExitTarget(current, '@space'));
+  }, [openSpaceSceneId, component.sceneId, update]);
+}
+
 export function SceneExitFields({
   ctx,
   component,
 }: ComponentFieldsProps<Extract<PrefabComponent, { type: 'scene-exit' }>>): ReactElement {
   const { update } = ctx;
+  const openSpaceSceneId = useOpenSpaceSceneId();
+  useMigrateOpenSpaceTarget(component, update, openSpaceSceneId);
+  const networkValue = component.networkInstanceId ?? STATION_PUBLIC_INSTANCE;
+  const arrivalValue = component.arrivalRoomId ?? 'lobby';
+  const arrivalOptions = (FLOOR_OPTIONS as readonly string[]).includes(arrivalValue)
+    ? FLOOR_OPTIONS
+    : [arrivalValue, ...FLOOR_OPTIONS];
 
   return (
     <>
@@ -45,7 +89,8 @@ export function SceneExitFields({
           value={component.sceneId ?? ''}
           emptyLabel="(pick a scene)"
           extraOptions={SPACE_EXIT_OPTION}
-          onCommit={(sceneId) => update({ ...component, sceneId })}
+          excludeSceneIds={openSpaceSceneId ? [openSpaceSceneId] : []}
+          onCommit={(sceneId) => update(patchSceneExitTarget(component, sceneId))}
         />
       </FieldRow>
       <FieldRow label="Trigger" wide>
@@ -53,7 +98,7 @@ export function SceneExitFields({
           options={SCENE_EXIT_TRIGGER_OPTIONS}
           value={component.trigger ?? 'interact'}
           onCommit={(trigger) =>
-            update({ ...component, trigger: trigger as SceneExitTrigger })
+            update(patchSceneExitTrigger(component, trigger as SceneExitTrigger))
           }
         />
       </FieldRow>
@@ -70,21 +115,30 @@ export function SceneExitFields({
         />
       </FieldRow>
       <FieldRow label="Network Instance" wide>
-        <TextField
-          value={component.networkInstanceId ?? 'station:public'}
+        <SelectField
+          options={networkInstanceOptions(networkValue)}
+          value={networkValue}
           onCommit={(networkInstanceId) =>
-            update({ ...component, networkInstanceId: networkInstanceId.trim() })
+            update({ ...component, networkInstanceId })
           }
         />
       </FieldRow>
       <FieldRow label="Arrival Room" wide>
-        <TextField
-          value={component.arrivalRoomId ?? 'lobby'}
+        <SelectField
+          options={arrivalOptions}
+          value={arrivalValue}
           onCommit={(arrivalRoomId) =>
-            update({ ...component, arrivalRoomId: arrivalRoomId.trim() || 'lobby' })
+            update({
+              ...component,
+              arrivalRoomId: (arrivalRoomId as StationFloorId) || 'lobby',
+            })
           }
         />
       </FieldRow>
+      <Hint>
+        Target Scene `@space` uses the Game Manager Open Space hop. Changing
+        Target or Trigger auto-fills Network Instance and Arrival Room.
+      </Hint>
     </>
   );
 }
@@ -457,21 +511,108 @@ export function AvmsTerminalFields({
       <FieldRow label="Id" wide>
         <TextField value={component.id} onCommit={(id) => update({ ...component, id })} />
       </FieldRow>
-      <FieldRow label="Floor" wide>
-        <SelectField
-          options={FLOOR_OPTIONS}
-          value={component.floorId}
-          onCommit={(floorId) =>
-            update({ ...component, floorId: floorId as StationFloorId })
+      <FieldRow label="Label" wide>
+        <TextField
+          value={component.label ?? 'AVMS terminal'}
+          onCommit={(label) =>
+            update({
+              ...component,
+              label: label.trim() ? label.trim() : undefined,
+            })
           }
         />
       </FieldRow>
-      <FieldRow label="Radius" wide>
+      <FieldRow label="Gaze radius" wide>
         <NumberField
-          value={component.radius}
-          onCommit={(radius) => update({ ...component, radius: Math.max(0.5, radius) })}
+          value={component.gazeRadius ?? 0.4}
+          step={0.05}
+          onCommit={(gazeRadius) =>
+            update({
+              ...component,
+              gazeRadius: Math.max(0.05, Math.min(2, gazeRadius)),
+            })
+          }
         />
       </FieldRow>
+      <FieldRow label="Max distance" wide>
+        <NumberField
+          value={component.maxDistance ?? 3}
+          step={0.1}
+          onCommit={(maxDistance) =>
+            update({
+              ...component,
+              maxDistance: Math.max(0.5, Math.min(10, maxDistance)),
+            })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Screen width" wide>
+        <NumberField
+          value={component.screenWidth ?? 0.45}
+          step={0.05}
+          onCommit={(screenWidth) =>
+            update({
+              ...component,
+              screenWidth: Math.max(0.2, Math.min(2, screenWidth)),
+            })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Screen height" wide>
+        <NumberField
+          value={component.screenHeight ?? 0.28}
+          step={0.05}
+          onCommit={(screenHeight) =>
+            update({
+              ...component,
+              screenHeight: Math.max(0.15, Math.min(1.5, screenHeight)),
+            })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Hangar Scene" wide>
+        <SceneRefField
+          value={component.hangarSceneId ?? ''}
+          emptyLabel="(no hangar button)"
+          onCommit={(hangarSceneId) =>
+            update({ ...component, hangarSceneId: hangarSceneId || undefined })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Hangar Button" wide>
+        <TextField
+          value={component.hangarLabel ?? 'To Hangar'}
+          onCommit={(hangarLabel) =>
+            update({
+              ...component,
+              hangarLabel: hangarLabel.trim() ? hangarLabel.trim() : undefined,
+            })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Hangar Instance" wide>
+        <TextField
+          value={component.hangarInstanceId ?? ''}
+          onCommit={(hangarInstanceId) =>
+            update({
+              ...component,
+              hangarInstanceId: hangarInstanceId.trim() || undefined,
+            })
+          }
+        />
+      </FieldRow>
+      <FieldRow label="Hangar Room" wide>
+        <TextField
+          value={component.hangarRoomId ?? 'lobby'}
+          onCommit={(hangarRoomId) =>
+            update({ ...component, hangarRoomId: hangarRoomId.trim() || undefined })
+          }
+        />
+      </FieldRow>
+      <Hint>
+        Place Empty on display face. Local +Z faces player. Walk up, look, press F.
+        Pick a Hangar Scene to show the hangar button on the panel.
+      </Hint>
     </>
   );
 }

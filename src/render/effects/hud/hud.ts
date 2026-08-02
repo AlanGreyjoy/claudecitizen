@@ -28,6 +28,7 @@ export interface HudElements {
   tutorialBannerEl: HTMLElement | null;
   promptEl: HTMLElement;
   readoutsEl: HTMLElement;
+  readoutsCopyBtn: HTMLButtonElement;
   statusEl: HTMLElement;
   controlsEl: HTMLElement;
   interactPromptEl: HTMLElement;
@@ -99,6 +100,7 @@ export function createHud(
   const statsPanel = createStatsPanel({
     promptEl: elements.promptEl,
     readoutsEl: elements.readoutsEl,
+    readoutsCopyBtn: elements.readoutsCopyBtn,
     statusEl: elements.statusEl,
   });
   const flightReticle = createFlightReticle({ rootEl: elements.flightReticleEl });

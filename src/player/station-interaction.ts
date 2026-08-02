@@ -51,8 +51,7 @@ export type StationInteraction =
       interactSoundUrl?: string;
     }
   | { kind: 'door'; door: StationDoorSpec }
-  | { kind: 'chest-storage'; marker: StationChestStorageMarker }
-  | { kind: 'avms-terminal' };
+  | { kind: 'chest-storage'; marker: StationChestStorageMarker };
 
 /** Build on-foot camera aim for station door raycasts. */
 export function resolveStationDoorInteractAim(
@@ -253,16 +252,6 @@ function resolvePrefabInteraction(
     doorAim,
   );
   if (chair) return { kind: 'chair', chair };
-
-  for (const avms of override.avmsMarkers) {
-    const near =
-      Math.hypot(
-        character.stationLocal.right - avms.right,
-        localUp - avms.up,
-        character.stationLocal.forward - avms.forward,
-      ) <= avms.radius;
-    if (near) return { kind: 'avms-terminal' };
-  }
 
   const door = nearestStationDoor(
     character,

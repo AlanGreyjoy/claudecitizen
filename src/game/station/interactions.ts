@@ -1,47 +1,17 @@
 import {
-  callShipToHangar,
   resolveStationDoorInteractAim,
   resolveStationInteraction,
   type StationInteraction,
 } from "../../player/station-interaction";
 import type { StationCharacterState } from "../../player/station-walk";
 import { beginChairSitTransition } from "../../player/chair-sit";
-import {
-  getActiveShip,
-  PLAYER_SHIP_INSTANCE_ID,
-} from "../../player/world-state";
-import { getShipInstance } from "../../flight/ship-world";
 import { playSfx } from "../../audio/sfx";
-import {
-  resetAssignedHangarBay,
-  setAssignedHangarBay,
-  type GameBootstrap,
-} from "../../net/api";
 import { sceneExitTarget } from "./scene-exit";
+import { openAvmsTerminal } from "./avms-actions";
 import type { LoopContext } from "../loop-context";
 import type { BuildTool } from "./build-tool";
 import type { StationAnimations } from "./animations";
 import type { FrameActions } from "../types";
-
-function shipsForAvms(ctx: LoopContext): GameBootstrap["ships"] {
-  if (ctx.bootstrap?.ships.length) return ctx.bootstrap.ships;
-  const ship = getActiveShip(ctx.world);
-  return [
-    {
-      id: ship.id,
-      shipDefinitionId: null,
-      prefabId: ship.prefabId,
-      displayName: ship.prefabId,
-      hp: ship.vitals.hp,
-      shields: ship.vitals.shields,
-      maxHp: ship.spec.maxHp,
-      maxShields: ship.spec.maxShields,
-      shieldRegenPerSec: ship.spec.shieldRegenPerSec,
-      maxSpeedMps: ship.spec.maxSpeedMps,
-      throttleAccelMps2: ship.spec.throttleAccelMps2,
-    },
-  ];
-}
 
 export function isVitalsLockedApartmentExit(
   ctx: LoopContext,
@@ -80,7 +50,6 @@ export function stationInteractionPrompt(
   }
   switch (interaction.kind) {
     case "terminal":
-    case "avms-terminal":
       return pressInteractPrompt("AVMS terminal");
     case "scene-exit":
       return interaction.marker.prompt.includes("Press ")
@@ -108,56 +77,6 @@ export function stationInteractionPrompt(
         interaction.marker.label.replace(/^Press F\s*[—-]\s*/i, "") || "Open chest",
       );
   }
-}
-
-async function syncHangarAfterAvms(
-  buildTool: BuildTool,
-  response: Awaited<ReturnType<typeof resetAssignedHangarBay>>,
-): Promise<void> {
-  const hangarRuntime = buildTool.buildRuntimeForArea("hangar");
-  hangarRuntime?.controller.syncBootstrap(response, response.arcBalance);
-  if (hangarRuntime) await buildTool.syncBuildPropsVisuals(hangarRuntime);
-}
-
-function openAvmsTerminal(ctx: LoopContext, buildTool: BuildTool): void {
-  ctx.avmsTerminal?.open({
-    ships: shipsForAvms(ctx),
-    canStore: ctx.world.assignedHangar !== null,
-    onStore: async () => {
-      const ship = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
-      if (ship) {
-        ship.instanceId = "stored";
-        ship.body.position = { x: 0, y: -100000, z: 0 };
-        ship.body.velocity = { x: 0, y: 0, z: 0 };
-      }
-      ctx.world.assignedHangar = null;
-      ctx.world.prompt = "Ship stored.";
-      if (!ctx.bootstrap) return;
-      try {
-        const response = await resetAssignedHangarBay();
-        await syncHangarAfterAvms(buildTool, response);
-      } catch (error) {
-        console.warn("Failed to persist hangar store.", error);
-      }
-    },
-    onDeliver: async (ship) => {
-      const hangar = await callShipToHangar(ctx.world, ctx.planet, ctx.seed, {
-        ownedShip: ship,
-        playerId: ctx.bootstrap?.player.id,
-        hangarInstanceId: ctx.bootstrap?.spawn.hangarInstanceId,
-      });
-      if (!hangar) throw new Error("No hangar bays available.");
-      ctx.world.prompt = `Ship delivered to Hangar ${hangar.index}`;
-      if (!ctx.bootstrap) return;
-      getActiveShip(ctx.world).instanceId = ctx.bootstrap.spawn.hangarInstanceId;
-      try {
-        const response = await setAssignedHangarBay(hangar.index);
-        await syncHangarAfterAvms(buildTool, response);
-      } catch (error) {
-        console.warn("Failed to persist assigned hangar bay.", error);
-      }
-    },
-  });
 }
 
 function trackPrefabProximitySound(
@@ -231,7 +150,7 @@ function activateStationInteraction(
     animations: StationAnimations;
   },
 ): void {
-  if (interaction.kind === "terminal" || interaction.kind === "avms-terminal") {
+  if (interaction.kind === "terminal") {
     if (actions.interactPressed) openAvmsTerminal(ctx, deps.buildTool);
     return;
   }

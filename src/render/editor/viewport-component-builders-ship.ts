@@ -293,27 +293,37 @@ function buildEntertainmentSystemHelper(
   group.add(sphere, screen);
   return group;
 }
-function buildWeaponShopHelper(
-  component: Extract<PrefabComponent, { type: "weapon-shop" }>,
+function buildVendorScreenHelper(
+  component: {
+    gazeRadius?: number;
+    screenWidth?: number;
+    screenHeight?: number;
+  },
+  color: number,
 ): THREE.Object3D | null {
   const group = new THREE.Group();
-  const color = 0xff7a4a;
   const radius = component.gazeRadius ?? 0.4;
   const sphere = makeHelperMesh(
-  new THREE.SphereGeometry(radius, 12, 10),
-  color,
-  0.28,
-  true,
+    new THREE.SphereGeometry(radius, 12, 10),
+    color,
+    0.28,
+    true,
   );
   const w = component.screenWidth ?? 0.45;
   const h = component.screenHeight ?? 0.28;
-  const screen = makeHelperMesh(
-  new THREE.PlaneGeometry(w, h),
-  color,
-  0.75,
-  );
+  const screen = makeHelperMesh(new THREE.PlaneGeometry(w, h), color, 0.75);
   group.add(sphere, screen);
   return group;
+}
+function buildWeaponShopHelper(
+  component: Extract<PrefabComponent, { type: "weapon-shop" }>,
+): THREE.Object3D | null {
+  return buildVendorScreenHelper(component, 0xff7a4a);
+}
+function buildAvmsTerminalHelper(
+  component: Extract<PrefabComponent, { type: "avms-terminal" }>,
+): THREE.Object3D | null {
+  return buildVendorScreenHelper(component, 0x4aa8ff);
 }
 function buildOutfittersHelper(
   component: Extract<PrefabComponent, { type: "outfitters" }>,
@@ -386,6 +396,7 @@ return {
     "cockpit-control": buildCockpitControlHelper,
     "cockpit-stat": buildCockpitStatHelper,
     "entertainment-system": buildEntertainmentSystemHelper,
+    "avms-terminal": buildAvmsTerminalHelper,
     "weapon-shop": buildWeaponShopHelper,
     "outfitters": buildOutfittersHelper,
     "food-shop": buildConsumableShopHelper,

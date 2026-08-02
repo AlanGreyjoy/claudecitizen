@@ -272,7 +272,10 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "hangar-pad",
     label: "Hangar Pad",
     category: "gameplay",
+    // Station runtime bakes pads; scene-authored hangars (instance scenes)
+    // go through the same builder, so the scene palette gets it too.
     kinds: ["station"],
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "hangar-pad",
@@ -375,15 +378,20 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     type: "avms-terminal",
     label: "AVMS Terminal",
     category: "vendor",
-    kinds: ["station"],
+    kinds: ALL_KINDS,
+    scenes: true,
     marker: true,
     createDefault: () => ({
       type: "avms-terminal",
       id: "avms-1",
-      radius: 2.5,
-      floorId: "lobby",
+      label: "AVMS terminal",
+      gazeRadius: 0.4,
+      maxDistance: 3,
+      screenWidth: 0.45,
+      screenHeight: 0.28,
     }),
-    hint: "Opens the Asteron Vehicle Management System to call ships from inventory.",
+    hint:
+      "Vendor screen. Place an Empty on the terminal display. Walk up, look at it, and press F to manage ships.",
   },
   {
     type: "weapon-shop",

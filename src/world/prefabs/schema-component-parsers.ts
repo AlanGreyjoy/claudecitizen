@@ -548,14 +548,69 @@ function parseAvmsTerminalComponent(
 ): PrefabComponent {
   const type = "avms-terminal" as const;
   return {
-          type,
-          id: parseString(value.id, `${path}.id`, 64),
-          radius: Math.min(
-            50,
-            Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
+    type,
+    id: parseString(value.id, `${path}.id`, 64),
+    label:
+      value.label === undefined
+        ? undefined
+        : parseString(value.label, `${path}.label`, 64),
+    gazeRadius:
+      value.gazeRadius === undefined
+        ? undefined
+        : Math.min(
+            2,
+            Math.max(
+              0.05,
+              parseFiniteNumber(value.gazeRadius, `${path}.gazeRadius`),
+            ),
           ),
-          floorId: parseFloorId(value.floorId, `${path}.floorId`),
-        };
+    maxDistance:
+      value.maxDistance === undefined
+        ? undefined
+        : Math.min(
+            10,
+            Math.max(
+              0.5,
+              parseFiniteNumber(value.maxDistance, `${path}.maxDistance`),
+            ),
+          ),
+    screenWidth:
+      value.screenWidth === undefined
+        ? undefined
+        : Math.min(
+            2,
+            Math.max(
+              0.2,
+              parseFiniteNumber(value.screenWidth, `${path}.screenWidth`),
+            ),
+          ),
+    screenHeight:
+      value.screenHeight === undefined
+        ? undefined
+        : Math.min(
+            1.5,
+            Math.max(
+              0.15,
+              parseFiniteNumber(value.screenHeight, `${path}.screenHeight`),
+            ),
+          ),
+    hangarSceneId:
+      value.hangarSceneId === undefined
+        ? undefined
+        : parseString(value.hangarSceneId, `${path}.hangarSceneId`, 128),
+    hangarLabel:
+      value.hangarLabel === undefined
+        ? undefined
+        : parseString(value.hangarLabel, `${path}.hangarLabel`, 64),
+    hangarInstanceId:
+      value.hangarInstanceId === undefined
+        ? undefined
+        : parseString(value.hangarInstanceId, `${path}.hangarInstanceId`, 128),
+    hangarRoomId:
+      value.hangarRoomId === undefined
+        ? undefined
+        : parseString(value.hangarRoomId, `${path}.hangarRoomId`, 64),
+  };
 }
 
 function parseWeaponShopComponent(
