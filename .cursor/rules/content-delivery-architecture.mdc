@@ -1,0 +1,21 @@
+---
+description: Build Web vs Postgres catalog vs one-shot migrations — read full architecture doc
+alwaysApply: true
+---
+
+# Content delivery architecture (pointer)
+
+Full law: [`docs/docs/architecture/content-delivery.md`](../../docs/docs/architecture/content-delivery.md).
+
+**Permanent decision:** three surfaces, never conflated. **Build Web** ships
+project files (scenes, prefabs, planets, systems, referenced/allowlisted
+assets). **Postgres catalog** (ships, props, items, weapons, backpacks,
+wearables, game settings, commerce) is edited **per environment** via Server
+Console `/admin/*`. **Migrations** are schema + one-shot seeds only — not
+continuous catalog sync. Prod `RUN_MIGRATIONS` defaults off unless set. Editor
+Play reads the live project; a shipped build uses the bundle — local success
+does not prove release completeness.
+
+When changing catalog promote paths, Build Web asset copy, Server Console
+definitions, or “works in Play / fails on play host” asset bugs, read the full
+doc first. Also listed in `AGENTS.md`.

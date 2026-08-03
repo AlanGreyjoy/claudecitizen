@@ -20,6 +20,7 @@ Also read when the domain matches:
 | `docs/docs/architecture/ship-flight.md` | Rapier + flight computer, modes, boost, quantum |
 | `docs/docs/architecture/ship-physics.md` | Vacuum inertia, coupled assist, dual-reticle |
 | `docs/docs/architecture/ship-combat.md` | Ship weapons, lock-on, lead markers, combat HUD |
+| `docs/docs/architecture/content-delivery.md` | Build Web vs Postgres catalog vs one-shot migrations |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab/scene editor work |
 | `.cursor/skills/prd/SKILL.md` | Creating PRD handoff packs under `prds/<slug>/` |
 | `.cursor/rules/terrain-cache.mdc` | Terrain/vegetation cache versioning |

@@ -9,6 +9,12 @@ description: Run the Rust backend and ship the web build.
 ClaudeCitizen deploys as **two pieces**: the Rust backend (API + cell authority)
 and a static web build from **File → Build Web**.
 
+Those pieces do **not** carry the same content. Project files (scenes, prefabs,
+assets) ride Build Web; live catalog definitions (ships, items, weapons, …) live
+in Postgres and are edited per environment via the Server console. Migrations
+are schema + one-shot seeds only — see
+[Content delivery](../architecture/content-delivery).
+
 ## Backend
 
 ### Local
@@ -82,4 +88,5 @@ cookie sessions.
 - [Stack](./stack)
 - [Realtime](./realtime)
 - [Build Web](/editor/build-web)
+- [Content delivery](/architecture/content-delivery)
 - [Server console](/server-console)

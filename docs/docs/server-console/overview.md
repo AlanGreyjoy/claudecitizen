@@ -11,6 +11,11 @@ ClaudeCitizen Rust backend. It lets you inspect registered players and manage th
 **game catalog** — ship, prop, item, weapon, backpack, and wearable definitions —
 plus global **game settings** such as starting ARC balance and starter loadouts.
 
+Catalog rows live in **that backend’s Postgres** only. They do not ship with
+Build Web, and local Console edits do not auto-sync to production. How project
+files, catalog, and migrations relate:
+[Content delivery](../architecture/content-delivery).
+
 The rest of the editor authors **project files** (scenes, prefabs, planets). The
 Server tab is the one place that edits **persistent server data** stored in
 PostgreSQL, live against a deployed backend.
@@ -74,6 +79,7 @@ Offline playtesting in the editor does **not** require it. See
 
 ## Related docs
 
+- [Content delivery](../architecture/content-delivery) — Build Web vs catalog vs migrations
 - [Getting started](./getting-started) — boot URL, prerequisites, and local setup
 - [Authentication](./authentication) — credentials, session cookies, and security
 - [Users](./users) — account inspection

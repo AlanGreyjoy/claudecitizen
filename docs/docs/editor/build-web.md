@@ -9,6 +9,10 @@ description: Release browser builds, asteron.runtime.json, and protected-asset c
 **File → Build Web** (`Ctrl+B`) produces the browser release. The web game is a
 **build target**, not a day-to-day development surface.
 
+How Build Web relates to the Postgres catalog and migrations (and why editor
+Play can succeed when a play host fails):
+[Content delivery](../architecture/content-delivery).
+
 ## What it does
 
 1. Saves the active document.
@@ -77,6 +81,7 @@ allowed to ship. See [Assets](/assets).
 
 ## Related
 
+- [Content delivery](../architecture/content-delivery) — Build Web vs catalog vs migrations
 - [Packages and textures](./packages-and-textures) — KTX-Software + derived KTX2
 - [Projects and settings](./projects-and-settings)
 - [Preview and playtest](./preview-and-playtest)

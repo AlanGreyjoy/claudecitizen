@@ -74,6 +74,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - Open Space / station boarding / Warp Gate → `docs/docs/architecture/space-traversal.md`
 - Star Map / multi-system / Warp Gate authorship → `docs/docs/architecture/star-map.md`
 - Presence / cells / instance follow-in / travel intents → `docs/docs/architecture/multiplayer.md`
+- Build Web / Server Console catalog / migrations / “works in Play, fails on play host” → `docs/docs/architecture/content-delivery.md`
 - PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 

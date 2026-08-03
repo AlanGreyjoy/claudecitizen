@@ -215,6 +215,12 @@ must not ship the authoring surface.
 Deployment specifics — TLS, WebTransport certificates, CORS, cookies — are in
 `deploy/README.md` and `docs/docs/engineering/poc-launch.md`.
 
+**Content delivery law:** project files ship via Build Web; live catalog
+(ships, items, weapons, …) lives in Postgres and is edited per environment via
+Server Console — migrations are schema + one-shot seeds only. Full law:
+`docs/docs/architecture/content-delivery.md`. Thin Cursor pointer:
+`.cursor/rules/content-delivery-architecture.mdc`.
+
 ## Prefab & Animation Architecture
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
@@ -876,6 +882,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/ship-physics-architecture.mdc` | Thin always-on pointer to the ship-physics architecture doc |
 | `docs/docs/architecture/ship-combat.md` | Blasters / missiles, lock-on, lead markers, combat HUD, shields→hull, hierarchy death |
 | `.cursor/rules/ship-combat-architecture.mdc` | Thin always-on pointer to the ship-combat architecture doc |
+| `docs/docs/architecture/content-delivery.md` | Build Web vs Postgres catalog vs one-shot migrations |
+| `.cursor/rules/content-delivery-architecture.mdc` | Thin always-on pointer to the content-delivery architecture doc |
 
 ## Utility scripts
 
