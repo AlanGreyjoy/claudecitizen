@@ -75,4 +75,5 @@ See [Controls](/play) for input bindings and quality presets.
 - [Server console](/server-console) — catalog, players, and game settings
 - [Assets](/assets) — project assets, protected packs, character avatars
 - [Roadmap](/roadmap) — living feature checklist
+- [Tech Debt](/tech-debt) — parked correctness/performance trade-offs
 - [Engineering](/engineering) — stack, DDD boundaries, planet math, design principles
