@@ -1,4 +1,11 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import type { DeployStateHandle } from './use-deploy-state';
 
@@ -83,18 +90,52 @@ export function DeployToggle({
 }
 
 /** Terminal-style output, pinned to the bottom as lines stream in. */
-export function DeployLog({ lines }: { lines: string[] }): ReactElement {
+export function DeployLog({
+  lines,
+  showCopy = false,
+}: {
+  lines: string[];
+  /** When true (typically after a failed run), offer a one-click clipboard dump. */
+  showCopy?: boolean;
+}): ReactElement {
   const scrollRef = useRef<HTMLPreElement | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const element = scrollRef.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [lines]);
 
+  useEffect(() => {
+    if (!showCopy) setCopied(false);
+  }, [showCopy]);
+
+  const copyLogs = (): void => {
+    const text = lines.join('\n');
+    if (!text) return;
+    void navigator.clipboard?.writeText(text).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      },
+      () => setCopied(false),
+    );
+  };
+
   return (
-    <pre className="ed-deploy-log" ref={scrollRef}>
-      {lines.length > 0 ? lines.join('\n') : 'No output yet.'}
-    </pre>
+    <div className="ed-deploy-log-block">
+      {showCopy && lines.length > 0 ? (
+        <div className="ed-deploy-log-header">
+          <span className="ed-deploy-field-label">Build log</span>
+          <button type="button" className="ed-btn" onClick={copyLogs}>
+            {copied ? 'Copied' : 'Copy Logs'}
+          </button>
+        </div>
+      ) : null}
+      <pre className="ed-deploy-log" ref={scrollRef}>
+        {lines.length > 0 ? lines.join('\n') : 'No output yet.'}
+      </pre>
+    </div>
   );
 }
 

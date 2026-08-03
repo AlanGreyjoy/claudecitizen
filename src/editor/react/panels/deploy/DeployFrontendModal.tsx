@@ -137,7 +137,10 @@ export function DeployFrontendModal({
             the documentation site instead.
           </p>
           <DeployProgress run={run} />
-          <DeployLog lines={state.log} />
+          <DeployLog
+            lines={state.log}
+            showCopy={!busy && state.status.isError && state.log.length > 0}
+          />
         </>
       )}
     </DeployDialogShell>

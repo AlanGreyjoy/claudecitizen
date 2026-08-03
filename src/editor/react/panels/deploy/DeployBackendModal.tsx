@@ -345,7 +345,10 @@ export function DeployBackendModal({
           {section === 'remote' ? <RemoteFields state={state} /> : null}
           {section === 'pipeline' ? <PipelineFields state={state} /> : null}
           <DeployProgress run={state.run} />
-          <DeployLog lines={state.log} />
+          <DeployLog
+            lines={state.log}
+            showCopy={!busy && state.status.isError && state.log.length > 0}
+          />
         </>
       )}
     </DeployDialogShell>

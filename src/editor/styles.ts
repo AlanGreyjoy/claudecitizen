@@ -1622,6 +1622,20 @@ body.ed-resize-row * {
   50% { opacity: 0.25; }
 }
 
+.ed-deploy-log-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ed-deploy-log-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
 /* Idle it should not dominate a short section; it grows as output streams in. */
 .ed-deploy-log {
   margin: 0;
