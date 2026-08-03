@@ -145,6 +145,9 @@ function buildPostGraph(
   cloudPass.name = 'cloud-deck';
 
   const sceneColor = scenePass.getTextureNode('output');
+  // TextureNode — GTAO / Denoise call `.sample(uv)` on this. Do not wrap it in
+  // Fn first; a float node has no `.sample` and black-screens the whole post
+  // stack (THREE.TSL: this.depthNode.sample is not a function).
   const rawSceneDepth = scenePass.getTextureNode('depth');
   // Empty WebGPU depth texels read ~0; atmosphere / night / fog sky gates
   // expect conventional far = 1 (see webgpu-atmosphere skyAwareDepth).
@@ -159,7 +162,7 @@ function buildPostGraph(
   const aoBlend = uniform(renderQuality.ambientOcclusionEnabled ? 1 : 0);
   const aoColor = uniform(new THREE.Color(0, 0, 0));
   const gtaoNode = renderQuality.ambientOcclusionEnabled
-    ? ao(sceneDepth, sceneNormal, camera)
+    ? ao(rawSceneDepth, sceneNormal, camera)
     : null;
 
   let colorAfterAo: Node = sceneColor;
@@ -175,7 +178,7 @@ function buildPostGraph(
     // AO target through it before compositing.
     const denoisedAo = denoise(
       gtaoNode.getTextureNode(),
-      sceneDepth,
+      rawSceneDepth,
       sceneNormal,
       camera,
     );
