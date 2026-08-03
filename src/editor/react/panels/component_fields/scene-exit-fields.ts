@@ -35,14 +35,13 @@ export function isOpenSpaceFlyThrough(
 export function sceneExitRoutingDefaults(
   sceneId: string,
   trigger: SceneExitTrigger,
-): Pick<SceneExitComponent, 'networkInstanceId' | 'arrivalRoomId' | 'stationPrefabId'> {
+): Pick<SceneExitComponent, 'networkInstanceId' | 'arrivalRoomId'> {
   if (isOpenSpaceFlyThrough(sceneId, trigger)) {
     return { networkInstanceId: '@space', arrivalRoomId: 'lobby' };
   }
   return {
     networkInstanceId: STATION_PUBLIC_INSTANCE,
     arrivalRoomId: 'lobby',
-    stationPrefabId: undefined,
   };
 }
 
@@ -59,9 +58,8 @@ export function patchSceneExitTarget(
     trigger,
     ...sceneExitRoutingDefaults(sceneId, trigger),
   };
-  if (!isOpenSpaceFlyThrough(sceneId, trigger)) {
-    delete next.stationPrefabId;
-  }
+  // Mouth comes from System Map hangar ownership — drop legacy Station picker.
+  delete next.stationPrefabId;
   return next;
 }
 
@@ -79,9 +77,7 @@ export function patchSceneExitTrigger(
     trigger,
     ...sceneExitRoutingDefaults(sceneId, trigger),
   };
-  if (!isOpenSpaceFlyThrough(sceneId, trigger)) {
-    delete next.stationPrefabId;
-  }
+  delete next.stationPrefabId;
   return next;
 }
 

@@ -95,9 +95,10 @@ owns the entry chain:
 2. **Character Create scene** — when the player has no saved appearance
 3. **Starting Hab** — private `instance` scene where play begins
 
-From the hab, a **Scene Exit** marker loads the shared station scene in-process,
-and flying a ship through a `fly-through` exit takes you to the **Open Space**
-scene still in the cockpit.
+From the hab, a **Scene Exit** marker loads the shared station scene in-process.
+Flying a ship through a hangar `fly-through` exit opens the **Open Space** scene
+still in the cockpit, at the System Map station that owns that hangar
+(`hangarSceneId` → Hangar Open Space Exit mouth).
 
 Every step is a field on the Game Manager, so the order is yours: clear
 **Title Scene** and the boot scene hosts the login UI itself, clear
@@ -119,7 +120,7 @@ stations authored on the System Map around the active planet.
 | --- | --- |
 | `systemId` | System document under the project's systems data (default `default`) |
 | `planetId` | Active planet terrain at world origin (one planet at a time) |
-| Station `prefab-instance` | Which station interior is walkable |
+| Station `sceneId` / Hab / Hangar | Concourse + owned interiors on the System Map entry |
 
 Stations parented to the active planet spawn at distinct orbital bearings derived
 from their System Map `offsetMeters`. The primary station owns walk physics; other

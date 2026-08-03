@@ -11,6 +11,7 @@ export type ResolvedLoopContextOptions = Required<
     | "planetId"
     | "systemId"
     | "activeStationInstanceId"
+    | "sceneId"
     | "content"
     | "shipPrefabId"
     | "shipRampDownOnSpawn"
@@ -68,6 +69,7 @@ function resolveSpawnOptions(options: GameLoopOptions) {
     planetId: options.planetId ?? "asteron",
     systemId: options.systemId ?? "default",
     activeStationInstanceId: options.activeStationInstanceId ?? null,
+    sceneId: options.sceneId ?? null,
     content: options.content ?? { planet: true, ship: true, station: true },
     shipPrefabId: options.shipPrefabId ?? null,
     shipRampDownOnSpawn: options.shipRampDownOnSpawn ?? false,

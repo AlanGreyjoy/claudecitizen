@@ -18,12 +18,17 @@ Interaction zone that opens the **Asteron Vehicle Management System** — lets p
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `id` | string | `"avms-1"` | Unique within the prefab |
-| `radius` | number | `2.5` | Interact distance in meters |
-| `floorId` | `"hab"` \| `"lobby"` \| `"hangar"` | `"lobby"` | Floor filter for the terminal |
+| `gazeRadius` / `maxDistance` | number | `0.4` / `3` | Gaze interact range |
+| `hangarSceneId` | scene select | *(empty)* | Family hangar scene — shows **To Hangar** on the panel |
+| `hangarLabel` | string | `"To Hangar"` | Button label |
+| `hangarInstanceId` | cell select | `"@hangar"` | Auto-fills when Hangar Scene is picked |
+| `hangarRoomId` | floor select | `"hangar"` | Auto-fills with Hangar Scene (`hab` / `lobby` / `hangar`) |
 
 ## Usage
 
-Place near hangar access on the lobby or hangar deck. Tune `radius` so the prompt appears when the player stands at the console.
+Place near hangar access on the lobby or hangar deck. Pick a **Hangar Scene** to
+enable the hangar button — **Hangar Instance** and **Hangar Room** fill like
+scene-exit Network Instance / Arrival Room (`@hangar` + `hangar`).
 
 Unlike a generic [Interaction](./interaction), AVMS terminals open the dedicated vehicle management UI rather than a text prompt.
 

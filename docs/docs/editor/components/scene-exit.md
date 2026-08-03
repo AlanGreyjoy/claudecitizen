@@ -26,7 +26,6 @@ mouth so a ship crossing the marker leaves for open space.
 | `radius` | number | `2.5` | Foot reach / ship crossing radius in meters |
 | `networkInstanceId` | string | `"station:public"` | Cell Transition; `@apartment` / `@hangar` / `@space` tokens allowed |
 | `arrivalRoomId` | string | `"lobby"` | Room id sent with the Transition |
-| `stationPrefabId` | string? | — | Required for `@space` / fly-through: Station whose Hangar Open Space Exit is the arrival mouth |
 
 ## Hab → station (on foot)
 
@@ -38,14 +37,15 @@ mouth so a ship crossing the marker leaves for open space.
 
 ## Hangar → open space (fly-through)
 
-1. On the **Station** prefab, place a [Hangar Open Space Exit](./hangar-open-space-exit) at the bay mouth
-2. In the hangar, place a **Scene Exit** covering the opening
-3. **Target Scene** → **Open Space (Game Manager)** (`@space`) — sets `fly-through`
-4. **Station** → that station prefab
+1. On the **Station** concourse scene, place a [Hangar Open Space Exit](./hangar-open-space-exit) at the bay mouth
+2. On the System Map, set that station's **Hangar scene** to this hangar
+3. In the hangar, place a **Scene Exit** covering the opening
+4. **Target Scene** → **Open Space (Game Manager)** (`@space`) — sets `fly-through`
 5. Network Instance stays `@space`
 
 Flying through swaps the scene into `space:<systemId>` and spawns you **still in
-the cockpit** at the station's Hangar Open Space Exit pose.
+the cockpit** at the owning station's Hangar Open Space Exit pose. Ownership
+comes from the System Map (`hangarSceneId`), not a field on this exit.
 
 This is not a menu `scene-link`. It stops the current play session and boots the
 target scene through the scene host.
@@ -53,6 +53,7 @@ target scene through the scene host.
 ## See also
 
 - [Hangar Open Space Exit](./hangar-open-space-exit)
+- [System Map](../system-map) — station family ownership
 - [Station authoring](../station-authoring)
 - [Instanced scene](../scene-components#instanced-scene) — private hab / hangar scope
 - [Game loop](../../architecture/game-loop)

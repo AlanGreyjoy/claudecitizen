@@ -82,6 +82,9 @@ export function planApproachPrefetch(
   // Below this, visitSelectedTiles already forces ground detail. Prefetching
   // L16/L17 here only competes with the tiles under the player.
   if (altitudeMeters < 1_500) return null;
+  // System Map orbital ranges (megameters): planet is a distant disc; surface
+  // prefetch only burns tile budget for detail that will never be seen.
+  if (altitudeMeters > 500_000) return null;
 
   const up = radialUp(position);
   const surfaceFocus = scale(up, planet.radiusMeters);

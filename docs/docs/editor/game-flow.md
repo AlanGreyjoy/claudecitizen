@@ -73,12 +73,14 @@ rather than stranding the player on the title screen.
 Open space is an ordinary scene; what makes it reachable is a **Scene Exit** with
 `trigger: fly-through` placed at a hangar mouth. Set its target scene to
 **Open Space (Game Manager)** — that stores the token `@space`, which resolves
-through the boot scene's Open Space Scene at runtime. A hangar prefab authored
-that way works in any project without knowing its scene ids.
+through the boot scene's Open Space Scene at runtime. A hangar authored that way
+works in any project without knowing its open-space scene id.
 
-Also pick **Station** on that exit: the Station prefab that owns a
-[Hangar Open Space Exit](./components/hangar-open-space-exit) marker. Arrival
-spawns the ship at that hangar mouth instead of a generic orbit altitude.
+Arrival pose comes from **station family ownership**, not a field on the exit.
+Put a [Hangar Open Space Exit](./components/hangar-open-space-exit) on the Station
+concourse scene, and on the [System Map](./system-map) set that station's
+**Hangar scene** to the hangar you fly out of. Runtime looks up `hangarSceneId`
+and spawns at that mouth instead of a generic orbit altitude.
 
 Flying through the marker swaps both the scene and the authoritative cell
 (`space:<systemId>`), and you arrive **still in the cockpit** rather than on

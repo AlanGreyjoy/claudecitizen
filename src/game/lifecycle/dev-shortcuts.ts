@@ -5,6 +5,7 @@ import { MODE_IN_STATION } from "../../player/modes";
 import type { ColorCorrectionSettings, SsaoSettings } from "../../types";
 import type { SurfaceDestination } from "../../world/biome-teleport";
 import type { LoopContext } from "../loop-context";
+import { resolveDeliverHangars } from "../station/avms-actions";
 import { getSurfaceSpawnDebug } from "./surface-spawn-debug";
 
 /** Console-only dev shortcuts (mirrors the __spikeScene diagnostic). */
@@ -14,11 +15,17 @@ export function attachDevShortcuts(
 ): void {
   window.__claudecitizenDev = {
     callShip: async () => {
+      const { hangars, parkInWorld } = await resolveDeliverHangars(ctx);
       const hangar = await callShipToHangar(ctx.world, ctx.planet, ctx.seed, {
         ownedShip: ctx.bootstrap?.ships[0],
         playerId: ctx.bootstrap?.player.id,
         hangarInstanceId: ctx.bootstrap?.spawn.hangarInstanceId,
+        hangars,
+        parkInWorld,
       });
+      if (hangar && ctx.bootstrap) {
+        ctx.bootstrap.hangar.assignedHangar = hangar.index;
+      }
       return hangar?.index ?? 0;
     },
     teleportToHangar: (index: number) => {

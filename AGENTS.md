@@ -473,10 +473,11 @@ place while being simulated in another.
   `openSpaceSceneId` (`resolveSceneExitSceneId`), so a hangar prefab can name
   the destination without knowing any project's scene ids. Unknown `@` tokens
   resolve to nothing rather than reaching the scene loader as a literal.
-- Open-space fly-throughs also author `stationPrefabId`: the Station prefab
-  whose singleton `hangar-open-space-exit` marker is the arrival mouth. Runtime
-  sets that station's orbit frame and spawns the ship there; missing id/marker
-  falls back to the generic open-space altitude spawn with a warning.
+- Open-space fly-throughs resolve the owning station from System Map
+  `hangarSceneId` (the hangar scene being left). Runtime loads that station's
+  concourse, sets its orbit frame, and spawns at its `hangar-open-space-exit`
+  mouth; missing ownership/marker falls back to the generic open-space altitude
+  spawn with a warning. Do not author a Station picker on the hangar exit.
 - A `fly-through` exit sets `arrival: 'in-ship'` on the target, which reaches
   `createWorldState` and spawns the player **seated and flying** in orbit.
   Without it the swap rebuilds the session and drops a mid-flight pilot on foot

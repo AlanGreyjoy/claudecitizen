@@ -72,16 +72,30 @@ export function resolveStationAltitudeMeters(station: SystemStationEntry): numbe
 
 /**
  * Pick the primary interactable station for this session.
- * Prefers the entry the session already asked for — by prefab id, or by the
- * scene being played — else the first.
+ * Prefers an explicit map instance, then the scene being played (concourse or
+ * owned Hab/Hangar), then a legacy prefab id, else the first entry.
  */
 export function pickPrimarySystemStation(
   stations: SystemStationEntry[],
-  preferred: { prefabId?: string | null; sceneId?: string | null } = {},
+  preferred: {
+    entryId?: string | null;
+    prefabId?: string | null;
+    sceneId?: string | null;
+  } = {},
 ): SystemStationEntry | null {
   if (stations.length === 0) return null;
+  if (preferred.entryId) {
+    const match = stations.find((station) => station.id === preferred.entryId);
+    if (match) return match;
+  }
   if (preferred.sceneId) {
-    const match = stations.find((station) => station.sceneId === preferred.sceneId);
+    const sceneId = preferred.sceneId;
+    const match = stations.find(
+      (station) =>
+        station.sceneId === sceneId
+        || station.hangarSceneId === sceneId
+        || station.habSceneId === sceneId,
+    );
     if (match) return match;
   }
   if (preferred.prefabId) {
@@ -99,12 +113,17 @@ export function stationEntrySourceId(station: SystemStationEntry): string {
 }
 
 /**
- * Look up a system station entry by map instance id and/or concourse scene id.
- * Prefers `entryId` when both are set.
+ * Look up a system station entry by map instance id, concourse scene id, or an
+ * owned Hab/Hangar scene id. Prefers `entryId`, then concourse, then hangar/hab.
  */
 export function findSystemStationEntry(
   system: SystemDocument,
-  query: { entryId?: string | null; sceneId?: string | null },
+  query: {
+    entryId?: string | null;
+    sceneId?: string | null;
+    hangarSceneId?: string | null;
+    habSceneId?: string | null;
+  },
 ): SystemStationEntry | null {
   if (query.entryId) {
     const byId = system.stations.find((station) => station.id === query.entryId);
@@ -114,15 +133,47 @@ export function findSystemStationEntry(
     const byScene = system.stations.find((station) => station.sceneId === query.sceneId);
     if (byScene) return byScene;
   }
+  if (query.hangarSceneId) {
+    const hangarSceneId = query.hangarSceneId.trim();
+    if (hangarSceneId) {
+      const byHangar = system.stations.find(
+        (station) => station.hangarSceneId === hangarSceneId,
+      );
+      if (byHangar) return byHangar;
+    }
+  }
+  if (query.habSceneId) {
+    const habSceneId = query.habSceneId.trim();
+    if (habSceneId) {
+      const byHab = system.stations.find((station) => station.habSceneId === habSceneId);
+      if (byHab) return byHab;
+    }
+  }
   return null;
 }
 
 /** Hangar scene owned by the station family, or empty when unset / unknown. */
 export function resolveStationFamilyHangarSceneId(
   system: SystemDocument,
-  query: { entryId?: string | null; sceneId?: string | null },
+  query: {
+    entryId?: string | null;
+    sceneId?: string | null;
+    hangarSceneId?: string | null;
+    habSceneId?: string | null;
+  },
 ): string {
   return findSystemStationEntry(system, query)?.hangarSceneId?.trim() ?? '';
+}
+
+/**
+ * Station family that owns this hangar scene on the System Map, or null when
+ * no entry lists it as `hangarSceneId`.
+ */
+export function resolveStationFamilyByHangarSceneId(
+  system: SystemDocument,
+  hangarSceneId: string,
+): SystemStationEntry | null {
+  return findSystemStationEntry(system, { hangarSceneId });
 }
 
 export function isStarParent(parentBodyId: string): boolean {

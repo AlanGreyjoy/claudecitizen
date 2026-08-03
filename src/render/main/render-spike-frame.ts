@@ -52,6 +52,7 @@ import type { createMuzzleFlashRenderer } from '../effects/muzzle-flash';
 import type { createHitDecalRenderer } from '../effects/hit-decals';
 import type { createImpactBurstRenderer } from '../effects/impact-burst';
 import type { createTracerRenderer } from '../effects/tracers';
+import { updateGameplayCameraFar } from './scene/scene-lighting';
 import type { createSceneLighting } from './scene/scene-lighting';
 import type { SecondaryStationEntry } from './scene/secondary-stations';
 import { recordSubmitMs } from './frame-timing';
@@ -378,6 +379,13 @@ function updateLightingAndCamera(
       station: { frame: deps.stationFrame, roomId: world.stationRoomId ?? null },
       dt,
     },
+  );
+  updateGameplayCameraFar(
+    deps.camera,
+    focusBody.position,
+    deps.planet.radiusMeters,
+    deps.planet.atmosphereHeightMeters,
+    renderScale,
   );
   return { surface, altitudeFactor, spaceFactor, sunState, shipUp, shipForward, renderScale };
 }

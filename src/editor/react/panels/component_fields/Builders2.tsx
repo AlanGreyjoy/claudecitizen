@@ -8,18 +8,22 @@ import {
   LADDER_DEFAULT_LABEL,
   LADDER_DEFAULT_RADIUS,
 } from '../../../../world/ladders';
-import { fetchPrefabList } from '../../../api';
 import type { ComponentFieldsProps } from './context';
 import { SceneRefField } from './SceneRefField';
 import {
   fetchOpenSpaceSceneId,
-  isOpenSpaceFlyThrough,
   networkInstanceOptions,
   patchSceneExitTarget,
   patchSceneExitTrigger,
   STATION_PUBLIC_INSTANCE,
   type SceneExitComponent,
 } from './scene-exit-fields';
+import {
+  AVMS_DEFAULT_HANGAR_INSTANCE,
+  AVMS_DEFAULT_HANGAR_ROOM,
+  hangarInstanceOptions,
+  patchAvmsHangarScene,
+} from './avms-terminal-fields';
 import {
   AssetUrlField,
   CheckboxRow,
@@ -71,32 +75,6 @@ function useMigrateOpenSpaceTarget(
   }, [openSpaceSceneId, component.sceneId, update]);
 }
 
-function useStationPrefabOptions(): { value: string; label: string }[] {
-  const [options, setOptions] = useState<{ value: string; label: string }[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    void fetchPrefabList()
-      .then((prefabs) => {
-        if (cancelled) return;
-        setOptions(
-          prefabs
-            .filter((entry) => entry.kind === 'station')
-            .map((entry) => ({
-              value: entry.id,
-              label: entry.name?.trim() ? `${entry.name} (${entry.id})` : entry.id,
-            })),
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setOptions([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return options;
-}
-
 export function SceneExitFields({
   ctx,
   component,
@@ -104,24 +82,11 @@ export function SceneExitFields({
   const { update } = ctx;
   const openSpaceSceneId = useOpenSpaceSceneId();
   useMigrateOpenSpaceTarget(component, update, openSpaceSceneId);
-  const stationOptions = useStationPrefabOptions();
   const networkValue = component.networkInstanceId ?? STATION_PUBLIC_INSTANCE;
   const arrivalValue = component.arrivalRoomId ?? 'lobby';
   const arrivalOptions = (FLOOR_OPTIONS as readonly string[]).includes(arrivalValue)
     ? FLOOR_OPTIONS
     : [arrivalValue, ...FLOOR_OPTIONS];
-  const openSpaceExit = isOpenSpaceFlyThrough(
-    component.sceneId ?? '',
-    component.trigger ?? 'interact',
-  );
-  const stationValue = component.stationPrefabId ?? '';
-  const stationSelectOptions = [
-    { value: '', label: '(pick a station)' },
-    ...stationOptions,
-    ...(stationValue && !stationOptions.some((option) => option.value === stationValue)
-      ? [{ value: stationValue, label: `${stationValue} (missing)` }]
-      : []),
-  ];
 
   return (
     <>
@@ -143,20 +108,6 @@ export function SceneExitFields({
           }
         />
       </FieldRow>
-      {openSpaceExit ? (
-        <FieldRow label="Station" wide>
-          <SelectField
-            options={stationSelectOptions}
-            value={stationValue}
-            onCommit={(stationPrefabId) =>
-              update({
-                ...component,
-                stationPrefabId: stationPrefabId || undefined,
-              })
-            }
-          />
-        </FieldRow>
-      ) : null}
       <FieldRow label="Prompt" wide>
         <TextField
           value={component.prompt ?? 'Press F — exit to station'}
@@ -192,9 +143,10 @@ export function SceneExitFields({
       </FieldRow>
       <Hint>
         Target Scene `@space` uses the Game Manager Open Space hop. Open-space
-        fly-throughs pick the Station whose Hangar Open Space Exit mouth is the
-        arrival pose. Changing Target or Trigger auto-fills Network Instance and
-        Arrival Room.
+        fly-throughs resolve the System Map station that owns this hangar
+        (`hangarSceneId`) and spawn at that station&apos;s Hangar Open Space
+        Exit. Changing Target or Trigger auto-fills Network Instance and Arrival
+        Room.
       </Hint>
     </>
   );
@@ -563,6 +515,12 @@ export function AvmsTerminalFields({
   component,
 }: ComponentFieldsProps<Extract<PrefabComponent, { type: 'avms-terminal' }>>): ReactElement {
   const { update } = ctx;
+  const hangarInstanceValue =
+    component.hangarInstanceId ?? AVMS_DEFAULT_HANGAR_INSTANCE;
+  const hangarRoomValue = component.hangarRoomId ?? AVMS_DEFAULT_HANGAR_ROOM;
+  const hangarRoomOptions = (FLOOR_OPTIONS as readonly string[]).includes(hangarRoomValue)
+    ? FLOOR_OPTIONS
+    : [hangarRoomValue, ...FLOOR_OPTIONS];
   return (
     <>
       <FieldRow label="Id" wide>
@@ -632,7 +590,7 @@ export function AvmsTerminalFields({
           value={component.hangarSceneId ?? ''}
           emptyLabel="(no hangar button)"
           onCommit={(hangarSceneId) =>
-            update({ ...component, hangarSceneId: hangarSceneId || undefined })
+            update(patchAvmsHangarScene(component, hangarSceneId))
           }
         />
       </FieldRow>
@@ -648,8 +606,9 @@ export function AvmsTerminalFields({
         />
       </FieldRow>
       <FieldRow label="Hangar Instance" wide>
-        <TextField
-          value={component.hangarInstanceId ?? ''}
+        <SelectField
+          options={hangarInstanceOptions(hangarInstanceValue)}
+          value={hangarInstanceValue}
           onCommit={(hangarInstanceId) =>
             update({
               ...component,
@@ -659,16 +618,21 @@ export function AvmsTerminalFields({
         />
       </FieldRow>
       <FieldRow label="Hangar Room" wide>
-        <TextField
-          value={component.hangarRoomId ?? 'lobby'}
+        <SelectField
+          options={hangarRoomOptions}
+          value={hangarRoomValue}
           onCommit={(hangarRoomId) =>
-            update({ ...component, hangarRoomId: hangarRoomId.trim() || undefined })
+            update({
+              ...component,
+              hangarRoomId: (hangarRoomId as StationFloorId) || undefined,
+            })
           }
         />
       </FieldRow>
       <Hint>
         Place Empty on display face. Local +Z faces player. Walk up, look, press F.
-        Pick a Hangar Scene to show the hangar button on the panel.
+        Pick a Hangar Scene to show the hangar button — Instance and Room fill
+        like scene-exit Network Instance / Arrival Room (`@hangar` + hangar).
       </Hint>
     </>
   );

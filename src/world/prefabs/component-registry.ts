@@ -401,9 +401,12 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       maxDistance: 3,
       screenWidth: 0.45,
       screenHeight: 0.28,
+      hangarInstanceId: "@hangar",
+      hangarRoomId: "hangar",
+      hangarLabel: "To Hangar",
     }),
     hint:
-      "Vendor screen. Place an Empty on the terminal display. Walk up, look at it, and press F to manage ships.",
+      "Vendor screen. Place an Empty on the terminal display. Walk up, look at it, and press F to manage ships. Pick Hangar Scene to show To Hangar; Instance/Room auto-fill.",
   },
   {
     type: "weapon-shop",

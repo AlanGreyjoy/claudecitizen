@@ -3,11 +3,16 @@ import {
   createFlightCameraFeelState,
 } from "../player/flight-camera-feel";
 import { createEntertainmentCameraState } from "../player/entertainment-camera";
+import {
+  parkShipOnHangarPad,
+  stowShipPendingHangar,
+} from "../player/station-interaction";
 import { createLoopingSfxController } from "../audio/sfx";
 import { createSoundSceneController } from "../audio/sound-scene";
 import { createFootstepController } from "../audio/footsteps";
 import { createStationNpcPopulation } from "../npc/station-population";
 import {
+  getHangarByIndex,
   getStationFrame,
   getStationLayoutOverride,
   type StationFrame,
@@ -48,12 +53,36 @@ import type {
   PlayerControls,
   WeaponCombatRuntimeEvent,
 } from "./types";
-import { resolveLoopContextOptions } from "./loop-context-options";
+import {
+  resolveLoopContextOptions,
+  type ResolvedLoopContextOptions,
+} from "./loop-context-options";
 
 interface StationAnimationState {
   value: number;
   target: number;
   rate: number;
+}
+
+/**
+ * After a Station-side AVMS deliver, the bay is assigned but pads live on the
+ * hangar scene. Entering that hangar parks the hull; other scenes keep it stowed.
+ */
+function applyAssignedHangarShipPose(
+  world: WorldState,
+  resolved: ResolvedLoopContextOptions,
+): void {
+  const assigned = resolved.bootstrap?.hangar.assignedHangar ?? null;
+  if (assigned === null) return;
+  world.assignedHangar = assigned;
+  if (!resolved.content.ship) return;
+  const hangarInstanceId = resolved.bootstrap?.spawn.hangarInstanceId;
+  const hangar = getHangarByIndex(assigned);
+  if (hangar) {
+    parkShipOnHangarPad(world, resolved.planet, hangar, hangarInstanceId);
+    return;
+  }
+  stowShipPendingHangar(world, hangarInstanceId);
 }
 
 /**
@@ -80,6 +109,8 @@ export interface LoopContext {
   readonly planetId: string;
   readonly systemId: string;
   readonly activeStationInstanceId: string | null;
+  /** Active scene document id — hangar ownership looks this up on the System Map. */
+  readonly sceneId: string | null;
   /** Subsystems the active scene declared; gates ship rendering and deck warmup. */
   readonly content: ScenePlayContent;
   readonly controls: PlayerControls;
@@ -164,9 +195,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     shipRampDownOnSpawn: resolved.shipRampDownOnSpawn,
     vitals: resolved.vitalsSession?.getVitals() ?? resolved.bootstrap?.player.vitals,
   });
-  if (resolved.bootstrap?.hangar.assignedHangar) {
-    world.assignedHangar = resolved.bootstrap.hangar.assignedHangar;
-  }
+  applyAssignedHangarShipPose(world, resolved);
 
   const stationFrame = getStationFrame(resolved.planet);
 
@@ -177,6 +206,7 @@ export function createLoopContext(options: GameLoopOptions): LoopContext {
     planetId: resolved.planetId,
     systemId: resolved.systemId,
     activeStationInstanceId: resolved.activeStationInstanceId,
+    sceneId: resolved.sceneId,
     content: resolved.content,
     controls: resolved.controls,
     renderer: resolved.renderer,

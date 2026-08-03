@@ -76,9 +76,9 @@ flowchart TD
 
 1. **Spawn in Hab** — starting place for the player (their instanced quarters for that station family). Placeable build allowed.
 2. **Hab → Station** — player uses a `scene-exit` to leave the hab and enter the shared station concourse.
-3. **AVMS on Station** — at an AVMS terminal, player can **call a ship** so it is delivered to their hangar bay.
+3. **AVMS on Station** — at an AVMS terminal, player can **call a ship** so it is delivered to their hangar bay. Runtime resolves pads from that family's hangar scene (`hangarSceneId` / terminal Hangar Scene), not from the Station concourse layout; the hull appears when the player enters the hangar.
 4. **Station → Hangar** — from inside the AVMS UI, **To Hangar** moves the player to that station family's **instanced** hangar. Placeable build allowed.
-5. **Hangar → Open Space** — hangar has a `scene-exit` set to **Open Space** (`@space` + `fly-through`) and picks the **Station** prefab for that family. Runtime finds that station's **`hangar-open-space-exit`** marker (`HANGAR-OPEN-SPACE-EXIT`) and spawns the ship **in-ship** at that hangar mouth pose.
+5. **Hangar → Open Space** — hangar has a `scene-exit` set to **Open Space** (`@space` + `fly-through`). Runtime looks up the System Map station that owns this hangar (`hangarSceneId`), loads that station's concourse scene, finds its **`hangar-open-space-exit`** marker (`HANGAR-OPEN-SPACE-EXIT`), and spawns the ship **in-ship** at that hangar mouth pose.
 
 ## Invariants (draft)
 
@@ -87,7 +87,7 @@ flowchart TD
 - Team members may enter a teammate's hab/hangar instance (follow-in); strangers stay out.
 - Do not hard-code a single global hab or hangar if the project has multiple stations.
 - AVMS "call ship" and "To Hangar" are station-side; destinations resolve to **that station's** hangar.
-- Hangar open-space fly-through names a station prefab; arrival uses that station's `hangar-open-space-exit` mouth — not a free-floating global portal.
+- Hangar open-space fly-through resolves the owning station via System Map `hangarSceneId`; arrival uses that station's `hangar-open-space-exit` mouth — not a free-floating global portal and not a Station picker on the exit.
 - Travel between places stays scene-based (`scene-exit` / scene request) — not page reload, not a second teleporter system.
 
 ## Open / later

@@ -140,8 +140,12 @@ function generateAsteronPois(planet: Planet, seed: number): QuantumDestination[]
   return destinations;
 }
 
-function stationDestination(station: SystemStationEntry): QuantumDestination {
+function stationDestination(
+  station: SystemStationEntry,
+  planet: Planet,
+): QuantumDestination {
   const hint = orbitHintFromSystemOffset(
+    planet,
     station.offsetMeters,
     resolveStationAltitudeMeters(station),
   );
@@ -174,15 +178,16 @@ function planetDestination(
 
 /** System Map bodies that participate in Nav / quantum. */
 export function listSystemQuantumDestinations(
+  planet: Planet,
   activePlanetDocumentId: string,
 ): QuantumDestination[] {
   const system = getActiveSystemDocument();
   const destinations: QuantumDestination[] = [];
-  for (const planet of system.planets) {
-    destinations.push(planetDestination(planet, activePlanetDocumentId));
+  for (const entry of system.planets) {
+    destinations.push(planetDestination(entry, activePlanetDocumentId));
   }
   for (const station of getSystemStationEntriesForPlanetDocument(system, activePlanetDocumentId)) {
-    destinations.push(stationDestination(station));
+    destinations.push(stationDestination(station, planet));
   }
   return destinations;
 }
@@ -201,7 +206,7 @@ export function listQuantumDestinations(planet: Planet, seed: number): QuantumDe
   const activeId = getActivePlanetConfig().planetId;
   return [
     ...listSurfaceDestinations(planet, seed),
-    ...listSystemQuantumDestinations(activeId),
+    ...listSystemQuantumDestinations(planet, activeId),
   ];
 }
 

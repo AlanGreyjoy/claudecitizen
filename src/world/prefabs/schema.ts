@@ -444,14 +444,16 @@ export type PrefabComponent =
       /** Room id sent with the network Transition (default `lobby`). */
       arrivalRoomId?: string;
       /**
-       * Station prefab whose `hangar-open-space-exit` is the open-space arrival
-       * mouth. Required when targeting `@space` / `fly-through`.
+       * Legacy Station prefab override for open-space arrival mouth. Prefer
+       * System Map ownership: hangar `hangarSceneId` → station family's
+       * `hangar-open-space-exit`. Optional when targeting `@space` / fly-through.
        */
       stationPrefabId?: string;
     }
   /**
-   * Hangar mouth on a Station prefab. Fly-through `@space` scene-exits that name
-   * this station spawn the ship here in open space (local +Z = exit facing).
+   * Hangar mouth on a Station scene (or legacy station prefab). Open-space
+   * fly-through from that family's hangar spawns the ship here (local +Z =
+   * exit facing). Ownership comes from the System Map, not the hangar exit.
    */
   | { type: "hangar-open-space-exit" }
   /**

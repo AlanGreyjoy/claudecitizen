@@ -945,6 +945,16 @@ function buildHangars(out: FlattenedComponents): HangarSpec[] {
   }));
 }
 
+/**
+ * Hangar pads only — no collider bake. Used when AVMS delivers a ship to a
+ * family hangar scene the player is not standing in.
+ */
+export function hangarsFromPrefabDocument(doc: PrefabDocument): HangarSpec[] {
+  const out = createEmptyFlattened();
+  collect(doc.root, vec3(0, 0, 0), quatIdentity(), vec3(1, 1, 1), out);
+  return buildHangars(out);
+}
+
 function buildInfoMarkers(out: FlattenedComponents): StationInfoMarker[] {
   return out.infoSeeds.map((seed) => ({
     id: seed.id,

@@ -32,7 +32,7 @@ Authoring uses a **flat ecliptic** in meters:
 
 Planets store `positionMeters` from the star. Stations store `offsetMeters` from a **parent** (`star` or a planet entry id). Dashed lines on the map show parent → station relationships.
 
-Default seed distances keep several planets draggable: planets near `1e10` m from the star, station offsets near `5e7` m.
+Default seed distances keep several planets draggable: planets near `1e10` m from the star, station offsets near `5e7` m. Those meters are the same units play uses — a station dragged far from its parent on the map is that far in orbit.
 
 ## Sidebar actions
 
@@ -54,7 +54,7 @@ Each station on the map is a `SystemStationEntry`:
 | --- | --- |
 | `sceneId` | Concourse / shared lobby scene (preferred). XOR with legacy `stationPrefabId` |
 | `habSceneId` | Instanced Hab scene this station owns (optional until wired) |
-| `hangarSceneId` | Instanced Hangar scene this station owns; AVMS **To Hangar** falls back here when the terminal leaves Hangar Scene blank |
+| `hangarSceneId` | Instanced Hangar scene this station owns; AVMS **To Hangar** falls back here when the terminal leaves Hangar Scene blank; hangar → open-space fly-through uses it to find this station's Hangar Open Space Exit |
 | `parentBodyId` / `offsetMeters` / `altitudeMeters` | Orbital placement on the ecliptic |
 
 Hab and Hangar are **ownership only** — they do not get their own ecliptic markers.
@@ -83,13 +83,17 @@ Playable scenes select a system through the scene's `game-manager` component
 (`systemId` / `planetId` / spawn mode). Scenes load and switch **in-process** via
 the scene host — never by reloading the page with new URL params.
 
-Stations parented to the **active** planet spawn at orbital bearings from their
-System Map `offsetMeters`. The primary station (matched by the played scene's
-`sceneId` when possible) is fully walkable. Other stations on the same planet
-render as visual roots without a second physics world. Stations parented to
-inactive planets are not spawned until that planet is active.
+Stations parented to the **active** planet spawn at their System Map
+`offsetMeters` as **true world meters** on the ecliptic (active planet at the
+origin). Looking out from a station shows the planet at that authored range and
+bearing. If `|offsetMeters|` is shorter than `radius + altitudeMeters`, the
+station is pushed out to that minimum shell so short offsets still clear the
+crust. The primary station (matched by the played scene's `sceneId` when
+possible) is fully walkable. Other stations on the same planet render as visual
+roots without a second physics world. Stations parented to inactive planets are
+not spawned until that planet is active.
 
-Quantum travel approaches the orbital marker only. Entering the concourse, Hab,
+Quantum travel approaches the same ecliptic marker. Entering the concourse, Hab,
 or Hangar stays `scene-exit` / AVMS / Play scene — not a second teleporter.
 
 See also: [Planet authoring](./planet-authoring), [Station authoring](./station-authoring),

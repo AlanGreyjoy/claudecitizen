@@ -1,7 +1,13 @@
-import { cross, dot, normalize, sub } from '../math/vec3';
-import { cartesianFromLatLonAlt, eastVector, radialUp } from './coordinates';
+import { cross, dot, normalize, sub, vec3 } from '../math/vec3';
+import {
+  altitudeForPosition,
+  cartesianFromLatLonAlt,
+  eastVector,
+  latLonForPosition,
+  radialUp,
+} from './coordinates';
 import { DEFAULT_SPAWN_SITE } from './landing-sites';
-import type { LandingSiteHint, Planet, Vec3 } from '../types';
+import type { Planet, Vec3 } from '../types';
 import type { GameplayCollider } from '../physics/colliders';
 import type { LadderSpec } from './ladders';
 import type { ChairSeatSpec } from './chair-seats';
@@ -277,7 +283,11 @@ export const STATION_ANCHORS = {
 
 const frameCache = new Map<string, StationFrame>();
 
-/** Optional orbit override set from System Map station entries (play bootstrap). */
+/**
+ * Optional orbit override from System Map station entries (play bootstrap).
+ * Lat/lon/alt are derived from the ecliptic cartesian origin so
+ * `getStationFrameAt` / quantum approach stay on the same point.
+ */
 export interface StationOrbitHint {
   latRadians: number;
   lonRadians: number;
@@ -296,21 +306,78 @@ export function getStationOrbitHint(): StationOrbitHint | null {
 }
 
 /**
- * Maps a system-ecliptic station offset into a stable orbital bearing around
- * the planet. Direction of `offsetMeters` becomes a longitude offset from the
- * default spawn site; altitude comes from the system entry.
+ * World-space station origin from System Map ecliptic meters (planet at origin).
+ *
+ * Map `offsetMeters` is true meters on the ecliptic (y = 0). When the offset
+ * would place the station inside the minimum orbit shell
+ * (`radius + altitudeMeters`), it is pushed out along that bearing so short
+ * legacy offsets still clear the crust. `altitudeMeters` is that minimum
+ * clearance — not a substitute for map range when the marker is far out.
  */
-export function orbitHintFromSystemOffset(
+export function stationOriginFromSystemOffset(
+  planet: Planet,
   offsetMeters: { x: number; z: number },
   altitudeMeters: number,
-  base: LandingSiteHint = DEFAULT_SPAWN_SITE,
+): Vec3 {
+  const minOrbitRadius = planet.radiusMeters + Math.max(0, altitudeMeters);
+  const horiz = Math.hypot(offsetMeters.x, offsetMeters.z);
+  if (horiz < 1e-6) {
+    return cartesianFromLatLonAlt(
+      DEFAULT_SPAWN_SITE.latRadians,
+      DEFAULT_SPAWN_SITE.lonRadians,
+      Math.max(0, altitudeMeters),
+      planet.radiusMeters,
+    );
+  }
+  const orbitRadius = Math.max(horiz, minOrbitRadius);
+  const scale = orbitRadius / horiz;
+  return vec3(offsetMeters.x * scale, 0, offsetMeters.z * scale);
+}
+
+/** Orbit hint (lat/lon/alt) matching {@link stationOriginFromSystemOffset}. */
+export function orbitHintFromSystemOffset(
+  planet: Planet,
+  offsetMeters: { x: number; z: number },
+  altitudeMeters: number,
 ): StationOrbitHint {
-  const bearing = Math.atan2(offsetMeters.x, offsetMeters.z);
+  const origin = stationOriginFromSystemOffset(planet, offsetMeters, altitudeMeters);
+  const { latRadians, lonRadians } = latLonForPosition(origin);
   return {
-    latRadians: base.latRadians,
-    lonRadians: base.lonRadians + bearing,
-    altitudeMeters,
+    latRadians,
+    lonRadians,
+    altitudeMeters: altitudeForPosition(origin, planet.radiusMeters),
   };
+}
+
+export function getStationFrameFromOrigin(planet: Planet, origin: Vec3): StationFrame {
+  const key = [
+    planet.name ?? 'planet',
+    planet.radiusMeters,
+    origin.x.toFixed(1),
+    origin.y.toFixed(1),
+    origin.z.toFixed(1),
+  ].join(':');
+  const cached = frameCache.get(key);
+  if (cached) return cached;
+
+  const up = radialUp(origin);
+  const forward = eastVector(origin);
+  const right = normalize(cross(forward, up));
+  const frame: StationFrame = { origin, right, up, forward };
+  frameCache.set(key, frame);
+  return frame;
+}
+
+/** Station frame at the System Map ecliptic offset (true meters). */
+export function stationFrameFromSystemOffset(
+  planet: Planet,
+  offsetMeters: { x: number; z: number },
+  altitudeMeters: number,
+): StationFrame {
+  return getStationFrameFromOrigin(
+    planet,
+    stationOriginFromSystemOffset(planet, offsetMeters, altitudeMeters),
+  );
 }
 
 export function getStationFrameAt(
@@ -319,28 +386,10 @@ export function getStationFrameAt(
   lonRadians: number,
   altitudeMeters: number,
 ): StationFrame {
-  const key = [
-    planet.name ?? 'planet',
-    planet.radiusMeters,
-    latRadians.toFixed(6),
-    lonRadians.toFixed(6),
-    altitudeMeters.toFixed(1),
-  ].join(':');
-  const cached = frameCache.get(key);
-  if (cached) return cached;
-
-  const origin = cartesianFromLatLonAlt(
-    latRadians,
-    lonRadians,
-    altitudeMeters,
-    planet.radiusMeters,
+  return getStationFrameFromOrigin(
+    planet,
+    cartesianFromLatLonAlt(latRadians, lonRadians, altitudeMeters, planet.radiusMeters),
   );
-  const up = radialUp(origin);
-  const forward = eastVector(origin);
-  const right = normalize(cross(forward, up));
-  const frame: StationFrame = { origin, right, up, forward };
-  frameCache.set(key, frame);
-  return frame;
 }
 
 export function getStationFrame(planet: Planet): StationFrame {
@@ -451,8 +500,8 @@ export interface StationSceneExitMarker {
   networkInstanceId: string;
   arrivalRoomId: string;
   /**
-   * Station prefab whose `hangar-open-space-exit` is the open-space arrival
-   * mouth. Empty when the exit is not an open-space fly-through.
+   * Legacy Station prefab override for open-space arrival. Empty when unset —
+   * runtime prefers System Map ownership from the hangar scene being left.
    */
   stationPrefabId: string;
 }

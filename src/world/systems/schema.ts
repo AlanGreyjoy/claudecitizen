@@ -10,12 +10,14 @@
  * - Star sits at (0, 0) on the ecliptic.
  * - `positionMeters.x/z` and `offsetMeters.x/z` are meters from the star /
  *   parent; there is no `y` / out-of-ecliptic placement in v1.
+ * - Those meters are **play meters**: with the active planet at world origin,
+ *   a station's `offsetMeters` is its ecliptic world position (y = 0).
  * - Display may convert to AU (`1 AU ≈ 1.496e11 m`); authoring uses meters.
  *
- * Default map distances: planets sit around `SYSTEM_MAP_PLANET_DISTANCE_METERS`
- * (1e10 m ≈ 0.067 AU) so six bodies remain draggable on a 2D System Map canvas
- * without microscopic steps. Stations use megameter-scale offsets from their
- * parent so both markers stay distinct on the map.
+ * Default seed distances: planets near `SYSTEM_MAP_PLANET_DISTANCE_METERS`
+ * (1e10 m ≈ 0.067 AU) so several bodies stay draggable on the 2D canvas.
+ * Station offsets are often megameter-scale — that range is what you see from
+ * the deck, not map-only decoration.
  */
 
 export const SYSTEM_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -32,7 +34,10 @@ export const SYSTEM_MAP_PLANET_DISTANCE_METERS = 10_000_000_000;
 /** Suggested station offset magnitude from parent on the map (meters). */
 export const SYSTEM_MAP_STATION_OFFSET_METERS = 50_000_000;
 
-/** Default orbital altitude when runtime places a station (matches today's feel). */
+/**
+ * Minimum clearance above the parent surface when `|offsetMeters|` is too short
+ * to clear the crust. Far map offsets use the offset magnitude as orbital range.
+ */
 export const DEFAULT_STATION_ALTITUDE_METERS = 200_000;
 
 export interface SystemEclipticMeters {
@@ -73,15 +78,20 @@ export interface SystemStationEntry {
   habSceneId?: string;
   /**
    * Instanced Hangar scene owned by this station family. AVMS To Hangar falls
-   * back here when the terminal leaves `hangarSceneId` blank.
+   * back here when the terminal leaves `hangarSceneId` blank. Hangar → open
+   * space fly-through uses this to find the family's `hangar-open-space-exit`.
    */
   hangarSceneId?: string;
   name: string;
   /** `"star"` or a `SystemPlanetEntry.id`. */
   parentBodyId: string;
-  /** Offset from parent in system meters (ecliptic). */
+  /** Offset from parent in system meters (ecliptic) — true play meters. */
   offsetMeters: SystemEclipticMeters;
-  /** Altitude above parent surface/orbit when runtime places the station. */
+  /**
+   * Minimum orbit clearance above the parent surface. Used when `|offsetMeters|`
+   * would place the station inside `radius + altitude`; otherwise the map
+   * offset magnitude is the orbital range from the planet center.
+   */
   altitudeMeters?: number;
 }
 

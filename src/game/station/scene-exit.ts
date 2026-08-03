@@ -22,8 +22,13 @@ export interface SceneExitTarget {
    */
   arrival: 'default' | 'in-ship';
   /**
-   * Station prefab whose `hangar-open-space-exit` is the open-space arrival
-   * mouth. Empty when the exit is not an open-space fly-through.
+   * Hangar scene the player left. Open-space fly-throughs use System Map
+   * ownership (`hangarSceneId`) to find the family's `hangar-open-space-exit`.
+   */
+  fromHangarSceneId?: string;
+  /**
+   * Legacy Station prefab override when ownership cannot resolve. Prefer
+   * System Map `hangarSceneId` ownership for scene-backed stations.
    */
   stationPrefabId?: string;
 }
@@ -62,13 +67,17 @@ export function sceneExitTarget(
   marker: StationSceneExitMarker,
   bootstrap: GameBootstrap | null,
   systemId: string,
+  options: { fromHangarSceneId?: string | null } = {},
 ): SceneExitTarget {
   const stationPrefabId = marker.stationPrefabId.trim();
+  const fromHangarSceneId = options.fromHangarSceneId?.trim() ?? '';
+  const flyThrough = marker.trigger === 'fly-through';
   return {
     sceneId: marker.sceneId,
     instanceId: resolveSceneExitInstanceId(marker.networkInstanceId, bootstrap, systemId),
     roomId: marker.arrivalRoomId,
-    arrival: marker.trigger === 'fly-through' ? 'in-ship' : 'default',
+    arrival: flyThrough ? 'in-ship' : 'default',
+    ...(flyThrough && fromHangarSceneId ? { fromHangarSceneId } : {}),
     ...(stationPrefabId ? { stationPrefabId } : {}),
   };
 }

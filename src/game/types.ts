@@ -72,6 +72,8 @@ export interface GameLoopOptions {
   planetId?: string;
   systemId?: string;
   activeStationInstanceId?: string | null;
+  /** Active scene document id (hangar / hab / concourse) for ownership resolve. */
+  sceneId?: string | null;
   /** Subsystems the active scene declared. Omitted means "boot everything". */
   content?: ScenePlayContent;
   /** Ship prefab the player ship spawns as. Omitted uses the default hull. */

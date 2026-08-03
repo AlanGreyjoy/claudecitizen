@@ -135,6 +135,37 @@ export function createMainScene(): THREE.Scene {
   return scene;
 }
 
+/** Default / floor far plane in render units (world meters × renderScale). */
+export const MIN_GAMEPLAY_CAMERA_FAR = 500_000;
+
 export function createMainCamera(): THREE.PerspectiveCamera {
-  return new THREE.PerspectiveCamera(72, 1, 0.0001, 500_000);
+  return new THREE.PerspectiveCamera(72, 1, 0.0001, MIN_GAMEPLAY_CAMERA_FAR);
+}
+
+/**
+ * Keep the planet (and its far limb) inside the clip range when the focus is
+ * at System Map distances. Camera is floating-origin / render-scaled, so far
+ * is in render units.
+ */
+export function updateGameplayCameraFar(
+  camera: THREE.PerspectiveCamera,
+  focusPositionMeters: { x: number; y: number; z: number },
+  planetRadiusMeters: number,
+  atmosphereHeightMeters: number,
+  renderScale: number,
+): void {
+  const rangeMeters = Math.hypot(
+    focusPositionMeters.x,
+    focusPositionMeters.y,
+    focusPositionMeters.z,
+  );
+  const worldFarMeters =
+    rangeMeters
+    + planetRadiusMeters
+    + Math.max(0, atmosphereHeightMeters)
+    + planetRadiusMeters * 0.25;
+  const nextFar = Math.max(MIN_GAMEPLAY_CAMERA_FAR, worldFarMeters * renderScale * 1.25);
+  if (Math.abs(camera.far - nextFar) < 1) return;
+  camera.far = nextFar;
+  camera.updateProjectionMatrix();
 }

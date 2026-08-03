@@ -9,11 +9,16 @@ import {
   setAssignedHangarBay,
   type GameBootstrap,
 } from "../../net/api";
-import type { StationAvmsMarker } from "../../world/station";
+import {
+  getStationHangars,
+  type HangarSpec,
+  type StationAvmsMarker,
+} from "../../world/station";
 import {
   getActiveSystemDocument,
   resolveStationFamilyHangarSceneId,
 } from "../../world/systems/runtime";
+import { loadHangarsFromSceneId } from "../../world/systems/station-source";
 import type { LoopContext } from "../loop-context";
 import { resolveSceneExitInstanceId } from "./scene-exit";
 import type { BuildTool } from "./build-tool";
@@ -27,8 +32,36 @@ function resolveAvmsHangarSceneId(
   if (fromTerminal) return fromTerminal;
   return resolveStationFamilyHangarSceneId(getActiveSystemDocument(), {
     entryId: ctx.activeStationInstanceId,
-    sceneId: ctx.stationPrefab?.id ?? null,
+    sceneId: ctx.sceneId ?? ctx.stationPrefab?.id ?? null,
   });
+}
+
+/**
+ * Pads for AVMS deliver: family hangar scene first (doc model), else pads on
+ * the active layout (legacy co-located station). `parkInWorld` is false when
+ * pads live in another scene — hull stays stowed until To Hangar.
+ */
+export async function resolveDeliverHangars(
+  ctx: LoopContext,
+  terminal: StationAvmsMarker | null = null,
+): Promise<{ hangars: HangarSpec[]; parkInWorld: boolean }> {
+  const hangarSceneId = resolveAvmsHangarSceneId(ctx, terminal);
+  if (hangarSceneId && ctx.sceneId === hangarSceneId) {
+    return { hangars: getStationHangars(), parkInWorld: true };
+  }
+  if (hangarSceneId) {
+    const hangars = await loadHangarsFromSceneId(hangarSceneId);
+    if (hangars.length > 0) return { hangars, parkInWorld: false };
+  }
+  return { hangars: getStationHangars(), parkInWorld: true };
+}
+
+function syncBootstrapAssignedHangar(
+  ctx: LoopContext,
+  assignedHangar: number | null,
+): void {
+  if (!ctx.bootstrap) return;
+  ctx.bootstrap.hangar.assignedHangar = assignedHangar;
 }
 
 function shipsForAvms(ctx: LoopContext): GameBootstrap["ships"] {
@@ -107,6 +140,7 @@ export function openAvmsTerminal(
         ship.body.velocity = { x: 0, y: 0, z: 0 };
       }
       ctx.world.assignedHangar = null;
+      syncBootstrapAssignedHangar(ctx, null);
       ctx.world.prompt = "Ship stored.";
       if (!ctx.bootstrap) return;
       try {
@@ -117,12 +151,16 @@ export function openAvmsTerminal(
       }
     },
     onDeliver: async (ship) => {
+      const { hangars, parkInWorld } = await resolveDeliverHangars(ctx, terminal);
       const hangar = await callShipToHangar(ctx.world, ctx.planet, ctx.seed, {
         ownedShip: ship,
         playerId: ctx.bootstrap?.player.id,
         hangarInstanceId: ctx.bootstrap?.spawn.hangarInstanceId,
+        hangars,
+        parkInWorld,
       });
       if (!hangar) throw new Error("No hangar bays available.");
+      syncBootstrapAssignedHangar(ctx, hangar.index);
       ctx.world.prompt = `Ship delivered to Hangar ${hangar.index}`;
       if (!ctx.bootstrap) return;
       getActiveShip(ctx.world).instanceId = ctx.bootstrap.spawn.hangarInstanceId;

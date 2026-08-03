@@ -62,7 +62,11 @@ function tryFlyThroughExit(ctx: LoopContext, position: Vec3): boolean {
   for (const marker of override.sceneExitMarkers) {
     if (marker.trigger !== "fly-through" || !marker.sceneId) continue;
     if (!shipCrossedExit(marker, local)) continue;
-    ctx.onRequestScene(sceneExitTarget(marker, ctx.bootstrap, ctx.systemId));
+    ctx.onRequestScene(
+      sceneExitTarget(marker, ctx.bootstrap, ctx.systemId, {
+        fromHangarSceneId: ctx.sceneId,
+      }),
+    );
     return true;
   }
   return false;

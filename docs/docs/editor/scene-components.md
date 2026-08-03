@@ -23,7 +23,7 @@ also appears on station/site prefabs as a gameplay marker.
 | Playable world | `planet` + `player-start` + `prefab-instance`(s) |
 | Per-player hab / hangar | `kind: "instance"` + `instanced-scene` `scope: "player"` + `spawn-point` |
 | Exit private hab to station scene | `scene-exit` (target scene id) |
-| Fly out to open space | `scene-exit`, `trigger: "fly-through"`, target **Open Space (Game Manager)** |
+| Fly out to open space | `scene-exit`, `trigger: "fly-through"`, target **Open Space (Game Manager)**; mouth from System Map `hangarSceneId` → Hangar Open Space Exit |
 
 ## `game-manager`
 

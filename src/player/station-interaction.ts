@@ -317,38 +317,15 @@ export function resolveStationInteraction(
   return null;
 }
 
-/**
- * Assigns a hangar and parks the player's ship on its pad: engines off,
- * zero velocity, grounded, nose facing the hangar mouth. Returns null when
- * the active station layout has no hangar pads. If the ship instance was
- * stored (removed), it is recreated from the provided record.
- */
-export async function callShipToHangar(
+/** Park the active ship on a hangar pad in the current station frame. */
+export function parkShipOnHangarPad(
   world: WorldState,
   planet: Planet,
-  seed: number,
-  options: {
-    ownedShip?: GameBootstrap['ships'][number];
-    playerId?: string;
-    hangarInstanceId?: string;
-  } = {},
-): Promise<HangarSpec | null> {
-  const hangars = getStationHangars();
-  if (hangars.length === 0) return null;
-
-  const instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
-  const { ownedShip, playerId, hangarInstanceId } = options;
-  if (!instance && ownedShip && playerId && hangarInstanceId) {
-    await ensurePlayerShipInstance(ownedShip, playerId, hangarInstanceId);
-  } else if (ownedShip && playerId) {
-    await applyOwnedShipToInstance(ownedShip, playerId);
-  }
-
-  const hangar = hangars[Math.abs(seed) % hangars.length];
+  hangar: HangarSpec,
+  hangarInstanceId?: string,
+): void {
   const ship = getActiveShip(world);
-  if (hangarInstanceId) {
-    ship.instanceId = hangarInstanceId;
-  }
+  if (hangarInstanceId) ship.instanceId = hangarInstanceId;
   const frame = getStationFrame(planet);
   const restLocal = {
     ...hangar.padSurfaceLocal,
@@ -362,5 +339,61 @@ export async function callShipToHangar(
     velocity: vec3(0, 0, 0),
   };
   world.assignedHangar = hangar.index;
+}
+
+/**
+ * Keep a delivered hull out of the current scene (Station concourse) until
+ * the player enters the family hangar. Same far-away trick as AVMS store.
+ */
+export function stowShipPendingHangar(
+  world: WorldState,
+  hangarInstanceId?: string,
+): void {
+  const ship = getActiveShip(world);
+  if (hangarInstanceId) ship.instanceId = hangarInstanceId;
+  ship.body.position = { x: 0, y: -100000, z: 0 };
+  ship.body.velocity = { x: 0, y: 0, z: 0 };
+  ship.body.grounded = true;
+}
+
+/**
+ * Assigns a hangar and parks the player's ship on its pad: engines off,
+ * zero velocity, grounded, nose facing the hangar mouth. Returns null when
+ * no hangar pads are available. Pads may come from the active layout or
+ * (for Station-side AVMS) the family hangar scene via `options.hangars`.
+ * When `parkInWorld` is false, only assigns the bay — hull stays stowed
+ * until the hangar scene loads.
+ */
+export async function callShipToHangar(
+  world: WorldState,
+  planet: Planet,
+  seed: number,
+  options: {
+    ownedShip?: GameBootstrap['ships'][number];
+    playerId?: string;
+    hangarInstanceId?: string;
+    hangars?: HangarSpec[];
+    parkInWorld?: boolean;
+  } = {},
+): Promise<HangarSpec | null> {
+  const hangars = options.hangars ?? getStationHangars();
+  if (hangars.length === 0) return null;
+
+  const instance = getShipInstance(PLAYER_SHIP_INSTANCE_ID);
+  const { ownedShip, playerId, hangarInstanceId } = options;
+  if (!instance && ownedShip && playerId && hangarInstanceId) {
+    await ensurePlayerShipInstance(ownedShip, playerId, hangarInstanceId);
+  } else if (ownedShip && playerId) {
+    await applyOwnedShipToInstance(ownedShip, playerId);
+  }
+
+  const hangar = hangars[Math.abs(seed) % hangars.length];
+  const parkInWorld = options.parkInWorld !== false;
+  if (parkInWorld) {
+    parkShipOnHangarPad(world, planet, hangar, hangarInstanceId);
+  } else {
+    world.assignedHangar = hangar.index;
+    stowShipPendingHangar(world, hangarInstanceId);
+  }
   return hangar;
 }

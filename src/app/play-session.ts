@@ -287,6 +287,7 @@ function createPlayGameLoop(options: {
     planetId: world.planetDocument.id,
     systemId: world.systemDocument?.id ?? world.params.systemId,
     activeStationInstanceId: world.primaryStation?.id ?? null,
+    sceneId: world.params.scene?.id ?? null,
     content: world.params.content,
     shipPrefabId: world.params.shipPrefabOverride,
     shipRampDownOnSpawn: world.params.shipTest,

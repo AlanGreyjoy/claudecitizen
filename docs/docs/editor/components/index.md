@@ -68,7 +68,7 @@ These components only appear on scene documents, and they decide what the scene
 | [Spawn point](./spawn-point) | Player spawn location and facing |
 | [Elevator](./elevator) | Floor-to-floor travel between paired markers |
 | [Scene Exit](./scene-exit) | In-play portal that loads another scene (hab → station, hangar → open space) |
-| [Hangar Open Space Exit](./hangar-open-space-exit) | Station hangar mouth — open-space fly-through arrival pose |
+| [Hangar Open Space Exit](./hangar-open-space-exit) | Station mouth pose; hangar fly-through resolves via System Map ownership |
 | [Ladder](./ladder) | Climbable rail — foot marker, +Y up, +Z step-off |
 | [Hangar pad](./hangar-pad) | Ship parking spot inside a hangar |
 | [AVMS terminal](./avms-terminal) | Opens the vehicle management UI |

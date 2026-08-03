@@ -66,9 +66,10 @@ At runtime, `src/app/scene-host.ts` loads a scene, mounts its UI screens or star
 play from its GameObjects, and switches scenes **in-process** — never by reloading
 the page. A `boot` scene runs no gameplay: its Game Manager names each hop, and
 the runtime follows that pipeline (sign in → character create when needed →
-starting hab). Private habs use `scene-exit` to enter a shared station scene; a
-`fly-through` exit takes a ship out to open space. See
-[Game flow](./game-flow).
+starting hab). Private habs use `scene-exit` to enter a shared station scene; a hangar
+`fly-through` exit opens open space at the owning station's Hangar Open Space
+Exit (System Map `hangarSceneId`). See [Game flow](./game-flow) and
+[Game loop](../architecture/game-loop).
 
 ## Prefab kinds at a glance
 
