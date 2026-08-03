@@ -11,9 +11,9 @@
  *
  * The sweep runs AFTER the incoming scene has finished loading, so an asset the
  * new scene also uses carries the current generation and survives untouched —
- * reuse *within* one play renderer is free. Across a scene switch the play
- * renderer is disposed and prod may have nulled ImageBitmap sources, so
- * `beginAssetGeneration` drops every unpinned entry and the next scene reloads.
+ * reuse across a scene switch is free, with no re-fetch and no re-parse (CPU
+ * ImageBitmap sources must still be present for the new WebGPU renderer to
+ * re-upload — see `texture-upload.ts`).
  *
  * String keys and callbacks only — this module must stay free of `three` so it
  * can sit in the shared cache layer.
@@ -75,22 +75,24 @@ export function unpinAsset(cacheName: string, key: string): void {
   caches.get(cacheName)?.pinned.delete(key);
 }
 
+/** Opens a new generation. Call at the start of a play session. */
+export function beginAssetGeneration(): number {
+  currentGeneration += 1;
+  return currentGeneration;
+}
+
 /**
- * Evicts unpinned keys. When `onlyStale` is true (post-publish sweep), keeps
- * keys touched in the current generation. When false (session start), drops
- * every unpinned entry — required after a renderer dispose, because prod
- * `drainSourceReleases` nulls ImageBitmap sources that cannot re-upload into
- * a new WebGPU backend.
+ * Evicts every unpinned key not touched during the current generation.
+ * Call after the new scene is fully published, never during teardown.
  */
-function evictUnpinnedAssets(onlyStale: boolean): SweepResult {
+export function sweepUnusedAssets(): SweepResult {
   const byCache: Record<string, number> = {};
   let swept = 0;
 
   for (const [cacheName, record] of caches) {
     const stale: string[] = [];
     for (const [key, generation] of record.generations) {
-      if (record.pinned.has(key)) continue;
-      if (onlyStale && generation === currentGeneration) continue;
+      if (generation === currentGeneration || record.pinned.has(key)) continue;
       stale.push(key);
     }
     if (!record.evict) continue;
@@ -107,32 +109,9 @@ function evictUnpinnedAssets(onlyStale: boolean): SweepResult {
   }
 
   if (swept > 0) {
-    const label = onlyStale ? 'swept' : 'session-reset';
-    console.info(
-      `[asset-residency] ${label} ${swept} entries at generation ${currentGeneration}`,
-      byCache,
-    );
+    console.info(`[asset-residency] swept ${swept} entries at generation ${currentGeneration}`, byCache);
   }
   return { byCache, swept };
-}
-
-/** Opens a new generation. Call at the start of a play session. */
-export function beginAssetGeneration(): number {
-  currentGeneration += 1;
-  // Previous play session disposed its WebGPURenderer. Cached templates may
-  // still hold textures whose CPU sources were released after upload — those
-  // cannot re-init on the new renderer (`image.complete` on null). Drop them
-  // before this scene loads so every hit re-decodes a fresh ImageBitmap.
-  evictUnpinnedAssets(false);
-  return currentGeneration;
-}
-
-/**
- * Evicts every unpinned key not touched during the current generation.
- * Call after the new scene is fully published, never during teardown.
- */
-export function sweepUnusedAssets(): SweepResult {
-  return evictUnpinnedAssets(true);
 }
 
 export function getAssetResidencySnapshot(): AssetResidencySnapshot {

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { AUTHORING_ENABLED } from '../../build-mode';
 
 /**
  * Releases the decoded CPU-side copy of a texture once it is on the GPU.
@@ -11,24 +10,18 @@ import { AUTHORING_ENABLED } from '../../build-mode';
  * visible yet, so the drain calls `renderer.initTexture` to force the upload
  * before closing the bitmap.
  *
- * Disabled under authoring. The editor runs several WebGPU renderers beside the
- * play renderer (viewport-scene, material-preview, equipment stage, thumbnails)
- * that render clones of the same cached templates. Each renderer owns a separate
- * backend `DataMap`, so each must upload the texture itself — releasing the
- * bitmap after the first upload would leave every other renderer with no source.
- * The release is only safe in a shipped build, which has exactly one renderer
- * *per play session*.
+ * Forced off. WebGPU node materials call `Textures.updateTexture` again
+ * whenever a sampled-texture binding reports `updated` — and that path reads
+ * `image.complete`. Nulling `source.data` after the first upload therefore
+ * black-screens the next frame (`Cannot read properties of null (reading
+ * 'complete')`), including on the first hab load. Scene switches make it
+ * worse: the play renderer is disposed and a cache hit cannot re-upload.
  *
- * Trade-off in that build: a released texture can never be re-uploaded. Each
- * scene switch disposes the play renderer and opens a new one, so
- * `beginAssetGeneration` must evict unpinned cache entries (and dedup must
- * refuse dead canonicals) before the next scene loads. Under WebGPU,
- * `Textures.updateTexture` also re-runs `backend.createTexture` whenever a
- * placeholder later gains real data, and `WebGPUTextureUtils` *throws*
- * ("Texture already initialized") rather than warning. Flip the constant to
- * disable entirely.
+ * When re-enabling: use `!AUTHORING_ENABLED` as well (editor runs several
+ * WebGPU renderers that each need the CPU source), and add a Three-safe
+ * "source released" guard so binding updates skip `image.complete` on null.
  */
-const RELEASE_DECODED_TEXTURE_SOURCES = !AUTHORING_ENABLED;
+const RELEASE_DECODED_TEXTURE_SOURCES = false;
 
 const queue: THREE.Texture[] = [];
 const queued = new WeakSet<THREE.Texture>();

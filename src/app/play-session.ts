@@ -585,8 +585,6 @@ export async function startPlaySession(
   const generation = startGeneration;
   // Opens a new asset generation. Everything this scene loads is stamped with
   // it; the sweep after publish evicts whatever the previous scene left behind.
-  // Also drops caches whose ImageBitmaps were released for the old renderer —
-  // those cannot re-upload into the new WebGPU backend.
   beginAssetGeneration();
   clearSourceReleaseQueue();
 

@@ -81,9 +81,9 @@ function vector2Key(vector: THREE.Vector2): string {
 }
 
 /**
- * True when the CPU source can still feed `WebGPURenderer` upload. Prod
- * `drainSourceReleases` sets `source.data = null` after upload; a later session
- * with a new renderer must not reuse that canonical.
+ * True when the CPU source can still feed `WebGPURenderer` upload. Guard for
+ * the (currently disabled) `drainSourceReleases` path that nulls `source.data`
+ * after upload — a live material must never be rebound to that dead object.
  */
 function textureSourceUploadable(texture: THREE.Texture): boolean {
   const data = texture.source?.data;
