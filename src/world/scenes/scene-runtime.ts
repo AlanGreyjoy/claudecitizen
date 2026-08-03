@@ -10,7 +10,7 @@ import type {
 import {
   SCENE_ENVIRONMENT_DEFAULT_BACKGROUND_COLOR,
 } from '../prefabs/schema';
-import type { SceneDocument } from './schema';
+import type { SceneDocument, SceneRuntime } from './schema';
 import { sceneHasStationContent } from './scene-station';
 
 /**
@@ -74,6 +74,11 @@ export function normalizeSceneEnvironment(
 }
 
 export interface ScenePlayConfig {
+  /**
+   * World-model truth for this document (`open-space` / `station` / `hab` /
+   * `hangar` / `flow`). Read this, never `kind`, when deciding what a scene is.
+   */
+  runtime: SceneRuntime;
   /** Null when the scene never authored a `game-manager`. */
   systemId: string | null;
   /** Null when the scene authored neither `game-manager` nor `planet`. */
@@ -87,8 +92,9 @@ export interface ScenePlayConfig {
    */
   characterCreateSceneId: string | null;
   /**
-   * Hab / gameplay scene `game-manager` sends the player to after auth.
-   * Null when unset — callers fall back to `scene-link`.
+   * Scene `game-manager` sends the player to after auth. Any `runtime` is
+   * legal — usually a hab, but a project may start in a station concourse or
+   * even Open Space. Null when unset — callers fall back to `scene-link`.
    */
   startingSceneId: string | null;
   /** Open-space scene the `@space` scene-exit token resolves to. */
@@ -237,7 +243,7 @@ function sceneHasHangarPads(scene: SceneDocument): boolean {
 function sceneNeedsPlayerShip(scene: SceneDocument, shipPrefabId: string | null): boolean {
   if (shipPrefabId !== null) return true;
   // Open space / fly-through destinations author no hull; the player brings one.
-  if (scene.kind === 'main-game') return true;
+  if (scene.runtime === 'open-space' || scene.kind === 'main-game') return true;
   return sceneHasHangarPads(scene);
 }
 
@@ -304,6 +310,7 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
   walkEntities(scene.gameObjects ?? [], (entity) => collectScenePlayEntity(entity, out));
 
   return {
+    runtime: scene.runtime,
     systemId: out.systemId,
     planetId: out.planetId,
     spawn: out.spawn,

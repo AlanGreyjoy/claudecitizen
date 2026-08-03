@@ -330,7 +330,7 @@ function handleControlsKeyDown(state: ControlsState, event: KeyboardEvent): void
     state.uHeldSinceMs = performance.now();
     state.quantumEngageTriggered = false;
   }
-  // Star Citizen-style coupled/decoupled toggle (Alt+C).
+  // Coupled/decoupled toggle (Alt+C).
   if (
     !wasDown &&
     event.code === 'KeyC' &&
@@ -736,7 +736,7 @@ function sampleCharacterInput(state: ControlsState) {
 }
 
 function sampleFlightInput(state: ControlsState) {
-  // Mouse drives persistent aim (IFCS); keyboard/gamepad pitch/yaw are direct torque.
+  // Mouse drives persistent aim (flight computer); keyboard/gamepad pitch/yaw are direct torque.
   const input = buildFlightInput(state.keys, { pitch01: 0, yaw01: 0 }, keyboardBindings(state));
   if (state.inputSuppressed) return input;
   for (const profileId of PROFILE_IDS) {

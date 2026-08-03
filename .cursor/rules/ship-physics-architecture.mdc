@@ -1,0 +1,20 @@
+---
+description: Vacuum inertia, residual coast, coupled assist, pitch/yaw dual-reticle — read ship-physics doc
+alwaysApply: true
+---
+
+# Ship physics architecture (pointer)
+
+Full law: [`docs/docs/architecture/ship-physics.md`](../../docs/docs/architecture/ship-physics.md).
+
+**Permanent decision:** in vacuum, Newton holds — release thrust ≠ instant stop;
+ship coasts. It does **not** coast forever: residual space drag + (when
+**coupled**) thruster assist bleed velocity. **Decoupled** ≈ free coast.
+**Pitch/yaw:** move mouse → **HUD cursor** moves → **ship turns toward that
+cursor** (dual reticle: cursor instant, nose lags). Never snap attitude to
+mouse. Same in atmosphere and vacuum. Atmosphere adds strong drag + planet *g*
+([Ship flight](../../docs/docs/architecture/ship-flight.md)).
+Rapier integrates; flight computer emits forces.
+
+When changing vacuum coast, coupled bleed, residual drag, angular settle, or
+mouse-cursor aim-track, read the full doc first. Also listed in `AGENTS.md`.

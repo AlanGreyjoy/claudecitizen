@@ -3,6 +3,7 @@
   "id": "title",
   "name": "Title",
   "kind": "title",
+  "runtime": "flow",
   "gameObjects": [
     {
       "id": "title-screen",

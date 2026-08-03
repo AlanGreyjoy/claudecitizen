@@ -61,7 +61,7 @@ flowchart TB
 | Context | Path | Owns |
 | --- | --- | --- |
 | **World** | `src/world/` | Planet geometry, terrain sampling, lakes, prefab schema & runtime flattening |
-| **Flight** | `src/flight/` | Ship rigid-body dynamics, IFCS aim, thruster-only altitude (no airborne gravity) |
+| **Flight** | `src/flight/` | Ship rigid-body dynamics, flight computer aim, atmospheric gravity from planet *g*, vacuum thruster flight |
 | **Player** | `src/player/` | Character controller, boarding, deck collision, pilot-seat FSM |
 | **NPC** | `src/npc/` | Non-player definitions, weighted populations, behavior state — may read station data and character appearance, never mutates player state |
 | **Render** | `src/render/` | Meshes, materials, LOD tiles, atmosphere, post-FX — **read-only** toward domain |

@@ -158,7 +158,12 @@ export type EditorStoreCtx = {
     meta: Partial<
       Pick<
         EditorDocumentState,
-        'documentType' | 'prefabId' | 'prefabName' | 'kind' | 'sceneKind'
+        | 'documentType'
+        | 'prefabId'
+        | 'prefabName'
+        | 'kind'
+        | 'sceneKind'
+        | 'sceneRuntime'
       >
     >,
   ) => void;

@@ -138,7 +138,14 @@ function handleSceneExitInteraction(
   // connection. A scene swap tears the world session down and dials a fresh
   // one, so a Transition sent here would be racing its own reconnect for the
   // Postgres write that decides the new session's cell.
-  ctx.onRequestScene?.(sceneExitTarget(interaction.marker, ctx.bootstrap, ctx.systemId));
+  // An on-foot `exit-hangar` still leaves for open space, so it needs the same
+  // hangar ownership hint a fly-through does — that is what finds the owning
+  // station body's bay mouth to arrive at.
+  ctx.onRequestScene?.(
+    sceneExitTarget(interaction.marker, ctx.bootstrap, ctx.systemId, {
+      fromHangarSceneId: ctx.sceneId,
+    }),
+  );
 }
 
 function activateStationInteraction(

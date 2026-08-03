@@ -27,6 +27,7 @@ function planetSurfaceStageScene(planetId: string): SceneDocument {
     id: `${planetId}-surface-stage`,
     name: `${planetId} (Surface Test)`,
     kind: 'prefab-stage',
+    runtime: 'flow',
     gameObjects: [
       {
         id: 'planet-surface-stage-root',

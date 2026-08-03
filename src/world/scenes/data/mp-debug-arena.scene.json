@@ -3,6 +3,7 @@
   "id": "mp-debug-arena",
   "name": "MP Debug Arena",
   "kind": "instance",
+  "runtime": "station",
   "gameObjects": [
     {
       "id": "ground",

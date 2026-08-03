@@ -42,7 +42,8 @@ Living checklist — not a contract. Priorities shift with the vibe.
 
 ## Flight & ships
 
-- [x] Inertial ship physics — thruster-only altitude (no airborne gravity), drag, boost, brake, landing clamp
+- [x] Inertial ship physics — thruster flight, drag, boost, brake, landing clamp
+- [ ] Atmospheric gravity on ships — planet `gravityMetersPerSecond2` inside atmosphere; heavier *g* → harder/longer escape (see [Ship flight](./architecture/ship-flight))
 - [x] Seamless takeoff, orbit, and landing (no loading screens)
 - [x] Pirate ship GLTF with walkable deck and landing pad
 - [ ] Additional ship hulls and interiors

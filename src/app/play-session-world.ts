@@ -1,15 +1,16 @@
 import type { LoadingScreenHandle } from './loading-screen';
 import { CLAUDECITIZEN_PLANET, DEFAULT_PLANET_ID, DEFAULT_PLANET_SEED } from '../world/planet';
-import { activatePlanetDocument } from '../world/planets/runtime';
+import { activatePlanetDocument, getActivePlanetConfig } from '../world/planets/runtime';
 import { loadPlanetDocument } from '../world/planets/loader';
 import { createDefaultPlanetDocument } from '../world/planets/schema';
 import { loadSystemDocument } from '../world/systems/loader';
 import {
   activateSystemDocument,
   DEFAULT_SYSTEM_ID,
+  getActiveSystemDocument,
   getSystemStationEntriesForPlanetDocument,
   pickPrimarySystemStation,
-  resolveStationAltitudeMeters,
+  findSystemStationEntry,
   resolveStationFamilyByHangarSceneId,
   stationEntrySourceId,
 } from '../world/systems/runtime';
@@ -18,13 +19,15 @@ import type { SystemDocument, SystemStationEntry } from '../world/systems/schema
 import { loadPrefabDocument } from '../world/prefabs/loader';
 import { buildStationLayoutFromPrefab } from '../world/prefabs/station-runtime';
 import {
-  orbitHintFromSystemOffset,
+  orbitHintFromOrigin,
   setStationLayoutOverride,
   setStationOrbitHint,
   getStationFrame,
-  stationFrameFromSystemOffset,
+  getStationFrameFromOrigin,
+  stationLocalToWorld,
   type StationFrame,
 } from '../world/station';
+import { stationBodyWorldPosition } from '../world/systems/placement';
 import {
   hangarOpenSpaceExitWorldPose,
   type HangarOpenSpaceExitWorldPose,
@@ -38,6 +41,9 @@ import { buildSceneStationDocument } from '../world/scenes/scene-station';
 import { AUTHORING_ENABLED } from '../build-mode';
 
 const DEFAULT_STATION_PREFAB_ID = 'demo-station';
+
+/** Clearance above a station body when arriving without a bay-mouth marker. */
+const STATION_ORBIT_FALLBACK_OFFSET_METERS = 400;
 
 /** URL-driven play predates scene content declarations, so it boots everything. */
 const ALL_CONTENT: ScenePlayContent = { planet: true, ship: true, station: true };
@@ -193,14 +199,24 @@ export interface PlayWorldContext {
   additionalStations: Array<{ prefab: PrefabDocument; frame: StationFrame }>;
 }
 
+/**
+ * Every other station body in the system, placed at its true map position.
+ *
+ * Not filtered to the active planet's children: Open Space is the whole star
+ * system, so a station orbiting a different planet — or parked on the star — is
+ * still a body in this host. It is placed here and the secondary-station loader
+ * decides whether its mesh is worth building yet from distance alone.
+ */
 async function loadAdditionalStations(
-  systemStations: ReturnType<typeof getSystemStationEntriesForPlanetDocument>,
+  systemDocument: SystemDocument | null,
   primaryStation: ReturnType<typeof pickPrimarySystemStation>,
   planet: Planet,
+  activePlanetDocumentId: string,
   playedSceneId: string | null,
 ): Promise<Array<{ prefab: PrefabDocument; frame: StationFrame }>> {
+  if (!systemDocument) return [];
   const additionalStations: Array<{ prefab: PrefabDocument; frame: StationFrame }> = [];
-  for (const entry of systemStations) {
+  for (const entry of systemDocument.stations) {
     if (primaryStation && entry.id === primaryStation.id) continue;
     // The scene being played is already the station around the player; drawing
     // it a second time as an orbital body would double it.
@@ -209,16 +225,21 @@ async function loadAdditionalStations(
     if (!prefab) continue;
     additionalStations.push({
       prefab,
-      frame: stationFrameFromSystemOffset(
+      frame: getStationFrameFromOrigin(
         planet,
-        entry.offsetMeters,
-        resolveStationAltitudeMeters(entry),
+        stationBodyWorldPosition(
+          systemDocument,
+          activePlanetDocumentId,
+          planet.radiusMeters,
+          entry,
+        ),
       ),
     });
   }
   if (additionalStations.length > 0) {
     console.info(
-      `Spawned ${additionalStations.length} secondary system station(s) as visual roots (primary owns walk physics).`,
+      `Placed ${additionalStations.length} secondary system station body/bodies at map meters `
+      + '(primary owns walk physics; meshes stream in on approach).',
     );
   }
   return additionalStations;
@@ -240,7 +261,11 @@ async function activatePlayWorldSystem(
   systemStations: ReturnType<typeof getSystemStationEntriesForPlanetDocument>;
   primaryStation: ReturnType<typeof pickPrimarySystemStation>;
 }> {
-  const systemDocument = !params.content.planet
+  // An `exit-hangar` arrival names its station family directly, and that family
+  // is what supplies the orbit frame the mouth pose is built in — so the system
+  // document has to load even for a host scene that streams no terrain.
+  const needsSystem = params.content.planet || params.stationEntryOverride !== null;
+  const systemDocument = !needsSystem
     ? null
     : (await loadSystemDocument(params.systemId))
       ?? (params.systemId !== DEFAULT_SYSTEM_ID
@@ -249,7 +274,7 @@ async function activatePlayWorldSystem(
   if (systemDocument) {
     activateSystemDocument(systemDocument);
     console.info(`System active: "${systemDocument.id}" (${systemDocument.name}).`);
-  } else if (params.content.planet) {
+  } else if (needsSystem) {
     console.warn(
       `System "${params.systemId}" not found; station placement falls back to the default orbital frame.`,
     );
@@ -258,17 +283,32 @@ async function activatePlayWorldSystem(
   const systemStations = systemDocument
     ? getSystemStationEntriesForPlanetDocument(systemDocument, planetDocumentId)
     : [];
-  const primaryStation = pickPrimarySystemStation(systemStations, {
-    entryId: params.stationEntryOverride,
-    prefabId: params.stationPrefabOverride,
-    sceneId: params.scene?.id ?? null,
-  });
-  if (primaryStation) {
+  // An explicit arrival entry outranks the active-planet filter. `systemStations`
+  // only holds bodies parented to the planet this scene names, and
+  // `pickPrimarySystemStation` returns null on an empty list *before* it ever
+  // looks at `entryId` — so filtering first would silently drop the very family
+  // the player just flew out of and leave the orbit hint unset.
+  const primaryStation =
+    (systemDocument && params.stationEntryOverride
+      ? findSystemStationEntry(systemDocument, { entryId: params.stationEntryOverride })
+      : null)
+    ?? pickPrimarySystemStation(systemStations, {
+      entryId: params.stationEntryOverride,
+      prefabId: params.stationPrefabOverride,
+      sceneId: params.scene?.id ?? null,
+    });
+  if (primaryStation && systemDocument) {
+    // Through the placement module, so a station orbiting another planet lands
+    // at its real map position instead of that offset applied to this planet.
     setStationOrbitHint(
-      orbitHintFromSystemOffset(
+      orbitHintFromOrigin(
         planet,
-        primaryStation.offsetMeters,
-        resolveStationAltitudeMeters(primaryStation),
+        stationBodyWorldPosition(
+          systemDocument,
+          planetDocumentId,
+          planet.radiusMeters,
+          primaryStation,
+        ),
       ),
     );
     console.info(
@@ -313,33 +353,70 @@ async function resolvePlayStation(
 }
 
 /**
+ * Ship pose beside a station body when the body is known but its bay mouth is
+ * not. Sits at the station's own ecliptic orbit, offset "up" so the hull is not
+ * inside the hull, facing along the orbit track.
+ *
+ * The point is that a missing marker must never drop the player to the planet:
+ * the generic open-space spawn is 1.5× atmosphere height above the landing
+ * site, which for a station megameters out reads as "it teleported me home".
+ */
+function stationOrbitFallbackPose(frame: StationFrame): HangarOpenSpaceExitWorldPose {
+  return {
+    position: stationLocalToWorld(frame, {
+      right: 0,
+      up: STATION_ORBIT_FALLBACK_OFFSET_METERS,
+      forward: 0,
+    }),
+    forward: frame.forward,
+    up: frame.up,
+  };
+}
+
+/**
  * World pose for flying out of a station hangar into open space.
  *
  * Loads the station family document only to read its `hangar-open-space-exit`
- * marker — does not replace the session's walkable station layout. Orbit frame
- * must already be set for that station (via `stationEntryOverride` / primary).
+ * marker — does not replace the session's walkable station layout.
+ *
+ * The frame comes from **this entry's** System Map offset, not from
+ * `getStationFrame`. That global reads a module-level orbit hint set elsewhere
+ * during world load; when it is unset or belongs to a different body, the mouth
+ * gets built at the default landing site 200 km over the planet instead of at
+ * the station — which is exactly the "it flew me down to the planet" symptom.
+ * Deriving the frame from the entry removes the ordering dependency entirely.
  */
 export async function resolveHangarOpenSpaceArrivalPose(
   planet: Planet,
   entry: SystemStationEntry,
 ): Promise<HangarOpenSpaceExitWorldPose | null> {
+  const frame = getStationFrameFromOrigin(
+    planet,
+    stationBodyWorldPosition(
+      getActiveSystemDocument(),
+      getActivePlanetConfig().planetId,
+      planet.radiusMeters,
+      entry,
+    ),
+  );
   const doc = await loadStationEntryDocument(entry);
   const label = stationEntrySourceId(entry);
   if (!doc) {
     console.warn(
-      `Open-space arrival station "${entry.id}" (${label}) not found; using default open-space spawn.`,
+      `Open-space arrival station "${entry.id}" (${label}) not found; arriving beside its map orbit instead.`,
     );
-    return null;
+    return stationOrbitFallbackPose(frame);
   }
   const layout = await buildStationLayoutFromPrefab(doc);
   const marker = layout?.hangarOpenSpaceExit ?? null;
   if (!marker) {
     console.warn(
-      `Station "${entry.id}" (${label}) has no hangar-open-space-exit marker; using default open-space spawn.`,
+      `Station "${entry.id}" (${label}) has no hangar-open-space-exit marker; `
+      + 'arriving beside its map orbit. Add the marker at the bay mouth.',
     );
-    return null;
+    return stationOrbitFallbackPose(frame);
   }
-  return hangarOpenSpaceExitWorldPose(getStationFrame(planet), marker);
+  return hangarOpenSpaceExitWorldPose(frame, marker);
 }
 
 /** Legacy prefab-only mouth when the exit names a hull not on the System Map. */
@@ -437,9 +514,14 @@ async function resolveOpenSpaceSpawnPose(
   if (legacyStationPrefabId) {
     return resolveHangarOpenSpaceArrivalPoseFromPrefab(world.planet, legacyStationPrefabId);
   }
+  // Nothing on the map claims this hangar, so there is no orbit to arrive at —
+  // the generic planet-relative spawn is all that is left. Name the authoring
+  // fix, because the symptom (dropped near the planet) does not suggest it.
   console.warn(
-    'Open-space fly-through: no System Map station owns this hangar '
-    + `(fromHangarSceneId="${fromHangarSceneId}"); using default open-space spawn.`,
+    'Open-space departure: no System Map station lists this hangar as its Hangar Scene '
+    + `(fromHangarSceneId="${fromHangarSceneId}"), so there is no orbit to arrive at. `
+    + 'Set that station entry\'s Hangar Scene on the System Map. Falling back to the '
+    + 'generic open-space spawn above the planet.',
   );
   return null;
 }
@@ -498,7 +580,7 @@ export async function loadPlayWorldContext(
   );
   loading?.setProgress(0.22);
 
-  const { systemDocument, systemStations, primaryStation } = await activatePlayWorldSystem(
+  const { systemDocument, primaryStation } = await activatePlayWorldSystem(
     params,
     planet,
     planetDocument.id,
@@ -507,9 +589,10 @@ export async function loadPlayWorldContext(
   const stationPrefab = await resolvePlayStation(params, primaryStation);
 
   const additionalStations = await loadAdditionalStations(
-    systemStations,
+    systemDocument,
     primaryStation,
     planet,
+    planetDocument.id,
     params.scene?.id ?? null,
   );
 

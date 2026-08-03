@@ -5,13 +5,16 @@ alwaysApply: true
 
 # Game loop architecture (pointer)
 
-Full draft: [`docs/docs/architecture/game-loop.md`](../../docs/docs/architecture/game-loop.md).
+Full law: [`docs/docs/architecture/game-loop.md`](../../docs/docs/architecture/game-loop.md).
 
-**Summary:** A Station owns its Hab + Hangar. Hab/Hangar are per-player instances
-(placeable build; team can follow in). On foot: Hab ↔ Station (`scene-exit`) →
-AVMS call ship / To Hangar → Hangar. Ships: Open Space **`enter-station`** →
-Hangar; Hangar **`exit-hangar`** → station nested `hangar-open-space-exit` in
-Open Space. See also [Space traversal](../../docs/docs/architecture/space-traversal.md).
+**Permanent decision:** A Station owns its Hab + Hangar. Hab/Hangar are
+per-player instances (placeable build; team follow-in). On foot: Hab ↔ Station
+(`scene-exit`) → AVMS call ship / To Hangar → Hangar. Ships: Open Space
+**`enter-station`** → Hangar; Hangar **`exit-hangar`** → station nested
+`hangar-open-space-exit` in Open Space. Session start:
+[Scene flow](../../docs/docs/architecture/scene-flow.md). Instance / peer truth:
+[Multiplayer](../../docs/docs/architecture/multiplayer.md). Open Space boarding:
+[Space traversal](../../docs/docs/architecture/space-traversal.md).
 
 When changing station/hab/hangar/AVMS/`scene-exit`/boarding flow, read the full
 doc first. Also listed in `AGENTS.md`.

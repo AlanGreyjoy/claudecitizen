@@ -52,7 +52,7 @@ These components only appear on scene documents, and they decide what the scene
 
 | Component | Summary |
 | --- | --- |
-| [game-manager](../scene-components#game-manager) | System, planet, spawn mode, and the entry pipeline (Title → Character Create → Starting Hab, plus Open Space and Loading) |
+| [game-manager](../scene-components#game-manager) | System, planet, spawn mode, and the entry pipeline (Title → Character Create → Starting Scene, plus Open Space and Loading) |
 | [planet](../scene-components#planet) | Planet document reference |
 | [player-start](../scene-components#player-start) | Spawn pose and mode |
 | [prefab-instance](../scene-components#prefab-instance) | Places a reusable prefab in the scene |
@@ -67,8 +67,10 @@ These components only appear on scene documents, and they decide what the scene
 | [Station frame](./station-frame) | Orbital placement origin (auto on save) |
 | [Spawn point](./spawn-point) | Player spawn location and facing |
 | [Elevator](./elevator) | Floor-to-floor travel between paired markers |
-| [Scene Exit](./scene-exit) | In-play portal that loads another scene (hab → station, hangar → open space) |
-| [Hangar Open Space Exit](./hangar-open-space-exit) | Station mouth pose; hangar fly-through resolves via System Map ownership |
+| [Scene Exit](./scene-exit) | On-foot portal that loads another scene (hab ↔ station ↔ hangar) |
+| [Exit Hangar](./exit-hangar) | Hangar → Open Space, on foot or fly-through; arrives at the owning station's mouth |
+| [Enter Station](./enter-station) | Open Space → hangar; ship fly-through volume on a station body |
+| [Hangar Open Space Exit](./hangar-open-space-exit) | Station mouth pose; where `exit-hangar` puts the ship |
 | [Ladder](./ladder) | Climbable rail — foot marker, +Y up, +Z step-off |
 | [Hangar pad](./hangar-pad) | Ship parking spot inside a hangar |
 | [AVMS terminal](./avms-terminal) | Opens the vehicle management UI |

@@ -1,0 +1,19 @@
+---
+description: Multiplayer — cell authority, presence, travel intents, instances — read full architecture doc
+alwaysApply: true
+---
+
+# Multiplayer architecture (pointer)
+
+Full law: [`docs/docs/architecture/multiplayer.md`](../../docs/docs/architecture/multiplayer.md).
+
+**Permanent decision:** design authority + replication with every shared
+feature — never “MP later.” Cell / edge / client pipeline; presence follows
+**mode** not ship existence; on-foot = client report + clamp; flight/combat
+outcomes = cell. In-play place changes = authored markers only. Hab/Hangar
+instances are real cells; team follow-in shares the owner's cell.
+`interest ≤ cell size`.
+
+When changing presence, cells, scene-exit / boarding cell resolve, instances,
+follow-in, placeables, quantum/Warp Gate peers, or wire replication, read the
+full doc first. Also listed in `AGENTS.md`.

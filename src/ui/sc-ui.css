@@ -7051,3 +7051,132 @@ kbd {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Nav-mode destination markers.
+
+   A screen overlay, not world geometry: an off-screen body pins to the nearest
+   viewport edge with a direction arrow, so a pilot can turn toward something
+   they cannot see. World-space markers vanish with the frustum, which is
+   exactly when navigation needs them.
+   --------------------------------------------------------------------------- */
+.sc-nav-markers {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 178;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.sc-nav-markers.is-visible {
+  opacity: 1;
+}
+
+.sc-nav-marker {
+  --nav-marker-color: rgba(140, 205, 235, 0.85);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  /* The element's own transform is the projected pixel position; the centring
+     offset has to be a separate step or it would be overwritten every frame. */
+  margin: -10px 0 0 -10px;
+  font-family: var(--sc-font-mono, ui-monospace, monospace);
+  line-height: 1;
+  color: var(--nav-marker-color);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.85);
+  will-change: transform;
+}
+
+.sc-nav-marker.is-visible {
+  display: flex;
+}
+
+.sc-nav-marker[data-kind='system-planet'] {
+  --nav-marker-color: rgba(170, 225, 190, 0.85);
+}
+
+.sc-nav-marker[data-kind='surface-poi'] {
+  --nav-marker-color: rgba(230, 205, 150, 0.82);
+}
+
+.sc-nav-marker.is-routed {
+  --nav-marker-color: rgba(160, 245, 255, 0.98);
+}
+
+.sc-nav-marker-icon {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--nav-marker-color);
+  transform: rotate(45deg);
+  box-shadow: 0 0 7px rgba(0, 0, 0, 0.6);
+}
+
+.sc-nav-marker.is-routed .sc-nav-marker-icon {
+  background: color-mix(in srgb, var(--nav-marker-color) 35%, transparent);
+}
+
+.sc-nav-marker-label,
+.sc-nav-marker-distance {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.sc-nav-marker-distance {
+  opacity: 0.72;
+  font-size: 9px;
+}
+
+/* Edge arrow only exists for clamped markers. It rotates to point at the body;
+   the icon and text stay upright so a marker pinned to the bottom edge is
+   still readable. */
+.sc-nav-marker-arrow {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+}
+
+.sc-nav-marker.is-off-screen .sc-nav-marker-arrow {
+  display: block;
+}
+
+.sc-nav-marker-arrow::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 0;
+  height: 0;
+  margin-top: -5px;
+  border-left: 8px solid var(--nav-marker-color);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+/* Off-screen markers read as "over there", not "here" — dim the diamond and
+   drop the distance line so the edge does not turn into a wall of text. */
+.sc-nav-marker.is-off-screen .sc-nav-marker-icon {
+  opacity: 0.45;
+  transform: rotate(45deg) scale(0.75);
+}
+
+.sc-nav-marker.is-off-screen .sc-nav-marker-distance {
+  display: none;
+}
+
+.sc-nav-marker.is-off-screen.is-routed .sc-nav-marker-icon {
+  opacity: 1;
+}
+
+.sc-nav-marker.is-off-screen.is-routed .sc-nav-marker-distance {
+  display: block;
+}

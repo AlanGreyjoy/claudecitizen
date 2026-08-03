@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Primary source of truth
 
-**`AGENTS.md` is the authoritative agent doc** — 400 lines covering prefab/animation wiring, ship flight (IFCS), terrain LOD invariants, cache invalidation rules, collider debugging, and a key-file index. Read it before any architectural or cross-cutting change. This file is the short orientation layer; do not duplicate AGENTS.md content here.
+**`AGENTS.md` is the authoritative agent doc** — 400 lines covering prefab/animation wiring, ship flight (flight computer), terrain LOD invariants, cache invalidation rules, collider debugging, and a key-file index. Read it before any architectural or cross-cutting change. This file is the short orientation layer; do not duplicate AGENTS.md content here.
 
 Also read when the domain matches:
 
@@ -12,6 +12,14 @@ Also read when the domain matches:
 |-----|------|
 | `.cursor/rules/agent-conventions.mdc` | Performance-as-constraint rules (frame budget, main-thread discipline, server tick) |
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning; symptom → fix tables |
+| `docs/docs/architecture/scene-flow.md` | Boot / Game Manager entry pipeline |
+| `docs/docs/architecture/game-loop.md` | Hab → Station → Hangar → Open Space |
+| `docs/docs/architecture/multiplayer.md` | Cell authority, presence, travel intents, instances |
+| `docs/docs/architecture/space-traversal.md` | Open Space host, boarding, Warp Gate |
+| `docs/docs/architecture/star-map.md` | Star System ↔ Star Map catalog |
+| `docs/docs/architecture/ship-flight.md` | Rapier + flight computer, modes, boost, quantum |
+| `docs/docs/architecture/ship-physics.md` | Vacuum inertia, coupled assist, dual-reticle |
+| `docs/docs/architecture/ship-combat.md` | Ship weapons, lock-on, lead markers, combat HUD |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab/scene editor work |
 | `.cursor/skills/prd/SKILL.md` | Creating PRD handoff packs under `prds/<slug>/` |
 | `.cursor/rules/terrain-cache.mdc` | Terrain/vegetation cache versioning |
@@ -99,7 +107,7 @@ Export **factories and pure functions** from domain modules, not classes.
 ### Data model: scenes and prefabs are documents, not code
 
 - A **scene** (`*.scene.json`, schema v3) is a GameObject tree. Components — `game-manager`, `planet`, `player-start`, `prefab-instance`, `ui-screen`, `scene-link`, `instanced-scene`, `scene-exit` — decide what the scene *is*. There is no `settings` block; v1/v2 docs migrate forward on read in `src/world/scenes/schema.ts`.
-- A scene of `kind: 'boot'` is the **entry document** the project's `defaultScene` names. It never runs gameplay: its `game-manager` names every hop (Title → Character Create → Starting Hab, plus Open Space and Loading) and `src/app/scene-flow.ts` follows that authored pipeline. The precedence itself is one pure function, `resolveSceneFlowStep` in `src/world/scenes/scene-runtime.ts` — do not add a second place that decides the entry order, and do not key it off `scene.kind`. See AGENTS.md "The boot scene owns the game flow".
+- A scene of `kind: 'boot'` is the **entry document** the project's `defaultScene` names. It never runs gameplay: its `game-manager` names every hop (Title → Character Create → Starting Hab, plus Open Space and Loading) and `src/app/scene-flow.ts` follows that authored pipeline. The precedence itself is one pure function, `resolveSceneFlowStep` in `src/world/scenes/scene-runtime.ts` — do not add a second place that decides the entry order, and do not key it off `scene.kind`. Full law: `docs/docs/architecture/scene-flow.md`.
 - Scenes resolve from **two** locations at the same relative path: when authoring, `src/world/scenes/loader.ts` fetches `/__editor/scene?id=` and the Electron repository reads the open project's `<project>/src/world/scenes/data/`; otherwise it falls back to this checkout's bundled `src/world/scenes/data/`, which holds only the engine-owned menu flow (boot, title, login, character-creation, loading, main-game).
 - `src/app/scene-host.ts` loads, switches, pauses, and disposes scenes **in-process**. Scene navigation must never reload the page.
 - A **prefab** (`*.prefab.json`) is identified by its document `id`, never its path — moving the file is safe; `editor-desktop/repository.mjs` maps id → path by scanning asset roots. `src/world/prefabs/schema.ts` is the canonical component list; read it first when a component's fields are unclear.
@@ -117,7 +125,8 @@ Editor → backend calls must go through `/__editor/backend/*`, proxied by the E
 
 - **On-foot (station)**: Rapier, `src/physics/station-physics.ts`.
 - **On-foot (ship deck)**: Rapier in **ship-local** space, `src/physics/ship-physics.ts`. Door/ramp colliders toggle via `setEnabled` from articulation blends.
-- **Ship flight**: custom IFCS integrator in `src/flight/`. **Never** put flight simulation in Rapier.
+- **Ship flight**: Rapier owns the flying hull; flight computer emits forces/torques. See `docs/docs/architecture/ship-flight.md`. Do not extend the legacy custom pose integrator.
+- **Ship combat**: Combat mode only — blasters / missiles, lock-on, lead markers, combat HUD. See `docs/docs/architecture/ship-combat.md`.
 
 ### Terrain: mesh and feet must sample the same grid
 
@@ -127,7 +136,7 @@ Cache versions live in `src/cache/cache-keys.ts`. Planet JSON edits invalidate a
 
 ### Multiplayer invariants
 
-**Plan multiplayer in parallel with every gameplay feature** — authority, intents, and peer visibility ship with the change, not as a later bolt-on. Full rule in AGENTS.md "Authoritative multiplayer".
+**Plan multiplayer in parallel with every gameplay feature** — authority, intents, and peer visibility ship with the change, not as a later bolt-on. Full law: `docs/docs/architecture/multiplayer.md` (AGENTS.md "Authoritative multiplayer"). Architecture docs are target law; code may lag.
 
 `backend/crates/sim-core/` is shared between native Rapier authority and browser WASM prediction. `proto/world.proto` is the canonical wire contract over WebTransport (reliable streams for control/reconciliation, datagrams for intents/snapshots). Cells are single-writer, leased through Redis, fenced by a PostgreSQL epoch. Do not add a WebSocket fallback, a second backend, client-authoritative outcomes, or a second prediction implementation.
 

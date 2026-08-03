@@ -30,7 +30,7 @@ There is no separate settings screen for scene contents.
 | Fly out to open space | `scene-exit` with `trigger: "fly-through"` |
 
 Start a project with **New Scene → Boot**: that scene's `game-manager` owns the
-entry chain (Title → Character Create when needed → Starting Hab) and the scenes
+entry chain (Title → Character Create when needed → Starting Scene) and the scenes
 it points at author no Game Manager of their own. Private habs are
 `kind: "instance"` with `instanced-scene` `scope: "player"`, a `spawn-point`, and
 a `scene-exit` toward the shared station scene. A playable scene usually needs a

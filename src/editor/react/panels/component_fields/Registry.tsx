@@ -41,6 +41,7 @@ import {
   ShipRampFields,
   ShipStatsFields,
 } from './Builders4';
+import { EnterStationFields, ExitHangarFields } from './BoardingFields';
 import { ShipControllerFields } from './ShipControllerFields';
 import {
   BedFields,
@@ -101,6 +102,8 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'npc-placement': field(NpcPlacementFields),
   'scene-exit': field(SceneExitFields),
   'hangar-open-space-exit': field(() => <HangarOpenSpaceExitFields />),
+  'exit-hangar': field(ExitHangarFields),
+  'enter-station': field(EnterStationFields),
   ladder: field(LadderFields),
   'hangar-pad': field(HangarPadFields),
   interaction: field(InteractionFields),

@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  fetchPlanet,
   fetchPlanetList,
   fetchPrefabList,
   fetchSceneList,
@@ -98,6 +99,13 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
     const savedSnapshotRef = useRef(savedSnapshot);
     const selectionRef = useRef(selection);
     const systemListRef = useRef<SystemListEntry[]>([]);
+    /**
+     * planetId -> surface radius, filled lazily from the planet documents.
+     * The canvas needs true radii to draw the crust and the minimum orbit
+     * shell; without them a station dragged "just above" a planet icon lands
+     * inside the planet and play silently relocates it.
+     */
+    const planetRadiiRef = useRef<Map<string, number>>(new Map());
     const loadGenerationRef = useRef(0);
     const canvasControllerRef = useRef<SystemMapCanvasController | null>(null);
     const mapHostRef = useRef<HTMLDivElement>(null);
@@ -150,6 +158,18 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
         fetchSystemList().catch(() => [] as SystemListEntry[]),
       ]);
       setPlanetList(planets);
+      // Radii come from the full documents; the list entries carry id/name only.
+      await Promise.all(
+        planets.map(async (entry) => {
+          if (planetRadiiRef.current.has(entry.id)) return;
+          try {
+            const doc = await fetchPlanet(entry.id);
+            if (doc.radiusMeters > 0) planetRadiiRef.current.set(entry.id, doc.radiusMeters);
+          } catch {
+            // A planet that fails to load just leaves the map without its shell.
+          }
+        }),
+      );
       setStationPrefabs(prefabs.filter((entry) => entry.kind === 'station'));
       setSceneList(scenes);
       systemListRef.current = systems;
@@ -326,6 +346,7 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
       const controller = createSystemMapCanvas(host, {
         getDocument: () => documentRef.current,
         getSelection: () => selectionRef.current,
+        getPlanetRadiusMeters: (planetId) => planetRadiiRef.current.get(planetId) ?? null,
         onSelectionChange: setSelectionState,
         onDirty: markDirty,
         onDragEnd: rebuildForm,

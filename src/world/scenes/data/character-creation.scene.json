@@ -3,6 +3,7 @@
   "id": "character-creation",
   "name": "Character Creation",
   "kind": "character-creator",
+  "runtime": "flow",
   "gameObjects": [
     {
       "id": "character-create-screen",

@@ -6,6 +6,7 @@ import { createDebugSettings } from './debug-settings';
 import { createFpsCounter } from './fps-counter';
 import { createStatsPanel } from './stats-panel';
 import { createFlightReticle } from './flight-reticle';
+import { createNavMarkersHud, type NavMarkersUpdateParams } from './nav-markers';
 import { createCockpitGazeHud } from './cockpit-gaze-hud';
 import {
   createCockpitSpeedHud,
@@ -34,6 +35,7 @@ export interface HudElements {
   interactPromptEl: HTMLElement;
   screenFadeEl: HTMLElement;
   flightReticleEl: HTMLElement;
+  navMarkersEl: HTMLElement;
   weaponCrosshairEl: HTMLElement;
   combatAmmoEl: HTMLElement;
   cockpitGazeEl: HTMLElement;
@@ -71,6 +73,12 @@ export interface HudUpdateParams {
     visible: boolean;
     instruments?: readonly CockpitSpeedInstrumentUpdate[];
   };
+  /**
+   * Nav-mode destination markers, already projected to screen pixels. Off-screen
+   * ones arrive clamped to the viewport edge so a pilot can turn toward a body
+   * they cannot see.
+   */
+  navMarkers?: NavMarkersUpdateParams;
 }
 
 export interface HudCallbacks {
@@ -104,6 +112,7 @@ export function createHud(
     statusEl: elements.statusEl,
   });
   const flightReticle = createFlightReticle({ rootEl: elements.flightReticleEl });
+  const navMarkersHud = createNavMarkersHud({ rootEl: elements.navMarkersEl });
   elements.weaponCrosshairEl.classList.remove('is-visible');
   const weaponCrosshair = createWeaponCrosshair(elements.weaponCrosshairEl);
   const combatAmmoHud = createCombatAmmoHud(elements.combatAmmoEl);
@@ -138,6 +147,7 @@ export function createHud(
       quantum: params.world.quantum,
       dual: params.flightDual,
     });
+    navMarkersHud.update(params.navMarkers ?? { visible: false, markers: [] });
     weaponCrosshair.update(
       {
         shotCount: params.weaponCrosshair?.shotCount ?? 0,

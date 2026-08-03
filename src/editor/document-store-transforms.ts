@@ -148,6 +148,7 @@ export function attachTransformLifecycleMethods(ctx: EditorStoreCtx): void {
       prefabName: 'Untitled Prefab',
       kind: 'station',
       sceneKind: 'main-game',
+      sceneRuntime: 'station',
       roots: [],
     };
     resetSessionAfterDocumentChange();
@@ -164,6 +165,7 @@ export function attachTransformLifecycleMethods(ctx: EditorStoreCtx): void {
       prefabName: 'Untitled Scene',
       kind: 'site',
       sceneKind: 'main-game',
+      sceneRuntime: 'open-space',
       roots: [],
     };
     resetSessionAfterDocumentChange();
@@ -176,6 +178,7 @@ export function attachTransformLifecycleMethods(ctx: EditorStoreCtx): void {
       prefabName: next.prefabName,
       kind: next.kind,
       sceneKind: next.sceneKind ?? 'main-game',
+      sceneRuntime: next.sceneRuntime ?? 'open-space',
       roots: next.roots,
     };
     ctx.selection = null;
@@ -223,6 +226,7 @@ export function attachTransformLifecycleMethods(ctx: EditorStoreCtx): void {
         | 'prefabName'
         | 'kind'
         | 'sceneKind'
+        | 'sceneRuntime'
       >
     >,
   ): void {

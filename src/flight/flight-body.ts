@@ -115,9 +115,9 @@ export interface FlightStatsOptions {
   rollTorqueNm?: number;
   /** Legacy: used only when forwardThrustN is omitted. */
   throttleAccelMps2?: number;
-  /** Coupled IFCS bleeds velocity when no thrust. Default true. */
+  /** Coupled flight computer bleeds velocity when no thrust. Default true. */
   coupled?: boolean;
-  /** World-space aim direction for IFCS turn-to-aim. */
+  /** World-space aim direction for flight-computer turn-to-aim. */
   aimForward?: Vec3;
 }
 
@@ -234,7 +234,7 @@ function integrateOrientation(
   let wy = (body.angularVelocity?.y ?? 0) + (torqueY / inertia) * dt;
   let wz = (body.angularVelocity?.z ?? 0) + (torqueZ / inertia) * dt;
 
-  // Always damp angular velocity so IFCS can't ring; stronger when demand is idle.
+  // Always damp angular velocity so aim-track can't ring; stronger when demand is idle.
   const demandMag =
     Math.abs(pitchDemand) + Math.abs(yawDemand) + Math.abs(rollDemand);
   const dampRate =

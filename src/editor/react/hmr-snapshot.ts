@@ -1,5 +1,5 @@
 import type { PrefabDocument } from '../../world/prefabs/schema';
-import type { SceneKind } from '../../world/scenes/schema';
+import type { SceneKind, SceneRuntime } from '../../world/scenes/schema';
 import type { EditorDocumentType } from '../document-types';
 import type { SceneEditorTab } from './types';
 
@@ -15,6 +15,7 @@ export type EditorHmrSnapshot = {
    */
   documentType?: EditorDocumentType;
   sceneKind?: SceneKind;
+  sceneRuntime?: SceneRuntime;
   dirty: boolean;
   selectedIds: string[];
   subSelection: { entityId: string; nodeUuid: string } | null;

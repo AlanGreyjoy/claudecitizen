@@ -26,6 +26,7 @@ export interface PlaySessionDom {
   controlsEl: HTMLElement;
   interactPromptEl: HTMLElement;
   flightReticleEl: HTMLElement;
+  navMarkersEl: HTMLElement;
   weaponCrosshairEl: HTMLElement;
   combatAmmoEl: HTMLElement;
   cockpitGazeEl: HTMLElement;
@@ -94,6 +95,7 @@ export function collectPlaySessionDom(root: ParentNode = document): PlaySessionD
     controlsEl: requireElement<HTMLElement>('hud-controls'),
     interactPromptEl: requireElement<HTMLElement>('interact-prompt'),
     flightReticleEl: requireElement<HTMLElement>('flight-reticle'),
+    navMarkersEl: requireElement<HTMLElement>('nav-markers'),
     weaponCrosshairEl: requireElement<HTMLElement>('weapon-crosshair'),
     combatAmmoEl: requireElement<HTMLElement>('combat-ammo'),
     cockpitGazeEl: requireElement<HTMLElement>('cockpit-gaze'),

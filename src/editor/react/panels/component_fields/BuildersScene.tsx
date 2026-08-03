@@ -48,7 +48,7 @@ const GAME_MANAGER_HOPS: Array<{
   },
   {
     key: 'startingSceneId',
-    label: 'Starting Hab',
+    label: 'Starting Scene',
     emptyLabel: '(none — use scene-link)',
   },
   {

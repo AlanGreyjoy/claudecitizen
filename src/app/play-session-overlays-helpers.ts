@@ -70,6 +70,7 @@ export function createPlayHud(
       controlsEl: dom.controlsEl,
       interactPromptEl: dom.interactPromptEl,
       flightReticleEl: dom.flightReticleEl,
+      navMarkersEl: dom.navMarkersEl,
       weaponCrosshairEl: dom.weaponCrosshairEl,
       combatAmmoEl: dom.combatAmmoEl,
       cockpitGazeEl: dom.cockpitGazeEl,

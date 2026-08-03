@@ -24,7 +24,7 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 ## Multiplayer — design in parallel
 
-**Do not ship gameplay that assumes a single local player and promise multiplayer later.** Authority, intents, replication, and peer visibility are planned with the feature — same change set or an explicit adjacent slice — not as a follow-up rewrite. Ask before coding: cell vs client ownership, wire path (`proto/world.proto` / WebTransport), and what a second player sees. Local-only cosmetics may stay non-authoritative (AGENTS.md friendly NPCs); real outcomes, travel, inventory, combat, and shared world state must not. Full invariants: AGENTS.md "Authoritative multiplayer".
+**Do not ship gameplay that assumes a single local player and promise multiplayer later.** Authority, intents, replication, and peer visibility are planned with the feature — same change set or an explicit adjacent slice — not as a follow-up rewrite. Ask before coding: cell vs client ownership, wire path (`proto/world.proto` / WebTransport), and what a second player sees. Local-only cosmetics may stay non-authoritative (AGENTS.md friendly NPCs); real outcomes, travel, inventory, combat, and shared world state must not. Full law: `docs/docs/architecture/multiplayer.md` (AGENTS.md "Authoritative multiplayer"). Architecture docs are target law — code may lag; refactor toward the doc.
 
 ### When performance matters (always)
 
@@ -61,15 +61,19 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 ## Quick triggers
 
-- New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`) — and plan multiplayer authority/replication in parallel (AGENTS.md "Authoritative multiplayer"); never "add MP later"
+- New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`) — and plan multiplayer authority/replication in parallel (`docs/docs/architecture/multiplayer.md`); never "add MP later"
 - Gameplay state / interactions / scene travel / shared entities → who owns truth, what peers see; Debug → Multiplayer for presence checks
 - Friendly station NPCs / waypoint routes / population definitions → `src/npc/` plus AGENTS.md "Friendly station NPCs"
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache-keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / scene / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (Electron desktop)"
-- Ship flight / mass / thrust / IFCS / dual-reticle / Preview Ship flight → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, and AGENTS.md "Ship flight"
+- Ship flight / mass / thrust / flight computer / Rapier hull / dual-reticle / modes / boost / quantum → `docs/docs/architecture/ship-flight.md`; vacuum inertia / residual coast / coupled → `docs/docs/architecture/ship-physics.md`; ship weapons / lock-on / lead / combat HUD / destroy → `docs/docs/architecture/ship-combat.md`; tuning → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, AGENTS.md "Ship flight"
+- Boot / Game Manager / Title → Create → Starting Scene → `docs/docs/architecture/scene-flow.md` (AGENTS.md "The boot scene owns the game flow")
 - Hab / Station / Hangar / AVMS / `scene-exit` player loop → `docs/docs/architecture/game-loop.md` (AGENTS.md "Player game loop")
+- Open Space / station boarding / Warp Gate → `docs/docs/architecture/space-traversal.md`
+- Star Map / multi-system / Warp Gate authorship → `docs/docs/architecture/star-map.md`
+- Presence / cells / instance follow-in / travel intents → `docs/docs/architecture/multiplayer.md`
 - PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 

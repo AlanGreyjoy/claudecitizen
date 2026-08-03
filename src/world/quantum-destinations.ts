@@ -3,13 +3,12 @@ import { resolveLandingSite } from './landing-sites';
 import { samplePlanetSurface } from './planet-surface';
 import { getActivePlanetConfig } from './planets/runtime';
 import type { Planet, Vec3 } from '../types';
+import { getActiveSystemDocument } from './systems/runtime';
 import {
-  getActiveSystemDocument,
-  getSystemStationEntriesForPlanetDocument,
-  resolveStationAltitudeMeters,
-} from './systems/runtime';
-import { orbitHintFromSystemOffset } from './station';
-import type { SystemPlanetEntry, SystemStationEntry } from './systems/schema';
+  listSystemBodyPlacements,
+  sphericalForWorldPosition,
+  type SystemBodyPlacement,
+} from './systems/placement';
 
 const OP1_SURFACE_OFFSET_METERS = 90_000;
 const PAD_OFFSET_METERS = 3;
@@ -18,6 +17,8 @@ const MAX_DRY_ATTEMPTS = 48;
 
 /** Stand-off outside the station hull along the orbital altitude. */
 const STATION_APPROACH_EXTRA_METERS = 2_000;
+/** Stand-off above another planet, dropped out before its handoff activates. */
+const PLANET_APPROACH_EXTRA_METERS = 250_000;
 
 export type QuantumDestinationKind = 'surface-poi' | 'system-station' | 'system-planet';
 
@@ -33,6 +34,13 @@ export interface QuantumDestination {
   planetDocumentId?: string;
   /** When true, quantum completes with a planet activation handoff. */
   handoff?: boolean;
+  /**
+   * In the player's immediate neighbourhood: the active planet's surface, or a
+   * body orbiting it. Local destinations always carry a nav blip; anything
+   * further out only blips once the player sets a route to it, or a busy system
+   * would paint the HUD with markers hours of flight away.
+   */
+  local?: boolean;
 }
 
 /** Legacy id for the first outpost near the landing site. */
@@ -87,6 +95,7 @@ function resolveOp1Placement(planet: Planet, seed: number): QuantumDestination {
     latRadians,
     lonRadians,
     kind: 'surface-poi',
+    local: true,
   };
 }
 
@@ -134,60 +143,87 @@ function generateAsteronPois(planet: Planet, seed: number): QuantumDestination[]
       latRadians,
       lonRadians,
       kind: 'surface-poi',
+      local: true,
     });
   }
 
   return destinations;
 }
 
-function stationDestination(
-  station: SystemStationEntry,
+function destinationKindFor(body: SystemBodyPlacement): QuantumDestinationKind | null {
+  if (body.kind === 'station') return 'system-station';
+  if (body.kind === 'planet') return 'system-planet';
+  // The star is a light source, not somewhere you quantum to.
+  return null;
+}
+
+/**
+ * A System Map body as a nav / quantum destination at its **true** ecliptic
+ * position.
+ *
+ * Planets used to be hard-coded to lat 0 / lon 0 / 250 km, which stacked every
+ * other planet in the system directly on top of the active one — the map said
+ * they were 0.07 AU apart and play said they were 250 km up. Positions now come
+ * from `listSystemBodyPlacements`, the single place map meters become play
+ * meters, so nav, quantum and the rendered body all agree.
+ */
+function bodyDestination(
+  body: SystemBodyPlacement,
   planet: Planet,
-): QuantumDestination {
-  const hint = orbitHintFromSystemOffset(
-    planet,
-    station.offsetMeters,
-    resolveStationAltitudeMeters(station),
-  );
+): QuantumDestination | null {
+  const kind = destinationKindFor(body);
+  if (!kind) return null;
+  const spherical = sphericalForWorldPosition(planet, body.position);
+  if (body.kind === 'planet' && body.isActivePlanet) {
+    // The planet underfoot is addressed by its surface, not by a point in orbit.
+    return {
+      id: systemPlanetDestinationId(body.id),
+      name: body.name,
+      latRadians: 0,
+      lonRadians: 0,
+      kind,
+      planetDocumentId: body.planetId,
+      handoff: false,
+    };
+  }
   return {
-    id: systemStationDestinationId(station.id),
-    name: station.name,
-    latRadians: hint.latRadians,
-    lonRadians: hint.lonRadians,
-    kind: 'system-station',
-    altitudeMeters: hint.altitudeMeters + STATION_APPROACH_EXTRA_METERS,
+    id: body.kind === 'station'
+      ? systemStationDestinationId(body.id)
+      : systemPlanetDestinationId(body.id),
+    name: body.name,
+    latRadians: spherical.latRadians,
+    lonRadians: spherical.lonRadians,
+    kind,
+    ...(body.planetId ? { planetDocumentId: body.planetId } : {}),
+    // Arriving at another planet swaps the terrain stack to it; a station is
+    // just a place in this one.
+    ...(body.kind === 'planet' ? { handoff: true } : {}),
+    local: body.isLocal,
+    altitudeMeters:
+      spherical.altitudeMeters
+      + (body.kind === 'station' ? STATION_APPROACH_EXTRA_METERS : PLANET_APPROACH_EXTRA_METERS),
   };
 }
 
-function planetDestination(
-  entry: SystemPlanetEntry,
-  activePlanetDocumentId: string,
-): QuantumDestination {
-  const isActive = entry.planetId === activePlanetDocumentId;
-  return {
-    id: systemPlanetDestinationId(entry.id),
-    name: entry.name ?? entry.planetId,
-    latRadians: 0,
-    lonRadians: 0,
-    kind: 'system-planet',
-    planetDocumentId: entry.planetId,
-    handoff: !isActive,
-    altitudeMeters: isActive ? undefined : 250_000,
-  };
-}
-
-/** System Map bodies that participate in Nav / quantum. */
+/**
+ * System Map bodies that participate in Nav / quantum.
+ *
+ * Every body, not just the active planet's children: a station orbiting another
+ * planet is still in this system, still on the map, and must still be reachable.
+ * Filtering by parent is what used to make those bodies vanish from play.
+ */
 export function listSystemQuantumDestinations(
   planet: Planet,
   activePlanetDocumentId: string,
 ): QuantumDestination[] {
-  const system = getActiveSystemDocument();
   const destinations: QuantumDestination[] = [];
-  for (const entry of system.planets) {
-    destinations.push(planetDestination(entry, activePlanetDocumentId));
-  }
-  for (const station of getSystemStationEntriesForPlanetDocument(system, activePlanetDocumentId)) {
-    destinations.push(stationDestination(station, planet));
+  for (const body of listSystemBodyPlacements(
+    getActiveSystemDocument(),
+    activePlanetDocumentId,
+    planet.radiusMeters,
+  )) {
+    const destination = bodyDestination(body, planet);
+    if (destination) destinations.push(destination);
   }
   return destinations;
 }

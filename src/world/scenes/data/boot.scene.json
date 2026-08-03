@@ -3,6 +3,7 @@
   "id": "boot",
   "name": "Boot",
   "kind": "boot",
+  "runtime": "flow",
   "gameObjects": [
     {
       "id": "game-manager",

@@ -32,7 +32,7 @@ Ramp / gear SFX play on intentional toggles (F interact, cockpit gaze click, san
 
 ## Flight stats
 
-Mass-scaled thrusters (Star Citizen–style IFCS). Acceleration ≈ thrust / mass; turn rate lags on heavy hulls.
+Mass-scaled thrusters with dual-reticle flight computer. Acceleration ≈ thrust / mass; turn rate lags on heavy hulls.
 
 | Field | Unit | Role |
 | --- | --- | --- |

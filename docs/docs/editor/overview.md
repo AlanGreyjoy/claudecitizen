@@ -53,7 +53,7 @@ documents migrate forward automatically on read.
 
 | Component | Role |
 | --- | --- |
-| `game-manager` | System, planet, spawn mode **and the entry pipeline** — Title, Character Create, Starting Hab, Open Space, Loading |
+| `game-manager` | System, planet, spawn mode **and the entry pipeline** — Title, Character Create, Starting Scene, Open Space, Loading |
 | `planet` | Planet document reference |
 | `player-start` | Spawn pose and mode |
 | `prefab-instance` | Places a reusable prefab |

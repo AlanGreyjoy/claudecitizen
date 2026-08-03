@@ -1,0 +1,18 @@
+---
+description: Boot / Game Manager scene flow — read full architecture doc
+alwaysApply: true
+---
+
+# Scene flow architecture (pointer)
+
+Full law: [`docs/docs/architecture/scene-flow.md`](../../docs/docs/architecture/scene-flow.md).
+
+**Permanent decision:** boot scene `game-manager` owns Title → Character Create
+→ Starting Scene (and `openSpaceSceneId` / world defaults). One pure precedence
+rule (`resolveSceneFlowStep`); Title/Create do not own a competing pipeline.
+In-play place changes are markers only — [Game loop](../../docs/docs/architecture/game-loop.md),
+[Multiplayer](../../docs/docs/architecture/multiplayer.md). Boot picks starting
+system; Warp Gate changes system during play.
+
+When changing boot, Game Manager hops, `SceneEntryFlow`, or entry precedence,
+read the full doc first. Also listed in `AGENTS.md`.

@@ -35,10 +35,10 @@ export const FLIGHT_CONFIG = {
   MAX_SPEED_METERS_PER_SECOND: 100,
   /** Mouse aim cone half-angle from ship forward (radians). */
   AIM_CONE_HALF_ANGLE_RAD: 0.55,
-  /** IFCS proportional gain: aim angular error → torque demand. */
-  AIM_IFCS_GAIN: 2.15,
-  /** IFCS derivative gain: bleed angular rate while tracking aim (stops bounce). */
-  AIM_IFCS_DAMPING: 1.0,
+  /** Flight-computer proportional gain: aim angular error → torque demand. */
+  AIM_TRACK_GAIN: 2.15,
+  /** Flight-computer derivative gain: bleed angular rate while tracking aim (stops bounce). */
+  AIM_TRACK_DAMPING: 1.0,
   /** Aim error deadzone (radians-ish via cross magnitude) — no torque when aligned. */
   AIM_ERROR_DEADZONE: 0.01,
   /** Mouse radians per pixel at sensitivity 1.0. */

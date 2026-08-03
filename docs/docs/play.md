@@ -93,7 +93,7 @@ owns the entry chain:
 
 1. **Title scene** — login / register (auth UI only)
 2. **Character Create scene** — when the player has no saved appearance
-3. **Starting Hab** — private `instance` scene where play begins
+3. **Starting Scene** — where play begins; usually a per-player hab `instance`, but any Runtime is legal
 
 From the hab, a **Scene Exit** marker loads the shared station scene in-process.
 Flying a ship through a hangar `fly-through` exit opens the **Open Space** scene

@@ -371,6 +371,7 @@ useEffect(() => {
       tab: tabRef.current,
       documentType: state.documentType,
       sceneKind: state.sceneKind,
+      sceneRuntime: state.sceneRuntime,
       dirty: store.isDirty(),
       selectedIds: store.getSelectedIds(),
       subSelection: store.getSubSelection(),

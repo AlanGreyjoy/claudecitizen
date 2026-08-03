@@ -3,6 +3,7 @@
   "id": "main-game",
   "name": "Main Game",
   "kind": "main-game",
+  "runtime": "open-space",
   "gameObjects": [
     {
       "id": "game-manager",

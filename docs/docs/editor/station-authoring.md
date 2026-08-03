@@ -126,7 +126,7 @@ concourse is another (`blackmarket`):
 | Hab | `instance` | `instanced-scene` `scope: "player"`, `spawn-point`, `scene-exit` → station id |
 | Station | `instance` (shared) or `main-game` | Station layout / prefab; omit player-scoped `instanced-scene` so players share a cell |
 
-The boot scene's Game Manager **Starting Hab** points at the hab scene; the hab's
+The boot scene's Game Manager **Starting Scene** points at the hab scene; the hab's
 Scene Exit points back at the station. See [Game flow](./game-flow).
 
 ### Hangar → open space

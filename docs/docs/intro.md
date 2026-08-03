@@ -60,7 +60,7 @@ See [Controls](/play) for input bindings and quality presets.
 ## What's in the box
 
 - **Procedural planet** — cube-sphere tiles, height sampling, landing sites, lake water
-- **Flight** — inertial IFCS ship body (no airborne gravity), drag, and dual-reticle mouse aim
+- **Flight** — Rapier hull + flight computer, atmospheric gravity (planet *g*), vacuum thruster flight, drag, dual-reticle mouse aim
 - **Player** — third-person character, ship boarding, walkable ship decks and stations
 - **Rendering** — tiled terrain meshing (Web Worker), instanced vegetation, star field, Takram atmosphere/clouds, volumetric fog, post-processing
 - **Online backend** — Axum APIs, native Rapier cell authority, PostgreSQL/SQLx persistence, Redis coordination, container image (`backend/Dockerfile`)
@@ -69,6 +69,7 @@ See [Controls](/play) for input bindings and quality presets.
 
 - [Quick start](/quick-start) — install and open the editor
 - [AsteronEngine](/editor) — scenes, prefabs, and authoring
+- [Architecture](/architecture/scene-flow) — scene flow, game loop, multiplayer, space, ships
 - [Projects and settings](/editor/projects-and-settings) — hub, project JSON, backend proxy
 - [Controls](/play) — input bindings and quality presets
 - [Server console](/server-console) — catalog, players, and game settings

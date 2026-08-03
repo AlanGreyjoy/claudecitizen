@@ -142,11 +142,12 @@ export function SceneExitFields({
         />
       </FieldRow>
       <Hint>
-        Target Scene `@space` uses the Game Manager Open Space hop. Open-space
-        fly-throughs resolve the System Map station that owns this hangar
-        (`hangarSceneId`) and spawn at that station&apos;s Hangar Open Space
-        Exit. Changing Target or Trigger auto-fills Network Instance and Arrival
-        Room.
+        {component.sceneId === '@space'
+          ? 'Legacy hangar departure. Exit Hangar is the designed path now — it '
+            + 'needs no target and works on foot or fly-through. This still '
+            + 'resolves the System Map station that owns this hangar and spawns '
+            + 'at its Hangar Open Space Exit.'
+          : 'Changing Target or Trigger auto-fills Network Instance and Arrival Room.'}
       </Hint>
     </>
   );

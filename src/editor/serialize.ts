@@ -168,6 +168,7 @@ export function fromPrefabDocument(doc: PrefabDocument): EditorDocumentState {
     prefabName: doc.name,
     kind: doc.kind,
     sceneKind: 'main-game',
+    sceneRuntime: 'station',
     roots: (doc.root.children ?? []).map(entityFromJson),
   };
 }
@@ -180,6 +181,7 @@ export function toSceneDocument(state: EditorDocumentState): SceneDocument {
     id,
     name: state.prefabName,
     kind: state.sceneKind,
+    runtime: state.sceneRuntime,
     gameObjects: state.roots.map(entityToJson),
   };
 }
@@ -191,6 +193,7 @@ export function fromSceneDocument(doc: SceneDocument): EditorDocumentState {
     prefabName: doc.name,
     kind: 'site',
     sceneKind: doc.kind,
+    sceneRuntime: doc.runtime,
     roots: doc.gameObjects.map(entityFromJson),
   };
 }
@@ -211,6 +214,7 @@ export function createSceneEditorStateFromTemplate(
     prefabName: name,
     kind: 'site',
     sceneKind: document.kind,
+    sceneRuntime: document.runtime,
     roots: document.gameObjects.map(entityFromJson),
   };
 }

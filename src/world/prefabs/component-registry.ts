@@ -247,7 +247,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       arrivalRoomId: "lobby",
     }),
     hint:
-      "The only way a player moves between places in Play. `interact` prompts for F on foot; `fly-through` fires when a ship crosses it (hangar → open space). Target cell takes a literal id or a per-player token: @apartment, @hangar, @space. Open-space exits also pick the Station whose Hangar Open Space Exit mouth to arrive at.",
+      "On-foot travel between places in Play: `interact` prompts for F. Target cell takes a literal id or a per-player token: @apartment, @hangar. Leaving a hangar for space is Exit Hangar now — a `@space` scene-exit still works but is legacy.",
   },
   {
     type: "hangar-open-space-exit",
@@ -259,7 +259,38 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
     singleton: true,
     createDefault: () => ({ type: "hangar-open-space-exit" }),
     hint:
-      "Hangar mouth on this Station. Fly-through @space scene-exits that name this station spawn the ship here in open space. Local +Z is exit facing.",
+      "Bay mouth pose on this Station body. Ships leaving this family's hangar via Exit Hangar arrive here in Open Space. Pose only — local +Z is exit facing.",
+  },
+  {
+    type: "exit-hangar",
+    label: "Exit Hangar",
+    category: "gameplay",
+    kinds: ["station"],
+    scenes: true,
+    marker: true,
+    createDefault: () => ({
+      type: "exit-hangar",
+      trigger: "fly-through",
+      prompt: "Press F — launch to open space",
+      radius: 8,
+    }),
+    hint:
+      "Hangar → Open Space. Place on a Runtime: hangar scene. Fly-through fires when the ship crosses it; interact prompts for F on foot. The ship arrives at the owning Station body's Hangar Open Space Exit mouth (System Map ownership).",
+  },
+  {
+    type: "enter-station",
+    label: "Enter Station",
+    category: "gameplay",
+    kinds: ["station"],
+    scenes: true,
+    marker: true,
+    createDefault: () => ({
+      type: "enter-station",
+      radius: 60,
+      arrivalRoomId: "hangar",
+    }),
+    hint:
+      "Open Space → hangar. Place on a Runtime: station body at the bay mouth. A ship flying through lands in this family's hangar instance — the System Map Hangar Scene, unless overridden here.",
   },
   {
     type: "ladder",
@@ -833,7 +864,7 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       spawn: "station",
     }),
     hint:
-      "Scene flow: system, planet, spawn mode, plus every entry hop — Title, Character Create, Starting Hab, Open Space and Loading. On a Boot scene this is the whole game pipeline.",
+      "Scene flow: system, planet, spawn mode, plus every entry hop — Title, Character Create, Starting Scene, Open Space and Loading. On a Boot scene this is the whole game pipeline.",
   },
   {
     type: "planet",

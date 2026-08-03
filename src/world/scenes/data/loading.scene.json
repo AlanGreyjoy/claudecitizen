@@ -3,6 +3,7 @@
   "id": "loading",
   "name": "Loading",
   "kind": "loading",
+  "runtime": "flow",
   "gameObjects": [
     {
       "id": "loading-screen",

@@ -178,6 +178,48 @@ function buildNpcSpawnerHelper(
   return group;
 }
 
+/**
+ * Boarding volume gizmo: a translucent sphere at the authored crossing radius
+ * plus a +Z arrow for travel direction. Both `exit-hangar` and `enter-station`
+ * are radius tests around the marker, so they share the shape and differ only
+ * in tint — orange leaves for space, green comes in from it.
+ */
+function buildBoardingVolumeHelper(
+  radius: number,
+  color: number,
+  makeHelperMesh: ViewportHelperMeshFactory,
+): THREE.Object3D {
+  const group = new THREE.Group();
+  const shell = makeHelperMesh(
+    new THREE.SphereGeometry(Math.max(0.5, radius), 20, 14),
+    color,
+    0.16,
+  );
+  const core = makeHelperMesh(new THREE.SphereGeometry(0.6, 12, 8), color, 0.7);
+  const facing = makeHelperMesh(new THREE.ConeGeometry(0.5, 1.8, 12), color, 0.75);
+  facing.rotation.x = Math.PI / 2;
+  facing.position.z = 1.4;
+  group.add(shell, core, facing);
+  return group;
+}
+
+/** Both boarding volumes in one spread so the builder map stays under its cap. */
+function boardingVolumeBuilders(
+  makeHelperMesh: ViewportHelperMeshFactory,
+): Record<string, (component: PrefabComponent) => THREE.Object3D | null> {
+  const volume = (color: number, fallbackRadius: number) =>
+    (component: PrefabComponent): THREE.Object3D =>
+      buildBoardingVolumeHelper(
+        (component as { radius?: number }).radius ?? fallbackRadius,
+        color,
+        makeHelperMesh,
+      );
+  return {
+    "exit-hangar": volume(0xffa23f, 8),
+    "enter-station": volume(0x5fe08a, 60),
+  };
+}
+
 export function createViewportStationBuilders(deps: ViewportComponentBuilderDeps): {
   buildColliderHelper: (
     component: Extract<PrefabComponent, { type: "collider" }>,
@@ -573,6 +615,7 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
     // Same mouth gizmo as scene-exit — pose-only marker at the hangar bay.
     "hangar-open-space-exit": () =>
       buildSceneExitHelper({ type: "scene-exit", sceneId: "" }),
+    ...boardingVolumeBuilders(makeHelperMesh),
     "ladder": (component: PrefabComponent) =>
       buildLadderHelper(
         component as Extract<PrefabComponent, { type: "ladder" }>,

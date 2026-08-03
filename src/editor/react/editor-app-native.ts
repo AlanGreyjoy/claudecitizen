@@ -19,6 +19,7 @@ export function restoreSnapshot(
       ...restored,
       documentType: snapshot.documentType ?? restored.documentType,
       sceneKind: snapshot.sceneKind ?? restored.sceneKind,
+      sceneRuntime: snapshot.sceneRuntime ?? restored.sceneRuntime,
     });
     if (!snapshot.dirty) store.markSaved();
   }

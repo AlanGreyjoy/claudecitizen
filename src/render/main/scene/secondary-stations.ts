@@ -5,6 +5,7 @@ import type { StationFrame } from '../../../world/station';
 import type { PrefabDocument } from '../../../world/prefabs/schema';
 import type { ParticleMaterialFactory } from '../../particles/material';
 import { createPrefabStationGroup } from '../../prefabs/prefab-renderer';
+import { BODY_ACTIVATION_RADIUS_METERS } from '../../../world/systems/placement';
 
 /**
  * Brings secondary station prefabs online ahead of arrival, one at a time.
@@ -19,11 +20,12 @@ import { createPrefabStationGroup } from '../../prefabs/prefab-renderer';
 // prefab only loads once the player is close enough for the mesh to matter.
 const LOAD_DISTANCE_METERS = 75_000;
 /**
- * Where the deferred build starts. Far enough out that its cost lands during
- * cruise rather than on approach; purely a scheduling hint, since crossing
- * `LOAD_DISTANCE_METERS` without a finished mesh still builds synchronously.
+ * Where the deferred build starts — the station body's activation radius from
+ * `systems/placement`, so the distance at which a body is "worth rendering" is
+ * stated once. Purely a scheduling hint: crossing `LOAD_DISTANCE_METERS`
+ * without a finished mesh still builds synchronously.
  */
-const PREPARE_DISTANCE_METERS = 220_000;
+const PREPARE_DISTANCE_METERS = BODY_ACTIVATION_RADIUS_METERS.station;
 
 export interface SecondaryStationEntry {
   prefab: PrefabDocument;

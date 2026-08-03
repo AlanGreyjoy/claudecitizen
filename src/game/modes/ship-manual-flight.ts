@@ -109,7 +109,7 @@ function resolveManualFlightPrompt(
   return `${prompts.holdPrompt("seatLook", "look around")} · ${prompts.holdPrompt("exitSeat", "get up")} · Alt+C coupled`;
 }
 
-/** IFCS integrate, dual-reticle aim, cockpit look-at, and flight prompt. */
+/** Flight-computer integrate, dual-reticle aim, cockpit look-at, and flight prompt. */
 export function advanceManualFlight(
   ctx: LoopContext,
   instance: ShipInstance,

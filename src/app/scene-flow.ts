@@ -138,6 +138,6 @@ export async function runBootScene(options: RunBootSceneOptions): Promise<void> 
   }
   console.error(
     `Boot scene "${scene.id}" has no ${step.missing} on its Game Manager and no scene-link to fall back on. `
-    + 'Set the Starting Hab (or a Title Scene) in the Game Manager inspector.',
+    + 'Set the Starting Scene (or a Title Scene) in the Game Manager inspector.',
   );
 }

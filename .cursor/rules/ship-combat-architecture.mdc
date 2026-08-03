@@ -1,0 +1,21 @@
+---
+description: Ship combat — blasters/missiles, lock-on, lead markers, combat HUD — read full architecture doc
+alwaysApply: true
+---
+
+# Ship combat architecture (pointer)
+
+Full law: [`docs/docs/architecture/ship-combat.md`](../../docs/docs/architecture/ship-combat.md).
+
+**Permanent decision:** ship fight loop lives in **Combat** flight mode only.
+Hardpoints: **blasters** (semi / burst / full chain) and **missiles** (locking /
+non-locking). Hold **RMB** → **10×** combat zoom. Hull combat UI owns blips,
+markers, and a lock target card (blue wireframe preview + names + shields/hull).
+Contacts show **lead** circles (green hit / red miss). Damage: shields then
+hull. Default death: readable **GLB hierarchy break-apart** (not instant
+despawn, not extreme debris speed). On-foot firearms stay a separate loop.
+Flight posture: [Ship flight](../../docs/docs/architecture/ship-flight.md).
+
+When changing ship weapons, lock-on, lead markers, combat zoom, combat HUD,
+ship vitals damage, or destruction FX, read the full doc first. Also listed in
+`AGENTS.md`.

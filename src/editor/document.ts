@@ -48,6 +48,7 @@ function buildStoreCtx(
       prefabName: 'Untitled Scene',
       kind: 'site',
       sceneKind: 'main-game',
+      sceneRuntime: 'open-space',
       roots: [],
     } as EditorDocumentState,
     selection: null as string | null,

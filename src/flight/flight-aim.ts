@@ -92,14 +92,14 @@ export function resolveAimForward(body: FlightBody, aim: FlightAimState): Vec3 {
 }
 
 /**
- * IFCS pitch/yaw demand (−1…1) to turn the nose toward a world aim direction.
+ * Flight-computer pitch/yaw demand (−1…1) to turn the nose toward a world aim direction.
  * PD: proportional on aim error, derivative on current angular rate (kills bounce).
  */
 export function aimTorqueDemand01(
   body: FlightBody,
   aimForward: Vec3,
-  gain = FLIGHT_CONFIG.AIM_IFCS_GAIN,
-  damping = FLIGHT_CONFIG.AIM_IFCS_DAMPING,
+  gain = FLIGHT_CONFIG.AIM_TRACK_GAIN,
+  damping = FLIGHT_CONFIG.AIM_TRACK_DAMPING,
 ): { pitch01: number; yaw01: number } {
   const right = normalize(cross(body.forward, body.up));
   const aim = normalize(aimForward);

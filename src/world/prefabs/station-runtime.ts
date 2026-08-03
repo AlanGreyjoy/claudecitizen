@@ -6,7 +6,9 @@ import {
   type StationFloorId,
   type StationInfoMarker,
   type StationSceneExitMarker,
+  type StationExitOrigin,
   type StationHangarOpenSpaceExitMarker,
+  type StationEnterStationMarker,
   type StationAvmsMarker,
   type StationWeaponShopMarker,
   type StationOutfittersMarker,
@@ -110,6 +112,7 @@ interface FlattenedComponents {
     interactSoundUrl?: string;
   }[];
   sceneExitSeeds: {
+    origin: StationExitOrigin;
     sceneId: string;
     prompt: string;
     radius: number;
@@ -122,6 +125,7 @@ interface FlattenedComponents {
     stationPrefabId: string;
   }[];
   hangarOpenSpaceExitSeed: StationHangarOpenSpaceExitMarker | null;
+  enterStationSeeds: StationEnterStationMarker[];
   avmsSeeds: {
     id: string;
     label: string;
@@ -285,6 +289,48 @@ function collectNpcPlacement(
   });
 }
 
+/**
+ * `exit-hangar` bakes into the same exit marker list as `scene-exit` so the
+ * on-foot interact prompt and the ship crossing test stay in one place. Its
+ * target is always the `@space` token: which Open Space document that is, and
+ * which station body's mouth the ship lands at, are both resolved at trigger
+ * time from the Game Manager and the System Map.
+ */
+function collectExitHangar(
+  component: Extract<PrefabComponent, { type: "exit-hangar" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.sceneExitSeeds.push({
+    origin: 'exit-hangar',
+    sceneId: '@space',
+    prompt: component.prompt?.trim() || 'Press F — launch to open space',
+    radius: component.radius ?? 8,
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    trigger: component.trigger ?? 'fly-through',
+    networkInstanceId: '@space',
+    arrivalRoomId: 'lobby',
+    stationPrefabId: '',
+  });
+}
+
+function collectEnterStation(
+  component: Extract<PrefabComponent, { type: "enter-station" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  out.enterStationSeeds.push({
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    radius: component.radius ?? 60,
+    hangarSceneId: component.hangarSceneId?.trim() ?? '',
+    arrivalRoomId: component.arrivalRoomId?.trim() || 'hangar',
+  });
+}
+
 function collectLadder(
   component: Extract<PrefabComponent, { type: "ladder" }>,
   ctx: CollectStationContext,
@@ -379,7 +425,14 @@ function collectSceneExit(
     console.warn('scene-exit marker has empty sceneId; ignoring.');
     return;
   }
+  if (sceneId === '@space') {
+    console.warn(
+      'scene-exit targets @space; that is the legacy hangar departure path. '
+      + 'Replace it with an exit-hangar component.',
+    );
+  }
   out.sceneExitSeeds.push({
+    origin: 'scene-exit',
     sceneId,
     prompt: component.prompt?.trim() || 'Press F — exit to station',
     radius: component.radius ?? 2.5,
@@ -782,6 +835,14 @@ function collect(
       collectHangarOpenSpaceExit(component, ctx, out);
       continue;
     }
+    if (component.type === 'exit-hangar') {
+      collectExitHangar(component, ctx, out);
+      continue;
+    }
+    if (component.type === 'enter-station') {
+      collectEnterStation(component, ctx, out);
+      continue;
+    }
     collectStationComponent(component, ctx, out);
   }
 
@@ -901,6 +962,7 @@ function createEmptyFlattened(): FlattenedComponents {
     infoSeeds: [],
     sceneExitSeeds: [],
     hangarOpenSpaceExitSeed: null,
+    enterStationSeeds: [],
     avmsSeeds: [],
     weaponShopSeeds: [],
     outfittersSeeds: [],
@@ -972,6 +1034,7 @@ function buildInfoMarkers(out: FlattenedComponents): StationInfoMarker[] {
 
 function buildSceneExitMarkers(out: FlattenedComponents): StationSceneExitMarker[] {
   return out.sceneExitSeeds.map((seed) => ({
+    origin: seed.origin,
     sceneId: seed.sceneId,
     prompt: seed.prompt,
     right: seed.right,
@@ -1152,6 +1215,7 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     infoMarkers: buildInfoMarkers(out),
     sceneExitMarkers: buildSceneExitMarkers(out),
     hangarOpenSpaceExit: buildHangarOpenSpaceExit(out),
+    enterStationMarkers: out.enterStationSeeds,
     doors: out.doors,
     chestStorage: out.chestStorage,
     avmsMarkers: buildAvmsMarkers(out),

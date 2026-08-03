@@ -355,7 +355,7 @@ function SelectedStationForm({
         }}
       />
       <SystemNumberField
-        label="Offset X (m)"
+        label="Offset X from parent centre (m)"
         value={station.offsetMeters.x}
         step={1_000_000}
         onChange={(value) => {
@@ -364,7 +364,7 @@ function SelectedStationForm({
         }}
       />
       <SystemNumberField
-        label="Offset Z (m)"
+        label="Offset Z from parent centre (m)"
         value={station.offsetMeters.z}
         step={1_000_000}
         onChange={(value) => {
@@ -373,7 +373,7 @@ function SelectedStationForm({
         }}
       />
       <SystemNumberField
-        label="Altitude (m)"
+        label="Min orbit clearance (m)"
         value={station.altitudeMeters ?? DEFAULT_STATION_ALTITUDE_METERS}
         step={1000}
         onChange={(value) => {

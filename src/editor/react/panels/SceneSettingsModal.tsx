@@ -2,9 +2,24 @@ import { useEffect, useState, type KeyboardEvent, type ReactElement } from 'reac
 import { createPortal } from 'react-dom';
 import type { EditorStore } from '../../document';
 import { showToast } from '../../dom';
-import { SCENE_ID_PATTERN, SCENE_KINDS, type SceneKind } from '../../../world/scenes/schema';
+import {
+  SCENE_ID_PATTERN,
+  SCENE_KINDS,
+  SCENE_RUNTIMES,
+  type SceneKind,
+  type SceneRuntime,
+} from '../../../world/scenes/schema';
 
-function titleForKind(kind: SceneKind): string {
+/** One line of "what does this document become in play" per Runtime. */
+const RUNTIME_HINTS: Record<SceneRuntime, string> = {
+  'open-space': 'System host — the star system the player flies in.',
+  station: 'Giant prefab body placed into Open Space by the System Map.',
+  hab: 'Per-player interior cell of a station family.',
+  hangar: 'Per-player hangar cell of a station family.',
+  flow: 'Menu / boot / loading document. Never a world body.',
+};
+
+function titleForSlug(kind: string): string {
   return kind
     .split('-')
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
@@ -44,6 +59,7 @@ export function SceneSettingsModal({
   onClose,
 }: SceneSettingsModalProps): ReactElement | null {
   const [draftKind, setDraftKind] = useState<SceneKind>('main-game');
+  const [draftRuntime, setDraftRuntime] = useState<SceneRuntime>('open-space');
   const [draftName, setDraftName] = useState('');
   const [draftId, setDraftId] = useState('');
   const [originalName, setOriginalName] = useState('');
@@ -54,6 +70,7 @@ export function SceneSettingsModal({
     if (!open) return;
     const state = store.getState();
     setDraftKind(state.sceneKind);
+    setDraftRuntime(state.sceneRuntime);
     setDraftName(state.prefabName);
     setDraftId(state.prefabId);
     setOriginalName(state.prefabName);
@@ -80,6 +97,7 @@ export function SceneSettingsModal({
       prefabId: draftId,
       prefabName: draftName.trim() || 'Untitled Scene',
       sceneKind: draftKind,
+      sceneRuntime: draftRuntime,
     });
     showToast('Scene settings updated.');
     onClose();
@@ -95,7 +113,7 @@ export function SceneSettingsModal({
       <div className="ed-dialog ed-scene-settings-modal" role="dialog" aria-modal="true">
         <div className="ed-scene-settings-heading">Scene Settings</div>
         <p className="ed-scene-settings-copy">
-          Scene identity and runtime kind. World config lives on GameObjects — add Game Manager,
+          Scene identity, Runtime, and kind. World config lives on GameObjects — add Game Manager,
           Planet, Player Start, or Prefab Instance components in the hierarchy.
         </p>
         <div className={`ed-system-status${statusError ? ' is-error' : ''}`}>{status}</div>
@@ -125,18 +143,36 @@ export function SceneSettingsModal({
             <span className="ed-scene-settings-label">Runtime</span>
             <select
               className="ed-input"
+              value={draftRuntime}
+              onChange={(event) => setDraftRuntime(event.target.value as SceneRuntime)}
+              onKeyDown={stopKeyPropagation}
+            >
+              {SCENE_RUNTIMES.map((runtime) => (
+                <option key={runtime} value={runtime}>
+                  {titleForSlug(runtime)}
+                </option>
+              ))}
+            </select>
+            <span className="ed-scene-settings-detail">
+              {RUNTIME_HINTS[draftRuntime]}
+            </span>
+          </label>
+          <label className="ed-scene-settings-field">
+            <span className="ed-scene-settings-label">Kind</span>
+            <select
+              className="ed-input"
               value={draftKind}
               onChange={(event) => setDraftKind(event.target.value as SceneKind)}
               onKeyDown={stopKeyPropagation}
             >
               {SCENE_KINDS.map((kind) => (
                 <option key={kind} value={kind}>
-                  {titleForKind(kind)}
+                  {titleForSlug(kind)}
                 </option>
               ))}
             </select>
             <span className="ed-scene-settings-detail">
-              Selects how the scene host launches this scene.
+              Editor taxonomy and boot back-compat. Runtime is the world-model truth.
             </span>
           </label>
         </div>

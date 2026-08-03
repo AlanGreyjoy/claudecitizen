@@ -1,38 +1,42 @@
 ---
-description: Ship flight IFCS — mass/thrust/torque, dual-reticle aim, coupled mode, preview flight. Use when tuning or changing ship flight.
-globs: src/flight/**,src/app/ship_play_session.ts,src/input/player_controls.ts,src/game/modes/in_ship.ts,src/game/create_game_loop.ts,src/player/ship_layout.ts,src/render/effects/hud/flight_reticle.ts,src/world/prefabs/ship_runtime.ts,assets/**/*.prefab.json
+description: Ship flight flight computer + Rapier hull — mass/thrust/torque, dual-reticle, coupled, contacts. Use when tuning or changing ship flight.
+globs: src/flight/**,src/physics/**,src/app/ship_play_session.ts,src/input/player_controls.ts,src/game/modes/in_ship.ts,src/game/create_game_loop.ts,src/player/ship_layout.ts,src/render/effects/hud/flight_reticle.ts,src/world/prefabs/ship_runtime.ts,assets/**/*.prefab.json
 alwaysApply: false
 ---
 
 # Ship Flight
 
-SC-style IFCS: mouse aim + nose lag, mass-scaled thrust/torque. **Flight is not Rapier** — Rapier is deck/station walking only.
+**Target law:** Rapier owns the flying hull; flight computer owns stick feel (forces/torques).
+Architecture: `docs/docs/architecture/ship-flight.md`. Pointer:
+`.cursor/rules/ship-flight-architecture.mdc`.
+
+Legacy custom pose integration may still exist in code — do not extend it; move
+work onto the Rapier path.
 
 ## Before changing feel
 
 1. Read `.cursor/skills/ship-flight/SKILL.md` (presets, symptom → fix, workflow).
-2. Read AGENTS.md section **Ship flight (SC-style IFCS)**.
+2. Read AGENTS.md **Ship flight** and the architecture doc above.
 
 ## Ownership
 
 | Layer | Where |
 | --- | --- |
-| Per-ship stats | `ship-controller` on hull → `ShipSpec` via `ship_runtime.ts` |
-| Global IFCS / damping | `src/flight/flight_config.ts` (all ships) |
-| Integrate | `flight_body.ts` (+ sandbox flat env) |
-| Aim / PD IFCS | `flight_aim.ts` + `player_controls.ts` |
-| Main play | `src/game/modes/in_ship.ts` (`MODE_IN_SHIP`) |
-| Preview | `ship_play_session.ts` pilot mode |
-| HUD | `flight_reticle.ts` (aim + nose pips); `cockpit_gaze_hud.ts` (Hold F look-at labels); `cockpit_speed_hud.ts` (cockpit-stat speed) |
-| Cockpit controls | `cockpit-control` markers → `ShipLayout.cockpitControls` → `cockpit_gaze.ts` |
-| Cockpit instruments | `cockpit-stat` markers → `ShipLayout.cockpitStats` → `cockpit_stats.ts` + speed HUD |
+| Per-ship stats | `ship-controller` → `ShipSpec` via ship runtime |
+| Global flight computer / damping / boost | `src/flight/flight-config.ts` |
+| Aim / thruster **demands** (pure) | `src/flight/` (`flight-aim`, demand mix) |
+| Rigid body + contacts + step | `physics/` flight world + cell `sim-core` |
+| Modes / quantum policy | `src/flight/flight-modes.ts`, `quantum-travel.ts` |
+| Combat weapons / lock / HUD | `docs/docs/architecture/ship-combat.md` (law; code TBD) |
+| Main play | `src/game/modes/in-ship.ts` (`MODE_IN_SHIP`) |
+| HUD | dual reticle, cockpit gaze, cockpit speed |
 
 ## Rules of thumb
 
-- Balance **one hull** via inspector mass/thrust/torque — do not edit `FLIGHT_CONFIG` unless every ship is wrong.
-- Pitch bounce → ↑ `AIM_IFCS_DAMPING` or ↓ pitch torque / max angular rate (see skill).
-- **No airborne gravity** (Star Wars hover) and **no auto-level** — roll/pitch stick; do not reintroduce without an explicit design change.
-- `world/` / `flight/` must not import `three` or DOM.
-- Keep flight math out of `render/` and out of Rapier.
+- Balance **one hull** via inspector mass/thrust/torque — not global knobs unless every ship is wrong.
+- Pitch bounce → ↑ aim-track damping or ↓ pitch torque / max angular rate (see skill).
+- **Atmospheric gravity** from planet `gravityMetersPerSecond2` while inside the atmosphere shell; vacuum = no planet pull. Heavier *g* → harder/longer escape. **No auto-level** — product law; do not reintroduce without design change.
+- `flight/` stays pure (no Three, no Rapier import); Rapier stays in `physics/` / sim-core.
+- One pose owner per frame — never blend legacy integrator with Rapier.
 
 Deeper tuning: `.cursor/skills/ship-flight/SKILL.md`. Prefab authoring: `.cursor/skills/prefab-editor/SKILL.md`.

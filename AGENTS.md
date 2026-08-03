@@ -79,12 +79,15 @@ navigation must not reload the page.
 
 ### The boot scene owns the game flow
 
+Full law: `docs/docs/architecture/scene-flow.md`. Thin Cursor pointer:
+`.cursor/rules/scene-flow-architecture.mdc`.
+
 `kind: 'boot'` is the entry document, and the project's `defaultScene` should
 point at it. It never runs gameplay: it reads the pipeline off its
 `game-manager` and hands off.
 
 ```
-boot scene ──► Title scene ──► Character Create ──► Starting Hab ──► Open Space
+boot scene ──► Title scene ──► Character Create ──► Starting Scene ──► Open Space
  (flow +        (auth UI,       (when the player     (gameplay)      (fly-through
   world          no Game         has no saved                         scene-exit)
   defaults)      Manager)        appearance)
@@ -116,18 +119,60 @@ Do not add a second place that decides the entry order, and do not re-key it off
 After boot lands the player in a starting hab, in-play travel follows the station
 family model: **Hab → Station → AVMS → Hangar → Open Space**. Each Station owns
 its Hab and Hangar; Hab/Hangar are per-player instances (placeable build; team
-follow-in). Full draft (diagrams + invariants):
+follow-in). Full law (diagrams + invariants):
 `docs/docs/architecture/game-loop.md`. Thin Cursor pointer:
 `.cursor/rules/game-loop-architecture.mdc`.
 
 Open Space itself is the **active star system** (`Runtime: open-space`) at 1:1
-System Map scale. Station map bodies are scene documents with
+Star Map scale. Station map bodies are scene documents with
 `Runtime: station` — authored as scenes, placed as giant prefabs; far bodies
-cull but keep pilot blips; quantum bridges hours-long thruster gaps. Ship
+cull but keep pilot **nav** blips (Combat contact blips are a separate HUD set —
+see space-traversal); quantum bridges hours-long thruster gaps. Ship
 boarding: `enter-station` (fly-through → hangar instance) /
 `exit-hangar` (→ nested `hangar-open-space-exit` mouth). Full law:
 `docs/docs/architecture/space-traversal.md`. Thin Cursor pointer:
 `.cursor/rules/space-traversal-architecture.mdc`.
+
+A **Star System** owns exactly one **Star Map** (ecliptic catalog: stations,
+planets, moons, waypoints, POIs (map entry + assigned prefab on arrival),
+missions, Warp Gates — Hab/Hangar ownership on
+stations, not map markers). A project may author many systems;
+`game-manager.systemId` selects the starting one. **In-play** cross-system
+travel is a Star Map **Warp Gate** (`warp-gate` → `targetSystemId`); quantum
+stays inside one system. Product name is Star Map; code may still say
+`SystemDocument` / System Map. Full law: `docs/docs/architecture/star-map.md`.
+Thin Cursor pointer: `.cursor/rules/star-map-architecture.mdc`.
+
+**`src/world/systems/placement.ts` is the only place Star Map meters become
+play meters.** World origin is the active planet — a rendering convention forced
+by the single-planet terrain stack, not a second coordinate system. Every other
+body (star, other planets, every station regardless of `parentBodyId`) is placed
+at its true ecliptic offset from it, so map distances are play distances. Orbit
+frames, hangar mouths, nav blips and quantum approach all read that one module;
+do not re-derive a body position anywhere else, and do not filter system bodies
+by the active planet — that filter is what used to make other planets' stations
+vanish from play. Only the active planet *renders*; far bodies cull and keep
+their pilot blips (`BODY_ACTIVATION_RADIUS_METERS`).
+
+**Ship flight** (Rapier hull + flight-computer demands, Traverse / Combat / Nav, boost,
+quantum) is documented in `docs/docs/architecture/ship-flight.md`. **Ship physics**
+(vacuum inertia, residual coast, coupled assist):
+`docs/docs/architecture/ship-physics.md`. **Ship combat** (blasters, missiles,
+lock-on, lead markers, combat HUD, hierarchy death):
+`docs/docs/architecture/ship-combat.md`. Thin Cursor pointers:
+`.cursor/rules/ship-flight-architecture.mdc`,
+`.cursor/rules/ship-physics-architecture.mdc`,
+`.cursor/rules/ship-combat-architecture.mdc`.
+
+`Runtime` is a real field: `SceneDocument.runtime` in
+`src/world/scenes/schema.ts` (`open-space` / `station` / `hab` / `hangar` /
+`flow`), surfaced on `ScenePlayConfig` and in Scene Settings. **Read `runtime`,
+not `kind`, when deciding what a document *is*.** `kind` stays as editor
+taxonomy and boot back-compat; when they disagree, fix the document. Documents
+written before the field infer it once on read (`inferSceneRuntime`) — menu
+kinds → `flow`, `main-game` → `open-space`, a player-scoped instance → `hangar`
+when it has `hangar-pad`s else `hab`, otherwise `station`. Do not add a second
+inference site.
 
 ## Project settings and backend config
 
@@ -271,18 +316,23 @@ with its own seat/bed/door/ramp/ladder handlers — it does not go through
 `src/game/modes/deck-locomotion.ts`. Any new deck interaction has to be wired in
 both places or it will silently not exist in Ship Test.
 
-### Ship flight (SC-style IFCS)
+### Ship flight (Rapier + flight computer)
 
-Flight is **not** Rapier. Deck walking may use Rapier; flying uses the custom integrator in `src/flight/`.
+**Target law:** flying hull is Rapier; flight computer emits forces/torques. Full doc:
+`docs/docs/architecture/ship-flight.md`. Legacy custom `integrateFlightBody` pose
+writing is compat only — do not extend it.
 
-- **Per-ship feel** is authored on `ship-controller` stats: `massKg`, `maxSpeedMps`, `maxAngularRateRadps`, thrust (N), torque (N·m). Baked into `ShipSpec` via `ship-runtime.ts`. Accel ≈ thrust/mass; turn ≈ torque/(mass × `INERTIA_FACTOR`).
-- **Global feel** (mouse aim gain, IFCS damping, coupled bleed, drag) lives in `src/flight/flight-config.ts` — only change when *all* ships feel wrong.
-- **Gravity (Star Wars–style):** once airborne, gravity does **not** pull the ship down. Altitude is thruster-only (Space/C). Landing uses ground/hangar clamp. **No auto-level** — roll/pitch attitude sticks until the pilot corrects (preview levels on pad exit).
-- **Mouse dual-reticle**: persistent aim pip + nose pip; IFCS PD-tracks aim (`flight-aim.ts`). Hold **F** = cockpit free-look (camera only); while free-looking, gaze + **LMB** activates `cockpit-control` markers (gear/ramp). **Alt+C** = coupled ↔ decoupled.
-- **Main play**: `src/game/modes/in-ship.ts` (`MODE_IN_SHIP`) → `integrateFlightBody` + dual reticle HUD (`src/game/hud/frame-hud.ts`).
-- **Ship tab playtest** (`src/editor/ship-test.ts`): **Pad** runs `startShipSandboxSession` (flat pad, no terrain); **Planet** runs `startEditorPlay(store, { shipSpawn: 'surface' })`. Both spawn on foot beside the hull with the ramp down and return the same `EditorPlaySession`, so F6/F7/Stop drive them identically. `?shipPrefab=` still boots the pad sandbox as a standalone page.
-- **Which hull spawns**: a scene's placed `prefab-instance{prefabKind:'ship'}` flows `scene-runtime.ts` → `PlayWorldParams.shipPrefabOverride` → `activateShipPrefab` → `createWorldState({ shipPrefabId })`. Break any link in that chain and every Play silently flies `DEFAULT_SHIP_PREFAB_ID` (the Starhopper) instead of the authored ship.
-- **Tuning workflow**: read `.cursor/skills/ship-flight/SKILL.md` (and `.cursor/rules/ship-flight.mdc`). Symptom → fix tables live there.
+- **Per-ship feel** on `ship-controller` stats: `massKg`, `maxSpeedMps`, `maxAngularRateRadps`, thrust (N), torque (N·m) → `ShipSpec`. Demands ≈ thrust/mass and torque vs inertia; Rapier mass matches authored mass.
+- **Speed:** cruise max = `maxSpeedMps`; boost (Shift) scales forward thrust demand and the live velocity cap (`BOOST_FACTOR`).
+- **Modes:** `traverse` → `combat` → `nav` (tap **U**). Quantum (hold **U**) only in **Nav**.
+- **Global flight-computer knobs** (aim gain, damping, coupled bleed, boost factor) — only when *all* ships feel wrong.
+- **Gravity:** atmospheric pull from planet `gravityMetersPerSecond2` inside `atmosphereHeightMeters` (heavier *g* → harder/longer escape); **no** planetary pull in vacuum. Vacuum inertia / residual coast / coupled assist: `docs/docs/architecture/ship-physics.md`. Landing = thrusters + Rapier contact (gear/pad/terrain). **No auto-level**.
+- **Dual-reticle:** aim pip + nose pip; aim-track PD → torque demand on the Rapier body. Hold **F** free-look; gaze + **LMB** for `cockpit-control`. **Alt+C** coupled ↔ decoupled.
+- **Contacts:** land / crash / ship–ship are Rapier outcomes; boarding triggers stay markers/sensors on that body.
+- **Combat weapons / lock / lead / combat HUD / destroy:** `docs/docs/architecture/ship-combat.md` (Combat mode only).
+- **Deck vs flight:** parked on-foot uses ship-local Rapier; flying uses the world flight body — never dual-drive pose.
+- **Main play / preview / spawn wiring:** `in-ship` mode, Ship tab Test, `shipPrefabOverride` chain — see architecture doc + ship-flight skill.
+- **Tuning:** `.cursor/skills/ship-flight/SKILL.md`, `.cursor/rules/ship-flight.mdc`.
 
 ## Editor (Electron desktop)
 
@@ -410,6 +460,11 @@ Docs: `docs/docs/server-console/payments.md`.
 
 ### Authoritative multiplayer
 
+Full law: `docs/docs/architecture/multiplayer.md`. Thin Cursor pointer:
+`.cursor/rules/multiplayer-architecture.mdc`. Architecture docs are the
+**target law**; code may lag (follow-in, placeables, quantum peers) — refactor
+toward the doc, do not treat today's gaps as permission to defer authority.
+
 **Multiplayer is designed in parallel, never bolted on later.** Every gameplay
 feature, state change, interaction outcome, scene travel path, and entity that
 peers must see or affect must answer up front: who owns the truth (cell vs
@@ -465,15 +520,39 @@ players authenticate, chat echoes back, and no player ever sees another. See
 `deploy/README.md`; production deploys merge two compose files, and the base
 file's development allowlist wins unless the overlay restates it.
 
-**`scene-exit` is the only way a player moves between places during Play.**
-The boot scene's `game-manager` decides where a session *begins*; every move
-after that is a `scene-exit` marker and nothing else. Elevators are gone — mode,
-ride state, `elevator` component and all. Do not reintroduce a second mechanism
-that picks a cell: two of them race, and the loser is a player rendering one
-place while being simulated in another.
+**Authored markers are the only way a player moves between places during
+Play.** The boot scene's `game-manager` decides where a session *begins*; every
+move after that is a `scene-exit`, an `exit-hangar`, or an `enter-station`
+marker and nothing else. Elevators are gone — mode, ride state, `elevator`
+component and all. Do not reintroduce a second mechanism that picks a cell: two
+of them race, and the loser is a player rendering one place while being
+simulated in another.
 
+Which primitive:
+
+| Move | Component | Lives on |
+| --- | --- | --- |
+| Hab ↔ Station ↔ Hangar, on foot | `scene-exit` | any walkable scene |
+| Hangar → Open Space | `exit-hangar` | `Runtime: hangar` scene |
+| Open Space → Hangar | `enter-station` | `Runtime: station` body |
+
+`exit-hangar` and `enter-station` bake through the same station layout as
+`scene-exit` (`exit-hangar` shares the `sceneExitMarkers` list and carries
+`origin: 'exit-hangar'`; `enter-station` gets its own `enterStationMarkers`),
+so there is still exactly one proximity test and one `onRequestScene` path.
+
+- `exit-hangar` needs no destination: `@space` resolves through the flow, and
+  the arrival pose comes from System Map ownership. It always sets
+  `arrival: 'in-ship'` — even on the `interact` trigger, because there is
+  nowhere to stand in open space.
+- `enter-station` resolves its hangar scene at trigger time from the System Map
+  entry that placed the body (`hangarSceneId`), unless the marker overrides it.
+  It arrives `default` (on foot, hull parked by the hangar's own delivery
+  logic); no bay is auto-assigned on crossing.
+- A hangar `scene-exit` targeting `@space` still works and warns at bake time.
+  It is legacy, not the designed path — migrate it to `exit-hangar`.
 - `trigger: "interact"` prompts for F on foot; `trigger: "fly-through"` fires
-  when a ship crosses the marker (hangar → open space) and shows no prompt.
+  when a ship crosses the marker and shows no prompt.
 - `networkInstanceId` takes a literal cell id or a per-player token —
   `@apartment`, `@hangar`, `@space` — resolved from the session bootstrap in
   `src/game/station/scene-exit.ts`. Private instance ids are per player and
@@ -487,7 +566,7 @@ place while being simulated in another.
   concourse, sets its orbit frame, and spawns at its `hangar-open-space-exit`
   mouth; missing ownership/marker falls back to the generic open-space altitude
   spawn with a warning. Do not author a Station picker on the hangar exit.
-- A `fly-through` exit sets `arrival: 'in-ship'` on the target, which reaches
+- An `in-ship` arrival (any `exit-hangar`, or a `fly-through` `scene-exit`) sets `arrival: 'in-ship'` on the target, which reaches
   `createWorldState` and spawns the player **seated and flying** in orbit.
   Without it the swap rebuilds the session and drops a mid-flight pilot on foot
   at the destination's Player Start.
@@ -709,7 +788,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 - **Station**: Rapier physics. `src/physics/station-physics.ts` owns the world; `src/physics/rapier-world.ts` bakes `GameplayCollider` into Rapier trimesh/cuboid bodies. Station walk uses `KinematicCharacterController.computeColliderMovement`.
 - **Ship (collider-deck)**: Rapier physics in **ship-local** space. `src/physics/ship-physics.ts` mirrors the station API; `ship-deck.ts` drives locomotion on hull/ramp/pad colliders. Doors/ramp toggle via `setEnabled` from articulation blends. Near a parked ship, on-foot enters that same world (pad + hull) and walks the open ramp continuously; leaving is freefall with no floor underfoot (off the pad) → planet/station at current feet. **Area gating**: `tryEnterShipPadInterest` only hands locomotion to the ship world when the player shares the ship's walkable area — in a station the ship must rest on a hangar pad (`sampleHangarRest`) in the player's current `stationRoomId`, and on-foot outdoors never targets a hangar-parked ship. The raw ship-local proximity box (`isNearParkedShipPad`, ±36 m) reaches through station walls/floors; do not call it ungated.
 - **Ship (exterior entry)**: `ship-controller.entry: "exterior"` marks an open-frame hull with **no walkable interior** (hovercraft, buggy, single-seat fighter). Ship-local Rapier is never created for it. Boarding is a ground-level circle test (`nearShipEntryPoint`, from `ship-entry` marker components baked into `ShipLayout.entryPoints`, falling back to the pilot seat's ground projection) → `beginSitTransition` straight from `MODE_ON_FOOT` / `MODE_IN_STATION`. Leaving the seat runs the exterior branch in `updateTransition`, which hands mode selection to `TransitionContext.onDisembarked` → `padInterest.leaveShipDeck()` so planet-vs-hangar resolution is shared with the deck path. `collectShipLayoutIssues` swaps the deck-collider/deck-spawn blockers for a mandatory pilot seat. Gate any new deck-only behaviour on `usesColliderDeck()`, not on "is a ship".
-- **Ship flight**: custom IFCS in `flight-body.ts` / `flight-aim.ts` — **do not** put flight simulation in Rapier. Rapier is for on-foot deck/station contact only.
+- **Ship flight**: Rapier owns the flying hull; flight computer in `flight/` emits forces/torques (`flight-aim` + demand mix). Target law: `docs/docs/architecture/ship-flight.md`. Parked deck stays ship-local Rapier — do not dual-drive pose. Legacy custom pose integrate is compat only.
 
 ## Common gotchas
 
@@ -719,7 +798,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 - **Door animates visually but player can't walk through**: the collider isn't bound to the animation (check `collider.animation` is set) or the Rapier collider isn't being toggled (check `setDoorColliderEnabled` is called in `updateStationAnimations`).
 - **Character floats above the seat / sits "on top of" the chair**: a seat marker is the seated character's **root**, and `character-avatar-model.ts` drops the avatar so its bounds rest on that origin — the marker belongs at deck level under the chair, not on the cushion. The bake derives `pilotEye` as marker + `eye` (scene axes, default `0, 0.87, 0.25`), so first-person height is tuned with `eye`, never by raising the marker. Raising the marker moves body and camera together and breaks the sitting pose. The viewport seat gizmo draws the root as a floor disc and the eye as the sphere for exactly this reason.
 - **Door animation with no bound collider**: `ship-runtime.ts` `bindColliderAnimations` and `station-runtime.ts` `bindStationColliderAnimations` log a warning **per door/animation** that has zero colliders bound to its node(s) — the door will animate but its collider stays enabled (player can't walk through). A collider with no matching node is a normal static floor/hull collider and is intentionally **not** warned about (that was a prior false-positive flood). Check the console for "has no collider bound".
-- **Ship pitch bounces after mouse aim**: IFCS overshoot — raise `AIM_IFCS_DAMPING` in `flight-config.ts` or lower per-ship pitch torque / `maxAngularRateRadps`. See ship-flight skill.
+- **Ship pitch bounces after mouse aim**: Aim-track overshoot — raise `AIM_TRACK_DAMPING` in `flight-config.ts` or lower per-ship pitch torque / `maxAngularRateRadps`. See ship-flight skill.
 - **One ship too twitchy / sluggish**: tune that prefab's `ship-controller` mass/thrust/torque — do not edit `FLIGHT_CONFIG` unless every hull is wrong.
 - **Preview pilot won't exit**: Hold Y should always leave the seat (same as main play). If the hold doesn't fire, check `exitSeat` binding / `updateExitSeatHold` in `player-controls.ts`.
 - **Players cannot see each other**: three unrelated causes wear the same face, so identify the layer before changing code. (1) *No world session at all* — the console shows `WebTransport dial to … failed`; check `WEBTRANSPORT_ALLOWED_ORIGINS`, then UDP 4433, then the certificate (`deploy/README.md` § Diagnosing a failed dial). (2) *Session is up, peers are frozen or absent* — presence is publishing the wrong body; run Debug → Multiplayer with drift logging and read the number. (3) *Peers appear, then stop* — replication sizing or interest radius, covered under Authoritative multiplayer. Chat proves nothing about any of them: the server echoes your own messages back, so an empty cell looks identical to a working one.
@@ -759,8 +838,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `src/render/characters/sidekick/animation-runtime.ts` | Retargeted clip playback, lower/upper masks, crossfades, and ADS parent-space compensation |
 | `src/player/station-walk.ts` | Station walking (Rapier character controller) |
 | `src/player/station-interaction.ts` | Resolves nearby station interactions from markers |
-| `src/flight/flight-config.ts` | Global IFCS / drag / damping / mouse aim knobs |
-| `src/flight/flight-aim.ts` | Aim state, mouse → aim, PD IFCS torque demand |
+| `src/flight/flight-config.ts` | Global flight computer / drag / damping / mouse aim knobs |
+| `src/flight/flight-aim.ts` | Aim state, mouse → aim, PD flight computer torque demand |
 | `src/flight/flight-body.ts` | Mass/thrust/torque integrate (planet + sandbox flat) |
 | `src/input/player-controls.ts` | Keyboard/gamepad input; aim persistence; Alt+C coupled; `wasKeyPressed` |
 | `src/game/create-game-loop.ts` | Thin play-loop orchestrator; wires feature modules + owns `frame()`/start/stop |
@@ -778,13 +857,25 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `src/render/prefabs/prefab-renderer.ts` | Binds animation components to GLB nodes; `updateAnimations` / `updateParticles` callbacks |
 | `src/render/particles/` | Unity-style `particle-system` runtime (billboards, modules, plane collision only) |
 | `scripts/inspect_glb.mjs` | CLI GLB node hierarchy dump |
-| `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/IFCS symptoms) |
+| `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/flight computer symptoms) |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab editor skill |
 | `.cursor/skills/prd/SKILL.md` | PRD handoff packs under `prds/<slug>/` (README, PRD, phases, checklist) |
-| `docs/docs/architecture/game-loop.md` | Player game loop draft: Hab → Station → AVMS → Hangar → Open Space |
+| `docs/docs/architecture/scene-flow.md` | Boot / Game Manager entry pipeline; one precedence rule |
+| `.cursor/rules/scene-flow-architecture.mdc` | Thin always-on pointer to the scene-flow architecture doc |
+| `docs/docs/architecture/game-loop.md` | Player game loop: Hab → Station → AVMS → Hangar → Open Space |
 | `.cursor/rules/game-loop-architecture.mdc` | Thin always-on pointer to the game-loop architecture doc |
-| `docs/docs/architecture/space-traversal.md` | Open Space host + station scenes as giant prefabs via Scene Settings `Runtime` |
+| `docs/docs/architecture/multiplayer.md` | Cell / edge / client, presence body, travel intents, instances |
+| `.cursor/rules/multiplayer-architecture.mdc` | Thin always-on pointer to the multiplayer architecture doc |
+| `docs/docs/architecture/space-traversal.md` | Open Space host + station boarding + Warp Gate cross-system |
 | `.cursor/rules/space-traversal-architecture.mdc` | Thin always-on pointer to the space-traversal architecture doc |
+| `docs/docs/architecture/star-map.md` | Star System ↔ Star Map; ecliptic catalog; Warp Gates between systems |
+| `.cursor/rules/star-map-architecture.mdc` | Thin always-on pointer to the Star Map architecture doc |
+| `docs/docs/architecture/ship-flight.md` | Rapier flight + flight computer: Traverse / Combat / Nav, boost, quantum, contacts |
+| `.cursor/rules/ship-flight-architecture.mdc` | Thin always-on pointer to the ship-flight architecture doc |
+| `docs/docs/architecture/ship-physics.md` | Vacuum inertia, residual coast, coupled assist, atmosphere drag |
+| `.cursor/rules/ship-physics-architecture.mdc` | Thin always-on pointer to the ship-physics architecture doc |
+| `docs/docs/architecture/ship-combat.md` | Blasters / missiles, lock-on, lead markers, combat HUD, shields→hull, hierarchy death |
+| `.cursor/rules/ship-combat-architecture.mdc` | Thin always-on pointer to the ship-combat architecture doc |
 
 ## Utility scripts
 

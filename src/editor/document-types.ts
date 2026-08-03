@@ -4,7 +4,7 @@ import type {
   PrefabMaterialOverride,
   PrefabPrimitive,
 } from '../world/prefabs/schema';
-import type { SceneKind } from '../world/scenes/schema';
+import type { SceneKind, SceneRuntime } from '../world/scenes/schema';
 import type { Vec3 } from '../types';
 
 export type EditorDocumentType = 'scene' | 'prefab';
@@ -46,6 +46,8 @@ export interface EditorDocumentState {
   prefabName: string;
   kind: PrefabKind;
   sceneKind: SceneKind;
+  /** World-model truth for scenes (`open-space` / `station` / `hab` / `hangar` / `flow`). */
+  sceneRuntime: SceneRuntime;
   roots: EditorEntity[];
 }
 

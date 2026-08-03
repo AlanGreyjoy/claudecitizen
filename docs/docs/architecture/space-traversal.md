@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 title: Space traversal
 description: Open Space is the active star system at 1:1 System Map scale; stations are scene documents with Runtime = station (giant prefabs).
 ---
@@ -10,8 +10,16 @@ Authoritative mental model for how a ship moves *inside* a star system once the
 player has left a hangar for Open Space — and what a "station scene" actually
 **is**.
 
-Related: [Basic game loop](./game-loop) (Hab → Station → Hangar → Open Space),
-[System Map](../editor/system-map) (ecliptic authorship),
+Related: [Star Map / Star System](./star-map) (one system ↔ one map; Warp Gates
+between systems),
+[Basic game loop](./game-loop) (Hab → Station → Hangar → Open Space),
+[Scene flow](./scene-flow) (boot / starting system only),
+[Multiplayer](./multiplayer) (cells, presence, travel intents),
+[Ship flight](./ship-flight) (flight computer, Traverse / Combat / Nav, boost, quantum
+engage),
+[Ship physics](./ship-physics) (vacuum inertia, residual coast, coupled assist),
+[Ship combat](./ship-combat) (Combat contact blips — distinct from nav body blips),
+[System Map](../editor/system-map) (editor how-to; ecliptic authorship),
 [Hangar Open Space Exit](../editor/components/hangar-open-space-exit).
 
 ## Permanent decision: scene document, prefab runtime
@@ -94,6 +102,10 @@ invent a second coordinate system; arrival always re-enters the same
 `open-space` host at the station body's hangar mouth. On-foot Hab / Station /
 Hangar hops stay in [Basic game loop](./game-loop).
 
+**Leaving this star system for another** is not thruster, quantum, or
+`scene-exit` — it is a **Warp Gate** on the Star Map. See **Warp Gate
+(cross-system)** below and [Star Map](./star-map).
+
 ## Station boarding (ship ↔ hangar ↔ station)
 
 Stations come in two flavors; **both** use the same boarding components:
@@ -168,12 +180,44 @@ shared host or inventing a second teleporter stack.
 
 | Mode | When | Cost |
 | --- | --- | --- |
-| Thruster / IFCS flight | Local maneuvre, approach, combat, scenic | Real time at ship speeds |
-| Quantum travel | Distant planet / station / POI | Short travel sequence; same host, same meters |
+| Thruster flight (flight computer → Rapier) | Local maneuvre, approach, combat, scenic | Real time at ship speeds; see [Ship flight](./ship-flight) |
+| Quantum travel | Distant planet / station / POI / Warp Gate **in this system** | Short travel sequence; same host, same meters |
+| Warp Gate | Leave this Star System for another | Approach gate (thruster or quantum), then host swap to destination Star Map |
 
-Quantum approaches the same ecliptic markers the System Map authored. It does
-**not** swap to a different system host mid-hop inside one star system, and it
-does **not** replace `scene-exit` for Hab / Hangar / deep interior cells.
+Quantum approaches the same ecliptic markers the Star Map authored. It does
+**not** swap to a different system host, and it does **not** replace
+`scene-exit` for Hab / Hangar / deep interior cells. Cross-system hops are
+**Warp Gate only** — see below.
+
+## Warp Gate (cross-system)
+
+Warp Gates connect **Star Maps**. Full authorship law lives in
+[Star Map / Star System](./star-map); this section is the Open Space play rule.
+
+| Piece | Role |
+| --- | --- |
+| Warp Gate prefab | Placeable body on the Star Map (geometry + volumes). |
+| `warp-gate` component | Names destination `targetSystemId` (and arrival gate when needed). |
+| Approach | Pilot **flies** or **quantums** to the gate like any other ecliptic marker. |
+| Trigger | Ship crosses / activates the gate volume → replace Open Space host with destination system's Star Map. |
+| Arrival | Ship spawns **in-ship** at the destination map's arrival Warp Gate pose. |
+
+```mermaid
+flowchart LR
+  HostA["Open Space host A"]
+  Approach["Thruster or quantum<br/>to gate on Map A"]
+  Gate["warp-gate trigger"]
+  HostB["Open Space host B<br/>Star Map B"]
+  HostA --> Approach --> Gate --> HostB
+```
+
+### What this rejects
+
+- Quantum as an inter-system teleporter (quantum stays inside one Star Map).
+- Boot / `game-manager.systemId` as the in-play travel path between systems
+  (boot picks the *starting* system; Warp Gate changes system during play).
+- A second long-range teleporter that bypasses Star Map placement.
+- Merging two systems' bodies into one Open Space host for the hop.
 
 ## Distant bodies: culled mesh, visible blip
 
@@ -191,6 +235,9 @@ full fidelity from anywhere would destroy the frame budget. Distance policy:
    range (quantum exit, thruster approach, or handoff threshold), the body
    streams / spawns back into the render set at its true ecliptic pose —
    still the same giant-prefab scene document, not a different world.
+   **POIs** follow the same idea: the Star Map entry holds pose + assigned
+   `prefabId`; on arrival Open Space loads that prefab (see
+   [Star Map — POIs](./star-map#pois--map-marker--streamed-prefab)).
 
 ```mermaid
 flowchart TD
@@ -208,6 +255,21 @@ On-foot inside `Runtime: hab` / `hangar` / a boarded station interior does not
 need the full open-space blip set. Blips are an **in-ship Open Space**
 navigation signal.
 
+### Nav body blips vs Combat contact blips
+
+Two HUD jobs — do not merge them into one undifferentiated blip list:
+
+| Set | When | Shows |
+| --- | --- | --- |
+| **Nav body blips** | In-ship Open Space (any flight mode that needs system nav) | Star Map bodies — planets, stations, POIs, Warp Gates, waypoints — so the pilot can navigate when meshes are culled |
+| **Combat contact blips** | **Combat** flight mode only | Other ships / threats in sensor–interest range — [Ship combat](./ship-combat) |
+
+Nav blips are **world catalog** markers. Combat blips are **hostile / peer
+contacts**. Combat mode may show both (nav faded or filterable; combat
+emphasized) — it must not replace nav bodies with contacts only, and Traverse /
+Nav must not arm the full combat contact HUD. Lead circles and lock brackets
+belong to combat contacts, not to planet/station nav markers.
+
 ## Invariants
 
 - Open Space ≡ the active System Map document's star system, one
@@ -220,34 +282,81 @@ navigation signal.
   bodies. On-foot travel into Hab / Station uses `scene-exit` / AVMS; ship
   travel Open Space ↔ Hangar uses `enter-station` / `exit-hangar`.
 - Thruster transit A → B is valid and slow; quantum is the practical bridge.
-- Far bodies cull from rendering; they must still show as pilot blips in ship
-  mode so navigation never depends on seeing the mesh.
+- Far bodies cull from rendering; they must still show as pilot **nav** blips in
+  ship mode so navigation never depends on seeing the mesh. Combat **contact**
+  blips are a separate HUD set — see Nav vs Combat blips above.
 - Quantum and thruster both target the same ecliptic markers — quantum is
   speed, not a different world model.
+- **Cross-system** hops use a Star Map **Warp Gate** (`warp-gate` → other
+  `systemId`). Quantum does not leave the active system.
 - Do not invent a second long-range teleporter that bypasses the Open Space
-  host or System Map placement.
+  host or Star Map placement.
 - Do not reintroduce "stations are only prefabs" *or* "stations are only
   world-swap scenes" as competing truths. **Scene document + `Runtime`** is
   the law.
 - Hangar → Open Space is `exit-hangar` → station nested `hangar-open-space-exit`,
   not a hangar `scene-exit` `@space` as the designed path.
 
+## Shipped
+
+- **Scene Settings `Runtime`** — `SceneDocument.runtime` in
+  `src/world/scenes/schema.ts`, exposed on `ScenePlayConfig`, editable in Scene
+  Settings beside (not instead of) `kind`. Documents authored before the field
+  infer it once on read: menu kinds → `flow`, `main-game` → `open-space`, a
+  player-scoped instance → `hangar` if it has pads else `hab`, anything else →
+  `station`. New scene templates **Station Body** and **Hangar** start from the
+  right runtime with the boarding markers already placed.
+- **`exit-hangar` / `enter-station`** — schema, parsers, registry, inspector
+  fields, viewport gizmos, and play triggers. `exit-hangar` bakes into the same
+  station exit marker list as `scene-exit` (tagged `origin: 'exit-hangar'`) so
+  the on-foot prompt and the ship crossing test stay in one place;
+  `enter-station` gets its own marker list because its destination is resolved
+  from System Map ownership at trigger time, not baked.
+- A hangar `scene-exit` targeting `@space` still loads and still works, and now
+  warns at bake time. It is legacy; new work uses `exit-hangar`.
+- **Multi-body placement at 1:1** — `src/world/systems/placement.ts` is the one
+  place System Map meters become play meters. The world origin is the active
+  planet (the terrain, atmosphere and gravity stacks are built around one planet
+  at the origin); every other body — the star, every other planet, every station
+  regardless of parent — is placed at its true ecliptic offset from it. Nav,
+  quantum, orbit frames and hangar mouths all read the same function, so no two
+  of them can disagree about where a body is.
+
+  Before this, `planetDestination` hard-coded every non-active planet to
+  lat 0 / lon 0 / 250 km, stacking the whole system on top of the active planet,
+  and `getSystemStationEntriesForPlanetDocument` filtered stations to the active
+  planet's children so anything orbiting elsewhere never loaded at all.
+- **Blips for every body.** `listNavDestinationMarkers` no longer drops
+  non-active planets: far bodies leave the render set, so the blip is the only
+  thing telling a pilot that system content exists out there.
+- **Approach streaming** for station bodies (75 km synchronous backstop,
+  activation radius deferred build) in `render/main/scene/secondary-stations.ts`.
+  `BODY_ACTIVATION_RADIUS_METERS` in `placement.ts` states the radius once.
+
 ## Open / later (implementation, not design)
 
 Design above is settled. Remaining work is product/engine detail:
 
-- Wire Scene Settings `Runtime` through schema, editor UI, and play host
-  (until then, treat this doc as the target; do not add a second model).
-- Author `enter-station` and `exit-hangar` components (schema, registry,
-  editor fields, play triggers); migrate hangar `@space` `scene-exit` callers
-  to `exit-hangar`.
-- Exact cull / stream radii per body type (planet vs station vs POI).
+- Ship-side arrival for `enter-station`: today the fly-through lands the player
+  on foot in the hangar with the hull parked by the hangar's own delivery logic
+  (same as AVMS To Hangar), and crossing the volume does not auto-assign a bay.
+- Only the **active** planet renders as a body. Other planets are placed,
+  blipped and quantum-targetable at their true positions, but arriving at one is
+  still a handoff that swaps the terrain stack rather than two planets sharing a
+  host. Multi-planet rendering needs the terrain/atmosphere/gravity stacks to
+  stop assuming a single planet at the origin.
+- The star is placed and named but never rendered as a body; sky lighting still
+  comes from the environment stack rather than its map position.
+- Current activation radii are starting values, not tuned: planet 2,000,000 m,
+  station 220,000 m, star none (`BODY_ACTIVATION_RADIUS_METERS`).
 - Blip UX (range rings, selection, quantum lock, threat filters).
-- Quantum phases (spool, travel, drop-out) vs IFCS ownership during the hop.
+- Quantum phases (spool, travel, drop-out) vs flight-computer ownership during the hop.
 - Multiplayer: who sees whom during quantum; interest / cell sizing across
-  system-scale distances.
-- Cross-system jumps (leaving this star system entirely) — out of scope until
-  a multi-system product path exists.
+  system-scale distances — law in [Multiplayer](./multiplayer); implement
+  without a second visibility channel.
+- **Warp Gate** play path: `warp-gate` component, map placement, approach
+  (thruster / quantum), Open Space host swap to `targetSystemId`, arrival at
+  destination gate — design in [Star Map](./star-map); implementation open.
 - Migration off legacy `stationPrefabId` map entries onto `Runtime: station`
   scenes.
 - How inactive-planet stations re-enter the render set relative to planet

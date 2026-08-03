@@ -1,5 +1,8 @@
 import type { GameBootstrap } from '../../net/api';
-import type { StationSceneExitMarker } from '../../world/station';
+import type {
+  StationEnterStationMarker,
+  StationSceneExitMarker,
+} from '../../world/station';
 
 /**
  * Where a `scene-exit` sends the player: the scene document to load, and the
@@ -63,6 +66,17 @@ export function resolveSceneExitInstanceId(
   }
 }
 
+/**
+ * An `exit-hangar` always hands the player out flying, even when the author
+ * chose the on-foot `interact` trigger: the destination is the owning station
+ * body's bay mouth in Open Space, and there is nowhere to stand there. A plain
+ * `scene-exit` only flies you out when it is a fly-through mouth.
+ */
+function exitArrivalMode(marker: StationSceneExitMarker): 'default' | 'in-ship' {
+  if (marker.origin === 'exit-hangar') return 'in-ship';
+  return marker.trigger === 'fly-through' ? 'in-ship' : 'default';
+}
+
 export function sceneExitTarget(
   marker: StationSceneExitMarker,
   bootstrap: GameBootstrap | null,
@@ -71,14 +85,40 @@ export function sceneExitTarget(
 ): SceneExitTarget {
   const stationPrefabId = marker.stationPrefabId.trim();
   const fromHangarSceneId = options.fromHangarSceneId?.trim() ?? '';
-  const flyThrough = marker.trigger === 'fly-through';
+  const arrival = exitArrivalMode(marker);
+  const inShip = arrival === 'in-ship';
   return {
     sceneId: marker.sceneId,
     instanceId: resolveSceneExitInstanceId(marker.networkInstanceId, bootstrap, systemId),
     roomId: marker.arrivalRoomId,
-    arrival: flyThrough ? 'in-ship' : 'default',
-    ...(flyThrough && fromHangarSceneId ? { fromHangarSceneId } : {}),
+    arrival,
+    ...(inShip && fromHangarSceneId ? { fromHangarSceneId } : {}),
     ...(stationPrefabId ? { stationPrefabId } : {}),
+  };
+}
+
+/**
+ * Open Space → hangar. The destination scene is resolved by the caller from
+ * System Map ownership (the station body does not know which map entry placed
+ * it), so an unresolved family yields no target rather than a broken hop.
+ *
+ * Arrival is `default`: the ship is parked on its assigned pad by the hangar's
+ * own delivery logic and the player walks in, exactly as an AVMS To Hangar hop
+ * does today.
+ */
+export function enterStationTarget(
+  marker: StationEnterStationMarker,
+  bootstrap: GameBootstrap | null,
+  systemId: string,
+  hangarSceneId: string,
+): SceneExitTarget | null {
+  const sceneId = hangarSceneId.trim();
+  if (!sceneId) return null;
+  return {
+    sceneId,
+    instanceId: resolveSceneExitInstanceId('@hangar', bootstrap, systemId),
+    roomId: marker.arrivalRoomId,
+    arrival: 'default',
   };
 }
 
@@ -90,7 +130,7 @@ export function sceneExitTarget(
  * who clips the edge of the opening at speed should still leave.
  */
 export function shipCrossedExit(
-  marker: StationSceneExitMarker,
+  marker: { right: number; up: number; forward: number; radius: number },
   shipLocal: { right: number; up: number; forward: number },
 ): boolean {
   return (

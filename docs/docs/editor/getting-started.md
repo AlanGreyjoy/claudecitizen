@@ -44,7 +44,7 @@ Return to the hub later with **File → Open Project…**.
 
 ## Typical workflow
 
-1. **Open or create a scene** — File → New Scene / Open Scene… (the Scene tab is the default 3D viewport). A new project already has a **Boot** scene wiring Title → Character Create → Starting Hab; see [Game flow](./game-flow).
+1. **Open or create a scene** — File → New Scene / Open Scene… (the Scene tab is the default 3D viewport). A new project already has a **Boot** scene wiring Title → Character Create → Starting Scene; see [Game flow](./game-flow).
 2. **Build the scene** — Hierarchy shows GameObjects; drag GLBs from Project or add boxes/empties. Add `planet`, `player-start`, and `prefab-instance` components to decide what the scene is (`game-manager` belongs on the boot scene, where it owns the game flow).
 3. **Edit prefabs** when needed — File → New Prefab / Open Prefab… (same viewport; the document bar shows Prefab).
 4. **Save** with `Ctrl+S`.

@@ -37,14 +37,14 @@ the entire game pipeline; nothing about the hop order is baked into the engine.
 | `spawn` | `"station"` \| `"surface"` | Where play starts |
 | `titleSceneId` | string? | Auth surface. Empty: the boot scene hosts the title UI itself |
 | `characterCreateSceneId` | string? | Character-creator scene when the player has no saved appearance. Empty: inline create gate |
-| `startingSceneId` | string? | Hab / gameplay scene after auth (+ create). Wins over `scene-link` when set |
+| `startingSceneId` | string? | Scene loaded after auth (+ create) — any Runtime, usually a hab. Wins over `scene-link` when set |
 | `openSpaceSceneId` | string? | Scene a `@space` `scene-exit` opens |
 | `loadingSceneId` | string? | Scene shown between hops. Empty: built-in loading overlay |
 | `requireAuth` | boolean? | Unset means `true`. Off makes an offline / single-player flow |
 | `skipTitleWhenSignedIn` | boolean? | Returning players with a live session bypass the title surface |
 
 **The flow:** boot → Title (sign in) → Character Create when the player has no
-appearance → Starting Hab. Every hop is optional; an empty field is skipped
+appearance → Starting Scene. Every hop is optional; an empty field is skipped
 rather than blocking. World knobs (`systemId` / `planetId` / `spawn`) carry into
 the destination when that scene has no Game Manager of its own — which is why
 Title and Character Create should author none.

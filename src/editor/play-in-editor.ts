@@ -55,6 +55,7 @@ function prefabStageScene(store: EditorStore, options: EditorPlayOptions): Scene
     id: `${prefabId}-stage`,
     name: `${state.prefabName} (Stage)`,
     kind: 'prefab-stage',
+    runtime: 'flow',
     gameObjects: [
       {
         id: 'prefab-stage-root',

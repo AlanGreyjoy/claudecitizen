@@ -12,6 +12,7 @@ import {
   systemPlanetDestinationId,
   systemStationDestinationId,
   type QuantumDestination,
+  type QuantumDestinationKind,
 } from '../world/quantum-destinations';
 import type { FlightBody, Planet, Vec3 } from '../types';
 import type { ShipFlightMode } from './flight-modes';
@@ -22,6 +23,9 @@ export interface NavDestinationMarker {
   id: string;
   name: string;
   position: Vec3;
+  kind: QuantumDestinationKind;
+  /** The player's Set Route target. Always drawn, at any distance. */
+  routed: boolean;
 }
 
 export const MIN_QUANTUM_DISTANCE_METERS = 50_000;
@@ -129,15 +133,24 @@ function alignmentDot(body: FlightBody, destination: Vec3): number {
   return dot(planarForward(body), bearingToDestination(body, destination));
 }
 
-function spoolDurationForDistance(distanceMeters: number): number {
+export function spoolDurationForDistance(distanceMeters: number): number {
   return Math.min(
     QUANTUM_SPOOL_MAX_SECONDS,
     QUANTUM_SPOOL_BASE_SECONDS + distanceMeters * QUANTUM_SPOOL_DISTANCE_SCALE,
   );
 }
 
-function travelDurationForDistance(distanceMeters: number): number {
+export function travelDurationForDistance(distanceMeters: number): number {
   return Math.max(8, Math.min(20, distanceMeters / 15_000));
+}
+
+/** Door-to-door quantum time: spool hold + jump + drop out. Editor labels use this. */
+export function quantumTripSeconds(distanceMeters: number): number {
+  return (
+    spoolDurationForDistance(distanceMeters) +
+    travelDurationForDistance(distanceMeters) +
+    QUANTUM_DROP_OUT_SECONDS
+  );
 }
 
 export function spikeDestinationId(): string {
@@ -548,19 +561,25 @@ export function listNavDestinationMarkers(
 ): NavDestinationMarker[] {
   const routedId = quantumDestinationIdFromNavRoute();
   const destinations = listQuantumDestinations(planet, seed).filter((dest) => {
-    if (dest.kind === 'system-planet' && !dest.handoff) return false;
-    // Always show the active route; otherwise surface POIs + local stations.
+    // The Set Route target is always drawn, however far away it is — that is
+    // the whole point of setting it in the HaloBand map.
     if (routedId && dest.id === routedId) return true;
-    if (dest.kind === 'system-station') return true;
-    if (dest.kind === 'surface-poi') return true;
-    if (dest.handoff && dest.id === routedId) return true;
-    return false;
+    // The planet underfoot has no meaningful marker position — it *is* the
+    // frame everything else is measured against.
+    if (dest.kind === 'system-planet' && !dest.handoff) return false;
+    // Local bodies blip unconditionally: they leave the render set long before
+    // they stop being somewhere you would actually fly, and navigation must
+    // never depend on seeing mesh. Everything further out stays off the HUD
+    // until routed, or a busy system paints markers hours of flight away.
+    return dest.local === true;
   });
 
   return destinations.map((dest) => ({
     id: dest.id,
     name: dest.name,
     position: destinationWorldPosition(planet, seed, dest),
+    kind: dest.kind,
+    routed: dest.id === routedId,
   }));
 }
 

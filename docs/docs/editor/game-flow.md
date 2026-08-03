@@ -10,8 +10,10 @@ A game's entry pipeline is authored, not built in. One scene — the **boot
 scene** — owns it, and everything from the login screen to the starting hab is a
 field you set on its **Game Manager**.
 
+Architecture law: [Scene flow](../architecture/scene-flow).
+
 ```
-Boot scene ──► Title ──► Character Create ──► Starting Hab ──► Open Space
+Boot scene ──► Title ──► Character Create ──► Starting Scene ──► Open Space
 (Game Manager  (auth UI) (no saved appearance)  (gameplay)     (fly a ship through
  + world                                                        a scene-exit)
  defaults)
@@ -23,7 +25,7 @@ Create it with **File → New Scene → Boot**. It arrives with three GameObject
 
 | GameObject | Why it is there |
 | --- | --- |
-| Game Manager | The pipeline: which scene is Title, Character Create, Starting Hab, Open Space |
+| Game Manager | The pipeline: which scene is Title, Character Create, Starting Scene, Open Space |
 | Planet | Default planet handed down to scenes that name none |
 | Player Start | Default spawn mode handed down the same way |
 
@@ -42,7 +44,7 @@ the project's scenes:
 | --- | --- | --- |
 | **Title Scene** | A `title` scene holding only a `ui-screen` | Host the title UI on the boot scene itself |
 | **Character Create Scene** | A `character-creator` scene | Use the inline character-create gate |
-| **Starting Hab** | Where play begins, usually a per-player `instance` | Fall back to an authored `scene-link` |
+| **Starting Scene** | Where play begins, usually a per-player `instance` | Fall back to an authored `scene-link` |
 | **Open Space Scene** | The MMO travel scene | Disable `@space` scene exits |
 | **Loading Scene** | A `loading` scene shown between hops | Use the built-in loading overlay |
 | **Require sign-in** | — | (unchecked) Run an offline / single-player flow |
@@ -60,12 +62,12 @@ On boot, with the flow in hand:
 2. **Signed in, Skip title unchecked** → still show the Title Scene (it just
    won't block).
 3. **No saved character appearance** → load the Character Create Scene.
-4. **Otherwise** → load the Starting Hab.
+4. **Otherwise** → load the Starting Scene.
 
 A deep link into a specific scene outranks all of it: the player asked for a
 place, and auth was only in the way — they land there after signing in.
 
-If the backend cannot be reached, the flow falls through to the Starting Hab
+If the backend cannot be reached, the flow falls through to the Starting Scene
 rather than stranding the player on the title screen.
 
 ## Open space

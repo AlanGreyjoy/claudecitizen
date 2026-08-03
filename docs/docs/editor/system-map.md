@@ -6,11 +6,15 @@ description: Place planets and stations on a shared ecliptic system layout.
 
 # System Map
 
-The **System Map** (Star Map) tab arranges planets and orbital stations around a
-single star. Layout is saved as a `SystemDocument` under
-`src/world/systems/data/` and is separate from planet terrain recipes (Planet
-Authoring). Station **concourses** are scenes; Hab and Hangar scenes are owned
-by each station entry but are not separate map markers.
+Editor how-to for the **Star Map** (tab / code may still say System Map).
+Architecture law: [Star Map / Star System](../architecture/star-map).
+
+The tab arranges planets and orbital stations around a single star. Layout is
+saved as a `SystemDocument` under `src/world/systems/data/` and is separate from
+planet terrain recipes (Planet Authoring). Station **concourses** are scenes;
+Hab and Hangar scenes are owned by each station entry but are not separate map
+markers. One Star System owns exactly one Star Map; a project may author many
+systems.
 
 See also: [Basic game loop](../architecture/game-loop) (station family ownership),
 [Space traversal](../architecture/space-traversal) (Open Space host; station
@@ -47,6 +51,14 @@ Default seed distances keep several planets draggable: planets near `1e10` m fro
 | **Remove** | Deletes the selected planet or station entry |
 | **Fit** | Zooms the map to fit all bodies |
 | **New** | Starts a new system document (prompt for slug id) |
+
+### Intended: right-click to add (refactor)
+
+Architecture law: [Star Map — Authoring UX](../architecture/star-map#authoring-ux--right-click-to-place).
+Today adds are sidebar-only. The designed authoring path is **right-click the
+map → Add** planet, moon, station, waypoint, POI, mission, Warp Gate, etc. at
+the cursor ecliptic pose. Sidebar Add actions remain shortcuts that create the
+same entry types.
 
 ## Station entries
 

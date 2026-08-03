@@ -1,5 +1,5 @@
 ---
-description: Open Space host + station giant prefabs + enter-station / exit-hangar boarding — read full architecture doc
+description: Open Space host + station boarding + Warp Gate cross-system — read full architecture doc
 alwaysApply: true
 ---
 
@@ -12,7 +12,12 @@ Full law: [`docs/docs/architecture/space-traversal.md`](../../docs/docs/architec
 in the system host. Ship boarding: **`enter-station`** (fly-through on station
 body → hangar instance) and **`exit-hangar`** (hangar → Open Space at nested
 `hangar-open-space-exit` mouth). Open-air and closed stations share those
-components. Far bodies cull; pilot blips stay. Quantum bridges long burns.
+components. Far bodies cull; pilot **nav** blips stay (Combat contact blips are a separate
+HUD set). Quantum bridges long burns **inside** one Star Map. **Between**
+systems: Star Map **Warp Gate** (`warp-gate` → other `systemId`) — fly/quantum
+to gate, then host swap; see
+[Star Map](../../docs/docs/architecture/star-map.md).
 
 When changing open-space layout, station authoring, boarding markers, quantum,
-culling, or nav blips, read the full doc first. Also listed in `AGENTS.md`.
+Warp Gates, culling, or nav blips, read the full doc first. Also listed in
+`AGENTS.md`.

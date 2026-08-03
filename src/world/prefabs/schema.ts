@@ -454,8 +454,50 @@ export type PrefabComponent =
    * Hangar mouth on a Station scene (or legacy station prefab). Open-space
    * fly-through from that family's hangar spawns the ship here (local +Z =
    * exit facing). Ownership comes from the System Map, not the hangar exit.
+   *
+   * Pose only — it is not the teleporter. `exit-hangar` is the trigger.
    */
   | { type: "hangar-open-space-exit" }
+  /**
+   * Hangar → Open Space. The one departure primitive: it resolves the owning
+   * Station family from the System Map (`hangarSceneId` → station entry) and
+   * puts the ship at that body's `hangar-open-space-exit` mouth in the Open
+   * Space host. Prefer this over a `scene-exit` targeting `@space`.
+   *
+   * Lives on a `Runtime: hangar` scene.
+   */
+  | {
+      type: "exit-hangar";
+      /**
+       * `fly-through` (default) fires when a ship crosses the volume;
+       * `interact` prompts for F on foot and launches from the pad.
+       */
+      trigger?: SceneExitTrigger;
+      /** HUD prompt when `trigger` is `interact`. */
+      prompt?: string;
+      /** Crossing / reach radius in meters. */
+      radius?: number;
+    }
+  /**
+   * Open Space → this station family's hangar. The ship flies through the
+   * volume and lands in the hangar instance — never in the concourse, and
+   * never as a world swap that drops the Open Space host.
+   *
+   * Lives on a `Runtime: station` body. Destination comes from the System Map
+   * entry that places this body (`hangarSceneId`) unless overridden here.
+   */
+  | {
+      type: "enter-station";
+      /** Crossing radius in meters. Station bay mouths are large. */
+      radius?: number;
+      /**
+       * Hangar scene override. Empty uses the System Map `hangarSceneId` of
+       * the station family that owns this body.
+       */
+      hangarSceneId?: string;
+      /** Room id sent with the network Transition (default `hangar`). */
+      arrivalRoomId?: string;
+    }
   /**
    * Climbable ladder. The marker sits at the foot of the climb line — the spot
    * the player stands on to mount. Local +Y is the climb axis, local +Z is the

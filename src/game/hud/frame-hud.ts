@@ -29,11 +29,13 @@ import {
 import { outfittersLabel, resolveOutfittersGazeTarget } from "../../player/outfitters-gaze";
 import { foodShopLabel, resolveFoodShopGazeTarget } from "../../player/food-shop-gaze";
 import { projectDirectionToReticleOffset } from "../../render/effects/hud/flight-reticle";
+import { buildNavMarkersHudState } from "./nav-markers-hud";
 import { resolveBoostMaxSpeedMps } from "../../flight/flight-config";
 import { type getActiveShipBody, getActiveShipRig } from "../../player/world-state";
 import { cross, length, normalize } from "../../math/vec3";
 import type { HudUpdateParams } from "../../render/effects";
 import type { CameraState } from "../types";
+import type { Vec3 } from "../../types";
 import type { LoopContext } from "../loop-context";
 
 type ShipBody = ReturnType<typeof getActiveShipBody>;
@@ -42,6 +44,7 @@ export interface FrameHud {
   flightDual: HudUpdateParams["flightDual"];
   cockpitGaze: HudUpdateParams["cockpitGaze"];
   cockpitSpeed: HudUpdateParams["cockpitSpeed"];
+  navMarkers: HudUpdateParams["navMarkers"];
 }
 
 function bedCockpitGaze(
@@ -145,19 +148,22 @@ function stationCockpitGaze(ctx: LoopContext): HudUpdateParams["cockpitGaze"] {
   };
 }
 
-function shipHud(
+/**
+ * View basis the cockpit HUD projects against.
+ *
+ * During Hold-F free look the reticle stays world-locked on ship aim/nose (it
+ * moves on screen as you look around), so the basis follows the seat rather
+ * than the hull. Nav markers use the same one, or a marker and the nose pip
+ * would disagree about where "ahead" is.
+ */
+function shipViewBasis(
   ctx: LoopContext,
   camera: CameraState,
   activeShip: ShipBody,
-): FrameHud {
-  const aim = ctx.controls.getFlightAim();
-  const aimDir = resolveAimForward(activeShip, aim);
-  // Project vs actual view: during Hold-F free look the reticle stays
-  // world-locked on ship aim/nose (moves on screen as you look around).
+): { forward: Vec3; up: Vec3; right: Vec3; fovY: number } {
   const seat = camera.seatLook;
-  const seatLooking = ctx.controls.isSeatLookActive();
   const freeLooking =
-    seatLooking ||
+    ctx.controls.isSeatLookActive() ||
     (seat &&
       (Math.abs(seat.yawRadians) > 1e-6 ||
         Math.abs(seat.pitchRadians) > 1e-6));
@@ -173,8 +179,23 @@ function shipHud(
         up: activeShip.up,
         right: normalize(cross(activeShip.forward, activeShip.up)),
       };
-  const fovY =
-    ((72 + (ctx.flightCameraFeelFrame?.fovDeltaDeg ?? 0)) * Math.PI) / 180;
+  return {
+    ...view,
+    fovY: ((72 + (ctx.flightCameraFeelFrame?.fovDeltaDeg ?? 0)) * Math.PI) / 180,
+  };
+}
+
+function shipHud(
+  ctx: LoopContext,
+  camera: CameraState,
+  activeShip: ShipBody,
+): FrameHud {
+  const aim = ctx.controls.getFlightAim();
+  const aimDir = resolveAimForward(activeShip, aim);
+  // Hold-F specifically, not the wider free-look test: cockpit gaze targeting
+  // is only offered while the key is actually held.
+  const seatLooking = ctx.controls.isSeatLookActive();
+  const { fovY, ...view } = shipViewBasis(ctx, camera, activeShip);
   const viewportH = window.innerHeight;
   const aimOff = projectDirectionToReticleOffset(
     aimDir,
@@ -197,6 +218,15 @@ function shipHud(
     noseOffsetPx: { x: noseOff.x, y: noseOff.y },
     coupled: ctx.controls.isCoupledMode(),
   };
+  // Same basis as the reticle, so a marker and the nose pip agree about where
+  // "ahead" is even during Hold-F free look.
+  const navMarkers = buildNavMarkersHudState(ctx, {
+    position: activeShip.position,
+    forward: view.forward,
+    right: view.right,
+    up: view.up,
+    fovYRadians: fovY,
+  });
 
   let cockpitGaze: HudUpdateParams["cockpitGaze"];
   let cockpitSpeed: HudUpdateParams["cockpitSpeed"];
@@ -269,7 +299,7 @@ function shipHud(
     }
   }
 
-  return { flightDual, cockpitGaze, cockpitSpeed };
+  return { flightDual, cockpitGaze, cockpitSpeed, navMarkers };
 }
 
 /** Builds the per-frame flight reticle / cockpit gaze / cockpit speed HUD state. */
@@ -281,6 +311,7 @@ export function buildFrameHud(
   let flightDual: HudUpdateParams["flightDual"];
   let cockpitGaze: HudUpdateParams["cockpitGaze"];
   let cockpitSpeed: HudUpdateParams["cockpitSpeed"];
+  let navMarkers: HudUpdateParams["navMarkers"];
 
   if (ctx.world.mode === MODE_IN_BED && !ctx.entertainmentSystem?.isOpen()) {
     cockpitGaze = bedCockpitGaze(ctx, activeShip);
@@ -300,7 +331,8 @@ export function buildFrameHud(
     flightDual = ship.flightDual;
     cockpitGaze = ship.cockpitGaze;
     cockpitSpeed = ship.cockpitSpeed;
+    navMarkers = ship.navMarkers;
   }
 
-  return { flightDual, cockpitGaze, cockpitSpeed };
+  return { flightDual, cockpitGaze, cockpitSpeed, navMarkers };
 }

@@ -1,0 +1,22 @@
+---
+description: Star Map / Star System — one system owns one map; Warp Gates cross systems; map catalogs stations, planets, moons, waypoints, POIs, missions — read full architecture doc
+alwaysApply: true
+---
+
+# Star Map architecture (pointer)
+
+Full law: [`docs/docs/architecture/star-map.md`](../../docs/docs/architecture/star-map.md).
+
+**Permanent decision:** one **Star System** ↔ one **Star Map**. A project may
+author many systems. The map is the ecliptic catalog of stations, planets,
+moons, waypoints, POIs (create + assign prefab for load-on-arrival), missions,
+and **Warp Gates** (AsteronEngine). Authors **right-click the map → Add** to
+place any catalog kind at the cursor. Hab/Hangar stay ownership on station
+entries, not map markers. Code aliases: `SystemDocument`, System Map tab,
+`*.system.json`. Open Space uses the active system's map at 1:1 meters.
+**Cross-system travel:** place a Warp Gate prefab with `warp-gate`
+(`targetSystemId`); fly or quantum *to* it; gate swaps the Open Space host —
+see [Space traversal](../../docs/docs/architecture/space-traversal.md).
+
+When changing system documents, map authoring, POIs, Warp Gates, or
+multi-system selection, read the full doc first. Also listed in `AGENTS.md`.

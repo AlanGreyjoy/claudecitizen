@@ -165,7 +165,7 @@ export function renderFrame(
   );
   deps.screens.renderAfterWebGl();
 
-  const { flightDual, cockpitGaze, cockpitSpeed } = buildFrameHud(ctx, {
+  const { flightDual, cockpitGaze, cockpitSpeed, navMarkers } = buildFrameHud(ctx, {
     camera,
     activeShip,
   });
@@ -191,6 +191,7 @@ export function renderFrame(
     flightDual,
     cockpitGaze,
     cockpitSpeed,
+    navMarkers: paused ? { visible: false, markers: [] } : navMarkers,
   });
   deps.buildTool.updateBuildBtnVisibility();
 }

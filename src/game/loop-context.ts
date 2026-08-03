@@ -67,6 +67,12 @@ interface StationAnimationState {
 /**
  * After a Station-side AVMS deliver, the bay is assigned but pads live on the
  * hangar scene. Entering that hangar parks the hull; other scenes keep it stowed.
+ *
+ * Flying open-space arrivals (`exit-hangar` → mouth pose) already have the
+ * correct hull pose from `createWorldState`. Park/stow must not run there:
+ * Open Space's walk layout is the station concourse (no pads), so a miss
+ * stows the ship inside the planet and the flight clamp snaps it to the
+ * surface — which is exactly the "I spawned on Asteron" hangar-exit bug.
  */
 function applyAssignedHangarShipPose(
   world: WorldState,
@@ -75,6 +81,8 @@ function applyAssignedHangarShipPose(
   const assigned = resolved.bootstrap?.hangar.assignedHangar ?? null;
   if (assigned === null) return;
   world.assignedHangar = assigned;
+  // Keep bay ownership for HUD / return, but leave the flying pose alone.
+  if (resolved.arrival === 'in-ship') return;
   if (!resolved.content.ship) return;
   const hangarInstanceId = resolved.bootstrap?.spawn.hangarInstanceId;
   const hangar = getHangarByIndex(assigned);

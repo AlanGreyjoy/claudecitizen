@@ -160,6 +160,7 @@ async function handleSnapshot(
         name: state.prefabName,
         kind: state.kind,
         sceneKind: state.sceneKind,
+        sceneRuntime: state.sceneRuntime,
         dirty: store.isDirty(),
         isolation: handlers.getIsolation(),
       };

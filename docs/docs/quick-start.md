@@ -128,7 +128,7 @@ src/
   app/                Scene host, play session, in-play chrome
   math/               Pure vector math
   world/              Planet, surface, coordinates, prefabs, scenes, systems
-  flight/             Ship physics and IFCS aim
+  flight/             Ship physics and flight computer aim
   player/             Character, deck, ship interaction
   npc/                NPC definitions and station populations
   render/             Three.js presentation layer

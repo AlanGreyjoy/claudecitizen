@@ -334,19 +334,26 @@ export function stationOriginFromSystemOffset(
   return vec3(offsetMeters.x * scale, 0, offsetMeters.z * scale);
 }
 
-/** Orbit hint (lat/lon/alt) matching {@link stationOriginFromSystemOffset}. */
-export function orbitHintFromSystemOffset(
-  planet: Planet,
-  offsetMeters: { x: number; z: number },
-  altitudeMeters: number,
-): StationOrbitHint {
-  const origin = stationOriginFromSystemOffset(planet, offsetMeters, altitudeMeters);
+/** Orbit hint (lat/lon/alt) for an already-resolved world origin. */
+export function orbitHintFromOrigin(planet: Planet, origin: Vec3): StationOrbitHint {
   const { latRadians, lonRadians } = latLonForPosition(origin);
   return {
     latRadians,
     lonRadians,
     altitudeMeters: altitudeForPosition(origin, planet.radiusMeters),
   };
+}
+
+/** Orbit hint (lat/lon/alt) matching {@link stationOriginFromSystemOffset}. */
+export function orbitHintFromSystemOffset(
+  planet: Planet,
+  offsetMeters: { x: number; z: number },
+  altitudeMeters: number,
+): StationOrbitHint {
+  return orbitHintFromOrigin(
+    planet,
+    stationOriginFromSystemOffset(planet, offsetMeters, altitudeMeters),
+  );
 }
 
 export function getStationFrameFromOrigin(planet: Planet, origin: Vec3): StationFrame {
@@ -483,8 +490,17 @@ export interface StationInfoMarker {
   interactSoundUrl?: string;
 }
 
+/**
+ * What authored the exit. `scene-exit` is the generic portal; `exit-hangar` is
+ * the dedicated hangar → Open Space departure, which always hands the player
+ * out flying at the owning station body's mouth regardless of trigger.
+ */
+export type StationExitOrigin = "scene-exit" | "exit-hangar";
+
 /** In-play portal that loads another scene document. */
 export interface StationSceneExitMarker {
+  /** Authoring component this marker was baked from. */
+  origin: StationExitOrigin;
   sceneId: string;
   prompt: string;
   right: number;
@@ -515,6 +531,23 @@ export interface StationHangarOpenSpaceExitMarker {
   up: number;
   forward: number;
   rotation: { x: number; y: number; z: number; w: number };
+}
+
+/**
+ * Fly-through volume on a Station body that lands the ship in this family's
+ * hangar instance. Baked from `enter-station`.
+ *
+ * `hangarSceneId` is empty when the author left it to System Map ownership —
+ * the destination is resolved at trigger time, not here, because the station
+ * document does not know which map entry placed it.
+ */
+export interface StationEnterStationMarker {
+  right: number;
+  up: number;
+  forward: number;
+  radius: number;
+  hangarSceneId: string;
+  arrivalRoomId: string;
 }
 
 export type StationDoorTrigger = "radial" | "raycast";
@@ -661,13 +694,19 @@ export interface StationLayoutOverride {
   /** Furniture chairs in station-local meters (F to sit). */
   chairs: ChairSeatSpec[];
   infoMarkers: StationInfoMarker[];
-  /** F-key portals that load another scene (hab → station). */
+  /**
+   * Portals that load another scene: `scene-exit` (hab → station) and
+   * `exit-hangar` (hangar → Open Space), which share the on-foot interact and
+   * ship fly-through machinery.
+   */
   sceneExitMarkers: StationSceneExitMarker[];
   /**
    * Hangar mouth for open-space fly-through arrival. Null when the station
    * prefab has no `hangar-open-space-exit` marker.
    */
   hangarOpenSpaceExit: StationHangarOpenSpaceExitMarker | null;
+  /** Fly-through volumes that take a ship from Open Space into the hangar. */
+  enterStationMarkers: StationEnterStationMarker[];
   /** Self-contained F-key doors from `door` components. */
   doors: StationDoorSpec[];
   /** Personal stash chests from `chest-storage` components. */

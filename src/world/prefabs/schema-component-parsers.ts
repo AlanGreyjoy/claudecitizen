@@ -349,6 +349,59 @@ function parseHangarOpenSpaceExitComponent(
   return { type: "hangar-open-space-exit" };
 }
 
+function parseExitHangarComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  // Fly-through is the default: leaving a hangar for space is a continuous act
+  // and stopping at the mouth to press a key is the exception, not the rule.
+  const trigger = SCENE_EXIT_TRIGGERS.includes(value.trigger as SceneExitTrigger)
+    ? (value.trigger as SceneExitTrigger)
+    : "fly-through";
+  return {
+    type: "exit-hangar",
+    trigger,
+    ...(value.prompt === undefined
+      ? {}
+      : { prompt: parseString(value.prompt, `${path}.prompt`, 128) }),
+    ...(value.radius === undefined
+      ? {}
+      : {
+          radius: Math.min(
+            200,
+            Math.max(0.5, parseFiniteNumber(value.radius, `${path}.radius`)),
+          ),
+        }),
+  };
+}
+
+function parseEnterStationComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  const hangarSceneRaw =
+    value.hangarSceneId === undefined
+      ? undefined
+      : parseString(value.hangarSceneId, `${path}.hangarSceneId`, 64).trim();
+  const arrivalRaw =
+    value.arrivalRoomId === undefined
+      ? undefined
+      : parseString(value.arrivalRoomId, `${path}.arrivalRoomId`, 64).trim();
+  return {
+    type: "enter-station",
+    ...(value.radius === undefined
+      ? {}
+      : {
+          radius: Math.min(
+            5000,
+            Math.max(1, parseFiniteNumber(value.radius, `${path}.radius`)),
+          ),
+        }),
+    ...(hangarSceneRaw ? { hangarSceneId: hangarSceneRaw } : {}),
+    ...(arrivalRaw ? { arrivalRoomId: arrivalRaw } : {}),
+  };
+}
+
 function parseLadderComponent(
   value: Record<string, unknown>,
   path: string,
@@ -1870,6 +1923,8 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "npc-placement": parseNpcPlacementComponent,
   "scene-exit": parseSceneExitComponent,
   "hangar-open-space-exit": parseHangarOpenSpaceExitComponent,
+  "exit-hangar": parseExitHangarComponent,
+  "enter-station": parseEnterStationComponent,
   "ladder": parseLadderComponent,
   "hangar-pad": parseHangarPadComponent,
   "interaction": parseInteractionComponent,

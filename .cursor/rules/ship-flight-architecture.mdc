@@ -1,0 +1,21 @@
+---
+description: Rapier ship flight + flight-computer control, modes, boost/quantum — read full architecture doc
+alwaysApply: true
+---
+
+# Ship flight architecture (pointer)
+
+Full law: [`docs/docs/architecture/ship-flight.md`](../../docs/docs/architecture/ship-flight.md).
+
+**Permanent decision:** flying hull is a **Rapier** rigid body; **flight computer** emits
+forces/torques (dual-reticle aim, coupled/decoupled, boost). **Atmospheric
+gravity** from planet `gravityMetersPerSecond2` inside
+`atmosphereHeightMeters` (heavier *g* → harder/longer escape); vacuum = no
+planet pull. Modes: **Traverse** / **Combat** / **Nav** (`tap U`); quantum only
+from **Nav**. Cruise max = `maxSpeedMps`; boost raises thrust demand + velocity
+cap. Parked deck stays ship-local Rapier — do not dual-drive pose. Open Space /
+Warp Gates: [Space traversal](../../docs/docs/architecture/space-traversal.md).
+
+When changing flight physics, atmospheric gravity, flight computer, modes,
+boost/speed, quantum, or contacts, read the full doc first. Also listed in
+`AGENTS.md`.

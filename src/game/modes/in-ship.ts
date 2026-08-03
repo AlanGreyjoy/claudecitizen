@@ -10,7 +10,15 @@ import { toggleShipCanopy } from "../../player/cockpit-gaze";
 import { getShipLayout } from "../../player/ship-layout";
 import { playShipCanopyToggleSfx } from "../../player/ship-articulation-sfx";
 import { getStationLayoutOverride, worldToStationLocal } from "../../world/station";
-import { sceneExitTarget, shipCrossedExit } from "../station/scene-exit";
+import {
+  getActiveSystemDocument,
+  resolveStationFamilyHangarSceneId,
+} from "../../world/systems/runtime";
+import {
+  enterStationTarget,
+  sceneExitTarget,
+  shipCrossedExit,
+} from "../station/scene-exit";
 import type { Vec3 } from "../../types";
 import type { CameraState, FrameActions } from "../types";
 import type { LoopContext } from "../loop-context";
@@ -49,10 +57,28 @@ function tryEngageQuantum(ctx: LoopContext): void {
 }
 
 /**
- * Fly-through `scene-exit` markers: leaving a hangar for open space is a
- * continuous act, so it fires on crossing rather than on a key press. Returns
- * true when the scene swap was requested, which stops the rest of the frame —
- * the world is about to be torn down underneath it.
+ * Hangar scene this station family owns, per the System Map. `enter-station`
+ * may override it on the marker; otherwise ownership of the body the player is
+ * flying at decides, because a station document does not know which map entry
+ * placed it.
+ */
+function resolveEnterStationHangarSceneId(
+  ctx: LoopContext,
+  authored: string,
+): string {
+  if (authored) return authored;
+  return resolveStationFamilyHangarSceneId(getActiveSystemDocument(), {
+    entryId: ctx.activeStationInstanceId,
+    sceneId: ctx.sceneId ?? ctx.stationPrefab?.id ?? null,
+  });
+}
+
+/**
+ * Fly-through boarding volumes: `exit-hangar` / fly-through `scene-exit` on the
+ * way out, `enter-station` on the way in. Crossing one is a continuous act, so
+ * it fires on proximity rather than a key press. Returns true when the scene
+ * swap was requested, which stops the rest of the frame — the world is about to
+ * be torn down underneath it.
  */
 function tryFlyThroughExit(ctx: LoopContext, position: Vec3): boolean {
   if (!ctx.onRequestScene) return false;
@@ -69,10 +95,28 @@ function tryFlyThroughExit(ctx: LoopContext, position: Vec3): boolean {
     );
     return true;
   }
+  for (const marker of override.enterStationMarkers) {
+    if (!shipCrossedExit(marker, local)) continue;
+    const target = enterStationTarget(
+      marker,
+      ctx.bootstrap,
+      ctx.systemId,
+      resolveEnterStationHangarSceneId(ctx, marker.hangarSceneId),
+    );
+    if (!target) {
+      console.warn(
+        "enter-station crossed but no hangar scene owns this station family "
+        + `(entry="${ctx.activeStationInstanceId ?? ''}"); staying in open space.`,
+      );
+      continue;
+    }
+    ctx.onRequestScene(target);
+    return true;
+  }
   return false;
 }
 
-/** Cockpit flight: IFCS integrate, dual-reticle aim, quantum travel, look-at. */
+/** Cockpit flight: flight-computer integrate, dual-reticle aim, quantum travel, look-at. */
 export function createInShipMode(
   ctx: LoopContext,
   deps: { prompts: Prompts },

@@ -3,6 +3,7 @@
   "id": "login",
   "name": "Login",
   "kind": "title",
+  "runtime": "flow",
   "gameObjects": [
     {
       "id": "login-screen",
