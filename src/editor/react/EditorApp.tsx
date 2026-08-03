@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type RefObject,
 } from 'react';
 import {
   installAgentBridgeListener,

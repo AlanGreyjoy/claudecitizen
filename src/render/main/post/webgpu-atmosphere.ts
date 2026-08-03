@@ -395,7 +395,7 @@ export function createWebGpuAtmospherePost(
       starsNode.updateBefore({
         renderer,
         camera: atmosphereCamera,
-      } as NodeFrame);
+      } as unknown as NodeFrame);
     }
 
     // Lunar inscattering is multiplied by the same AgX day calibration (×6) as

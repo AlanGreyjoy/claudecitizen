@@ -43,9 +43,7 @@ function applyInstancedWindMaterial(
   const sourceMaterials = Array.isArray(mesh.material)
     ? mesh.material
     : [mesh.material];
-  const convertedMaterials = sourceMaterials.map((source) =>
-    factory(source, mesh.instanceMatrix),
-  );
+  const convertedMaterials = sourceMaterials.map((source) => factory(source));
   const owned = new Set<THREE.Material>();
   for (let index = 0; index < convertedMaterials.length; index += 1) {
     const converted = convertedMaterials[index];

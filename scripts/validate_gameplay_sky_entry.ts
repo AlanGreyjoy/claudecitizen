@@ -130,7 +130,7 @@ export async function run(): Promise<GameplaySkyResult> {
 
   // Empty cloud scene: this harness bisects the atmosphere in isolation, so the
   // deck pass composites nothing and the sky is what it measures.
-  const postStack = createWebGpuMainPostStack(
+  const postStack = await createWebGpuMainPostStack(
     renderer,
     scene,
     new THREE.Scene(),
