@@ -17,7 +17,6 @@ import {
   type RecoilPatternState,
 } from "../../player/weapon-recoil";
 import { normalize } from "../../math/vec3";
-import { playSfx } from "../../audio/sfx";
 import { consumeInventoryAmmo } from "../../net/api";
 import type { Vec3 } from "../../types";
 import type { WeaponCombatRuntimeEvent } from "../types";
@@ -27,6 +26,11 @@ import {
   fallbackWeaponPose,
   resolveWeaponBallisticHit,
 } from "./weapon-hit-resolution";
+import {
+  playDryFireAudio,
+  playReloadAudio,
+  playWeaponFireAudio,
+} from "./weapon-audio";
 
 export interface WeaponCombatActions {
   cycleWeaponFireModePressed: boolean;
@@ -128,7 +132,13 @@ function presentShot(args: {
     tracer: { end: pathEnd, speedMps: firearm.muzzleVelocityMps, start: origin },
   });
   kickCamera(ctx, firearm, feel);
-  if (combat?.fireSoundUrl) playSfx(combat.fireSoundUrl);
+  playWeaponFireAudio({
+    assets: combat,
+    firearm,
+    hit,
+    // kickCamera already advanced the counter; it seeds per-shot audio jitter.
+    shotIndex: feel.shotCount,
+  });
   return {
     type: "shot",
     combat,
@@ -196,9 +206,8 @@ function processFireEvent(args: {
   }
   if (event.type === "dry-fire" || event.type === "reload-started") {
     const combat = presentation?.combat ?? null;
-    const soundUrl =
-      event.type === "dry-fire" ? combat?.dryFireSoundUrl : combat?.reloadSoundUrl;
-    if (soundUrl) playSfx(soundUrl);
+    if (event.type === "dry-fire") playDryFireAudio(combat);
+    else playReloadAudio(combat);
     runtimeEvents.push({
       type: event.type,
       combat,

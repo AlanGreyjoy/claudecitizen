@@ -123,17 +123,8 @@ export interface WalkFacingParams {
   /** Camera forward projected on the walk plane — the active-aim facing target. */
   cameraForward: Vec3;
   up: Vec3;
+  /** Active ADS squares the whole character to the view instead of the move. */
   aiming: boolean;
-  /**
-   * When true, the whole character stays camera-aligned.
-   * Non-aim locomotion faces the movement direction.
-   */
-  lockFacingToCamera?: boolean;
-}
-
-/** Active ADS rotates the whole character toward the camera/aim direction. */
-export function shouldLockFacingToCamera(aiming: boolean): boolean {
-  return aiming;
 }
 
 /** Resolve raw RMB aim against locomotion rules shared by every walker. */
@@ -156,9 +147,7 @@ export function resolveWalkFacing(
   params: WalkFacingParams,
   dt: number,
 ): Vec3 {
-  const lockToCamera = params.lockFacingToCamera
-    ?? params.aiming;
-  const desired = lockToCamera ? params.cameraForward : params.moveDirection;
+  const desired = params.aiming ? params.cameraForward : params.moveDirection;
   const turned = rotateCharacterToward(params.currentForward, desired, params.up, dt);
   return length(turned) < 1e-6
     ? normalize(tangentize(params.currentForward, params.up))
@@ -214,6 +203,11 @@ const RISE_ANIMATION_SPEED = 0.15;
  */
 const FALL_ANIMATION_SPEED = 1.5;
 
+/** True while a jump clip is running, i.e. before the landing clip starts. */
+export function isJumpInProgress(jumpPhase: JumpPhase): boolean {
+  return jumpPhase === "jump-start" || jumpPhase === "jump-loop";
+}
+
 /**
  * Animation-only airborne test for Rapier-controlled walkers. Physics keeps
  * falling during the coyote window; only the clip choice is held back.
@@ -222,10 +216,17 @@ export function isAirborneForAnimation(
   grounded: boolean,
   verticalVelocity: number,
   startedJump: boolean,
+  jumpInProgress: boolean,
 ): boolean {
   if (startedJump) return true;
   if (verticalVelocity > RISE_ANIMATION_SPEED) return true;
-  return !grounded && verticalVelocity < -FALL_ANIMATION_SPEED;
+  if (grounded) return false;
+  // A jump ends when the controller reports ground, never on speed alone. Every
+  // jump coasts through the [-FALL_ANIMATION_SPEED, RISE_ANIMATION_SPEED] band
+  // at its apex, and treating that as a landing plays the land clip in mid-air
+  // and then again on touchdown — the jump appears to fire twice.
+  if (jumpInProgress) return true;
+  return verticalVelocity < -FALL_ANIMATION_SPEED;
 }
 
 export interface JumpAnimationPhaseState {
@@ -255,7 +256,7 @@ export function advanceJumpAnimationPhase(
     };
   }
 
-  if (state.jumpPhase === "jump-start" || state.jumpPhase === "jump-loop") {
+  if (isJumpInProgress(state.jumpPhase)) {
     return { jumpPhase: "jump-land", jumpPhaseTime: 0 };
   }
   if (state.jumpPhase === "jump-land" && elapsed < JUMP_LAND_SECONDS) {

@@ -46,6 +46,7 @@ export interface BaseCharacterUiBindingsState {
   simulateDrawnSlotId: string | null;
   gizmoMode: EquipmentGizmoMode;
   gizmoSpace: 'local' | 'world';
+  guidesVisible: boolean;
   catalogMessage: string;
   weapons: import('../../net/admin-api').WeaponDefinition[];
   backpacks: import('../../net/admin-api').BackpackDefinition[];
@@ -75,6 +76,7 @@ export interface BaseCharacterUiBindingsClosure {
   simulateDrawnSlotId: string | null;
   gizmoMode: EquipmentGizmoMode;
   gizmoSpace: 'local' | 'world';
+  guidesVisible: boolean;
   catalogMessage: string;
   weapons: import('../../net/admin-api').WeaponDefinition[];
   backpacks: import('../../net/admin-api').BackpackDefinition[];
@@ -154,6 +156,7 @@ export function createBaseCharacterUiBindings(
     simulateDrawnSlotId: null,
     gizmoMode: 'translate',
     gizmoSpace: 'local',
+    guidesVisible: closure.guidesVisible,
     catalogMessage: closure.catalogMessage,
     weapons: closure.weapons,
     backpacks: closure.backpacks,
@@ -198,6 +201,7 @@ export function createBaseCharacterUiBindings(
     uiState.simulateDrawnSlotId = closure.simulateDrawnSlotId;
     uiState.gizmoMode = closure.gizmoMode;
     uiState.gizmoSpace = closure.gizmoSpace;
+    uiState.guidesVisible = closure.guidesVisible;
     uiState.catalogMessage = closure.catalogMessage;
     uiState.weapons = closure.weapons;
     uiState.backpacks = closure.backpacks;
@@ -227,6 +231,7 @@ export function createBaseCharacterUiBindings(
     closure.simulateDrawnSlotId = uiState.simulateDrawnSlotId;
     closure.gizmoMode = uiState.gizmoMode;
     closure.gizmoSpace = uiState.gizmoSpace;
+    closure.guidesVisible = uiState.guidesVisible;
     closure.catalogMessage = uiState.catalogMessage;
     closure.weapons = uiState.weapons;
     closure.backpacks = uiState.backpacks;

@@ -3,7 +3,7 @@
 export interface MenuCatalogEntry {
   id: string;
   name: string;
-  /** Source element id in `index.html` under `#app`, or null when built in code. */
+  /** Source element id in `play-chrome.html`, or null when built in code. */
   templateId: string | null;
   description: string;
 }

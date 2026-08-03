@@ -133,9 +133,23 @@ function frameIsometricCamera(
  * data URL with a transparent background suitable for `iconUrl`.
  */
 export async function generateItemPrefabScreenshot(prefabId: string): Promise<string> {
+  return generatePrefabKindScreenshot(prefabId, 'item');
+}
+
+/**
+ * Loads a ship prefab and captures the same isometric admin icon as weapons.
+ */
+export async function generateShipPrefabScreenshot(prefabId: string): Promise<string> {
+  return generatePrefabKindScreenshot(prefabId, 'ship');
+}
+
+async function generatePrefabKindScreenshot(
+  prefabId: string,
+  kind: 'item' | 'ship',
+): Promise<string> {
   const trimmed = prefabId.trim();
   if (!trimmed) {
-    throw new Error('Select an item prefab before generating a screenshot.');
+    throw new Error(`Select a ${kind} prefab before generating a screenshot.`);
   }
 
   const canvas = document.createElement('canvas');
@@ -181,10 +195,10 @@ export async function generateItemPrefabScreenshot(prefabId: string): Promise<st
 
     const loaded = await loadPrefabDocument(trimmed);
     if (!loaded) {
-      throw new Error(`Item prefab "${trimmed}" could not be loaded.`);
+      throw new Error(`${kind === 'ship' ? 'Ship' : 'Item'} prefab "${trimmed}" could not be loaded.`);
     }
-    if (loaded.kind !== 'item') {
-      throw new Error(`Prefab "${trimmed}" is kind "${loaded.kind}", not an item prefab.`);
+    if (loaded.kind !== kind) {
+      throw new Error(`Prefab "${trimmed}" is kind "${loaded.kind}", not a ${kind} prefab.`);
     }
 
     const doc = prepareScreenshotDocument(loaded);

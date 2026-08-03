@@ -34,7 +34,7 @@ import {
   DEFAULT_SHIP_LAYOUT,
   getShipLayoutForPrefab,
 } from './ship-layout';
-import { DEFAULT_SHIP_PREFAB_ID } from '../world/ships';
+import { NO_SHIP_PREFAB_ID } from '../world/ships';
 import type { ShipFlightMode } from '../flight/flight-modes';
 import {
   createQuantumTravelState,
@@ -162,7 +162,7 @@ export function createWorldState(
   } = {},
 ): WorldState {
   clearShipWorld();
-  const prefabId = options.shipPrefabId ?? DEFAULT_SHIP_PREFAB_ID;
+  const prefabId = options.shipPrefabId ?? NO_SHIP_PREFAB_ID;
   const layout = getShipLayoutForPrefab(prefabId) ?? DEFAULT_SHIP_LAYOUT;
   const inShip = options.arrival === 'in-ship';
   const body = inShip

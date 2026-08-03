@@ -73,6 +73,7 @@ export interface ShipDefinition {
   name: string;
   description: string;
   prefabId: string;
+  iconUrl: string | null;
   costArc: number;
   maxHp: number;
   maxShields: number;
@@ -87,6 +88,7 @@ export interface ShipDefinitionInput {
   name: string;
   description: string;
   prefabId: string;
+  iconUrl?: string | null;
   costArc: number;
   maxHp: number;
   maxShields: number;

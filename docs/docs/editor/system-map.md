@@ -12,7 +12,9 @@ single star. Layout is saved as a `SystemDocument` under
 Authoring). Station **concourses** are scenes; Hab and Hangar scenes are owned
 by each station entry but are not separate map markers.
 
-See also: [Basic game loop](../architecture/game-loop) (station family ownership).
+See also: [Basic game loop](../architecture/game-loop) (station family ownership),
+[Space traversal](../architecture/space-traversal) (Open Space host; station
+scenes are giant prefabs via Scene Settings `Runtime`).
 
 ## Open the tab
 

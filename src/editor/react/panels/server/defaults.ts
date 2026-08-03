@@ -81,6 +81,7 @@ export const DEFAULT_SHIP_FORM: ShipDefinitionInput = {
   name: '',
   description: '',
   prefabId: 'phobos-starhopper',
+  iconUrl: null,
   costArc: 0,
   maxHp: 1000,
   maxShields: 500,

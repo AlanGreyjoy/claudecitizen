@@ -533,6 +533,12 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
         typeof source.defaultScene === 'string' && source.defaultScene ? source.defaultScene : 'title',
         'defaultScene',
       ),
+      // Optional: the engine ships no hull, so an unset value simply means a
+      // shipless session stays shipless rather than inventing a missing prefab.
+      defaultShipPrefab:
+        typeof source.defaultShipPrefab === 'string' && source.defaultShipPrefab.trim()
+          ? requireSlugId(source.defaultShipPrefab.trim(), 'defaultShipPrefab')
+          : '',
       build: {
         outDir: typeof build.outDir === 'string' && build.outDir.trim() ? build.outDir.trim() : 'dist',
       },

@@ -78,11 +78,13 @@ export function createOnFootMode(
         jumpPressed: input.actions.jumpPressed,
       },
       input.dt,
-      ctx.planet,
-      ctx.seed,
-      ctx.planetPhysics,
-      deps.combat.currentAnimStance(),
-      weaponPoseAiming,
+      {
+        planet: ctx.planet,
+        seed: ctx.seed,
+        propCollision: ctx.planetPhysics,
+        stanceId: deps.combat.currentAnimStance(),
+        aiming: weaponPoseAiming,
+      },
     );
     if (deps.padInterest.tryEnterShipPadInterest()) return;
     const boardPrompt = deps.shipSystems.handleBoardExterior(

@@ -232,10 +232,11 @@ pub async fn create_ship(
     let id = Uuid::new_v4().to_string();
     sqlx::query(
         r#"INSERT INTO "ShipDefinition"
-           ("id", "name", "description", "prefabId", "costArc", "maxHp", "maxShields", "shieldRegenPerSec", "maxSpeedMps", "throttleAccelMps2", "createdAt", "updatedAt")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())"#,
+           ("id", "name", "description", "prefabId", "iconUrl", "costArc", "maxHp", "maxShields", "shieldRegenPerSec", "maxSpeedMps", "throttleAccelMps2", "createdAt", "updatedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())"#,
     )
     .bind(&id).bind(values.string("name")?).bind(values.string("description")?).bind(values.string("prefabId")?)
+    .bind(values.optional_string("iconUrl")?)
     .bind(values.int("costArc")?).bind(values.number("maxHp")?).bind(values.number("maxShields")?)
     .bind(values.number("shieldRegenPerSec")?).bind(values.number("maxSpeedMps")?).bind(values.number("throttleAccelMps2")?)
     .execute(&state.db).await?;
@@ -259,6 +260,7 @@ pub async fn update_ship(
             ("name", FieldKind::String),
             ("description", FieldKind::String),
             ("prefabId", FieldKind::String),
+            ("iconUrl", FieldKind::NullableString),
             ("costArc", FieldKind::Integer),
             ("maxHp", FieldKind::Number),
             ("maxShields", FieldKind::Number),
@@ -804,7 +806,7 @@ async fn ship_by_id(state: &AppState, id: &str) -> ApiResult<Value> {
 }
 fn ship_json(row: PgRow) -> Result<Value, sqlx::Error> {
     Ok(
-        json!({"id":row.try_get::<String,_>("id")?,"name":row.try_get::<String,_>("name")?,"description":row.try_get::<String,_>("description")?,"prefabId":row.try_get::<String,_>("prefabId")?,"costArc":row.try_get::<i32,_>("costArc")?,"maxHp":row.try_get::<f64,_>("maxHp")?,"maxShields":row.try_get::<f64,_>("maxShields")?,"shieldRegenPerSec":row.try_get::<f64,_>("shieldRegenPerSec")?,"maxSpeedMps":row.try_get::<f64,_>("maxSpeedMps")?,"throttleAccelMps2":row.try_get::<f64,_>("throttleAccelMps2")?,"createdAt":iso(&row,"createdAt")?,"updatedAt":iso(&row,"updatedAt")?}),
+        json!({"id":row.try_get::<String,_>("id")?,"name":row.try_get::<String,_>("name")?,"description":row.try_get::<String,_>("description")?,"prefabId":row.try_get::<String,_>("prefabId")?,"iconUrl":row.try_get::<Option<String>,_>("iconUrl")?,"costArc":row.try_get::<i32,_>("costArc")?,"maxHp":row.try_get::<f64,_>("maxHp")?,"maxShields":row.try_get::<f64,_>("maxShields")?,"shieldRegenPerSec":row.try_get::<f64,_>("shieldRegenPerSec")?,"maxSpeedMps":row.try_get::<f64,_>("maxSpeedMps")?,"throttleAccelMps2":row.try_get::<f64,_>("throttleAccelMps2")?,"createdAt":iso(&row,"createdAt")?,"updatedAt":iso(&row,"updatedAt")?}),
     )
 }
 

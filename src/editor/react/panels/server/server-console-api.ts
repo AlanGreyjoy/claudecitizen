@@ -108,6 +108,12 @@ export function resetPrefabCaches(): void {
 }
 
 export async function ensureShipPrefabs(): Promise<ShipPrefabOption[]> {
+  // Authoring: always re-read so a newly saved hull shows up without leaving
+  // the Server tab. Cached list is for release builds only.
+  if (import.meta.env.DEV || AUTHORING_ENABLED) {
+    shipPrefabsCache = await listShipPrefabOptions();
+    return shipPrefabsCache;
+  }
   if (shipPrefabsCache.length > 0) return shipPrefabsCache;
   shipPrefabsCache = await listShipPrefabOptions();
   return shipPrefabsCache;

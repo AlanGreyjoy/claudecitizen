@@ -20,7 +20,7 @@ import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { beginAssetGeneration, sweepUnusedAssets } from '../cache/asset-residency';
 import { warmPlanetSpawnCaches } from '../world/spawn-warm';
 import { normalizeVegetationSettings } from '../render/vegetation/settings';
-import { activateShipPrefab, applyDefaultShipPrefab, syncBootstrapShips } from '../world/ships';
+import { resolveSessionShipPrefabId, syncBootstrapShips } from '../world/ships';
 import {
   getStationColliders,
   getStationFrame,
@@ -235,16 +235,22 @@ async function warmPlaySpawnSurface(
 }
 
 /**
- * Activates the hull the scene actually placed. A scene that places no ship
- * still needs one loaded (mode transitions read a body), so the default hull
- * remains the fallback rather than the only option.
+ * Resolves and loads this session's hull *before* the world is built.
+ *
+ * The world is constructed with a ship instance and cannot represent "no ship
+ * yet", so whatever is active at that moment is what the player gets until
+ * something corrects it. Resolving here — scene-placed hull, else the player's
+ * own ship, else the project fallback — means the instance is right the first
+ * time instead of being fabricated and patched a few hundred milliseconds
+ * later, which is what left the layout collider-less mid-load.
+ *
+ * Returns the prefab id the world should spawn, or null for a shipless session.
  */
-async function applyScenePlayShipPrefab(params: PlayWorldParams): Promise<void> {
-  if (!params.shipPrefabOverride) {
-    await applyDefaultShipPrefab();
-    return;
-  }
-  await activateShipPrefab(params.shipPrefabOverride);
+async function resolvePlayShipPrefab(
+  params: PlayWorldParams,
+  bootstrap: GameBootstrap | null,
+): Promise<string | null> {
+  return resolveSessionShipPrefabId(params.shipPrefabOverride, bootstrap?.ships);
 }
 
 function createPlayGameLoop(options: {
@@ -263,6 +269,8 @@ function createPlayGameLoop(options: {
   arrival?: 'default' | 'in-ship';
   /** Hangar-mouth pose for an `in-ship` open-space arrival. */
   spaceSpawnPose?: HangarOpenSpaceExitWorldPose | null;
+  /** Hull resolved before the world is built. Null for a shipless session. */
+  shipPrefabId: string | null;
 }) {
   const {
     world,
@@ -289,7 +297,7 @@ function createPlayGameLoop(options: {
     activeStationInstanceId: world.primaryStation?.id ?? null,
     sceneId: world.params.scene?.id ?? null,
     content: world.params.content,
-    shipPrefabId: world.params.shipPrefabOverride,
+    shipPrefabId: options.shipPrefabId,
     shipRampDownOnSpawn: world.params.shipTest,
     controls,
     renderer,
@@ -586,9 +594,11 @@ export async function startPlaySession(
     worldParams: options.worldParams,
     networkTarget: options.networkTarget,
   });
-  // Scenes that place no ship never load a hull. The player ship stays an
-  // unrendered data stub so mode transitions keep a body to read.
-  if (world.params.content.ship) await applyScenePlayShipPrefab(world.params);
+  // Hab / station concourse keep an unrendered stub. Hangar pads, open space,
+  // and placed ship prefabs load the real hull (AVMS delivery + flight).
+  const shipPrefabId = world.params.content.ship
+    ? await resolvePlayShipPrefab(world.params, bootstrap)
+    : null;
   const { dom, renderer, rendererError, characterAppearance } = await mountPlaySurface(
     loading,
     world,
@@ -648,6 +658,7 @@ export async function startPlaySession(
     onRequestScene: options.onRequestScene,
     arrival,
     spaceSpawnPose,
+    shipPrefabId,
   });
 
   loopRef.loop = gameLoop;

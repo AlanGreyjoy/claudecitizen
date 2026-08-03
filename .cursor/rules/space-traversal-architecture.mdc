@@ -1,0 +1,18 @@
+---
+description: Open Space host + station giant prefabs + enter-station / exit-hangar boarding — read full architecture doc
+alwaysApply: true
+---
+
+# Space traversal architecture (pointer)
+
+Full law: [`docs/docs/architecture/space-traversal.md`](../../docs/docs/architecture/space-traversal.md).
+
+**Permanent decision:** scene document + Scene Settings **`Runtime`**
+(`open-space` / `station` / `hab` / `hangar` / `flow`). Station = giant prefab
+in the system host. Ship boarding: **`enter-station`** (fly-through on station
+body → hangar instance) and **`exit-hangar`** (hangar → Open Space at nested
+`hangar-open-space-exit` mouth). Open-air and closed stations share those
+components. Far bodies cull; pilot blips stay. Quantum bridges long burns.
+
+When changing open-space layout, station authoring, boarding markers, quantum,
+culling, or nav blips, read the full doc first. Also listed in `AGENTS.md`.

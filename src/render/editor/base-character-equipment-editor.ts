@@ -16,6 +16,8 @@ import {
   previewControllerState,
 } from './base-character-equipment-controller';
 import { createBaseCharacterFlyCamera } from './base-character-equipment-fly';
+import { createEquipmentGuides } from './base-character-equipment-guides';
+import { collectBarrelEnd, collectMuzzleFlash } from '../../world/prefabs/item-runtime';
 import {
   applyCharacterType as applyCharacterTypePreview,
   assignDefinition as assignCatalogDefinition,
@@ -56,7 +58,7 @@ import {
   type BaseCharacterUiBindingsClosure,
 } from './base-character-equipment-ui-bindings';
 import type { CatalogDefinition } from './base-character-equipment-utils';
-import { copyObjectToTransform, labelFromUrl } from './base-character-equipment-utils';
+import { copyObjectToTransform, findEntityObject, labelFromUrl } from './base-character-equipment-utils';
 
 export interface BaseCharacterEquipmentEditor {
   activate: () => void;
@@ -80,7 +82,9 @@ export function createBaseCharacterEquipmentEditor(
 ): BaseCharacterEquipmentEditor {
   const { stageHost, leftHost, rightHost, onUiChange } = options;
   const dom = createBaseCharacterStageDom(stageHost);
-  const { stage, canvas, stageStatus, packMissingBanner } = dom;
+  const {
+    stage, canvas, stageStatus, guideReadout, playTestReticle, packMissingBanner,
+  } = dom;
 
   const closure: BaseCharacterUiBindingsClosure = {
     documentState: null,
@@ -101,6 +105,7 @@ export function createBaseCharacterEquipmentEditor(
     simulateDrawnSlotId: null,
     gizmoMode: 'translate',
     gizmoSpace: 'local',
+    guidesVisible: true,
     catalogMessage: 'Catalog not loaded.',
     weapons: [] as WeaponDefinition[],
     backpacks: [] as BackpackDefinition[],
@@ -214,10 +219,36 @@ export function createBaseCharacterEquipmentEditor(
     backpackSocketObjects: closure.backpackSocketObjects,
     backpackSocketEntities: closure.backpackSocketEntities,
   });
+  const guides = createEquipmentGuides(previewRoot);
+  // barrel-end wins over muzzle-flash: it is the ballistic origin, so aligning
+  // to it is what actually decides where shots leave the gun.
+  const resolveBoreAnchor = (): { object: THREE.Object3D | null; isWeaponRoot: boolean } => {
+    const slotId = closure.playTestActive
+      ? closure.playTestWeaponSlotId ?? closure.selectedSlotId
+      : closure.selectedSlotId;
+    const weaponRoot = closure.weaponPreviewRoots.get(slotId) ?? null;
+    if (!weaponRoot) return { object: null, isWeaponRoot: false };
+    const prefabId = closure.assignments.get(slotId)?.prefabId ?? null;
+    const draft = prefabId ? runtime.weaponPrefabDrafts.get(prefabId) ?? null : null;
+    const marker = draft ? collectBarrelEnd(draft) ?? collectMuzzleFlash(draft) : null;
+    const markerObject = marker ? findEntityObject(weaponRoot, marker.entityId) : null;
+    return { object: markerObject ?? weaponRoot, isWeaponRoot: !markerObject };
+  };
+  const refreshGuides = (): void => {
+    const bore = resolveBoreAnchor();
+    guides.setVisible(closure.guidesVisible && !closure.playTestActive);
+    guides.refresh({
+      avatarRoot: closure.avatar?.root ?? null,
+      boreAnchor: bore.object,
+      boreIsWeaponRoot: bore.isWeaponRoot,
+      gizmoTarget: closure.playTestActive ? null : gizmo.object ?? null,
+    });
+  };
   const syncGizmo = (): void => {
     const target = transformLookup();
     if (target) gizmo.attach(target.object);
     else gizmo.detach();
+    refreshGuides();
   };
 
   const sessions = {
@@ -257,6 +288,7 @@ export function createBaseCharacterEquipmentEditor(
 
   let raf = 0;
   let frameLoopStarted = false;
+  let lastGuideText: string | null = null;
   const renderFrame = (): void => {
     if (disposed) return;
     raf = requestAnimationFrame(renderFrame);
@@ -273,6 +305,14 @@ export function createBaseCharacterEquipmentEditor(
       runtime.controllerUpperBodyAim.current?.update(deltaSeconds);
     }
     updateNestedParticleSystems(previewRoot, deltaSeconds, camera);
+    playTestReticle.hidden = !(closure.playTestActive && runtime.playTestHardAim.value);
+    guides.setVisible(closure.guidesVisible && !closure.playTestActive);
+    const guideText = guides.readout();
+    if (guideText !== lastGuideText) {
+      lastGuideText = guideText;
+      guideReadout.textContent = guideText ?? '';
+      guideReadout.hidden = !guideText;
+    }
     renderer.render(scene, camera);
   };
   const startFrameLoop = (): void => {
@@ -401,6 +441,7 @@ export function createBaseCharacterEquipmentEditor(
       playTestSession.stopPlayTestControls();
       runtime.controllerSourceLoads.clear();
       gizmo.detach();
+      guides.dispose();
       controls.dispose();
       gizmo.dispose();
       revokeAnimationObjectUrl();

@@ -120,6 +120,15 @@ follow-in). Full draft (diagrams + invariants):
 `docs/docs/architecture/game-loop.md`. Thin Cursor pointer:
 `.cursor/rules/game-loop-architecture.mdc`.
 
+Open Space itself is the **active star system** (`Runtime: open-space`) at 1:1
+System Map scale. Station map bodies are scene documents with
+`Runtime: station` — authored as scenes, placed as giant prefabs; far bodies
+cull but keep pilot blips; quantum bridges hours-long thruster gaps. Ship
+boarding: `enter-station` (fly-through → hangar instance) /
+`exit-hangar` (→ nested `hangar-open-space-exit` mouth). Full law:
+`docs/docs/architecture/space-traversal.md`. Thin Cursor pointer:
+`.cursor/rules/space-traversal-architecture.mdc`.
+
 ## Project settings and backend config
 
 `asteron.project.json` at the project root holds `name`, `backendUrl` (release /
@@ -774,6 +783,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/skills/prd/SKILL.md` | PRD handoff packs under `prds/<slug>/` (README, PRD, phases, checklist) |
 | `docs/docs/architecture/game-loop.md` | Player game loop draft: Hab → Station → AVMS → Hangar → Open Space |
 | `.cursor/rules/game-loop-architecture.mdc` | Thin always-on pointer to the game-loop architecture doc |
+| `docs/docs/architecture/space-traversal.md` | Open Space host + station scenes as giant prefabs via Scene Settings `Runtime` |
+| `.cursor/rules/space-traversal-architecture.mdc` | Thin always-on pointer to the space-traversal architecture doc |
 
 ## Utility scripts
 

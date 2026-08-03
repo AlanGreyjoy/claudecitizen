@@ -1,8 +1,6 @@
 import { add, normalize, scale, vec3 } from '../../math/vec3';
-import {
-  integrateCharacterLocomotion,
-  ORBIT_PITCH_LIMIT,
-} from '../../player/character-controller';
+import { ORBIT_PITCH_LIMIT } from '../../player/character-camera';
+import { integrateCharacterLocomotion } from '../../player/locomotion-integrator';
 import {
   animationFromState,
   resolveWalkInputIntent,
@@ -62,10 +60,9 @@ export function updateShipSandboxGroundFallback(
     session.character,
     {
       wantsJump: actions.jumpPressed,
-      wantsSprint: intent.isSprinting,
-      isMoving,
       desiredDirection,
       moveSpeed,
+      jumpSpeed: intent.jumpSpeedMetersPerSecond,
     },
     dt,
     WORLD_UP,

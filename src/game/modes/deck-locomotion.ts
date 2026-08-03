@@ -1,5 +1,10 @@
 import { getActiveShip } from "../../player/world-state";
-import { getShipLayout, usesColliderDeck } from "../../player/ship-layout";
+import {
+  getShipLayout,
+  getShipRestHeightMeters,
+  usesColliderDeck,
+} from "../../player/ship-layout";
+import { sampleHangarRest } from "../../world/station";
 import { doorBlends } from "../../player/ship-rig";
 import {
   isShipParked,
@@ -59,10 +64,20 @@ function handleExteriorDeck(
     return;
   }
   ctx.world.shipExteriorWalk = true;
-  if (onHullExterior) {
+  // A hull parked in a station hangar has no terrain under it — snapping feet
+  // to the planet surface from inside an interior scene drops the player
+  // through the deck. The pad collider is the floor there, so Rapier's own
+  // result already stands them on it.
+  const inHangar =
+    sampleHangarRest(
+      ctx.stationFrame,
+      instance.body.position,
+      getShipRestHeightMeters(),
+    ) !== null;
+  if (onHullExterior || inHangar) {
     ctx.world.character = {
       ...result.state,
-      up: radialUp(result.state.position),
+      up: inHangar ? ctx.world.character.up : radialUp(result.state.position),
       deckZone: undefined,
     };
   } else {

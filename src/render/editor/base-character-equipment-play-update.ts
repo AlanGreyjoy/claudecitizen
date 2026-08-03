@@ -1,15 +1,14 @@
 import * as THREE from 'three';
 import {
-  integrateCharacterLocomotion,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-} from '../../player/character-controller';
+} from '../../player/character-camera';
+import { integrateCharacterLocomotion } from '../../player/locomotion-integrator';
 import {
   animationLayersFromState,
   resolveWalkAiming,
   resolveWalkFacing,
   resolveWalkInputIntent,
-  shouldLockFacingToCamera,
   type WalkGait,
 } from '../../player/character-locomotion';
 import { resolveDeckCameraOrbit } from '../../flight/flight-aim';
@@ -24,9 +23,10 @@ import type { PlayTestSessionContext } from './base-character-equipment-play-ses
 
 const PLAY_TEST_GRAVITY_METERS_PER_SECOND_SQUARED = 9.8;
 const PLAY_TEST_STAGE_RADIUS_METERS = 9;
-const PLAY_TEST_WORLD_UP: Vec3 = { x: 0, y: 1, z: 0 };
-const PLAY_TEST_STAGE_FORWARD: Vec3 = { x: 0, y: 0, z: 1 };
-const PLAY_TEST_WEAPON_AIM_ZOOM_SCALE = 0.86;
+export const PLAY_TEST_WORLD_UP: Vec3 = { x: 0, y: 1, z: 0 };
+export const PLAY_TEST_STAGE_FORWARD: Vec3 = { x: 0, y: 0, z: 1 };
+/** Hard aim pulls the orbit camera this much closer than the resting zoom. */
+export const PLAY_TEST_WEAPON_AIM_ZOOM_SCALE = 0.86;
 const PLAY_TEST_WEAPON_AIM_ZOOM_HALF_LIFE_SECONDS = 0.07;
 const PLAY_TEST_MAX_UPPER_BODY_AIM_YAW = THREE.MathUtils.degToRad(80);
 const PLAY_TEST_MAX_UPPER_BODY_AIM_PITCH = THREE.MathUtils.degToRad(55);
@@ -173,10 +173,9 @@ export function updatePlayTestFrame(
     playTestCharacter,
     {
       wantsJump: intent.wantsJump,
-      wantsSprint: intent.isSprinting,
-      isMoving: intent.isMoving,
       desiredDirection,
       moveSpeed: intent.moveSpeedMetersPerSecond,
+      jumpSpeed: intent.jumpSpeedMetersPerSecond,
     },
     deltaSeconds,
     PLAY_TEST_WORLD_UP,
@@ -212,7 +211,6 @@ export function updatePlayTestFrame(
       cameraForward,
       up: PLAY_TEST_WORLD_UP,
       aiming: poseAiming,
-      lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
     },
     deltaSeconds,
   );

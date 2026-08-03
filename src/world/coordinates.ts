@@ -1,4 +1,4 @@
-import { cross, normalize, scale, vec3 } from '../math/vec3';
+import { add, cross, normalize, scale, vec3 } from '../math/vec3';
 import type { Vec3 } from '../types';
 
 export function cartesianFromLatLonAlt(
@@ -26,6 +26,27 @@ export function eastVector(position: Vec3): Vec3 {
   const east = cross(worldNorth, up);
   if (Math.hypot(east.x, east.y, east.z) < 1e-9) return vec3(1, 0, 0);
   return normalize(east);
+}
+
+export interface SurfaceTangentBasis {
+  east: Vec3;
+  north: Vec3;
+  up: Vec3;
+}
+
+/** Orthonormal surface frame at a position: east/north span the tangent plane. */
+export function surfaceTangentBasis(position: Vec3): SurfaceTangentBasis {
+  const up = radialUp(position);
+  const east = eastVector(position);
+  return { east, north: normalize(cross(up, east)), up };
+}
+
+/** Tangent-plane direction for a yaw measured from east toward north. */
+export function forwardFromYaw(position: Vec3, yawRadians: number): Vec3 {
+  const { east, north } = surfaceTangentBasis(position);
+  return normalize(
+    add(scale(east, Math.cos(yawRadians)), scale(north, Math.sin(yawRadians))),
+  );
 }
 
 export function altitudeForPosition(position: Vec3, radiusMeters: number): number {

@@ -23,7 +23,7 @@ import {
   createFlightAimState,
 } from '../flight/flight-aim';
 import { QUANTUM_ENGAGE_HOLD_SECONDS } from '../flight/quantum-travel';
-import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character-controller';
+import { FIRST_PERSON_PITCH_LIMIT, ORBIT_PITCH_LIMIT } from '../player/character-camera';
 import {
   getKeyboardBindingCodes,
   formatKeyboardBinding,

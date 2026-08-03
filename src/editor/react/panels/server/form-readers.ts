@@ -28,10 +28,12 @@ export function formNumber(form: HTMLFormElement, name: string): number {
 }
 
 export function readShipForm(form: HTMLFormElement): ShipDefinitionInput {
+  const iconRaw = formValue(form, 'iconUrl');
   return {
     name: formValue(form, 'name'),
     description: formValue(form, 'description'),
     prefabId: formValue(form, 'prefabId'),
+    iconUrl: iconRaw ? iconRaw : null,
     costArc: Math.round(formNumber(form, 'costArc')),
     maxHp: formNumber(form, 'maxHp'),
     maxShields: formNumber(form, 'maxShields'),

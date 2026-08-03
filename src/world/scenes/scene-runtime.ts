@@ -24,7 +24,10 @@ import { sceneHasStationContent } from './scene-station';
 export interface ScenePlayContent {
   /** Scene names a planet (`game-manager` / `planet`) or spawns on the surface. */
   planet: boolean;
-  /** Scene places a ship prefab instance. */
+  /**
+   * Player ship is active in this scene: placed ship prefab, hangar pads
+   * (AVMS-delivered hull), or open-space / main-game flight.
+   */
   ship: boolean;
   /** Scene authors a station: inline geometry/markers or a placed prefab. */
   station: boolean;
@@ -219,6 +222,25 @@ function collectPrefabInstanceFields(
   }
 }
 
+/** Hangar pads mean AVMS can park a hull here — no decorative ship prefab required. */
+function sceneHasHangarPads(scene: SceneDocument): boolean {
+  const visit = (entities: PrefabEntity[]): boolean =>
+    entities.some((entity) => {
+      if ((entity.components ?? []).some((component) => component.type === 'hangar-pad')) {
+        return true;
+      }
+      return visit(entity.children ?? []);
+    });
+  return visit(scene.gameObjects ?? []);
+}
+
+function sceneNeedsPlayerShip(scene: SceneDocument, shipPrefabId: string | null): boolean {
+  if (shipPrefabId !== null) return true;
+  // Open space / fly-through destinations author no hull; the player brings one.
+  if (scene.kind === 'main-game') return true;
+  return sceneHasHangarPads(scene);
+}
+
 function collectScenePlayEntity(entity: PrefabEntity, out: ScenePlayAccum): void {
   collectGameManagerFields(entity, out);
   const planet = findComponent(entity, 'planet');
@@ -236,8 +258,7 @@ function collectScenePlayEntity(entity: PrefabEntity, out: ScenePlayAccum): void
   if (uiScreen) {
     out.uiScreens.push({
       screen: uiScreen.screen,
-      ...(uiScreen.menuId ? { menuId: uiScreen.menuId } : {}),
-    });
+      ...(uiScreen.menuId ? { menuId: uiScreen.menuId } : {}),    });
   }
   const sceneLink = findComponent(entity, 'scene-link');
   // An unset target is a placeholder the author has not filled in yet.
@@ -302,7 +323,7 @@ export function resolveScenePlayConfig(scene: SceneDocument): ScenePlayConfig {
     environment: out.environment ?? normalizeSceneEnvironment(null),
     content: {
       planet: out.requiresPlanet,
-      ship: out.shipPrefabId !== null,
+      ship: sceneNeedsPlayerShip(scene, out.shipPrefabId),
       // A scene can author its station inline (GLB GameObjects, colliders,
       // spawn point) instead of placing a station prefab.
       station: out.stationPrefabId !== null || sceneHasStationContent(scene),

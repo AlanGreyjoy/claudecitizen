@@ -5,7 +5,7 @@ import {
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
   resolveOrbitCamera,
-} from '../../../player/character-controller';
+} from '../../../player/character-camera';
 import { getBedEyeLocal, getPilotEyeLocal } from '../../../player/ship-interaction';
 import { getChairEyeLocal } from '../../../player/chair-sit';
 import { findChairById } from '../../../world/chair-seats';

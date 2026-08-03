@@ -171,7 +171,14 @@ export function createAvmsTerminal(elements: AvmsTerminalElements) {
     setStatus('Dispatching vehicle to hangar bay…');
     try {
       await onDeliver(ship);
-      setOpen(false);
+      delivering = false;
+      canStore = true;
+      elements.deliverBtnEl.disabled = ships.length === 0;
+      elements.storeBtnEl.disabled = false;
+      setStatus(
+        `${ship.displayName} delivered. Use To Hangar when ready, or store to recall.`,
+        'ok',
+      );
     } catch (error) {
       delivering = false;
       elements.deliverBtnEl.disabled = ships.length === 0;

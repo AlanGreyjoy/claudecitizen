@@ -18,6 +18,7 @@ import { clamp01 } from './domain/math';
 import type { RenderMode } from './domain/types';
 import type { StationFrame } from '../../world/station';
 import { getShipLayout } from '../../player/ship-layout';
+import { NO_SHIP_PREFAB_ID } from '../../world/ships';
 import { updateLocalLightShadowCull } from '../prefabs/prefab-renderer';
 import { getTextureDedupSnapshot } from '../assets/texture-dedup';
 import { drainSourceReleases, getPendingSourceReleaseCount } from '../assets/texture-upload';
@@ -558,7 +559,7 @@ function updateShipsAndStations(
     [
       {
         id: 'legacy',
-        prefabId: getShipLayout().hullUrl ? 'active' : 'phobos-starhopper',
+        prefabId: getShipLayout().hullUrl ? 'active' : NO_SHIP_PREFAB_ID,
         body: world.ship,
         rig: world.shipRig ?? { gear01: 1, ramp01: 0, canopy01: 0, doors: {} },
       },

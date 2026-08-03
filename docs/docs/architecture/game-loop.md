@@ -15,6 +15,9 @@ Related editor authoring: [Game flow](../editor/game-flow.md) (boot / Game Manag
 [Hangar Open Space Exit](../editor/components/hangar-open-space-exit.md),
 [AVMS terminal](../editor/components/avms-terminal.md).
 
+Once in Open Space, system-scale flight / quantum / distant-body culling lives
+in [Space traversal](./space-traversal).
+
 ## Station family (ownership)
 
 A **Station** owns its paired interiors. Hab and Hangar are not free-floating
@@ -26,13 +29,15 @@ catalog. Each station lists:
 
 | Field | Meaning |
 | --- | --- |
-| `sceneId` | Shared Station concourse scene (map body) |
-| `habSceneId` | That station's instanced Hab scene |
-| `hangarSceneId` | That station's instanced Hangar scene |
+| `sceneId` | Station body — a scene with **`Runtime: station`** (giant prefab placed into Open Space); see [Space traversal](./space-traversal) |
+| `habSceneId` | That station's Hab scene (`Runtime: hab`) |
+| `hangarSceneId` | That station's Hangar scene (`Runtime: hangar`) |
 
 Hab/Hangar are **not** separate ecliptic markers — only ownership scene ids.
-Example: Black Market Station → `blackmarket` / `blackmarkethab` /
-`blackmarkethanger`. See [System Map](../editor/system-map).
+The station concourse / hull is still a `.scene.json` document, but play places
+it like a prefab inside the `Runtime: open-space` host. Example: Black Market
+Station → `blackmarket` / `blackmarkethab` / `blackmarkethanger`. See
+[System Map](../editor/system-map).
 
 AVMS **To Hangar** uses the terminal's Hangar Scene when set; otherwise it
 falls back to the active station entry's `hangarSceneId`. Cell tokens
@@ -63,13 +68,19 @@ flowchart TB
 
 ## Player loop (happy path)
 
+On foot and AVMS still move Hab ↔ Station ↔ Hangar. **Ships** enter and leave
+through Open Space boarding markers — full law in [Space traversal](./space-traversal)
+(Station boarding).
+
 ```mermaid
 flowchart TD
   Spawn([spawn / start]) --> Hab[HAB<br/>instanced apartment; placeable build]
-  Hab -->|"scene-exit (on foot, interact)"| Station[STATION<br/>shared concourse / lobby]
+  Hab -->|"scene-exit on foot"| Station[STATION<br/>shared concourse / Runtime station body]
   Station -->|"AVMS: call ship → hangar bay"| Hangar[HANGAR<br/>instanced ship pads; placeable build]
   Station -->|"AVMS: To Hangar"| Hangar
-  Hangar -->|"scene-exit → Open Space<br/>via HANGAR-OPEN-SPACE-EXIT"| OpenSpace[OPEN SPACE]
+  Hangar -->|"scene-exit on foot"| Station
+  Hangar -->|"exit-hangar"| OpenSpace[OPEN SPACE]
+  OpenSpace -->|"enter-station fly-through<br/>on station body"| Hangar
 ```
 
 ### Steps
@@ -77,8 +88,9 @@ flowchart TD
 1. **Spawn in Hab** — starting place for the player (their instanced quarters for that station family). Placeable build allowed.
 2. **Hab → Station** — player uses a `scene-exit` to leave the hab and enter the shared station concourse.
 3. **AVMS on Station** — at an AVMS terminal, player can **call a ship** so it is delivered to their hangar bay. Runtime resolves pads from that family's hangar scene (`hangarSceneId` / terminal Hangar Scene), not from the Station concourse layout; the hull appears when the player enters the hangar.
-4. **Station → Hangar** — from inside the AVMS UI, **To Hangar** moves the player to that station family's **instanced** hangar. Placeable build allowed.
-5. **Hangar → Open Space** — hangar has a `scene-exit` set to **Open Space** (`@space` + `fly-through`). Runtime looks up the System Map station that owns this hangar (`hangarSceneId`), loads that station's concourse scene, finds its **`hangar-open-space-exit`** marker (`HANGAR-OPEN-SPACE-EXIT`), and spawns the ship **in-ship** at that hangar mouth pose.
+4. **Station → Hangar** — from inside the AVMS UI, **To Hangar** moves the player to that station family's **instanced** hangar. Placeable build allowed. Hangar → Station on foot is a `scene-exit` back to the concourse.
+5. **Hangar → Open Space** — hangar uses **`exit-hangar`** (not a `@space` `scene-exit`). Runtime resolves the owning station via System Map `hangarSceneId`, finds that station body's nested **`hangar-open-space-exit`** marker, and spawns the ship **in-ship** at that mouth pose in the Open Space host.
+6. **Open Space → Hangar** — ship flies through **`enter-station`** on the station body (open-air or closed bay — same component). Lands in that station family's hangar instance. From there, on-foot `scene-exit` reaches the station concourse.
 
 ## Invariants (draft)
 
@@ -87,12 +99,13 @@ flowchart TD
 - Team members may enter a teammate's hab/hangar instance (follow-in); strangers stay out.
 - Do not hard-code a single global hab or hangar if the project has multiple stations.
 - AVMS "call ship" and "To Hangar" are station-side; destinations resolve to **that station's** hangar.
-- Hangar open-space fly-through resolves the owning station via System Map `hangarSceneId`; arrival uses that station's `hangar-open-space-exit` mouth — not a free-floating global portal and not a Station picker on the exit.
-- Travel between places stays scene-based (`scene-exit` / scene request) — not page reload, not a second teleporter system.
+- Ship Open Space ↔ Hangar uses `enter-station` / `exit-hangar`; mouth pose is the station body's nested `hangar-open-space-exit` — not a free-floating global portal and not a Station picker on the hangar exit.
+- On-foot travel between Hab / Station / Hangar stays `scene-exit` / AVMS — not page reload, not a second teleporter system.
+- Station bodies follow [Space traversal](./space-traversal): scene document + `Runtime: station` (giant prefab in the Open Space host). Do not fork back into "prefab-only" vs "world-swap scene" as two truths.
 
 ## Open / later
 
-- Return paths (Hangar → Station, Station → Hab, Open Space → Hangar).
+- Station → Hab return path authoring polish.
 - How boot / Game Manager `startingSceneId` picks which station family's hab
   (family Hab is already on the System Map entry; boot still authors the hop).
 - `scene-exit` tokens that resolve Hab/Hangar **scenes** from the family

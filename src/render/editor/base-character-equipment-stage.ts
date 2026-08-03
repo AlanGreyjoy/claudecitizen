@@ -14,6 +14,8 @@ export interface BaseCharacterStageDom {
   playTestHudState: HTMLDivElement;
   playTestHudLoadout: HTMLDivElement;
   stageStatus: HTMLDivElement;
+  guideReadout: HTMLDivElement;
+  playTestReticle: HTMLDivElement;
   packMissingBanner: HTMLDivElement;
 }
 
@@ -60,6 +62,13 @@ export function createBaseCharacterStageDom(stageHost: HTMLElement): BaseCharact
   );
   const stageStatus = document.createElement('div');
   stageStatus.className = 'ed-base-stage-status';
+  const guideReadout = document.createElement('div');
+  guideReadout.className = 'ed-base-guide-readout';
+  guideReadout.hidden = true;
+  // Mirrors the gameplay HUD reticle: screen centre, shown only while aiming.
+  const playTestReticle = document.createElement('div');
+  playTestReticle.className = 'ed-base-playtest-reticle';
+  playTestReticle.hidden = true;
   const packMissingBanner = document.createElement('div');
   packMissingBanner.className = 'ed-base-pack-missing is-hidden';
   packMissingBanner.setAttribute('role', 'status');
@@ -68,7 +77,7 @@ export function createBaseCharacterStageDom(stageHost: HTMLElement): BaseCharact
     + '<span>Export from Unity (<code>ClaudeCitizen → Export Synty Sidekick…</code>), '
     + 'then use <code>Tools → Locate Synty Sidekick Pack…</code> '
     + 'or set the folder in Project Settings.</span>';
-  stage.append(canvas, playTestHud, stageStatus, packMissingBanner);
+  stage.append(canvas, playTestHud, stageStatus, guideReadout, playTestReticle, packMissingBanner);
   stageHost.append(stage);
   return {
     stage,
@@ -77,6 +86,8 @@ export function createBaseCharacterStageDom(stageHost: HTMLElement): BaseCharact
     playTestHudState,
     playTestHudLoadout,
     stageStatus,
+    guideReadout,
+    playTestReticle,
     packMissingBanner,
   };
 }

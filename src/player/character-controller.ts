@@ -1,86 +1,54 @@
 import {
   add,
   cross,
-  dot,
   length,
-  lerp,
   normalize,
-  rotateAroundAxis,
   scale,
-  sub,
   tangentize,
   vec3,
 } from "../math/vec3";
 import {
   eastVector,
+  forwardFromYaw,
   radialUp,
   surfacePointFromPosition,
 } from "../world/coordinates";
 import { sampleFootPlanetSurface } from "../world/planet-surface";
-import type {
-  CharacterInput,
-  CharacterState,
-  JumpPhase,
-  Planet,
-  Vec3,
-} from "../types";
+import type { CharacterInput, CharacterState, Planet, Vec3 } from "../types";
 import {
   animationLayersFromState,
-  JUMP_LAND_SECONDS,
-  JUMP_START_SECONDS,
-  resolveWalkFacing,
   resolveWalkAiming,
+  resolveWalkFacing,
   resolveWalkInputIntent,
-  shouldLockFacingToCamera,
 } from "./character-locomotion";
+import {
+  integrateCharacterLocomotion,
+  type GroundContact,
+  type LocomotionCallbacks,
+} from "./locomotion-integrator";
 import type { WeaponAnimStanceId } from "./inventory/weapon-select";
-import { getCharacterSettings } from "./character-settings";
 
+/**
+ * The planet-surface walker: camera-relative move input against band-limited
+ * terrain heights, with prop tops as an extra standing surface. Gravity, air
+ * control, and jump phases live in `locomotion-integrator.ts`; facing and clip
+ * selection live in `character-locomotion.ts`.
+ */
+
+/** Foot clearance above the sampled terrain skin. */
 export const CHARACTER_GROUND_OFFSET_METERS = 0.05;
-const AIR_CONTROL = 0.18;
-/** Extra pull on the way down so hang time doesn't feel floaty. */
-const FALL_GRAVITY_MULTIPLIER = 1.7;
-export const ORBIT_PITCH_LIMIT = 1.15;
-export const FIRST_PERSON_PITCH_LIMIT = 1.5;
 export const CHARACTER_EYE_HEIGHT_METERS = 1.62;
-const CAMERA_REF_ZOOM = 7.4;
-const CLOSE_ZOOM_SHOULDER_BONUS_METERS = 0.18;
 
-interface TangentBasis {
-  east: Vec3;
-  north: Vec3;
-  up: Vec3;
-}
-
-export interface OrbitCamera {
-  forward: Vec3;
-  pitchRadians: number;
-  right: Vec3;
-  up: Vec3;
-}
-
-export interface CharacterCameraRig {
-  positionOffset: Vec3;
-  targetOffset: Vec3;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function tangentBasis(position: Vec3): TangentBasis {
-  const up = radialUp(position);
-  const east = eastVector(position);
-  const north = normalize(cross(up, east));
-  return { east, north, up };
-}
-
-function forwardFromYaw(position: Vec3, yawRadians: number): Vec3 {
-  const { east, north } = tangentBasis(position);
-  return normalize(
-    add(scale(east, Math.cos(yawRadians)), scale(north, Math.sin(yawRadians))),
-  );
-}
+/** Tallest prop top the walker steps up onto instead of walking into. */
+const PROP_STEP_UP_MAX_METERS = 1.25;
+/** Props probing slightly above the feet still count — probe noise, not a wall. */
+const PROP_STEP_DOWN_LIMIT_METERS = -0.05;
+/** A prop only wins over the terrain when it is clearly above it. */
+const PROP_ABOVE_TERRAIN_EPSILON_METERS = 0.02;
+/** Longest drop onto a prop top accepted as a landing. */
+const PROP_LANDING_REACH_METERS = 0.85;
+/** Props this far below the terrain skin are stale probes, not landings. */
+const PROP_LANDING_TERRAIN_TOLERANCE_METERS = 0.05;
 
 function movementDirection(
   position: Vec3,
@@ -104,227 +72,89 @@ function clampToGround(position: Vec3, surfaceRadiusMeters: number): Vec3 {
   );
 }
 
-function updateGroundJumpState(
-  state: Pick<CharacterState, "jumpPhase" | "jumpPhaseTime">,
-  dt: number,
-): JumpPhase {
-  if (state.jumpPhase !== "jump-land") return state.jumpPhase;
-  return state.jumpPhaseTime + dt >= JUMP_LAND_SECONDS
-    ? "grounded"
-    : "jump-land";
+export interface PlanetPropCollision {
+  filterMovement: (from: Vec3, desiredDelta: Vec3, up: Vec3) => Vec3;
+  /** Distance along -up from feet to a prop top, or null. */
+  probeSupport: (from: Vec3, up: Vec3) => number | null;
 }
 
-export interface LocomotionMotionInput {
-  wantsJump: boolean;
-  wantsSprint: boolean;
-  isMoving: boolean;
-  desiredDirection: Vec3;
-  moveSpeed: number;
+interface PlanetGround {
+  planet: Planet;
+  seed: number;
+  propCollision: PlanetPropCollision | null;
 }
 
-export interface LocomotionIntegrationResult {
-  grounded: boolean;
-  jumpPhase: JumpPhase;
-  jumpPhaseTime: number;
-  position: Vec3;
-  up: Vec3;
-  velocity: Vec3;
+/** Terrain foot pose at a position, ignoring props. */
+function terrainContact(ground: PlanetGround, position: Vec3): GroundContact {
+  const surface = sampleFootPlanetSurface(ground.planet, ground.seed, position);
+  const snapped = clampToGround(position, surface.surfaceRadiusMeters);
+  return { position: snapped, up: radialUp(snapped) };
 }
 
-export interface LocomotionCallbacks {
-  onGroundedStep: () => { position: Vec3; up: Vec3 };
-  tryLand: (position: Vec3) => { position: Vec3; up: Vec3 } | null;
-  /** When set, recomputes up each airborne frame (planet radial gravity). */
-  sampleAirborneUp?: (position: Vec3) => Vec3;
+/** Slide along props, then stand on the terrain or on a prop top above it. */
+function stepPlanetGround(
+  ground: PlanetGround,
+  from: Vec3,
+  step: Vec3,
+): GroundContact {
+  const props = ground.propCollision;
+  const moved = props
+    ? props.filterMovement(from, step, radialUp(from))
+    : add(from, step);
+  const terrain = terrainContact(ground, moved);
+
+  const support = props?.probeSupport(terrain.position, terrain.up) ?? null;
+  if (
+    support === null
+    || support <= PROP_STEP_DOWN_LIMIT_METERS
+    || support >= PROP_STEP_UP_MAX_METERS
+  ) {
+    return terrain;
+  }
+  const propPosition = add(terrain.position, scale(terrain.up, -support));
+  if (
+    length(propPosition)
+    <= length(terrain.position) + PROP_ABOVE_TERRAIN_EPSILON_METERS
+  ) {
+    return terrain;
+  }
+  return { position: propPosition, up: radialUp(propPosition) };
 }
 
-type LocomotionState = Pick<
-  CharacterState,
-  "position" | "velocity" | "grounded" | "jumpPhase" | "jumpPhaseTime"
->;
+/** Foot pose if a falling character has reached a prop top or the terrain. */
+function tryLandOnPlanet(
+  ground: PlanetGround,
+  candidate: Vec3,
+): GroundContact | null {
+  const surface = sampleFootPlanetSurface(ground.planet, ground.seed, candidate);
+  const terrainRadius =
+    surface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
+  const up = radialUp(candidate);
 
-function integrateGroundedLocomotion(
-  state: LocomotionState,
-  motion: LocomotionMotionInput,
-  dt: number,
-  callbacks: LocomotionCallbacks,
-): Pick<LocomotionIntegrationResult, "grounded" | "jumpPhase" | "jumpPhaseTime" | "position" | "up" | "velocity"> {
-  const stepped = callbacks.onGroundedStep();
-  const position = stepped.position;
-  const nextUp = stepped.up;
-  const velocity =
-    dt > 0 ? scale(sub(position, state.position), 1 / dt) : vec3(0, 0, 0);
-
-  if (motion.wantsJump) {
-    return {
-      grounded: false,
-      jumpPhase: "jump-start",
-      jumpPhaseTime: 0,
-      position,
-      up: nextUp,
-      velocity: add(velocity, scale(nextUp, getCharacterSettings().jumpSpeedMetersPerSecond)),
-    };
+  const support = ground.propCollision?.probeSupport(candidate, up) ?? null;
+  if (support !== null && support < PROP_LANDING_REACH_METERS) {
+    const propPosition = add(candidate, scale(up, -support));
+    if (
+      length(propPosition)
+      >= terrainRadius - PROP_LANDING_TERRAIN_TOLERANCE_METERS
+    ) {
+      return { position: propPosition, up: radialUp(propPosition) };
+    }
   }
 
-  const jumpPhase = updateGroundJumpState(state, dt);
+  if (length(candidate) > terrainRadius) return null;
+  return terrainContact(ground, candidate);
+}
+
+function planetLocomotionCallbacks(
+  ground: PlanetGround,
+  from: Vec3,
+  step: Vec3,
+): LocomotionCallbacks {
   return {
-    grounded: true,
-    jumpPhase,
-    jumpPhaseTime: jumpPhase === "grounded" ? 0 : state.jumpPhaseTime + dt,
-    position,
-    up: nextUp,
-    velocity,
-  };
-}
-
-interface AirborneLocomotionInput {
-  callbacks: LocomotionCallbacks;
-  dt: number;
-  gravityMetersPerSecond2: number;
-  jumpPhase: JumpPhase;
-  jumpPhaseTime: number;
-  motion: LocomotionMotionInput;
-  position: Vec3;
-  up: Vec3;
-  velocity: Vec3;
-}
-
-function integrateAirborneLocomotion(
-  input: AirborneLocomotionInput,
-): Pick<LocomotionIntegrationResult, "grounded" | "jumpPhase" | "jumpPhaseTime" | "position" | "up" | "velocity"> {
-  const {
-    motion,
-    dt,
-    position,
-    up,
-    velocity,
-    jumpPhase,
-    jumpPhaseTime,
-    gravityMetersPerSecond2,
-    callbacks,
-  } = input;
-  const tangentVelocity = tangentize(velocity, up);
-  const desiredVelocity = scale(motion.desiredDirection, motion.moveSpeed);
-  const blendedTangent = lerp(
-    tangentVelocity,
-    desiredVelocity,
-    clamp(dt * AIR_CONTROL * 8, 0, 1),
-  );
-  const verticalSpeed = dot(velocity, up);
-  const gravityScale = verticalSpeed < 0 ? FALL_GRAVITY_MULTIPLIER : 1;
-  const verticalVelocity =
-    verticalSpeed - gravityMetersPerSecond2 * gravityScale * dt;
-  const nextVelocity = add(blendedTangent, scale(up, verticalVelocity));
-  const nextPosition = add(position, scale(nextVelocity, dt));
-
-  const landed = callbacks.tryLand(nextPosition);
-  if (landed) {
-    return {
-      grounded: true,
-      jumpPhase: "jump-land",
-      jumpPhaseTime: 0,
-      position: landed.position,
-      up: landed.up,
-      velocity: tangentize(nextVelocity, landed.up),
-    };
-  }
-
-  let nextUp = up;
-  if (callbacks.sampleAirborneUp) nextUp = callbacks.sampleAirborneUp(nextPosition);
-
-  let nextJumpPhase = jumpPhase;
-  let nextJumpPhaseTime = jumpPhaseTime;
-  if (jumpPhase === "jump-start" && jumpPhaseTime >= JUMP_START_SECONDS) {
-    nextJumpPhase = "jump-loop";
-    nextJumpPhaseTime = 0;
-  } else if (jumpPhase === "grounded") {
-    nextJumpPhase = "jump-loop";
-    nextJumpPhaseTime = 0;
-  }
-
-  return {
-    grounded: false,
-    jumpPhase: nextJumpPhase,
-    jumpPhaseTime: nextJumpPhaseTime,
-    position: nextPosition,
-    up: nextUp,
-    velocity: nextVelocity,
-  };
-}
-
-/** Shared grounded/airborne jump integration for planet, deck, and station walkers. */
-export function integrateCharacterLocomotion(
-  state: LocomotionState,
-  motion: LocomotionMotionInput,
-  dt: number,
-  initialUp: Vec3,
-  gravityMetersPerSecond2: number,
-  callbacks: LocomotionCallbacks,
-): LocomotionIntegrationResult {
-  const jumpPhaseTime =
-    state.jumpPhase === "grounded" ? 0 : state.jumpPhaseTime + dt;
-
-  if (state.grounded) {
-    return integrateGroundedLocomotion(state, motion, dt, callbacks);
-  }
-
-  return integrateAirborneLocomotion({
-    motion,
-    dt,
-    position: state.position,
-    up: initialUp,
-    velocity: state.velocity,
-    jumpPhase: state.jumpPhase,
-    jumpPhaseTime,
-    gravityMetersPerSecond2,
-    callbacks,
-  });
-}
-
-export function resolveOrbitCamera(
-  position: Vec3,
-  yawRadians: number,
-  pitchRadians: number,
-  pitchLimit: number = ORBIT_PITCH_LIMIT,
-): OrbitCamera {
-  const up = radialUp(position);
-  const planarForward = forwardFromYaw(position, yawRadians);
-  const right = normalize(cross(planarForward, up));
-  const clampedPitch = clamp(pitchRadians, -pitchLimit, pitchLimit);
-  const forward = normalize(
-    rotateAroundAxis(planarForward, right, clampedPitch),
-  );
-  return {
-    forward,
-    pitchRadians: clampedPitch,
-    right,
-    up,
-  };
-}
-
-export function resolveCharacterCameraRig(
-  orbit: OrbitCamera,
-  zoomDistance: number,
-): CharacterCameraRig {
-  const zoomRatio = clamp(zoomDistance / CAMERA_REF_ZOOM, 0.22, 1.35);
-  const shoulderUp = 3.2 * zoomRatio;
-  const closeZoom01 = 1 - clamp(zoomDistance / CAMERA_REF_ZOOM, 0, 1);
-  const shoulderRight =
-    0.75 * Math.sqrt(zoomRatio) + CLOSE_ZOOM_SHOULDER_BONUS_METERS * closeZoom01;
-  const targetUp = 1.75;
-
-  return {
-    positionOffset: add(
-      add(
-        scale(orbit.forward, -zoomDistance),
-        scale(orbit.right, shoulderRight),
-      ),
-      scale(orbit.up, shoulderUp),
-    ),
-    targetOffset: add(
-      scale(orbit.right, shoulderRight),
-      scale(orbit.up, targetUp),
-    ),
+    onGroundedStep: () => stepPlanetGround(ground, from, step),
+    tryLand: (candidate) => tryLandOnPlanet(ground, candidate),
+    sampleAirborneUp: radialUp,
   };
 }
 
@@ -333,10 +163,9 @@ export function createCharacterState(
   forward: Vec3 = eastVector(position),
 ): CharacterState {
   const up = radialUp(position);
-  const tangentForward = normalize(tangentize(forward, up));
   return {
     animation: "Idle_Loop",
-    forward: tangentForward,
+    forward: normalize(tangentize(forward, up)),
     grounded: true,
     jumpPhase: "grounded",
     jumpPhaseTime: 0,
@@ -346,42 +175,22 @@ export function createCharacterState(
   };
 }
 
-export function placeCharacterOnSurface(
-  position: Vec3,
-  forward: Vec3 = eastVector(position),
-): CharacterState {
-  const up = radialUp(position);
-  const tangentForward = normalize(tangentize(forward, up));
-  return {
-    animation: "Idle_Loop",
-    forward: tangentForward,
-    grounded: true,
-    jumpPhase: "grounded",
-    jumpPhaseTime: 0,
-    position,
-    up,
-    velocity: vec3(0, 0, 0),
-  };
-}
-
-export interface PlanetPropCollision {
-  filterMovement: (from: Vec3, desiredDelta: Vec3, up: Vec3) => Vec3;
-  /** Distance along -up from feet to a prop top, or null. */
-  probeSupport: (from: Vec3, up: Vec3) => number | null;
+export interface PlanetWalkContext {
+  planet: Planet;
+  seed: number;
+  propCollision?: PlanetPropCollision | null;
+  stanceId?: WeaponAnimStanceId;
+  aiming?: boolean;
 }
 
 export function updateCharacterState(
   state: CharacterState,
   input: CharacterInput,
   dt: number,
-  planet: Planet,
-  seed: number,
-  propCollision?: PlanetPropCollision | null,
-  stanceId: WeaponAnimStanceId = "unarmed",
-  aiming = false,
+  context: PlanetWalkContext,
 ): CharacterState {
   const intent = resolveWalkInputIntent(input);
-  const poseAiming = resolveWalkAiming(aiming, intent);
+  const poseAiming = resolveWalkAiming(context.aiming ?? false, intent);
   const cameraYawRadians = input.cameraYawRadians ?? 0;
   const desiredDirection = movementDirection(
     state.position,
@@ -389,83 +198,43 @@ export function updateCharacterState(
     intent.moveY,
     cameraYawRadians,
   );
-  const cameraForward = movementDirection(state.position, 0, 1, cameraYawRadians);
+  const ground: PlanetGround = {
+    planet: context.planet,
+    seed: context.seed,
+    propCollision: context.propCollision ?? null,
+  };
 
-  const gravity = planet.gravityMetersPerSecond2 ?? 9.8;
   const motion = integrateCharacterLocomotion(
     state,
     {
       wantsJump: intent.wantsJump,
-      wantsSprint: intent.isSprinting,
-      isMoving: intent.isMoving,
       desiredDirection,
       moveSpeed: intent.moveSpeedMetersPerSecond,
+      jumpSpeed: intent.jumpSpeedMetersPerSecond,
     },
     dt,
     radialUp(state.position),
-    gravity,
-    {
-      onGroundedStep: () => {
-        const step = scale(desiredDirection, intent.moveSpeedMetersPerSecond * dt);
-        const up0 = radialUp(state.position);
-        const nextPosition = propCollision
-          ? propCollision.filterMovement(state.position, step, up0)
-          : add(state.position, step);
-        const nextSurface = sampleFootPlanetSurface(planet, seed, nextPosition);
-        const terrainPos = clampToGround(
-          nextPosition,
-          nextSurface.surfaceRadiusMeters,
-        );
-        const up = radialUp(terrainPos);
-        const support = propCollision?.probeSupport(terrainPos, up) ?? null;
-        // Prefer prop tops that sit above the terrain skin.
-        if (support !== null && support > -0.05 && support < 1.25) {
-          const propPos = add(terrainPos, scale(up, -support));
-          if (length(propPos) > length(terrainPos) + 0.02) {
-            return { position: propPos, up: radialUp(propPos) };
-          }
-        }
-        return { position: terrainPos, up };
-      },
-      tryLand: (candidate) => {
-        const nextSurface = sampleFootPlanetSurface(planet, seed, candidate);
-        const up = radialUp(candidate);
-        const support = propCollision?.probeSupport(candidate, up) ?? null;
-        if (support !== null && support < 0.85) {
-          const propped = add(candidate, scale(up, -support));
-          const terrainRadius =
-            nextSurface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
-          if (length(propped) >= terrainRadius - 0.05) {
-            return { position: propped, up: radialUp(propped) };
-          }
-        }
-        const landingRadius =
-          nextSurface.surfaceRadiusMeters + CHARACTER_GROUND_OFFSET_METERS;
-        if (length(candidate) > landingRadius) return null;
-        const snapped = clampToGround(
-          candidate,
-          nextSurface.surfaceRadiusMeters,
-        );
-        return { position: snapped, up: radialUp(snapped) };
-      },
-      sampleAirborneUp: radialUp,
-    },
+    context.planet.gravityMetersPerSecond2 ?? 9.8,
+    planetLocomotionCallbacks(
+      ground,
+      state.position,
+      scale(desiredDirection, intent.moveSpeedMetersPerSecond * dt),
+    ),
   );
 
   const forward = resolveWalkFacing(
     {
       currentForward: state.forward,
       moveDirection: desiredDirection,
-      cameraForward,
+      cameraForward: forwardFromYaw(state.position, cameraYawRadians),
       up: motion.up,
       aiming: poseAiming,
-      lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
     },
     dt,
   );
 
   const layers = animationLayersFromState({
-    stanceId,
+    stanceId: context.stanceId ?? "unarmed",
     aiming: poseAiming,
     isMoving: intent.isMoving,
     isCrouching: intent.isCrouching,

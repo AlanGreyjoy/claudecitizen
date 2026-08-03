@@ -6,12 +6,14 @@ description: Station hangar mouth — open-space fly-through arrival pose.
 
 # Hangar Open Space Exit
 
-Singleton marker on a **Station** concourse scene at the hangar bay mouth. When
-a hangar `scene-exit` targets **Open Space** (`@space` / `fly-through`), the
-runtime finds the System Map station that owns that hangar and arrives
-**in-ship** at this marker's world pose.
+Singleton marker on a **Station** body (`Runtime: station`) — a nested
+GameObject at the hangar bay mouth. Pose only: when hangar **`exit-hangar`**
+fires, the runtime finds the System Map station that owns that hangar and
+spawns the ship **in-ship** in Open Space at this marker's world pose.
 
 Docs name: `HANGAR-OPEN-SPACE-EXIT`. Component type: `hangar-open-space-exit`.
+
+Architecture: [Space traversal — Station boarding](../../architecture/space-traversal).
 
 | Property | Value |
 | --- | --- |
@@ -26,17 +28,18 @@ None — pose comes from the empty's transform. Local **+Z** is exit facing
 
 ## Usage
 
-1. Open the **Station** concourse scene (not the hangar instance scene)
-2. Place an Empty at the hangar mouth in open space
+1. Open the **Station** scene (`Runtime: station` — not the hangar instance)
+2. Place an Empty at the hangar mouth (nested under the station tree)
 3. Add **Hangar Open Space Exit**
 4. Aim local +Z out of the bay
 5. On the System Map, set this station's **Hangar scene** to the hangar that
    flies out here
-6. On the hangar mouth **Scene Exit**, set Target Scene → Open Space
+6. On the hangar, place **Exit Hangar** (departure). On the station body, place
+   **Enter Station** (ship fly-through → hangar instance)
 
 ## See also
 
-- [Scene Exit](./scene-exit) — hangar fly-through
+- [Space traversal](../../architecture/space-traversal) — `enter-station` / `exit-hangar`
 - [System Map](../system-map) — `hangarSceneId` ownership
 - [Station authoring](../station-authoring)
-- [Game loop](../../architecture/game-loop) — Hab → Station → Hangar → Open Space
+- [Game loop](../../architecture/game-loop) — Hab ↔ Station ↔ Hangar; ship boarding

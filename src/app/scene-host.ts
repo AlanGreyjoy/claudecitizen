@@ -14,6 +14,7 @@ import type { SceneDocument } from '../world/scenes/schema';
 import type { SceneUiScreen } from '../world/prefabs/schema';
 import type { AuthSession, SessionLostReason } from '../net/api';
 import { getSession, setUnauthorizedHandler } from '../net/api';
+import { runtimeConfig } from '../net/runtime-config';
 import type { LoadingScreenHandle } from './loading-screen';
 import {
   isPlaySessionRunning,
@@ -74,6 +75,30 @@ interface SceneHostState {
     networkTarget?: SceneExitTarget | null,
   ) => Promise<void>;
   scheduleAutoLinks: (scene: SceneDocument) => void;
+  /** Flow used to resolve `scene-exit` tokens, falling back to the boot scene. */
+  resolveExitFlow: () => Promise<SceneEntryFlow | null>;
+}
+
+/**
+ * Game flow for a scene that authors none of its own.
+ *
+ * Editor Play starts at the open document, so playing a hangar or hab never
+ * passes through the boot scene that names the flow — and a `@space` exit would
+ * resolve to no scene and silently do nothing, leaving the pilot flying out of
+ * the hangar into open world. Reading the project's boot document gives F6 the
+ * same Game Manager the shipped build gets. Kept out of `entryFlow` itself so
+ * it only resolves exit tokens and never overrides the played scene's world.
+ */
+async function loadBootEntryFlow(playedSceneId: string): Promise<SceneEntryFlow | null> {
+  const bootSceneId = runtimeConfig().bootScene;
+  if (!bootSceneId || bootSceneId === playedSceneId) return null;
+  const boot = await loadSceneDocument(bootSceneId);
+  if (!boot) return null;
+  const flow = resolveSceneEntryFlow(boot);
+  if (!flow) {
+    console.warn(`Boot scene "${bootSceneId}" has no Game Manager; scene-exit tokens cannot resolve.`);
+  }
+  return flow;
 }
 
 async function startHostGameplay(
@@ -102,8 +127,14 @@ async function startHostGameplay(
       void (async () => {
         // `@space` and friends are Game Manager hops, not documents; resolve
         // before the swap so a token never reaches the scene loader.
-        const sceneId = resolveExitTargetScene(target, state.getEntryFlow());
-        if (!sceneId) return;
+        const flow = state.getEntryFlow() ?? (await state.resolveExitFlow());
+        const sceneId = resolveExitTargetScene(target, flow);
+        if (!sceneId) {
+          console.warn(
+            `Scene exit from "${scene.id}" targets "${target.sceneId}", which resolved to no scene; staying put.`,
+          );
+          return;
+        }
         const resolved = session ?? (requireAuth ? await getSession() : null);
         await state.loadScene(sceneId, resolved, { ...target, sceneId });
       })();
@@ -235,6 +266,7 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
   let loading: LoadingScreenHandle | null = null;
   let resumeSceneId: string | null = null;
   let entryFlow: SceneEntryFlow | null = null;
+  let bootFlowPromise: Promise<SceneEntryFlow | null> | null = null;
 
   function clearPendingTransition(): void {
     if (!pendingTransition) return;
@@ -258,6 +290,10 @@ export function createSceneHost(options: SceneHostOptions): SceneHostHandle {
     isDisposed: () => disposed,
     loadScene: async () => {},
     scheduleAutoLinks: () => {},
+    resolveExitFlow: async () => {
+      bootFlowPromise ??= loadBootEntryFlow(activeScene?.id ?? '');
+      return bootFlowPromise;
+    },
   };
 
   state.scheduleAutoLinks = (scene: SceneDocument): void => {

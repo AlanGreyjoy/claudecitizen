@@ -237,6 +237,7 @@ export interface BaseCharacterUiApiContext {
     simulateDrawnSlotId: string | null;
     gizmoMode: EquipmentGizmoMode;
     gizmoSpace: 'local' | 'world';
+    guidesVisible: boolean;
     catalogMessage: string;
     weapons: BaseCharacterUiSnapshot['weapons'];
     backpacks: BaseCharacterUiSnapshot['backpacks'];
@@ -375,6 +376,7 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
       simulateDrawnSlotId: ctx.state.simulateDrawnSlotId,
       gizmoMode: ctx.state.gizmoMode,
       gizmoSpace: ctx.state.gizmoSpace,
+      guidesVisible: ctx.state.guidesVisible,
       catalogMessage: ctx.state.catalogMessage,
       weapons: ctx.state.weapons,
       backpacks: ctx.state.backpacks,
@@ -425,6 +427,11 @@ export function createBaseCharacterEditorUiApi(ctx: BaseCharacterUiApiContext): 
       ctx.notifyUiChange();
     },
     setGizmoMode: (mode) => ctx.setGizmoModeInternal(mode),
+    setGuidesVisible: (visible) => {
+      ctx.state.guidesVisible = visible;
+      ctx.notifyUiChange();
+      ctx.syncGizmo();
+    },
     toggleGizmoSpace: () => {
       ctx.state.gizmoSpace = ctx.state.gizmoSpace === 'local' ? 'world' : 'local';
       ctx.gizmo.setSpace(ctx.state.gizmoSpace);

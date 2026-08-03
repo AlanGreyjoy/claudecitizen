@@ -66,6 +66,8 @@ export interface BaseCharacterUiSnapshot {
   simulateDrawnSlotId: string | null;
   gizmoMode: EquipmentGizmoMode;
   gizmoSpace: 'local' | 'world';
+  /** Bore ray / aim line / centerline overlays on the authoring stage. */
+  guidesVisible: boolean;
   catalogMessage: string;
   weapons: WeaponDefinition[];
   backpacks: BackpackDefinition[];
@@ -94,6 +96,7 @@ export interface BaseCharacterEditorUiApi {
   setSimulateDrawnSlotId: (slotId: string | null) => void;
   setGizmoMode: (mode: EquipmentGizmoMode) => void;
   toggleGizmoSpace: () => void;
+  setGuidesVisible: (visible: boolean) => void;
   setPlayTestActive: (active: boolean) => Promise<void>;
   equipDefaultPlayTestLoadout: (overwrite?: boolean) => boolean;
   rebuildEquipmentPreview: () => Promise<void>;

@@ -37,8 +37,10 @@ async function bootEditor(): Promise<void> {
     return;
   }
 
-  const { loadRuntimeConfig } = await import('./net/runtime-config');
+  const { loadRuntimeConfig, runtimeConfig } = await import('./net/runtime-config');
   await loadRuntimeConfig();
+  const { setDefaultShipPrefabId } = await import('./world/ships');
+  setDefaultShipPrefabId(runtimeConfig().defaultShipPrefab);
   startEditorSession();
 }
 

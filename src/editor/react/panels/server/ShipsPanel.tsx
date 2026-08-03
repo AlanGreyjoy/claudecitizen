@@ -9,6 +9,7 @@ import {
 } from './server-console-api';
 import { DEFAULT_SHIP_FORM } from './defaults';
 import { readShipForm } from './form-readers';
+import { IconUrlField } from './FormComponents';
 import { useServerConsole } from './ServerConsoleContext';
 import {
   AdminButton,
@@ -123,15 +124,26 @@ export function ShipFormPanel({ shipId }: { shipId: string | null }): ReactEleme
   const { navigate, setStatus } = useServerConsole();
   const [existing, setExisting] = useState<ShipDefinition | null | undefined>(undefined);
   const [prefabs, setPrefabs] = useState<Awaited<ReturnType<typeof ensureShipPrefabs>>>([]);
+  const [iconUrl, setIconUrl] = useState('');
+  const [prefabId, setPrefabId] = useState('');
 
   useEffect(() => {
     void ensureShipPrefabs().then(setPrefabs);
     if (!shipId) {
       setExisting(null);
+      setIconUrl('');
+      setPrefabId('');
       return;
     }
     listShipDefinitions()
-      .then((ships) => setExisting(ships.find((entry) => entry.id === shipId) ?? null))
+      .then((ships) => {
+        const ship = ships.find((entry) => entry.id === shipId) ?? null;
+        setExisting(ship);
+        if (ship) {
+          setIconUrl(ship.iconUrl ?? '');
+          setPrefabId(ship.prefabId);
+        }
+      })
       .catch(() => setExisting(null));
   }, [shipId]);
 
@@ -144,6 +156,7 @@ export function ShipFormPanel({ shipId }: { shipId: string | null }): ReactEleme
         name: existing.name,
         description: existing.description,
         prefabId: existing.prefabId,
+        iconUrl: existing.iconUrl,
         costArc: existing.costArc,
         maxHp: existing.maxHp,
         maxShields: existing.maxShields,
@@ -152,6 +165,8 @@ export function ShipFormPanel({ shipId }: { shipId: string | null }): ReactEleme
         throttleAccelMps2: existing.throttleAccelMps2,
       }
     : { ...DEFAULT_SHIP_FORM, prefabId: prefabs[0]?.id ?? DEFAULT_SHIP_FORM.prefabId };
+
+  const activePrefabId = prefabId || defaults.prefabId;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -191,7 +206,12 @@ export function ShipFormPanel({ shipId }: { shipId: string | null }): ReactEleme
             />
           </AdminField>
           <AdminField label="Ship prefab">
-            <select className="sc-admin-select" name="prefabId" defaultValue={defaults.prefabId}>
+            <select
+              className="sc-admin-select"
+              name="prefabId"
+              value={activePrefabId}
+              onChange={(event) => setPrefabId(event.currentTarget.value)}
+            >
               {prefabs.map((prefab) => (
                 <option key={prefab.id} value={prefab.id}>
                   {prefab.label} ({prefab.id})
@@ -199,6 +219,12 @@ export function ShipFormPanel({ shipId }: { shipId: string | null }): ReactEleme
               ))}
             </select>
           </AdminField>
+          <IconUrlField
+            value={iconUrl}
+            onChange={setIconUrl}
+            prefabId={activePrefabId}
+            prefabKind="ship"
+          />
           <AdminField label="Cost (ARC)">
             <input
               className="sc-admin-input"

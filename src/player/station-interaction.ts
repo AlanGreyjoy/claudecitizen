@@ -1,10 +1,10 @@
 import { add, length, scale, sub, dot, vec3 } from '../math/vec3';
+import { CHARACTER_GROUND_OFFSET_METERS } from './character-controller';
 import {
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
   resolveOrbitCamera,
-  CHARACTER_GROUND_OFFSET_METERS,
-} from './character-controller';
+} from './character-camera';
 import {
   getStationFrame,
   getStationHangars,

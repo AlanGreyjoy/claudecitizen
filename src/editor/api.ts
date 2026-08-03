@@ -213,6 +213,11 @@ export interface ProjectSettingsDocument {
   /** Play, Server tab, and editor backend proxy. Defaults to localhost. */
   editorBackendUrl: string;
   defaultScene: string;
+  /**
+   * Ship prefab a session falls back to when the player owns none (offline
+   * Play, pre-starter-grant). Empty leaves shipless sessions shipless.
+   */
+  defaultShipPrefab: string;
   build: { outDir: string };
   contentPacks: {
     /** Project-relative folder containing Sidekick manifest.json + parts. Empty = unset. */

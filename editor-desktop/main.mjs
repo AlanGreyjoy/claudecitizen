@@ -1277,6 +1277,7 @@ if (!hasSingleInstanceLock) {
               project: projectSettings.name,
               backendUrl: projectSettings.backendUrl,
               bootScene: projectSettings.defaultScene,
+              defaultShipPrefab: projectSettings.defaultShipPrefab ?? '',
             },
             null,
             2,

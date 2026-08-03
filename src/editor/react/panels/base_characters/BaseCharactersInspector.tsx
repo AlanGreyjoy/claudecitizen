@@ -410,7 +410,22 @@ function TransformInspectorSection({
           >
             {snap.gizmoSpace === 'local' ? 'Local' : 'World'}
           </button>
+          <button
+            type="button"
+            className={`ed-btn${snap.guidesVisible ? ' is-active' : ''}`}
+            title="Bore ray from the barrel-end marker, eye-height aim line, body centerline, ADS crosshair line, and an alignment readout"
+            onClick={() => api.setGuidesVisible(!snap.guidesVisible)}
+          >
+            Guides
+          </button>
         </div>
+      ) : null}
+      {transformTarget && snap.guidesVisible ? (
+        <p className="ed-base-note">
+          Red = bore (barrel-end +Z, amber when the weapon prefab has no marker) ·
+          green = eye-height aim line · blue = body centerline · white = ADS crosshair line,
+          crossed where it passes the muzzle and at 15 m. Readout is bottom-right.
+        </p>
       ) : null}
       {transformTarget?.source === 'character' && editingMount ? (
         <label className="ed-base-field">

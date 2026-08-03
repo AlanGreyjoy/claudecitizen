@@ -794,6 +794,27 @@ function withinPadHorizontal(
   );
 }
 
+/**
+ * True when a world position stands on this hangar's pad footprint.
+ *
+ * Boarding a hangar-parked hull is gated on this rather than on sharing a room
+ * id: prefab/scene stations author colliders instead of walk-volume rooms, so
+ * their room id never resolves, and the ship's own 36 m interest box is wide
+ * enough to swallow a whole bay — stepping into the hangar would hand the
+ * player to ship-local physics while still metres from the hull.
+ */
+export function isOnHangarPad(
+  frame: StationFrame,
+  position: Vec3,
+  hangar: HangarSpec,
+): boolean {
+  return withinPadHorizontal(
+    worldToStationLocal(frame, position),
+    hangar.padSurfaceLocal,
+    HANGAR_PAD_HALF_METERS,
+  );
+}
+
 function withinPadVertical(local: StationLocalPoint, pad: StationLocalPoint): boolean {
   return (
     local.up >= pad.up - HANGAR_REST_BELOW_SLACK_METERS &&

@@ -33,7 +33,7 @@ import { createPersonalInventory } from '../../render/effects/hud/personal-inven
 import { createWeaponShop } from '../../render/effects/hud/weapon-shop';
 import { createFoodShop } from '../../render/effects/hud/food-shop';
 import type { PlanetSurfaceSample } from '../../types';
-import { DEFAULT_SHIP_PREFAB_ID } from '../../world/ships';
+import { NO_SHIP_PREFAB_ID } from '../../world/ships';
 import type { MenuPreviewId } from '../menus/catalog';
 import { clonePlayMenuTemplate, requireOrig } from '../menus/clone-template';
 import {
@@ -94,7 +94,7 @@ function createMockWorld(shipMode: boolean): WorldState {
   body.velocity = vec3(80, 0, 20);
   const instance = createShipInstance({
     id: PLAYER_SHIP_INSTANCE_ID,
-    prefabId: DEFAULT_SHIP_PREFAB_ID,
+    prefabId: NO_SHIP_PREFAB_ID,
     layout: DEFAULT_SHIP_LAYOUT,
     body,
     instanceId: 'editor:menu-manager',

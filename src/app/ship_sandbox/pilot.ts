@@ -32,7 +32,7 @@ import {
   playCockpitControlToggleSfx,
   playShipCanopyToggleSfx,
 } from '../../player/ship-articulation-sfx';
-import { FIRST_PERSON_PITCH_LIMIT } from '../../player/character-controller';
+import { FIRST_PERSON_PITCH_LIMIT } from '../../player/character-camera';
 import { MODE_IN_SHIP } from '../../player/modes';
 import type { ShipSandboxSession, SandboxPilotActions } from './types';
 import { SANDBOX_GRAVITY, SANDBOX_GROUND_Y_METERS, SHIP_FORWARD, WORLD_UP } from './types';

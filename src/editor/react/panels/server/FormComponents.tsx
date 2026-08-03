@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
-import { generateItemPrefabScreenshot } from '../../../../render/prefabs/item-prefab-screenshot';
+import {
+  generateItemPrefabScreenshot,
+  generateShipPrefabScreenshot,
+} from '../../../../render/prefabs/item-prefab-screenshot';
 import { useServerConsole } from './ServerConsoleContext';
 import { AdminButton, AdminField } from './Components';
 
@@ -7,21 +10,33 @@ type IconUrlFieldProps = {
   value: string;
   onChange: (value: string) => void;
   prefabId: string;
+  /** Defaults to item — ships use the same isometric capture path. */
+  prefabKind?: 'item' | 'ship';
 };
 
-export function IconUrlField({ value, onChange, prefabId }: IconUrlFieldProps): ReactElement {
+export function IconUrlField({
+  value,
+  onChange,
+  prefabId,
+  prefabKind = 'item',
+}: IconUrlFieldProps): ReactElement {
   const { setStatus } = useServerConsole();
   const [generating, setGenerating] = useState(false);
   const trimmed = value.trim();
+  const kindLabel = prefabKind === 'ship' ? 'ship' : 'item';
 
   const handleGenerate = (): void => {
     if (!prefabId) {
-      setStatus('Select an item prefab before generating a screenshot.', true);
+      setStatus(`Select a ${kindLabel} prefab before generating a screenshot.`, true);
       return;
     }
     setGenerating(true);
     setStatus(`Generating isometric screenshot for "${prefabId}"...`);
-    void generateItemPrefabScreenshot(prefabId)
+    const capture =
+      prefabKind === 'ship'
+        ? generateShipPrefabScreenshot(prefabId)
+        : generateItemPrefabScreenshot(prefabId);
+    void capture
       .then((dataUrl) => {
         onChange(dataUrl);
         setStatus('Screenshot generated. Save the definition to persist the icon.');
@@ -50,14 +65,18 @@ export function IconUrlField({ value, onChange, prefabId }: IconUrlFieldProps): 
             variant="secondary"
             type="button"
             disabled={generating}
-            title="Load the selected item prefab and capture an isometric PNG with a transparent background"
+            title={`Load the selected ${kindLabel} prefab and capture an isometric PNG with a transparent background`}
             onClick={handleGenerate}
           >
             Generate Screenshot
           </AdminButton>
         </div>
         {trimmed ? (
-          <img className="sc-admin-icon-preview" alt="Item icon preview" src={trimmed} />
+          <img
+            className="sc-admin-icon-preview"
+            alt={`${kindLabel === 'ship' ? 'Ship' : 'Item'} icon preview`}
+            src={trimmed}
+          />
         ) : null}
       </div>
     </AdminField>

@@ -138,12 +138,20 @@ function UserAssignShipCard({
   const [selectedShipId, setSelectedShipId] = useState('');
   const [assigning, setAssigning] = useState(false);
   const available = filterAvailableShipDefinitions(user, shipDefinitions);
+  // Select falls back to first available option; keep that id for submit too —
+  // otherwise Assign is a no-op until the operator changes the dropdown.
+  const effectiveShipId = available.some((definition) => definition.id === selectedShipId)
+    ? selectedShipId
+    : (available[0]?.id ?? '');
 
   const handleAssign = (): void => {
-    if (!selectedShipId) return;
+    if (!effectiveShipId) return;
     setAssigning(true);
-    void assignShipToUser(user.id, { shipDefinitionId: selectedShipId })
-      .then(() => onAssigned())
+    void assignShipToUser(user.id, { shipDefinitionId: effectiveShipId })
+      .then(() => {
+        setSelectedShipId('');
+        onAssigned();
+      })
       .catch((err) => {
         if (err instanceof AdminAuthError) {
           onAuthError(err.message);
@@ -175,7 +183,7 @@ function UserAssignShipCard({
         <select
           className="sc-admin-select"
           name="assign-ship"
-          value={selectedShipId || available[0]?.id || ''}
+          value={effectiveShipId}
           onChange={(event) => setSelectedShipId(event.currentTarget.value)}
         >
           {available.map((definition) => (

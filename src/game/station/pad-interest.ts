@@ -7,7 +7,11 @@ import {
   getShipRestHeightMeters,
   usesColliderDeck,
 } from "../../player/ship-layout";
-import { sampleHangarRest, worldToStationLocal } from "../../world/station";
+import {
+  isOnHangarPad,
+  sampleHangarRest,
+  worldToStationLocal,
+} from "../../world/station";
 import {
   isNearParkedShipPad,
   worldToShipLocal,
@@ -21,10 +25,7 @@ import {
   syncShipArticulationColliders,
   teleportShipPlayerLocal,
 } from "../../physics/ship-physics";
-import {
-  createStationCharacterAt,
-  type StationCharacterState,
-} from "../../player/station-walk";
+import { createStationCharacterAt } from "../../player/station-walk";
 import {
   CHARACTER_GROUND_OFFSET_METERS,
   createCharacterState,
@@ -71,8 +72,13 @@ export function createPadInterest(
     );
     if (ctx.world.mode === MODE_IN_STATION) {
       if (!hangarRest) return false;
-      const roomId = (ctx.world.character as StationCharacterState).stationRoomId;
-      if (roomId !== hangarRest.hangar.roomId) return false;
+      // Stand on the pad, not merely in the same room. Prefab/scene stations
+      // author colliders instead of walk-volume rooms, so a room-id comparison
+      // never matched there and this branch was dead; the pad footprint is the
+      // geometric version of the same rule and works for both station kinds.
+      if (!isOnHangarPad(ctx.stationFrame, ctx.world.character.position, hangarRest.hangar)) {
+        return false;
+      }
     } else if (hangarRest) {
       // On foot outdoors: hangar-parked ships are boarded from the hangar
       // deck (station mode), never by world-switching through station walls.
@@ -90,8 +96,10 @@ export function createPadInterest(
       doors: doorBlends(rig),
     };
     const local = worldToShipLocal(ship, ctx.world.character.position);
-    ctx.shipPhysics.setPadEnabled(true);
-    ctx.shipPhysics.setPadRestHeight(getShipRestHeightMeters());
+    // A hangar bay is flat, so the pad disc is a faithful floor. A planet is
+    // not: there the disc stays off and exterior feet snap to terrain instead.
+    ctx.shipPhysics.setPadEnabled(hangarRest !== null);
+    if (hangarRest) ctx.shipPhysics.setPadRestHeight(getShipRestHeightMeters());
     teleportShipPlayerLocal(ctx.shipPhysics, {
       right: local.right,
       up: local.up,

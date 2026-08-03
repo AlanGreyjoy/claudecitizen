@@ -4,6 +4,7 @@ import { sampleHangarRest } from "../../world/station";
 import { getShipRestHeightMeters } from "../../player/ship-layout";
 import { listShipInstances, removeShipInstance } from "../../flight/ship-world";
 import { MODE_ON_FOOT } from "../../player/modes";
+import { stopAllGunshotVoices } from "../../audio/gunshots";
 import type { LoopContext } from "../loop-context";
 import type { DeckPhysics } from "../ship/deck-physics";
 import { teleportToSurface as runTeleportToSurface } from "./teleport-surface";
@@ -30,6 +31,7 @@ function cleanupForTitleReturn(
   ctx.boostSfx.stop();
   ctx.thrustSfx.stop();
   ctx.footsteps.reset();
+  stopAllGunshotVoices();
   deckPhysics.disposeShipDeckPhysics();
   let clearedHangar = false;
   for (const instance of listShipInstances()) {

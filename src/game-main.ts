@@ -120,6 +120,8 @@ async function bootGameEntry(): Promise<void> {
   // Resolve backend config before anything can issue a request. A multiplayer
   // debug window then provisions itself before the scene host asks for a session.
   await loadRuntimeConfig();
+  const { setDefaultShipPrefabId } = await import('./world/ships');
+  setDefaultShipPrefabId(runtimeConfig().defaultShipPrefab);
   const descriptor = multiplayerDebugDescriptor();
   if (descriptor) {
     await prepareMultiplayerDebug(descriptor).catch((error: unknown) => {

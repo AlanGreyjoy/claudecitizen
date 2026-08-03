@@ -19,11 +19,19 @@ export interface RuntimeConfig {
   backendUrl: string;
   /** Scene the game loads on start. */
   bootScene: string;
+  /**
+   * Hull a session falls back to when the player owns no ship — offline editor
+   * Play, or a citizen who has not been granted a starter ship yet. Empty when
+   * the project names none; the engine ships no hull of its own, so a stale id
+   * here silently produces a ship with no deck colliders.
+   */
+  defaultShipPrefab: string;
 }
 
 const DEFAULTS: RuntimeConfig = {
   backendUrl: 'http://localhost:3000',
   bootScene: 'title',
+  defaultShipPrefab: '',
 };
 const RUNTIME_CONFIG_URL = '/asteron.runtime.json';
 
@@ -36,16 +44,22 @@ function normalizeBackendUrl(value: unknown): string | null {
   return /^https?:\/\/[^\s]+$/.test(trimmed) ? trimmed : null;
 }
 
-function normalizeSceneId(value: unknown): string | null {
+function normalizeSlugId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return /^[a-z0-9][a-z0-9-]{0,63}$/.test(trimmed) ? trimmed : null;
 }
 
-function merge(backendUrl: unknown, bootScene: unknown): void {
+function merge(source: {
+  backendUrl?: unknown;
+  bootScene?: unknown;
+  defaultShipPrefab?: unknown;
+}): void {
   resolved = {
-    backendUrl: normalizeBackendUrl(backendUrl) ?? resolved.backendUrl,
-    bootScene: normalizeSceneId(bootScene) ?? resolved.bootScene,
+    backendUrl: normalizeBackendUrl(source.backendUrl) ?? resolved.backendUrl,
+    bootScene: normalizeSlugId(source.bootScene) ?? resolved.bootScene,
+    defaultShipPrefab:
+      normalizeSlugId(source.defaultShipPrefab) ?? resolved.defaultShipPrefab,
   };
 }
 
@@ -58,13 +72,15 @@ async function readEditorProjectSettings(): Promise<void> {
         backendUrl?: unknown;
         editorBackendUrl?: unknown;
         defaultScene?: unknown;
+        defaultShipPrefab?: unknown;
       };
     };
     // Authoring never follows the release stamp — that was the prod footgun.
-    merge(
-      payload.document?.editorBackendUrl ?? DEFAULTS.backendUrl,
-      payload.document?.defaultScene,
-    );
+    merge({
+      backendUrl: payload.document?.editorBackendUrl ?? DEFAULTS.backendUrl,
+      bootScene: payload.document?.defaultScene,
+      defaultShipPrefab: payload.document?.defaultShipPrefab,
+    });
   } catch {
     // Defaults stay in place when no project is bound.
   }
@@ -77,8 +93,9 @@ async function readShippedRuntimeConfig(): Promise<void> {
     const payload = (await response.json()) as {
       backendUrl?: unknown;
       bootScene?: unknown;
+      defaultShipPrefab?: unknown;
     };
-    merge(payload.backendUrl, payload.bootScene);
+    merge(payload);
   } catch {
     // A release without runtime config falls back to localhost.
   }

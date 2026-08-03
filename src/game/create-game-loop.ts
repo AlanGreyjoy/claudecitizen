@@ -1,4 +1,5 @@
 import { createLoopContext } from "./loop-context";
+import { stopAllGunshotVoices } from "../audio/gunshots";
 import { createSceneSounds } from "./audio/scene-sounds";
 import { createPrompts } from "./station/prompts";
 import { createDeckPhysics } from "./ship/deck-physics";
@@ -165,6 +166,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
     ctx.planetPhysics = null;
     ctx.soundScene.dispose();
     ctx.footsteps.dispose();
+    stopAllGunshotVoices();
     ctx.renderer?.getStationRoot()?.userData.disposeParticleSystems?.();
   }
 

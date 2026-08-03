@@ -88,6 +88,8 @@ async function readProjectSettings(projectRoot) {
     name: typeof parsed.name === 'string' ? parsed.name : 'Asteron',
     backendUrl: typeof parsed.backendUrl === 'string' ? parsed.backendUrl : '',
     defaultScene: typeof parsed.defaultScene === 'string' ? parsed.defaultScene : 'title',
+    defaultShipPrefab:
+      typeof parsed.defaultShipPrefab === 'string' ? parsed.defaultShipPrefab : '',
     outDir: resolve(projectRoot, outDir),
   };
 }
@@ -228,6 +230,7 @@ async function writeReleaseMetadata(settings) {
         project: settings.name,
         backendUrl: settings.backendUrl,
         bootScene: settings.defaultScene,
+        defaultShipPrefab: settings.defaultShipPrefab ?? '',
       },
       null,
       2,

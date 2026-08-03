@@ -8,7 +8,6 @@ import {
 } from "../flight/ship-world";
 import type { GameBootstrap } from "../net/api";
 import {
-  DEFAULT_SHIP_LAYOUT,
   getShipLayoutForPrefab,
   registerShipLayoutForPrefab,
   setActiveShipPrefabId,
@@ -23,10 +22,31 @@ import { buildShipLayoutFromPrefab } from "./prefabs/ship-runtime";
  * The player ship is a ship prefab: hull model, colliders, doors, pilot
  * seat, and ramp anchors all come from its components. The empty stub in
  * player/ship_layout.ts is only used before a prefab layout is loaded.
+ *
+ * Which hull that is belongs to the project, not the engine — a hardcoded id
+ * resolved to nothing in every project but the one it was named for, and the
+ * failure was silent: a hull rendered from the built-in model while the layout
+ * stayed the collider-less stub, so players walked through their own ship.
+ * `app/` injects the project's `defaultShipPrefab` at startup.
  */
-export const DEFAULT_SHIP_PREFAB_ID = "phobos-starhopper";
+let defaultShipPrefabId: string | null = null;
 
-registerShipLayoutForPrefab(DEFAULT_SHIP_PREFAB_ID, DEFAULT_SHIP_LAYOUT);
+/**
+ * Prefab id of the ship instance a shipless session still has to construct:
+ * `WorldState` has no "no ship" state and `getActiveShip` throws on a missing
+ * instance. It resolves to the collider-less stub layout, so `usesColliderDeck`
+ * is false and nothing tries to board it.
+ */
+export const NO_SHIP_PREFAB_ID = "none";
+
+export function setDefaultShipPrefabId(prefabId: string | null): void {
+  const trimmed = prefabId?.trim();
+  defaultShipPrefabId = trimmed ? trimmed : null;
+}
+
+export function getDefaultShipPrefabId(): string | null {
+  return defaultShipPrefabId;
+}
 
 /** Loads a ship prefab, caches its layout, and optionally activates it. */
 export async function loadShipPrefabLayout(
@@ -47,34 +67,32 @@ export async function loadShipPrefabLayout(
   return layout;
 }
 
-/** Loads the default ship prefab and activates its gameplay layout. */
-export async function applyDefaultShipPrefab(): Promise<void> {
-  const layout = await loadShipPrefabLayout(DEFAULT_SHIP_PREFAB_ID);
-  const deckReady = layout && layout.colliders.length > 0;
-  if (!deckReady) {
-    if (layout) {
-      console.warn(
-        `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" has no deck colliders; using the built-in layout.`,
-      );
-    } else {
-      console.warn(
-        `Ship prefab "${DEFAULT_SHIP_PREFAB_ID}" not found; using the built-in ship layout.`,
-      );
-    }
-    return;
+/**
+ * Hull this session's world should be built from, resolved before world
+ * creation so the ship instance is right the first time. A scene that places a
+ * ship wins; otherwise the player's own ship; otherwise the project fallback.
+ * Returns null when the session genuinely has no ship.
+ */
+export async function resolveSessionShipPrefabId(
+  sceneShipPrefabId: string | null,
+  ships: GameBootstrap["ships"] | undefined,
+): Promise<string | null> {
+  const prefabId = sceneShipPrefabId ?? ships?.[0]?.prefabId ?? defaultShipPrefabId;
+  if (!prefabId) return null;
+  // The layout must be registered before `createWorldState` reads it, or the
+  // instance is built on the collider-less stub and only corrected later.
+  const layout = await loadShipPrefabLayout(prefabId);
+  if (!layout) {
+    console.warn(`Ship prefab "${prefabId}" did not load; this session has no ship.`);
+    return null;
   }
-  setActiveShipPrefabId(DEFAULT_SHIP_PREFAB_ID);
-}
-
-/** Activates a cached or freshly loaded prefab layout for deck/rig helpers. */
-export async function activateShipPrefab(prefabId: string): Promise<ShipLayout> {
-  let layout = getShipLayoutForPrefab(prefabId);
-  const cached = layout;
-  const loaded = await loadShipPrefabLayout(prefabId);
-  if (loaded) layout = loaded;
-  else if (cached) layout = cached;
+  if (layout.colliders.length === 0) {
+    console.warn(
+      `Ship prefab "${prefabId}" has no deck colliders; its interior is not walkable.`,
+    );
+  }
   setActiveShipPrefabId(prefabId);
-  return layout;
+  return prefabId;
 }
 
 /** Clears the active prefab override (dev / teardown). */

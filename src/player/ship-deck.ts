@@ -9,19 +9,19 @@ import {
   tangentize,
   vec3,
 } from "../math/vec3";
+import { CHARACTER_GROUND_OFFSET_METERS } from "./character-controller";
 import {
-  CHARACTER_GROUND_OFFSET_METERS,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-} from "./character-controller";
+} from "./character-camera";
 import {
   advanceJumpAnimationPhase,
   animationLayersFromState,
   isAirborneForAnimation,
+  isJumpInProgress,
   resolveWalkAiming,
   resolveWalkFacing,
   resolveWalkInputIntent,
-  shouldLockFacingToCamera,
 } from "./character-locomotion";
 import {
   sampleColliderGroundHeight,
@@ -878,13 +878,17 @@ function updateCharacterOnDeckRapier(
       cameraForward,
       up: ship.up,
       aiming: poseAiming,
-      lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
     },
     dt,
   );
   const flags = resolveDeckExitState(state, physics, grounded, options);
 
-  const airborne = isAirborneForAnimation(grounded, verticalAfter, startedJump);
+  const airborne = isAirborneForAnimation(
+    grounded,
+    verticalAfter,
+    startedJump,
+    isJumpInProgress(state.jumpPhase),
+  );
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   const layers = animationLayersFromState({
     stanceId,

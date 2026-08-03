@@ -4,10 +4,10 @@ import {
   advanceJumpAnimationPhase,
   animationLayersFromState,
   isAirborneForAnimation,
+  isJumpInProgress,
   resolveWalkAiming,
   resolveWalkFacing,
   resolveWalkInputIntent,
-  shouldLockFacingToCamera,
 } from './character-locomotion';
 
 import {
@@ -243,7 +243,12 @@ export function updateCharacterInStation(
   stepStationPhysics(physics);
 
   const groundedAfter = isStationPlayerGrounded(physics);
-  const airborne = isAirborneForAnimation(groundedAfter, verticalVelocity, startedJump);
+  const airborne = isAirborneForAnimation(
+    groundedAfter,
+    verticalVelocity,
+    startedJump,
+    isJumpInProgress(state.jumpPhase),
+  );
   const jump = advanceJumpAnimationPhase(state, dt, airborne, startedJump);
   const position = getStationPlayerPosition(physics, frame);
   const local = worldToStationLocal(frame, position);
@@ -254,7 +259,6 @@ export function updateCharacterInStation(
       cameraForward,
       up: frame.up,
       aiming: poseAiming,
-      lockFacingToCamera: shouldLockFacingToCamera(poseAiming),
     },
     dt,
   );

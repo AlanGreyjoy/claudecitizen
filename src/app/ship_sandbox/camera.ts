@@ -3,7 +3,7 @@ import {
   FIRST_PERSON_PITCH_LIMIT,
   ORBIT_PITCH_LIMIT,
   resolveCharacterCameraRig,
-} from '../../player/character-controller';
+} from '../../player/character-camera';
 import { resolveDeckCameraOrbit } from '../../flight/flight-aim';
 import { getBedEyeLocal, localOffsetToWorld } from '../../player/ship-interaction';
 import { updateEntertainmentCameraFeel } from '../../player/entertainment-camera';

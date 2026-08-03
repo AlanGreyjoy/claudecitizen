@@ -2574,6 +2574,64 @@ body.ed-resize-row * {
   pointer-events: none;
 }
 
+.ed-base-guide-readout {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  max-width: min(520px, calc(100% - 24px));
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: rgba(24, 31, 39, 0.9);
+  color: var(--ed-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.ed-base-guide-readout[hidden] {
+  display: none;
+}
+
+.ed-base-playtest-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.ed-base-playtest-reticle[hidden] {
+  display: none;
+}
+
+.ed-base-playtest-reticle::before,
+.ed-base-playtest-reticle::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
+.ed-base-playtest-reticle::before {
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  margin-left: -0.5px;
+}
+
+.ed-base-playtest-reticle::after {
+  top: 50%;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  margin-top: -0.5px;
+}
+
 .ed-base-stage-status.is-error,
 .ed-base-warning {
   color: var(--ed-danger);

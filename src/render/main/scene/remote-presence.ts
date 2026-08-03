@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getShipLayoutForPrefab } from '../../../player/ship-layout';
+import { getDefaultShipPrefabId, NO_SHIP_PREFAB_ID } from '../../../world/ships';
 import type { NetworkRenderEntity, NetworkShipRig, Vec3 } from '../../../types';
 import {
   createCharacterAvatarInstance,
@@ -27,7 +28,10 @@ interface RemoteObject {
   labelTexture: THREE.CanvasTexture;
 }
 
-const DEFAULT_REMOTE_SHIP_PREFAB_ID = 'phobos-starhopper';
+/** Peer snapshot without a prefab id: the project fallback, else the stub. */
+function defaultRemoteShipPrefabId(): string {
+  return getDefaultShipPrefabId() ?? NO_SHIP_PREFAB_ID;
+}
 
 const DEFAULT_REMOTE_SHIP_RIG: NetworkShipRig = {
   gear01: 0,
@@ -61,7 +65,7 @@ function createLabelTexture(text: string): THREE.CanvasTexture {
 }
 
 function resolveRemoteShipPrefabId(entity: NetworkRenderEntity): string {
-  return entity.ship?.prefabId?.trim() || DEFAULT_REMOTE_SHIP_PREFAB_ID;
+  return entity.ship?.prefabId?.trim() || defaultRemoteShipPrefabId();
 }
 
 function createRemoteShipHandle(prefabId: string, renderScale: number): ShipModelHandle {

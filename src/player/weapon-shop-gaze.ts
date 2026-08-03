@@ -5,10 +5,8 @@ import {
   type StationFrame,
   type StationWeaponShopMarker,
 } from "../world/station";
-import {
-  CHARACTER_EYE_HEIGHT_METERS,
-  ORBIT_PITCH_LIMIT,
-} from "./character-controller";
+import { CHARACTER_EYE_HEIGHT_METERS } from "./character-controller";
+import { ORBIT_PITCH_LIMIT } from "./character-camera";
 
 /**
  * Gaze pick for station weapon-shop markers while on foot
