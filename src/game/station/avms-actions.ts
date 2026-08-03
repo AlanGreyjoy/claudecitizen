@@ -10,9 +10,26 @@ import {
   type GameBootstrap,
 } from "../../net/api";
 import type { StationAvmsMarker } from "../../world/station";
+import {
+  getActiveSystemDocument,
+  resolveStationFamilyHangarSceneId,
+} from "../../world/systems/runtime";
 import type { LoopContext } from "../loop-context";
 import { resolveSceneExitInstanceId } from "./scene-exit";
 import type { BuildTool } from "./build-tool";
+
+/** Terminal hangar scene, else System Map family ownership for this station. */
+function resolveAvmsHangarSceneId(
+  ctx: LoopContext,
+  terminal: StationAvmsMarker | null,
+): string {
+  const fromTerminal = terminal?.hangarSceneId.trim() ?? "";
+  if (fromTerminal) return fromTerminal;
+  return resolveStationFamilyHangarSceneId(getActiveSystemDocument(), {
+    entryId: ctx.activeStationInstanceId,
+    sceneId: ctx.stationPrefab?.id ?? null,
+  });
+}
 
 function shipsForAvms(ctx: LoopContext): GameBootstrap["ships"] {
   if (ctx.bootstrap?.ships.length) return ctx.bootstrap.ships;
@@ -51,18 +68,20 @@ function hangarTravel(
   ctx: LoopContext,
   terminal: StationAvmsMarker | null,
 ): (() => void) | undefined {
-  const sceneId = terminal?.hangarSceneId.trim();
-  if (!terminal || !sceneId || !ctx.onRequestScene) return undefined;
+  const sceneId = resolveAvmsHangarSceneId(ctx, terminal);
+  if (!sceneId || !ctx.onRequestScene) return undefined;
   const onRequestScene = ctx.onRequestScene;
+  const hangarInstanceId = terminal?.hangarInstanceId?.trim() || "@hangar";
+  const hangarRoomId = terminal?.hangarRoomId?.trim() || "lobby";
   return () => {
     onRequestScene({
       sceneId,
       instanceId: resolveSceneExitInstanceId(
-        terminal.hangarInstanceId,
+        hangarInstanceId,
         ctx.bootstrap,
         ctx.systemId,
       ),
-      roomId: terminal.hangarRoomId,
+      roomId: hangarRoomId,
       arrival: "default",
     });
   };

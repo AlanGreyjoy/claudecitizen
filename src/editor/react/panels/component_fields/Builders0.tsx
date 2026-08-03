@@ -74,6 +74,11 @@ export function StationFrameFields(): ReactElement {
   return <></>;
 }
 
+/** Pose-only marker — hangar mouth for open-space fly-through arrival. */
+export function HangarOpenSpaceExitFields(): ReactElement {
+  return <></>;
+}
+
 export function PropFrameFields(): ReactElement {
   return <></>;
 }

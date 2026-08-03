@@ -450,6 +450,22 @@ export interface StationSceneExitMarker {
    */
   networkInstanceId: string;
   arrivalRoomId: string;
+  /**
+   * Station prefab whose `hangar-open-space-exit` is the open-space arrival
+   * mouth. Empty when the exit is not an open-space fly-through.
+   */
+  stationPrefabId: string;
+}
+
+/**
+ * Hangar mouth baked from a Station's `hangar-open-space-exit` marker.
+ * Pose is station-local; rotation faces local +Z out of the bay.
+ */
+export interface StationHangarOpenSpaceExitMarker {
+  right: number;
+  up: number;
+  forward: number;
+  rotation: { x: number; y: number; z: number; w: number };
 }
 
 export type StationDoorTrigger = "radial" | "raycast";
@@ -509,8 +525,8 @@ export interface StationAvmsMarker {
   screenWidth: number;
   screenHeight: number;
   /**
-   * Hangar shortcut authored on the component. Empty `hangarSceneId` means the
-   * terminal has no hangar button — engine code never names a project scene.
+   * Hangar shortcut authored on the component. Empty `hangarSceneId` falls back
+   * to the active System Map station entry's `hangarSceneId` (station family).
    */
   hangarSceneId: string;
   hangarLabel: string;
@@ -598,6 +614,11 @@ export interface StationLayoutOverride {
   infoMarkers: StationInfoMarker[];
   /** F-key portals that load another scene (hab → station). */
   sceneExitMarkers: StationSceneExitMarker[];
+  /**
+   * Hangar mouth for open-space fly-through arrival. Null when the station
+   * prefab has no `hangar-open-space-exit` marker.
+   */
+  hangarOpenSpaceExit: StationHangarOpenSpaceExitMarker | null;
   /** Self-contained F-key doors from `door` components. */
   doors: StationDoorSpec[];
   /** Personal stash chests from `chest-storage` components. */

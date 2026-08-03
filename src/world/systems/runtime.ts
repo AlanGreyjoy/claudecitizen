@@ -98,6 +98,33 @@ export function stationEntrySourceId(station: SystemStationEntry): string {
   return station.sceneId ? `scene:${station.sceneId}` : station.stationPrefabId ?? 'unknown';
 }
 
+/**
+ * Look up a system station entry by map instance id and/or concourse scene id.
+ * Prefers `entryId` when both are set.
+ */
+export function findSystemStationEntry(
+  system: SystemDocument,
+  query: { entryId?: string | null; sceneId?: string | null },
+): SystemStationEntry | null {
+  if (query.entryId) {
+    const byId = system.stations.find((station) => station.id === query.entryId);
+    if (byId) return byId;
+  }
+  if (query.sceneId) {
+    const byScene = system.stations.find((station) => station.sceneId === query.sceneId);
+    if (byScene) return byScene;
+  }
+  return null;
+}
+
+/** Hangar scene owned by the station family, or empty when unset / unknown. */
+export function resolveStationFamilyHangarSceneId(
+  system: SystemDocument,
+  query: { entryId?: string | null; sceneId?: string | null },
+): string {
+  return findSystemStationEntry(system, query)?.hangarSceneId?.trim() ?? '';
+}
+
 export function isStarParent(parentBodyId: string): boolean {
   return parentBodyId === SYSTEM_STAR_PARENT_ID;
 }

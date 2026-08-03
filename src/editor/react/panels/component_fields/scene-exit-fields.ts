@@ -20,6 +20,14 @@ export const SCENE_EXIT_NETWORK_OPTIONS: readonly LabeledOption[] = [
   { value: '@space', label: 'Open space (@space)' },
 ];
 
+/** True when this exit leaves a hangar mouth for open space. */
+export function isOpenSpaceFlyThrough(
+  sceneId: string,
+  trigger: SceneExitTrigger,
+): boolean {
+  return sceneId === '@space' || trigger === 'fly-through';
+}
+
 /**
  * Defaults for Network Instance / Arrival Room from the chosen target + trigger.
  * `@space` / fly-through → open-space cell; everything else → shared station lobby.
@@ -27,11 +35,15 @@ export const SCENE_EXIT_NETWORK_OPTIONS: readonly LabeledOption[] = [
 export function sceneExitRoutingDefaults(
   sceneId: string,
   trigger: SceneExitTrigger,
-): Pick<SceneExitComponent, 'networkInstanceId' | 'arrivalRoomId'> {
-  if (sceneId === '@space' || trigger === 'fly-through') {
+): Pick<SceneExitComponent, 'networkInstanceId' | 'arrivalRoomId' | 'stationPrefabId'> {
+  if (isOpenSpaceFlyThrough(sceneId, trigger)) {
     return { networkInstanceId: '@space', arrivalRoomId: 'lobby' };
   }
-  return { networkInstanceId: STATION_PUBLIC_INSTANCE, arrivalRoomId: 'lobby' };
+  return {
+    networkInstanceId: STATION_PUBLIC_INSTANCE,
+    arrivalRoomId: 'lobby',
+    stationPrefabId: undefined,
+  };
 }
 
 /** Target Scene change: also pick trigger so hangar mouths don't stay on interact. */
@@ -41,12 +53,16 @@ export function patchSceneExitTarget(
 ): SceneExitComponent {
   const trigger: SceneExitTrigger =
     sceneId === '@space' ? 'fly-through' : 'interact';
-  return {
+  const next: SceneExitComponent = {
     ...component,
     sceneId,
     trigger,
     ...sceneExitRoutingDefaults(sceneId, trigger),
   };
+  if (!isOpenSpaceFlyThrough(sceneId, trigger)) {
+    delete next.stationPrefabId;
+  }
+  return next;
 }
 
 export function patchSceneExitTrigger(
@@ -57,12 +73,16 @@ export function patchSceneExitTrigger(
     trigger === 'fly-through' && !(component.sceneId ?? '').trim()
       ? '@space'
       : (component.sceneId ?? '');
-  return {
+  const next: SceneExitComponent = {
     ...component,
     sceneId,
     trigger,
     ...sceneExitRoutingDefaults(sceneId, trigger),
   };
+  if (!isOpenSpaceFlyThrough(sceneId, trigger)) {
+    delete next.stationPrefabId;
+  }
+  return next;
 }
 
 /** Options list that keeps a custom/unknown authored value visible. */

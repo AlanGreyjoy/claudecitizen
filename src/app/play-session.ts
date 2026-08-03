@@ -37,7 +37,12 @@ import type { BuildPropColliderRuntime } from '../player/hangar_build/prop-colli
 import { pickStationFloorPoint } from '../render/hangar/prop-instances';
 import { resolvePlaySessionBootstrap } from './play-session-bootstrap';
 import { isEditorOfflineBootstrap } from './editor-play-bootstrap';
-import { loadPlayWorldContext, type PlayWorldParams } from './play-session-world';
+import {
+  resolveOpenSpaceFlyThroughWorld,
+  type PlayWorldContext,
+  type PlayWorldParams,
+} from './play-session-world';
+import type { HangarOpenSpaceExitWorldPose } from '../world/hangar-open-space-exit';
 import { collectPlaySessionDom, requireElement } from './play-session-dom';
 import { getPlayChromeRoot, mountPlayChrome } from './play-chrome';
 import { createPlayBuildSystems } from './play-session-build';
@@ -204,7 +209,7 @@ export interface StartPlaySessionOptions {
 
 async function warmPlaySpawnSurface(
   loading: LoadingScreenHandle | undefined,
-  world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
+  world: PlayWorldContext,
   renderer: SpikeRenderer | null,
 ): Promise<void> {
   if (!world.params.spawnSurface) {
@@ -243,7 +248,7 @@ async function applyScenePlayShipPrefab(params: PlayWorldParams): Promise<void> 
 }
 
 function createPlayGameLoop(options: {
-  world: Awaited<ReturnType<typeof loadPlayWorldContext>>;
+  world: PlayWorldContext;
   controls: ReturnType<typeof createPlayerControls>;
   renderer: SpikeRenderer | null;
   rendererError: unknown;
@@ -256,6 +261,8 @@ function createPlayGameLoop(options: {
   onRequestScene?: (target: SceneExitTarget) => void;
   /** Set by the scene-exit that caused this session, if any. */
   arrival?: 'default' | 'in-ship';
+  /** Hangar-mouth pose for an `in-ship` open-space arrival. */
+  spaceSpawnPose?: HangarOpenSpaceExitWorldPose | null;
 }) {
   const {
     world,
@@ -276,6 +283,7 @@ function createPlayGameLoop(options: {
     seed: world.seed,
     spawn: world.params.spawnSurface ? 'surface' : 'station',
     arrival: options.arrival ?? 'default',
+    spaceSpawnPose: options.spaceSpawnPose ?? null,
     planetId: world.planetDocument.id,
     systemId: world.systemDocument?.id ?? world.params.systemId,
     activeStationInstanceId: world.primaryStation?.id ?? null,
@@ -327,7 +335,7 @@ function createPlayGameLoop(options: {
 
 async function createPlayRenderer(
   dom: ReturnType<typeof collectPlaySessionDom>,
-  world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
+  world: PlayWorldContext,
   characterAppearance: PlayerCharacterAppearanceV1 | null,
 ): Promise<{ renderer: SpikeRenderer | null; rendererError: unknown }> {
   try {
@@ -408,7 +416,7 @@ function wireBuildCanvas(
 }
 
 async function createPlayStationPhysics(
-  world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
+  world: PlayWorldContext,
 ): Promise<StationPhysics | null> {
   try {
     const stationFrame = getStationFrame(world.planet);
@@ -498,7 +506,7 @@ function createPlayVitalsSession(options: {
 }
 
 async function finalizePlaySessionStart(options: {
-  world: Awaited<ReturnType<typeof loadPlayWorldContext>>;
+  world: PlayWorldContext;
   overlays: Awaited<ReturnType<typeof createPlayOverlayStack>>;
   bootstrap: GameBootstrap | null;
   onSurfaceTeleport: ReturnType<typeof createGameLoop>['teleportToSurface'];
@@ -527,7 +535,7 @@ async function finalizePlaySessionStart(options: {
  */
 async function mountPlaySurface(
   loading: LoadingScreenHandle | undefined,
-  world: Awaited<ReturnType<typeof loadPlayWorldContext>>,
+  world: PlayWorldContext,
   bootstrap: GameBootstrap | null,
 ): Promise<{
   dom: ReturnType<typeof collectPlaySessionDom>;
@@ -573,7 +581,10 @@ export async function startPlaySession(
   loading?.setProgress(0.15);
 
   document.getElementById('title-screen')?.classList.add('is-hidden');
-  const world = await loadPlayWorldContext(loading, options.worldParams);
+  const { world, arrival, spaceSpawnPose } = await resolveOpenSpaceFlyThroughWorld(loading, {
+    worldParams: options.worldParams,
+    networkTarget: options.networkTarget,
+  });
   // Scenes that place no ship never load a hull. The player ship stays an
   // unrendered data stub so mode transitions keep a body to read.
   if (world.params.content.ship) await applyScenePlayShipPrefab(world.params);
@@ -634,7 +645,8 @@ export async function startPlaySession(
     physics,
     vitalsSession,
     onRequestScene: options.onRequestScene,
-    arrival: options.networkTarget?.arrival ?? 'default',
+    arrival,
+    spaceSpawnPose,
   });
 
   loopRef.loop = gameLoop;

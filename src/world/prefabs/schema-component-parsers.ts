@@ -312,6 +312,10 @@ function parseSceneExitComponent(
     value.arrivalRoomId === undefined
       ? undefined
       : parseString(value.arrivalRoomId, `${path}.arrivalRoomId`, 64).trim();
+  const stationPrefabRaw =
+    value.stationPrefabId === undefined
+      ? undefined
+      : parseString(value.stationPrefabId, `${path}.stationPrefabId`, 128).trim();
   const trigger = SCENE_EXIT_TRIGGERS.includes(value.trigger as SceneExitTrigger)
     ? (value.trigger as SceneExitTrigger)
     : "interact";
@@ -332,7 +336,17 @@ function parseSceneExitComponent(
         }),
     ...(networkRaw ? { networkInstanceId: networkRaw } : { networkInstanceId: "" }),
     ...(arrivalRaw ? { arrivalRoomId: arrivalRaw } : {}),
+    ...(stationPrefabRaw ? { stationPrefabId: stationPrefabRaw } : {}),
   };
+}
+
+function parseHangarOpenSpaceExitComponent(
+  value: Record<string, unknown>,
+  path: string,
+): PrefabComponent {
+  void value;
+  void path;
+  return { type: "hangar-open-space-exit" };
 }
 
 function parseLadderComponent(
@@ -1855,6 +1869,7 @@ export const COMPONENT_PARSER_BY_TYPE: Record<
   "npc-waypoint": parseNpcWaypointComponent,
   "npc-placement": parseNpcPlacementComponent,
   "scene-exit": parseSceneExitComponent,
+  "hangar-open-space-exit": parseHangarOpenSpaceExitComponent,
   "ladder": parseLadderComponent,
   "hangar-pad": parseHangarPadComponent,
   "interaction": parseInteractionComponent,

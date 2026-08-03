@@ -76,6 +76,10 @@ Open space is an ordinary scene; what makes it reachable is a **Scene Exit** wit
 through the boot scene's Open Space Scene at runtime. A hangar prefab authored
 that way works in any project without knowing its scene ids.
 
+Also pick **Station** on that exit: the Station prefab that owns a
+[Hangar Open Space Exit](./components/hangar-open-space-exit) marker. Arrival
+spawns the ship at that hangar mouth instead of a generic orbit altitude.
+
 Flying through the marker swaps both the scene and the authoritative cell
 (`space:<systemId>`), and you arrive **still in the cockpit** rather than on
 foot.

@@ -18,6 +18,7 @@ const STATION_COMPONENT_TYPES = new Set<PrefabComponent['type']>([
   'npc-waypoint',
   'npc-placement',
   'scene-exit',
+  'hangar-open-space-exit',
   'hangar-pad',
   'interaction',
   'avms-terminal',

@@ -13,6 +13,7 @@ import {
 import { resolveLandingSite } from '../world/landing-sites';
 import { sampleFootPlanetSurface, sampleRenderablePlanetSurface } from '../world/planet-surface';
 import type { CharacterState, FlightBody, Planet, Vec3 } from '../types';
+import type { HangarOpenSpaceExitWorldPose } from '../world/hangar-open-space-exit';
 
 import { getShipRestHeightMeters } from './ship-layout';
 import { getPilotSeatAnchor } from './ship-interaction';
@@ -60,6 +61,11 @@ export function createSpaceSpawnShip(planet: Planet, seed: number): FlightBody {
   );
   // Facing along the orbit track, upright relative to the planet below.
   return createFlightBody(position, eastVector(position), radialUp(position));
+}
+
+/** Open-space arrival at a station hangar mouth (`hangar-open-space-exit`). */
+export function createSpaceSpawnShipAtPose(pose: HangarOpenSpaceExitWorldPose): FlightBody {
+  return createFlightBody(pose.position, pose.forward, pose.up);
 }
 
 /** Character already seated at the controls, for an arrival that is mid-flight. */

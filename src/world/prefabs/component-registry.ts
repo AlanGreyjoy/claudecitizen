@@ -247,7 +247,19 @@ export const COMPONENT_REGISTRY: ComponentDef[] = [
       arrivalRoomId: "lobby",
     }),
     hint:
-      "The only way a player moves between places in Play. `interact` prompts for F on foot; `fly-through` fires when a ship crosses it (hangar → open space). Target cell takes a literal id or a per-player token: @apartment, @hangar, @space.",
+      "The only way a player moves between places in Play. `interact` prompts for F on foot; `fly-through` fires when a ship crosses it (hangar → open space). Target cell takes a literal id or a per-player token: @apartment, @hangar, @space. Open-space exits also pick the Station whose Hangar Open Space Exit mouth to arrive at.",
+  },
+  {
+    type: "hangar-open-space-exit",
+    label: "Hangar Open Space Exit",
+    category: "gameplay",
+    kinds: ["station"],
+    scenes: true,
+    marker: true,
+    singleton: true,
+    createDefault: () => ({ type: "hangar-open-space-exit" }),
+    hint:
+      "Hangar mouth on this Station. Fly-through @space scene-exits that name this station spawn the ship here in open space. Local +Z is exit facing.",
   },
   {
     type: "ladder",

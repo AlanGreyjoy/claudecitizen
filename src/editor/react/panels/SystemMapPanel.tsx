@@ -235,22 +235,23 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
     }, [markDirtyAndRebuild, planetList, setSelectionState, setStatusMessage]);
 
     const addStationEntry = useCallback(() => {
-      if (stationPrefabs.length === 0) {
-        setStatusMessage('No station prefabs available.', true);
+      if (sceneList.length === 0) {
+        setStatusMessage('No scenes available. Create a station scene first.', true);
         return;
       }
-      const prefab = stationPrefabs[0];
-      if (!prefab) return;
+      const preferred =
+        sceneList.find((scene) => scene.id === 'blackmarket') ?? sceneList[0];
+      if (!preferred) return;
       const doc = documentRef.current;
       const taken = new Set(doc.stations.map((station) => station.id));
-      const id = uniqueSlug(`${prefab.id}-orbit`, taken);
+      const id = uniqueSlug(`${preferred.id}-orbit`, taken);
       const parent = doc.planets[0];
       const parentBodyId = parent?.id ?? SYSTEM_STAR_PARENT_ID;
       const index = doc.stations.length;
       doc.stations.push({
         id,
-        stationPrefabId: prefab.id,
-        name: prefab.name,
+        sceneId: preferred.id,
+        name: preferred.name,
         parentBodyId,
         offsetMeters: {
           x: Math.cos(index) * SYSTEM_MAP_STATION_OFFSET_METERS,
@@ -261,7 +262,7 @@ export const SystemMapPanel = forwardRef<SystemMapEditor, SystemMapPanelProps>(
       setDocumentState({ ...doc });
       setSelectionState({ kind: 'station', id });
       markDirtyAndRebuild();
-    }, [markDirtyAndRebuild, setSelectionState, setStatusMessage, stationPrefabs]);
+    }, [markDirtyAndRebuild, sceneList, setSelectionState, setStatusMessage]);
 
     const removeSelected = useCallback(() => {
       const doc = documentRef.current;

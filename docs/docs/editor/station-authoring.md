@@ -133,15 +133,15 @@ Scene Exit points back at the station. See [Game flow](./game-flow).
 
 A hangar leaves for space by ship, not on foot:
 
-1. Place a **Scene Exit** at the hangar mouth, sized to cover the opening
-2. Set `trigger: "fly-through"` — it fires on crossing, with no prompt
-3. Set its target scene to **Open Space (Game Manager)**, which stores the
-   `@space` token and resolves through the boot scene's **Open Space Scene**
-4. Set `networkInstanceId` to `@space` so the cell follows the scene
+1. On the **Station** prefab, place a [Hangar Open Space Exit](./components/hangar-open-space-exit) at the bay mouth (local +Z out)
+2. In the hangar, place a **Scene Exit** at the mouth, sized to cover the opening
+3. Set its target scene to **Open Space (Game Manager)** (`@space` / `fly-through`)
+4. Set **Station** to that station prefab so arrival uses its hangar mouth pose
+5. Keep `networkInstanceId` `@space` so the cell follows the scene
 
 Flying through swaps the scene and drops you into `space:<systemId>` still at the
-controls. Because the target is a token, the same hangar prefab works in any
-project that names an Open Space Scene.
+controls, at the station's Hangar Open Space Exit. Because the target is a token,
+the same hangar prefab works in any project that names an Open Space Scene.
 
 ## Preview
 

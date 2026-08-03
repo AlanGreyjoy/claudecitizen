@@ -19,9 +19,14 @@ import {
   orbitHintFromSystemOffset,
   setStationLayoutOverride,
   setStationOrbitHint,
+  getStationFrame,
   getStationFrameAt,
   type StationFrame,
 } from '../world/station';
+import {
+  hangarOpenSpaceExitWorldPose,
+  type HangarOpenSpaceExitWorldPose,
+} from '../world/hangar-open-space-exit';
 import type { Planet } from '../types';
 import type { PlanetDocument } from '../world/planets/schema';
 import type { PrefabDocument } from '../world/prefabs/schema';
@@ -292,6 +297,73 @@ async function resolvePlayStation(
     ?? primaryStation?.stationPrefabId
     ?? (params.content.planet ? DEFAULT_STATION_PREFAB_ID : null);
   return stationPrefabId ? resolveStationPrefab(stationPrefabId) : null;
+}
+
+/**
+ * World pose for flying out of a station hangar into open space.
+ *
+ * Loads the named station prefab only to read its `hangar-open-space-exit`
+ * marker — does not replace the session's walkable station layout. Orbit frame
+ * must already be set for that station (via `stationPrefabOverride` / primary).
+ */
+export async function resolveHangarOpenSpaceArrivalPose(
+  planet: Planet,
+  stationPrefabId: string,
+): Promise<HangarOpenSpaceExitWorldPose | null> {
+  const id = stationPrefabId.trim();
+  if (!id) return null;
+  const doc = await loadPrefabDocument(id);
+  if (!doc) {
+    console.warn(
+      `Open-space arrival station prefab "${id}" not found; using default open-space spawn.`,
+    );
+    return null;
+  }
+  const layout = await buildStationLayoutFromPrefab(doc);
+  const marker = layout?.hangarOpenSpaceExit ?? null;
+  if (!marker) {
+    console.warn(
+      `Station prefab "${id}" has no hangar-open-space-exit marker; using default open-space spawn.`,
+    );
+    return null;
+  }
+  return hangarOpenSpaceExitWorldPose(getStationFrame(planet), marker);
+}
+
+/** Fly-through `@space` arrival: prefer the exit's station for orbit + mouth pose. */
+export async function resolveOpenSpaceFlyThroughWorld(
+  loading: LoadingScreenHandle | undefined,
+  options: {
+    worldParams?: PlayWorldParams;
+    networkTarget?: {
+      arrival?: 'default' | 'in-ship';
+      stationPrefabId?: string;
+    } | null;
+  },
+): Promise<{
+  world: PlayWorldContext;
+  arrival: 'default' | 'in-ship';
+  spaceSpawnPose: HangarOpenSpaceExitWorldPose | null;
+}> {
+  const arrival = options.networkTarget?.arrival ?? 'default';
+  const arrivalStationPrefabId =
+    arrival === 'in-ship' ? options.networkTarget?.stationPrefabId?.trim() ?? '' : '';
+  let worldParams = options.worldParams;
+  if (arrivalStationPrefabId) {
+    const base = worldParams ?? (await readPlayWorldParamsFromScene());
+    worldParams = { ...base, stationPrefabOverride: arrivalStationPrefabId };
+  }
+  const world = await loadPlayWorldContext(loading, worldParams);
+  const spaceSpawnPose =
+    arrival === 'in-ship' && arrivalStationPrefabId
+      ? await resolveHangarOpenSpaceArrivalPose(world.planet, arrivalStationPrefabId)
+      : null;
+  if (arrival === 'in-ship' && !arrivalStationPrefabId) {
+    console.warn(
+      'Open-space fly-through scene-exit has no stationPrefabId; using default open-space spawn.',
+    );
+  }
+  return { world, arrival, spaceSpawnPose };
 }
 
 export async function loadPlayWorldContext(

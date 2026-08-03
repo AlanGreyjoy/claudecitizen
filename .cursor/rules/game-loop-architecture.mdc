@@ -9,8 +9,9 @@ Full draft: [`docs/docs/architecture/game-loop.md`](../../docs/docs/architecture
 
 **Summary:** A Station owns its Hab + Hangar. Hab/Hangar are per-player instances
 (placeable build; team can follow in). Happy path: Hab → Station (`scene-exit`) →
-AVMS call ship / To Hangar → Hangar → Open Space (`scene-exit` via Station marker
-`HANGAR-OPEN-SPACE-EXIT`). Travel stays scene-based — no second teleporter system.
+AVMS call ship / To Hangar → Hangar → Open Space (`scene-exit` `@space` + station
+prefab → Station `hangar-open-space-exit` / `HANGAR-OPEN-SPACE-EXIT` mouth).
+Travel stays scene-based — no second teleporter system.
 
 When changing station/hab/hangar/AVMS/`scene-exit` flow, read the full doc first.
 Also listed in `AGENTS.md`.

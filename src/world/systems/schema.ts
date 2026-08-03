@@ -1,7 +1,10 @@
 /**
- * System documents place planets and station prefab instances on a flat
- * ecliptic around a single star. Files live under
- * src/world/systems/data/<id>.system.json.
+ * System documents place planets and orbital stations on a flat ecliptic
+ * around a single star. Files live under src/world/systems/data/<id>.system.json.
+ *
+ * Stations are scene-first (concourse `sceneId`) with optional Hab/Hangar
+ * ownership (`habSceneId` / `hangarSceneId`). Legacy `stationPrefabId` remains
+ * as an XOR geometry source.
  *
  * Coordinates (v1):
  * - Star sits at (0, 0) on the ecliptic.
@@ -61,8 +64,18 @@ export interface SystemStationEntry {
    * `buildSceneStationDocument`).
    */
   stationPrefabId?: string;
-  /** Scene id whose GameObjects author this station. */
+  /** Scene id whose GameObjects author this station (concourse / shared lobby). */
   sceneId?: string;
+  /**
+   * Instanced Hab scene owned by this station family. Not a map marker — only
+   * ownership for travel / boot wiring. Empty means family incomplete.
+   */
+  habSceneId?: string;
+  /**
+   * Instanced Hangar scene owned by this station family. AVMS To Hangar falls
+   * back here when the terminal leaves `hangarSceneId` blank.
+   */
+  hangarSceneId?: string;
   name: string;
   /** `"star"` or a `SystemPlanetEntry.id`. */
   parentBodyId: string;
@@ -97,6 +110,16 @@ function readOptionalAltitude(raw: unknown): number | undefined {
   return raw;
 }
 
+/** Optional scene id; empty/missing → undefined; invalid pattern → sentinel fail. */
+function readOptionalOwnedSceneId(raw: unknown): string | undefined | null {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'string') return null;
+  const id = raw.trim();
+  if (!id) return undefined;
+  if (!SYSTEM_ID_PATTERN.test(id)) return null;
+  return id;
+}
+
 function parsePlanetEntry(raw: unknown): SystemPlanetEntry | null {
   if (!raw || typeof raw !== 'object') return null;
   const src = raw as Record<string, unknown>;
@@ -110,36 +133,57 @@ function parsePlanetEntry(raw: unknown): SystemPlanetEntry | null {
   return { id, planetId, name, positionMeters };
 }
 
+/** Exactly one geometry source: station prefab XOR concourse scene. */
+function readStationGeometrySource(
+  src: Record<string, unknown>,
+): { stationPrefabId?: string; sceneId?: string } | null {
+  const stationPrefabId =
+    typeof src.stationPrefabId === 'string' ? src.stationPrefabId.trim() : '';
+  const sceneId = typeof src.sceneId === 'string' ? src.sceneId.trim() : '';
+  if (Boolean(stationPrefabId) === Boolean(sceneId)) return null;
+  if (stationPrefabId && !SYSTEM_ID_PATTERN.test(stationPrefabId)) return null;
+  if (sceneId && !SYSTEM_ID_PATTERN.test(sceneId)) return null;
+  return {
+    ...(stationPrefabId ? { stationPrefabId } : {}),
+    ...(sceneId ? { sceneId } : {}),
+  };
+}
+
+function readStationFamilyScenes(
+  src: Record<string, unknown>,
+): { habSceneId?: string; hangarSceneId?: string } | null {
+  const habSceneId = readOptionalOwnedSceneId(src.habSceneId);
+  const hangarSceneId = readOptionalOwnedSceneId(src.hangarSceneId);
+  if (habSceneId === null || hangarSceneId === null) return null;
+  return {
+    ...(habSceneId ? { habSceneId } : {}),
+    ...(hangarSceneId ? { hangarSceneId } : {}),
+  };
+}
+
 function parseStationEntry(raw: unknown): SystemStationEntry | null {
   if (!raw || typeof raw !== 'object') return null;
   const src = raw as Record<string, unknown>;
   const id = typeof src.id === 'string' ? src.id.trim() : '';
-  const stationPrefabId =
-    typeof src.stationPrefabId === 'string' ? src.stationPrefabId.trim() : '';
-  const sceneId = typeof src.sceneId === 'string' ? src.sceneId.trim() : '';
   const parentBodyId =
     typeof src.parentBodyId === 'string' ? src.parentBodyId.trim() : '';
   const name = typeof src.name === 'string' ? src.name.trim() : '';
-  if (!SYSTEM_ID_PATTERN.test(id)) return null;
-  // A station names exactly one geometry source.
-  if (Boolean(stationPrefabId) === Boolean(sceneId)) return null;
-  if (stationPrefabId && !SYSTEM_ID_PATTERN.test(stationPrefabId)) return null;
-  if (sceneId && !SYSTEM_ID_PATTERN.test(sceneId)) return null;
-  if (!name) return null;
+  if (!SYSTEM_ID_PATTERN.test(id) || !name) return null;
   if (parentBodyId !== SYSTEM_STAR_PARENT_ID && !SYSTEM_ID_PATTERN.test(parentBodyId)) {
     return null;
   }
+  const geometry = readStationGeometrySource(src);
+  const family = readStationFamilyScenes(src);
   const offsetMeters = readEclipticMeters(src.offsetMeters);
-  if (!offsetMeters) return null;
-  const altitudeMeters = readOptionalAltitude(src.altitudeMeters);
+  if (!geometry || !family || !offsetMeters) return null;
   return {
     id,
-    ...(stationPrefabId ? { stationPrefabId } : {}),
-    ...(sceneId ? { sceneId } : {}),
+    ...geometry,
+    ...family,
     name,
     parentBodyId,
     offsetMeters,
-    altitudeMeters,
+    altitudeMeters: readOptionalAltitude(src.altitudeMeters),
   };
 }
 
@@ -220,19 +264,16 @@ export function createDefaultSystemDocument(
     ],
     stations: [
       {
-        id: 'demo-station-orbit',
-        stationPrefabId: 'demo-station',
-        name: 'Demo Station',
-        parentBodyId: 'asteron',
-        offsetMeters: { x: SYSTEM_MAP_STATION_OFFSET_METERS, z: 0 },
-        altitudeMeters: DEFAULT_STATION_ALTITUDE_METERS,
-      },
-      {
         id: 'blackmarket-orbit',
-        stationPrefabId: 'blackmarketstation',
+        sceneId: 'blackmarket',
+        habSceneId: 'blackmarkethab',
+        hangarSceneId: 'blackmarkethanger',
         name: 'Black Market Station',
         parentBodyId: 'asteron',
-        offsetMeters: { x: -SYSTEM_MAP_STATION_OFFSET_METERS, z: SYSTEM_MAP_STATION_OFFSET_METERS },
+        offsetMeters: {
+          x: -SYSTEM_MAP_STATION_OFFSET_METERS,
+          z: SYSTEM_MAP_STATION_OFFSET_METERS,
+        },
         altitudeMeters: DEFAULT_STATION_ALTITUDE_METERS,
       },
     ],

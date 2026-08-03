@@ -21,6 +21,11 @@ export interface SceneExitTarget {
    * rather than standing at the destination's Player Start.
    */
   arrival: 'default' | 'in-ship';
+  /**
+   * Station prefab whose `hangar-open-space-exit` is the open-space arrival
+   * mouth. Empty when the exit is not an open-space fly-through.
+   */
+  stationPrefabId?: string;
 }
 
 /**
@@ -58,11 +63,13 @@ export function sceneExitTarget(
   bootstrap: GameBootstrap | null,
   systemId: string,
 ): SceneExitTarget {
+  const stationPrefabId = marker.stationPrefabId.trim();
   return {
     sceneId: marker.sceneId,
     instanceId: resolveSceneExitInstanceId(marker.networkInstanceId, bootstrap, systemId),
     roomId: marker.arrivalRoomId,
     arrival: marker.trigger === 'fly-through' ? 'in-ship' : 'default',
+    ...(stationPrefabId ? { stationPrefabId } : {}),
   };
 }
 

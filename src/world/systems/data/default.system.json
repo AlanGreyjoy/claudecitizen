@@ -17,19 +17,10 @@
   ],
   "stations": [
     {
-      "id": "demo-station-orbit",
-      "stationPrefabId": "demo-station",
-      "name": "Demo Station",
-      "parentBodyId": "asteron",
-      "offsetMeters": {
-        "x": 32581680.4748497,
-        "z": -36858168.12717646
-      },
-      "altitudeMeters": 200000
-    },
-    {
       "id": "blackmarket-orbit",
-      "stationPrefabId": "blackmarketstation",
+      "sceneId": "blackmarket",
+      "habSceneId": "blackmarkethab",
+      "hangarSceneId": "blackmarkethanger",
       "name": "Black Market Station",
       "parentBodyId": "asteron",
       "offsetMeters": {

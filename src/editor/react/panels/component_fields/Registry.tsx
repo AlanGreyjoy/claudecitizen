@@ -4,6 +4,7 @@ import type { ComponentFieldContext, ComponentFieldsProps } from './context';
 import {
   DrawnGripFields,
   EquipmentSocketFields,
+  HangarOpenSpaceExitFields,
   ItemFrameFields,
   MuzzleFlashFields,
   PropFrameFields,
@@ -99,6 +100,7 @@ export const COMPONENT_FIELD_COMPONENTS: Partial<
   'npc-waypoint': field(NpcWaypointFields),
   'npc-placement': field(NpcPlacementFields),
   'scene-exit': field(SceneExitFields),
+  'hangar-open-space-exit': field(() => <HangarOpenSpaceExitFields />),
   ladder: field(LadderFields),
   'hangar-pad': field(HangarPadFields),
   interaction: field(InteractionFields),

@@ -20,9 +20,11 @@ import type { DeckCharacterState } from './ship-deck';
 import type { ShipRigState } from './ship-rig';
 import type { StationCharacterState } from './station-walk';
 import { MODE_IN_SHIP, MODE_IN_STATION, MODE_ON_FOOT } from './modes';
+import type { HangarOpenSpaceExitWorldPose } from '../world/hangar-open-space-exit';
 import {
   createPilotSpawnCharacter,
   createSpaceSpawnShip,
+  createSpaceSpawnShipAtPose,
   createSpawnCharacter,
   createSpawnShip,
   initialCameraYaw,
@@ -144,6 +146,11 @@ export function createWorldState(
      * dropped on foot at the destination's Player Start mid-flight.
      */
     arrival?: 'default' | 'in-ship';
+    /**
+     * Hangar-mouth pose for an `in-ship` arrival. When unset, open-space spawn
+     * falls back to the generic landing-site orbit altitude.
+     */
+    spaceSpawnPose?: HangarOpenSpaceExitWorldPose | null;
     planetId?: string;
     systemId?: string;
     activeStationInstanceId?: string | null;
@@ -158,7 +165,11 @@ export function createWorldState(
   const prefabId = options.shipPrefabId ?? DEFAULT_SHIP_PREFAB_ID;
   const layout = getShipLayoutForPrefab(prefabId) ?? DEFAULT_SHIP_LAYOUT;
   const inShip = options.arrival === 'in-ship';
-  const body = inShip ? createSpaceSpawnShip(planet, seed) : createSpawnShip(planet, seed);
+  const body = inShip
+    ? (options.spaceSpawnPose
+      ? createSpaceSpawnShipAtPose(options.spaceSpawnPose)
+      : createSpaceSpawnShip(planet, seed))
+    : createSpawnShip(planet, seed);
   const planetId = options.planetId ?? 'asteron';
   const instance = createShipInstance({
     id: PLAYER_SHIP_INSTANCE_ID,

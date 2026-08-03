@@ -443,7 +443,17 @@ export type PrefabComponent =
       networkInstanceId?: string;
       /** Room id sent with the network Transition (default `lobby`). */
       arrivalRoomId?: string;
+      /**
+       * Station prefab whose `hangar-open-space-exit` is the open-space arrival
+       * mouth. Required when targeting `@space` / `fly-through`.
+       */
+      stationPrefabId?: string;
     }
+  /**
+   * Hangar mouth on a Station prefab. Fly-through `@space` scene-exits that name
+   * this station spawn the ship here in open space (local +Z = exit facing).
+   */
+  | { type: "hangar-open-space-exit" }
   /**
    * Climbable ladder. The marker sits at the foot of the climb line — the spot
    * the player stands on to mount. Local +Y is the climb axis, local +Z is the

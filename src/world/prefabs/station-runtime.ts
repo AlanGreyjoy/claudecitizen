@@ -6,6 +6,7 @@ import {
   type StationFloorId,
   type StationInfoMarker,
   type StationSceneExitMarker,
+  type StationHangarOpenSpaceExitMarker,
   type StationAvmsMarker,
   type StationWeaponShopMarker,
   type StationOutfittersMarker,
@@ -118,7 +119,9 @@ interface FlattenedComponents {
     trigger: SceneExitTrigger;
     networkInstanceId: string;
     arrivalRoomId: string;
+    stationPrefabId: string;
   }[];
+  hangarOpenSpaceExitSeed: StationHangarOpenSpaceExitMarker | null;
   avmsSeeds: {
     id: string;
     label: string;
@@ -389,7 +392,32 @@ function collectSceneExit(
         ? 'station:public'
         : component.networkInstanceId.trim(),
     arrivalRoomId: component.arrivalRoomId?.trim() || 'lobby',
+    stationPrefabId: component.stationPrefabId?.trim() ?? '',
   });
+}
+
+function collectHangarOpenSpaceExit(
+  _component: Extract<PrefabComponent, { type: "hangar-open-space-exit" }>,
+  ctx: CollectStationContext,
+  out: FlattenedComponents,
+): void {
+  if (out.hangarOpenSpaceExitSeed) {
+    console.warn(
+      'Multiple hangar-open-space-exit markers; keeping the first and ignoring the rest.',
+    );
+    return;
+  }
+  out.hangarOpenSpaceExitSeed = {
+    right: ctx.right,
+    up: ctx.up,
+    forward: ctx.forward,
+    rotation: {
+      x: ctx.rotation.x,
+      y: ctx.rotation.y,
+      z: ctx.rotation.z,
+      w: ctx.rotation.w,
+    },
+  };
 }
 
 /** Vendor component ids repeat across placeable instances; entity id scopes them. */
@@ -750,6 +778,10 @@ function collect(
       collectChairSeat(component, ctx, out);
       continue;
     }
+    if (component.type === 'hangar-open-space-exit') {
+      collectHangarOpenSpaceExit(component, ctx, out);
+      continue;
+    }
     collectStationComponent(component, ctx, out);
   }
 
@@ -868,6 +900,7 @@ function createEmptyFlattened(): FlattenedComponents {
     hangarSeeds: [],
     infoSeeds: [],
     sceneExitSeeds: [],
+    hangarOpenSpaceExitSeed: null,
     avmsSeeds: [],
     weaponShopSeeds: [],
     outfittersSeeds: [],
@@ -938,7 +971,14 @@ function buildSceneExitMarkers(out: FlattenedComponents): StationSceneExitMarker
     trigger: seed.trigger,
     networkInstanceId: seed.networkInstanceId,
     arrivalRoomId: seed.arrivalRoomId,
+    stationPrefabId: seed.stationPrefabId,
   }));
+}
+
+function buildHangarOpenSpaceExit(
+  out: FlattenedComponents,
+): StationHangarOpenSpaceExitMarker | null {
+  return out.hangarOpenSpaceExitSeed;
 }
 
 /**
@@ -1101,6 +1141,7 @@ export async function buildStationLayoutFromPrefab(doc: PrefabDocument): Promise
     chairs: out.chairs,
     infoMarkers: buildInfoMarkers(out),
     sceneExitMarkers: buildSceneExitMarkers(out),
+    hangarOpenSpaceExit: buildHangarOpenSpaceExit(out),
     doors: out.doors,
     chestStorage: out.chestStorage,
     avmsMarkers: buildAvmsMarkers(out),

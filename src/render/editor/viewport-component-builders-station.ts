@@ -570,6 +570,9 @@ function buildFrameAxesHelper(): THREE.Object3D | null {
     "npc-waypoint": buildNpcWaypointHelper,
     "npc-placement": buildNpcPlacementHelper,
     "scene-exit": buildSceneExitHelper,
+    // Same mouth gizmo as scene-exit — pose-only marker at the hangar bay.
+    "hangar-open-space-exit": () =>
+      buildSceneExitHelper({ type: "scene-exit", sceneId: "" }),
     "ladder": (component: PrefabComponent) =>
       buildLadderHelper(
         component as Extract<PrefabComponent, { type: "ladder" }>,

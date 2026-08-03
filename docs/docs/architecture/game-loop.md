@@ -12,6 +12,7 @@ shortcut that still goes through scene request).
 
 Related editor authoring: [Game flow](../editor/game-flow.md) (boot / Game Manager),
 [Station authoring](../editor/station-authoring.md), [Scene Exit](../editor/components/scene-exit.md),
+[Hangar Open Space Exit](../editor/components/hangar-open-space-exit.md),
 [AVMS terminal](../editor/components/avms-terminal.md).
 
 ## Station family (ownership)
@@ -19,6 +20,23 @@ Related editor authoring: [Game flow](../editor/game-flow.md) (boot / Game Manag
 A **Station** owns its paired interiors. Hab and Hangar are not free-floating
 world places — they belong to that station so multiple stations can each have
 their own pair.
+
+**Authoring home:** the Star Map / System Map `SystemStationEntry` is the
+catalog. Each station lists:
+
+| Field | Meaning |
+| --- | --- |
+| `sceneId` | Shared Station concourse scene (map body) |
+| `habSceneId` | That station's instanced Hab scene |
+| `hangarSceneId` | That station's instanced Hangar scene |
+
+Hab/Hangar are **not** separate ecliptic markers — only ownership scene ids.
+Example: Black Market Station → `blackmarket` / `blackmarkethab` /
+`blackmarkethanger`. See [System Map](../editor/system-map).
+
+AVMS **To Hangar** uses the terminal's Hangar Scene when set; otherwise it
+falls back to the active station entry's `hangarSceneId`. Cell tokens
+(`@hangar`, `@apartment`) still resolve the per-player instance.
 
 ```mermaid
 flowchart TB
@@ -60,7 +78,7 @@ flowchart TD
 2. **Hab → Station** — player uses a `scene-exit` to leave the hab and enter the shared station concourse.
 3. **AVMS on Station** — at an AVMS terminal, player can **call a ship** so it is delivered to their hangar bay.
 4. **Station → Hangar** — from inside the AVMS UI, **To Hangar** moves the player to that station family's **instanced** hangar. Placeable build allowed.
-5. **Hangar → Open Space** — hangar has a `scene-exit` set to **Open Space**. That exit sends the player to the Station component named **`HANGAR-OPEN-SPACE-EXIT`** (same station family).
+5. **Hangar → Open Space** — hangar has a `scene-exit` set to **Open Space** (`@space` + `fly-through`) and picks the **Station** prefab for that family. Runtime finds that station's **`hangar-open-space-exit`** marker (`HANGAR-OPEN-SPACE-EXIT`) and spawns the ship **in-ship** at that hangar mouth pose.
 
 ## Invariants (draft)
 
@@ -69,12 +87,14 @@ flowchart TD
 - Team members may enter a teammate's hab/hangar instance (follow-in); strangers stay out.
 - Do not hard-code a single global hab or hangar if the project has multiple stations.
 - AVMS "call ship" and "To Hangar" are station-side; destinations resolve to **that station's** hangar.
-- Hangar open-space exit targets the Station marker `HANGAR-OPEN-SPACE-EXIT` — not a free-floating global portal.
+- Hangar open-space fly-through names a station prefab; arrival uses that station's `hangar-open-space-exit` mouth — not a free-floating global portal.
 - Travel between places stays scene-based (`scene-exit` / scene request) — not page reload, not a second teleporter system.
 
 ## Open / later
 
 - Return paths (Hangar → Station, Station → Hab, Open Space → Hangar).
-- Boarding / fly-through trigger details on the hangar exit.
-- How boot / Game Manager `startingSceneId` picks which station family's hab.
-- Backend cell tokens (`@apartment`, `@hangar`, etc.) vs authored scene ids.
+- How boot / Game Manager `startingSceneId` picks which station family's hab
+  (family Hab is already on the System Map entry; boot still authors the hop).
+- `scene-exit` tokens that resolve Hab/Hangar **scenes** from the family
+  (today portals may still name concrete scene ids; cells use `@apartment` /
+  `@hangar`).

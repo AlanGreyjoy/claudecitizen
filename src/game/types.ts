@@ -18,6 +18,7 @@ import type { BuildArea, GameBootstrap } from "../net/api";
 import type { WorldClient } from "../net/world-client";
 import type { StationPhysics } from "../physics/station-physics";
 import type { PrefabDocument } from "../world/prefabs/schema";
+import type { HangarOpenSpaceExitWorldPose } from "../world/hangar-open-space-exit";
 import type { ScenePlayContent } from "../world/scenes/scene-runtime";
 import type { SurfaceDestination } from "../world/biome-teleport";
 import type {
@@ -63,6 +64,11 @@ export interface GameLoopOptions {
    * overrides `spawn` — the player is in the cockpit, not at a Player Start.
    */
   arrival?: 'default' | 'in-ship';
+  /**
+   * Hangar-mouth world pose for an `in-ship` arrival from a station's
+   * `hangar-open-space-exit`. Null/omitted uses the generic open-space spawn.
+   */
+  spaceSpawnPose?: HangarOpenSpaceExitWorldPose | null;
   planetId?: string;
   systemId?: string;
   activeStationInstanceId?: string | null;

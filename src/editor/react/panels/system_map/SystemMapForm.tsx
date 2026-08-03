@@ -225,8 +225,18 @@ function SelectedStationForm({
 
   // A station is authored either as a prefab or as a scene, never both.
   const usesScene = Boolean(station.sceneId);
+  const canUsePrefab = stationPrefabs.length > 0 || Boolean(station.stationPrefabId);
   const prefabOptions = sourceOptions(stationPrefabs, station.stationPrefabId);
   const sceneOptions = sourceOptions(sceneList, station.sceneId);
+  const ownedSceneOptions = [
+    { value: '', label: '(none)' },
+    ...sourceOptions(sceneList, station.habSceneId),
+  ];
+  // Keep hangar options independent so a missing hangar id still shows once.
+  const hangarSceneOptions = [
+    { value: '', label: '(none)' },
+    ...sourceOptions(sceneList, station.hangarSceneId),
+  ];
 
   const parentOptions = [
     { value: SYSTEM_STAR_PARENT_ID, label: 'Star' },
@@ -234,6 +244,11 @@ function SelectedStationForm({
       value: planet.id,
       label: planet.name ?? planet.id,
     })),
+  ];
+
+  const sourceOptionsList = [
+    ...(canUsePrefab ? [{ value: 'prefab', label: 'Station prefab' }] : []),
+    { value: 'scene', label: 'Scene' },
   ];
 
   return (
@@ -260,11 +275,8 @@ function SelectedStationForm({
       />
       <SystemSelectField
         label="Source"
-        value={usesScene ? 'scene' : 'prefab'}
-        options={[
-          { value: 'prefab', label: 'Station prefab' },
-          { value: 'scene', label: 'Scene' },
-        ]}
+        value={usesScene || !canUsePrefab ? 'scene' : 'prefab'}
+        options={sourceOptionsList}
         onChange={(value) => {
           if (value === 'scene') {
             const next = station.sceneId ?? sceneList[0]?.id;
@@ -280,9 +292,9 @@ function SelectedStationForm({
           onMarkDirtyAndRebuild();
         }}
       />
-      {usesScene ? (
+      {usesScene || !canUsePrefab ? (
         <SystemSelectField
-          label="Scene"
+          label="Station scene"
           value={station.sceneId ?? ''}
           options={sceneOptions}
           onChange={(value) => {
@@ -301,6 +313,26 @@ function SelectedStationForm({
           }}
         />
       )}
+      <SystemSelectField
+        label="Hab scene"
+        value={station.habSceneId ?? ''}
+        options={ownedSceneOptions}
+        onChange={(value) => {
+          if (value) station.habSceneId = value;
+          else delete station.habSceneId;
+          onMarkDirty();
+        }}
+      />
+      <SystemSelectField
+        label="Hangar scene"
+        value={station.hangarSceneId ?? ''}
+        options={hangarSceneOptions}
+        onChange={(value) => {
+          if (value) station.hangarSceneId = value;
+          else delete station.hangarSceneId;
+          onMarkDirty();
+        }}
+      />
       <SystemSelectField
         label="Parent body"
         value={station.parentBodyId}
