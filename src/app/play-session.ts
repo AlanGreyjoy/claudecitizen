@@ -18,6 +18,7 @@ import {
 } from '../player/character_creator/player-character-appearance';
 import { createSpikeRenderer, type SpikeRenderer } from '../render/main';
 import { beginAssetGeneration, sweepUnusedAssets } from '../cache/asset-residency';
+import { clearSourceReleaseQueue } from '../render/assets/texture-upload';
 import { warmPlanetSpawnCaches } from '../world/spawn-warm';
 import { normalizeVegetationSettings } from '../render/vegetation/settings';
 import { resolveSessionShipPrefabId, syncBootstrapShips } from '../world/ships';
@@ -584,7 +585,10 @@ export async function startPlaySession(
   const generation = startGeneration;
   // Opens a new asset generation. Everything this scene loads is stamped with
   // it; the sweep after publish evicts whatever the previous scene left behind.
+  // Also drops caches whose ImageBitmaps were released for the old renderer —
+  // those cannot re-upload into the new WebGPU backend.
   beginAssetGeneration();
+  clearSourceReleaseQueue();
 
   await Promise.all([loadCurrentCharacterSettings(), loadCurrentDefaultAnimationController()]);
   loading?.setProgress(0.15);

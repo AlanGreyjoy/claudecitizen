@@ -16,13 +16,17 @@ import { AUTHORING_ENABLED } from '../../build-mode';
  * that render clones of the same cached templates. Each renderer owns a separate
  * backend `DataMap`, so each must upload the texture itself — releasing the
  * bitmap after the first upload would leave every other renderer with no source.
- * The release is only safe in a shipped build, which has exactly one renderer.
+ * The release is only safe in a shipped build, which has exactly one renderer
+ * *per play session*.
  *
- * Trade-off in that build: a released texture can never be re-uploaded. Under
- * WebGPU that is stricter than it was under WebGL — `Textures.updateTexture`
- * re-runs `backend.createTexture` whenever a placeholder texture later gains
- * real data, and `WebGPUTextureUtils` *throws* ("Texture already initialized")
- * rather than warning. Flip the constant to disable entirely.
+ * Trade-off in that build: a released texture can never be re-uploaded. Each
+ * scene switch disposes the play renderer and opens a new one, so
+ * `beginAssetGeneration` must evict unpinned cache entries (and dedup must
+ * refuse dead canonicals) before the next scene loads. Under WebGPU,
+ * `Textures.updateTexture` also re-runs `backend.createTexture` whenever a
+ * placeholder later gains real data, and `WebGPUTextureUtils` *throws*
+ * ("Texture already initialized") rather than warning. Flip the constant to
+ * disable entirely.
  */
 const RELEASE_DECODED_TEXTURE_SOURCES = !AUTHORING_ENABLED;
 
@@ -63,6 +67,11 @@ export function queueSourceRelease(root: THREE.Object3D): void {
     queued.add(texture);
     queue.push(texture);
   }
+}
+
+/** Drops pending releases — call when the play renderer is torn down. */
+export function clearSourceReleaseQueue(): void {
+  queue.length = 0;
 }
 
 /**

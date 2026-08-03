@@ -81,6 +81,21 @@ function vector2Key(vector: THREE.Vector2): string {
 }
 
 /**
+ * True when the CPU source can still feed `WebGPURenderer` upload. Prod
+ * `drainSourceReleases` sets `source.data = null` after upload; a later session
+ * with a new renderer must not reuse that canonical.
+ */
+function textureSourceUploadable(texture: THREE.Texture): boolean {
+  const data = texture.source?.data;
+  if (data == null) return false;
+  if (typeof ImageBitmap !== 'undefined' && data instanceof ImageBitmap) {
+    // `close()` leaves a 0×0 bitmap that still fails upload.
+    return data.width > 0 && data.height > 0;
+  }
+  return true;
+}
+
+/**
  * Texture names alone are not safe identifiers. Include the material usage,
  * decoded dimensions, sampler state, and UV transform so only equivalent atlas
  * bindings converge on one Three.js texture object.
@@ -167,7 +182,23 @@ function deduplicateMaterialTextures(
     if (!key) continue;
 
     const canonical = canonicalTextures.get(key);
-    if (!canonical) {
+    if (canonical && !textureSourceUploadable(canonical.texture)) {
+      // Released after a prior session's GPU upload — cannot re-init. Drop and
+      // let this freshly decoded texture become the new canonical.
+      totalEstimatedBytes -= canonical.estimatedBytes;
+      if (totalEstimatedBytes < 0) totalEstimatedBytes = 0;
+      for (const deadOwner of canonical.owners) {
+        ownerKeys.get(deadOwner)?.delete(key);
+      }
+      canonicalTextures.delete(key);
+      try {
+        canonical.texture.dispose();
+      } catch {
+        // Already disposed with its old renderer backend entry.
+      }
+    }
+    const liveCanonical = canonicalTextures.get(key);
+    if (!liveCanonical) {
       const estimatedBytes = estimateTextureBytes(value);
       canonicalTextures.set(key, { estimatedBytes, owners: new Set(), texture: value });
       canonicalIdentities.add(value);
@@ -176,9 +207,9 @@ function deduplicateMaterialTextures(
       continue;
     }
     rememberOwner(key, owner);
-    if (canonical.texture === value) continue;
+    if (liveCanonical.texture === value) continue;
 
-    properties[property] = canonical.texture;
+    properties[property] = liveCanonical.texture;
     materialChanged = true;
     reused += 1;
     if (!disposed.has(value)) {
