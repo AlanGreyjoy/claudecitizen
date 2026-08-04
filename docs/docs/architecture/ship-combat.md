@@ -192,8 +192,9 @@ Wireframe preview is presentation-only; it must not allocate a second full
 prefab load every frame — clone / impostor / simplified mesh from the already-
 resident hull, budgeted.
 
-Own-ship shields / hull remain on the existing HaloBand / vitals readouts;
-combat UI adds **hostile / target** readouts, it does not replace own vitals.
+Own-ship shields / hull remain on the existing HaloBand / vitals readouts
+([HaloBand](./haloband) Ship tab); combat UI adds **hostile / target**
+readouts, it does not replace own vitals.
 
 ## Vitals and damage
 

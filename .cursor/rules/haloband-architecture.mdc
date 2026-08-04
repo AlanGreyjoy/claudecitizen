@@ -1,0 +1,22 @@
+---
+description: HaloBand personal device UI — tabs, suppress, no authority — read full architecture doc
+alwaysApply: true
+---
+
+# HaloBand architecture (pointer)
+
+Full law: [`docs/docs/architecture/haloband.md`](../../docs/docs/architecture/haloband.md).
+
+**Permanent decision:** one **HaloBand** personal device shell. Tabs are apps
+(Home, Comms, Missions, Map, Inventory, Mall, Ship) — not competing overlays.
+Open (default **F2**) **suppresses input**; world keeps simulating. HaloBand is
+presentation only; inventory / Mall / chat / vitals outcomes stay domain +
+server. Mall tab only with live wiring (AC ≠ dock ARC). Ship tab only in
+ship modes. Map Set Route persists after close → quantum.
+[Star Map](../../docs/docs/architecture/star-map.md),
+[Player](../../docs/docs/architecture/player.md),
+[Content delivery](../../docs/docs/architecture/content-delivery.md).
+
+When changing HaloBand shell, tabs, open/suppress, Map route, Mall, Inventory
+vs Personal Inventory, or Menu Manager HaloBand preview, read the full doc
+first. Also listed in `AGENTS.md`.

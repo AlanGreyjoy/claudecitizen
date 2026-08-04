@@ -237,6 +237,12 @@ binds system + body + starter Hab. Full law:
 vitals reset on wake. Full law: `docs/docs/architecture/player-death.md`.
 Thin Cursor pointer: `.cursor/rules/player-death-architecture.mdc`.
 
+**HaloBand law:** one personal device shell (Home / Comms / Missions / Map /
+Inventory / Mall / Ship); open suppresses input, does not pause; presentation
+only — Mall / chat / inventory outcomes stay server-owned. Full law:
+`docs/docs/architecture/haloband.md`. Thin Cursor pointer:
+`.cursor/rules/haloband-architecture.mdc`.
+
 ## Prefab & Animation Architecture
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
@@ -912,6 +918,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/home-worlds-architecture.mdc` | Thin always-on pointer to the home-worlds architecture doc |
 | `docs/docs/architecture/player-death.md` | Death / respawn: custom point or home-world Hab |
 | `.cursor/rules/player-death-architecture.mdc` | Thin always-on pointer to the player-death architecture doc |
+| `docs/docs/architecture/haloband.md` | Personal device UI: tabs, suppress, Map/Mall/Inventory |
+| `.cursor/rules/haloband-architecture.mdc` | Thin always-on pointer to the HaloBand architecture doc |
 
 ## Utility scripts
 

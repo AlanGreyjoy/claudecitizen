@@ -18,7 +18,8 @@ signup bind), [Player death](./player-death) (respawn after vitals kill you),
 [Multiplayer](./multiplayer) (cell-owned death / medicine; peers also see
 loadout / pose / firearm fire — that doc),
 [Content delivery](./content-delivery) (medicine as live catalog items),
-[Ship combat](./ship-combat) (hull vitals are a **different** pipeline).
+[Ship combat](./ship-combat) (hull vitals are a **different** pipeline),
+[HaloBand](./haloband) (Home tiles display vitals; do not own them).
 
 **This doc is law.** Code may lag. Gaps are refactor targets — not permission
 to invent a second vitals model or a client-only heal path.

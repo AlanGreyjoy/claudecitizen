@@ -24,6 +24,7 @@ Also read when the domain matches:
 | `docs/docs/architecture/player.md` | Character HP, hunger, thirst, temp/air, medicine toxicity, HUD |
 | `docs/docs/architecture/home-worlds.md` | Home world select; Asteron / Virelia / Korrath; starter Hab |
 | `docs/docs/architecture/player-death.md` | Death / respawn: custom point or home-world Hab |
+| `docs/docs/architecture/haloband.md` | Personal device UI: Home / Comms / Missions / Map / Inventory / Mall / Ship |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab/scene editor work |
 | `.cursor/skills/prd/SKILL.md` | Creating PRD handoff packs under `prds/<slug>/` |
 | `.cursor/rules/terrain-cache.mdc` | Terrain/vegetation cache versioning |

@@ -295,4 +295,5 @@ src/world/systems/data/<id>.system.json
   swap, reciprocal gate on the destination map.
 - Editor / code rename from "System Map" / `SystemDocument` toward Star Map
   product naming when the refactor budget allows.
-- Align in-ship HaloBand / nav UI language with Star Map.
+- Align in-ship HaloBand / nav UI language with Star Map
+  ([HaloBand](./haloband)).
