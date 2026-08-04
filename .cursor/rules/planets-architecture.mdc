@@ -1,0 +1,28 @@
+---
+description: Planets — PlanetDocument recipe, Star Map link, active origin, Build Web; sky ≠ breathable — read full architecture doc
+alwaysApply: true
+---
+
+# Planets architecture (pointer)
+
+Full law: [`docs/docs/architecture/planets.md`](../../docs/docs/architecture/planets.md).
+
+**Permanent decision:** one **PlanetDocument** owns the body recipe (radius,
+gravity, atmosphere shell, terrain, sky, surface life-support). Star Map
+places the body (`planetId`); **Build Web** ships planets (not Console
+catalog). Planet Authoring has a **Presets** dropdown (**10** named recipes)
+and a **Random** button that rolls a saveable recipe (editor-only; not a
+player runtime roll). Outdoor walk / run / jump **scale with planet *g***;
+sealed interiors stay ~1g. One **active** planet owns
+terrain + sky + atmospheric *g*; far bodies place + nav-blip. Sky /
+`atmosphereHeightMeters` ≠ breathable.
+[Star Map](../../docs/docs/architecture/star-map.md),
+[Space traversal](../../docs/docs/architecture/space-traversal.md),
+[Player](../../docs/docs/architecture/player.md),
+[Home Worlds](../../docs/docs/architecture/home-worlds.md),
+[Ship flight](../../docs/docs/architecture/ship-flight.md).
+
+When changing planet schema, Planet Authoring (including **Presets** / **Random**),
+active-planet handoff, surface vitals fields, outdoor on-foot *g* scaling, or
+gas-giant vs rocky body rules, read the full doc first. Also listed in
+`AGENTS.md`.

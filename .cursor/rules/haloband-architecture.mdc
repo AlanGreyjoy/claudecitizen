@@ -19,5 +19,8 @@ ship modes. Map Set Route persists after close → quantum.
 
 When changing HaloBand shell, tabs, open/suppress, Map route, Mall, Inventory
 vs Personal Inventory, or Menu Manager HaloBand preview, read the full doc
-first. Item Mall / AC / Stripe: [Item Mall](../../docs/docs/architecture/item-mall.md).
+first. Missions tab / contracts: [Missions](../../docs/docs/architecture/missions.md).
+Factions / Orgs panes (later): [Factions](../../docs/docs/architecture/factions.md),
+[Organizations](../../docs/docs/architecture/organizations.md).
+Item Mall / AC / Stripe: [Item Mall](../../docs/docs/architecture/item-mall.md).
 Also listed in `AGENTS.md`.

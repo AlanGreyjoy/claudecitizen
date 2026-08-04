@@ -2,7 +2,7 @@ import { add, length, normalize, scale, sub } from "../math/vec3";
 import type { Vec3 } from "../types";
 
 /**
- * Star Citizen–style bunk-screen focus: narrow FOV + dolly toward the
+ * Bunk-screen focus: narrow FOV + dolly toward the
  * entertainment panel while it is open or under gaze.
  */
 

@@ -10,7 +10,8 @@ Full law: [`docs/docs/architecture/content-delivery.md`](../../docs/docs/archite
 **Permanent decision:** three surfaces, never conflated. **Build Web** ships
 project files (scenes, prefabs, planets, systems, referenced/allowlisted
 assets). **Postgres catalog** (ships, props, items, weapons, backpacks,
-wearables, game settings, commerce) is edited **per environment** via Server
+wearables, game settings, commerce, mob defs/packs when live, mission
+defs/boards when live) is edited **per environment** via Server
 Console `/admin/*`. **Migrations** are schema + one-shot seeds only — not
 continuous catalog sync. Prod `RUN_MIGRATIONS` defaults off unless set. Editor
 Play reads the live project; a shipped build uses the bundle — local success

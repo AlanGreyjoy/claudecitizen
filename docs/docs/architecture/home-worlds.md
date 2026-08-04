@@ -14,6 +14,7 @@ put on the body lives in [Player](./player). Where death sends you lives in
 
 Related: [Scene flow](./scene-flow) (Home World Select hop),
 [Star Map](./star-map) (system + body catalog),
+[Planets](./planets) (primary body recipe; rocky vs gas giant),
 [Basic game loop](./game-loop) (station family Hab ownership),
 [Space traversal](./space-traversal) (Runtime / sealed interiors),
 [Multiplayer](./multiplayer) (per-player Hab instance).
@@ -120,8 +121,8 @@ spawn. Surface sorties are intentional, not the default lobby.
 ## Environment vs home world
 
 Home world picks **which** planet recipe applies when the body is on that
-world’s surface (or whether surface exists at all). The stress rules
-themselves stay in [Player](./player):
+world’s surface (or whether surface exists at all). Body recipe law:
+[Planets](./planets). Stress rules themselves stay in [Player](./player):
 
 | Home world | Typical outdoors stress |
 | --- | --- |

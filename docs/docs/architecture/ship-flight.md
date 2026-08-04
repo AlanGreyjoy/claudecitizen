@@ -18,7 +18,8 @@ boarding), [Scene flow](./scene-flow) (boot / starting system),
 [Ship physics](./ship-physics) (vacuum inertia, residual coast,
 coupled assist), [Ship combat](./ship-combat) (blasters, missiles, lock-on,
 combat HUD), [Ship controller](../editor/components/ship-controller)
-(authored stats), [Star Map](./star-map) (ecliptic bodies quantum targets).
+(authored stats), [Star Map](./star-map) (ecliptic bodies quantum targets),
+[Planets](./planets) (`gravityMetersPerSecond2`, `atmosphereHeightMeters`).
 
 Tuning symptom → fix tables live in `.cursor/skills/ship-flight/SKILL.md`.
 This doc is the **law**; the skill is the **dial**. Code may still carry a

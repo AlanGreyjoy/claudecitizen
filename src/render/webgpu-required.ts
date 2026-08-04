@@ -4,8 +4,8 @@ import type { WebGPURenderer } from 'three/webgpu';
  * WebGPU is a hard requirement for this engine — there is no WebGL fallback.
  *
  * That is a deliberate product decision, not a limitation. The compute paths the
- * renderer is built around (see `prds/webgpu-migration/PLAN.md`) have no WebGL2
- * equivalent: WebGL2 has no compute shaders at all. Silently degrading to WebGL2
+ * renderer is built around have no WebGL2 equivalent: WebGL2 has no compute
+ * shaders at all. Silently degrading to WebGL2
  * would ship a build that looks like it works while missing the thing that makes
  * terrain and vegetation authoring fast, and the resulting bug reports would be
  * indistinguishable from real regressions.

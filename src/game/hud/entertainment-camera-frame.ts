@@ -10,7 +10,7 @@ import {
 } from "../../player/entertainment-camera";
 import type { LoopContext } from "../loop-context";
 
-/** SC-style bunk screen zoom — ease even while ES UI pauses the sim. */
+/** Bunk screen zoom — ease even while ES UI pauses the sim. */
 export function renderEntertainmentCameraFeel(
   ctx: LoopContext,
   frameDt: number,

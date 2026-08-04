@@ -12,6 +12,7 @@ player has left a hangar for Open Space — and what a "station scene" actually
 
 Related: [Star Map / Star System](./star-map) (one system ↔ one map; Warp Gates
 between systems),
+[Planets](./planets) (active body recipe; terrain origin),
 [Basic game loop](./game-loop) (Hab → Station → Hangar → Open Space),
 [Scene flow](./scene-flow) (boot / starting system only),
 [Multiplayer](./multiplayer) (cells, presence, travel intents),

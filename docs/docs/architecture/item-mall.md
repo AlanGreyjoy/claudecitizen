@@ -17,6 +17,8 @@ catalog), [HaloBand](./haloband) (Mall tab = play surface),
 [Stripe](./stripe) (in-game Payment Element; not hosted Checkout pages),
 [Player](./player) (consumables / medicine after purchase),
 [Multiplayer](./multiplayer) (balances and inventory mutate on the server),
+[Missions](./missions) (contract pay is **ARC**, never AC; XP separate),
+[Progression](./progression) (XP ≠ AC),
 [API reference](../server-console/api-reference) (route table).
 
 **This doc is law.** Code may lag on sellable types, gameplay awards, or

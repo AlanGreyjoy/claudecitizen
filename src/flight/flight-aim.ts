@@ -149,7 +149,7 @@ export function applyMouseDeltaToAim(
 
 /**
  * As the nose catches the aim point, bleed aim offsets so the cone recenters
- * on the new forward (SC-style sticky aim without unbounded drift).
+ * on the new forward (sticky aim without unbounded drift).
  */
 export function recenterAimAsNoseTracks(
   aim: FlightAimState,

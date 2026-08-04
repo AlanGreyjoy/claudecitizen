@@ -14,6 +14,7 @@ in [Home Worlds](./home-worlds).
 Related: [Scene flow](./scene-flow) (first spawn only),
 [Basic game loop](./game-loop) (Hab / station places),
 [Multiplayer](./multiplayer) (cell-owned death + instance Hab),
+[Progression](./progression) (**no XP loss** on death),
 [Ship combat](./ship-combat) (hull destroy ≠ character death by itself).
 
 **This doc is law.** Code may lag. Gaps are refactor targets — not permission

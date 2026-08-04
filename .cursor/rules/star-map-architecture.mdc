@@ -17,6 +17,7 @@ entries, not map markers. Code aliases: `SystemDocument`, System Map tab,
 **Cross-system travel:** place a Warp Gate prefab with `warp-gate`
 (`targetSystemId`); fly or quantum *to* it; gate swaps the Open Space host —
 see [Space traversal](../../docs/docs/architecture/space-traversal.md).
+Body recipes linked by `planetId`: [Planets](../../docs/docs/architecture/planets.md).
 
 When changing system documents, map authoring, POIs, Warp Gates, or
 multi-system selection, read the full doc first. Also listed in `AGENTS.md`.

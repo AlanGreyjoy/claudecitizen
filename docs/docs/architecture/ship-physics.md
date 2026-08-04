@@ -13,8 +13,8 @@ into that physics. Pilot modes (Traverse / Combat / Nav) and quantum live in
 
 Related: [Ship flight](./ship-flight) (modes, boost, quantum, atmospheric
 *g*), [Ship combat](./ship-combat) (Combat mode weapons / lead while coasting),
-[Space traversal](./space-traversal) (Open Space host), planet schema
-(`gravityMetersPerSecond2`, `atmosphereHeightMeters`).
+[Space traversal](./space-traversal) (Open Space host),
+[Planets](./planets) (`gravityMetersPerSecond2`, `atmosphereHeightMeters`).
 
 ## Permanent decision: Newton in vacuum, with authored bleed
 

@@ -6,7 +6,7 @@ description: Bounded contexts, dependency direction, and import rules in ClaudeC
 
 # Domain-Driven Design
 
-ClaudeCitizen uses **Domain-Driven Design (DDD)** to keep a Star Citizen–scale simulation maintainable in the browser. The idea is simple: each part of the game owns a **bounded context** with explicit boundaries. Simulation rules live in domain modules; rendering only **reads** that state.
+ClaudeCitizen uses **Domain-Driven Design (DDD)** to keep a large seamless space-and-planet simulation maintainable in the browser. The idea is simple: each part of the game owns a **bounded context** with explicit boundaries. Simulation rules live in domain modules; rendering only **reads** that state.
 
 ## Why DDD here?
 

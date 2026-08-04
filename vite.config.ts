@@ -500,7 +500,7 @@ const FORCE_WEBGL_OPTION = /\bforceWebGL\s*:/;
 /**
  * Fails a release build that would silently run on WebGL2.
  *
- * WebGPU is a hard product requirement (`prds/webgpu-migration/PLAN.md`): the
+ * WebGPU is a hard product requirement: the
  * compute paths the engine depends on have no WebGL2 equivalent. Three's
  * `WebGPURenderer` degrades to a WebGL2 backend on its own and no constructor
  * parameter opts out, so a leftover `forceWebGL` or a stray `WebGLRenderer`

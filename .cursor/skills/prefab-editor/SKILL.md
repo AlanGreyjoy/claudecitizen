@@ -92,7 +92,7 @@ Legacy station doors still work via `animation` + `interaction{interactionType:"
 
 ### Bed (ships)
 
-SC-style bunk: place an Empty on the mattress → **Bed** component → **radial** (or raycast) trigger.
+Bed bunk: place an Empty on the mattress → **Bed** component → **radial** (or raycast) trigger.
 
 1. Tune **Eye** (pillow head cam) and **Stand XZ** (get-up aisle spot)
 2. Preview: walk near → **F** to lie down → mouse looks around → **Hold Y** to get up
@@ -100,7 +100,7 @@ SC-style bunk: place an Empty on the mattress → **Bed** component → **radial
 
 ### Cockpit look-at controls (ships)
 
-SC-style while seated: **Hold F** free-look → gaze at a `cockpit-control` empty → **left-click** to toggle gear/ramp.
+While seated: **Hold F** free-look → gaze at a `cockpit-control` empty → **left-click** to toggle gear/ramp.
 
 1. Add Empty near the physical switch in the cockpit
 2. Add component **Cockpit Control** (`landing-gear` | `cargo-ramp`)

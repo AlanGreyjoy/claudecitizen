@@ -12,6 +12,8 @@ dialogue, mission givers / talk-give-take) — **not** [mobs](../../docs/docs/ar
 Ambient ~100 budget via **LOD** (not Sidekick/UAL). Motion:
 probe-then-commit; no full navmesh default. Shop / mission / give-take =
 **cell** outcomes. Ambient local; service NPCs interest-culled.
+Contract state / ARC pay: [Missions](../../docs/docs/architecture/missions.md).
+Reputation: [Factions](../../docs/docs/architecture/factions.md).
 [Multiplayer](../../docs/docs/architecture/multiplayer.md),
 [HaloBand](../../docs/docs/architecture/haloband.md).
 

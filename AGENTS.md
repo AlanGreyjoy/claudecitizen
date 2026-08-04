@@ -233,6 +233,13 @@ binds system + body + starter Hab. Full law:
 `docs/docs/architecture/home-worlds.md`. Thin Cursor pointer:
 `.cursor/rules/home-worlds-architecture.mdc`.
 
+**Planets law:** one PlanetDocument owns body recipe (physics, terrain, sky,
+surface life-support); Star Map places it; Build Web ships it; active planet
+owns terrain / *g* stack; outdoor walk/run scales with planet *g*; sky ≠
+breathable. Full law:
+`docs/docs/architecture/planets.md`. Thin Cursor pointer:
+`.cursor/rules/planets-architecture.mdc`.
+
 **Player death law:** respawn to valid custom point, else home-world Hab;
 vitals reset on wake. Full law: `docs/docs/architecture/player-death.md`.
 Thin Cursor pointer: `.cursor/rules/player-death-architecture.mdc`.
@@ -268,6 +275,38 @@ cell entities (peers see/help same fight); cell owns aggro/HP/loot/leash;
 **editor dens** + **Console** MobDef/loot/packs; LOD + interest budgets; not
 ship Combat. Full law: `docs/docs/architecture/mobs.md`. Thin Cursor pointer:
 `.cursor/rules/mobs-architecture.mdc`.
+
+**Missions law:** contracts (MMO + station boards) — server-owned accept /
+progress / rewards; pay is **ARC** (+ items / rep), **never AC**; NPC offer
+verbs + mob kill credit + HaloBand log; defs in catalog, markers in editor.
+Full law: `docs/docs/architecture/missions.md`. Thin Cursor pointer:
+`.cursor/rules/missions-architecture.mdc`.
+
+**Loot tables law:** reusable catalog tables; server RNG; personal loot default;
+`lootTableId` refs from mobs/chests/missions; never AC from drops. Full law:
+`docs/docs/architecture/loot-tables.md`. Thin Cursor pointer:
+`.cursor/rules/loot-tables-architecture.mdc`.
+
+**Factions law:** NPC / world factions — joinable guilds, ranks, faction XP,
+skill lines, standing; aggro-sides for wildlife; **≠ player Orgs**. Full law:
+`docs/docs/architecture/factions.md`. Thin Cursor pointer:
+`.cursor/rules/factions-architecture.mdc`.
+
+**Organizations law:** player-created Orgs — roster, roles, invites; one Org
+per player (MVP); server-owned; orthogonal to NPC factions. Full law:
+`docs/docs/architecture/organizations.md`. Thin Cursor pointer:
+`.cursor/rules/organizations-architecture.mdc`.
+
+**Progression law:** soft character level + XP; catalog curve; no XP loss on
+death; soft content gates; XP ≠ ARC ≠ AC. Full law:
+`docs/docs/architecture/progression.md`. Thin Cursor pointer:
+`.cursor/rules/progression-architecture.mdc`.
+
+**Harvesting law:** on-foot tools + ship mining → one material pipeline; cell
+owns deplete/yield/craft grants; loot-table yields; never AC; mining ≠ combat
+guns; recipes at authored stations. Full law:
+`docs/docs/architecture/harvesting.md`. Thin Cursor pointer:
+`.cursor/rules/harvesting-architecture.mdc`.
 
 ## Prefab & Animation Architecture
 
@@ -933,7 +972,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `scripts/inspect_glb.mjs` | CLI GLB node hierarchy dump |
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/flight computer symptoms) |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab editor skill |
-| `.cursor/skills/prd/SKILL.md` | PRD handoff packs under `prds/<slug>/` (README, PRD, phases, checklist) |
+| `.cursor/skills/architecture-diagram/SKILL.md` | Architecture docs as law: consume, cross-doc deps, author/update |
 | `docs/docs/architecture/scene-flow.md` | Boot / Game Manager: Title → Create → Home World → Hab; one precedence rule |
 | `.cursor/rules/scene-flow-architecture.mdc` | Thin always-on pointer to the scene-flow architecture doc |
 | `docs/docs/architecture/game-loop.md` | Player game loop: Hab → Station → AVMS → Hangar → Open Space |
@@ -944,6 +983,8 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/space-traversal-architecture.mdc` | Thin always-on pointer to the space-traversal architecture doc |
 | `docs/docs/architecture/star-map.md` | Star System ↔ Star Map; ecliptic catalog; Warp Gates between systems |
 | `.cursor/rules/star-map-architecture.mdc` | Thin always-on pointer to the Star Map architecture doc |
+| `docs/docs/architecture/planets.md` | PlanetDocument recipe; active planet; surface env; Build Web |
+| `.cursor/rules/planets-architecture.mdc` | Thin always-on pointer to the planets architecture doc |
 | `docs/docs/architecture/ship-flight.md` | Rapier flight + flight computer: Traverse / Combat / Nav, boost, quantum, contacts |
 | `.cursor/rules/ship-flight-architecture.mdc` | Thin always-on pointer to the ship-flight architecture doc |
 | `docs/docs/architecture/ship-physics.md` | Vacuum inertia, residual coast, coupled assist, atmosphere drag |
@@ -968,6 +1009,18 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/npc-architecture.mdc` | Thin always-on pointer to the NPC architecture doc |
 | `docs/docs/architecture/mobs.md` | PVE mobs: monsters/animals; cell combat; not NPCs |
 | `.cursor/rules/mobs-architecture.mdc` | Thin always-on pointer to the mob architecture doc |
+| `docs/docs/architecture/missions.md` | Contracts: types, ARC pay, objectives; server state; HaloBand presents |
+| `.cursor/rules/missions-architecture.mdc` | Thin always-on pointer to the missions architecture doc |
+| `docs/docs/architecture/loot-tables.md` | Server loot rolls; personal claim; catalog tables |
+| `.cursor/rules/loot-tables-architecture.mdc` | Thin always-on pointer to the loot-tables architecture doc |
+| `docs/docs/architecture/factions.md` | NPC factions: joinable guilds, ranks, skill lines; not player Orgs |
+| `.cursor/rules/factions-architecture.mdc` | Thin always-on pointer to the factions architecture doc |
+| `docs/docs/architecture/organizations.md` | Player Orgs: roster, roles, invites; ≠ NPC factions |
+| `.cursor/rules/organizations-architecture.mdc` | Thin always-on pointer to the organizations architecture doc |
+| `docs/docs/architecture/progression.md` | Soft level + XP curve; mission/mob grants; no death XP loss |
+| `.cursor/rules/progression-architecture.mdc` | Thin always-on pointer to the progression architecture doc |
+| `docs/docs/architecture/harvesting.md` | On-foot + ship harvest; yields → craft recipes; cell-owned |
+| `.cursor/rules/harvesting-architecture.mdc` | Thin always-on pointer to the harvesting architecture doc |
 
 ## Utility scripts
 
@@ -988,7 +1041,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 ## Other conventions
 
 - `.cursor/rules/agent-conventions.mdc` exists and defers to this file as the primary source — update both if changing architecture boundaries.
-- Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/`, `.cursor/skills/prd/` — read when editing those domains (PRD packs when creating `prds/` handoffs).
+- Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/`, `.cursor/skills/architecture-diagram/` — read when editing those domains (architecture docs = law; code may lag).
 - Export **factories + pure functions** from domain modules (not classes). Three.js objects never appear in `world/` or `flight/`.
 - Prefab JSON lives in the project asset library as `<folder>/<id>.prefab.json` and is committed (metadata only) — `.gitignore` re-includes `*.prefab.json` under the otherwise-ignored `/assets/` tree. The game bundles them via a recursive `import.meta.glob`.
 - **Filenames:** `*.ts` is kebab-case, `*.tsx` is PascalCase (except Vite's `main.tsx`) — enforced by `eslint-plugin-check-file`. Directories were not migrated and several remain snake_case (`src/render/planet_tiles/`, `src/world/surface_spawns/`, `src/app/ship_sandbox/`, `src/render/effects/lake_water/`), as do `scripts/` files, which are exempt.

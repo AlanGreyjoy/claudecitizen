@@ -1,5 +1,5 @@
 /**
- * BOTW-inspired personal inventory with Star Citizen presentation.
+ * Personal inventory presentation (grid browse + detail).
  * A dedicated Sidekick scene renders the character; DOM owns browsing and loadout interaction.
  */
 

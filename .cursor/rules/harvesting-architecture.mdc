@@ -1,0 +1,21 @@
+---
+description: Harvesting — on-foot + ship extract, cell yields, craft sink; never AC — read full architecture doc
+alwaysApply: true
+---
+
+# Harvesting architecture (pointer)
+
+Full law: [`docs/docs/architecture/harvesting.md`](../../docs/docs/architecture/harvesting.md).
+
+**Permanent decision:** one material pipeline, two extractors (**on-foot** tools
+vs nodes; **ship** mining hardpoints vs asteroids/debris). **Cell** owns HP,
+deplete, yield grant, craft deduct. Yields via [Loot tables](../../docs/docs/architecture/loot-tables.md);
+**never AC**. Recipes spend tagged materials at authored stations. Mining ≠
+combat weapons. Survival kits and flight sustain share the craft graph.
+[Player](../../docs/docs/architecture/player.md),
+[Missions](../../docs/docs/architecture/missions.md),
+[Multiplayer](../../docs/docs/architecture/multiplayer.md),
+[Content delivery](../../docs/docs/architecture/content-delivery.md).
+
+When changing harvest nodes, ship mining, yield grants, craft stations/recipes,
+or gather mission credit, read the full doc first. Also listed in `AGENTS.md`.

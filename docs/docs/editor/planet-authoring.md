@@ -8,6 +8,9 @@ description: Author planets, tune generation and vegetation, and playtest on the
 
 The **Planet Authoring** scene tab lets you edit planet documents (look/feel, height recipe, hydrology, biome palette, vegetation defaults, surface spawn catalog) and jump into offline surface play to hunt FPS spikes.
 
+Architecture law (body recipe, active planet, surface life-support vs sky):
+[Planets](../architecture/planets).
+
 ## Open the tab
 
 1. Launch AsteronEngine (`npm run editor:dev`) and open a project.
@@ -19,6 +22,8 @@ The **Planet Authoring** scene tab lets you edit planet documents (look/feel, he
 | --- | --- |
 | **File → Open Planets** | Search/list planet documents under `src/world/planets/data/` |
 | **File → Save** / Ctrl+S | Writes `<id>.planet.json` via `/__editor/planet` |
+| **Presets** (dropdown) | Apply one of the **10** named starting recipes to the open document. See [Planets](../architecture/planets#presets-dropdown-planet-authoring). |
+| **Random** (panel button) | Rolls a new planet recipe into the open document (new seed + randomized knobs). Preview / tweak / Save as usual. See [Planets](../architecture/planets#random-button-planet-authoring). |
 | **Game → Test Play** | Saves, then opens surface playtest |
 | **Preview** (panel button) | Rebuilds the heightfield patch and plants grass/trees plus spawn-catalog props from current settings (stays in the editor) |
 | **Test Play** (panel button) | Same as **Game → Test Play** |

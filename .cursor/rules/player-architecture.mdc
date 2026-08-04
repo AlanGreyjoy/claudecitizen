@@ -20,5 +20,6 @@ outcomes; client owns HUD. Ship hull vitals stay separate
 When changing character HP, hunger, thirst, planet life-support stress,
 medicine / toxicology, or player HUD vitals visibility, read the full doc
 first. Home world offers / signup: [Home Worlds](../../docs/docs/architecture/home-worlds.md).
+Planet body recipe / surface env: [Planets](../../docs/docs/architecture/planets.md).
 Death / respawn: [Player death](../../docs/docs/architecture/player-death.md).
 Also listed in `AGENTS.md`.

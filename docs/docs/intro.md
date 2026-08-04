@@ -8,7 +8,7 @@ title: Introduction
 
 ![ClaudeCitizen banner](/img/banner-with-logo.png)
 
-A space sandbox inspired by Star Citizen — procedural planets, ship flight,
+A space sandbox — procedural planets, ship flight,
 on-foot exploration, and seamless surface-to-orbit transitions. The game runtime
 is TypeScript and Three.js; online play runs on an authoritative Rust backend
 with shared Rust/WASM prediction and Protobuf over WebTransport.

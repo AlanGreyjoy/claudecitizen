@@ -17,8 +17,9 @@ Related: [Player](./player) (vitals Home tiles read),
 route), [Ship combat](./ship-combat) (Ship tab hull / shields),
 [Content delivery](./content-delivery) (Mall listings / credit packs as live
 catalog), [Multiplayer](./multiplayer) (chat + inventory outcomes stay
-cell/server-owned), [NPCs](./npc) / [Mobs](./mobs) (Missions tab mirrors
-contracts; NPC verbs vs PVE), [Item Mall](./item-mall) (AC storefront + packs),
+cell/server-owned), [Missions](./missions) (contract log — this tab presents),
+[NPCs](./npc) / [Mobs](./mobs) (offer verbs vs PVE kill credit),
+[Item Mall](./item-mall) (AC storefront + packs),
 [Stripe](./stripe) (Payment Element pay UI),
 [Payments](../server-console/payments) (operator how-to), editor
 [Menu Manager](../editor/menu-manager) (preview only).
@@ -36,7 +37,7 @@ fullscreen products.
 | --- | --- |
 | **Home** | At-a-glance vitals, environment, vehicles, notifications; contracts teaser |
 | **Comms** | Proximity / session chat send + receive |
-| **Missions** | Active contracts / mission log (product later; tab reserved) |
+| **Missions** | Active contracts / mission log ([Missions](./missions)) |
 | **Map** | In-play Star Map (ecliptic) — select body, Set / Clear Route for quantum |
 | **Inventory** | Portable inventory browse (+ eventually equip / consume — one inventory UX) |
 | **Mall** | AsteronCredits storefront + credit packs (online only) |
@@ -119,11 +120,12 @@ do not invent a second chat bus for HaloBand.
 
 ### Missions
 
-**Reserved tab.** Product: mission / contract log tied to Star Map mission
-markers and backend persistence. NPC verbs (offer, talk-to, give-to, take-from,
-turn-in) and cell ownership: [NPCs](./npc). Kill/escort creatures: [Mobs](./mobs).
-Baseline: static empty placeholder. Do not re-purpose the tab for unrelated UI;
-do not hide it without an explicit product cut.
+**Reserved tab until wired.** Product law: [Missions](./missions) — server-owned
+contract log (accept / track / turn-in ready / history); pay is ARC. NPC verbs
+(offer, talk-to, give-to, take-from, turn-in): [NPCs](./npc). Kill/escort
+creatures: [Mobs](./mobs). Star Map mission markers are spatial targets, not a
+second quest DB. Baseline: static empty placeholder. Do not re-purpose the tab
+for unrelated UI; do not hide it without an explicit product cut.
 
 ### Map
 

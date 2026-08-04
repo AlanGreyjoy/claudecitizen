@@ -14,6 +14,10 @@ aggro, HP, death, loot, leash, kill/assist credit. **Editor** places dens
 (Build Web); **Server Console** owns MobDef / loot / packs. LOD + AI budgets
 on web. Not player Sidekick. Ship Combat = different loop.
 [NPCs](../../docs/docs/architecture/npc.md),
+[Missions](../../docs/docs/architecture/missions.md) (kill / escort credit),
+[Loot tables](../../docs/docs/architecture/loot-tables.md),
+[Progression](../../docs/docs/architecture/progression.md) (kill XP),
+[Factions](../../docs/docs/architecture/factions.md),
 [Multiplayer](../../docs/docs/architecture/multiplayer.md),
 [Content delivery](../../docs/docs/architecture/content-delivery.md).
 

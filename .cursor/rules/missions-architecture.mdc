@@ -1,0 +1,24 @@
+---
+description: Contracts — types, ARC pay, objectives; server state; HaloBand presents
+alwaysApply: true
+---
+
+# Missions architecture (pointer)
+
+Full law: [`docs/docs/architecture/missions.md`](../../docs/docs/architecture/missions.md).
+
+**Permanent decision:** missions (contracts) are **server-owned** state —
+accept / progress / fail / rewards. Pay is **ARC** (+ items / reputation /
+XP) — **never AsteronCredits**. Offer surfaces: NPC giver, mission board,
+HaloBand log. Defs / boards = live catalog (Console); spatial markers / NPC
+offer ids / dens = editor → Build Web. Objective verbs use
+[NPCs](../../docs/docs/architecture/npc.md); kill / escort creatures use
+[Mobs](../../docs/docs/architecture/mobs.md). Standing:
+[Factions](../../docs/docs/architecture/factions.md). Level/XP:
+[Progression](../../docs/docs/architecture/progression.md). Loot packs:
+[Loot tables](../../docs/docs/architecture/loot-tables.md). Presentation only:
+[HaloBand](../../docs/docs/architecture/haloband.md).
+
+When changing mission defs, boards, pay/rewards, objective credit, HaloBand
+Missions, Star Map mission markers, or contract offer/turn-in flows, read the
+full doc first. Also listed in `AGENTS.md`.

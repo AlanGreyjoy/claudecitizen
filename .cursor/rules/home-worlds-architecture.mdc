@@ -14,6 +14,7 @@ floating cities, no land terrain), **Korrath** (volcanic / extreme heat).
 Sticky at create. Starting Hab resolves from `homeWorldId`. Death fallback
 respawn uses home Hab — [Player death](../../docs/docs/architecture/player-death.md).
 Entry hop: [Scene flow](../../docs/docs/architecture/scene-flow.md).
+Primary body recipe: [Planets](../../docs/docs/architecture/planets.md).
 
 When changing home-world offers, signup select, or starter Hab binding, read
 the full doc first. Also listed in `AGENTS.md`.

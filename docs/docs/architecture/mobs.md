@@ -15,7 +15,12 @@ Three.js / WebGPU, Rapier, authoritative cells).
 townsfolk live in [NPCs](./npc). Do not implement PVE as “hostile NPCs” bolted
 onto the crowd pipeline.
 
-Related: [NPCs](./npc) (social / economic / mission characters),
+Related: [NPCs](./npc) (social / economic characters; mission verbs),
+[Missions](./missions) (kill / escort credit → contract state),
+[Loot tables](./loot-tables) (death rolls),
+[Factions](./factions) (mob aggro side / NPC allegiance),
+[Organizations](./organizations) (player crews — not mob factions),
+[Progression](./progression) (kill XP),
 [Multiplayer](./multiplayer) (cell owns combat outcomes),
 [Player](./player) (character HP / death from mob damage),
 [Player death](./player-death) (respawn after lethal mob fight),
@@ -42,8 +47,8 @@ ship Combat-mode dogfights.
 | Other players | See + help (same HP bar / aggro) | Ambient fill may differ per client |
 
 Mission objectives like “kill 5 X” or “escort through wolves” **reference**
-mobs; the mission state machine stays with NPC/mission services
-([NPCs](./npc)), while the creatures are mob entities.
+mobs; the mission state machine is [Missions](./missions). NPC talk / turn-in
+stays [NPCs](./npc).
 
 ### 2. Cell owns PVE — and peers see the fight
 
@@ -78,8 +83,15 @@ flowchart TB
   Cell["Cell sim<br/>AI + combat + loot"]
   Edge["Edge interest"]
   Client["Client<br/>LOD + predict FX"]
+  Mission["Mission state<br/>kill / assist credit"]
+  Player["Player vitals<br/>HP / death"]
+  Inv["Inventory<br/>loot grants"]
   Spawn --> Cell
+  Client -->|"fire / hit intents"| Cell
   Cell --> Edge --> Client
+  Cell -->|"kill / assist events"| Mission
+  Cell -->|"damage"| Player
+  Cell -->|"death loot"| Inv
 ```
 
 ### What this rejects
@@ -101,6 +113,9 @@ flowchart TB
 | **Prey / ambient fauna** | Flavor animals; may flee; optional hunt loot |
 | **Elite / boss** | Scripted or denser stats; still mob entity kind, harder budget exceptions |
 | **Mission mob** | Same mob pipeline; mission service listens for kill / tag credit |
+
+Mission kill / escort credit flows into [Missions](./missions). Creatures stay
+mobs; turn-in / offer NPCs stay [NPCs](./npc).
 
 ## Combat loop (on-foot / surface / interior)
 
@@ -127,9 +142,16 @@ a handoff rule. Cell boundaries + interest must remain honest
 
 ### Loot
 
-- Loot table on mob / encounter def (catalog).
-- Roll on cell at death (or interact-corpse if product requires).
-- Inventory grants server-side; no client-spawned currency.
+Full law: [Loot tables](./loot-tables).
+
+- `MobDefinition.lootTableId` → catalog table (not embedded JSON).
+- Roll on cell at death (personal loot default; assist credit required).
+- Inventory grants server-side; no client-spawned currency; never AC.
+
+### XP
+
+Kill XP from mob def + level-gap multipliers — [Progression](./progression).
+Granted with death resolution for eligible assisters.
 
 ## Presentation (FPS)
 
@@ -186,11 +208,12 @@ flowchart LR
   Editor["Editor<br/>den markers + mesh"]
   Console["Server Console<br/>MobDef / loot / pack"]
   Build["Build Web"]
+  Resolve["Resolve packId<br/>→ this env catalog"]
   Cell["Cell spawn runtime"]
   Editor -->|"den → packId"| Build
-  Console -->|"defs + packs"| Cell
-  Build -->|"layout + mesh URLs"| Cell
-  Cell -->|"resolve packId → spawn entities"| Cell
+  Build -->|"layout + mesh URLs"| Resolve
+  Console -->|"defs + packs"| Resolve
+  Resolve -->|"spawn entities"| Cell
 ```
 
 ### Why this split
@@ -225,8 +248,8 @@ den says so.
 
 | Row | Owns |
 | --- | --- |
-| `MobDefinition` | Combat identity: stats, presentation id, loot table id, faction |
-| `LootTable` | Drop rolls |
+| `MobDefinition` | Combat identity: stats, presentation id, `lootTableId`, faction, `xpReward`, level |
+| `LootTable` | Drop rolls — [Loot tables](./loot-tables) |
 | `MobPack` (or equivalent) | Weighted list of mob defs + counts / elite chance |
 | Game settings | Global spawn / interest caps |
 
@@ -328,6 +351,11 @@ population. Prefer a distinct `mob/` (or backend mob module) when implemented.
 ## See also
 
 - [NPCs](./npc)
+- [Missions](./missions)
+- [Loot tables](./loot-tables)
+- [Factions](./factions)
+- [Organizations](./organizations)
+- [Progression](./progression)
 - [Multiplayer](./multiplayer)
 - [Ship combat](./ship-combat)
 - [Player](./player) / [Player death](./player-death)

@@ -32,7 +32,7 @@ Bunk overhead screen for the in-bed Entertainment System (ES). **Ship** prefabs 
 4. Tune gaze radius / max distance so the prompt appears from the pillow
 5. Preview: lie down → look at screen (camera eases in) → **F** → ES apps → Esc to close · Hold Y to get up
 
-While the panel is under gaze or open, the bed camera uses a Star Citizen–style FOV zoom + slight dolly toward the screen.
+While the panel is under gaze or open, the bed camera uses an FOV zoom + slight dolly toward the screen.
 
 Apps: **Docs**, **YouTube** (embeds), and **NASA TV** (official [NASA Live](https://www.youtube.com/channel/UCNwkvBoDag92nHiZBzbYicA) YouTube channel embed — may be offline between events).
 

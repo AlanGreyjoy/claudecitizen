@@ -13,8 +13,10 @@ air), medication toxicity, and which of those the HUD shows when. This is the
 
 Related: [Basic game loop](./game-loop) (where the character stands),
 [Space traversal](./space-traversal) (planet surface vs sealed interiors vs
-Open Space), [Home Worlds](./home-worlds) (Asteron / Virelia / Korrath;
+Open Space), [Planets](./planets) (body recipe: temp band, breathable, *g* shell + outdoor
+walk feel), [Home Worlds](./home-worlds) (Asteron / Virelia / Korrath;
 signup bind), [Player death](./player-death) (respawn after vitals kill you),
+[Progression](./progression) (XP / level — not vitals),
 [Multiplayer](./multiplayer) (cell-owned death / medicine; peers also see
 loadout / pose / firearm fire — that doc),
 [Content delivery](./content-delivery) (medicine as live catalog items),
@@ -107,7 +109,8 @@ outside a hull without a suit has no air.
 
 ### Planet authoring (law names, not a schema patch here)
 
-The active planet document owns surface environment for vitals:
+The active planet document owns surface environment for vitals. Full body-recipe
+law: [Planets](./planets).
 
 | Field (conceptual) | Meaning |
 | --- | --- |
@@ -117,6 +120,15 @@ The active planet document owns surface environment for vitals:
 Exact JSON keys land with the implementation. Sky / Bruneton scattering and
 `atmosphereHeightMeters` (flight *g* shell) are **not** automatically
 “breathable” — a thick unbreathable soup is allowed.
+
+### Gravity and walking (not a vital bar)
+
+Planet `gravityMetersPerSecond2` also changes **how walking and running feel**
+outdoors — heavy *g* slows you down; light *g* makes strides floatier. Full
+law: [Planets](./planets#gravity-and-on-foot-feel). Character settings stay
+the Earth baseline; planet *g* scales them. Sealed interiors keep artificial
+~1g (same place split as temp / air above). This is locomotion feel, not a
+HUD vital.
 
 ### HUD vs damage
 

@@ -60,7 +60,7 @@ Living checklist — not a contract. Priorities shift with the vibe.
 - [x] Over-the-shoulder camera for on-foot and ship-deck traversal
 - [x] Friendly station NPCs — spawner/waypoint graphs and named service characters
 - [ ] Points of interest — outposts, wrecks, landmarks
-- [ ] Mission hooks and dialogue outcomes
+- [ ] Mission hooks and dialogue outcomes — see [Missions](./architecture/missions)
 - [ ] EVA / zero-g outside the ship
 
 ## Economy & items

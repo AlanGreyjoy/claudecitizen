@@ -1,0 +1,20 @@
+---
+description: NPC factions — joinable guilds, ranks, skill lines, standing; not player Orgs — read full architecture doc
+alwaysApply: true
+---
+
+# Factions architecture (pointer)
+
+Full law: [`docs/docs/architecture/factions.md`](../../docs/docs/architecture/factions.md).
+
+**Permanent decision:** **Factions** are **NPC / world** groups (joinable
+guilds, standing-only, aggro-sides). Players join / earn **faction XP → rank →
+skill line**. Standing ≠ ARC ≠ AC. Catalog defs; durable membership + standing.
+**Not** player crews — those are [Organizations](../../docs/docs/architecture/organizations.md).
+[Missions](../../docs/docs/architecture/missions.md),
+[NPCs](../../docs/docs/architecture/npc.md),
+[Mobs](../../docs/docs/architecture/mobs.md),
+[Home Worlds](../../docs/docs/architecture/home-worlds.md).
+
+When changing faction defs, join/rank/skill lines, standing deltas, or aggro
+sides, read the full doc first. Also listed in `AGENTS.md`.

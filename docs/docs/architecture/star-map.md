@@ -11,10 +11,12 @@ Authoritative mental model for how a project authors **star systems** and the
 intended world model, not a changelog of today's schema.
 
 Related: [Space traversal](./space-traversal) (Open Space host at 1:1 map meters),
+[Planets](./planets) (body recipe linked by `planetId`),
 [Basic game loop](./game-loop) (station family Hab / Hangar ownership),
 [Scene flow](./scene-flow) (boot picks starting system),
 [Multiplayer](./multiplayer) (cells during travel / Warp Gate),
 [Ship flight](./ship-flight) (Nav mode / quantum to map markers),
+[Missions](./missions) (mission markers link contract defs / objectives),
 [System Map](../editor/system-map) (editor how-to; code still names the tab /
 document this way).
 
@@ -79,7 +81,7 @@ AsteronEngine:
 | **Station** | Giant-prefab body (`Runtime: station` scene preferred); parent + offset; owns Hab / Hangar scene ids. |
 | **Waypoint** | Navigation / quantum / blip target without full station geometry or streamed content. |
 | **POI** | Point of interest on the ecliptic. Authors create it on the Star Map and **assign a prefab** that Open Space loads when the player arrives (approach / activation range). Explore sites, wrecks, landmarks, narrative hooks. |
-| **Mission** | Mission encounter or objective placed on the map (authorship lives with the map entry; mission content may reference it). |
+| **Mission** | Mission encounter or objective placed on the map. Authorship is the map entry; content / pay live in [Missions](./missions) catalog defs the marker references. |
 | **Warp Gate** | Cross-system portal body. Prefab with a `warp-gate` component; place on this map; configure destination Star System. |
 
 Station entries still carry **family ownership** (`habSceneId` / `hangarSceneId`)

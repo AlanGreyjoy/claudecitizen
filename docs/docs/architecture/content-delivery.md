@@ -16,9 +16,15 @@ Related: [Build Web](../editor/build-web) (how-to),
 [Ship definitions](../server-console/ship-definitions),
 [Item definitions](../server-console/item-definitions),
 [Game settings](../server-console/game-settings),
+[Planets](./planets) (planet docs ship in the project release),
 [Player](./player) (medicine / consumables as live catalog),
 [Item Mall](./item-mall) (AC packs / MallListing as live catalog),
 [Mobs](./mobs) (dens in editor; mob/loot/pack defs in catalog),
+[Missions](./missions) (markers / NPC offers in editor; mission defs / boards in
+catalog),
+[Loot tables](./loot-tables) / [Factions](./factions) / [Organizations](./organizations) /
+[Progression](./progression) / [Harvesting](./harvesting)
+(catalog faction defs + curves + loot + harvest/recipe defs; Orgs are player state only),
 [Assets](../assets).
 
 **This doc is law.** Local Server Console edits never auto-sync to prod.
@@ -29,7 +35,7 @@ Migrations are not a catalog promote path.
 | Surface | What lives there | How it reaches an environment |
 | --- | --- | --- |
 | **Project release** | Scenes, prefabs, planets, systems, `assets/` (including protected packs when staged) | **File → Build Web** → deploy static host; stamps `asteron.runtime.json` |
-| **Live catalog** | `ShipDefinition`, props, items, weapons, backpacks, wearables, `GameSettings`, credit packs, mall listings, payment config, **mob definitions / loot tables / mob packs** (when PVE lands — [Mobs](./mobs)) | Server Console `/admin/*` against **that** backend’s Postgres; **Deploy → Sync Catalog…** to promote editor → release `backendUrl`; or a one-shot seed migration |
+| **Live catalog** | `ShipDefinition`, props, items, weapons, backpacks, wearables, `GameSettings`, credit packs, mall listings, payment config, **mob definitions / loot tables / mob packs** (when PVE lands — [Mobs](./mobs)), **mission definitions / boards / factions** (when contracts land — [Missions](./missions)) | Server Console `/admin/*` against **that** backend’s Postgres; **Deploy → Sync Catalog…** to promote editor → release `backendUrl`; or a one-shot seed migration |
 | **Migrations** | Schema history + **one-shot** seeds (`WHERE NOT EXISTS` / upsert) | `npm run backend:migrate` or boot with `RUN_MIGRATIONS=true` (defaults **false** in production) |
 
 Never conflate them:
@@ -117,6 +123,13 @@ local Console state ships with the backend binary.
 | Credit packs | `CreditPack` | Real-money → AsteronCredits |
 | Item Mall | `MallListing` | Points at item definitions |
 | Payments | `PaymentProvider` | **Prod-specific** secrets/URLs — do not copy local Stripe keys blindly |
+| Missions (when live) | `MissionDefinition`, boards | Contract defs + pay — [Missions](./missions) |
+| Factions (when live) | `Faction`, ranks, skill lines, relations | NPC faction defs — [Factions](./factions); player standing/membership are player state |
+| Organizations | — | **Player state only** — never catalog promote — [Organizations](./organizations) |
+| Loot tables (when live) | `LootTable` | Shared drop defs — [Loot tables](./loot-tables) |
+| Progression (when live) | `ProgressionCurve` / GameSettings knobs | XP curve params — [Progression](./progression) |
+| Harvesting (when live) | `HarvestNodeDef`, `RecipeDef`, tool/module tiers | Node/recipe defs; markers/dens in project — [Harvesting](./harvesting) |
+| Mobs (when live) | `MobDefinition`, packs | Stats in catalog; dens in project — [Mobs](./mobs) |
 
 Seeds already in `backend/migrations/` (starter Phobos ship, demo props/items,
 weapons, wearables, sample mall, …) apply **once**. Later Console edits do not

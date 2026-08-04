@@ -1,0 +1,20 @@
+---
+description: Progression — soft level + XP curve, server grants, no death XP loss — read full architecture doc
+alwaysApply: true
+---
+
+# Progression architecture (pointer)
+
+Full law: [`docs/docs/architecture/progression.md`](../../docs/docs/architecture/progression.md).
+
+**Permanent decision:** soft **character level** + cumulative **XP**; curve
+\(\Delta(L)=A L^{B}+C\) (catalog-tunable; max level ~50); server
+`apply_xp_delta` only; **no XP loss on death**; XP ≠ ARC ≠ AC. Soft content
+gates preferred over hard DPS walls. Sources: missions, mob kills (level-gap
+multipliers), later discovery.
+[Missions](../../docs/docs/architecture/missions.md),
+[Mobs](../../docs/docs/architecture/mobs.md),
+[Player death](../../docs/docs/architecture/player-death.md).
+
+When changing XP grants, level curve, level gates, or HaloBand XP UI, read the
+full doc first. Also listed in `AGENTS.md`.

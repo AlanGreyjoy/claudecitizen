@@ -17,6 +17,7 @@ Also read when the domain matches:
 | `docs/docs/architecture/multiplayer.md` | Cell authority, presence, character presentation (loadout / pose / fire), travel intents, instances |
 | `docs/docs/architecture/space-traversal.md` | Open Space host, boarding, Warp Gate |
 | `docs/docs/architecture/star-map.md` | Star System ↔ Star Map catalog |
+| `docs/docs/architecture/planets.md` | PlanetDocument recipe; active planet; surface env; Build Web |
 | `docs/docs/architecture/ship-flight.md` | Rapier + flight computer, modes, boost, quantum |
 | `docs/docs/architecture/ship-physics.md` | Vacuum inertia, coupled assist, dual-reticle |
 | `docs/docs/architecture/ship-combat.md` | Ship weapons, lock-on, lead markers, combat HUD |
@@ -29,8 +30,14 @@ Also read when the domain matches:
 | `docs/docs/architecture/stripe.md` | In-game Stripe wallet: Elements, saved cards, default PM, pack buy |
 | `docs/docs/architecture/npc.md` | MMO NPCs: crowd LOD, shops, dialogue, mission verbs; not mobs |
 | `docs/docs/architecture/mobs.md` | PVE mobs: monsters/animals; cell combat; not NPCs |
+| `docs/docs/architecture/missions.md` | Contracts: types, ARC pay, objectives; server state; HaloBand presents |
+| `docs/docs/architecture/loot-tables.md` | Server loot rolls; personal claim; catalog tables |
+| `docs/docs/architecture/factions.md` | NPC factions: joinable guilds, ranks, skill lines; not player Orgs |
+| `docs/docs/architecture/organizations.md` | Player Orgs: roster, roles, invites; ≠ NPC factions |
+| `docs/docs/architecture/progression.md` | Soft level + XP curve; mission/mob grants; no death XP loss |
+| `docs/docs/architecture/harvesting.md` | On-foot + ship harvest; yields → craft; cell-owned; never AC |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab/scene editor work |
-| `.cursor/skills/prd/SKILL.md` | Creating PRD handoff packs under `prds/<slug>/` |
+| `.cursor/skills/architecture-diagram/SKILL.md` | Architecture docs as law; cross-doc deps; author/update |
 | `.cursor/rules/terrain-cache.mdc` | Terrain/vegetation cache versioning |
 
 **Filename convention is mixed on purpose.** `*.ts` is kebab-case and `*.tsx` is PascalCase (ESLint `check-file` enforces both), but the migration never touched directory names — `src/render/planet_tiles/`, `src/world/surface_spawns/`, `src/app/ship_sandbox/`, `src/render/effects/lake_water/` are still snake_case, and `scripts/` is exempt entirely (`measure_desync.ts`, `inspect_glb.mjs`). Do not "fix" those; a blind `_`→`-` sweep breaks imports.

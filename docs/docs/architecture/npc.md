@@ -15,13 +15,15 @@ game (TypeScript + Three.js / WebGPU, Rapier, authoritative cells).
 **NPCs are not mobs.** PVE monsters, animals, and combat fauna live in
 [Mobs](./mobs). Do not merge the two pipelines.
 
-Related: [Mobs](./mobs), [Multiplayer](./multiplayer) (cell owns shop / mission /
-dialogue outcomes), [Basic game loop](./game-loop),
-[Space traversal](./space-traversal), [Player](./player),
-[HaloBand](./haloband) (Missions tab presents contracts; does not own them),
-[Content delivery](./content-delivery) (shops, items, mission defs as live
-catalog), [Item Mall](./item-mall) (AC mall ≠ ARC vendor NPC shops),
-editor NPC components (`npc-spawner`, `npc-waypoint`, `npc-placement`).
+Related: [Missions](./missions) (contract state / ARC pay — this doc owns
+NPC verbs only; rep/XP/loot packs live in sibling laws), [Mobs](./mobs),
+[Multiplayer](./multiplayer) (cell owns shop / mission / dialogue outcomes),
+[Basic game loop](./game-loop), [Space traversal](./space-traversal),
+[Player](./player), [HaloBand](./haloband) (Missions tab presents contracts;
+does not own them), [Content delivery](./content-delivery) (shops, items,
+mission defs as live catalog), [Item Mall](./item-mall) (AC mall ≠ ARC vendor
+NPC shops), editor NPC components (`npc-spawner`, `npc-waypoint`,
+`npc-placement`).
 
 **This doc is law.** Code may lag hard (crowd still uses player avatars; shops
 are mostly screen terminals; missions stub). Gaps are refactor targets — not
@@ -57,13 +59,23 @@ Client owns prompts, UI, and prediction of cosmetic reaction only.
 
 ```mermaid
 flowchart TB
-  Ambient["Ambient crowd<br/>local cosmetic fill"]
+  Author["Editor placement<br/>spawner / waypoint / placement"]
+  Ambient["Ambient crowd<br/>local sim"]
   Service["Service NPCs<br/>shop / dialog / mission"]
-  Cell["Cell + catalog<br/>outcomes"]
-  UI["Client UI<br/>HaloBand / dialogue / shop"]
-  Ambient -->|"LOD only"| UI
+  Present["Client presentation<br/>crowd LOD"]
+  Edge["Edge interest"]
+  Cell["Cell<br/>validate + mutate"]
+  Catalog["Catalog<br/>shop / mission defs"]
+  UI["Interact UI<br/>HaloBand / dialogue / shop"]
+  Author -->|"ambient"| Ambient
+  Author -->|"named / service"| Service
+  Ambient -->|"LOD only"| Present
+  Service -->|"pose + public flags"| Edge
+  Edge --> Present
   Service -->|"interact intent"| Cell
+  Catalog -->|"stock / offers"| Cell
   Cell -->|"grant / debit / mission state"| UI
+  Present -.->|"F / focus"| UI
 ```
 
 ## Budgets (keep separate)
@@ -133,8 +145,9 @@ Do not treat “I clicked the dialogue option” as item grant on the client.
 
 ### Missions (contracts)
 
-HaloBand **Missions** tab is presentation ([HaloBand](./haloband)). Mission
-**state** (accepted, objectives, rewards) is server-owned.
+Full law: [Missions](./missions). HaloBand **Missions** tab is presentation
+([HaloBand](./haloband)). Mission **state** (accepted, objectives, rewards) is
+server-owned; pay is **ARC** (never AC).
 
 NPC-facing mission verbs (MMO-standard):
 
@@ -148,6 +161,22 @@ NPC-facing mission verbs (MMO-standard):
 
 Kill / escort / gather that target **mobs** or world props still update the
 **same** mission state machine — mob combat itself is [Mobs](./mobs).
+
+```mermaid
+flowchart LR
+  Mob["Mob cell<br/>HP / death"]
+  Credit["Mission credit<br/>kill / assist"]
+  State["Mission state<br/>objectives"]
+  NPC["NPC turn-in<br/>giver / objective"]
+  UI["HaloBand Missions"]
+  Mob -->|"cell events"| Credit --> State
+  State -->|"turn-in ready"| NPC
+  State --> UI
+  NPC -->|"interact intent"| State
+```
+
+Creatures stay on the mob pipeline; townsfolk stay NPCs. Only **mission state**
+bridges them — full contract law: [Missions](./missions).
 
 ### Interact gating
 
@@ -296,13 +325,14 @@ when catalog rows exist ([Content delivery](./content-delivery)).
 - Crowd LOD renderer; then raise alive caps.
 - NPC shopkeeper face on top of existing ARC shop outcomes.
 - Dialogue trees + bark tables.
-- Mission state machine + HaloBand Missions tab wiring.
+- Mission state machine + HaloBand Missions tab wiring — [Missions](./missions).
 - Coarse city portals (still not Recast).
-- Catalog-backed NPC / dialogue / mission defs in Server Console.
+- Catalog-backed NPC / dialogue defs in Server Console (mission defs: [Missions](./missions)).
 - Scripted “NPC turns hostile” handoff into [Mobs](./mobs) if needed.
 
 ## See also
 
+- [Missions](./missions)
 - [Mobs](./mobs)
 - AGENTS.md § Friendly station NPCs (baseline; defer here on presentation +
   interactions)

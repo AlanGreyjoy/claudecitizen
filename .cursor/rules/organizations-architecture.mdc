@@ -1,0 +1,18 @@
+---
+description: Player Organizations (Orgs) — roster, roles, invites; not NPC factions — read full architecture doc
+alwaysApply: true
+---
+
+# Organizations architecture (pointer)
+
+Full law: [`docs/docs/architecture/organizations.md`](../../docs/docs/architecture/organizations.md).
+
+**Permanent decision:** **Orgs** are **player-created** crews. Server owns
+create / invite / kick / roles. MVP: **one Org per player**. Durable Postgres
+state — not catalog. Orthogonal to NPC [Factions](../../docs/docs/architecture/factions.md)
+(no shared rank / skill line). Party ≠ Org.
+[HaloBand](../../docs/docs/architecture/haloband.md),
+[Multiplayer](../../docs/docs/architecture/multiplayer.md).
+
+When changing Org roster, invites, roles, Org chat, or Org bank, read the full
+doc first. Also listed in `AGENTS.md`.

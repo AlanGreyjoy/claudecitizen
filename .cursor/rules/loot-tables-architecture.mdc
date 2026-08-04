@@ -1,0 +1,20 @@
+---
+description: Loot tables — server rolls, personal loot default, catalog-owned — read full architecture doc
+alwaysApply: true
+---
+
+# Loot tables architecture (pointer)
+
+Full law: [`docs/docs/architecture/loot-tables.md`](../../docs/docs/architecture/loot-tables.md).
+
+**Permanent decision:** reusable **`LootTable`** catalog rows; **server** RNG +
+idempotent grants; **personal loot** default in shared PVE; callers (mobs,
+chests, mission packs) pass `lootTableId` only. Tiny ARC OK; **never AC**.
+Nesting depth ≤ 3. Entry gates may use level / reputation.
+[Mobs](../../docs/docs/architecture/mobs.md),
+[Missions](../../docs/docs/architecture/missions.md),
+[Progression](../../docs/docs/architecture/progression.md),
+[Factions](../../docs/docs/architecture/factions.md).
+
+When changing drop rolls, corpse claim, loot UI grants, or Console loot CRUD,
+read the full doc first. Also listed in `AGENTS.md`.
