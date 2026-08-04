@@ -17,6 +17,7 @@ Related: [Star Map](./star-map) (ecliptic placement + `planetId` link),
 terrain), [Ship flight](./ship-flight) (atmospheric *g* + drag shell),
 [Ship physics](./ship-physics) (atmosphere vs vacuum coast),
 [Player](./player) (surface temperature + breathable air stress / HUD),
+[Character locomotion](./character-locomotion) (outdoor walk / jump / fall *g* scale),
 [Home Worlds](./home-worlds) (which body recipe binds starter life),
 [Content delivery](./content-delivery) (planets ship via Build Web),
 [Mobs](./mobs) (surface dens / wildlife on walkable bodies),
@@ -38,7 +39,8 @@ like, what the sky looks like, and (later) whether you can breathe outside.
 - The **Star Map** only says *where* that world sits in the star system.
 - Players feel the recipe when they walk outside or fly near the body —
 including **how heavy their steps feel**. Heavy gravity makes walking and
-running harder; light gravity makes them floatier / easier.
+running harder and jumps shorter / falls snappier; light gravity makes them
+floatier / easier with longer hang time.
 
 You do **not** need to hand-tune every slider for every new world. Planet
 Authoring gives two shortcuts next to each other:
@@ -196,48 +198,54 @@ the fields so features know which bucket to extend.
 | Field | Role |
 | --- | --- |
 | `radiusMeters` | Body radius; places the surface and atmosphere shell |
-| `gravityMetersPerSecond2` | Near-surface gravity strength (m/s²). Drives **ship** pull inside the atmosphere shell **and** **on-foot** walk / run / jump feel on that body’s surface. Vacuum ships: no planetary pull. |
+| `gravityMetersPerSecond2` | Near-surface gravity strength (m/s²). Drives **ship** pull inside the atmosphere shell **and** **on-foot** walk / run / jump / fall feel on that body’s surface. Vacuum ships: no planetary pull. |
 | `atmosphereHeightMeters` | Radial shell above the surface where the ship is **in atmosphere** (drag + *g*). Not “breathable height.” |
 | `dragSeaLevel` | Sea-level aerodynamic drag scale for flight in atmosphere |
 
 Heavier *g* → harder / longer ship escape under the same thrust, **and**
-slower / heavier on-foot locomotion. Lighter *g* → easier escape and floatier
-strides. Do not hardcode Earth *g* in the flight computer **or** character
-locomotion when a planet surface is active.
+slower / heavier on-foot locomotion with weaker hops and snappier falls.
+Lighter *g* → easier escape and floatier strides / longer hang. Do not
+hardcode Earth *g* in the flight computer **or** character locomotion when a
+planet surface is active.
 
 ### Gravity and on-foot feel
 
-**Law:** planet `gravityMetersPerSecond2` affects **walking and running** (and
-jump arc) when the character is **on foot outdoors** on that body. This is
-part of the fun of different worlds — not only a ship number.
+**Law:** planet `gravityMetersPerSecond2` affects **walking and running**,
+**jump impulse**, and **fall acceleration** when the character is **on foot
+outdoors** on that body. This is part of the fun of different worlds — not
+only a ship number.
 
-| Planet *g* vs Earth (~9.8) | Walk / run | Jump |
-| --- | --- | --- |
-| **Heavier** (e.g. high-gravity preset) | Slower top speed; strides feel labored; sprint costs more effort to reach | Lower peak / snappier fall |
-| **Earth-like** (temperate rocky / Asteron) | Baseline from character settings | Baseline |
-| **Lighter** (small / moon-like / low *g*) | Faster or floatier horizontal motion; longer glide between steps | Higher / floatier hang time |
+| Planet *g* vs Earth (~9.8) | Walk / run | Jump impulse | Fall |
+| --- | --- | --- | --- |
+| **Heavier** (e.g. high-gravity preset) | Slower top speed; strides feel labored; sprint costs more effort to reach | Lower hop | Snappier / faster drop |
+| **Earth-like** (temperate rocky / Asteron) | Baseline from character settings | Baseline | Baseline |
+| **Lighter** (small / moon-like / low *g*) | Faster or floatier horizontal motion; longer glide between steps | Higher / floatier takeoff | Longer hang / slower fall |
 
 Rules:
 
-1. **Character settings** still own the **Earth-baseline** walk / sprint / jump
-   numbers (Base Characters → Char Settings). Planet *g* **scales** those —
-   it does not replace them with a second unrelated speed table.
+1. **Character settings** still own the **Earth-baseline** walk / sprint /
+   jump numbers (Base Characters → Char Settings). Planet *g* **scales**
+   those — and the outdoor **fall** accel — it does not replace them with a
+   second unrelated speed table.
 2. Scale from Earth: roughly `g / 9.80665` (exact curve tunable; clamp so
    ultra-heavy worlds stay playable and ultra-light worlds do not become
    cartoon teleport).
 3. **Sealed interiors** (station / Hab / Hangar / ship cabin) use **artificial
    ~1g** locomotion — they do **not** inherit the outdoor planet’s heavy or
-   light *g*. Same split as vitals: outdoors feels the world; indoors is life
-   support ([Player](./player)).
+   light *g* for walk, jump, or fall. Same split as vitals: outdoors feels
+   the world; indoors is life support ([Player](./player)).
 4. Gas-giant floating cities = station-family floors → artificial *g*, not
    “walking on gas.”
 5. Animation / footstep cadence should track effective speed so heavy *g*
    does not look like moonwalking at half speed with a full sprint clip.
+   Jump / land clip timing should track effective hang.
+   Full walker policy: [Character locomotion](./character-locomotion).
 6. Multiplayer: peers see the scaled motion; cell clamps still respect the
    effective top speed for that place ([Multiplayer](./multiplayer)).
 
 What this rejects: only applying planet *g* to ships; applying outdoor *g*
-inside Habs; a second hardcoded walk-speed list per planet id that bypasses
+inside Habs; scaling walk while leaving jump or fall on a fixed Earth
+constant; a second hardcoded walk-speed list per planet id that bypasses
 `gravityMetersPerSecond2`.
 
 ### Terrain and surface look (rocky / walkable bodies)
@@ -336,7 +344,7 @@ nav list every body; only the **terrain mesh** is single-active.
 | --- | --- |
 | Ship in atmosphere shell | `gravityMetersPerSecond2`, drag / `atmosphereHeightMeters`, sea-level drag |
 | Ship in vacuum | No planetary *g*; residual space drag / coupled assist only ([Ship physics](./ship-physics)) |
-| On foot outdoors (rocky) | Terrain; biomes; vegetation; spawns; temp / breathable stress; **walk / run / jump scaled by `gravityMetersPerSecond2`** |
+| On foot outdoors (rocky) | Terrain; biomes; vegetation; spawns; temp / breathable stress; **walk / run / jump / fall scaled by `gravityMetersPerSecond2`** |
 | Station / Hab / Hangar / ship interior | No surface vitals stress; **artificial ~1g** locomotion (not outdoor planet *g*) |
 
 ## Multiplayer
@@ -362,7 +370,7 @@ nav list every body; only the **terrain mesh** is single-active.
 | Multi-planet terrain | Single active origin | Same constraint until terrain stack is multi-body |
 | **Presets** in Planet Authoring | Absent | Dropdown of **10** named presets; apply to open doc |
 | **Random** in Planet Authoring | Absent | **Random** button rolls a saveable planet recipe |
-| On-foot *g* scale | Fall uses planet *g*; walk/sprint mostly Earth baseline | Walk / run / jump **scaled** by planet *g* outdoors |
+| On-foot *g* scale | Fall often planet; walk/sprint/jump impulse mostly Earth baseline | Walk / run / jump impulse / fall **scaled** by planet *g* outdoors |
 
 ## Invariants
 
@@ -380,7 +388,7 @@ nav list every body; only the **terrain mesh** is single-active.
 - Terrain mesh and foot sampling stay synchronized (AGENTS.md).
 - Planet Authoring **Presets** (10) and **Random** produce normal, saveable
   PlanetDocuments — not player runtime rolls.
-- Outdoor on-foot walk / run / jump scale with planet
+- Outdoor on-foot walk / run / jump / fall scale with planet
   `gravityMetersPerSecond2`; sealed interiors stay ~1g artificial.
 
 ## Open / later

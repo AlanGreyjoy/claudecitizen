@@ -17,7 +17,8 @@ boarding), [Scene flow](./scene-flow) (boot / starting system),
 [Multiplayer](./multiplayer) (presence while flying; quantum peers),
 [Ship physics](./ship-physics) (vacuum inertia, residual coast,
 coupled assist), [Ship combat](./ship-combat) (blasters, missiles, lock-on,
-combat HUD), [Ship controller](../editor/components/ship-controller)
+combat HUD), [Character locomotion](./character-locomotion) (deck walk ≠
+flight body), [Ship controller](../editor/components/ship-controller)
 (authored stats), [Star Map](./star-map) (ecliptic bodies quantum targets),
 [Planets](./planets) (`gravityMetersPerSecond2`, `atmosphereHeightMeters`).
 
@@ -81,7 +82,8 @@ flowchart TB
 | **Flying / seated pilot** | World-space Rapier body for the hull (Open Space / hangar air volume). |
 | **On-foot on a parked hull** | Ship-local Rapier for deck colliders (doors, ramp, pad) — same as today. |
 
-Do not put the walking character controller on the flying world body. Park /
+Do not put the walking character controller on the flying world body — walk
+law: [Character locomotion](./character-locomotion). Park /
 land → hand off to deck world; takeoff → hull is dynamic in the flight world
 again. One owner of “where is the ship” at a time.
 

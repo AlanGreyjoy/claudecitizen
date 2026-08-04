@@ -15,6 +15,7 @@ inventory authority.
 Related: [Player](./player) (vitals Home tiles read),
 [Star Map](./star-map) / [Ship flight](./ship-flight) (Map tab + quantum
 route), [Ship combat](./ship-combat) (Ship tab hull / shields),
+[Character locomotion](./character-locomotion) (open suppresses walk input),
 [Content delivery](./content-delivery) (Mall listings / credit packs as live
 catalog), [Multiplayer](./multiplayer) (chat + inventory outcomes stay
 cell/server-owned), [Missions](./missions) (contract log — this tab presents),

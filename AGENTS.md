@@ -160,10 +160,13 @@ quantum) is documented in `docs/docs/architecture/ship-flight.md`. **Ship physic
 (vacuum inertia, residual coast, coupled assist):
 `docs/docs/architecture/ship-physics.md`. **Ship combat** (blasters, missiles,
 lock-on, lead markers, combat HUD, hierarchy death):
-`docs/docs/architecture/ship-combat.md`. Thin Cursor pointers:
+`docs/docs/architecture/ship-combat.md`. **Character combat** (on-foot / TPS
+firearms, melee, throwables; cell hits):
+`docs/docs/architecture/character-combat.md`. Thin Cursor pointers:
 `.cursor/rules/ship-flight-architecture.mdc`,
 `.cursor/rules/ship-physics-architecture.mdc`,
-`.cursor/rules/ship-combat-architecture.mdc`.
+`.cursor/rules/ship-combat-architecture.mdc`,
+`.cursor/rules/character-combat-architecture.mdc`.
 
 `Runtime` is a real field: `SceneDocument.runtime` in
 `src/world/scenes/schema.ts` (`open-space` / `station` / `hab` / `hangar` /
@@ -222,11 +225,33 @@ Server Console — migrations are schema + one-shot seeds only. Full law:
 `docs/docs/architecture/content-delivery.md`. Thin Cursor pointer:
 `.cursor/rules/content-delivery-architecture.mdc`.
 
+**Settings law:** if another AsteronEngine project can need a different value,
+it belongs in Project settings (`asteron.project.json`), Scene settings
+(**File → Scene Settings…**), GameSettings / catalog (Server Console), or
+project document content — not a hard-coded *only* path. **Defaults and
+seeds are fine and encouraged** (scaffold, schema defaults, one-shot
+migrations); authors/operators override afterward. Client localStorage prefs ≠
+`GameSettings`. Full law: `docs/docs/architecture/settings.md`. Thin Cursor
+pointer: `.cursor/rules/settings-architecture.mdc`.
+
 **Player vitals law:** character HP, hunger, thirst, planet temperature /
 breathable air, medicine toxicity, and HUD visibility. Full law:
 `docs/docs/architecture/player.md`. Thin Cursor pointer:
 `.cursor/rules/player-architecture.mdc`. Ship hull shields/HP stay separate
-(`docs/docs/architecture/ship-combat.md`).
+(`docs/docs/architecture/ship-combat.md`). On-foot weapons:
+`docs/docs/architecture/character-combat.md`.
+
+**Character combat law:** TPS camera + firearm loop in walk modes; catalog
+weapons/ammo; ballistics; melee + throwables in scope; cell owns entity hits.
+Full law: `docs/docs/architecture/character-combat.md`. Thin Cursor pointer:
+`.cursor/rules/character-combat-architecture.mdc`.
+
+**Character locomotion law:** one shared walk policy (planet / station / deck);
+Unity-style per-family blend controllers (**no root motion**); idle mouse ≠
+body yaw; gaits, facing + upper-body aim, ADS suppress, ladders; outdoor *g*
+scales walk / run / jump / fall.
+Full law: `docs/docs/architecture/character-locomotion.md`. Thin Cursor pointer:
+`.cursor/rules/character-locomotion-architecture.mdc`.
 
 **Home worlds law:** after Character Create, pick Asteron / Virelia / Korrath;
 binds system + body + starter Hab. Full law:
@@ -235,7 +260,7 @@ binds system + body + starter Hab. Full law:
 
 **Planets law:** one PlanetDocument owns body recipe (physics, terrain, sky,
 surface life-support); Star Map places it; Build Web ships it; active planet
-owns terrain / *g* stack; outdoor walk/run scales with planet *g*; sky ≠
+owns terrain / *g* stack; outdoor walk/run/jump/fall scale with planet *g*; sky ≠
 breathable. Full law:
 `docs/docs/architecture/planets.md`. Thin Cursor pointer:
 `.cursor/rules/planets-architecture.mdc`.
@@ -318,7 +343,7 @@ guns; recipes at authored stations. Full law:
 
 ### Rifle ADS locomotion blending
 
-- `src/player/character-locomotion.ts` owns effective on-foot aim and facing for planet, station, and ship-deck walkers. While effective ADS is active, the whole character turns toward the camera-forward aim direction; otherwise it faces movement. Do not make equipped rifle/pistol stances camera-locked when RMB is not held.
+- `src/player/character-locomotion.ts` owns effective on-foot aim and facing for planet, station, and ship-deck walkers. Idle: mouse look orbits camera only — body holds last yaw. While effective ADS is active, root/legs square to camera-forward **and** the upper body tracks aim (upper overlay while moving); otherwise moving faces movement. Do not make equipped rifle/pistol stances camera-locked when RMB is not held. Stance controllers are Unity-style blends per combat family with **no root motion** — see `docs/docs/architecture/character-locomotion.md`.
 - `src/player/animation/resolve-locomotion.ts` owns the base/upper clip decision. Rifle ADS while idle uses full-body `idle_aiming`; rifle ADS while walking/running uses the current rifle gait as the lower-body base plus `idle_aiming` as the upper-body override.
 - Sprint takes precedence over ADS. Moving with the sprint gait suppresses the aim pose, camera-facing lock, and aim camera zoom until the character stops sprinting. Sprint always uses its normal full-body locomotion clip; the drawn-weapon crosshair remains available for hip fire.
 - `src/render/characters/sidekick/animation-runtime.ts` splits the clips at `spine_01`. Do not play full-body gait and ADS actions over the same spine/arm tracks, and do not turn ADS into a generic additive delta; both approaches double-drive the upper skeleton and distort the weapon pose.
@@ -428,6 +453,8 @@ writing is compat only — do not extend it.
 - **Dual-reticle:** aim pip + nose pip; aim-track PD → torque demand on the Rapier body. Hold **F** free-look; gaze + **LMB** for `cockpit-control`. **Alt+C** coupled ↔ decoupled.
 - **Contacts:** land / crash / ship–ship are Rapier outcomes; boarding triggers stay markers/sensors on that body.
 - **Combat weapons / lock / lead / combat HUD / destroy:** `docs/docs/architecture/ship-combat.md` (Combat mode only).
+- **On-foot / TPS firearms / melee / throwables:** `docs/docs/architecture/character-combat.md`.
+- **On-foot locomotion / gaits / ladders / *g* scale:** `docs/docs/architecture/character-locomotion.md`.
 - **Deck vs flight:** parked on-foot uses ship-local Rapier; flying uses the world flight body — never dual-drive pose.
 - **Main play / preview / spawn wiring:** `in-ship` mode, Ship tab Test, `shipPrefabOverride` chain — see architecture doc + ship-flight skill.
 - **Tuning:** `.cursor/skills/ship-flight/SKILL.md`, `.cursor/rules/ship-flight.mdc`.
@@ -991,8 +1018,14 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/ship-physics-architecture.mdc` | Thin always-on pointer to the ship-physics architecture doc |
 | `docs/docs/architecture/ship-combat.md` | Blasters / missiles, lock-on, lead markers, combat HUD, shields→hull, hierarchy death |
 | `.cursor/rules/ship-combat-architecture.mdc` | Thin always-on pointer to the ship-combat architecture doc |
+| `docs/docs/architecture/character-combat.md` | On-foot / TPS firearms, melee, throwables; cell-owned hits |
+| `.cursor/rules/character-combat-architecture.mdc` | Thin always-on pointer to the character-combat architecture doc |
+| `docs/docs/architecture/character-locomotion.md` | Shared walk policy: gaits, facing, jump, ladders, planet *g* |
+| `.cursor/rules/character-locomotion-architecture.mdc` | Thin always-on pointer to the character-locomotion architecture doc |
 | `docs/docs/architecture/content-delivery.md` | Build Web vs Postgres catalog vs one-shot migrations |
 | `.cursor/rules/content-delivery-architecture.mdc` | Thin always-on pointer to the content-delivery architecture doc |
+| `docs/docs/architecture/settings.md` | Project / Scene / GameSettings vs catalog seeds |
+| `.cursor/rules/settings-architecture.mdc` | Thin always-on pointer to the settings architecture doc |
 | `docs/docs/architecture/player.md` | Character HP, hunger, thirst, temp/air, medicine toxicity, HUD |
 | `.cursor/rules/player-architecture.mdc` | Thin always-on pointer to the player architecture doc |
 | `docs/docs/architecture/home-worlds.md` | Home world select; Asteron / Virelia / Korrath; starter Hab bind |

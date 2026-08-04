@@ -24,6 +24,7 @@ Related: [NPCs](./npc) (social / economic characters; mission verbs),
 [Multiplayer](./multiplayer) (cell owns combat outcomes),
 [Player](./player) (character HP / death from mob damage),
 [Player death](./player-death) (respawn after lethal mob fight),
+[Character combat](./character-combat) (on-foot firearms / melee / throwables),
 [Ship combat](./ship-combat) (**ship** weapons / hull — different loop),
 [Space traversal](./space-traversal) / [Star Map](./star-map) (where encounters
 may live), [Content delivery](./content-delivery) (mob defs / loot tables as
@@ -322,7 +323,7 @@ population. Prefer a distinct `mob/` (or backend mob module) when implemented.
 | Loop | Doc |
 | --- | --- |
 | On-foot / surface PVE vs creatures | **This doc** |
-| Player firearms vs players / (later) mobs | [Multiplayer](./multiplayer) + this doc for mob HP |
+| Player firearms vs players / (later) mobs | [Character combat](./character-combat) + [Multiplayer](./multiplayer); this doc for mob HP |
 | Ship vs ship | [Ship combat](./ship-combat) |
 | NPC shop / talk / mission | [NPCs](./npc) |
 

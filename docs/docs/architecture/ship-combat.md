@@ -16,14 +16,15 @@ Related: [Ship flight](./ship-flight) (Combat as a flight posture; modes cycle),
 [Ship physics](./ship-physics) (vacuum coast while dogfighting),
 [Space traversal](./space-traversal) (Open Space host; nav vs combat blips),
 [Multiplayer](./multiplayer) (cell-owned damage / destroy),
-[Ship controller](../editor/components/ship-controller) (hull vitals on the
-prefab).
+[Character combat](./character-combat) (on-foot / TPS firearms — different
+loop), [Ship controller](../editor/components/ship-controller) (hull vitals on
+the prefab).
 
 **This doc is law.** Code today may have Combat as a HUD/mode label and unused
 ship vitals helpers — treat gaps as refactor targets, not as proof weapons are
-out of scope. On-foot firearm combat (`game/combat`, character weapons) is a
-**different** loop; do not reuse its magazine/crosshair path for ship hardpoints.
-Peers must still see on-foot loadout / pose / fire —
+out of scope. On-foot firearm combat is a **different** loop —
+[Character combat](./character-combat); do not reuse its magazine/crosshair path
+for ship hardpoints. Peers must still see on-foot loadout / pose / fire —
 [Multiplayer](./multiplayer#character-presentation-loadout-animation-fire).
 
 ## Permanent decision: Combat mode owns the fight loop
@@ -244,7 +245,7 @@ required for the default law.
 | Combat zoom | input + camera feel (Combat only) |
 | Blips / lead / lock markers / target card | `render` HUD (reads domain) |
 | Hierarchy break-apart FX | `render` (reads destroy event) |
-| On-foot guns | `game/combat` — **out of this doc’s loop** |
+| On-foot guns | [Character combat](./character-combat) — **out of this doc’s loop** |
 
 `flight/` (or a pure ship-combat sibling under domain) stays free of Three /
 DOM. `render/` never decides hits.
@@ -272,7 +273,8 @@ DOM. `render/` never decides hits.
   shields + hull.
 - Damage: shields then hull; one vitals pipeline with crash damage.
 - Default death: **slow, readable** GLB hierarchy break-apart + FX.
-- On-foot firearm loop stays separate; peer visibility for that loop is
+- On-foot firearm loop stays separate — [Character combat](./character-combat);
+  peer visibility is
   [Multiplayer](./multiplayer#character-presentation-loadout-animation-fire).
 - Cell owns combat outcomes; client predicts presentation.
 

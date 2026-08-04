@@ -12,17 +12,19 @@ gravity, atmosphere shell, terrain, sky, surface life-support). Star Map
 places the body (`planetId`); **Build Web** ships planets (not Console
 catalog). Planet Authoring has a **Presets** dropdown (**10** named recipes)
 and a **Random** button that rolls a saveable recipe (editor-only; not a
-player runtime roll). Outdoor walk / run / jump **scale with planet *g***;
+player runtime roll). Outdoor walk / run / jump / fall **scale with planet *g***;
 sealed interiors stay ~1g. One **active** planet owns
 terrain + sky + atmospheric *g*; far bodies place + nav-blip. Sky /
 `atmosphereHeightMeters` ≠ breathable.
 [Star Map](../../docs/docs/architecture/star-map.md),
 [Space traversal](../../docs/docs/architecture/space-traversal.md),
 [Player](../../docs/docs/architecture/player.md),
+[Character locomotion](../../docs/docs/architecture/character-locomotion.md)
+(outdoor *g* scale: walk / jump / fall),
 [Home Worlds](../../docs/docs/architecture/home-worlds.md),
 [Ship flight](../../docs/docs/architecture/ship-flight.md).
 
 When changing planet schema, Planet Authoring (including **Presets** / **Random**),
-active-planet handoff, surface vitals fields, outdoor on-foot *g* scaling, or
-gas-giant vs rocky body rules, read the full doc first. Also listed in
-`AGENTS.md`.
+active-planet handoff, surface vitals fields, outdoor on-foot *g* scaling
+(walk / jump / fall), or gas-giant vs rocky body rules, read the full doc
+first. Also listed in `AGENTS.md`.

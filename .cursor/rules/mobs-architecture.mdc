@@ -13,6 +13,7 @@ via interest so peers **see and help** the same fight / boss HP. Cell owns
 aggro, HP, death, loot, leash, kill/assist credit. **Editor** places dens
 (Build Web); **Server Console** owns MobDef / loot / packs. LOD + AI budgets
 on web. Not player Sidekick. Ship Combat = different loop.
+On-foot guns: [Character combat](../../docs/docs/architecture/character-combat.md).
 [NPCs](../../docs/docs/architecture/npc.md),
 [Missions](../../docs/docs/architecture/missions.md) (kill / escort credit),
 [Loot tables](../../docs/docs/architecture/loot-tables.md),

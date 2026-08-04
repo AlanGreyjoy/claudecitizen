@@ -22,6 +22,7 @@ Related: [Organizations](./organizations) (player crews — separate),
 [Progression](./progression) (character level ≠ faction rank),
 [Home Worlds](./home-worlds) (may bias starting allegiance),
 [Item Mall](./item-mall) (standing ≠ AC), [Content delivery](./content-delivery),
+[Settings](./settings) (catalog defs + optional seeds; not hard-coded rosters),
 [HaloBand](./haloband) (later faction pane).
 
 **This doc is law.** Code may lag. Gaps are refactor targets — not permission

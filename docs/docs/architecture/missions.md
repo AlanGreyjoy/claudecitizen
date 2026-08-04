@@ -27,6 +27,7 @@ Related: [NPCs](./npc) (offer / talk / give / take / turn-in verbs),
 [Progression](./progression) (mission XP),
 [Loot tables](./loot-tables) (optional item pack rolls),
 [Harvesting](./harvesting) (gather / deliver materials from nodes / mining),
+[Character combat](./character-combat) (kill credit via cell hit events),
 [Player](./player) / [Player death](./player-death) (fail / abandon while dead),
 [Game loop](./game-loop) / [Space traversal](./space-traversal) (travel to
 objectives).

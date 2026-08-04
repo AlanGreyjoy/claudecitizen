@@ -25,6 +25,8 @@ catalog),
 [Loot tables](./loot-tables) / [Factions](./factions) / [Organizations](./organizations) /
 [Progression](./progression) / [Harvesting](./harvesting)
 (catalog faction defs + curves + loot + harvest/recipe defs; Orgs are player state only),
+[Character combat](./character-combat) (weapons / ammo catalog + weapon prefabs),
+[Settings](./settings) (Project / Scene / GameSettings vs catalog seeds),
 [Assets](../assets).
 
 **This doc is law.** Local Server Console edits never auto-sync to prod.

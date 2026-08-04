@@ -1,0 +1,26 @@
+---
+description: Character locomotion — TPS walk gaits, facing, jump, ladders, planet *g* — read full architecture doc
+alwaysApply: true
+---
+
+# Character locomotion architecture (pointer)
+
+Full law: [`docs/docs/architecture/character-locomotion.md`](../../docs/docs/architecture/character-locomotion.md).
+
+**Permanent decision:** one shared **locomotion policy** for planet / station /
+deck walkers (gaits walk·run·sprint, crouch, jump, TPS facing). Surfaces only
+own ground contact / physics API. **Animation stance controllers** =
+Unity-style **blend** graphs per combat family (unarmed, rifle, handgun,
+rocket/launcher, throwable, melee) — **no root motion**. Authored docs =
+Char Settings + animation controllers only (no third “CharacterController”
+asset). Idle: mouse look = camera only, body holds yaw. ADS: root faces
+camera-forward **and** upper body tracks aim; **sprint suppresses ADS**.
+Outdoor planet *g* scales **walk / run / jump impulse / fall acceleration**;
+sealed interiors ~1g. Ladder = walk-mode **sub-state**. Flying hull ≠ walk
+controller. Peers: pose + on-foot clamp —
+[Multiplayer](../../docs/docs/architecture/multiplayer.md). Weapons:
+[Character combat](../../docs/docs/architecture/character-combat.md).
+
+When changing walk/run/sprint, crouch, jump / fall *g*, facing/ADS / idle look,
+blend controllers, ladders, deck vs station vs planet integrate, or outdoor *g*
+scale, read the full doc first. Also listed in `AGENTS.md`.

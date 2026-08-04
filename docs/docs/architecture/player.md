@@ -19,6 +19,8 @@ signup bind), [Player death](./player-death) (respawn after vitals kill you),
 [Progression](./progression) (XP / level — not vitals),
 [Multiplayer](./multiplayer) (cell-owned death / medicine; peers also see
 loadout / pose / firearm fire — that doc),
+[Character combat](./character-combat) (on-foot / TPS weapons → HP),
+[Character locomotion](./character-locomotion) (outdoor *g* feel vs sealed),
 [Content delivery](./content-delivery) (medicine as live catalog items),
 [Ship combat](./ship-combat) (hull vitals are a **different** pipeline),
 [HaloBand](./haloband) (Home tiles display vitals; do not own them).
@@ -125,7 +127,8 @@ Exact JSON keys land with the implementation. Sky / Bruneton scattering and
 
 Planet `gravityMetersPerSecond2` also changes **how walking and running feel**
 outdoors — heavy *g* slows you down; light *g* makes strides floatier. Full
-law: [Planets](./planets#gravity-and-on-foot-feel). Character settings stay
+law: [Planets](./planets#gravity-and-on-foot-feel) and
+[Character locomotion](./character-locomotion). Character settings stay
 the Earth baseline; planet *g* scales them. Sealed interiors keep artificial
 ~1g (same place split as temp / air above). This is locomotion feel, not a
 HUD vital.

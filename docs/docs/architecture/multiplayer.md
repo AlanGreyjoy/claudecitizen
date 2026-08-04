@@ -16,8 +16,10 @@ nametag on an empty body.
 
 Related: [Scene flow](./scene-flow) (session start only),
 [Ship flight](./ship-flight) / [Ship combat](./ship-combat) (cell-owned flight
-and damage; on-foot guns are a **different** fight loop but the **same** peer
-visibility duty), [Player](./player) (cell-owned character vitals / medicine /
+and damage), [Character combat](./character-combat) (on-foot / TPS firearms —
+different fight loop, **same** peer visibility duty),
+[Character locomotion](./character-locomotion) (gait / pose peers must match),
+[Player](./player) (cell-owned character vitals / medicine /
 death), [Player death](./player-death) (respawn resolve),
 [Home Worlds](./home-worlds) (starter Hab bind),
 [NPCs](./npc) / [Mobs](./mobs) (service NPCs vs PVE; ambient cosmetic),
@@ -104,7 +106,8 @@ flying hulls. Do not ship a local-only FPS loop and promise peer visuals later.
 | **Firearm fire** | When you fire: muzzle presentation, tracer / projectile travel as product requires, and hit feedback peers need for shared combat (impact / damage outcomes stay cell-owned with [Player](./player) vitals) |
 
 Ship hardpoint fire stays under [Ship combat](./ship-combat). This section is
-the **on-foot / character** path (`game/combat` and character equipment).
+the **on-foot / character** path — full fight law in
+[Character combat](./character-combat).
 
 ### Authority vs presentation
 

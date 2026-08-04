@@ -15,6 +15,8 @@ server. Mall tab only with live wiring (AC ≠ dock ARC). Ship tab only in
 ship modes. Map Set Route persists after close → quantum.
 [Star Map](../../docs/docs/architecture/star-map.md),
 [Player](../../docs/docs/architecture/player.md),
+[Character locomotion](../../docs/docs/architecture/character-locomotion.md)
+(open suppresses walk),
 [Content delivery](../../docs/docs/architecture/content-delivery.md).
 
 When changing HaloBand shell, tabs, open/suppress, Map route, Mall, Inventory

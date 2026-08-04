@@ -1,0 +1,23 @@
+---
+description: Project / Scene / GameSettings — settings required; defaults and seeds encouraged — read full architecture doc
+alwaysApply: true
+---
+
+# Settings architecture (pointer)
+
+Full law: [`docs/docs/architecture/settings.md`](../../docs/docs/architecture/settings.md).
+
+**Permanent decision:** AsteronEngine is multi-project. If a value **can** be a
+setting for another game, it **must** be a **Project setting**, **Scene
+setting**, or **Game setting** / catalog row — never the *only* path as a
+hard-coded ClaudeCitizen constant. **Defaults and seeds are fine and
+encouraged** (schema defaults, New Project scaffold, one-shot migration seeds)
+so empty projects boot playable — authors/operators override afterward.
+Project = `asteron.project.json`; Scene = **File → Scene Settings…**;
+GameSettings / catalog = Server Console.
+[Content delivery](../../docs/docs/architecture/content-delivery.md). Client
+localStorage graphics prefs ≠ `GameSettings`.
+
+When adding tunables, scene-level options, defaults/seeds, starter grants, or
+seedable catalog (factions, curves, …), read the full doc first. Also listed in
+`AGENTS.md`.

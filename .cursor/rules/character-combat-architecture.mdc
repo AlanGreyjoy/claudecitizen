@@ -1,0 +1,21 @@
+---
+description: Character combat — TPS firearms, melee, throwables, cell hits — read full architecture doc
+alwaysApply: true
+---
+
+# Character combat architecture (pointer)
+
+Full law: [`docs/docs/architecture/character-combat.md`](../../docs/docs/architecture/character-combat.md).
+
+**Permanent decision:** on-foot fight is one **character combat** loop (TPS
+camera + firearm feel) in walk modes only — planet / station / deck. Firearms:
+catalog weapons + ammo, bolt/single/burst/auto, ballistic drop, ADS (sprint
+suppresses). Melee and throwables are in-scope. Cell owns entity hits / damage;
+client predicts FX / HUD. **≠** [Ship combat](../../docs/docs/architecture/ship-combat.md).
+Walk / facing: [Character locomotion](../../docs/docs/architecture/character-locomotion.md).
+Peers: [Multiplayer](../../docs/docs/architecture/multiplayer.md). Vitals:
+[Player](../../docs/docs/architecture/player.md).
+
+When changing firearms, ADS, ballistics, ammo reload, melee, throwables,
+crosshair/recoil, or on-foot hit authority, read the full doc first. Also listed
+in `AGENTS.md`.

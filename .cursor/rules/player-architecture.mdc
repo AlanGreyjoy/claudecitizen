@@ -16,6 +16,8 @@ kills; toxicity decays slowly. HUD: hunger / thirst / toxicology always;
 planet temp/atmo **only on planet**; HP **only below 100%**. Cell owns
 outcomes; client owns HUD. Ship hull vitals stay separate
 ([Ship combat](../../docs/docs/architecture/ship-combat.md)).
+Weapon damage path: [Character combat](../../docs/docs/architecture/character-combat.md).
+Walk / outdoor *g*: [Character locomotion](../../docs/docs/architecture/character-locomotion.md).
 
 When changing character HP, hunger, thirst, planet life-support stress,
 medicine / toxicology, or player HUD vitals visibility, read the full doc

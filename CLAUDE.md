@@ -21,7 +21,10 @@ Also read when the domain matches:
 | `docs/docs/architecture/ship-flight.md` | Rapier + flight computer, modes, boost, quantum |
 | `docs/docs/architecture/ship-physics.md` | Vacuum inertia, coupled assist, dual-reticle |
 | `docs/docs/architecture/ship-combat.md` | Ship weapons, lock-on, lead markers, combat HUD |
+| `docs/docs/architecture/character-combat.md` | On-foot / TPS firearms, melee, throwables; cell hits |
+| `docs/docs/architecture/character-locomotion.md` | Shared walk policy; stance controllers; facing + upper aim; ladders; *g* scales walk/jump/fall |
 | `docs/docs/architecture/content-delivery.md` | Build Web vs Postgres catalog vs one-shot migrations |
+| `docs/docs/architecture/settings.md` | Project / Scene / GameSettings vs catalog seeds |
 | `docs/docs/architecture/player.md` | Character HP, hunger, thirst, temp/air, medicine toxicity, HUD |
 | `docs/docs/architecture/home-worlds.md` | Home world select; Asteron / Virelia / Korrath; starter Hab |
 | `docs/docs/architecture/player-death.md` | Death / respawn: custom point or home-world Hab |
@@ -143,6 +146,8 @@ Editor → backend calls must go through `/__editor/backend/*`, proxied by the E
 - **On-foot (ship deck)**: Rapier in **ship-local** space, `src/physics/ship-physics.ts`. Door/ramp colliders toggle via `setEnabled` from articulation blends.
 - **Ship flight**: Rapier owns the flying hull; flight computer emits forces/torques. See `docs/docs/architecture/ship-flight.md`. Do not extend the legacy custom pose integrator.
 - **Ship combat**: Combat mode only — blasters / missiles, lock-on, lead markers, combat HUD. See `docs/docs/architecture/ship-combat.md`.
+- **Character combat**: on-foot / TPS firearms (melee + throwables in law); cell owns entity hits. See `docs/docs/architecture/character-combat.md`.
+- **Character locomotion**: shared walk policy across planet / station / deck; per-family stance controllers; gaits, facing + upper-body aim, ladders; outdoor *g* scales walk / jump / fall. See `docs/docs/architecture/character-locomotion.md`.
 
 ### Terrain: mesh and feet must sample the same grid
 

@@ -15,7 +15,8 @@ survival sim, not a client-side gather sandbox.
 
 Related: [Loot tables](./loot-tables) (yield rolls), [Player](./player)
 (hunger / thirst / meds from crafted consumables), [Ship combat](./ship-combat)
-(mining ≠ combat guns), [Ship flight](./ship-flight) (pilot posture while
+(mining ≠ combat guns), [Character combat](./character-combat) (firearms ≠
+harvest tools), [Ship flight](./ship-flight) (pilot posture while
 mining), [Space traversal](./space-traversal) / [Star Map](./star-map)
 (asteroid belts), [Missions](./missions) (gather objectives),
 [Content delivery](./content-delivery) (markers vs catalog),

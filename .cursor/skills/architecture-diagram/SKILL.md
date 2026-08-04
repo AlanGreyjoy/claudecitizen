@@ -51,6 +51,7 @@ Agent index: `AGENTS.md` (architecture sections + key-file table). Orientation:
 | --- | --- |
 | Currency / pay / grants | [item-mall](../../../docs/docs/architecture/item-mall.md) (ARC ≠ AC); [stripe](../../../docs/docs/architecture/stripe.md) if money |
 | Catalog vs project files | [content-delivery](../../../docs/docs/architecture/content-delivery.md) |
+| Tunable / seedable / “another project’s value” | [settings](../../../docs/docs/architecture/settings.md) (Project / Scene / GameSettings vs catalog) |
 | Shared gameplay / travel / presence | [multiplayer](../../../docs/docs/architecture/multiplayer.md) |
 | Mission offer / talk / shops | [npc](../../../docs/docs/architecture/npc.md) + [missions](../../../docs/docs/architecture/missions.md) |
 | Kill / wildlife / PVE | [mobs](../../../docs/docs/architecture/mobs.md) (≠ NPC) |
@@ -77,7 +78,10 @@ do not invent a parallel ownership story in code comments.
 | Ship Rapier + modes / boost / quantum | `docs/docs/architecture/ship-flight.md` |
 | Vacuum coast / aim-track | `docs/docs/architecture/ship-physics.md` |
 | Ship weapons / lock / destroy | `docs/docs/architecture/ship-combat.md` |
+| On-foot / TPS firearms / melee / throwables | `docs/docs/architecture/character-combat.md` |
+| On-foot walk / gaits / ladders / planet *g* | `docs/docs/architecture/character-locomotion.md` |
 | Build Web vs Console catalog | `docs/docs/architecture/content-delivery.md` |
+| Project / Scene / GameSettings / catalog seeds | `docs/docs/architecture/settings.md` |
 | Character vitals / planet stress | `docs/docs/architecture/player.md` |
 | Home world select / starter Hab | `docs/docs/architecture/home-worlds.md` |
 | Death / respawn | `docs/docs/architecture/player-death.md` |
@@ -124,6 +128,8 @@ diagrams are normative, not decoration.
 - Using today's stub/gap as the permanent design
 - Paying missions/loot in **AC** or granting money outside Stripe webhook law
 - Conflating NPC ↔ mob, Faction ↔ Org, ARC ↔ AC, Build Web ↔ Console catalog
+- Hard-coding multi-project knobs instead of Project / Scene / GameSettings /
+  catalog ([settings](../../../docs/docs/architecture/settings.md))
 - Adding a second scene-travel or cell-pick mechanism
 - “Add multiplayer later” for shared gameplay
 - Writing a PRD pack under `prds/` (removed; law docs replace it)
