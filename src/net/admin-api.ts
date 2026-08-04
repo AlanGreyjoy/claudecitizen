@@ -700,3 +700,15 @@ export function grantPlayerCredits(
     { method: 'POST', body: JSON.stringify(body) },
   );
 }
+
+/** Full catalog snapshot for scripts / tooling. Prefer Deploy → Sync Catalog in the editor. */
+export function exportAdminCatalog(): Promise<Record<string, unknown>> {
+  return requestAdminJson<Record<string, unknown>>('/admin/catalog/export', { method: 'GET' });
+}
+
+export function importAdminCatalog(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  return requestAdminJson<Record<string, unknown>>('/admin/catalog/import', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}

@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld(
     deployClient: () => ipcRenderer.invoke('deploy:client'),
     cancelDeploy: () => ipcRenderer.invoke('deploy:cancel'),
     onDeployState: (callback) => subscribe('editor:deploy-state', callback),
+    getCatalogSyncUrls: () => ipcRenderer.invoke('deploy:catalog-sync-urls'),
+    syncCatalog: (options) => ipcRenderer.invoke('deploy:catalog-sync', options),
+    onCatalogSyncState: (callback) => subscribe('editor:catalog-sync-state', callback),
     onNativeCommand: (callback) => subscribe('editor:native-command', callback),
     onAgentRequest: (callback) => subscribe('agent:request', callback),
     replyAgentRequest: (payload) => {

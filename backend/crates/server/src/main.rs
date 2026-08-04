@@ -1,4 +1,5 @@
 mod admin;
+mod admin_catalog;
 mod admin_payments;
 mod auth;
 mod cell;
@@ -20,6 +21,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     http::{HeaderValue, Method, header},
     routing::{get, patch, post, put},
 };
@@ -82,6 +84,22 @@ fn router(state: AppState) -> Result<Router> {
             Method::DELETE,
         ])
         .allow_headers([header::CONTENT_TYPE]);
+    // Catalog import carries weapon icon data-URLs (~3MB+). Axum's default body
+    // limit is 2MB — RequestBodyLimitLayer alone does not raise it; Json extract
+    // still hits DefaultBodyLimit ("length limit exceeded").
+    let catalog = Router::new()
+        .route(
+            "/admin/catalog/export",
+            get(admin_catalog::export_catalog),
+        )
+        .route(
+            "/admin/catalog/import",
+            put(admin_catalog::import_catalog),
+        )
+        .layer(DefaultBodyLimit::max(16 * 1024 * 1024))
+        .layer(RequestBodyLimitLayer::new(16 * 1024 * 1024))
+        .with_state(state.clone());
+
     Ok(Router::new()
         .route("/livez", get(health::live))
         .route("/readyz", get(health::ready))
@@ -244,6 +262,7 @@ fn router(state: AppState) -> Result<Router> {
             patch(admin::update_wearable).delete(admin::delete_wearable),
         )
         .layer(RequestBodyLimitLayer::new(512 * 1024))
+        .merge(catalog)
         .layer(CatchPanicLayer::new())
         .layer(TraceLayer::new_for_http())
         .layer(cors)

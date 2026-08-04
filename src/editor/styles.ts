@@ -1448,6 +1448,14 @@ body.ed-resize-row * {
   color: #f0c674;
 }
 
+.ed-deploy-url-value {
+  margin: 0;
+  word-break: break-all;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 6px 0 0;
+}
+
 .ed-deploy-hint {
   margin: 0;
   color: var(--ed-text-dim);

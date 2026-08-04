@@ -22,6 +22,7 @@ import { usePrefabIsolation } from './use-prefab-isolation';
 import type { DeployTarget } from '../../platform/editor-desktop';
 import { DeployBackendModal } from './panels/deploy/DeployBackendModal';
 import { DeployFrontendModal } from './panels/deploy/DeployFrontendModal';
+import { DeploySyncCatalogModal } from './panels/deploy/DeploySyncCatalogModal';
 import { MultiplayerDebugModal } from './panels/multiplayer_debug/MultiplayerDebugModal';
 import { PackagesModal } from './panels/PackagesModal';
 import { TranscodeTexturesModal } from './panels/TranscodeTexturesModal';
@@ -68,6 +69,10 @@ function EditorAppModals(props: EditorAppModalsProps): ReactElement {
       />
       <DeployFrontendModal
         open={props.deployTarget === 'client'}
+        onClose={props.onCloseDeploy}
+      />
+      <DeploySyncCatalogModal
+        open={props.deployTarget === 'catalog'}
         onClose={props.onCloseDeploy}
       />
       <MultiplayerDebugModal
@@ -432,6 +437,7 @@ export function EditorApp(): ReactElement {
     openProjectSettings,
     openDeployFrontend: () => setDeployTarget('client'),
     openDeployBackend: () => setDeployTarget('backend'),
+    openDeploySyncCatalog: () => setDeployTarget('catalog'),
     openMultiplayerDebug: () => setMultiplayerDebugOpen(true),
     openPackages: () => setPackagesOpen(true),
     transcodeTextures: () => {

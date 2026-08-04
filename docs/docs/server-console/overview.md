@@ -12,9 +12,9 @@ ClaudeCitizen Rust backend. It lets you inspect registered players and manage th
 plus global **game settings** such as starting ARC balance and starter loadouts.
 
 Catalog rows live in **that backend’s Postgres** only. They do not ship with
-Build Web, and local Console edits do not auto-sync to production. How project
-files, catalog, and migrations relate:
-[Content delivery](../architecture/content-delivery).
+Build Web, and local Console edits do not auto-sync to production. Promote with
+**Deploy → Sync Catalog…** (see
+[Content delivery](../architecture/content-delivery)).
 
 The rest of the editor authors **project files** (scenes, prefabs, planets). The
 Server tab is the one place that edits **persistent server data** stored in

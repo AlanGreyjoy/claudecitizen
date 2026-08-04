@@ -53,6 +53,7 @@ transcribed from this document and every one of them is editable.
 |-----------|--------------|
 | Deploy → Backend… | Opens SSH, runs the step list on the box, then GETs the health URL |
 | Deploy → Front End… | `build:project-web` locally, then `netlify deploy --prod --no-build` |
+| Deploy → Sync Catalog… | Exports catalog from `editorBackendUrl`, upserts into project `backendUrl` |
 
 Each opens its own dialog holding only the settings that half needs, a live log,
 and its own Deploy button. The backend dialog also has **Test connection**, which
@@ -227,15 +228,16 @@ different backend, edit that one file in the publish directory and redeploy.
 
 | Change | How it ships |
 |--------|--------------|
-| Scenes, prefabs, planets, models | `npm run build:project-web` + Netlify deploy |
-| Weapons, items, equipment definitions | New SQL file in `backend/migrations/`, then redeploy the backend |
-| Backend code | `git pull && docker compose ... up -d --build` |
+| Scenes, prefabs, planets, models | **Deploy → Front End…** (or `npm run build:project-web` + host deploy) |
+| Ships, weapons, items, props, mall metadata | **Deploy → Sync Catalog…** (export local → upsert release `backendUrl`) |
+| Schema / missing baseline seeds | SQLx migration (`ON CONFLICT DO NOTHING`); applied when `RUN_MIGRATIONS=true` |
+| Backend code | **Deploy → Backend…** (or `git pull` + compose rebuild on the box) |
+| Stripe secrets / live Price ids | Server Console → Payments on **that** environment — never Sync Catalog |
 
-Catalog data lives in SQL migrations (`0008_equipment_catalog.sql`,
-`0016_weapon_combat_ammo.sql`, `0017_weapon_combat_seed.sql`), not in rows you
-hand-edit locally. `RUN_MIGRATIONS=true` applies them on boot, so adding a
-weapon means adding a migration — your local Postgres never needs to be copied
-to the server.
+Catalog definitions are edited per environment in Server Console. Sync Catalog
+is the promote tool: it does not run automatically on Backend deploy, does not
+copy players/inventory, and does not write `PaymentProvider` or
+`stripePriceId`. One-shot migrations only insert rows that are still missing.
 
 ## Certificate renewal
 

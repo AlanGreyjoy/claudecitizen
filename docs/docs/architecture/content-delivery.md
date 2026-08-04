@@ -26,7 +26,7 @@ Migrations are not a catalog promote path.
 | Surface | What lives there | How it reaches an environment |
 | --- | --- | --- |
 | **Project release** | Scenes, prefabs, planets, systems, `assets/` (including protected packs when staged) | **File → Build Web** → deploy static host; stamps `asteron.runtime.json` |
-| **Live catalog** | `ShipDefinition`, props, items, weapons, backpacks, wearables, `GameSettings`, credit packs, mall listings, payment config | Server Console `/admin/*` against **that** backend’s Postgres — or a one-shot seed in a migration |
+| **Live catalog** | `ShipDefinition`, props, items, weapons, backpacks, wearables, `GameSettings`, credit packs, mall listings, payment config | Server Console `/admin/*` against **that** backend’s Postgres; **Deploy → Sync Catalog…** to promote editor → release `backendUrl`; or a one-shot seed migration |
 | **Migrations** | Schema history + **one-shot** seeds (`WHERE NOT EXISTS` / upsert) | `npm run backend:migrate` or boot with `RUN_MIGRATIONS=true` (defaults **false** in production) |
 
 Never conflate them:
@@ -130,22 +130,28 @@ replay on migrate.
 
 ## Promote order (mesh-backed content)
 
-1. Author prefab + assets in the project → **Build Web** → deploy play host.
-2. Point Server tab at the **target** backend → create/patch definitions with
-   matching `prefabId`s (and icons if used).
-3. Update **Game settings** starters only if new players should receive them
-   (existing players keep their prior grant).
-4. Commerce last: credit packs / mall listings / payment URLs for that env.
+1. Author prefab + assets in the project → **Build Web** / **Deploy → Front End…**.
+2. Promote catalog definitions with **Deploy → Sync Catalog…** (exports from
+   `editorBackendUrl`, upserts into project `backendUrl`). Requires target admin
+   credentials. Does **not** run inside **Deploy → Backend…**.
+3. Optionally check **Include game settings** on Sync if new players should get
+   updated starters (existing players keep prior grants).
+4. Configure Stripe / live Price ids on the **target** env via Server → Payments
+   (Sync never writes `PaymentProvider` or `stripePriceId`).
 
 ```mermaid
 flowchart LR
-  A["1 Build Web<br/>prefab + GLB"] --> B["2 Catalog def<br/>on target DB"]
-  B --> C["3 Game settings<br/>starters optional"]
-  C --> D["4 Commerce<br/>packs / mall"]
+  A["1 Build Web<br/>prefab + GLB"] --> B["2 Deploy Sync Catalog<br/>defs on target DB"]
+  B --> C["3 Game settings<br/>optional on Sync"]
+  C --> D["4 Payments panel<br/>Stripe per env"]
 ```
 
 Reverse order fails: catalog without mesh → empty hangar / missing weapon
 model; mesh without catalog → players never receive or buy it.
+
+One-shot SQLx seeds (`ON CONFLICT DO NOTHING`) still fill **missing** rows on a
+fresh database when migrations run. They are not continuous sync — ongoing
+edits go through Sync Catalog.
 
 ## Failure modes
 
@@ -154,7 +160,7 @@ model; mesh without catalog → players never receive or buy it.
 | `Ship prefab "…" not found` on play host | Prefab not in Build Web bundle (`import.meta.glob`); worked in editor because `/__editor` saw the project file |
 | Protected GLB **404** | Asset not re-copied after protected strip (unreferenced, wrong project root, or missing from allowlist) |
 | Hangar empty but bootstrap lists a ship | Backend `prefabId` ok; **client** layout/mesh failed — catalog sync will not fix it |
-| New item/weapon exists locally only | Console was pointed at localhost; recreate on prod |
+| New item/weapon exists locally only | Sync Catalog not run against prod (or Console pointed only at localhost) |
 | Default hull URL 404 | `ship-model.ts` falls back to hardcoded `PROTECTED_SHIP_URL` (Phobos) when `hullUrl` is omitted — release must still stage that path |
 
 ```mermaid

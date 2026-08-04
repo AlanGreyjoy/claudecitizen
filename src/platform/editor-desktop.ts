@@ -51,6 +51,7 @@ export type DesktopNativeCommandType =
   | 'build-web'
   | 'deploy-frontend'
   | 'deploy-backend'
+  | 'deploy-sync-catalog'
   | 'new-scene'
   | 'new-prefab'
   | 'save'
@@ -181,13 +182,37 @@ export interface DeployResult {
   failedStep?: number;
 }
 
-export type DeployTarget = 'backend' | 'client';
+export type DeployTarget = 'backend' | 'client' | 'catalog';
 
 export type DeployState =
   | { phase: 'started'; target: DeployTarget; steps: string[]; message: string }
   | { phase: 'step'; stepIndex: number; label: string }
   | { phase: 'log'; line: string }
   | { phase: 'success' | 'error'; target: DeployTarget; ok: boolean; message: string; failedStep?: number };
+
+export interface CatalogSyncUrls {
+  sourceUrl: string;
+  targetUrl: string;
+}
+
+export interface CatalogSyncOptions {
+  targetEmail: string;
+  targetPassword: string;
+  sourceEmail?: string;
+  sourcePassword?: string;
+  includeGameSettings?: boolean;
+}
+
+export interface CatalogSyncResult {
+  ok: boolean;
+  message: string;
+  result?: unknown;
+}
+
+export type CatalogSyncState =
+  | { phase: 'started'; message?: string }
+  | { phase: 'log'; line: string }
+  | { phase: 'success' | 'error'; ok: boolean; message: string; result?: unknown };
 
 /** One probe of the local backend, as the multiplayer debug dialog shows it. */
 export interface MultiplayerDebugProbe {
@@ -274,6 +299,9 @@ export interface ClaudeCitizenEditorDesktopBridge {
   deployClient: () => Promise<DeployResult>;
   cancelDeploy: () => Promise<{ canceled: boolean }>;
   onDeployState: (callback: (state: DeployState) => void) => () => void;
+  getCatalogSyncUrls: () => Promise<CatalogSyncUrls>;
+  syncCatalog: (options: CatalogSyncOptions) => Promise<CatalogSyncResult>;
+  onCatalogSyncState: (callback: (state: CatalogSyncState) => void) => () => void;
   onNativeCommand: (callback: (command: DesktopNativeCommand) => void) => () => void;
   onAgentRequest: (callback: (request: DesktopAgentRequest) => void) => () => void;
   replyAgentRequest: (payload: DesktopAgentResponse) => void;

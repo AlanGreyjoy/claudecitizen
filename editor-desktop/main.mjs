@@ -30,6 +30,7 @@ import {
 import { startDevRenderer } from './dev_renderer.mjs';
 import { createAgentServer, createRendererAgentTransport } from './agent_server.mjs';
 import { createDeployManager } from './deploy.mjs';
+import { createCatalogSyncManager } from './catalog_sync.mjs';
 import { createMultiplayerDebugManager } from './multiplayer_debug.mjs';
 import {
   EngineToolsError,
@@ -856,6 +857,10 @@ function installEditorApplicationMenu({
           label: 'Backend…',
           click: () => sendEditorCommand(getWindow, 'deploy-backend'),
         },
+        {
+          label: 'Sync Catalog…',
+          click: () => sendEditorCommand(getWindow, 'deploy-sync-catalog'),
+        },
       ],
     },
     {
@@ -1487,6 +1492,11 @@ if (!hasSingleInstanceLock) {
     onEvent: (event) => sendState(mainWindow, 'editor:deploy-state', event),
   });
 
+  const catalogSyncManager = createCatalogSyncManager({
+    getRepository: () => repository,
+    onEvent: (event) => sendState(mainWindow, 'editor:catalog-sync-state', event),
+  });
+
   // Assigned to the module-scope binding so `serveEditorRequest` can route
   // `/__editor/mp/<n>/backend/*` through the right instance's cookie jar.
   multiplayerDebug = createMultiplayerDebugManager({
@@ -1673,6 +1683,8 @@ if (!hasSingleInstanceLock) {
         'deploy:backend': () => deployManager.deployBackend(),
         'deploy:client': () => deployManager.deployClient(),
         'deploy:cancel': () => deployManager.cancel(),
+        'deploy:catalog-sync-urls': () => catalogSyncManager.getUrls(),
+        'deploy:catalog-sync': (payload) => catalogSyncManager.sync(payload),
       };
       for (const [channel, handler] of Object.entries(deployChannels)) {
         ipcMain.handle(channel, (event, payload) => {

@@ -51,6 +51,7 @@ export type NativeCommandHandlers = {
   buildWeb: () => void;
   openDeployFrontend: () => void;
   openDeployBackend: () => void;
+  openDeploySyncCatalog: () => void;
   newScene: () => void;
   newPrefab: () => void;
   save: () => void;
@@ -81,6 +82,7 @@ export function dispatchNativeCommand(
     'build-web': handlers.buildWeb,
     'deploy-frontend': handlers.openDeployFrontend,
     'deploy-backend': handlers.openDeployBackend,
+    'deploy-sync-catalog': handlers.openDeploySyncCatalog,
     'new-scene': handlers.newScene,
     'new-prefab': handlers.newPrefab,
     save: handlers.save,

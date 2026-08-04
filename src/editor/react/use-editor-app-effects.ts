@@ -74,6 +74,7 @@ export type EditorAppEffectsArgs = {
   openProjectSettings: () => void;
   openDeployFrontend: () => void;
   openDeployBackend: () => void;
+  openDeploySyncCatalog: () => void;
   openMultiplayerDebug: () => void;
   openPackages: () => void;
   transcodeTextures: () => void | Promise<void>;
@@ -115,6 +116,7 @@ export function useEditorAppEffects(args: EditorAppEffectsArgs): void {
     openProjectSettings,
     openDeployFrontend,
     openDeployBackend,
+    openDeploySyncCatalog,
     openMultiplayerDebug,
     openPackages,
     transcodeTextures,
@@ -157,6 +159,7 @@ useEffect(() => {
       openProjectSettings: openProjectSettings,
       openDeployFrontend,
       openDeployBackend,
+      openDeploySyncCatalog,
       openMultiplayerDebug,
       openPackages,
       transcodeTextures: () => void transcodeTextures(),
@@ -188,6 +191,7 @@ useEffect(() => {
   openProjectSettings,
   openDeployFrontend,
   openDeployBackend,
+  openDeploySyncCatalog,
   openMultiplayerDebug,
   openPackages,
   transcodeTextures,
