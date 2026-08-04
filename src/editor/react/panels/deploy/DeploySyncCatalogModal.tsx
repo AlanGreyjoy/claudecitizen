@@ -1,14 +1,12 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { getDesktopEditorBridge } from '../../../../platform/editor-desktop';
-import type { CatalogSyncState, CatalogSyncUrls } from '../../../../platform/editor-desktop';
+import type { CatalogSyncConfig, CatalogSyncState } from '../../../../platform/editor-desktop';
 import {
   DeployDialogShell,
   DeployField,
   DeployLog,
   DeployToggle,
 } from './DeployDialogParts';
-
-type SyncUrls = CatalogSyncUrls;
 
 /** Deploy → Sync Catalog…. Pushes local catalog defs to the release backendUrl. */
 export function DeploySyncCatalogModal({
@@ -19,8 +17,8 @@ export function DeploySyncCatalogModal({
   onClose: () => void;
 }): ReactElement | null {
   const bridge = getDesktopEditorBridge();
-  const [urls, setUrls] = useState<SyncUrls | null>(null);
-  const [urlsError, setUrlsError] = useState('');
+  const [config, setConfig] = useState<CatalogSyncConfig | null>(null);
+  const [configError, setConfigError] = useState('');
   const [targetEmail, setTargetEmail] = useState('');
   const [targetPassword, setTargetPassword] = useState('');
   const [sourceEmail, setSourceEmail] = useState('');
@@ -37,13 +35,22 @@ export function DeploySyncCatalogModal({
     if (!open || !bridge) return;
     setLines([]);
     setStatus({ message: '', isError: false });
-    setUrlsError('');
+    setConfigError('');
+    setTargetPassword('');
+    setSourcePassword('');
     void bridge
-      .getCatalogSyncUrls()
-      .then((next: CatalogSyncUrls) => setUrls(next))
+      .getCatalogSyncConfig()
+      .then((next) => {
+        setConfig(next);
+        setTargetEmail(next.targetEmail);
+        setSourceEmail(next.sourceEmail);
+        setIncludeGameSettings(next.includeGameSettings);
+      })
       .catch((error: unknown) => {
-        setUrls(null);
-        setUrlsError(error instanceof Error ? error.message : 'Could not read project settings.');
+        setConfig(null);
+        setConfigError(
+          error instanceof Error ? error.message : 'Could not read catalog sync settings.',
+        );
       });
   }, [open, bridge]);
 
@@ -63,6 +70,12 @@ export function DeploySyncCatalogModal({
         setStatus({
           message: event.message ?? (event.ok ? 'Done.' : 'Failed.'),
           isError: !event.ok,
+        });
+        // Refresh has*Password flags after sync persists credentials.
+        void bridge.getCatalogSyncConfig().then((next) => {
+          setConfig(next);
+          setTargetPassword('');
+          setSourcePassword('');
         });
       }
     });
@@ -89,13 +102,15 @@ export function DeploySyncCatalogModal({
     );
   }
 
+  const urls = config?.urls ?? null;
   const sameUrl = Boolean(urls && urls.sourceUrl === urls.targetUrl);
+  const hasTargetPassword = Boolean(config?.hasTargetPassword) || targetPassword.length > 0;
   const canSync =
     Boolean(urls) &&
     !sameUrl &&
     !busy &&
     targetEmail.trim().length > 0 &&
-    targetPassword.length > 0;
+    hasTargetPassword;
 
   const runSync = async (): Promise<void> => {
     setBusy(true);
@@ -104,7 +119,7 @@ export function DeploySyncCatalogModal({
     try {
       const result = await bridge.syncCatalog({
         targetEmail: targetEmail.trim(),
-        targetPassword,
+        targetPassword: targetPassword || undefined,
         sourceEmail: sourceEmail.trim() || undefined,
         sourcePassword: sourcePassword || undefined,
         includeGameSettings,
@@ -143,7 +158,7 @@ export function DeploySyncCatalogModal({
         </>
       }
     >
-      {urlsError ? <p className="ed-deploy-hint is-warning">{urlsError}</p> : null}
+      {configError ? <p className="ed-deploy-hint is-warning">{configError}</p> : null}
 
       {urls ? (
         <div className="ed-deploy-form">
@@ -185,6 +200,8 @@ export function DeploySyncCatalogModal({
             onChange={setSourcePassword}
             type="password"
             span={2}
+            placeholder={config?.hasSourcePassword ? '•••••••• (stored)' : 'optional'}
+            detail="Kept in ~/.asteron/catalog-sync.json at mode 0600 — never in the project."
           />
           <DeployField
             label="Target admin password"
@@ -192,6 +209,8 @@ export function DeploySyncCatalogModal({
             onChange={setTargetPassword}
             type="password"
             span={2}
+            placeholder={config?.hasTargetPassword ? '•••••••• (stored)' : 'required'}
+            detail="Leave blank to keep the stored password. Saved when you sync."
           />
           <DeployToggle
             label="Include game settings"
@@ -200,8 +219,8 @@ export function DeploySyncCatalogModal({
             detail="Off by default — avoids overwriting prod starter ARC / starter ship and item ids."
           />
         </div>
-      ) : !urlsError ? (
-        <p className="ed-deploy-hint">Loading project backend URLs…</p>
+      ) : !configError ? (
+        <p className="ed-deploy-hint">Loading catalog sync settings…</p>
       ) : null}
 
       <DeployLog lines={lines} />

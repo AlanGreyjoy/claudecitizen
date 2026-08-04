@@ -1684,6 +1684,7 @@ if (!hasSingleInstanceLock) {
         'deploy:client': () => deployManager.deployClient(),
         'deploy:cancel': () => deployManager.cancel(),
         'deploy:catalog-sync-urls': () => catalogSyncManager.getUrls(),
+        'deploy:catalog-sync-config': () => catalogSyncManager.getConfig(),
         'deploy:catalog-sync': (payload) => catalogSyncManager.sync(payload),
       };
       for (const [channel, handler] of Object.entries(deployChannels)) {

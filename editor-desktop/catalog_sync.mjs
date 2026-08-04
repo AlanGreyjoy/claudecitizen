@@ -2,10 +2,18 @@
  * Deploy → Sync Catalog: export from editorBackendUrl, import to backendUrl.
  *
  * Runs in Electron main with net.fetch so each origin keeps its own cookie jar
- * (cc_admin). The renderer cceditor:// origin cannot hold those cookies or pass CORS.
+ * (cc_admin). Admin emails/passwords are stored per project in
+ * ~/.asteron/catalog-sync.json at mode 0600 (same pattern as deploy.json).
+ * Passwords never leave the main process — the renderer only sees has*Password.
  */
 
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { net } from 'electron';
+
+const CONFIG_DIR = join(homedir(), '.asteron');
+const CONFIG_PATH = join(CONFIG_DIR, 'catalog-sync.json');
 
 export class CatalogSyncError extends Error {
   constructor(message, status = 400) {
@@ -21,6 +29,44 @@ function trimSlash(url) {
 
 function joinUrl(base, path) {
   return `${trimSlash(base)}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function normalizeStored(value) {
+  const source = typeof value === 'object' && value !== null ? value : {};
+  return {
+    targetEmail: typeof source.targetEmail === 'string' ? source.targetEmail.trim() : '',
+    targetPassword: typeof source.targetPassword === 'string' ? source.targetPassword : '',
+    sourceEmail: typeof source.sourceEmail === 'string' ? source.sourceEmail.trim() : '',
+    sourcePassword: typeof source.sourcePassword === 'string' ? source.sourcePassword : '',
+    includeGameSettings: source.includeGameSettings === true,
+  };
+}
+
+function toPublicConfig(stored) {
+  return {
+    targetEmail: stored.targetEmail,
+    sourceEmail: stored.sourceEmail,
+    includeGameSettings: stored.includeGameSettings,
+    hasTargetPassword: stored.targetPassword.length > 0,
+    hasSourcePassword: stored.sourcePassword.length > 0,
+  };
+}
+
+async function readStore() {
+  try {
+    const raw = await readFile(CONFIG_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return {};
+    throw error;
+  }
+}
+
+async function writeStore(store) {
+  await mkdir(CONFIG_DIR, { recursive: true });
+  await writeFile(CONFIG_PATH, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
+  await chmod(CONFIG_PATH, 0o600);
 }
 
 async function readJson(response) {
@@ -40,7 +86,10 @@ function errorMessage(body, fallback) {
 
 /**
  * @param {{
- *   getRepository: () => { getProjectSettings: () => Promise<{ document: { editorBackendUrl?: string, backendUrl?: string } }> } | null,
+ *   getRepository: () => {
+ *     projectRoot: string,
+ *     getProjectSettings: () => Promise<{ document: { editorBackendUrl?: string, backendUrl?: string } }>
+ *   } | null,
  *   onEvent?: (event: { phase: string, line?: string, message?: string, ok?: boolean, result?: unknown }) => void,
  * }} deps
  */
@@ -52,6 +101,17 @@ export function createCatalogSyncManager({ getRepository, onEvent }) {
   };
 
   const log = (line) => emit({ phase: 'log', line });
+
+  function projectKey() {
+    const repository = getRepository();
+    if (!repository) throw new CatalogSyncError('No AsteronEngine project is open.');
+    return repository.projectRoot;
+  }
+
+  async function loadStored() {
+    const store = await readStore();
+    return normalizeStored(store[projectKey()]);
+  }
 
   async function resolveUrls() {
     const repository = getRepository();
@@ -155,15 +215,53 @@ export function createCatalogSyncManager({ getRepository, onEvent }) {
     return parts.length > 0 ? parts.join(', ') : 'no row changes';
   }
 
+  async function saveConfig(value) {
+    const key = projectKey();
+    const store = await readStore();
+    const existing = normalizeStored(store[key]);
+    const incoming = typeof value === 'object' && value !== null ? value : {};
+    const targetPassword =
+      typeof incoming.targetPassword === 'string' && incoming.targetPassword.length > 0
+        ? incoming.targetPassword
+        : existing.targetPassword;
+    const sourcePassword =
+      typeof incoming.sourcePassword === 'string' && incoming.sourcePassword.length > 0
+        ? incoming.sourcePassword
+        : existing.sourcePassword;
+    const next = normalizeStored({
+      targetEmail:
+        typeof incoming.targetEmail === 'string' ? incoming.targetEmail : existing.targetEmail,
+      sourceEmail:
+        typeof incoming.sourceEmail === 'string' ? incoming.sourceEmail : existing.sourceEmail,
+      includeGameSettings:
+        typeof incoming.includeGameSettings === 'boolean'
+          ? incoming.includeGameSettings
+          : existing.includeGameSettings,
+      targetPassword,
+      sourcePassword,
+    });
+    store[key] = next;
+    await writeStore(store);
+    return { saved: true, ...toPublicConfig(next), path: CONFIG_PATH };
+  }
+
   return {
     async getUrls() {
       return resolveUrls();
     },
 
+    /** Public form state — passwords never included. */
+    async getConfig() {
+      const [urls, stored] = await Promise.all([resolveUrls(), loadStored()]);
+      return { urls, ...toPublicConfig(stored), path: CONFIG_PATH };
+    },
+
+    saveConfig,
+
     /**
      * @param {{
      *   targetEmail: string,
-     *   targetPassword: string,
+     *   targetPassword?: string,
      *   sourceEmail?: string,
      *   sourcePassword?: string,
      *   includeGameSettings?: boolean,
@@ -171,11 +269,31 @@ export function createCatalogSyncManager({ getRepository, onEvent }) {
      */
     async sync(options) {
       if (running) throw new CatalogSyncError('A catalog sync is already running.');
-      const targetEmail = String(options?.targetEmail || '').trim();
-      const targetPassword = String(options?.targetPassword || '');
+
+      const stored = await loadStored();
+      const targetEmail = String(options?.targetEmail || stored.targetEmail || '').trim();
+      const typedTargetPassword = String(options?.targetPassword || '');
+      const targetPassword = typedTargetPassword || stored.targetPassword;
       if (!targetEmail || !targetPassword) {
         throw new CatalogSyncError('Target admin email and password are required.');
       }
+
+      const sourceEmail = String(options?.sourceEmail ?? stored.sourceEmail ?? '').trim();
+      const typedSourcePassword = String(options?.sourcePassword || '');
+      const sourcePassword = typedSourcePassword || stored.sourcePassword;
+      const includeGameSettings =
+        typeof options?.includeGameSettings === 'boolean'
+          ? options.includeGameSettings
+          : stored.includeGameSettings;
+
+      // Persist before the network work so a successful fill survives a mid-sync fail.
+      await saveConfig({
+        targetEmail,
+        targetPassword: typedTargetPassword || undefined,
+        sourceEmail,
+        sourcePassword: typedSourcePassword || undefined,
+        includeGameSettings,
+      });
 
       running = true;
       emit({ phase: 'started', message: 'Syncing catalog…' });
@@ -190,8 +308,6 @@ export function createCatalogSyncManager({ getRepository, onEvent }) {
         log(`Source (editor): ${sourceUrl}`);
         log(`Target (release): ${targetUrl}`);
 
-        const sourceEmail = String(options?.sourceEmail || '').trim();
-        const sourcePassword = String(options?.sourcePassword || '');
         if (sourceEmail && sourcePassword) {
           log('Signing in to source admin…');
           await adminLogin(sourceUrl, sourceEmail, sourcePassword);
@@ -233,7 +349,6 @@ export function createCatalogSyncManager({ getRepository, onEvent }) {
         log('Signing in to target admin…');
         await adminLogin(targetUrl, targetEmail, targetPassword);
 
-        const includeGameSettings = Boolean(options?.includeGameSettings);
         log(
           includeGameSettings
             ? 'Importing catalog (including game settings)…'

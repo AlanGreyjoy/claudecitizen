@@ -195,9 +195,20 @@ export interface CatalogSyncUrls {
   targetUrl: string;
 }
 
+export interface CatalogSyncConfig {
+  urls: CatalogSyncUrls;
+  targetEmail: string;
+  sourceEmail: string;
+  includeGameSettings: boolean;
+  hasTargetPassword: boolean;
+  hasSourcePassword: boolean;
+  path: string;
+}
+
 export interface CatalogSyncOptions {
   targetEmail: string;
-  targetPassword: string;
+  /** Empty string / omitted keeps the stored password. */
+  targetPassword?: string;
   sourceEmail?: string;
   sourcePassword?: string;
   includeGameSettings?: boolean;
@@ -300,6 +311,7 @@ export interface ClaudeCitizenEditorDesktopBridge {
   cancelDeploy: () => Promise<{ canceled: boolean }>;
   onDeployState: (callback: (state: DeployState) => void) => () => void;
   getCatalogSyncUrls: () => Promise<CatalogSyncUrls>;
+  getCatalogSyncConfig: () => Promise<CatalogSyncConfig>;
   syncCatalog: (options: CatalogSyncOptions) => Promise<CatalogSyncResult>;
   onCatalogSyncState: (callback: (state: CatalogSyncState) => void) => () => void;
   onNativeCommand: (callback: (command: DesktopNativeCommand) => void) => () => void;
