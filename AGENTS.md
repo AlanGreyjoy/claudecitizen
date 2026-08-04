@@ -484,8 +484,9 @@ Docs: `docs/docs/server-console/payments.md`.
 
 Full law: `docs/docs/architecture/multiplayer.md`. Thin Cursor pointer:
 `.cursor/rules/multiplayer-architecture.mdc`. Architecture docs are the
-**target law**; code may lag (follow-in, placeables, quantum peers) — refactor
-toward the doc, do not treat today's gaps as permission to defer authority.
+**target law**; code may lag (follow-in, placeables, quantum peers, character
+presentation sync) — refactor toward the doc, do not treat today's gaps as
+permission to defer authority.
 
 **Multiplayer is designed in parallel, never bolted on later.** Every gameplay
 feature, state change, interaction outcome, scene travel path, and entity that
@@ -621,6 +622,11 @@ silence, because an idle entity is *supposed* to send nothing.
 `EntityProfile` sent once per viewer when an entity enters interest; entity
 state is addressed by a small per-connection handle. Putting appearance back in
 the per-tick path is what blew the MTU and blanked every populated cell.
+**Visible equipped loadout** (weapons, backpacks, wearables) updates on change
+via the structural / reliable path — same duty: peers must remesh gear. Compact
+pose / fire events keep peer avatars honest; cell owns firearm hit outcomes.
+Full presentation law: `docs/docs/architecture/multiplayer.md`
+(Character presentation). Do not treat a nametag capsule as “peers see me.”
 
 Cell persistence uses `CellCheckpoint`, deliberately *not* the wire `Snapshot` —
 the wire format is lossy by design (no velocity, f32 orientation, no identity).
@@ -886,7 +892,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/scene-flow-architecture.mdc` | Thin always-on pointer to the scene-flow architecture doc |
 | `docs/docs/architecture/game-loop.md` | Player game loop: Hab → Station → AVMS → Hangar → Open Space |
 | `.cursor/rules/game-loop-architecture.mdc` | Thin always-on pointer to the game-loop architecture doc |
-| `docs/docs/architecture/multiplayer.md` | Cell / edge / client, presence body, travel intents, instances |
+| `docs/docs/architecture/multiplayer.md` | Cell / edge / client, presence body, character presentation (loadout / pose / fire), travel intents, instances |
 | `.cursor/rules/multiplayer-architecture.mdc` | Thin always-on pointer to the multiplayer architecture doc |
 | `docs/docs/architecture/space-traversal.md` | Open Space host + station boarding + Warp Gate cross-system |
 | `.cursor/rules/space-traversal-architecture.mdc` | Thin always-on pointer to the space-traversal architecture doc |

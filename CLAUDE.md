@@ -14,7 +14,7 @@ Also read when the domain matches:
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning; symptom → fix tables |
 | `docs/docs/architecture/scene-flow.md` | Boot / Game Manager entry: Title → Create → Home World → Hab |
 | `docs/docs/architecture/game-loop.md` | Hab → Station → Hangar → Open Space |
-| `docs/docs/architecture/multiplayer.md` | Cell authority, presence, travel intents, instances |
+| `docs/docs/architecture/multiplayer.md` | Cell authority, presence, character presentation (loadout / pose / fire), travel intents, instances |
 | `docs/docs/architecture/space-traversal.md` | Open Space host, boarding, Warp Gate |
 | `docs/docs/architecture/star-map.md` | Star System ↔ Star Map catalog |
 | `docs/docs/architecture/ship-flight.md` | Rapier + flight computer, modes, boost, quantum |

@@ -1,7 +1,7 @@
 ---
 sidebar_position: 5
 title: Multiplayer
-description: Cell authority, presence body, scene-travel intents, instance follow-in — design with the feature.
+description: Cell authority, presence body, character presentation, scene-travel intents, instance follow-in — design with the feature.
 ---
 
 # Multiplayer Architecture
@@ -10,18 +10,23 @@ Authoritative mental model for **who owns truth**, **what peers see**, and
 **how place changes** stay one cell story. Travel *places* are defined in
 [Basic game loop](./game-loop) and [Space traversal](./space-traversal); this
 doc owns **authority and replication** for those moves (and for shared
-gameplay generally).
+gameplay generally) — including **ships in Open Space** and the **on-foot
+character** (loadout, animation, firearm fire) so a second player is not a
+nametag on an empty body.
 
 Related: [Scene flow](./scene-flow) (session start only),
 [Ship flight](./ship-flight) / [Ship combat](./ship-combat) (cell-owned flight
-and damage), [Player](./player) (cell-owned character vitals / medicine /
+and damage; on-foot guns are a **different** fight loop but the **same** peer
+visibility duty), [Player](./player) (cell-owned character vitals / medicine /
 death), [Player death](./player-death) (respawn resolve),
-[Home Worlds](./home-worlds) (starter Hab bind), editor **Debug → Multiplayer**
-harness.
+[Home Worlds](./home-worlds) (starter Hab bind),
+[Content delivery](./content-delivery) (wearables / weapons / backpacks as
+live catalog), editor **Debug → Multiplayer** harness.
 
 **This doc is law.** Code may lag (instance follow-in, placeable replication,
-quantum peer visibility). Gaps are refactor targets — never an excuse to ship
-client-authoritative outcomes or “add MP later.”
+quantum peer visibility, character presentation sync). Gaps are refactor
+targets — never an excuse to ship client-authoritative outcomes or “add MP
+later.”
 
 ## Permanent decision: design multiplayer in parallel
 
@@ -77,6 +82,62 @@ Every player owns an active ship. Presence must describe the body the player
 
 Wrong body → frozen peers in hangars or “nobody online.” One decision site for
 that mapping (today `presenceShipBody` / equivalent) — do not scatter.
+
+Peers in interest must **see the ship** when you fly (hull pose, and combat
+public state per [Ship combat](./ship-combat)) — not only your character capsule
+when parked / on foot.
+
+## Character presentation: loadout, animation, fire
+
+A second player in interest must see **you**, not a blank avatar with a name.
+On-foot / seated character presentation is shared world state — same duty as
+flying hulls. Do not ship a local-only FPS loop and promise peer visuals later.
+
+### What peers must observe
+
+| Layer | Peers see |
+| --- | --- |
+| **Body appearance** | Saved character appearance (face / body recipe) |
+| **Equipped loadout** | Visible slots that change the mesh: weapons (drawn / holstered as posture requires), backpacks, wearables, and other catalog items that attach to the character |
+| **Locomotion / pose** | Walk / run / sprint / idle, ADS / aim posture, reload, climb, seat / bed poses — enough that the peer avatar matches what you are doing |
+| **Firearm fire** | When you fire: muzzle presentation, tracer / projectile travel as product requires, and hit feedback peers need for shared combat (impact / damage outcomes stay cell-owned with [Player](./player) vitals) |
+
+Ship hardpoint fire stays under [Ship combat](./ship-combat). This section is
+the **on-foot / character** path (`game/combat` and character equipment).
+
+### Authority vs presentation
+
+| Concern | Owner |
+| --- | --- |
+| Equip / unequip / inventory truth | Cell (durable loadout); peers get public equipped state |
+| Hit detection / damage / death from firearms | Cell — [Player](./player) |
+| Pose / animation / drawn-weapon posture | Replicated public presentation (intents or compact state); each client drives its own avatar from that |
+| Muzzle / tracer / cosmetic fire FX | Derived from replicated fire events — every interested viewer plays them; do not local-only |
+| Local HUD (crosshair, mag count, recoil punch) | Client only — peers do not need your full FPS chrome |
+
+### Wire shape (law, not today’s schema)
+
+- **Identity + body appearance** → profile / structural path once per viewer
+  (`EntityProfile` or successor) — not per-tick.
+- **Equipped loadout** that changes visible mesh → structural or reliable
+  update when it changes (equip events), not stuffed into every datagram.
+- **Pose / locomotion / aim flags** → compact per-tick or event churn peers
+  need to keep avatars honest.
+- **Fire events** → reliable or loss-tolerant event stream so peers play the
+  shot; cell resolves whether the shot **matters** (damage).
+
+Do not put full appearance JSON, full inventory, or full clip catalogs on the
+hot per-tick path. Do not treat “peers see a capsule” as done.
+
+### What this rejects
+
+- Local-only equipped guns / backpacks / wearables while peers see an unarmed
+  body.
+- Local-only muzzle flash / tracers / fire anim while damage somehow syncs
+  (or the reverse: silent peer guns that still kill you with no FX).
+- “Animation is cosmetic, skip replication” for locomotion and combat postures
+  other players must read.
+- A second ad-hoc peer-avatar channel that bypasses cell → edge interest.
 
 ## On-foot vs flight authority
 
@@ -163,7 +224,9 @@ edge interest.
 | Never size snapshots against `MAX_DATAGRAM_BYTES` alone | Sanity bound ≠ path MTU; use `Connection::max_datagram_size()` |
 | Structural frames → reliable stream | Baseline, entity enter/leave — nothing restates them |
 | Pure state churn → datagram | Loss costs one tick; idle entities may send nothing |
-| Identity / appearance → `EntityProfile` once per viewer | Not per-tick — appearance on the hot path blew MTU before |
+| Identity / body appearance → `EntityProfile` (or successor) once per viewer | Not per-tick — appearance on the hot path blew MTU before |
+| Equipped visible loadout → reliable / structural on change | Peers must remesh weapons / backpack / wearables without per-tick catalogs |
+| Fire + compact pose flags → event / churn path | Peers play shots and match locomotion; cell owns hit outcomes |
 | Checkpoint ≠ wire Snapshot | Wire is lossy by design |
 
 ## Origins (CORS vs WebTransport)
@@ -182,6 +245,7 @@ deploy docs.
 | Presence body choice | Client publish path keyed by mode |
 | Scene travel resolve | Game / station exit → in-memory target → new session cell |
 | Flight / combat outcomes | Cell (+ shared prediction) |
+| Character loadout / fire / pose presentation | Cell durable equip + replicated public presentation; cell hit resolve |
 | Cosmetic NPCs | Local until promoted |
 
 ## Invariants
@@ -190,6 +254,9 @@ deploy docs.
 - One cell-picker family for in-play moves: authored markers (+ login for
   fresh session only).
 - Presence follows `world.mode` / pilot posture, not ship existence.
+- Peers in interest see **flying ships** and **on-foot characters** with
+  appearance, equipped gear, locomotion / combat pose, and firearm fire FX —
+  not blank proxies.
 - On-foot: client report + clamp; flight: cell Rapier; combat damage: cell;
   character vitals / medicine / death: cell ([Player](./player));
   respawn: cell ([Player death](./player-death)).
@@ -207,6 +274,7 @@ deploy docs.
 | Presence body | Mode-aware path exists | Never regress to ship-exists |
 | On-foot clamp | Shipped | Keep |
 | Marker travel | `scene-exit` / boarding | Keep; migrate `@space` hangar exits to `exit-hangar` |
+| Character appearance / loadout / pose / fire | Open / lagging | Peers see gear + anim + shots (section above) |
 | Team follow-in | Partial / open | Owner instance cell + deny strangers |
 | Placeable sync | Open | Instance durable + replicate |
 | Quantum / Warp Gate peers | Open | Same interest rules; document when implementing |
@@ -220,3 +288,5 @@ deploy docs.
   need shared outcomes.
 - Ship–ship collider LOD vs interest at Open Space ranges
   ([Ship flight](./ship-flight)).
+- Compact on-foot pose / fire wire schema and network LOD for crowded
+  stations (still must convey drawn weapon + fire at near LOD).

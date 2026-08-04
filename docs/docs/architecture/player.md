@@ -15,7 +15,8 @@ Related: [Basic game loop](./game-loop) (where the character stands),
 [Space traversal](./space-traversal) (planet surface vs sealed interiors vs
 Open Space), [Home Worlds](./home-worlds) (Asteron / Virelia / Korrath;
 signup bind), [Player death](./player-death) (respawn after vitals kill you),
-[Multiplayer](./multiplayer) (cell-owned death / medicine),
+[Multiplayer](./multiplayer) (cell-owned death / medicine; peers also see
+loadout / pose / firearm fire — that doc),
 [Content delivery](./content-delivery) (medicine as live catalog items),
 [Ship combat](./ship-combat) (hull vitals are a **different** pipeline).
 
@@ -196,6 +197,9 @@ only; local HUD owns the full report.
 - Death and medicine outcomes are shared gameplay — design replication with
   the feature ([Multiplayer](./multiplayer)). Do not ship local-only HP for
   the local body and promise sync later.
+- Peers must also see equipped gear, locomotion / combat pose, and firearm
+  fire — not vitals-only. Law lives under **Character presentation** in
+  [Multiplayer](./multiplayer); this doc does not own that wire.
 - On-foot **position** remains client-reported + clamp; vitals are not
   position. Do not put heal authority on the client because “on-foot is
   client-ish.”

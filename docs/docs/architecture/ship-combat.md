@@ -23,6 +23,8 @@ prefab).
 ship vitals helpers — treat gaps as refactor targets, not as proof weapons are
 out of scope. On-foot firearm combat (`game/combat`, character weapons) is a
 **different** loop; do not reuse its magazine/crosshair path for ship hardpoints.
+Peers must still see on-foot loadout / pose / fire —
+[Multiplayer](./multiplayer#character-presentation-loadout-animation-fire).
 
 ## Permanent decision: Combat mode owns the fight loop
 
@@ -42,7 +44,6 @@ Combat is active, the pilot gets:
 Traverse stays “fly somewhere.” Nav stays travel (quantum). Combat is the only
 mode that arms hardpoints and shows the full combat HUD. Do not fire ship
 weapons from Traverse or Nav; do not open quantum from Combat.
-
 ```mermaid
 flowchart TB
   Mode{{"flightMode = combat"}}
@@ -270,7 +271,8 @@ DOM. `render/` never decides hits.
   shields + hull.
 - Damage: shields then hull; one vitals pipeline with crash damage.
 - Default death: **slow, readable** GLB hierarchy break-apart + FX.
-- On-foot firearm loop stays separate.
+- On-foot firearm loop stays separate; peer visibility for that loop is
+  [Multiplayer](./multiplayer#character-presentation-loadout-animation-fire).
 - Cell owns combat outcomes; client predicts presentation.
 
 ## Baseline vs law (today)
