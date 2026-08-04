@@ -27,6 +27,8 @@ Also read when the domain matches:
 | `docs/docs/architecture/haloband.md` | Personal device UI: Home / Comms / Missions / Map / Inventory / Mall / Ship |
 | `docs/docs/architecture/item-mall.md` | AC mall: consumables, outfits (pieces/packs), placeables |
 | `docs/docs/architecture/stripe.md` | In-game Stripe wallet: Elements, saved cards, default PM, pack buy |
+| `docs/docs/architecture/npc.md` | MMO NPCs: crowd LOD, shops, dialogue, mission verbs; not mobs |
+| `docs/docs/architecture/mobs.md` | PVE mobs: monsters/animals; cell combat; not NPCs |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab/scene editor work |
 | `.cursor/skills/prd/SKILL.md` | Creating PRD handoff packs under `prds/<slug>/` |
 | `.cursor/rules/terrain-cache.mdc` | Terrain/vegetation cache versioning |

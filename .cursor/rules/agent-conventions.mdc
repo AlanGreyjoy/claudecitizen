@@ -63,7 +63,8 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 
 - New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`) — and plan multiplayer authority/replication in parallel (`docs/docs/architecture/multiplayer.md`); never "add MP later"
 - Gameplay state / interactions / scene travel / shared entities → who owns truth, what peers see; Debug → Multiplayer for presence checks
-- Friendly station NPCs / waypoint routes / population definitions → `src/npc/` plus AGENTS.md "Friendly station NPCs"
+- Friendly station NPCs / shopkeepers / dialogue / mission NPC verbs / crowd LOD → `docs/docs/architecture/npc.md` (AGENTS.md "Friendly station NPCs" for baseline)
+- Mobs / PVE monsters / animals / wildlife / mob loot → `docs/docs/architecture/mobs.md`
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache-keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
@@ -82,6 +83,8 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - HaloBand / F2 device / Map route / Mall tab / portable inventory UI → `docs/docs/architecture/haloband.md`
 - Item Mall / AsteronCredits / credit packs / Stripe webhook / mall purchase → `docs/docs/architecture/item-mall.md`
 - Stripe Payment Element / checkout session / publishable key / hosted vs in-game pay → `docs/docs/architecture/stripe.md`
+- NPC ambient crowds / shopkeepers / dialogue / mission givers / LOD / navmesh reject → `docs/docs/architecture/npc.md`
+- Mobs / PVE fauna / aggro / mob loot / wildlife dens → `docs/docs/architecture/mobs.md`
 - PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 

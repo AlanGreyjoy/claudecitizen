@@ -18,6 +18,7 @@ Related: [Build Web](../editor/build-web) (how-to),
 [Game settings](../server-console/game-settings),
 [Player](./player) (medicine / consumables as live catalog),
 [Item Mall](./item-mall) (AC packs / MallListing as live catalog),
+[Mobs](./mobs) (dens in editor; mob/loot/pack defs in catalog),
 [Assets](../assets).
 
 **This doc is law.** Local Server Console edits never auto-sync to prod.
@@ -28,7 +29,7 @@ Migrations are not a catalog promote path.
 | Surface | What lives there | How it reaches an environment |
 | --- | --- | --- |
 | **Project release** | Scenes, prefabs, planets, systems, `assets/` (including protected packs when staged) | **File → Build Web** → deploy static host; stamps `asteron.runtime.json` |
-| **Live catalog** | `ShipDefinition`, props, items, weapons, backpacks, wearables, `GameSettings`, credit packs, mall listings, payment config | Server Console `/admin/*` against **that** backend’s Postgres; **Deploy → Sync Catalog…** to promote editor → release `backendUrl`; or a one-shot seed migration |
+| **Live catalog** | `ShipDefinition`, props, items, weapons, backpacks, wearables, `GameSettings`, credit packs, mall listings, payment config, **mob definitions / loot tables / mob packs** (when PVE lands — [Mobs](./mobs)) | Server Console `/admin/*` against **that** backend’s Postgres; **Deploy → Sync Catalog…** to promote editor → release `backendUrl`; or a one-shot seed migration |
 | **Migrations** | Schema history + **one-shot** seeds (`WHERE NOT EXISTS` / upsert) | `npm run backend:migrate` or boot with `RUN_MIGRATIONS=true` (defaults **false** in production) |
 
 Never conflate them:

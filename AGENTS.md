@@ -258,6 +258,17 @@ history in Mall; webhook still sole money→AC grant. Full law:
 `docs/docs/architecture/stripe.md`. Thin Cursor pointer:
 `.cursor/rules/stripe-architecture.mdc`.
 
+**NPC law:** MMO characters — ambient fill (~100 LOD budget), shopkeepers,
+dialogue, mission givers / talk-give-take; not mobs; probe-then-commit; cell
+owns shop/mission outcomes. Full law: `docs/docs/architecture/npc.md`. Thin
+Cursor pointer: `.cursor/rules/npc-architecture.mdc`.
+
+**Mob law:** PVE combatants (monsters, animals, fauna) ≠ NPCs; **network-synced**
+cell entities (peers see/help same fight); cell owns aggro/HP/loot/leash;
+**editor dens** + **Console** MobDef/loot/packs; LOD + interest budgets; not
+ship Combat. Full law: `docs/docs/architecture/mobs.md`. Thin Cursor pointer:
+`.cursor/rules/mobs-architecture.mdc`.
+
 ## Prefab & Animation Architecture
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
@@ -287,9 +298,14 @@ history in Mall; webhook still sole money→AC grant. Full law:
 
 ### Friendly station NPCs
 
+Full law: `docs/docs/architecture/npc.md` (MMO townsfolk + crowd LOD;
+NPC ≠ mob — see `docs/docs/architecture/mobs.md`). Thin Cursor pointer:
+`.cursor/rules/npc-architecture.mdc`. Baseline below still uses the **player
+avatar pipeline** for ambient draw — that is known debt; do not extend it.
+
 - Ambient populations use `npc-spawner` markers connected to an undirected graph of `npc-waypoint` markers. Named/service characters use `npc-placement`.
 - `station-runtime.ts` flattens those components into station-local NPC specs. `src/world/npc.ts` validates duplicate/missing ids, cross-floor links, missing route groups, and disconnected graphs.
-- `src/npc/station-population.ts` runs a deterministic, cosmetic local population. `src/render/main/scene/station-npcs.ts` renders it through the existing character avatar pipeline with distance activation.
+- `src/npc/station-population.ts` runs a deterministic, cosmetic local population. `src/render/main/scene/station-npcs.ts` currently renders through the character avatar pipeline with distance activation (**law:** replace with crowd LOD — not full Sidekick/UAL per ambient).
 - NPC definitions and weighted populations live in `src/npc/catalog.ts`; station prefabs reference ids instead of embedding appearance data.
 - **Roam motion is analytic, not physics-driven.** No character controller runs per NPC — that would cost a `computeColliderMovement` per actor per frame (~1-2 ms at the 32-actor cap) to reproduce motion the wander step already produces. Instead `physics/station-npc-capsules.ts` validates each candidate target *once* when it is picked (`sampleFloorHeight` snaps it to real floor and rejects drops past the autostep allowance; `isPathClear` sweeps a capsule along the segment), so the walk itself needs no per-frame collision. Segments are re-probed every `ROAM_RECHECK_INTERVAL_SECONDS` because doors and build-mode props move after a target is chosen.
   - The sweep capsule is **lifted `PROBE_GROUND_CLEARANCE_METERS` off the floor**. Rapier reports `time_of_impact = 0` for a shape already touching geometry at the start of a cast, so a floor-hugging probe hits the floor instantly on every candidate and the whole check silently degrades to a no-op. Same trap documented in `camera-occlusion.ts`.
@@ -948,6 +964,10 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/item-mall-architecture.mdc` | Thin always-on pointer to the Item Mall architecture doc |
 | `docs/docs/architecture/stripe.md` | In-game Payment Element; no React; webhook-only grants |
 | `.cursor/rules/stripe-architecture.mdc` | Thin always-on pointer to the Stripe architecture doc |
+| `docs/docs/architecture/npc.md` | MMO NPCs: crowd LOD, shops, dialogue, missions; not mobs |
+| `.cursor/rules/npc-architecture.mdc` | Thin always-on pointer to the NPC architecture doc |
+| `docs/docs/architecture/mobs.md` | PVE mobs: monsters/animals; cell combat; not NPCs |
+| `.cursor/rules/mobs-architecture.mdc` | Thin always-on pointer to the mob architecture doc |
 
 ## Utility scripts
 

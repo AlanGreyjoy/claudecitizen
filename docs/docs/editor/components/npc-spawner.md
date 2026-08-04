@@ -34,7 +34,9 @@ wanders a disc centred on the marker.
 ## Roaming
 
 Roam mode trades authoring effort for accuracy. Targets are random points in the
-disc and NPCs walk to them in a straight line — **there is no station navmesh**,
+disc and NPCs walk to them in a straight line — **there is no station navmesh**
+(architecture law: keep probe-then-commit; see
+[NPCs](../../architecture/npc)),
 so a disc that overlaps a wall, a counter, or a stairwell produces NPCs clipping
 through it. Keep the radius inside open floor, or use `route` with waypoints when
 the space has obstacles. The viewport draws the roam disc as a wireframe ring so

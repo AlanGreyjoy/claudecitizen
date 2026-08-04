@@ -1,0 +1,21 @@
+---
+description: Mobs PVE — network-synced cell entities; co-op help; not NPCs — read full architecture doc
+alwaysApply: true
+---
+
+# Mob architecture (pointer)
+
+Full law: [`docs/docs/architecture/mobs.md`](../../docs/docs/architecture/mobs.md).
+
+**Permanent decision:** **mobs ≠ NPCs.** Mobs are PVE combatants (monsters,
+animals, fauna). In shared space they are **cell entities** — network-synced
+via interest so peers **see and help** the same fight / boss HP. Cell owns
+aggro, HP, death, loot, leash, kill/assist credit. **Editor** places dens
+(Build Web); **Server Console** owns MobDef / loot / packs. LOD + AI budgets
+on web. Not player Sidekick. Ship Combat = different loop.
+[NPCs](../../docs/docs/architecture/npc.md),
+[Multiplayer](../../docs/docs/architecture/multiplayer.md),
+[Content delivery](../../docs/docs/architecture/content-delivery.md).
+
+When changing mob spawn, AI, PVE combat, loot, dens, or wildlife catalog,
+read the full doc first. Also listed in `AGENTS.md`.

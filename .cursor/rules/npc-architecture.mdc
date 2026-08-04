@@ -1,0 +1,20 @@
+---
+description: NPCs — MMO townsfolk, shops, dialogue, missions; crowd LOD; not mobs — read full architecture doc
+alwaysApply: true
+---
+
+# NPC architecture (pointer)
+
+Full law: [`docs/docs/architecture/npc.md`](../../docs/docs/architecture/npc.md).
+
+**Permanent decision:** NPCs are MMO **characters** (ambient fill, shopkeepers,
+dialogue, mission givers / talk-give-take) — **not** [mobs](../../docs/docs/architecture/mobs.md).
+Ambient ~100 budget via **LOD** (not Sidekick/UAL). Motion:
+probe-then-commit; no full navmesh default. Shop / mission / give-take =
+**cell** outcomes. Ambient local; service NPCs interest-culled.
+[Multiplayer](../../docs/docs/architecture/multiplayer.md),
+[HaloBand](../../docs/docs/architecture/haloband.md).
+
+When changing NPC population, shops-on-NPC, dialogue, mission NPC verbs,
+crowd rendering, or promoting service NPCs, read the full doc first. Also
+listed in `AGENTS.md`.

@@ -17,7 +17,8 @@ Related: [Player](./player) (vitals Home tiles read),
 route), [Ship combat](./ship-combat) (Ship tab hull / shields),
 [Content delivery](./content-delivery) (Mall listings / credit packs as live
 catalog), [Multiplayer](./multiplayer) (chat + inventory outcomes stay
-cell/server-owned), [Item Mall](./item-mall) (AC storefront + packs),
+cell/server-owned), [NPCs](./npc) / [Mobs](./mobs) (Missions tab mirrors
+contracts; NPC verbs vs PVE), [Item Mall](./item-mall) (AC storefront + packs),
 [Stripe](./stripe) (Payment Element pay UI),
 [Payments](../server-console/payments) (operator how-to), editor
 [Menu Manager](../editor/menu-manager) (preview only).
@@ -119,9 +120,10 @@ do not invent a second chat bus for HaloBand.
 ### Missions
 
 **Reserved tab.** Product: mission / contract log tied to Star Map mission
-markers and backend persistence. Baseline: static empty placeholder. Do not
-re-purpose the tab for unrelated UI; do not hide it without an explicit
-product cut.
+markers and backend persistence. NPC verbs (offer, talk-to, give-to, take-from,
+turn-in) and cell ownership: [NPCs](./npc). Kill/escort creatures: [Mobs](./mobs).
+Baseline: static empty placeholder. Do not re-purpose the tab for unrelated UI;
+do not hide it without an explicit product cut.
 
 ### Map
 

@@ -20,6 +20,7 @@ and damage; on-foot guns are a **different** fight loop but the **same** peer
 visibility duty), [Player](./player) (cell-owned character vitals / medicine /
 death), [Player death](./player-death) (respawn resolve),
 [Home Worlds](./home-worlds) (starter Hab bind),
+[NPCs](./npc) / [Mobs](./mobs) (service NPCs vs PVE; ambient cosmetic),
 [Content delivery](./content-delivery) (wearables / weapons / backpacks as
 live catalog), editor **Debug → Multiplayer** harness.
 
@@ -38,8 +39,8 @@ and entity that peers must see or affect answers up front:
 3. What does a second player observe?
 
 Local-only stubs are fine for **cosmetics that stay non-authoritative** (e.g.
-friendly station NPC roam). They are not an excuse to defer authority for real
-outcomes, travel, inventory, combat, or shared world state.
+friendly station NPC roam — [NPCs](./npc)). They are not an excuse to defer
+authority for real outcomes, travel, inventory, combat, or shared world state.
 
 ```mermaid
 flowchart LR
@@ -246,7 +247,9 @@ deploy docs.
 | Scene travel resolve | Game / station exit → in-memory target → new session cell |
 | Flight / combat outcomes | Cell (+ shared prediction) |
 | Character loadout / fire / pose presentation | Cell durable equip + replicated public presentation; cell hit resolve |
-| Cosmetic NPCs | Local until promoted |
+| Cosmetic ambient NPCs | Local until promoted |
+| Service NPCs (shop / dialog / mission) | Cell + interest ([NPCs](./npc)) |
+| Mobs (PVE) | Cell + interest ([Mobs](./mobs)) |
 
 ## Invariants
 
@@ -284,8 +287,9 @@ deploy docs.
 - Quantum travel peer visibility / interest during spool–travel–drop-out.
 - Warp Gate host swap: cell handoff + what peers in each system see.
 - Placeable build schema + checkpoint format for hab/hangar instances.
-- Promote friendly NPCs to cell entities when dialogue / combat / inventory
-  need shared outcomes.
+- Promote service NPCs (shop / dialogue / mission) to cell entities when
+  outcomes are shared ([NPCs](./npc) — ambient stay local).
+- Mobs as distinct cell entities for PVE ([Mobs](./mobs) — not hostile NPCs).
 - Ship–ship collider LOD vs interest at Open Space ranges
   ([Ship flight](./ship-flight)).
 - Compact on-foot pose / fire wire schema and network LOD for crowded
