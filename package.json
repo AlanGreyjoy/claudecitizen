@@ -30,7 +30,7 @@
     "mcp:asteron": "node tools/asteron-mcp/src/index.mjs",
     "docs:dev": "npm run start -w docs",
     "docs:build": "npm run build -w docs",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "secrets:check": "./scripts/check-secrets.sh"
   },
   "devDependencies": {

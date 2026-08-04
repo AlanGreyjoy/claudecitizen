@@ -87,28 +87,29 @@ point at it. It never runs gameplay: it reads the pipeline off its
 `game-manager` and hands off.
 
 ```
-boot scene ──► Title scene ──► Character Create ──► Starting Scene ──► Open Space
- (flow +        (auth UI,       (when the player     (gameplay)      (fly-through
-  world          no Game         has no saved                         scene-exit)
-  defaults)      Manager)        appearance)
+boot scene ──► Title ──► Character Create ──► Home World Select ──► Home Hab ──► Open Space
+ (flow +        (auth)    (no appearance)      (no homeWorldId)      (gameplay)   (later markers)
+  defaults)
 ```
 
 Every hop is a `game-manager` field, so the order is a project decision, not an
-engine constant: `titleSceneId`, `characterCreateSceneId`, `startingSceneId`,
-`openSpaceSceneId`, `loadingSceneId`, plus `requireAuth` (unset means true) and
-`skipTitleWhenSignedIn`. Leave a hop empty and it is skipped — no title scene
-means the boot scene hosts the title UI itself; no character-create scene falls
-back to the inline create gate.
+engine constant: `titleSceneId`, `characterCreateSceneId`,
+`homeWorldSelectSceneId`, `startingSceneId` (legacy / template; live starting
+Hab resolves from home world), `openSpaceSceneId`, `loadingSceneId`, plus
+`requireAuth` (unset means true) and `skipTitleWhenSignedIn`. Leave a hop empty
+and it is skipped — no title scene means the boot scene hosts the title UI
+itself; no character-create scene falls back to the inline create gate. Home
+worlds law: `docs/docs/architecture/home-worlds.md`.
 
 - `resolveSceneFlowStep` (`src/world/scenes/scene-runtime.ts`) is the **single**
   precedence rule, pure and stage-driven. The boot scene and the post-auth
   hand-off both call it, so they cannot drift.
 - `src/app/scene-flow.ts` is the impure driver (session + bootstrap fetch);
   `scene-host.ts` only dispatches to it.
-- The flow travels with the session in `SceneEntryFlow` — Title and Character
-  Create deliberately author **no** `game-manager`, so it is configured in
-  exactly one place, and its `systemId` / `planetId` / `spawn` are the world
-  defaults handed down to whatever scene it launches.
+- The flow travels with the session in `SceneEntryFlow` — Title, Character
+  Create, and Home World Select deliberately author **no** `game-manager`, so
+  it is configured in exactly one place; home world bindings supply
+  `systemId` / `planetId` / starter Hab for that player.
 
 Do not add a second place that decides the entry order, and do not re-key it off
 `scene.kind`. A legacy project whose `title` scene still carries the
@@ -220,6 +221,21 @@ Deployment specifics — TLS, WebTransport certificates, CORS, cookies — are i
 Server Console — migrations are schema + one-shot seeds only. Full law:
 `docs/docs/architecture/content-delivery.md`. Thin Cursor pointer:
 `.cursor/rules/content-delivery-architecture.mdc`.
+
+**Player vitals law:** character HP, hunger, thirst, planet temperature /
+breathable air, medicine toxicity, and HUD visibility. Full law:
+`docs/docs/architecture/player.md`. Thin Cursor pointer:
+`.cursor/rules/player-architecture.mdc`. Ship hull shields/HP stay separate
+(`docs/docs/architecture/ship-combat.md`).
+
+**Home worlds law:** after Character Create, pick Asteron / Virelia / Korrath;
+binds system + body + starter Hab. Full law:
+`docs/docs/architecture/home-worlds.md`. Thin Cursor pointer:
+`.cursor/rules/home-worlds-architecture.mdc`.
+
+**Player death law:** respawn to valid custom point, else home-world Hab;
+vitals reset on wake. Full law: `docs/docs/architecture/player-death.md`.
+Thin Cursor pointer: `.cursor/rules/player-death-architecture.mdc`.
 
 ## Prefab & Animation Architecture
 
@@ -866,7 +882,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/flight computer symptoms) |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab editor skill |
 | `.cursor/skills/prd/SKILL.md` | PRD handoff packs under `prds/<slug>/` (README, PRD, phases, checklist) |
-| `docs/docs/architecture/scene-flow.md` | Boot / Game Manager entry pipeline; one precedence rule |
+| `docs/docs/architecture/scene-flow.md` | Boot / Game Manager: Title → Create → Home World → Hab; one precedence rule |
 | `.cursor/rules/scene-flow-architecture.mdc` | Thin always-on pointer to the scene-flow architecture doc |
 | `docs/docs/architecture/game-loop.md` | Player game loop: Hab → Station → AVMS → Hangar → Open Space |
 | `.cursor/rules/game-loop-architecture.mdc` | Thin always-on pointer to the game-loop architecture doc |
@@ -884,6 +900,12 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/ship-combat-architecture.mdc` | Thin always-on pointer to the ship-combat architecture doc |
 | `docs/docs/architecture/content-delivery.md` | Build Web vs Postgres catalog vs one-shot migrations |
 | `.cursor/rules/content-delivery-architecture.mdc` | Thin always-on pointer to the content-delivery architecture doc |
+| `docs/docs/architecture/player.md` | Character HP, hunger, thirst, temp/air, medicine toxicity, HUD |
+| `.cursor/rules/player-architecture.mdc` | Thin always-on pointer to the player architecture doc |
+| `docs/docs/architecture/home-worlds.md` | Home world select; Asteron / Virelia / Korrath; starter Hab bind |
+| `.cursor/rules/home-worlds-architecture.mdc` | Thin always-on pointer to the home-worlds architecture doc |
+| `docs/docs/architecture/player-death.md` | Death / respawn: custom point or home-world Hab |
+| `.cursor/rules/player-death-architecture.mdc` | Thin always-on pointer to the player-death architecture doc |
 
 ## Utility scripts
 

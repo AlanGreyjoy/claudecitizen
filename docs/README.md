@@ -41,6 +41,11 @@ in the Netlify UI:
 which steps up to the repository root for `npm install` and `npm run docs:build`
 and then publishes `docs/build`.
 
+Netlify’s auto-install runs at the repo root (npm workspaces) with production
+omits, so root `devDependencies` like `husky` are absent. Root `prepare` is
+`husky || true`, and `docs/netlify.toml` sets `HUSKY=0`, so the docs build does
+not fail on missing git hooks.
+
 The game itself is **not** deployed from this repository. Browser releases come
 from **File → Build Web** in the AsteronEngine editor, which writes a release
 directory you deploy wherever you like — see [Quick start](./docs/quick-start.md).

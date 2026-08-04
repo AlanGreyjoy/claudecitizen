@@ -1,0 +1,19 @@
+---
+description: Player death and respawn — home Hab default or custom respawn point — read full architecture doc
+alwaysApply: true
+---
+
+# Player death architecture (pointer)
+
+Full law: [`docs/docs/architecture/player-death.md`](../../docs/docs/architecture/player-death.md).
+
+**Permanent decision:** character dies on HP ≤ 0 or lethal medication toxicity
+([Player](../../docs/docs/architecture/player.md)). Respawn: valid **custom
+respawn** if set, else **home-world Hab**
+([Home Worlds](../../docs/docs/architecture/home-worlds.md)). On wake: full HP,
+toxicity 0, hunger/thirst safe baseline. Cell owns death + resolve; no default
+ghost mode; no client free-teleport. Ship hull destroy ≠ automatic character
+death.
+
+When changing death, respawn precedence, or post-death vitals reset, read the
+full doc first. Also listed in `AGENTS.md`.

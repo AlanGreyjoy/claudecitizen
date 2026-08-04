@@ -8,11 +8,14 @@ alwaysApply: true
 Full law: [`docs/docs/architecture/scene-flow.md`](../../docs/docs/architecture/scene-flow.md).
 
 **Permanent decision:** boot scene `game-manager` owns Title → Character Create
-→ Starting Scene (and `openSpaceSceneId` / world defaults). One pure precedence
-rule (`resolveSceneFlowStep`); Title/Create do not own a competing pipeline.
-In-play place changes are markers only — [Game loop](../../docs/docs/architecture/game-loop.md),
-[Multiplayer](../../docs/docs/architecture/multiplayer.md). Boot picks starting
-system; Warp Gate changes system during play.
+→ Home World Select → Starting Hab (and `openSpaceSceneId` / world defaults).
+One pure precedence rule (`resolveSceneFlowStep`); Title/Create/Home Select do
+not own a competing pipeline. Starting Hab resolves from home world —
+[Home Worlds](../../docs/docs/architecture/home-worlds.md). In-play place
+changes are markers only — [Game loop](../../docs/docs/architecture/game-loop.md),
+[Multiplayer](../../docs/docs/architecture/multiplayer.md). Death respawn is
+not this pipeline — [Player death](../../docs/docs/architecture/player-death.md).
+Boot / home world picks starting system; Warp Gate changes system during play.
 
-When changing boot, Game Manager hops, `SceneEntryFlow`, or entry precedence,
-read the full doc first. Also listed in `AGENTS.md`.
+When changing boot, Game Manager hops, `SceneEntryFlow`, home-world entry, or
+entry precedence, read the full doc first. Also listed in `AGENTS.md`.

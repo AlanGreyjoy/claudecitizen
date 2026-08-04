@@ -12,7 +12,7 @@ Also read when the domain matches:
 |-----|------|
 | `.cursor/rules/agent-conventions.mdc` | Performance-as-constraint rules (frame budget, main-thread discipline, server tick) |
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning; symptom → fix tables |
-| `docs/docs/architecture/scene-flow.md` | Boot / Game Manager entry pipeline |
+| `docs/docs/architecture/scene-flow.md` | Boot / Game Manager entry: Title → Create → Home World → Hab |
 | `docs/docs/architecture/game-loop.md` | Hab → Station → Hangar → Open Space |
 | `docs/docs/architecture/multiplayer.md` | Cell authority, presence, travel intents, instances |
 | `docs/docs/architecture/space-traversal.md` | Open Space host, boarding, Warp Gate |
@@ -21,6 +21,9 @@ Also read when the domain matches:
 | `docs/docs/architecture/ship-physics.md` | Vacuum inertia, coupled assist, dual-reticle |
 | `docs/docs/architecture/ship-combat.md` | Ship weapons, lock-on, lead markers, combat HUD |
 | `docs/docs/architecture/content-delivery.md` | Build Web vs Postgres catalog vs one-shot migrations |
+| `docs/docs/architecture/player.md` | Character HP, hunger, thirst, temp/air, medicine toxicity, HUD |
+| `docs/docs/architecture/home-worlds.md` | Home world select; Asteron / Virelia / Korrath; starter Hab |
+| `docs/docs/architecture/player-death.md` | Death / respawn: custom point or home-world Hab |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab/scene editor work |
 | `.cursor/skills/prd/SKILL.md` | Creating PRD handoff packs under `prds/<slug>/` |
 | `.cursor/rules/terrain-cache.mdc` | Terrain/vegetation cache versioning |
@@ -108,7 +111,7 @@ Export **factories and pure functions** from domain modules, not classes.
 ### Data model: scenes and prefabs are documents, not code
 
 - A **scene** (`*.scene.json`, schema v3) is a GameObject tree. Components — `game-manager`, `planet`, `player-start`, `prefab-instance`, `ui-screen`, `scene-link`, `instanced-scene`, `scene-exit` — decide what the scene *is*. There is no `settings` block; v1/v2 docs migrate forward on read in `src/world/scenes/schema.ts`.
-- A scene of `kind: 'boot'` is the **entry document** the project's `defaultScene` names. It never runs gameplay: its `game-manager` names every hop (Title → Character Create → Starting Hab, plus Open Space and Loading) and `src/app/scene-flow.ts` follows that authored pipeline. The precedence itself is one pure function, `resolveSceneFlowStep` in `src/world/scenes/scene-runtime.ts` — do not add a second place that decides the entry order, and do not key it off `scene.kind`. Full law: `docs/docs/architecture/scene-flow.md`.
+- A scene of `kind: 'boot'` is the **entry document** the project's `defaultScene` names. It never runs gameplay: its `game-manager` names every hop (Title → Character Create → Home World Select → Starting Hab, plus Open Space and Loading) and `src/app/scene-flow.ts` follows that authored pipeline. Starting Hab resolves from the player's home world once home worlds are live. The precedence itself is one pure function, `resolveSceneFlowStep` in `src/world/scenes/scene-runtime.ts` — do not add a second place that decides the entry order, and do not key it off `scene.kind`. Full law: `docs/docs/architecture/scene-flow.md` (home worlds: `docs/docs/architecture/home-worlds.md`).
 - Scenes resolve from **two** locations at the same relative path: when authoring, `src/world/scenes/loader.ts` fetches `/__editor/scene?id=` and the Electron repository reads the open project's `<project>/src/world/scenes/data/`; otherwise it falls back to this checkout's bundled `src/world/scenes/data/`, which holds only the engine-owned menu flow (boot, title, login, character-creation, loading, main-game).
 - `src/app/scene-host.ts` loads, switches, pauses, and disposes scenes **in-process**. Scene navigation must never reload the page.
 - A **prefab** (`*.prefab.json`) is identified by its document `id`, never its path — moving the file is safe; `editor-desktop/repository.mjs` maps id → path by scanning asset roots. `src/world/prefabs/schema.ts` is the canonical component list; read it first when a component's fields are unclear.

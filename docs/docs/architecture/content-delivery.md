@@ -16,6 +16,7 @@ Related: [Build Web](../editor/build-web) (how-to),
 [Ship definitions](../server-console/ship-definitions),
 [Item definitions](../server-console/item-definitions),
 [Game settings](../server-console/game-settings),
+[Player](./player) (medicine / consumables as live catalog),
 [Assets](../assets).
 
 **This doc is law.** Local Server Console edits never auto-sync to prod.

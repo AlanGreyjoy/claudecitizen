@@ -14,7 +14,10 @@ gameplay generally).
 
 Related: [Scene flow](./scene-flow) (session start only),
 [Ship flight](./ship-flight) / [Ship combat](./ship-combat) (cell-owned flight
-and damage), editor **Debug → Multiplayer** harness.
+and damage), [Player](./player) (cell-owned character vitals / medicine /
+death), [Player death](./player-death) (respawn resolve),
+[Home Worlds](./home-worlds) (starter Hab bind), editor **Debug → Multiplayer**
+harness.
 
 **This doc is law.** Code may lag (instance follow-in, placeable replication,
 quantum peer visibility). Gaps are refactor targets — never an excuse to ship
@@ -83,9 +86,12 @@ that mapping (today `presenceShipBody` / equivalent) — do not scatter.
 | **On moving ship deck** | Clamp / velocity limits use **ship** speed | Judging deck motion by on-foot caps rejects every passenger intent. |
 | **Ship flight** | Cell Rapier full authority | Client predicts with shared core. |
 | **Ship combat damage / destroy** | Cell | Client predicts FX / HUD — [Ship combat](./ship-combat). |
+| **Character vitals** (HP, hunger, thirst, toxicity, medicine, death) | Cell | Client owns HUD only — [Player](./player). |
+| **Character respawn** | Cell | Custom point if valid, else home-world Hab — [Player death](./player-death). |
 
 Do not “restore” pure server dead-reckoning of on-foot position without station
-geometry to back it. Do not remove the clamp.
+geometry to back it. Do not remove the clamp. Do not put character heal /
+death on the client because on-foot *position* is client-reported.
 
 ## Authored markers are the only in-play place change
 
@@ -184,7 +190,9 @@ deploy docs.
 - One cell-picker family for in-play moves: authored markers (+ login for
   fresh session only).
 - Presence follows `world.mode` / pilot posture, not ship existence.
-- On-foot: client report + clamp; flight: cell Rapier; combat damage: cell.
+- On-foot: client report + clamp; flight: cell Rapier; combat damage: cell;
+  character vitals / medicine / death: cell ([Player](./player));
+  respawn: cell ([Player death](./player-death)).
 - Hab/Hangar instances are real cells; follow-in shares the owner's cell;
   placeables replicate there.
 - `interest ≤ cell size`; no second invisible-peer path.

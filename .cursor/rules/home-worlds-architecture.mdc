@@ -1,0 +1,19 @@
+---
+description: Home worlds — Asteron, Virelia, Korrath; signup select; starter Hab bind — read full architecture doc
+alwaysApply: true
+---
+
+# Home worlds architecture (pointer)
+
+Full law: [`docs/docs/architecture/home-worlds.md`](../../docs/docs/architecture/home-worlds.md).
+
+**Permanent decision:** after Character Create, new players choose a **home
+world**. Choice binds Star System + primary body + starter station family
+(Hab). Initial three: **Asteron** (temperate rocky), **Virelia** (gas giant /
+floating cities, no land terrain), **Korrath** (volcanic / extreme heat).
+Sticky at create. Starting Hab resolves from `homeWorldId`. Death fallback
+respawn uses home Hab — [Player death](../../docs/docs/architecture/player-death.md).
+Entry hop: [Scene flow](../../docs/docs/architecture/scene-flow.md).
+
+When changing home-world offers, signup select, or starter Hab binding, read
+the full doc first. Also listed in `AGENTS.md`.

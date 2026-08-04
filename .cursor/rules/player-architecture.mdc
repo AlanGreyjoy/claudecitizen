@@ -1,0 +1,24 @@
+---
+description: Player vitals — HP, hunger, thirst, temp/air, medicine toxicity, HUD — read full architecture doc
+alwaysApply: true
+---
+
+# Player architecture (pointer)
+
+Full law: [`docs/docs/architecture/player.md`](../../docs/docs/architecture/player.md).
+
+**Permanent decision:** one character vitals model — **HP**, **hunger**,
+**thirst**, **medication toxicity**. Planet surface applies authored
+**temperature** + **breathable air** (may be lethal). Stations / habs /
+hangars / ship interiors are sealed (no temp/air stress). Vacuum without a
+suit has no air. Medicine heals HP and **adds toxicity**; lethal toxicity
+kills; toxicity decays slowly. HUD: hunger / thirst / toxicology always;
+planet temp/atmo **only on planet**; HP **only below 100%**. Cell owns
+outcomes; client owns HUD. Ship hull vitals stay separate
+([Ship combat](../../docs/docs/architecture/ship-combat.md)).
+
+When changing character HP, hunger, thirst, planet life-support stress,
+medicine / toxicology, or player HUD vitals visibility, read the full doc
+first. Home world offers / signup: [Home Worlds](../../docs/docs/architecture/home-worlds.md).
+Death / respawn: [Player death](../../docs/docs/architecture/player-death.md).
+Also listed in `AGENTS.md`.

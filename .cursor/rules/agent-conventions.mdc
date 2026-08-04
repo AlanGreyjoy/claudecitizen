@@ -69,12 +69,15 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / scene / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (Electron desktop)"
 - Ship flight / mass / thrust / flight computer / Rapier hull / dual-reticle / modes / boost / quantum → `docs/docs/architecture/ship-flight.md`; vacuum inertia / residual coast / coupled → `docs/docs/architecture/ship-physics.md`; ship weapons / lock-on / lead / combat HUD / destroy → `docs/docs/architecture/ship-combat.md`; tuning → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, AGENTS.md "Ship flight"
-- Boot / Game Manager / Title → Create → Starting Scene → `docs/docs/architecture/scene-flow.md` (AGENTS.md "The boot scene owns the game flow")
+- Boot / Game Manager / Title → Create → Home World → Starting Hab → `docs/docs/architecture/scene-flow.md` (AGENTS.md "The boot scene owns the game flow"); home offers → `docs/docs/architecture/home-worlds.md`
 - Hab / Station / Hangar / AVMS / `scene-exit` player loop → `docs/docs/architecture/game-loop.md` (AGENTS.md "Player game loop")
 - Open Space / station boarding / Warp Gate → `docs/docs/architecture/space-traversal.md`
 - Star Map / multi-system / Warp Gate authorship → `docs/docs/architecture/star-map.md`
 - Presence / cells / instance follow-in / travel intents → `docs/docs/architecture/multiplayer.md`
 - Build Web / Server Console catalog / migrations / “works in Play, fails on play host” → `docs/docs/architecture/content-delivery.md`
+- Character HP / hunger / thirst / planet temp/air / medicine toxicity / player HUD vitals → `docs/docs/architecture/player.md`
+- Home world select / Asteron / Virelia / Korrath / starter Hab bind → `docs/docs/architecture/home-worlds.md`
+- Character death / respawn / custom respawn point → `docs/docs/architecture/player-death.md`
 - PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 

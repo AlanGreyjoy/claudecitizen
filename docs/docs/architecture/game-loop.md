@@ -12,9 +12,11 @@ places move via `scene-exit` (and AVMS hangar shortcuts that still go through
 the same scene-request path). Ship Open Space ↔ Hangar uses dedicated boarding
 markers — full law in [Space traversal](./space-traversal).
 
-**Where the session begins** (Title → Character Create → Starting Scene) lives
-in [Scene flow](./scene-flow). **Who owns truth / who sees whom** during
-instance travel lives in [Multiplayer](./multiplayer).
+**Where the session begins** (Title → Character Create → Home World Select →
+Starting Hab) lives in [Scene flow](./scene-flow) and
+[Home Worlds](./home-worlds). **Who owns truth / who sees whom** during
+instance travel lives in [Multiplayer](./multiplayer). Death respawn (home Hab
+or custom point) lives in [Player death](./player-death).
 
 Related editor authoring: [Game flow](../editor/game-flow.md) (boot / Game
 Manager how-to), [Station authoring](../editor/station-authoring.md),
