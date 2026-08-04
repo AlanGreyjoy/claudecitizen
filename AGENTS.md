@@ -243,6 +243,19 @@ only — Mall / chat / inventory outcomes stay server-owned. Full law:
 `docs/docs/architecture/haloband.md`. Thin Cursor pointer:
 `.cursor/rules/haloband-architecture.mdc`.
 
+**Item Mall law:** ARC ≠ AsteronCredits; AC spends only in Item Mall; money
+grants via Stripe webhook only; all AC mutations through `apply_credit_delta`
++ ledger. Full law: `docs/docs/architecture/item-mall.md`. Thin Cursor pointer:
+`.cursor/rules/item-mall-architecture.mdc`. Operator how-to:
+`docs/docs/server-console/payments.md`.
+
+**Stripe law:** in-game HaloBand Mall wallet — Payment Element for card entry
+(not hosted Checkout/Portal); saved `pm_…` + brand/last4; player default card
+with **one card → auto-default**; pack buy charges default when set; purchase
+history in Mall; webhook still sole money→AC grant. Full law:
+`docs/docs/architecture/stripe.md`. Thin Cursor pointer:
+`.cursor/rules/stripe-architecture.mdc`.
+
 ## Prefab & Animation Architecture
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
@@ -472,8 +485,13 @@ Invariants — do not work around these:
 - **`payments::ledger::apply_credit_delta` is the only way `Player.creditBalance` may change.**
   Every mutation writes one `AsteronCreditLedger` row in the same transaction and carries an
   idempotency key. Never `UPDATE "creditBalance"` directly.
-- **Credits are granted only by the Stripe webhook**, never by `create_checkout` and never by a
-  client-side success redirect. Fulfillment is keyed on the Stripe event id, so replays are no-ops.
+- **Credits are granted only by the Stripe webhook**, never by `create_checkout`,
+  client Elements confirm, or a success redirect. Fulfillment is keyed on the
+  Stripe event id, so replays are no-ops.
+- **Pay UI (target):** in-game Stripe.js Payment Element + saved-card wallet
+  in HaloBand Mall (default PM; one card auto-default; pack charge on
+  default). Not hosted Checkout / Customer Portal. React not required. See
+  `docs/docs/architecture/stripe.md`.
 - The webhook handler takes `axum::body::Bytes`, not `Json` — HMAC verification needs the exact
   raw bytes. Do not parse the body before the signature passes.
 - Stripe secrets are AES-256-GCM ciphertext in `PaymentProvider`, wrapped with
@@ -484,7 +502,11 @@ Invariants — do not work around these:
 - `mall::SELLABLE_ITEM_TYPES` (consumables today) is mirrored by `MALL_SELLABLE_ITEM_TYPES` in
   `src/editor/react/panels/server/defaults.ts` — widen both together.
 
-Docs: `docs/docs/server-console/payments.md`.
+Docs: `docs/docs/architecture/item-mall.md` (mall / AC law),
+`docs/docs/architecture/stripe.md` (Payment Element pay UI),
+`docs/docs/server-console/payments.md` (operator how-to).
+Thin Cursor pointers: `.cursor/rules/item-mall-architecture.mdc`,
+`.cursor/rules/stripe-architecture.mdc`.
 
 ### Authoritative multiplayer
 
@@ -920,6 +942,10 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/player-death-architecture.mdc` | Thin always-on pointer to the player-death architecture doc |
 | `docs/docs/architecture/haloband.md` | Personal device UI: tabs, suppress, Map/Mall/Inventory |
 | `.cursor/rules/haloband-architecture.mdc` | Thin always-on pointer to the HaloBand architecture doc |
+| `docs/docs/architecture/item-mall.md` | AsteronCredits, Stripe packs, MallListing storefront |
+| `.cursor/rules/item-mall-architecture.mdc` | Thin always-on pointer to the Item Mall architecture doc |
+| `docs/docs/architecture/stripe.md` | In-game Payment Element; no React; webhook-only grants |
+| `.cursor/rules/stripe-architecture.mdc` | Thin always-on pointer to the Stripe architecture doc |
 
 ## Utility scripts
 

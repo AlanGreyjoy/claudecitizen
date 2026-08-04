@@ -80,6 +80,8 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - Home world select / Asteron / Virelia / Korrath / starter Hab bind → `docs/docs/architecture/home-worlds.md`
 - Character death / respawn / custom respawn point → `docs/docs/architecture/player-death.md`
 - HaloBand / F2 device / Map route / Mall tab / portable inventory UI → `docs/docs/architecture/haloband.md`
+- Item Mall / AsteronCredits / credit packs / Stripe webhook / mall purchase → `docs/docs/architecture/item-mall.md`
+- Stripe Payment Element / checkout session / publishable key / hosted vs in-game pay → `docs/docs/architecture/stripe.md`
 - PRD / phased handoff pack under `prds/` → `.cursor/skills/prd/SKILL.md` (mirror `prds/system-map/`)
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 

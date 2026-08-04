@@ -143,7 +143,12 @@ The note you type is stored with the ledger entry.
 
 The Item Mall is a **Mall** tab on the HaloBand, so it is reachable anywhere in game. It shows the storefront, the player's AC balance, and the credit packs.
 
-Buying credits opens hosted Stripe Checkout in the system browser — the desktop editor hands off through Electron, the web build opens a tab. Card details never touch engine code. After hand-off the panel polls for a few seconds so the balance updates without a reload, but the webhook remains the only thing that actually grants credits.
+Buying credits uses the in-game Stripe Payment Element in the Mall tab
+([Stripe architecture](../architecture/stripe.md)); baseline may still open
+hosted Checkout in the system browser until that lands. Card details never
+touch engine code. After payment the panel polls for a few seconds so the
+balance updates without a reload, but the webhook remains the only thing that
+actually grants credits.
 
 If you have not finished Stripe setup, the panel says credit purchases are unavailable rather than showing buttons that would fail.
 
@@ -160,6 +165,9 @@ If you have not finished Stripe setup, the panel says credit purchases are unava
 
 ## See also
 
+- [Item Mall architecture](../architecture/item-mall.md) — permanent decisions (currencies, ledger, webhook grants)
+- [Stripe architecture](../architecture/stripe.md) — in-game Payment Element (target); not hosted Checkout pages
 - [API reference](./api-reference.md) — the `/admin/*` endpoints behind these panels
 - [Item definitions](./item-definitions.md) — creating the items you list
 - [Game settings](./game-settings.md) — starting ARC balance and starter grants
+- [HaloBand architecture](../architecture/haloband.md) — Mall tab as play surface

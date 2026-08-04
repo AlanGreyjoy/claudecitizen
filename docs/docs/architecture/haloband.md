@@ -17,8 +17,10 @@ Related: [Player](./player) (vitals Home tiles read),
 route), [Ship combat](./ship-combat) (Ship tab hull / shields),
 [Content delivery](./content-delivery) (Mall listings / credit packs as live
 catalog), [Multiplayer](./multiplayer) (chat + inventory outcomes stay
-cell/server-owned), [Payments](../server-console/payments) (AsteronCredits /
-Stripe), editor [Menu Manager](../editor/menu-manager) (preview only).
+cell/server-owned), [Item Mall](./item-mall) (AC storefront + packs),
+[Stripe](./stripe) (Payment Element pay UI),
+[Payments](../server-console/payments) (operator how-to), editor
+[Menu Manager](../editor/menu-manager) (preview only).
 
 **This doc is law.** Code may lag (Missions stub, Inventory equip split, holo
 backdrop unwired). Gaps are refactor targets — not permission to fork a second

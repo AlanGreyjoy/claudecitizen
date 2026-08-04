@@ -1,0 +1,23 @@
+---
+description: Item Mall / AsteronCredits — two currencies, ledger chokepoint, webhook-only grants — read full architecture doc
+alwaysApply: true
+---
+
+# Item Mall architecture (pointer)
+
+Full law: [`docs/docs/architecture/item-mall.md`](../../docs/docs/architecture/item-mall.md).
+
+**Permanent decision:** **ARC** ≠ **AsteronCredits (AC)**. AC spends only in
+the **Item Mall**. Money grants AC **only** via Stripe webhook fulfillment —
+never checkout create, client confirm, or redirect. All AC mutations go through
+`apply_credit_delta` + append-only ledger + idempotency key. `MallListing` is
+a layer over `ItemDefinition` (live catalog). Sellable types gated server-side
+(`consumable` today) — widen `mall.rs` and Console `MALL_SELLABLE_ITEM_TYPES`
+together. Pay UI: [Stripe](../../docs/docs/architecture/stripe.md). Play
+surface: HaloBand Mall tab
+([HaloBand](../../docs/docs/architecture/haloband.md)). Operator how-to:
+[Payments](../../docs/docs/server-console/payments.md).
+
+When changing mall purchase, credit packs, Stripe webhook, ledger, sellable
+types, or Commerce Console panels, read the full doc first. Also listed in
+`AGENTS.md`.
