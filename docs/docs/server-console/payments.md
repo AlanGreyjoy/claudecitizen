@@ -126,7 +126,10 @@ Removing a pack that has purchase history deactivates it instead of deleting it,
 | Featured | Highlights the card in the mall. |
 | Live | Hides the listing without deleting it. |
 
-**The mall currently sells consumables only.** That limit is enforced server-side in `backend/crates/server/src/mall.rs`, and the item picker only offers sellable types, so you cannot create a listing the purchase endpoint would reject.
+**The mall currently sells consumables only** in code
+(`SELLABLE_ITEM_TYPES`). Architecture target also covers **outfits** (pieces +
+packs, Outfitters slot tabs) and **hab/hangar placeables** — see
+[Item Mall architecture](../architecture/item-mall.md).
 
 ## Granting credits by hand
 

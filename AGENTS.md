@@ -243,9 +243,11 @@ only — Mall / chat / inventory outcomes stay server-owned. Full law:
 `docs/docs/architecture/haloband.md`. Thin Cursor pointer:
 `.cursor/rules/haloband-architecture.mdc`.
 
-**Item Mall law:** ARC ≠ AsteronCredits; AC spends only in Item Mall; money
-grants via Stripe webhook only; all AC mutations through `apply_credit_delta`
-+ ledger. Full law: `docs/docs/architecture/item-mall.md`. Thin Cursor pointer:
+**Item Mall law:** ARC ≠ AsteronCredits; AC spends only in Item Mall
+(consumables, outfits pieces/packs with Outfitters slots, placeables into
+building inventory for hab/hangar Build Mode — baseline still consumable-only); money grants via Stripe webhook
+only; all AC mutations through `apply_credit_delta` + ledger. Full law:
+`docs/docs/architecture/item-mall.md`. Thin Cursor pointer:
 `.cursor/rules/item-mall-architecture.mdc`. Operator how-to:
 `docs/docs/server-console/payments.md`.
 
@@ -942,7 +944,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/player-death-architecture.mdc` | Thin always-on pointer to the player-death architecture doc |
 | `docs/docs/architecture/haloband.md` | Personal device UI: tabs, suppress, Map/Mall/Inventory |
 | `.cursor/rules/haloband-architecture.mdc` | Thin always-on pointer to the HaloBand architecture doc |
-| `docs/docs/architecture/item-mall.md` | AsteronCredits, Stripe packs, MallListing storefront |
+| `docs/docs/architecture/item-mall.md` | AC mall: consumables, outfit packs/slots, placeables |
 | `.cursor/rules/item-mall-architecture.mdc` | Thin always-on pointer to the Item Mall architecture doc |
 | `docs/docs/architecture/stripe.md` | In-game Payment Element; no React; webhook-only grants |
 | `.cursor/rules/stripe-architecture.mdc` | Thin always-on pointer to the Stripe architecture doc |

@@ -104,35 +104,87 @@ Refunds / disputes (`charge.refunded`, `charge.dispute.created`) reverse
 granted AC through the same ledger; balance clamps at zero with the requested
 vs applied delta recorded.
 
-## Item Mall (AC → inventory)
+## Item Mall (AC → inventory / props)
 
-A **MallListing** is a **layer** over an existing `ItemDefinition`:
+The Mall storefront is curated in Server Console and browsed in HaloBand.
+Listings spend **AsteronCredits** and grant durable ownership (inventory
+stacks and/or placeable entitlements).
 
-- Delist / hide never deletes the item or changes its ARC shop price.
-- Same item may sell for ARC at a station and for AC in the mall.
-- Fields that matter: price (AC), category, hold limit per player (`0` /
-  null = unlimited), featured, live, sort order.
+### Listing shapes
 
-Player flow:
+| Shape | Grants | Notes |
+| --- | --- | --- |
+| **Single item** | One `ItemDefinition` (quantity / stack rules) | Baseline `MallListing` today |
+| **Outfit pack** | **One or more** wearable / backpack `ItemDefinition`s in a single AC purchase | Bundle SKU — e.g. full suit; still one listing price |
+| **Placeable** | Quantity of one `PropDefinition` into **building inventory** | Same pool Build Mode uses to place in habs / hangars |
 
-1. `GET /game/mall` → active listings + `creditBalance`.
-2. `POST /game/mall/purchase` `{ listingId, quantity }` in one transaction:
-   lock balance → validate listing / type / stack / hold limit →
-   `apply_credit_delta(Spend)` → add inventory → return new balance +
-   inventory.
-3. HaloBand refreshes from the response. Client
-   `mallPurchaseBlockedReason` may disable buttons early; **server remains
-   authority**.
+- Delist / hide never deletes the underlying definition or its ARC shop price.
+- Same item may sell for ARC at a station shop and for AC in the mall.
+- Listing fields that matter: price (AC), storefront category, hold limit,
+  featured, live, sort order; packs carry an ordered list of definition ids.
 
-### Sellable types
+Player flow (all shapes):
 
-Phase one: **`consumable` only** (`SELLABLE_ITEM_TYPES` in `mall.rs`, mirrored
-by `MALL_SELLABLE_ITEM_TYPES` in Console `defaults.ts`). Widening is an
-explicit product change — update **both** allowlists together. Operators
-must not be able to create a listing the purchase endpoint would reject.
+1. `GET /game/mall` → active listings + `creditBalance` (grouped for UI).
+2. `POST /game/mall/purchase` `{ listingId, quantity? }` in one transaction:
+   lock balance → validate listing → `apply_credit_delta(Spend)` → grant
+   inventory and/or **building inventory** → return new balance + state.
+3. HaloBand refreshes from the response. Client may disable buttons early;
+   **server remains authority**.
 
-Quantity cap per request (`MAX_PURCHASE_QUANTITY`, today 99) prevents a
-fat-finger drain.
+### Storefront categories (law)
+
+HaloBand Mall browses by **top-level category**, then (for outfits) the same
+slot tabs as station **Outfitters**:
+
+| Top-level | What players buy |
+| --- | --- |
+| **Consumables** | Food, drink, medicine, other `consumable` items |
+| **Outfits** | Wearables + backpacks; slot tabs below |
+| **Placeables** | Hab / hangar build props → **building inventory** |
+
+**Outfits** slot tabs (shared with Outfitters — do not invent a second
+taxonomy):
+
+| Tab id | Player-facing label (examples) |
+| --- | --- |
+| `head` | Head / Helmet |
+| `torso` | Torso / Body |
+| `arms` | Arms / Shoulders |
+| `legs` | Legs |
+| `feet` | Feet |
+| `back` | Back (backpacks) |
+
+Players buy **single pieces** under a tab (helmet, body, shoulders, legs, …)
+or an **outfit pack** that lands multiple pieces in one purchase. Packs should
+still appear under Outfits (and may show which slots they fill). Station
+Outfitters remain the **ARC** walk-up vendor; Mall is the **AC** personal
+device store — same slot language, different currency.
+
+**Placeables:** Mall spends AC and adds the purchased `PropDefinition` into
+the player’s **building inventory** (prop id + quantity) — the same stock
+Build Mode already uses. From that inventory the player places props in
+**habs and hangars**. Do not invent a second “mall-only” prop stash; do not
+dump placeables into portable `PlayerItem` inventory. ARC hangar/apartment
+prop purchase paths may still exist; Mall is the AC intake into that same
+building inventory. Cap / max-per-space rules stay on `PropDefinition` and
+placement, not a separate Mall fiction.
+
+### Sellable allowlists
+
+| Catalog | Allowed in Mall (law) | Baseline today |
+| --- | --- | --- |
+| `ItemDefinition` | `consumable`, `clothing`, `armor`, `backpack` (and outfit **packs** of those) | `consumable` only |
+| `PropDefinition` | Hab / hangar placeables | Not mall-wired |
+
+Server allowlist (`SELLABLE_ITEM_TYPES` in `mall.rs`) and Console picker
+(`MALL_SELLABLE_ITEM_TYPES` in `defaults.ts`) must move **together**. Pack
+and placeable listing shapes need matching Console + purchase validation —
+operators must not create a listing purchase would reject.
+
+Quantity cap per request (`MAX_PURCHASE_QUANTITY`, today 99) applies to
+stackable singles; unique gear / packs follow owned-copy rules like Outfitters
+(already owned → cannot buy again unless product says otherwise).
 
 ## Ledger chokepoint
 
@@ -194,8 +246,10 @@ Mall and payments are **REST + Postgres**, not cell tick. Still:
 - Money AC grants: Stripe webhook fulfillment only.
 - All AC mutations: `apply_credit_delta` + ledger + idempotency.
 - Webhook: verify signature on raw bytes before JSON parse.
-- MallListing layers ItemDefinition; delist ≠ delete item.
-- Sellable types: server allowlist ↔ Console picker in lockstep.
+- MallListing layers catalog definitions (item, outfit pack, or placeable);
+  delist ≠ delete definition.
+- Sellable allowlists: server ↔ Console in lockstep; outfits use Outfitters
+  slot tabs; placeables are a Mall category.
 - Packs / listings / payment config = live catalog per environment.
 - HaloBand Mall tab only when live mall wiring exists.
 - Card data never enters engine code as PAN — Stripe Elements iframe
@@ -212,7 +266,10 @@ Mall and payments are **REST + Postgres**, not cell tick. Still:
 | Credit packs + Console CRUD | Live | Same; pay UI → [Stripe](./stripe) |
 | Mall listings + purchase | Live | Same |
 | HaloBand Mall tab | Live online; hidden offline | Same |
-| Sellable types | `consumable` only | Widen only with product + both allowlists |
+| Sellable types | `consumable` only | Consumables + outfits (pieces + packs) + placeables |
+| Outfit categories | N/A | Same slots as Outfitters (`head`…`back`) |
+| Outfit packs | Absent | One AC SKU → multiple item defs |
+| Placeables in Mall | Absent (ARC build purchase) | AC → same building inventory → place in hab/hangar |
 | `CreditReason::Award` gameplay | Admin UI only; no game caller | Optional later prize path through ledger |
 | Menu Manager mall preview | No wiring | Optional mock; never fake grants |
 | Catalog sync of Stripe secrets | Refused / env-local | Keep refused |
@@ -234,13 +291,17 @@ Mall and payments are **REST + Postgres**, not cell tick. Still:
 
 ## Open / later
 
-- Widen `SELLABLE_ITEM_TYPES` (weapons, wearables, …) with product + both
-  allowlists.
+- Widen allowlists + Console pickers for `clothing` / `armor` / `backpack`;
+  outfit pack listing schema (`itemDefinitionIds[]` or equivalent).
+- HaloBand Mall category chrome (Consumables / Outfits / Placeables) and
+  Outfitters-matching slot tabs.
+- `PropDefinition` mall listing + purchase → increment **building inventory**;
+  Build Mode places those props in habs / hangars.
 - Gameplay `Award` callers (events, seasons) still through the ledger.
-- Richer Mall UX (categories, featured rail, purchase confirm).
 - Optional Menu Manager mock mall for art direction (display only).
 - Cross-env catalog promote rules for packs without leaking Stripe price
   secrets (already guarded — keep guarded).
 
 Operator walkthrough: [Payments and the Item Mall](../server-console/payments).
 Payment Element / session UI: [Stripe](./stripe).
+Outfitters ARC vendor (same slot tabs): [Outfitters](../editor/components/outfitters).
