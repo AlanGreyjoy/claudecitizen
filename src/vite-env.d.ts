@@ -1,6 +1,13 @@
 /// <reference types="vite/client" />
 
 declare global {
+  /**
+   * Build stamp injected by Vite's `define`. Telemetry reports it so a
+   * regression can be attributed to a build rather than to "recently" — players
+   * run whatever version their cache last picked up.
+   */
+  const __ASTERON_BUILD_ID__: string;
+
   interface Window {
     __claudecitizenRenderStats: import('./types').RenderStats | null;
     __claudecitizenWorld?: import('./player/world-state').WorldState;

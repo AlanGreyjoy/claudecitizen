@@ -470,6 +470,17 @@ npm run build:wasm       # compile shared prediction code for the browser
 
 Backend env template: `backend/.env.example`. JWT secrets, DB URLs, certificate paths, etc. live there.
 
+#### Observability
+
+`npm run dev:observability` starts OpenObserve plus a scrape-only otel-collector (compose profile `observability`). Full pipeline, metric list, cardinality rules and security posture: **`docs/docs/architecture/observability.md`** — read it before adding a metric or a client telemetry field.
+
+Two things that bite:
+
+- **Export is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set.** That default is deliberate; do not make it required. A bare `npm run start:server` must behave exactly as it did before observability existed.
+- **Never put `player_id`, `cell_id`, `entity_id` or `session_id` in a metric label.** Each distinct value is a permanent time series. They go in log fields and trace attributes, which are indexed for search instead.
+
+Read back with `npm run obs <command>` rather than tailing container logs — `errors`, `slow-frames`, `frames --session <id>`, `freezes`, `tick`, `logs --grep`, and `sql` for anything else.
+
 #### Checking whether the dev backend is up
 
 Use the port, not a request: `ss -ltnp | grep :3000` (the process is `cc-server`). Health routes are **`/livez` and `/readyz`** — there is no `/health`, and the route table in `backend/crates/server/src/main.rs` is the only source of truth for paths, so read it rather than guessing by convention.
@@ -1003,6 +1014,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `editor-desktop/engine_tools.mjs` | Tools → Packages: download/install KTX-Software under `~/.asteron/tools/` |
 | `scripts/derived-assets.mjs` | Shared source-vs-derived resolution rule; imported by `vite.config.ts` and `editor-desktop/repository.mjs` |
 | `scripts/check_page.mjs` | Page validation |
+| `scripts/obs.mjs` | Query logs / metrics / traces from OpenObserve (`npm run obs errors -- --since 1h`). Needs `OBS_PASSWORD`; see `docs/docs/architecture/observability.md` |
 
 ## Other conventions
 

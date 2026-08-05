@@ -51,7 +51,10 @@ export interface GrassSpatialIndex {
 
 function cellCoordinate(value: number, min: number, cellSize: number, dim: number): number {
   const cell = Math.floor((value - min) / cellSize);
-  if (cell < 0) return 0;
+  // Negated rather than `cell < 0`, so a NaN translation lands in cell 0 too.
+  // Letting NaN through would index the counting-sort arrays with NaN, which
+  // silently drops the instance and leaves a zeroed matrix in its slot.
+  if (!(cell >= 0)) return 0;
   if (cell >= dim) return dim - 1;
   return cell;
 }
@@ -103,11 +106,19 @@ function fitGridDimensions(bounds: InstanceBounds): {
   dimY: number;
   dimZ: number;
 } {
+  // One non-finite instance translation makes a span NaN, and every comparison
+  // against NaN is false — the loop below would double `cellSize` forever on
+  // the main thread, an unkillable freeze earned by one bad grass blade. A
+  // degenerate span is a single cell, which is also the right answer for it.
+  const spanX = Number.isFinite(bounds.spanX) ? bounds.spanX : 0;
+  const spanY = Number.isFinite(bounds.spanY) ? bounds.spanY : 0;
+  const spanZ = Number.isFinite(bounds.spanZ) ? bounds.spanZ : 0;
+
   let cellSize = BASE_CELL_METERS;
   for (;;) {
-    const dimX = Math.max(1, Math.floor(bounds.spanX / cellSize) + 1);
-    const dimY = Math.max(1, Math.floor(bounds.spanY / cellSize) + 1);
-    const dimZ = Math.max(1, Math.floor(bounds.spanZ / cellSize) + 1);
+    const dimX = Math.max(1, Math.floor(spanX / cellSize) + 1);
+    const dimY = Math.max(1, Math.floor(spanY / cellSize) + 1);
+    const dimZ = Math.max(1, Math.floor(spanZ / cellSize) + 1);
     if (dimX * dimY * dimZ <= MAX_CELLS) return { cellSize, dimX, dimY, dimZ };
     cellSize *= 2;
   }

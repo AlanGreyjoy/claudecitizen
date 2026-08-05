@@ -128,6 +128,29 @@ export function applyShadowQuality(
   }
 }
 
+/**
+ * Stops a light's shadow pass without disposing its ShadowNode.
+ *
+ * Clearing `castShadow` looks like the obvious way to switch shadows off, and
+ * it is the one thing that must never be done per frame. Three's
+ * AnalyticLightNode disposes the ShadowNode along with it, while the command
+ * buffer being encoded this frame still references the ShadowMap and
+ * ShadowDepthTexture that just went away. WebGPU rejects that submit —
+ * `Destroyed texture [Texture "ShadowMap"] used in a submit` — and goes on
+ * rejecting every submit after it, so the window keeps its last image and stops
+ * responding to anything the renderer does. From outside that is a hard freeze.
+ *
+ * `shadow.intensity` alone is not enough either: it only scales the shader
+ * contribution, and ShadowNode still rasterises the whole scene into the depth
+ * map. `autoUpdate` is what actually stops the pass. Same rule `updateSunSystem`
+ * follows for the sun/moon hand-off, here as something callers can reuse.
+ */
+export function muteLightShadow(light: THREE.DirectionalLight): void {
+  light.shadow.intensity = 0;
+  light.shadow.autoUpdate = false;
+  light.shadow.needsUpdate = false;
+}
+
 export function createMainScene(): THREE.Scene {
   const scene = new THREE.Scene();
   scene.background = SKY_HIGH_COLOR.clone();

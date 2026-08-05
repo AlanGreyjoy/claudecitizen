@@ -703,6 +703,13 @@ const editorBridgeTarget = editorBridgePort
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), enforceRequiredWebGpu(), copyReferencedGameAssets()],
+  // Stamped into the bundle so client telemetry can name the build a player is
+  // actually running. Set ASTERON_BUILD_ID in CI to use a commit SHA instead.
+  define: {
+    __ASTERON_BUILD_ID__: JSON.stringify(
+      process.env.ASTERON_BUILD_ID ?? new Date().toISOString(),
+    ),
+  },
   build: {
     // The engine is open source, so shipping maps leaks nothing, and a release
     // stack trace that reads `prefab-renderer.ts:214` instead of `RH @ index.js`

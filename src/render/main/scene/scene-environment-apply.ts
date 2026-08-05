@@ -1,7 +1,7 @@
 import type * as THREE from 'three';
 import type { SceneBackgroundMode, SceneLightingMode } from '../../../world/prefabs/schema';
 import type { SceneEnvironmentConfig } from '../../../world/scenes/scene-runtime';
-import type { SceneLighting } from './scene-lighting';
+import { muteLightShadow, type SceneLighting } from './scene-lighting';
 
 /**
  * Whether the star-field equirect replaces the sky fill.
@@ -55,9 +55,12 @@ export function applySceneLightingMode(
   if (lightingMode === 'outdoor') return;
 
   lighting.sun.intensity = 0;
-  lighting.sun.castShadow = false;
   lighting.moonLight.intensity = 0;
-  lighting.moonLight.castShadow = false;
+  // Not `castShadow = false`: this runs every frame, after the sun system has
+  // set it, and disposing the ShadowNode mid-frame poisons the pending submit.
+  // See `muteLightShadow`.
+  muteLightShadow(lighting.sun);
+  muteLightShadow(lighting.moonLight);
 }
 
 export function applyAmbientOverrides(

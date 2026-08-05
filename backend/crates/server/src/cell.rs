@@ -11,7 +11,11 @@
 //! differently, which is precisely the kind of split that hides bugs until a
 //! second node appears.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cc_protocol::{
@@ -47,6 +51,7 @@ use uuid::Uuid;
 use crate::{
     error::{ApiError, ApiResult},
     grid::finite,
+    observability,
 };
 
 const CELL_LEASE_MS: u64 = 10_000;
@@ -143,6 +148,7 @@ impl CellCoordinator {
         if let Some(handle) = self.try_claim(cell_id).await? {
             self.cells.write().await.insert(cell_id.to_owned(), handle);
         }
+        observability::record_cells_owned(self.cells.read().await.len());
         Ok(())
     }
 
@@ -188,6 +194,7 @@ impl CellCoordinator {
                 return Ok(());
             }
             self.cells.write().await.remove(cell_id);
+            observability::record_cells_owned(self.cells.read().await.len());
         }
         let payload = serde_json::to_vec(&command).map_err(anyhow::Error::from)?;
         let mut redis = self.redis.clone();
@@ -304,7 +311,8 @@ async fn run_cell(
             }
         }
     });
-    let mut ticker = interval(Duration::from_secs_f32(FIXED_DT_SECONDS));
+    let tick_budget = Duration::from_secs_f32(FIXED_DT_SECONDS);
+    let mut ticker = interval(tick_budget);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut lease_ticker = interval(Duration::from_millis(CELL_LEASE_RENEW_MS));
     let mut lease_valid = true;
@@ -312,6 +320,10 @@ async fn run_cell(
     while lease_valid {
         tokio::select! {
             _ = ticker.tick() => {
+                // `MissedTickBehavior::Skip` means an overrun is absorbed by
+                // dropping the next tick, silently. Timing the body is the only
+                // way a late cell is distinguishable from a healthy one.
+                let tick_started = Instant::now();
                 let mut joined = false;
                 while let Ok(command) = receiver.try_recv() {
                     joined |= handle_command(&spawn, &fanout, &mut authority, &mut entities, tick, command);
@@ -337,6 +349,13 @@ async fn run_cell(
                 }
                 if tick.is_multiple_of(CELL_CHECKPOINT_TICKS) {
                     spawn_checkpoint(&spawn, &entities, tick);
+                }
+                observability::record_cell_tick(tick_started.elapsed(), tick_budget);
+                // Sampled on the profile cadence rather than every tick: cell
+                // population changes on the order of seconds, and a 30 Hz
+                // histogram write per cell buys nothing but overhead.
+                if tick.is_multiple_of(PROFILE_HEARTBEAT_TICKS) {
+                    observability::record_cell_entities(entities.len());
                 }
             }
             _ = lease_ticker.tick() => {
@@ -691,6 +710,7 @@ fn publish_profiles(
 
 fn publish(fanout: &mpsc::Sender<Vec<u8>>, payload: Vec<u8>) {
     if fanout.try_send(payload).is_err() {
+        observability::record_fanout_drop();
         tracing::warn!("cell fan-out queue is full; dropped a frame");
     }
 }

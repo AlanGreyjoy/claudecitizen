@@ -15,6 +15,20 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: development
+      # Must be listed here, not only in an .env file: compose reads .env for
+      # ${VAR} interpolation but does not forward its contents into containers.
+      RUST_LOG: ${RUST_LOG:-cc_server=info,tower_http=info}
+      # Turns anyhow's backtrace capture on, which is what puts frames in the
+      # `backtrace` field of a 500's log line.
+      RUST_BACKTRACE: ${RUST_BACKTRACE:-1}
+      # Empty by default, and empty means "do not export": the server runs
+      # identically with no collector present. Point it at OpenObserve's OTLP
+      # base — the exporter appends /v1/traces and /v1/logs itself.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      # e.g. `Authorization=Basic <base64 of email:password>`. Holds credentials,
+      # so it lives in the env file and never in this one.
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-cc-server}
       HTTP_BIND: 0.0.0.0:3000
       CLIENT_ORIGIN: http://localhost:4173
       WEBTRANSPORT_ALLOWED_ORIGINS: http://localhost:4173,http://127.0.0.1:5173,cceditor://app,null
@@ -99,6 +113,66 @@ services:
       timeout: 5s
       retries: 20
 
+  # Logs, metrics and traces in one binary. Gated behind a compose profile so
+  # `npm run dev:infra` stays the three services the game actually needs — start
+  # these with `npm run dev:observability`, or set COMPOSE_PROFILES=observability
+  # to bring them up with everything else.
+  openobserve:
+    image: openobserve/openobserve:v0.91.1
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      ZO_ROOT_USER_EMAIL: ${ZO_ROOT_USER_EMAIL:-admin@claude-citizen.com}
+      # Development placeholder, in the same spirit as the dev JWT secrets
+      # above. The production overlay makes this a required variable.
+      #
+      # The complexity is not decoration: OpenObserve validates this at startup
+      # and *panics* if it fails, so a simpler placeholder puts the container in
+      # a restart loop whose only symptom is one line buried in its log. Needs
+      # 8-128 characters with a lowercase, an uppercase, a digit and a symbol.
+      ZO_ROOT_USER_PASSWORD: ${ZO_ROOT_USER_PASSWORD:-Dev-Observe-1!}
+      ZO_DATA_DIR: /data
+      # No usage reporting to an external endpoint from a box holding player
+      # telemetry.
+      ZO_TELEMETRY: "false"
+    volumes:
+      - claude_citizen_openobserve:/data
+    ports:
+      # Loopback even in development: this is a login-protected UI, but it is
+      # served over plain HTTP and holds every log line the backend produces.
+      - "127.0.0.1:${OPENOBSERVE_PORT:-5080}:5080"
+
+  # Exists for one job: OpenObserve accepts pushes but does not scrape, and the
+  # backend's metrics are a Prometheus endpoint. Traces and logs bypass this
+  # entirely — the backend pushes those straight to OpenObserve over OTLP.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.158.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    depends_on:
+      - openobserve
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      # Base64 of the development ZO_ROOT_USER_EMAIL:ZO_ROOT_USER_PASSWORD pair
+      # set above. Defaulting it to empty is worse than useless: the scrape
+      # succeeds, the export 401s, and the collector logs "Dropping data" every
+      # ten seconds while OpenObserve sits there looking merely empty.
+      # Regenerate after changing either value:
+      #   printf '%s' "$ZO_ROOT_USER_EMAIL:$ZO_ROOT_USER_PASSWORD" | base64 -w0
+      OPENOBSERVE_AUTH_HEADER: ${OPENOBSERVE_AUTH_HEADER:-Basic YWRtaW5AY2xhdWRlLWNpdGl6ZW4uY29tOkRldi1PYnNlcnZlLTEh}
+      OPENOBSERVE_ENDPOINT: ${OPENOBSERVE_ENDPOINT:-http://openobserve:5080/api/default}
+      # The development loop runs the Rust server on the host with
+      # `npm run dev:server`, not as the `backend` compose service — that
+      # service name does not resolve inside this network and the scrape fails
+      # with "no such host". The production overlay points it at the service.
+      METRICS_SCRAPE_TARGET: ${METRICS_SCRAPE_TARGET:-host.docker.internal:3000}
+    # Docker Desktop provides this name; on Linux it has to be mapped explicitly.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./deploy/observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+
 volumes:
   claude_citizen_pg:
   claude_citizen_redis:
+  claude_citizen_openobserve:

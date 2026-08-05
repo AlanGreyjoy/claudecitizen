@@ -1,4 +1,6 @@
 import { backendRequestUrl, runtimeConfig } from './runtime-config';
+// Import-free module by design, so `net/` does not pick up the telemetry graph.
+import { noteServerRequestId, telemetrySessionId } from '../telemetry/session';
 import type { PlayerCharacterAppearanceV1 } from '../player/character_creator/player-character-appearance';
 import type { PlayerSurvivalVitals } from '../player/vitals';
 import type {
@@ -175,6 +177,9 @@ async function requestJson<T>(path: string, init: RequestInit = {}, retry = true
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        // Ties this call to the player's telemetry session, so a client-side
+        // frame sample and the server span for the same moment can be joined.
+        'X-Client-Session': telemetrySessionId(),
         ...(init.headers ?? {}),
       },
     });
@@ -182,6 +187,9 @@ async function requestJson<T>(path: string, init: RequestInit = {}, retry = true
     if (shouldKickOnFailure(path)) notifySessionLost('unavailable');
     throw error;
   }
+  // Server-minted, exposed through CORS. Held so a later client error report
+  // can name the last request this player made.
+  noteServerRequestId(response.headers.get('x-request-id'));
 
   if (response.status === 401 && retry && path !== '/auth/refresh') {
     const refreshed = await refreshSession().catch(() => null);

@@ -17,6 +17,8 @@
     "build:project-web": "node scripts/build_project_web.mjs",
     "build:server": "cargo build --locked --release --manifest-path backend/Cargo.toml -p cc-server",
     "dev:infra": "docker compose up -d postgres redis mailpit",
+    "dev:observability": "docker compose --profile observability up -d openobserve otel-collector",
+    "obs": "node scripts/obs.mjs",
     "dev:server": "watchexec --restart --stop-timeout 20s --no-vcs-ignore --watch backend --watch proto --watch rust-toolchain.toml -- cargo run --locked --manifest-path backend/Cargo.toml -p cc-server",
     "start:server": "cargo run --locked --manifest-path backend/Cargo.toml -p cc-server",
     "backend:migrate": "cargo run --locked --manifest-path backend/Cargo.toml -p cc-server -- migrate",

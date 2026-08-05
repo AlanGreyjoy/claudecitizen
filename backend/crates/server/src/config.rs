@@ -44,6 +44,13 @@ pub struct Config {
     /// Optional env override for the console-stored Stripe webhook signing secret.
     pub stripe_webhook_secret: Option<String>,
     pub api_public_url: String,
+    /// Where `/telemetry/client` forwards browser batches. `None` disables the
+    /// route's forwarding without disabling the route — the client keeps
+    /// getting 202 and never behaves differently for lack of a log store.
+    pub client_telemetry_url: Option<String>,
+    /// The `Authorization` value lifted out of `OTEL_EXPORTER_OTLP_HEADERS`, so
+    /// the ingest path and the OTLP exporter share one credential.
+    pub client_telemetry_auth: Option<String>,
 }
 
 impl Config {
@@ -71,6 +78,21 @@ impl Config {
             "none" => SameSite::None,
             _ => SameSite::Lax,
         };
+        // Derived from the OTLP endpoint rather than configured separately: for
+        // OpenObserve the OTLP base is `<host>/api/<org>` and the native JSON
+        // ingest for a stream is `<host>/api/<org>/<stream>/_json`, so one
+        // variable covers both. `CLIENT_TELEMETRY_INGEST_URL` overrides it when
+        // OTLP points at something that is not OpenObserve.
+        let otlp_base =
+            optional("OTEL_EXPORTER_OTLP_ENDPOINT").map(|url| url.trim_end_matches('/').to_owned());
+        let client_telemetry_url = optional("CLIENT_TELEMETRY_INGEST_URL")
+            .or_else(|| otlp_base.map(|base| format!("{base}/client/_json")));
+        let client_telemetry_auth = optional("OTEL_EXPORTER_OTLP_HEADERS").and_then(|raw| {
+            raw.split(',')
+                .filter_map(|entry| entry.split_once('='))
+                .find(|(key, _)| key.trim().eq_ignore_ascii_case("authorization"))
+                .map(|(_, value)| value.trim().to_owned())
+        });
         let client_origin = read("CLIENT_ORIGIN", "http://localhost:4173");
         let webtransport_allowed_origins = read("WEBTRANSPORT_ALLOWED_ORIGINS", &client_origin)
             .split(',')
@@ -127,6 +149,8 @@ impl Config {
             stripe_secret_key,
             stripe_webhook_secret: optional("STRIPE_WEBHOOK_SECRET"),
             api_public_url,
+            client_telemetry_url,
+            client_telemetry_auth,
         })
     }
 }

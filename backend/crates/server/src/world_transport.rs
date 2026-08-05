@@ -36,6 +36,7 @@ use crate::{
     cell::{CellSubscription, RoutedCommand},
     error::{ApiError, ApiResult},
     grid::{CellAddress, CellGrid, grid_for},
+    observability,
     replication::Replicator,
     state::AppState,
 };
@@ -317,6 +318,10 @@ async fn accept_session(state: AppState, incoming: IncomingSession) -> Result<()
         .accept_bi()
         .await
         .context("accept control stream")?;
+    // Held for the rest of the function. The loop below exits through `?` on a
+    // dozen paths, so a manual decrement would be skipped by most of them and
+    // the gauge would only ever climb.
+    let _session_gauge = observability::SessionGuard::open();
 
     let mut session = Session::new(state, ticket);
     let mut subscription = session.attach().await?;
@@ -442,9 +447,15 @@ async fn publish_frame(
     // Structural frames, and anything the path will not carry, take the
     // reliable stream. Everything else is state churn: losing one costs 50 ms.
     if frame.reliable || payload.len() > budget {
+        // Only the size case is a symptom — a structural frame is *meant* to be
+        // reliable, so counting it would bury the signal in normal traffic.
+        if !frame.reliable {
+            observability::record_frame_fallback("budget");
+        }
         return write_raw_control(send_stream, &payload).await;
     }
     if let Err(error) = connection.send_datagram(&payload) {
+        observability::record_frame_fallback("refused");
         tracing::debug!(error = ?error, len = payload.len(), "snapshot datagram refused; using the control stream");
         return write_raw_control(send_stream, &payload).await;
     }

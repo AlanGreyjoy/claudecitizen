@@ -53,7 +53,7 @@ import type { createMuzzleFlashRenderer } from '../effects/muzzle-flash';
 import type { createHitDecalRenderer } from '../effects/hit-decals';
 import type { createImpactBurstRenderer } from '../effects/impact-burst';
 import type { createTracerRenderer } from '../effects/tracers';
-import { updateGameplayCameraFar } from './scene/scene-lighting';
+import { muteLightShadow, updateGameplayCameraFar } from './scene/scene-lighting';
 import type { createSceneLighting } from './scene/scene-lighting';
 import type { SecondaryStationEntry } from './scene/secondary-stations';
 import { recordSubmitMs } from './frame-timing';
@@ -694,8 +694,12 @@ function configurePostStack(
   const { quantumBusy, quantumTraveling } = focus;
   deps.postStack.setEffectsEnabled(!quantumBusy);
   if (quantumBusy) {
-    deps.lighting.sun.castShadow = false;
-    deps.lighting.moonLight.castShadow = false;
+    // The hyperspace bubble renders with the world hidden, so no shadow pass is
+    // worth running. Mute it — never by clearing `castShadow`, which runs after
+    // this frame's lighting pass and before its submit and so destroys textures
+    // the pending command buffer still holds. See `muteLightShadow`.
+    muteLightShadow(deps.lighting.sun);
+    muteLightShadow(deps.lighting.moonLight);
   }
   state.wasQuantumTraveling = quantumTraveling;
   if (!quantumTraveling) {

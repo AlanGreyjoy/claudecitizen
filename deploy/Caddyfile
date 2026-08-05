@@ -7,11 +7,22 @@
 {$API_DOMAIN} {
 	tls /certs/fullchain.pem /certs/privkey.pem
 
+	# The Prometheus scrape is unauthenticated by design — it is meant to be
+	# reached over the compose network by the collector, never from the public
+	# internet. Without this block it would be served here alongside every
+	# other route, publishing live player counts, cell topology and node ids.
+	# 404 rather than 403 so the endpoint's existence is not advertised.
+	handle /metrics* {
+		respond "Not Found" 404
+	}
+
 	# The browser sends session cookies cross-site; the backend sets the CORS
 	# headers itself against CLIENT_ORIGIN, so Caddy must not add its own or
 	# the response ends up with two Access-Control-Allow-Origin values and the
 	# browser rejects every call.
-	reverse_proxy backend:3000
+	handle {
+		reverse_proxy backend:3000
+	}
 
 	encode gzip
 	log {

@@ -28,6 +28,11 @@ import {
   recordRenderMs,
   recordSimMs,
 } from "../render/main/frame-timing";
+import { reportHandledError } from "../telemetry";
+
+/** Console spam guard; the telemetry sink dedups by error signature already. */
+const MAX_LOGGED_FRAME_ERRORS = 3;
+let loggedFrameErrors = 0;
 
 export type {
   BuildAreaRuntime,
@@ -35,6 +40,40 @@ export type {
   GameLoopOptions,
   WeaponCombatRuntimeEvent,
 } from "./types";
+
+/**
+ * Records a frame that threw, so the loop can survive it.
+ *
+ * Re-arming `requestAnimationFrame` is the only thing keeping the game alive,
+ * and it used to sit downstream of every piece of per-frame work: an exception
+ * in the sim tick or the render frame escaped before the next frame was
+ * scheduled and the loop stopped for good — a window that draws its last frame
+ * forever and answers no input, which reads as a hard lock-up and clears only
+ * by force-quitting the app.
+ *
+ * A cold arrival (quantum drop-out over a surface site, a scene swap) is both
+ * where a one-off throw is most likely and where losing the loop is least
+ * recoverable. Report it and keep drawing: a visibly broken frame can be
+ * diagnosed, a dead process cannot.
+ */
+function reportFrameFailure(ctx: LoopContext, error: unknown): void {
+  loggedFrameErrors += 1;
+  if (loggedFrameErrors <= MAX_LOGGED_FRAME_ERRORS) {
+    console.error(
+      `ClaudeCitizen game frame failed (mode=${ctx.world.mode},`
+      + ` quantum=${ctx.world.quantum.phase}):`,
+      error,
+    );
+  }
+  reportHandledError("game-loop.frame", error);
+}
+
+/** Engine audio and combat input do not carry across a paused frame. */
+function quietPausedFrame(ctx: LoopContext): void {
+  ctx.boostSfx.stop();
+  ctx.thrustSfx.stop();
+  ctx.controls.setCombatInputActive(false);
+}
 
 function closeGameLoopOverlays(ctx: LoopContext): void {
   ctx.entertainmentSystem?.close();
@@ -97,22 +136,16 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
   let lastWeaponPoseAiming = false;
   let lastUnpausedNowMs = 0;
 
-  function frame(nowMs: number): void {
-    if (!ctx.running) return;
-
+  /** True when the frame ends the loop on purpose: planet handoff or scene swap. */
+  function runFrame(nowMs: number): boolean {
     recordFrameStart(performance.now());
     const paused = ctx.isPaused?.() ?? false;
     const frameDt = Math.min((nowMs - ctx.lastMs) / 1000, 1 / 30);
     const dt = paused ? 0 : frameDt;
     ctx.lastMs = nowMs;
 
-    if (paused) {
-      ctx.boostSfx.stop();
-      ctx.thrustSfx.stop();
-      ctx.controls.setCombatInputActive(false);
-    } else {
-      lastUnpausedNowMs = nowMs;
-    }
+    if (paused) quietPausedFrame(ctx);
+    else lastUnpausedNowMs = nowMs;
 
     let camera = ctx.controls.sampleCameraState(0);
     // Keep last ADS state while paused so orbit zoom does not ease out on Esc.
@@ -125,7 +158,7 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
       camera = tick.camera;
       weaponPoseAiming = tick.weaponPoseAiming;
       lastWeaponPoseAiming = weaponPoseAiming;
-      if (tick.abortFrame) return;
+      if (tick.abortFrame) return true;
     }
 
     // Freeze render clock while paused so camera smooth / ADS zoom stay put.
@@ -140,8 +173,19 @@ export function createGameLoop(options: GameLoopOptions): GameLoopHandle {
       paused,
     });
     recordRenderMs(performance.now() - renderStart);
+    return false;
+  }
 
-    requestAnimationFrame(frame);
+  function frame(nowMs: number): void {
+    if (!ctx.running) return;
+    let ended = false;
+    // See `reportFrameFailure`: never let a throw take the rAF chain with it.
+    try {
+      ended = runFrame(nowMs);
+    } catch (error) {
+      reportFrameFailure(ctx, error);
+    }
+    if (!ended) requestAnimationFrame(frame);
   }
 
   function start(): void {

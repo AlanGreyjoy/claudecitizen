@@ -30,6 +30,7 @@ Also read when the domain matches:
 | `docs/docs/architecture/stripe.md` | In-game Stripe wallet: Elements, saved cards, default PM, pack buy |
 | `docs/docs/architecture/npc.md` | MMO NPCs: crowd LOD, shops, dialogue, mission verbs; not mobs |
 | `docs/docs/architecture/mobs.md` | PVE mobs: monsters/animals; cell combat; not NPCs |
+| `docs/docs/architecture/observability.md` | OpenObserve stack, backend metrics/logs, client frame telemetry, `scripts/obs.mjs` |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab/scene editor work |
 | `.cursor/rules/terrain-cache.mdc` | Terrain/vegetation cache versioning |
 
@@ -47,6 +48,8 @@ npm run build:web         # release web target (strips unreferenced protected as
 npm run build:wasm        # shared Rust prediction core → browser WASM
 
 npm run dev:infra         # docker compose up -d postgres redis mailpit
+npm run dev:observability # OpenObserve + otel-collector (compose profile)
+npm run obs errors -- --since 1h   # query logs/metrics/traces; see architecture/observability.md
 npm run dev:server        # Watchexec rebuild/restart Rust API (TCP 3000, WebTransport UDP 4433)
 npm run start:server      # one-shot Rust backend
 npm run backend:migrate   # apply committed SQLx migrations

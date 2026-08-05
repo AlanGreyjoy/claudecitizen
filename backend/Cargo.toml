@@ -29,6 +29,22 @@ jsonwebtoken = { version = "9.3.1", default-features = false }
 lettre = { version = "0.11.19", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
 metrics = "0.24.3"
 metrics-exporter-prometheus = "0.18.1"
+opentelemetry = "0.32.0"
+opentelemetry-appender-tracing = "0.32.0"
+# OTLP over HTTP/protobuf rather than gRPC: `reqwest` is already in the tree for
+# Discord and Stripe, so this adds no new transport stack, and OpenObserve's
+# ingest is a plain HTTPS endpoint with a Basic auth header.
+#
+# `reqwest-blocking-client`, NOT `reqwest-client`. The SDK's batch processors run
+# on dedicated OS threads with no Tokio reactor, so the async client panics on
+# its first export with "there is no reactor running" and takes the exporter
+# thread down — traces and logs then silently stop while the process keeps
+# serving. The blocking client is the crate's own default for this reason: it
+# selects a `NoAsync` retry runtime and builds itself off-runtime. Note the
+# selection priority is `reqwest-client` > `hyper-client` > `reqwest-blocking-client`,
+# so enabling the async feature anywhere in the tree reintroduces the panic.
+opentelemetry-otlp = { version = "0.32.0", default-features = false, features = ["http-proto", "logs", "reqwest-blocking-client", "trace"] }
+opentelemetry_sdk = { version = "0.32.1", features = ["rt-tokio"] }
 prost = "0.14.4"
 prost-build = "0.14.4"
 protoc-bin-vendored = "3.2.0"
@@ -45,6 +61,7 @@ thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["full"] }
 tower-http = { version = "0.6.8", features = ["catch-panic", "compression-gzip", "cors", "limit", "request-id", "trace"] }
 tracing = "0.1.44"
+tracing-opentelemetry = "0.33.0"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 url = "2.5.8"
 uuid = { version = "1.20.0", features = ["serde", "v4"] }

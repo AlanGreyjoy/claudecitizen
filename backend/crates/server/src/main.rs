@@ -11,9 +11,11 @@ mod health;
 mod http;
 mod mail;
 mod mall;
+mod observability;
 mod payments;
 mod replication;
 mod state;
+mod telemetry;
 mod world_transport;
 
 use std::time::Duration;
@@ -22,7 +24,8 @@ use anyhow::{Context, Result};
 use axum::{
     Router,
     extract::DefaultBodyLimit,
-    http::{HeaderValue, Method, header},
+    http::{HeaderName, HeaderValue, Method, header},
+    middleware,
     routing::{get, patch, post, put},
 };
 use config::Config;
@@ -30,17 +33,24 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use state::AppState;
 use tokio::net::TcpListener;
 use tower_http::{
-    catch_panic::CatchPanicLayer, cors::CorsLayer, limit::RequestBodyLimitLayer, trace::TraceLayer,
+    catch_panic::CatchPanicLayer,
+    cors::CorsLayer,
+    limit::RequestBodyLimitLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    trace::TraceLayer,
 };
-use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let _ = dotenvy::from_filename("backend/.env");
-    init_tracing();
+    load_dotenv();
+    // Config is read before the subscriber is installed because the OTLP
+    // resource needs `node_id`. Nothing in `from_env` logs — it fails by
+    // returning, and that error still reaches stderr through `main`.
     let config = Config::from_env()?;
+    let _telemetry = observability::init_tracing(&config.node_id)?;
     let migrate_only = std::env::args().nth(1).as_deref() == Some("migrate");
     let metrics = PrometheusBuilder::new().install_recorder()?;
+    observability::describe_metrics();
     let state = AppState::connect(config, metrics).await?;
     if state.config.run_migrations || migrate_only {
         sqlx::migrate!("../../migrations")
@@ -55,6 +65,7 @@ async fn main() -> Result<()> {
 
     let webtransport_state = state.clone();
     let webtransport = tokio::spawn(async move { world_transport::run(webtransport_state).await });
+    tokio::spawn(observability::run_pool_sampler(state.db.clone()));
     let app = router(state.clone())?;
     let listener = TcpListener::bind(state.config.http_bind)
         .await
@@ -70,6 +81,37 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Loads `backend/.env` when present, and complains loudly when it is malformed.
+///
+/// A missing file is normal — the runtime image has none and every value comes
+/// from the environment. A *parse error* is not: dotenvy stops at the offending
+/// line, so every variable below it is silently missing and the server starts
+/// looking healthy. That failure mode cost a long debugging session once, where
+/// an unquoted `Authorization=Basic <token>` truncated at the space and the only
+/// evidence was a 401 in another service's access log.
+///
+/// The message deliberately does not echo the line: these files hold secrets.
+fn load_dotenv() {
+    match dotenvy::from_filename("backend/.env") {
+        Ok(_) => {}
+        // The path is CWD-relative, so this is also the normal case when the
+        // server is run from anywhere but the repository root.
+        Err(dotenvy::Error::Io(_)) => {}
+        Err(error) => {
+            // Before `init_tracing`, so there is no subscriber to log through.
+            eprintln!(
+                "[config] backend/.env could not be parsed ({}); variables at or below \
+                 the bad line were NOT loaded. Values containing spaces must be quoted, \
+                 e.g. OTEL_EXPORTER_OTLP_HEADERS=\"Authorization=Basic <token>\".",
+                match error {
+                    dotenvy::Error::LineParse(_, index) => format!("bad syntax at column {index}"),
+                    other => other.to_string(),
+                }
+            );
+        }
+    }
+}
+
 fn router(state: AppState) -> Result<Router> {
     let origin = HeaderValue::from_str(&state.config.client_origin)
         .context("CLIENT_ORIGIN must be a valid HTTP header value")?;
@@ -83,7 +125,17 @@ fn router(state: AppState) -> Result<Router> {
             Method::PATCH,
             Method::DELETE,
         ])
-        .allow_headers([header::CONTENT_TYPE]);
+        // `X-Client-Session` carries the browser's telemetry session id. Without
+        // it in the allow-list the preflight fails and every REST call dies.
+        .allow_headers([
+            header::CONTENT_TYPE,
+            HeaderName::from_static("x-client-session"),
+        ])
+        // Set by `SetRequestIdLayer` and echoed by `PropagateRequestIdLayer`.
+        // Without exposing it the browser can see the response but not its
+        // request id, so a client error report has nothing to join to the
+        // server-side span.
+        .expose_headers([HeaderName::from_static("x-request-id")]);
     // Catalog import carries weapon icon data-URLs (~3MB+). Axum's default body
     // limit is 2MB — RequestBodyLimitLayer alone does not raise it; Json extract
     // still hits DefaultBodyLimit ("length limit exceeded").
@@ -179,6 +231,10 @@ fn router(state: AppState) -> Result<Router> {
         .route("/game/mall", get(mall::list_mall))
         .route("/game/mall/purchase", post(mall::purchase_mall_item))
         .route("/world/session", post(world_transport::create_session))
+        // Unauthenticated by design: a crash on the title screen, before any
+        // login, is exactly the report worth keeping. Identity is stamped from
+        // the session cookie when one is present, never from the body.
+        .route("/telemetry/client", post(telemetry::ingest))
         .route(
             "/admin/session",
             get(admin::session).post(admin::login).delete(admin::logout),
@@ -263,20 +319,28 @@ fn router(state: AppState) -> Result<Router> {
         )
         .layer(RequestBodyLimitLayer::new(512 * 1024))
         .merge(catalog)
+        // route_layer, not layer: this only runs once axum has matched a route,
+        // which is what makes `MatchedPath` available and keeps the metric's
+        // route label bounded. Unmatched paths are not worth a time series.
+        .route_layer(middleware::from_fn(observability::track_http_metrics))
         .layer(CatchPanicLayer::new())
-        .layer(TraceLayer::new_for_http())
+        // Ordering matters and reads bottom-up: the last layer applied is the
+        // outermost. `SetRequestId` has to run before the span is built so the
+        // id lands in it, and `PropagateRequestId` has to run after the handler
+        // so it can copy that id onto the response.
+        .layer(PropagateRequestIdLayer::x_request_id())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(observability::HttpSpan)
+                .on_response(observability::HttpResponseLog)
+                // Suppressed: every 5xx already logs its chain and backtrace in
+                // `ApiError::into_response`, and the default here would emit a
+                // second, thinner line for the same failure.
+                .on_failure(()),
+        )
+        .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(cors)
         .with_state(state))
-}
-
-fn init_tracing() {
-    tracing_subscriber::registry()
-        .with(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("cc_server=info,tower_http=info")),
-        )
-        .with(tracing_subscriber::fmt::layer().json())
-        .init();
 }
 
 async fn shutdown_signal() {

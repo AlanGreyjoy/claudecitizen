@@ -102,6 +102,17 @@ async function migrateLegacyUserData() {
 // switches applied after the GPU process spawns are ignored.
 app.commandLine.appendSwitch('enable-unsafe-webgpu');
 app.commandLine.appendSwitch('enable-features', 'Vulkan');
+// Opt-in DevTools Protocol port, for `scripts/wedge_stack.mjs`. A renderer
+// wedged in an infinite loop cannot report anything itself — no console line,
+// no telemetry flush, no responsive DevTools window — but `Debugger.pause` over
+// CDP still interrupts the loop and hands back the exact stack. Off unless
+// asked for: the port is unauthenticated and grants full control of the app.
+if (process.env.CLAUDECITIZEN_DEBUG_PORT) {
+  app.commandLine.appendSwitch(
+    'remote-debugging-port',
+    process.env.CLAUDECITIZEN_DEBUG_PORT,
+  );
+}
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const editorDevMode =
   process.argv.includes('--dev')

@@ -24,6 +24,12 @@ import { passRequiredWebGpuStartupGate } from './app/required-webgpu-gate';
  *   ?shipPrefab=<id>                   — ship sandbox
  */
 async function bootGameEntry(): Promise<void> {
+  // Started before the WebGPU gate, not after: a machine that fails the gate
+  // never reaches the rest of this function, and "the engine would not start"
+  // is one of the more valuable things to have a record of.
+  const telemetry = await import('./telemetry');
+  void telemetry.startClientTelemetry();
+
   const canStart = await passRequiredWebGpuStartupGate({
     productName: 'ClaudeCitizen',
   });
@@ -52,6 +58,9 @@ async function bootGameEntry(): Promise<void> {
   function startPlaytest(): void {
     const loading = showLoadingScreen();
     void startPlaySession(loading, { requireAuth: false }).catch((error) => {
+      // The global handler only sees what nothing caught, and every boot path
+      // here catches — so a start failure would otherwise never be reported.
+      telemetry.reportHandledError('boot.playSession', error);
       console.error('ClaudeCitizen play session failed to start.', error);
       loading.hide();
       restoreTitleScreen(null);
@@ -77,6 +86,7 @@ async function bootGameEntry(): Promise<void> {
       import('./app/ship-play-session')
         .then((module) => module.startShipPlaySession(shipPrefabId))
         .catch((error) => {
+          telemetry.reportHandledError('boot.shipSandbox', error);
           console.error('ClaudeCitizen ship sandbox failed to load.', error);
         });
       return true;
@@ -125,6 +135,7 @@ async function bootGameEntry(): Promise<void> {
   const descriptor = multiplayerDebugDescriptor();
   if (descriptor) {
     await prepareMultiplayerDebug(descriptor).catch((error: unknown) => {
+      telemetry.reportHandledError('boot.multiplayerDebug', error);
       console.error('[mp-debug] Instance preparation failed.', error);
     });
   }

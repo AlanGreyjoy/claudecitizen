@@ -1,0 +1,49 @@
+# Scrape-and-forward only.
+#
+# OpenObserve ingests OTLP pushes but has no scraper, and the backend exposes
+# its metrics as a Prometheus endpoint. That mismatch is the only reason this
+# process exists — backend traces and logs go straight to OpenObserve over OTLP
+# and never pass through here.
+
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: cc-server
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["${env:METRICS_SCRAPE_TARGET}"]
+
+processors:
+  # Without batching, every scrape becomes its own HTTP request to OpenObserve.
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+  # Bounds the collector's own memory so a stalled exporter cannot grow the
+  # queue until the container is OOM-killed and takes the scrape history with it.
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+exporters:
+  # `otlp_http`, not the older `otlphttp` alias, which this collector version
+  # accepts but logs a deprecation warning for on every start.
+  otlp_http/openobserve:
+    endpoint: "${env:OPENOBSERVE_ENDPOINT}"
+    headers:
+      Authorization: "${env:OPENOBSERVE_AUTH_HEADER}"
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+
+service:
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/openobserve]

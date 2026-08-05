@@ -48,6 +48,17 @@ services:
       # honour a hashed cert for 14 days.
       WEBTRANSPORT_CERT_PATH: /certs/fullchain.pem
       WEBTRANSPORT_KEY_PATH: /certs/privkey.pem
+      # Left empty on purpose, exactly as in the base file. An existing deploy
+      # that has not opted into observability must keep working untouched, so
+      # export stays off until both of these are set in deploy/.env. When they
+      # are, the endpoint is reached over the compose network — plain HTTP is
+      # correct there, it never crosses the public interface.
+      #
+      #   OTEL_EXPORTER_OTLP_ENDPOINT=http://openobserve:5080/api/default
+      #   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <base64 email:password>
+      #   COMPOSE_PROFILES=observability
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
     volumes:
       - ${CERT_DIR:-/opt/asteron/certs}:/certs:ro
     # !override replaces the base list instead of appending to it. Compose
@@ -74,6 +85,25 @@ services:
       - caddy_config:/config
     environment:
       API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in deploy/.env}
+
+  # Only started when COMPOSE_PROFILES includes `observability`.
+  openobserve:
+    environment:
+      # The dev placeholder in the base file is a real login on a real box here.
+      # OpenObserve panics at startup on a password that fails its complexity
+      # check, so a weak value here is a restart loop, not a warning.
+      ZO_ROOT_USER_PASSWORD: ${ZO_ROOT_USER_PASSWORD:?set ZO_ROOT_USER_PASSWORD in deploy/.env}
+    # Already loopback in the base file; restated so the intent survives an edit
+    # there. Caddy does not proxy it — reach the UI over an SSH tunnel:
+    #   ssh -N -L 5080:127.0.0.1:5080 <user>@<host>
+    ports: !override
+      - "127.0.0.1:5080:5080"
+
+  otel-collector:
+    environment:
+      # In production the Rust server *is* a compose service, so the scrape uses
+      # service discovery rather than the base file's host-gateway hop.
+      METRICS_SCRAPE_TARGET: ${METRICS_SCRAPE_TARGET:-backend:3000}
 
   # Development defaults publish these on 0.0.0.0. On a public box that exposes
   # Postgres with the checked-in dev password to the whole internet.

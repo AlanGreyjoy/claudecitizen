@@ -738,6 +738,25 @@ fn decode_claims(
     Ok(claims)
 }
 
+/// Best-effort player id for endpoints that accept both signed-in and anonymous
+/// callers.
+///
+/// Telemetry is the case this exists for: a crash on the title screen, before
+/// any login, is exactly the crash worth capturing, so a missing or expired
+/// cookie must attribute the report to nobody rather than reject it. Every
+/// failure — no cookie, bad token, no player row — collapses to `None`.
+pub async fn optional_user_id(state: &AppState, headers: &HeaderMap) -> Option<String> {
+    let token = read_cookie(headers, "cc_at")?;
+    let claims = decode_claims(
+        &token,
+        &state.config.jwt_access_secret,
+        "access",
+        ACCESS_AUDIENCE,
+    )
+    .ok()?;
+    require_player_id(state, &claims.sub).await.ok()
+}
+
 pub async fn require_player_id(state: &AppState, user_id: &str) -> ApiResult<String> {
     sqlx::query_scalar(r#"SELECT "id" FROM "Player" WHERE "userId" = $1"#)
         .bind(user_id)
