@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4.5
+sidebar_position: 16
 title: Planets
 description: Planet documents — body recipe (physics, terrain, sky, surface life-support), Star Map placement, active-planet origin, Build Web delivery.
 ---

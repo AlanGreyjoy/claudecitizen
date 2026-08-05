@@ -422,6 +422,19 @@ export function getShipLayoutForPrefab(prefabId: string): ShipLayout {
   return layoutByPrefabId.get(prefabId) ?? DEFAULT_SHIP_LAYOUT;
 }
 
+/**
+ * Has this prefab's layout actually been baked, as opposed to falling back?
+ *
+ * `getShipLayoutForPrefab` answers with `DEFAULT_SHIP_LAYOUT` for both, which is
+ * the right call for gameplay — nothing should have to null-check a layout — but
+ * it leaves a caller unable to tell "this hull has no url authored" from "this
+ * hull is not loaded yet". Peer ships need that distinction: only the second
+ * case is worth fetching, and only the second case is worth rebuilding for.
+ */
+export function hasShipLayoutForPrefab(prefabId: string): boolean {
+  return layoutByPrefabId.has(prefabId);
+}
+
 /** Selects which prefab layout getShipLayout() returns for deck/rig helpers. */
 export function setActiveShipPrefabId(prefabId: string): void {
   activePrefabId = prefabId;

@@ -192,5 +192,18 @@ export function treeDrawDistanceMeters(altitudeMeters: number): number {
     TREE_DRAW_DISTANCE_GROUND_METERS + altitude * TREE_DRAW_DISTANCE_PER_ALTITUDE
   );
 }
-/** Re-pack grass instances when the player moves this far. */
-export const GRASS_RADIUS_UPDATE_MIN_MOVE_METERS = 1;
+/**
+ * Re-pack grass instances when the player moves this far.
+ *
+ * A re-pack rewrites and re-uploads the near-field instance buffer of every
+ * grass-eligible tile, so this is a per-metre-walked cost, not a per-frame one.
+ * At 1 m a run repacked five times a second; the pack radius is
+ * `DEFAULT_GRASS_DISTANCE_METERS` (20 m), so a focus stale by this much still
+ * leaves grass correct well inside that disc and only the outermost blades —
+ * the smallest on screen — settle a step late.
+ *
+ * Kept modest rather than large because `grass-spatial-index.ts` now bounds a
+ * re-pack to the cells the radius touches, so the remaining win from spacing
+ * them out is small and not worth trading visible pop for.
+ */
+export const GRASS_RADIUS_UPDATE_MIN_MOVE_METERS = 2;

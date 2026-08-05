@@ -1,5 +1,5 @@
 ---
-sidebar_position: 11
+sidebar_position: 8
 title: Home Worlds
 description: Three starter home worlds — Asteron, Virelia, Korrath — chosen after character create; bind system, body, and starter Hab.
 ---

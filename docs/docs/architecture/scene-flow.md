@@ -1,5 +1,5 @@
 ---
-sidebar_position: 1
+sidebar_position: 20
 title: Scene flow
 description: Boot scene + Game Manager own Title → Character Create → Home World Select → Starting Hab; one precedence rule.
 ---

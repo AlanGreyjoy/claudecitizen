@@ -1,5 +1,5 @@
 ---
-sidebar_position: 18
+sidebar_position: 11
 title: Missions
 description: MMO-style contracts — types, objectives, ARC pay, rewards; server-owned state; HaloBand presents.
 ---

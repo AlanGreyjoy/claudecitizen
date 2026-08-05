@@ -1,5 +1,5 @@
 ---
-sidebar_position: 2
+sidebar_position: 5
 title: Basic game loop
 description: Hab → Station → AVMS → Hangar → Open Space; station owns its hab and hangar.
 ---

@@ -12,6 +12,13 @@ import {
 
 const OP1_SURFACE_OFFSET_METERS = 90_000;
 const PAD_OFFSET_METERS = 3;
+/**
+ * Height above local terrain a quantum drop-out leaves the ship at a surface
+ * site. Quantum is an approach, not a landing: you arrive in the site's
+ * airspace — inside the atmosphere, engines lit — and fly the last leg down
+ * yourself. Dropping straight onto the pad skipped that entirely.
+ */
+const SURFACE_ARRIVAL_ALTITUDE_METERS = 3_000;
 const POI_COUNT = 12;
 const MAX_DRY_ATTEMPTS = 48;
 
@@ -254,17 +261,18 @@ export function getQuantumDestination(
   return listQuantumDestinations(planet, seed).find((dest) => dest.id === id) ?? null;
 }
 
-export function destinationWorldPosition(
+function resolveDestinationPosition(
   planet: Planet,
   seed: number,
   destination: QuantumDestination,
+  surfaceOffsetMeters: number,
 ): Vec3 {
   let planetCache = destinationPositionCache.get(planet);
   if (!planetCache) {
     planetCache = new Map<string, Vec3>();
     destinationPositionCache.set(planet, planetCache);
   }
-  const cacheKey = `${seed}:${destination.id}:${destination.latRadians}:${destination.lonRadians}:${destination.altitudeMeters ?? 'surface'}`;
+  const cacheKey = `${seed}:${destination.id}:${destination.latRadians}:${destination.lonRadians}:${destination.altitudeMeters ?? `surface+${surfaceOffsetMeters}`}`;
   const cached = planetCache.get(cacheKey);
   if (cached) return cached;
 
@@ -289,9 +297,38 @@ export function destinationWorldPosition(
   const position = cartesianFromLatLonAlt(
     destination.latRadians,
     destination.lonRadians,
-    surface.heightMeters + PAD_OFFSET_METERS,
+    surface.heightMeters + surfaceOffsetMeters,
     planet.radiusMeters,
   );
   planetCache.set(cacheKey, position);
   return position;
+}
+
+/** Where the site itself is: pad height. Nav markers and distances use this. */
+export function destinationWorldPosition(
+  planet: Planet,
+  seed: number,
+  destination: QuantumDestination,
+): Vec3 {
+  return resolveDestinationPosition(planet, seed, destination, PAD_OFFSET_METERS);
+}
+
+/**
+ * Where a quantum drop-out actually puts the ship.
+ *
+ * Surface sites arrive `SURFACE_ARRIVAL_ALTITUDE_METERS` above local terrain —
+ * in atmosphere, above the site, never on it. Orbital destinations already
+ * carry their own stand-off altitude and are unchanged.
+ */
+export function quantumArrivalPosition(
+  planet: Planet,
+  seed: number,
+  destination: QuantumDestination,
+): Vec3 {
+  return resolveDestinationPosition(
+    planet,
+    seed,
+    destination,
+    SURFACE_ARRIVAL_ALTITUDE_METERS,
+  );
 }

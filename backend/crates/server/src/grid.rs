@@ -31,30 +31,52 @@ pub struct CellGrid {
     pub size: Option<f64>,
     /// Furthest an entity can be replicated at all. Never exceeds `size`.
     pub interest: f64,
-    /// Inside this radius an entity replicates without its ship rig.
+    /// Inside this radius an on-foot entity replicates without its ship rig.
     pub medium: f64,
-    /// Inside this radius an entity replicates in full.
+    /// Inside this radius an on-foot entity replicates in full.
     pub full: f64,
+    /// `medium` for an entity flying a ship.
+    pub ship_medium: f64,
+    /// `full` for an entity flying a ship.
+    pub ship_full: f64,
 }
 
 impl CellGrid {
+    /// LOD bands for one entity, chosen by whether it is a character or a ship.
+    ///
+    /// One set of radii for both is what made a peer's ship vanish: a hull is
+    /// two orders of magnitude larger than a person and is flown at speeds that
+    /// cross a character's whole `full` band in a second, so a station instance
+    /// tuned for walking (250 m / 2.5 km) stripped every ship overhead down to a
+    /// marker. Bands are per-entity, not per-instance, because a station cell
+    /// legitimately holds both.
+    fn bands(&self, in_ship: bool) -> (f64, f64) {
+        if in_ship {
+            (self.ship_full, self.ship_medium)
+        } else {
+            (self.full, self.medium)
+        }
+    }
+
     /// Ticks between sends for an entity at this distance. Distant entities
     /// still move, they just cost a fraction of the bandwidth to watch.
-    pub fn send_interval(&self, distance: f64) -> u64 {
-        if distance <= self.full {
+    pub fn send_interval(&self, distance: f64, in_ship: bool) -> u64 {
+        let (full, medium) = self.bands(in_ship);
+        if distance <= full {
             1
-        } else if distance <= self.medium {
+        } else if distance <= medium {
             2
         } else {
             10
         }
     }
 
-    pub fn lod(&self, distance: f64) -> cc_protocol::world::NetworkLod {
+    pub fn lod(&self, distance: f64, in_ship: bool) -> cc_protocol::world::NetworkLod {
         use cc_protocol::world::NetworkLod;
-        if distance <= self.full {
+        let (full, medium) = self.bands(in_ship);
+        if distance <= full {
             NetworkLod::Full
-        } else if distance <= self.medium {
+        } else if distance <= medium {
             NetworkLod::Medium
         } else {
             NetworkLod::Marker
@@ -69,11 +91,18 @@ impl CellGrid {
 /// Interiors are one cell: a hab module or a shared scene is small enough that
 /// everyone in it is mutually interesting, and partitioning it would only
 /// reintroduce interior walls that block sight.
+/// Ship bands are deliberately generous next to the character ones. A station
+/// instance is not only its rooms — it is the volume ships fly through to reach
+/// them, and `interest` is unbounded here precisely because everyone in the
+/// instance is mutually interesting. Capping the ship bands below `interest`
+/// would put the old vanishing act back, just further out.
 const INTERIOR: CellGrid = CellGrid {
     size: None,
     interest: f64::INFINITY,
     medium: 2_500.0,
     full: 250.0,
+    ship_medium: 50_000.0,
+    ship_full: 5_000.0,
 };
 
 pub fn grid_for(instance_id: &str) -> CellGrid {
@@ -83,6 +112,10 @@ pub fn grid_for(instance_id: &str) -> CellGrid {
             interest: 50_000.0,
             medium: 2_500.0,
             full: 250.0,
+            // Clamped by `interest`: a band past the cut is unreachable, and a
+            // radius that reads as reachable but never fires is worse than none.
+            ship_medium: 50_000.0,
+            ship_full: 5_000.0,
         };
     }
     if instance_id.starts_with("space:") {
@@ -91,6 +124,8 @@ pub fn grid_for(instance_id: &str) -> CellGrid {
             interest: 500_000.0,
             medium: 25_000.0,
             full: 2_500.0,
+            ship_medium: 250_000.0,
+            ship_full: 25_000.0,
         };
     }
     INTERIOR

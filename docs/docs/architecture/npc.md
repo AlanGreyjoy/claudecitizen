@@ -1,5 +1,5 @@
 ---
-sidebar_position: 16
+sidebar_position: 14
 title: NPCs
 description: MMO characters — ambient crowds, shopkeepers, dialogue, mission givers/objectives; FPS LOD; not mobs.
 ---
@@ -15,15 +15,13 @@ game (TypeScript + Three.js / WebGPU, Rapier, authoritative cells).
 **NPCs are not mobs.** PVE monsters, animals, and combat fauna live in
 [Mobs](./mobs). Do not merge the two pipelines.
 
-Related: [Missions](./missions) (contract state / ARC pay — this doc owns
-NPC verbs only; rep/XP/loot packs live in sibling laws), [Mobs](./mobs),
-[Multiplayer](./multiplayer) (cell owns shop / mission / dialogue outcomes),
-[Basic game loop](./game-loop), [Space traversal](./space-traversal),
-[Player](./player), [HaloBand](./haloband) (Missions tab presents contracts;
-does not own them), [Content delivery](./content-delivery) (shops, items,
-mission defs as live catalog), [Item Mall](./item-mall) (AC mall ≠ ARC vendor
-NPC shops), editor NPC components (`npc-spawner`, `npc-waypoint`,
-`npc-placement`).
+Related: [Mobs](./mobs), [Multiplayer](./multiplayer) (cell owns shop / mission /
+dialogue outcomes), [Basic game loop](./game-loop),
+[Space traversal](./space-traversal), [Player](./player),
+[HaloBand](./haloband) (Missions tab presents contracts; does not own them),
+[Content delivery](./content-delivery) (shops, items, mission defs as live
+catalog), [Item Mall](./item-mall) (AC mall ≠ ARC vendor NPC shops),
+editor NPC components (`npc-spawner`, `npc-waypoint`, `npc-placement`).
 
 **This doc is law.** Code may lag hard (crowd still uses player avatars; shops
 are mostly screen terminals; missions stub). Gaps are refactor targets — not
@@ -58,25 +56,29 @@ gameplay**. Cell (or durable server services behind the cell) owns outcomes.
 Client owns prompts, UI, and prediction of cosmetic reaction only.
 
 ```mermaid
-flowchart TB
-  Author["Editor placement<br/>spawner / waypoint / placement"]
-  Ambient["Ambient crowd<br/>local sim"]
-  Service["Service NPCs<br/>shop / dialog / mission"]
-  Present["Client presentation<br/>crowd LOD"]
-  Edge["Edge interest"]
-  Cell["Cell<br/>validate + mutate"]
-  Catalog["Catalog<br/>shop / mission defs"]
-  UI["Interact UI<br/>HaloBand / dialogue / shop"]
-  Author -->|"ambient"| Ambient
-  Author -->|"named / service"| Service
-  Ambient -->|"LOD only"| Present
-  Service -->|"pose + public flags"| Edge
-  Edge --> Present
-  Service -->|"interact intent"| Cell
-  Catalog -->|"stock / offers"| Cell
+flowchart LR
+  subgraph client["Client"]
+    Ambient["Ambient crowd<br/>local sim, never replicated"]
+    Render["Presentation<br/>NPC LOD ladder"]
+    UI["HaloBand / dialogue / shop UI<br/>prompts + cosmetic prediction"]
+  end
+  subgraph server["Server"]
+    Edge["Edge interest"]
+    Cell["Cell<br/>mission state, inventory, ARC"]
+    Catalog["Live catalog<br/>shop / dialogue / mission defs"]
+  end
+  Ambient -->|"LOD only"| Render
+  UI -->|"interact intent (reliable)"| Cell
+  Catalog -->|"defs"| Cell
   Cell -->|"grant / debit / mission state"| UI
-  Present -.->|"F / focus"| UI
+  Cell -->|"service NPC entities"| Edge
+  Edge -->|"pose + public flags (quest available, shop open)"| Render
 ```
+
+Read the arrows literally. **Intent leaves the client**, never the NPC. Ambient
+crowd never crosses the boundary. Service NPCs come *back down* through edge
+interest as cell entities — they are not client-spawned props that later ask
+permission. Mobs are a different pipeline entirely ([Mobs](./mobs)).
 
 ## Budgets (keep separate)
 
@@ -133,6 +135,26 @@ open vendor / mission UI. Exact UI chrome can live in world panels or HaloBand;
   commerce outcomes — do not invent a second wallet.
 - ARC dock shops ≠ AC Item Mall ([Item Mall](./item-mall), [HaloBand](./haloband)).
 
+```mermaid
+sequenceDiagram
+  participant P as Player client
+  participant C as Cell
+  participant K as Catalog / inventory
+  P->>P: prompt in range, bump NPC to Hero LOD
+  P->>C: open shop (npcId)
+  C->>C: validate range / cell position / eligibility
+  C->>K: read stock + prices for shopId
+  K-->>P: shop contents (server-shaped, not client-filtered)
+  P->>C: buy (itemId, qty, clientRequestId)
+  C->>C: re-check range, stock, ARC balance, inventory space
+  C->>K: debit ARC + grant item (idempotent on clientRequestId)
+  K-->>P: new balance + inventory delta
+```
+
+The second range check is not redundant — the client may have walked away, and
+the price list it holds is stale by definition. `clientRequestId` makes a retried
+buy a no-op instead of a double charge.
+
 ### Dialogue
 
 | Kind | Example | Authority |
@@ -145,9 +167,8 @@ Do not treat “I clicked the dialogue option” as item grant on the client.
 
 ### Missions (contracts)
 
-Full law: [Missions](./missions). HaloBand **Missions** tab is presentation
-([HaloBand](./haloband)). Mission **state** (accepted, objectives, rewards) is
-server-owned; pay is **ARC** (never AC).
+HaloBand **Missions** tab is presentation ([HaloBand](./haloband)). Mission
+**state** (accepted, objectives, rewards) is server-owned.
 
 NPC-facing mission verbs (MMO-standard):
 
@@ -161,22 +182,6 @@ NPC-facing mission verbs (MMO-standard):
 
 Kill / escort / gather that target **mobs** or world props still update the
 **same** mission state machine — mob combat itself is [Mobs](./mobs).
-
-```mermaid
-flowchart LR
-  Mob["Mob cell<br/>HP / death"]
-  Credit["Mission credit<br/>kill / assist"]
-  State["Mission state<br/>objectives"]
-  NPC["NPC turn-in<br/>giver / objective"]
-  UI["HaloBand Missions"]
-  Mob -->|"cell events"| Credit --> State
-  State -->|"turn-in ready"| NPC
-  State --> UI
-  NPC -->|"interact intent"| State
-```
-
-Creatures stay on the mob pipeline; townsfolk stay NPCs. Only **mission state**
-bridges them — full contract law: [Missions](./missions).
 
 ### Interact gating
 
@@ -217,6 +222,24 @@ Distances are order-of-magnitude; tune per quality preset. Law is the **shape**.
 | **Crowd mid** | Medium | Low-poly / GPU-instanced body | Shared cheap cycle |
 | **Near** | Close | Mid detail; still not full modular Sidekick by default | Short shared clip set |
 | **Hero** | Tiny hard cap (in dialogue / shop / mission focus) | Higher fidelity if justified | May approach player tech; **single-digit cap** |
+
+```mermaid
+flowchart LR
+  Culled["Culled<br/>no draw, sim may sleep"]
+  Far["Crowd far<br/>impostor / instanced"]
+  Mid["Crowd mid<br/>low-poly instanced<br/><b>ambient default</b>"]
+  Near["Near<br/>mid detail, hard cap"]
+  Hero["Hero<br/>single-digit cap"]
+  Culled <-->|"distance / interest"| Far
+  Far <-->|"distance"| Mid
+  Mid <-->|"distance + cap"| Near
+  Near -->|"interact focus only"| Hero
+  Hero -->|"focus released"| Near
+```
+
+Distance walks a body **down** the ladder; only interact focus walks it up to
+Hero, and only within the cap. A marker, nameplate, or quest icon on screen
+never promotes a band.
 
 Rules:
 
@@ -325,14 +348,13 @@ when catalog rows exist ([Content delivery](./content-delivery)).
 - Crowd LOD renderer; then raise alive caps.
 - NPC shopkeeper face on top of existing ARC shop outcomes.
 - Dialogue trees + bark tables.
-- Mission state machine + HaloBand Missions tab wiring — [Missions](./missions).
+- Mission state machine + HaloBand Missions tab wiring.
 - Coarse city portals (still not Recast).
-- Catalog-backed NPC / dialogue defs in Server Console (mission defs: [Missions](./missions)).
+- Catalog-backed NPC / dialogue / mission defs in Server Console.
 - Scripted “NPC turns hostile” handoff into [Mobs](./mobs) if needed.
 
 ## See also
 
-- [Missions](./missions)
 - [Mobs](./mobs)
 - AGENTS.md § Friendly station NPCs (baseline; defer here on presentation +
   interactions)

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 10
+sidebar_position: 17
 title: Player
 description: Character vitals — HP, hunger, thirst, temperature, breathable air, medicine toxicity, and HUD visibility.
 ---

@@ -223,6 +223,16 @@ export interface ProjectSettingsDocument {
     /** Project-relative folder containing Sidekick manifest.json + parts. Empty = unset. */
     syntySidekick: string;
   };
+  /**
+   * KTX2 transcode size caps, read by `scripts/transcode_project_textures.mjs`.
+   * Power of two, or 0 for no cap. They live here rather than in a CLI flag
+   * because they are part of the transcode manifest's settings signature, and
+   * Tools → Transcode Project Textures… passes only `--project`.
+   */
+  textures: {
+    maxTextureSize: number;
+    maxNormalSize: number;
+  };
 }
 
 export async function fetchProjectSettings(): Promise<ProjectSettingsDocument> {

@@ -5,10 +5,10 @@ import type { WebGPURenderer } from 'three/webgpu';
  *
  * That is a deliberate product decision, not a limitation. The compute paths the
  * renderer is built around have no WebGL2 equivalent: WebGL2 has no compute
- * shaders at all. Silently degrading to WebGL2
- * would ship a build that looks like it works while missing the thing that makes
- * terrain and vegetation authoring fast, and the resulting bug reports would be
- * indistinguishable from real regressions.
+ * shaders at all. Silently degrading to WebGL2 would ship a build that looks
+ * like it works while missing the thing that makes terrain and vegetation
+ * authoring fast, and the resulting bug reports would be indistinguishable from
+ * real regressions.
  *
  * `WebGPURenderer` degrades by default and it is *not* opt-out via constructor
  * parameters — see `disableWebGlFallback` below. Every surface that creates a

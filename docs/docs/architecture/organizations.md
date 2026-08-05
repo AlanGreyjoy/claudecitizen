@@ -1,5 +1,5 @@
 ---
-sidebar_position: 22
+sidebar_position: 15
 title: Organizations
 description: Player-created Orgs — membership, roles, invites; not NPC factions; server-owned.
 ---

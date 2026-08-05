@@ -499,8 +499,25 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
     return typeof value === 'string' ? value.trim().replace(/\/$/, '') : '';
   }
 
+  /**
+   * KTX2 transcode size cap: a power of two, or 0 for "no cap".
+   *
+   * Silently clamps rather than throwing, because this normalizer also runs on
+   * read: a hand-edited bad value should not make the project unopenable.
+   */
+  function normalizeTextureCap(value) {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return 0;
+    if ((value & (value - 1)) !== 0) return 0;
+    return value;
+  }
+
   function normalizeProjectSettings(value) {
     const source = typeof value === 'object' && value !== null ? value : {};
+    // This function is a whitelist — anything not rebuilt here is dropped on the
+    // next save. `textures` feeds the transcode manifest signature, so losing it
+    // would silently re-encode every derived twin at full resolution.
+    const textures =
+      typeof source.textures === 'object' && source.textures !== null ? source.textures : {};
     const backendUrl = normalizeBackendUrlField(source.backendUrl);
     const editorBackendUrl = normalizeBackendUrlField(source.editorBackendUrl);
     const build =
@@ -544,6 +561,10 @@ export function createEditorRepository(rawProjectRoot, options = {}) {
       },
       contentPacks: {
         syntySidekick,
+      },
+      textures: {
+        maxTextureSize: normalizeTextureCap(textures.maxTextureSize),
+        maxNormalSize: normalizeTextureCap(textures.maxNormalSize),
       },
     };
   }

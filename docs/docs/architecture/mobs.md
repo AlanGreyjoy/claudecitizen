@@ -1,5 +1,5 @@
 ---
-sidebar_position: 17
+sidebar_position: 12
 title: Mobs
 description: PVE combatants — monsters, animals, fauna; cell combat; not NPCs; FPS + interest budgets.
 ---
@@ -15,16 +15,10 @@ Three.js / WebGPU, Rapier, authoritative cells).
 townsfolk live in [NPCs](./npc). Do not implement PVE as “hostile NPCs” bolted
 onto the crowd pipeline.
 
-Related: [NPCs](./npc) (social / economic characters; mission verbs),
-[Missions](./missions) (kill / escort credit → contract state),
-[Loot tables](./loot-tables) (death rolls),
-[Factions](./factions) (mob aggro side / NPC allegiance),
-[Organizations](./organizations) (player crews — not mob factions),
-[Progression](./progression) (kill XP),
+Related: [NPCs](./npc) (social / economic / mission characters),
 [Multiplayer](./multiplayer) (cell owns combat outcomes),
 [Player](./player) (character HP / death from mob damage),
 [Player death](./player-death) (respawn after lethal mob fight),
-[Character combat](./character-combat) (on-foot firearms / melee / throwables),
 [Ship combat](./ship-combat) (**ship** weapons / hull — different loop),
 [Space traversal](./space-traversal) / [Star Map](./star-map) (where encounters
 may live), [Content delivery](./content-delivery) (mob defs / loot tables as
@@ -48,8 +42,8 @@ ship Combat-mode dogfights.
 | Other players | See + help (same HP bar / aggro) | Ambient fill may differ per client |
 
 Mission objectives like “kill 5 X” or “escort through wolves” **reference**
-mobs; the mission state machine is [Missions](./missions). NPC talk / turn-in
-stays [NPCs](./npc).
+mobs; the mission state machine stays with NPC/mission services
+([NPCs](./npc)), while the creatures are mob entities.
 
 ### 2. Cell owns PVE — and peers see the fight
 
@@ -73,27 +67,35 @@ Flavor-only birds that never interact and never drop may stay cosmetic later —
 **hostiles, huntables, elites, bosses, and mission mobs do not.** If a second
 player should help, it is a cell entity from spawn.
 
+```mermaid
+flowchart LR
+  subgraph server["Server"]
+    Den["Dens<br/>shipped layout"]
+    Catalog["Catalog<br/>MobDef / pack / loot"]
+    Cell["Cell sim<br/>AI, HP, aggro, leash, loot"]
+    Edge["Edge interest"]
+  end
+  subgraph clients["Clients in interest"]
+    A["Player A<br/>LOD + predicted FX"]
+    B["Player B<br/>same mob, same HP"]
+  end
+  Den -->|"packId"| Cell
+  Catalog -->|"defs + loot tables"| Cell
+  Cell -->|"mob entities"| Edge
+  Edge -->|"pose, HP, phase, attack events"| A
+  Edge -->|"pose, HP, phase, attack events"| B
+  A -->|"attack intent"| Cell
+  B -->|"attack intent"| Cell
+```
+
+Two clients, **one** HP pool. That is the shape — no per-player mob copy, no
+client that resolves its own kill. Contrast [NPCs](./npc), where ambient crowd
+never leaves the client at all.
+
 ### 3. Frame + interest budgets own packs
 
 A fight must stay playable on web: bounded active mobs in interest, LOD
 presentation, amortized AI. Do not spawn unbounded fauna into one cell view.
-
-```mermaid
-flowchart TB
-  Spawn["Mob spawn / dens"]
-  Cell["Cell sim<br/>AI + combat + loot"]
-  Edge["Edge interest"]
-  Client["Client<br/>LOD + predict FX"]
-  Mission["Mission state<br/>kill / assist credit"]
-  Player["Player vitals<br/>HP / death"]
-  Inv["Inventory<br/>loot grants"]
-  Spawn --> Cell
-  Client -->|"fire / hit intents"| Cell
-  Cell --> Edge --> Client
-  Cell -->|"kill / assist events"| Mission
-  Cell -->|"damage"| Player
-  Cell -->|"death loot"| Inv
-```
 
 ### What this rejects
 
@@ -115,9 +117,6 @@ flowchart TB
 | **Elite / boss** | Scripted or denser stats; still mob entity kind, harder budget exceptions |
 | **Mission mob** | Same mob pipeline; mission service listens for kill / tag credit |
 
-Mission kill / escort credit flows into [Missions](./missions). Creatures stay
-mobs; turn-in / offer NPCs stay [NPCs](./npc).
-
 ## Combat loop (on-foot / surface / interior)
 
 Ship hull fight stays in [Ship combat](./ship-combat). Mob fight is the
@@ -132,6 +131,27 @@ Ship hull fight stays in [Ship combat](./ship-combat). Mob fight is the
 | Death → loot / XP / mission credit | Cell; idempotent grants |
 | Presentation / hurt VFX | Client from replicated events |
 
+```mermaid
+sequenceDiagram
+  participant P as Player client
+  participant C as Cell
+  participant M as Mission service
+  participant E as Edge interest
+  P->>P: predict muzzle / impact FX
+  P->>C: fire intent (origin, aim, weapon, tick)
+  C->>C: validate range / LOS / cooldown, apply damage
+  C-->>E: HP + hit event
+  E-->>P: replicated HP / hurt state (peers too)
+  C->>C: HP reaches 0 → death, roll loot table
+  C->>M: kill + assist credit (tag / damage rules)
+  M-->>P: objective progress (HaloBand)
+  C-->>E: death event + lootable corpse
+```
+
+Client predicts **feel** only — muzzle flash, tracer, impact decal. HP, death,
+loot roll, and mission credit land server-side and arrive back as replicated
+state. A client that drew a kill and got no death event was wrong, and shows it.
+
 Player death from mob damage follows [Player death](./player-death).
 
 ### Leash and reset
@@ -143,16 +163,9 @@ a handoff rule. Cell boundaries + interest must remain honest
 
 ### Loot
 
-Full law: [Loot tables](./loot-tables).
-
-- `MobDefinition.lootTableId` → catalog table (not embedded JSON).
-- Roll on cell at death (personal loot default; assist credit required).
-- Inventory grants server-side; no client-spawned currency; never AC.
-
-### XP
-
-Kill XP from mob def + level-gap multipliers — [Progression](./progression).
-Granted with death resolution for eligible assisters.
+- Loot table on mob / encounter def (catalog).
+- Roll on cell at death (or interact-corpse if product requires).
+- Inventory grants server-side; no client-spawned currency.
 
 ## Presentation (FPS)
 
@@ -207,15 +220,19 @@ mob **stats** only in prefab JSON, and do not paint dens in the Server Console.
 ```mermaid
 flowchart LR
   Editor["Editor<br/>den markers + mesh"]
-  Console["Server Console<br/>MobDef / loot / pack"]
   Build["Build Web"]
-  Resolve["Resolve packId<br/>→ this env catalog"]
-  Cell["Cell spawn runtime"]
-  Editor -->|"den → packId"| Build
-  Build -->|"layout + mesh URLs"| Resolve
-  Console -->|"defs + packs"| Resolve
-  Resolve -->|"spawn entities"| Cell
+  Console["Server Console<br/>MobDef / loot / pack"]
+  Cell["Cell spawn runtime<br/>resolve packId"]
+  Entities["Spawned mob entities"]
+  Editor -->|"den refs packId"| Build
+  Build -->|"layout + mesh URLs"| Cell
+  Console -->|"defs + packs (per environment)"| Cell
+  Cell --> Entities
 ```
+
+**Where** comes across the top (editor, rebuild required). **What** comes in
+from the side (catalog, live). They meet only at spawn resolve — an unknown
+`packId` logs and skips rather than inventing a mob.
 
 ### Why this split
 
@@ -249,8 +266,8 @@ den says so.
 
 | Row | Owns |
 | --- | --- |
-| `MobDefinition` | Combat identity: stats, presentation id, `lootTableId`, faction, `xpReward`, level |
-| `LootTable` | Drop rolls — [Loot tables](./loot-tables) |
+| `MobDefinition` | Combat identity: stats, presentation id, loot table id, faction |
+| `LootTable` | Drop rolls |
 | `MobPack` (or equivalent) | Weighted list of mob defs + counts / elite chance |
 | Game settings | Global spawn / interest caps |
 
@@ -323,7 +340,7 @@ population. Prefer a distinct `mob/` (or backend mob module) when implemented.
 | Loop | Doc |
 | --- | --- |
 | On-foot / surface PVE vs creatures | **This doc** |
-| Player firearms vs players / (later) mobs | [Character combat](./character-combat) + [Multiplayer](./multiplayer); this doc for mob HP |
+| Player firearms vs players / (later) mobs | [Multiplayer](./multiplayer) + this doc for mob HP |
 | Ship vs ship | [Ship combat](./ship-combat) |
 | NPC shop / talk / mission | [NPCs](./npc) |
 
@@ -352,11 +369,6 @@ population. Prefer a distinct `mob/` (or backend mob module) when implemented.
 ## See also
 
 - [NPCs](./npc)
-- [Missions](./missions)
-- [Loot tables](./loot-tables)
-- [Factions](./factions)
-- [Organizations](./organizations)
-- [Progression](./progression)
 - [Multiplayer](./multiplayer)
 - [Ship combat](./ship-combat)
 - [Player](./player) / [Player death](./player-death)

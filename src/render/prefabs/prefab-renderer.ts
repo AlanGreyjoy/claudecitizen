@@ -297,11 +297,47 @@ function configureSpotLightShadow(
   light.shadow.radius = 2;
 }
 
+/**
+ * World-space bounding-sphere radius below which a mesh stops casting shadows.
+ *
+ * `receiveShadow` is a shader branch and stays on for everything. `castShadow`
+ * is a whole extra draw in the shadow pass, and a GLB's mesh count is set by how
+ * the artist split the source scene, not by what is worth a shadow: the Synty
+ * Black Market station is 1,887 nodes over 688 meshes, and blanket-true made
+ * every bolt, pipe cap, decal plane, and floor greeble its own shadow draw —
+ * roughly doubling the station's draw calls for contact shadows a few
+ * centimetres across.
+ *
+ * 0.75 m radius is a 1.5 m object — pipes, signs, floor junk, panel greebles
+ * fall under it; walls, platforms, crates, and hulls clear it comfortably, so
+ * the read silhouette is unchanged. Measured against the Black Market station's
+ * 1,849 mesh nodes: 0.5 m drops 15% of shadow draws, 0.75 m drops 25%, 1 m
+ * drops 33%, 2 m drops 59%. Raise it if the shadow pass is still the wall;
+ * lower it if small props start looking like they float.
+ */
+const MIN_SHADOW_CASTER_RADIUS_METERS = 0.75;
+
+function shouldCastShadow(mesh: THREE.Mesh): boolean {
+  const geometry = mesh.geometry;
+  if (!geometry) return false;
+  if (geometry.boundingSphere == null) geometry.computeBoundingSphere();
+  const radius = geometry.boundingSphere?.radius;
+  if (radius == null || !Number.isFinite(radius)) return true;
+
+  // Geometry bounds are in the mesh's own local units; a node scaled up inside
+  // the GLB is still a large object in the scene.
+  const scale = mesh.matrixWorld.getMaxScaleOnAxis();
+  return radius * scale >= MIN_SHADOW_CASTER_RADIUS_METERS;
+}
+
 function prepareModelMaterials(root: THREE.Object3D): void {
   applyDefaultFrustumCulling(root);
+  // The template's own hierarchy scale is known here; instance transforms are
+  // applied later and are ~1 for placed prefabs.
+  root.updateWorldMatrix(false, true);
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
-    object.castShadow = true;
+    object.castShadow = shouldCastShadow(object);
     object.receiveShadow = true;
     configureShipMaterial(object.material);
   });

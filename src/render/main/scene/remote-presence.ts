@@ -1,6 +1,13 @@
 import * as THREE from 'three';
-import { getShipLayoutForPrefab } from '../../../player/ship-layout';
-import { getDefaultShipPrefabId, NO_SHIP_PREFAB_ID } from '../../../world/ships';
+import {
+  getShipLayoutForPrefab,
+  hasShipLayoutForPrefab,
+} from '../../../player/ship-layout';
+import {
+  getDefaultShipPrefabId,
+  loadShipPrefabLayout,
+  NO_SHIP_PREFAB_ID,
+} from '../../../world/ships';
 import type { NetworkRenderEntity, NetworkShipRig, Vec3 } from '../../../types';
 import {
   createCharacterAvatarInstance,
@@ -23,6 +30,12 @@ interface RemoteObject {
   avatarAppearanceKey: string;
   shipHandle: ShipModelHandle | null;
   shipPrefabId: string | null;
+  /**
+   * Was `shipHandle` built from a baked layout, or from the fallback while the
+   * real one was still loading? Only ever goes false -> true for a given prefab,
+   * so it costs at most one rebuild per peer per hull.
+   */
+  shipLayoutReady: boolean;
   marker: THREE.Mesh;
   label: THREE.Sprite;
   labelTexture: THREE.CanvasTexture;
@@ -33,6 +46,42 @@ function defaultRemoteShipPrefabId(): string {
   return getDefaultShipPrefabId() ?? NO_SHIP_PREFAB_ID;
 }
 
+/**
+ * Ship prefabs fetched on a peer's behalf, so one hull is requested once however
+ * many players are flying it and however often they cross the interest edge.
+ *
+ * Only the local player's own hulls are ever loaded by the session — a peer's
+ * `prefabId` replicates correctly but resolves against an empty cache, and
+ * `createShipModel` quietly substitutes the built-in hull for a null url. The
+ * result is a synced ship wearing the wrong airframe, which is worse than a
+ * missing one: it looks correct. Failures are remembered so a project with a
+ * broken prefab id does not re-request it every time a peer moves.
+ */
+const requestedShipLayouts = new Set<string>();
+const unresolvableShipLayouts = new Set<string>();
+
+function requestRemoteShipLayout(prefabId: string): void {
+  if (
+    !prefabId
+    || prefabId === NO_SHIP_PREFAB_ID
+    || hasShipLayoutForPrefab(prefabId)
+    || requestedShipLayouts.has(prefabId)
+    || unresolvableShipLayouts.has(prefabId)
+  ) {
+    return;
+  }
+  requestedShipLayouts.add(prefabId);
+  void loadShipPrefabLayout(prefabId)
+    .then((layout) => {
+      if (!layout) unresolvableShipLayouts.add(prefabId);
+    })
+    .catch((error: unknown) => {
+      unresolvableShipLayouts.add(prefabId);
+      console.warn(`Peer ship prefab "${prefabId}" failed to load.`, error);
+    })
+    .finally(() => requestedShipLayouts.delete(prefabId));
+}
+
 const DEFAULT_REMOTE_SHIP_RIG: NetworkShipRig = {
   gear01: 0,
   ramp01: 0,
@@ -41,6 +90,34 @@ const DEFAULT_REMOTE_SHIP_RIG: NetworkShipRig = {
 };
 
 const labelCanvasSize = { width: 256, height: 64 };
+
+/** Octahedron radius and label size in metres at the reference distance. */
+const MARKER_RADIUS_M = 0.7;
+const LABEL_WIDTH_M = 3.6;
+const LABEL_HEIGHT_M = 0.9;
+const LABEL_HEIGHT_OFFSET_M = 2.15;
+
+/**
+ * Distance at which a marker is drawn at its authored size. Past it the marker
+ * grows linearly, which is what holds its *apparent* size constant.
+ *
+ * Marker LOD is the band where the server has stopped sending a body at all, so
+ * this blip is the only thing standing in for a player. Authored at walking
+ * scale it is well under a pixel by the time the band actually fires — a ship
+ * kilometres overhead rendered as nothing, which reads exactly like presence
+ * being broken. `renderScale` cancels here: both the geometry and the position
+ * offset carry it, so the ratio that decides apparent size does not.
+ */
+const MARKER_REFERENCE_DISTANCE_M = 400;
+
+function markerGrowth(distanceMeters: number): number {
+  if (!Number.isFinite(distanceMeters)) return 1;
+  return Math.max(1, distanceMeters / MARKER_REFERENCE_DISTANCE_M);
+}
+
+function distanceMeters(from: Vec3, to: Vec3): number {
+  return Math.hypot(from.x - to.x, from.y - to.y, from.z - to.z);
+}
 
 function createLabelTexture(text: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -92,7 +169,16 @@ function ensureRemoteShip(
   prefabId: string,
   renderScale: number,
 ): ShipModelHandle {
-  if (remote.shipHandle && remote.shipPrefabId === prefabId) {
+  // The hull url is baked into the model at construction, so a layout that
+  // arrives later cannot be applied in place — the handle is rebuilt once, on
+  // the frame the bake lands.
+  requestRemoteShipLayout(prefabId);
+  const layoutReady = hasShipLayoutForPrefab(prefabId);
+  if (
+    remote.shipHandle
+    && remote.shipPrefabId === prefabId
+    && remote.shipLayoutReady === layoutReady
+  ) {
     return remote.shipHandle;
   }
   if (remote.shipHandle) {
@@ -104,6 +190,7 @@ function ensureRemoteShip(
   remote.root.add(handle.group);
   remote.shipHandle = handle;
   remote.shipPrefabId = prefabId;
+  remote.shipLayoutReady = layoutReady;
   return handle;
 }
 
@@ -122,7 +209,7 @@ function createRemoteObject(
   const avatar = createCharacterAvatarInstance(renderScale, appearance);
 
   const marker = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.7 * renderScale),
+    new THREE.OctahedronGeometry(MARKER_RADIUS_M * renderScale),
     new THREE.MeshBasicMaterial({
       color: 0xffce6f,
       transparent: true,
@@ -140,8 +227,8 @@ function createRemoteObject(
       depthTest: true,
     }),
   );
-  label.scale.set(3.6 * renderScale, 0.9 * renderScale, 1);
-  label.position.y = 2.15 * renderScale;
+  label.scale.set(LABEL_WIDTH_M * renderScale, LABEL_HEIGHT_M * renderScale, 1);
+  label.position.y = LABEL_HEIGHT_OFFSET_M * renderScale;
 
   root.add(avatar.root, marker, label);
   return {
@@ -150,6 +237,7 @@ function createRemoteObject(
     avatarAppearanceKey: appearanceKey(appearance),
     shipHandle: null,
     shipPrefabId: null,
+    shipLayoutReady: false,
     marker,
     label,
     labelTexture,
@@ -177,6 +265,7 @@ function disposeRemoteObject(object: RemoteObject): void {
     object.root.remove(object.shipHandle.group);
     object.shipHandle = null;
     object.shipPrefabId = null;
+    object.shipLayoutReady = false;
   }
   object.marker.geometry.dispose();
   if (Array.isArray(object.marker.material)) {
@@ -220,6 +309,23 @@ function setMarkerPose(
   );
 }
 
+/**
+ * Size the blip and its name so both stay readable however far out the contact
+ * is. Applied to the two objects rather than to `root`, which also carries the
+ * avatar and the hull — scaling those would inflate a peer's actual body the
+ * moment they crossed a band edge.
+ */
+function setMarkerScale(remote: RemoteObject, distance: number, renderScale: number): void {
+  const growth = markerGrowth(distance);
+  remote.marker.scale.setScalar(growth);
+  remote.label.scale.set(
+    LABEL_WIDTH_M * renderScale * growth,
+    LABEL_HEIGHT_M * renderScale * growth,
+    1,
+  );
+  remote.label.position.y = LABEL_HEIGHT_OFFSET_M * renderScale * growth;
+}
+
 export function createRemotePresenceRenderer(
   scene: THREE.Scene,
   renderScale: number,
@@ -256,7 +362,14 @@ export function createRemotePresenceRenderer(
     avatar.root.visible = avatarVisible;
     if (remote.shipHandle) remote.shipHandle.group.visible = shipVisible;
     remote.marker.visible = isMarker;
-    remote.label.visible = !isMarker;
+    // The name is what makes a blip a *player* rather than scenery, so it stays
+    // on at marker range — the one range where there is no body to recognise.
+    remote.label.visible = true;
+    setMarkerScale(
+      remote,
+      isMarker ? distanceMeters(entity.markerPosition, focusPosition) : 0,
+      renderScale,
+    );
 
     if (avatarVisible && entity.character) {
       avatar.setAnimation(entity.character.animation);

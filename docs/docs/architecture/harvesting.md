@@ -1,5 +1,5 @@
 ---
-sidebar_position: 23
+sidebar_position: 7
 title: Harvesting
 description: On-foot and ship resource extract — depleting nodes, yield rolls, materials into space crafting; cell-owned; never AC.
 ---

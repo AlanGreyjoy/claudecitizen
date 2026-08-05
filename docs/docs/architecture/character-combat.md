@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8.5
+sidebar_position: 1
 title: Character combat
 description: On-foot / TPS firearms — loadout, ADS, ballistics, ammo, melee and throwables; cell-owned hits; not ship combat.
 ---
@@ -110,7 +110,7 @@ see are under [Multiplayer](./multiplayer#character-presentation-loadout-animati
 Hotkeys **1 / 2 / 3** (and bar UI) select among armed slots; pressing the active
 slot may holster. Drawn weapon drives the active **animation stance
 controller** (rifle / handgun / rocket / throwable / melee — see
-[Character locomotion](./character-locomotion#animation-stance-controllers))
+[Character locomotion](./character-locomotion#animation-stance-controllers-unity-style-blend-no-root-motion))
 and the active firearm resolver. Holstered weapons still replicate as equipped
 mesh state when visible.
 

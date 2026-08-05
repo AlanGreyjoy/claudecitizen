@@ -154,7 +154,7 @@ impl Replicator {
                     baseline
                         || (changed(last_state, &state)
                             && self.tick.saturating_sub(*last_sent_tick)
-                                >= self.grid.send_interval(range))
+                                >= self.grid.send_interval(range, in_ship(&state)))
                 }
             };
             if !due {
@@ -234,7 +234,8 @@ impl Replicator {
                 if range > self.grid.interest {
                     continue;
                 }
-                let candidate = (detail(entity.clone(), self.grid.lod(range)), range);
+                let lod = self.grid.lod(range, in_ship(entity));
+                let candidate = (detail(entity.clone(), lod), range);
                 nearest
                     .entry(id.clone())
                     .and_modify(|held| {
@@ -281,6 +282,15 @@ impl Replicator {
                 .unwrap_or_default(),
         }
     }
+}
+
+/// Which set of LOD radii this entity is judged by.
+///
+/// Keyed off `mode` rather than `ship.is_some()` on purpose: `detail` clears the
+/// ship payload at marker range, so reading the payload would flip a distant
+/// ship back to character bands and pin it there.
+fn in_ship(entity: &ReplicatedEntity) -> bool {
+    entity.mode == "in-ship"
 }
 
 /// Strip what the viewer cannot resolve at this distance.

@@ -160,13 +160,10 @@ quantum) is documented in `docs/docs/architecture/ship-flight.md`. **Ship physic
 (vacuum inertia, residual coast, coupled assist):
 `docs/docs/architecture/ship-physics.md`. **Ship combat** (blasters, missiles,
 lock-on, lead markers, combat HUD, hierarchy death):
-`docs/docs/architecture/ship-combat.md`. **Character combat** (on-foot / TPS
-firearms, melee, throwables; cell hits):
-`docs/docs/architecture/character-combat.md`. Thin Cursor pointers:
+`docs/docs/architecture/ship-combat.md`. Thin Cursor pointers:
 `.cursor/rules/ship-flight-architecture.mdc`,
 `.cursor/rules/ship-physics-architecture.mdc`,
-`.cursor/rules/ship-combat-architecture.mdc`,
-`.cursor/rules/character-combat-architecture.mdc`.
+`.cursor/rules/ship-combat-architecture.mdc`.
 
 `Runtime` is a real field: `SceneDocument.runtime` in
 `src/world/scenes/schema.ts` (`open-space` / `station` / `hab` / `hangar` /
@@ -225,45 +222,16 @@ Server Console — migrations are schema + one-shot seeds only. Full law:
 `docs/docs/architecture/content-delivery.md`. Thin Cursor pointer:
 `.cursor/rules/content-delivery-architecture.mdc`.
 
-**Settings law:** if another AsteronEngine project can need a different value,
-it belongs in Project settings (`asteron.project.json`), Scene settings
-(**File → Scene Settings…**), GameSettings / catalog (Server Console), or
-project document content — not a hard-coded *only* path. **Defaults and
-seeds are fine and encouraged** (scaffold, schema defaults, one-shot
-migrations); authors/operators override afterward. Client localStorage prefs ≠
-`GameSettings`. Full law: `docs/docs/architecture/settings.md`. Thin Cursor
-pointer: `.cursor/rules/settings-architecture.mdc`.
-
 **Player vitals law:** character HP, hunger, thirst, planet temperature /
 breathable air, medicine toxicity, and HUD visibility. Full law:
 `docs/docs/architecture/player.md`. Thin Cursor pointer:
 `.cursor/rules/player-architecture.mdc`. Ship hull shields/HP stay separate
-(`docs/docs/architecture/ship-combat.md`). On-foot weapons:
-`docs/docs/architecture/character-combat.md`.
-
-**Character combat law:** TPS camera + firearm loop in walk modes; catalog
-weapons/ammo; ballistics; melee + throwables in scope; cell owns entity hits.
-Full law: `docs/docs/architecture/character-combat.md`. Thin Cursor pointer:
-`.cursor/rules/character-combat-architecture.mdc`.
-
-**Character locomotion law:** one shared walk policy (planet / station / deck);
-Unity-style per-family blend controllers (**no root motion**); idle mouse ≠
-body yaw; gaits, facing + upper-body aim, ADS suppress, ladders; outdoor *g*
-scales walk / run / jump / fall.
-Full law: `docs/docs/architecture/character-locomotion.md`. Thin Cursor pointer:
-`.cursor/rules/character-locomotion-architecture.mdc`.
+(`docs/docs/architecture/ship-combat.md`).
 
 **Home worlds law:** after Character Create, pick Asteron / Virelia / Korrath;
 binds system + body + starter Hab. Full law:
 `docs/docs/architecture/home-worlds.md`. Thin Cursor pointer:
 `.cursor/rules/home-worlds-architecture.mdc`.
-
-**Planets law:** one PlanetDocument owns body recipe (physics, terrain, sky,
-surface life-support); Star Map places it; Build Web ships it; active planet
-owns terrain / *g* stack; outdoor walk/run/jump/fall scale with planet *g*; sky ≠
-breathable. Full law:
-`docs/docs/architecture/planets.md`. Thin Cursor pointer:
-`.cursor/rules/planets-architecture.mdc`.
 
 **Player death law:** respawn to valid custom point, else home-world Hab;
 vitals reset on wake. Full law: `docs/docs/architecture/player-death.md`.
@@ -301,38 +269,6 @@ cell entities (peers see/help same fight); cell owns aggro/HP/loot/leash;
 ship Combat. Full law: `docs/docs/architecture/mobs.md`. Thin Cursor pointer:
 `.cursor/rules/mobs-architecture.mdc`.
 
-**Missions law:** contracts (MMO + station boards) — server-owned accept /
-progress / rewards; pay is **ARC** (+ items / rep), **never AC**; NPC offer
-verbs + mob kill credit + HaloBand log; defs in catalog, markers in editor.
-Full law: `docs/docs/architecture/missions.md`. Thin Cursor pointer:
-`.cursor/rules/missions-architecture.mdc`.
-
-**Loot tables law:** reusable catalog tables; server RNG; personal loot default;
-`lootTableId` refs from mobs/chests/missions; never AC from drops. Full law:
-`docs/docs/architecture/loot-tables.md`. Thin Cursor pointer:
-`.cursor/rules/loot-tables-architecture.mdc`.
-
-**Factions law:** NPC / world factions — joinable guilds, ranks, faction XP,
-skill lines, standing; aggro-sides for wildlife; **≠ player Orgs**. Full law:
-`docs/docs/architecture/factions.md`. Thin Cursor pointer:
-`.cursor/rules/factions-architecture.mdc`.
-
-**Organizations law:** player-created Orgs — roster, roles, invites; one Org
-per player (MVP); server-owned; orthogonal to NPC factions. Full law:
-`docs/docs/architecture/organizations.md`. Thin Cursor pointer:
-`.cursor/rules/organizations-architecture.mdc`.
-
-**Progression law:** soft character level + XP; catalog curve; no XP loss on
-death; soft content gates; XP ≠ ARC ≠ AC. Full law:
-`docs/docs/architecture/progression.md`. Thin Cursor pointer:
-`.cursor/rules/progression-architecture.mdc`.
-
-**Harvesting law:** on-foot tools + ship mining → one material pipeline; cell
-owns deplete/yield/craft grants; loot-table yields; never AC; mining ≠ combat
-guns; recipes at authored stations. Full law:
-`docs/docs/architecture/harvesting.md`. Thin Cursor pointer:
-`.cursor/rules/harvesting-architecture.mdc`.
-
 ## Prefab & Animation Architecture
 
 - **Prefabs** (`src/world/prefabs/`) are JSON trees of entities with transforms, GLB assets, and gameplay components. Data files are `*.prefab.json` filed in **any folder** under the project asset library (`<project>/assets/`) — `assets/Prefabs/` is the default landing spot. A prefab's identity is its document `id`, never its path, so moving the file breaks nothing; `editor-desktop/repository.mjs` scans the asset roots to map id to path.
@@ -343,7 +279,7 @@ guns; recipes at authored stations. Full law:
 
 ### Rifle ADS locomotion blending
 
-- `src/player/character-locomotion.ts` owns effective on-foot aim and facing for planet, station, and ship-deck walkers. Idle: mouse look orbits camera only — body holds last yaw. While effective ADS is active, root/legs square to camera-forward **and** the upper body tracks aim (upper overlay while moving); otherwise moving faces movement. Do not make equipped rifle/pistol stances camera-locked when RMB is not held. Stance controllers are Unity-style blends per combat family with **no root motion** — see `docs/docs/architecture/character-locomotion.md`.
+- `src/player/character-locomotion.ts` owns effective on-foot aim and facing for planet, station, and ship-deck walkers. While effective ADS is active, the whole character turns toward the camera-forward aim direction; otherwise it faces movement. Do not make equipped rifle/pistol stances camera-locked when RMB is not held.
 - `src/player/animation/resolve-locomotion.ts` owns the base/upper clip decision. Rifle ADS while idle uses full-body `idle_aiming`; rifle ADS while walking/running uses the current rifle gait as the lower-body base plus `idle_aiming` as the upper-body override.
 - Sprint takes precedence over ADS. Moving with the sprint gait suppresses the aim pose, camera-facing lock, and aim camera zoom until the character stops sprinting. Sprint always uses its normal full-body locomotion clip; the drawn-weapon crosshair remains available for hip fire.
 - `src/render/characters/sidekick/animation-runtime.ts` splits the clips at `spine_01`. Do not play full-body gait and ADS actions over the same spine/arm tracks, and do not turn ADS into a generic additive delta; both approaches double-drive the upper skeleton and distort the weapon pose.
@@ -453,8 +389,6 @@ writing is compat only — do not extend it.
 - **Dual-reticle:** aim pip + nose pip; aim-track PD → torque demand on the Rapier body. Hold **F** free-look; gaze + **LMB** for `cockpit-control`. **Alt+C** coupled ↔ decoupled.
 - **Contacts:** land / crash / ship–ship are Rapier outcomes; boarding triggers stay markers/sensors on that body.
 - **Combat weapons / lock / lead / combat HUD / destroy:** `docs/docs/architecture/ship-combat.md` (Combat mode only).
-- **On-foot / TPS firearms / melee / throwables:** `docs/docs/architecture/character-combat.md`.
-- **On-foot locomotion / gaits / ladders / *g* scale:** `docs/docs/architecture/character-locomotion.md`.
 - **Deck vs flight:** parked on-foot uses ship-local Rapier; flying uses the world flight body — never dual-drive pose.
 - **Main play / preview / spawn wiring:** `in-ship` mode, Ship tab Test, `shipPrefabOverride` chain — see architecture doc + ship-flight skill.
 - **Tuning:** `.cursor/skills/ship-flight/SKILL.md`, `.cursor/rules/ship-flight.mdc`.
@@ -844,6 +778,23 @@ AsteronEngine **Tools → Packages…** (managed under `~/.asteron/tools/`), or 
 `ASTERON_KTX`, or put `ktx` on PATH. **Tools → Transcode Project Textures…**
 runs the same script from the editor.
 
+**The codec is only half the lever.** Source packs ship textures authored for
+offline renders — Synty's `PolygonScifiWorlds_Texture_A_01_Normal_8k.png` is
+8192² (256 MB decoded, ~85 MB even as UASTC) and is embedded in hundreds of
+GLBs, most with no 4k twin to remap onto. `maxNormalSize` / `maxTextureSize`
+halve a texture until it fits.
+
+**Set the caps in `asteron.project.json` under `textures`, not on the command
+line.** They are part of the manifest signature, so changing one re-encodes the
+whole tree — and Tools → Transcode passes only `--project`, so a cap that lived
+only in a shell invocation is silently undone the first time anyone uses the
+menu. `--max-normal-size` / `--max-texture-size` override for a one-off.
+
+`--jobs <n>` (default `cores - 2`, capped at 16) parallelises over files — `ktx`
+at these settings is effectively single-threaded, so a serial run of a whole
+project is hours. Full byte budgets and diagrams:
+`docs/docs/architecture/texture-memory.md`.
+
 `scripts/derived-assets.mjs` is the single resolution rule, imported by both
 `editor-desktop/repository.mjs` (`resolveAssetReadPath`, used by every editor
 asset request) and `vite.config.ts` (`preferDerivedAsset`, used by the release
@@ -885,10 +836,13 @@ reload while a missed decrement would pin gigabytes.
   `{ pin: true }` / `{ pinModels: true }` — editor viewport, material panels,
   equipment preview. Without the pin, a sweep triggered by Play tears down
   geometry their own WebGL context is still rendering.
-- `src/render/assets/texture-upload.ts` closes decoded ImageBitmaps after upload,
-  and is **disabled under `AUTHORING_ENABLED`**: the editor runs several WebGL
-  contexts over the same templates, and a bitmap closed after uploading to one
-  can never reach the others.
+- `src/render/assets/texture-upload.ts` *would* close decoded ImageBitmaps after
+  upload, but `RELEASE_DECODED_TEXTURE_SOURCES` is **`false` engine-wide** — not
+  merely gated under `AUTHORING_ENABLED`. Re-enabling it as-is black-screens
+  WebGPU (`Textures.updateTexture` re-reads `image.complete` on a nulled
+  source). **So every uncompressed texture currently costs its decoded size
+  twice, CPU and GPU** — which is why transcoding matters more than the flag.
+  Analysis and the re-enable checklist: `docs/docs/tech-debt/texture-source-release.md`.
 
 The HUD stats panel reports `GPU`, `Tex Mem`, and `Assets` rows. If `GPU tex`
 jumps after a transcode, texture names were lost.
@@ -999,7 +953,6 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `scripts/inspect_glb.mjs` | CLI GLB node hierarchy dump |
 | `.cursor/skills/ship-flight/SKILL.md` | Flight tuning skill (mass/thrust/flight computer symptoms) |
 | `.cursor/skills/prefab-editor/SKILL.md` | Prefab editor skill |
-| `.cursor/skills/architecture-diagram/SKILL.md` | Architecture docs as law: consume, cross-doc deps, author/update |
 | `docs/docs/architecture/scene-flow.md` | Boot / Game Manager: Title → Create → Home World → Hab; one precedence rule |
 | `.cursor/rules/scene-flow-architecture.mdc` | Thin always-on pointer to the scene-flow architecture doc |
 | `docs/docs/architecture/game-loop.md` | Player game loop: Hab → Station → AVMS → Hangar → Open Space |
@@ -1010,22 +963,14 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/space-traversal-architecture.mdc` | Thin always-on pointer to the space-traversal architecture doc |
 | `docs/docs/architecture/star-map.md` | Star System ↔ Star Map; ecliptic catalog; Warp Gates between systems |
 | `.cursor/rules/star-map-architecture.mdc` | Thin always-on pointer to the Star Map architecture doc |
-| `docs/docs/architecture/planets.md` | PlanetDocument recipe; active planet; surface env; Build Web |
-| `.cursor/rules/planets-architecture.mdc` | Thin always-on pointer to the planets architecture doc |
 | `docs/docs/architecture/ship-flight.md` | Rapier flight + flight computer: Traverse / Combat / Nav, boost, quantum, contacts |
 | `.cursor/rules/ship-flight-architecture.mdc` | Thin always-on pointer to the ship-flight architecture doc |
 | `docs/docs/architecture/ship-physics.md` | Vacuum inertia, residual coast, coupled assist, atmosphere drag |
 | `.cursor/rules/ship-physics-architecture.mdc` | Thin always-on pointer to the ship-physics architecture doc |
 | `docs/docs/architecture/ship-combat.md` | Blasters / missiles, lock-on, lead markers, combat HUD, shields→hull, hierarchy death |
 | `.cursor/rules/ship-combat-architecture.mdc` | Thin always-on pointer to the ship-combat architecture doc |
-| `docs/docs/architecture/character-combat.md` | On-foot / TPS firearms, melee, throwables; cell-owned hits |
-| `.cursor/rules/character-combat-architecture.mdc` | Thin always-on pointer to the character-combat architecture doc |
-| `docs/docs/architecture/character-locomotion.md` | Shared walk policy: gaits, facing, jump, ladders, planet *g* |
-| `.cursor/rules/character-locomotion-architecture.mdc` | Thin always-on pointer to the character-locomotion architecture doc |
 | `docs/docs/architecture/content-delivery.md` | Build Web vs Postgres catalog vs one-shot migrations |
 | `.cursor/rules/content-delivery-architecture.mdc` | Thin always-on pointer to the content-delivery architecture doc |
-| `docs/docs/architecture/settings.md` | Project / Scene / GameSettings vs catalog seeds |
-| `.cursor/rules/settings-architecture.mdc` | Thin always-on pointer to the settings architecture doc |
 | `docs/docs/architecture/player.md` | Character HP, hunger, thirst, temp/air, medicine toxicity, HUD |
 | `.cursor/rules/player-architecture.mdc` | Thin always-on pointer to the player architecture doc |
 | `docs/docs/architecture/home-worlds.md` | Home world select; Asteron / Virelia / Korrath; starter Hab bind |
@@ -1042,18 +987,6 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `.cursor/rules/npc-architecture.mdc` | Thin always-on pointer to the NPC architecture doc |
 | `docs/docs/architecture/mobs.md` | PVE mobs: monsters/animals; cell combat; not NPCs |
 | `.cursor/rules/mobs-architecture.mdc` | Thin always-on pointer to the mob architecture doc |
-| `docs/docs/architecture/missions.md` | Contracts: types, ARC pay, objectives; server state; HaloBand presents |
-| `.cursor/rules/missions-architecture.mdc` | Thin always-on pointer to the missions architecture doc |
-| `docs/docs/architecture/loot-tables.md` | Server loot rolls; personal claim; catalog tables |
-| `.cursor/rules/loot-tables-architecture.mdc` | Thin always-on pointer to the loot-tables architecture doc |
-| `docs/docs/architecture/factions.md` | NPC factions: joinable guilds, ranks, skill lines; not player Orgs |
-| `.cursor/rules/factions-architecture.mdc` | Thin always-on pointer to the factions architecture doc |
-| `docs/docs/architecture/organizations.md` | Player Orgs: roster, roles, invites; ≠ NPC factions |
-| `.cursor/rules/organizations-architecture.mdc` | Thin always-on pointer to the organizations architecture doc |
-| `docs/docs/architecture/progression.md` | Soft level + XP curve; mission/mob grants; no death XP loss |
-| `.cursor/rules/progression-architecture.mdc` | Thin always-on pointer to the progression architecture doc |
-| `docs/docs/architecture/harvesting.md` | On-foot + ship harvest; yields → craft recipes; cell-owned |
-| `.cursor/rules/harvesting-architecture.mdc` | Thin always-on pointer to the harvesting architecture doc |
 
 ## Utility scripts
 
@@ -1065,7 +998,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 | `scripts/validate_terrain_system.ts` | Validate terrain LOD, seams, mesh/foot fidelity, and routed hydrology |
 | `scripts/spike-demo.ts` | Headless scripted takeoff/orbit/landing (`npm run demo`) |
 | `scripts/bake_ship_textures.py` | Fix Unity trim-sheet materials for Three.js PBR |
-| `scripts/transcode_project_textures.mjs` | Write KTX2 twins to `<project>/.asteron/derived/` (`npm run transcode:textures -- --project <dir>`, or Tools → Transcode Project Textures…). Needs `ktx` via Tools → Packages, `ASTERON_KTX`, or PATH. Run after the bake scripts |
+| `scripts/transcode_project_textures.mjs` | Write KTX2 twins to `<project>/.asteron/derived/` (`npm run transcode:textures -- --project <dir>`, or Tools → Transcode Project Textures…). Needs `ktx` via Tools → Packages, `ASTERON_KTX`, or PATH. Run after the bake scripts. Size caps come from `asteron.project.json` → `textures` (flags override); `--jobs` parallelises over files |
 | `scripts/resolve_ktx.mjs` | Resolve managed / env / PATH `ktx` binary |
 | `editor-desktop/engine_tools.mjs` | Tools → Packages: download/install KTX-Software under `~/.asteron/tools/` |
 | `scripts/derived-assets.mjs` | Shared source-vs-derived resolution rule; imported by `vite.config.ts` and `editor-desktop/repository.mjs` |
@@ -1074,7 +1007,7 @@ The renderer's `bindAnimationComponent` (`prefab-renderer.ts`) searches `targetO
 ## Other conventions
 
 - `.cursor/rules/agent-conventions.mdc` exists and defers to this file as the primary source — update both if changing architecture boundaries.
-- Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/`, `.cursor/skills/architecture-diagram/` — read when editing those domains (architecture docs = law; code may lag).
+- Project skills: `.cursor/skills/prefab-editor/`, `.cursor/skills/ship-flight/` — read when editing those domains.
 - Export **factories + pure functions** from domain modules (not classes). Three.js objects never appear in `world/` or `flight/`.
 - Prefab JSON lives in the project asset library as `<folder>/<id>.prefab.json` and is committed (metadata only) — `.gitignore` re-includes `*.prefab.json` under the otherwise-ignored `/assets/` tree. The game bundles them via a recursive `import.meta.glob`.
 - **Filenames:** `*.ts` is kebab-case, `*.tsx` is PascalCase (except Vite's `main.tsx`) — enforced by `eslint-plugin-check-file`. Directories were not migrated and several remain snake_case (`src/render/planet_tiles/`, `src/world/surface_spawns/`, `src/app/ship_sandbox/`, `src/render/effects/lake_water/`), as do `scripts/` files, which are exempt.

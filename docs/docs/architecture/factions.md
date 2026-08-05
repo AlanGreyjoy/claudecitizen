@@ -1,5 +1,5 @@
 ---
-sidebar_position: 20
+sidebar_position: 4
 title: Factions
 description: Joinable NPC factions — ranks, skill lines, standing; catalog-owned; not player Orgs.
 ---

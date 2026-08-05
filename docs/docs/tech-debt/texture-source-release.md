@@ -11,7 +11,7 @@ description: WebGPU-unsafe ImageBitmap release after upload — currently forced
 | Status | **Parked** — release path forced off |
 | Severity | Correctness blocker if re-enabled as-is; memory cost while off |
 | Code | `src/render/assets/texture-upload.ts` |
-| Related | `src/cache/asset-residency.ts`, `src/render/assets/texture-dedup.ts`, `src/app/play-session.ts` |
+| Related | `src/cache/asset-residency.ts`, `src/render/assets/texture-dedup.ts`, `src/app/play-session.ts`, [Texture memory](../architecture/texture-memory) |
 | Found | 2026-08-03 (prod black hab / blackmarket after WebGPU post work) |
 | When done | Move a short write-up into [Resolved](./resolved.md) and remove this page |
 

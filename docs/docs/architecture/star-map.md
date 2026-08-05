@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 26
 title: Star Map and Star System
 description: One Star System owns one Star Map; catalog includes stations, planets, moons, waypoints, POIs (prefab on arrival), missions, Warp Gates.
 ---

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9.5
+sidebar_position: 21
 title: Settings
 description: Project / Scene / GameSettings — configurable surfaces required; defaults and one-shot seeds encouraged.
 ---

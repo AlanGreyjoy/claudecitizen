@@ -1,5 +1,5 @@
 ---
-sidebar_position: 15
+sidebar_position: 27
 title: Stripe
 description: In-game Payment Element, saved cards, default payment method, pack purchase, and purchase history — no React; webhook-only AC grants.
 ---

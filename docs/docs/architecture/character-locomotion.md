@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8.4
+sidebar_position: 2
 title: Character locomotion
 description: On-foot / TPS walk — gaits, facing, jump, crouch, ladders, planet *g* scale; shared policy across planet / station / deck.
 ---

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 21
+sidebar_position: 19
 title: Progression
 description: Soft character level + XP curve — mission/mob grants; catalog-tuned; gates content lightly; not gear-score DPS walls.
 ---
@@ -106,29 +106,29 @@ do not make leveling a money printer.
 
 XP **required to advance from level L to L+1**:
 
-\[
+$$
 \Delta(L) = \mathrm{round}\bigl(A \cdot L^{B} + C\bigr)
-\]
+$$
 
 Suggested defaults (Console-tunable; not magic sacred numbers):
 
 | Param | Default | Role |
 | --- | --- | --- |
-| \(A\) | `100` | Scale |
-| \(B\) | `1.85` | Super-linear growth (classic MMO feel) |
-| \(C\) | `50` | Floor so early levels are not free |
+| $A$ | `100` | Scale |
+| $B$ | `1.85` | Super-linear growth (classic MMO feel) |
+| $C$ | `50` | Floor so early levels are not free |
 
-**Cumulative XP** to *be* level \(L\) (L ≥ 1):
+**Cumulative XP** to *be* level $L$ (L ≥ 1):
 
-\[
+$$
 \mathrm{totalXp}(L) = \sum_{k=1}^{L-1} \Delta(k)
-\]
+$$
 
-with \(\mathrm{totalXp}(1) = 0\).
+with $\mathrm{totalXp}(1) = 0$.
 
 Store either:
 
-1. **Params** \(A,B,C\) + `maxLevel` in `ProgressionCurve` / GameSettings, and
+1. **Params** $A,B,C$ + `maxLevel` in `ProgressionCurve` / GameSettings, and
    compute on grant, or
 2. An authored **array** `xpToNext[1..maxLevel-1]` for full hand-tune.
 
@@ -162,15 +162,15 @@ authored recipe says so.
 
 ### Kill XP and level gap
 
-Let \(L_p\) = player level, \(L_m\) = mob level (from MobDef).
+Let $L_p$ = player level, $L_m$ = mob level (from MobDef).
 
-Base \(X_0 =\) mob `xpReward`.
+Base $X_0 =$ mob `xpReward`.
 
-\[
+$$
 X = X_0 \cdot m(\Delta), \quad \Delta = L_m - L_p
-\]
+$$
 
-| \(\Delta\) | Multiplier \(m\) (suggested) |
+| $\Delta$ | Multiplier $m$ (suggested) |
 | --- | --- |
 | ≤ −5 | `0` (grey — no XP) |
 | −4 .. −1 | `0.25 … 0.8` (lerp) |
@@ -224,7 +224,7 @@ communicate risk. Hard blocks only when the def sets `enforceMinLevel`.
 | Piece | Baseline | Law |
 | --- | --- | --- |
 | Level / XP | Absent | Soft level + cumulative XP |
-| Curve | — | Parametric \(\Delta(L) = A L^{B} + C\) |
+| Curve | — | Parametric $\Delta(L) = A L^{B} + C$ |
 | Death | Vitals reset | No XP loss |
 | Combat power | Gear / aim | Soft gates; mild or no per-level DPS |
 

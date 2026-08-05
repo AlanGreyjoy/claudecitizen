@@ -1,5 +1,5 @@
 ---
-sidebar_position: 14
+sidebar_position: 9
 title: Item Mall
 description: AsteronCredits, Stripe packs, MallListing storefront — two currencies, one ledger chokepoint, webhook-only money grants.
 ---

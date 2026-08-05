@@ -5,12 +5,27 @@ import {
 } from '../../flight/quantum-travel';
 import type { Vec3 } from '../../types';
 
-const HYPERSPACE_RADIUS_METERS = 42;
-const HYPERSPACE_LENGTH_METERS = 520;
-const HYPERSPACE_FLOW_TEXTURE_URL =
-  '/assets/protected/hyperspace/Hyperspace_Texture2.png';
-const HYPERSPACE_OPACITY_TEXTURE_URL =
-  '/assets/protected/hyperspace/Hyperspace_Texture4.png';
+/**
+ * The quantum bubble is also the frame budget's best friend: during a jump the
+ * renderer draws *only* this and the hull (`renderQuantumIsolation`), so the
+ * whole planet stack — terrain, vegetation, water, clouds, post — is culled.
+ * Everything here must stay cheap enough to keep that promise: two open
+ * cylinders, one procedural node material, no textures, no extra passes.
+ */
+/**
+ * Both barrels must contain the camera, or the pilot watches the tunnel from
+ * outside instead of flying down it. The external ship camera pulls back
+ * `(58 + 180) * zoom` metres and up `(9 + 136) * zoom` at space altitude
+ * (`camera-rig-modes.ts`), and ship zoom clamps at 2.2 — about 610 m from the
+ * hull worst case. The old 42 m capsule was inside that, which is the other
+ * half of why the effect never read as a tunnel.
+ */
+const HYPERSPACE_RADIUS_METERS = 900;
+const HYPERSPACE_LENGTH_METERS = 5_200;
+/** Inner barrel, counter-rotating, for parallax against the outer one. */
+const HYPERSPACE_CORE_RADIUS_SCALE = 0.8;
+const HYPERSPACE_CORE_LENGTH_SCALE = 0.8;
+const HYPERSPACE_RADIAL_SEGMENTS = 48;
 const MARKER_POOL_SIZE = 12;
 /** Keep roughly constant angular size (~1.2°); clamps prevent huge/tiny extremes. */
 const MARKER_ANGULAR_SCALE = 0.021;
@@ -18,95 +33,6 @@ const MARKER_MIN_METERS = 120;
 const MARKER_MAX_METERS = 25_000;
 /** Lift markers above the pad so they read against terrain from orbit. */
 const MARKER_ALTITUDE_BOOST_METERS = 400;
-
-const hyperspaceVertexShader = `
-  varying vec2 vUv;
-
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-const hyperspaceFragmentShader = `
-  uniform float uIntensity;
-  uniform float uTime;
-  uniform sampler2D uFlowTexture;
-  uniform sampler2D uOpacityTexture;
-  varying vec2 vUv;
-
-  const float TAU = 6.28318530718;
-
-  void main() {
-    float angle = vUv.x * TAU;
-    float axis = vUv.y;
-    vec2 flowUv = vec2(
-      fract(vUv.x * 2.0 + uTime * 0.025),
-      fract(axis * 3.0 - uTime * 0.42)
-    );
-    vec2 opacityUv = vec2(
-      fract(vUv.x * 1.5 - uTime * 0.018),
-      fract(axis * 2.0 - uTime * 0.18)
-    );
-    float flowTexture = texture2D(uFlowTexture, flowUv).r;
-    float opacityTexture = texture2D(uOpacityTexture, opacityUv).r;
-    float axialPulse = 0.5 + 0.5 * sin(
-      axis * 56.0 - uTime * 8.0 + angle * 2.0 + (flowTexture - 0.5) * 3.0
-    );
-    float spiral = 0.5 + 0.5 * sin(
-      angle * 5.0 + axis * 14.0 - uTime * 2.5
-    );
-    float streak = smoothstep(
-      0.46,
-      0.84,
-      mix(flowTexture, opacityTexture, 0.42)
-    );
-    float lightning = smoothstep(
-      0.68,
-      0.96,
-      abs(flowTexture - opacityTexture) * 1.3 + axialPulse * 0.34
-    );
-    float ribbon = smoothstep(0.58, 0.92, streak * 0.72 + spiral * 0.34);
-
-    vec3 violet = vec3(0.58, 0.08, 0.42);
-    vec3 blue = vec3(0.05, 0.42, 0.95);
-    vec3 cyan = vec3(0.32, 0.88, 1.0);
-    vec3 plasma = mix(violet, blue, smoothstep(0.12, 0.78, axis));
-    plasma = mix(plasma, cyan, streak * 0.52 + lightning * 0.38);
-
-    float energy =
-      0.2 +
-      streak * 0.58 +
-      lightning * 0.72 +
-      ribbon * 0.22;
-    vec3 color = vec3(0.003, 0.009, 0.035) + plasma * energy;
-    float alpha = clamp(
-      (0.82 + streak * 0.1 + lightning * 0.05) * uIntensity,
-      0.0,
-      0.98
-    );
-    gl_FragColor = vec4(color * uIntensity, alpha);
-  }
-`;
-
-function createFallbackHyperspaceTexture(value: number): THREE.DataTexture {
-  const texture = new THREE.DataTexture(
-    new Uint8Array([value, value, value, 255]),
-    1,
-    1,
-    THREE.RGBAFormat,
-  );
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function configureHyperspaceTexture(texture: THREE.Texture): void {
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.colorSpace = THREE.NoColorSpace;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-}
 
 export interface QuantumNavMarker {
   id: string;
@@ -133,61 +59,24 @@ export interface QuantumBubbleHandle {
 
 export interface HyperspaceMaterialHandle {
   material: THREE.Material;
-  setFlowTexture: (texture: THREE.Texture) => void;
   setIntensity: (intensity: number) => void;
-  setOpacityTexture: (texture: THREE.Texture) => void;
   setTime: (timeSeconds: number) => void;
+  /** 0 = spool-up drift, 1 = full travel rush. Drives streak speed and stretch. */
+  setWarp: (warp01: number) => void;
+  /** Entry / exit blow-out, 0..1. Washes the tunnel to white. */
+  setFlash: (flash01: number) => void;
   dispose: () => void;
 }
 
-export type HyperspaceMaterialFactory = (
-  flowTexture: THREE.Texture,
-  opacityTexture: THREE.Texture,
-) => HyperspaceMaterialHandle;
+export type HyperspaceMaterialFactory = () => HyperspaceMaterialHandle;
 
 export interface QuantumBubbleOptions {
-  /** WebGPU runtime injects the TSL hyperspace material during the renderer flip. */
-  hyperspaceMaterialFactory?: HyperspaceMaterialFactory;
-}
-
-function createWebGlHyperspaceMaterial(
-  flowTexture: THREE.Texture,
-  opacityTexture: THREE.Texture,
-): HyperspaceMaterialHandle {
-  const uniforms = {
-    uIntensity: new THREE.Uniform(0),
-    uTime: new THREE.Uniform(0),
-    uFlowTexture: new THREE.Uniform(flowTexture),
-    uOpacityTexture: new THREE.Uniform(opacityTexture),
-  };
-  const material = new THREE.ShaderMaterial({
-    uniforms,
-    vertexShader: hyperspaceVertexShader,
-    fragmentShader: hyperspaceFragmentShader,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-    side: THREE.BackSide,
-    toneMapped: false,
-  });
-  return {
-    material,
-    setFlowTexture(texture) {
-      uniforms.uFlowTexture.value = texture;
-    },
-    setIntensity(intensity) {
-      uniforms.uIntensity.value = intensity;
-    },
-    setOpacityTexture(texture) {
-      uniforms.uOpacityTexture.value = texture;
-    },
-    setTime(timeSeconds) {
-      uniforms.uTime.value = timeSeconds;
-    },
-    dispose() {
-      material.dispose();
-    },
-  };
+  /**
+   * Required. `WebGPURenderer` only consumes node materials — there is no
+   * WebGL path in this engine (`src/render/webgpu-required.ts`), and a raw
+   * `ShaderMaterial` here would silently draw as a blank node material.
+   */
+  hyperspaceMaterialFactory: HyperspaceMaterialFactory;
 }
 
 function makeLabelSprite(text: string): THREE.Sprite {
@@ -271,15 +160,35 @@ function isQuantumBubbleActive(phase: QuantumTravelState['phase']): boolean {
   return phase === 'spooling' || phase === 'traveling' || phase === 'dropOut';
 }
 
+function spoolProgress(quantum: QuantumTravelState): number {
+  return Math.min(1, quantum.spoolElapsed / Math.max(quantum.spoolDuration, 0.001));
+}
+
+function dropOutProgress(quantum: QuantumTravelState): number {
+  return Math.min(1, quantum.dropOutElapsed / QUANTUM_DROP_OUT_SECONDS);
+}
+
 function quantumBubbleIntensity(quantum: QuantumTravelState): number {
-  const spoolT = Math.min(
-    1,
-    quantum.spoolElapsed / Math.max(quantum.spoolDuration, 0.001),
-  );
-  const dropT = Math.min(1, quantum.dropOutElapsed / QUANTUM_DROP_OUT_SECONDS);
-  if (quantum.phase === 'spooling') return Math.max(0, (spoolT - 0.55) / 0.45);
+  const dropT = dropOutProgress(quantum);
+  if (quantum.phase === 'spooling') {
+    return Math.max(0, (spoolProgress(quantum) - 0.55) / 0.45);
+  }
   if (quantum.phase === 'dropOut') return 1 - dropT * dropT * (3 - 2 * dropT);
   return 1;
+}
+
+/**
+ * How hard the streaks are being pulled: a slow swirl while the drive spools,
+ * full stretch in the tunnel, relaxing again as it collapses.
+ */
+function quantumBubbleWarp(quantum: QuantumTravelState): number {
+  if (quantum.phase === 'spooling') return spoolProgress(quantum) * 0.4;
+  if (quantum.phase === 'dropOut') return 1 - dropOutProgress(quantum);
+  return 1;
+}
+
+function quantumBubbleFlash(quantum: QuantumTravelState): number {
+  return Math.min(1, Math.max(quantum.entryFlash, quantum.exitFlash));
 }
 
 function boostedMarkerPosition(marker: Vec3): Vec3 {
@@ -292,94 +201,79 @@ function boostedMarkerPosition(marker: Vec3): Vec3 {
   };
 }
 
+interface HyperspaceShell {
+  root: THREE.Group;
+  outerSpin: THREE.Group;
+  innerSpin: THREE.Group;
+  geometries: THREE.BufferGeometry[];
+}
+
+/**
+ * Two open-ended barrels around the hull, sharing one material.
+ *
+ * Open-ended (not a capsule) because the pilot is *inside* it: capped ends
+ * meant the shader's forward convergence was drawn on a dome right in front of
+ * the camera instead of receding down a tunnel. The inner barrel is shorter,
+ * narrower and counter-rotates, which is what gives the streaks depth — two
+ * draw calls buy the parallax a single shell cannot fake.
+ *
+ * Local +Y is mapped to −Z so the shader's `uv.y = 1` end sits *ahead* of the
+ * ship, where the throat glow belongs.
+ */
+function createHyperspaceShell(
+  material: THREE.Material,
+  renderScale: number,
+): HyperspaceShell {
+  const root = new THREE.Group();
+  const geometries: THREE.BufferGeometry[] = [];
+
+  const buildBarrel = (
+    name: string,
+    radiusScale: number,
+    lengthScale: number,
+  ): THREE.Group => {
+    const geometry = new THREE.CylinderGeometry(
+      HYPERSPACE_RADIUS_METERS * radiusScale * renderScale,
+      HYPERSPACE_RADIUS_METERS * radiusScale * renderScale,
+      HYPERSPACE_LENGTH_METERS * lengthScale * renderScale,
+      HYPERSPACE_RADIAL_SEGMENTS,
+      1,
+      true,
+    );
+    geometries.push(geometry);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = name;
+    mesh.rotation.x = -Math.PI * 0.5;
+    mesh.renderOrder = 8;
+    mesh.frustumCulled = false;
+    const spin = new THREE.Group();
+    spin.add(mesh);
+    root.add(spin);
+    return spin;
+  };
+
+  const outerSpin = buildBarrel('quantum-hyperspace-barrel', 1, 1);
+  const innerSpin = buildBarrel(
+    'quantum-hyperspace-core',
+    HYPERSPACE_CORE_RADIUS_SCALE,
+    HYPERSPACE_CORE_LENGTH_SCALE,
+  );
+  return { root, outerSpin, innerSpin, geometries };
+}
+
 export function createQuantumBubble(
   scene: THREE.Scene,
   renderScale: number,
-  options: QuantumBubbleOptions = {},
+  options: QuantumBubbleOptions,
 ): QuantumBubbleHandle {
   const root = new THREE.Group();
   root.name = 'quantum-bubble-root';
   root.frustumCulled = false;
 
-  // The Unity reference is a single animated capsule. Rebuild its geometry
-  // procedurally so travel remains one lightweight draw call. When the local
-  // protected asset pack exists, its original flow maps add surface detail.
-  const fallbackFlowTexture = createFallbackHyperspaceTexture(128);
-  const fallbackOpacityTexture = createFallbackHyperspaceTexture(150);
-  const hyperspaceVisual = (
-    options.hyperspaceMaterialFactory ?? createWebGlHyperspaceMaterial
-  )(fallbackFlowTexture, fallbackOpacityTexture);
-  const hyperspaceGeometry = new THREE.CapsuleGeometry(
-    HYPERSPACE_RADIUS_METERS * renderScale,
-    HYPERSPACE_LENGTH_METERS * renderScale,
-    5,
-    16,
-  );
-  const shellSpin = new THREE.Group();
-  const hyperspaceShell = new THREE.Mesh(
-    hyperspaceGeometry,
-    hyperspaceVisual.material,
-  );
-  hyperspaceShell.name = 'quantum-hyperspace-capsule';
-  hyperspaceShell.rotation.x = Math.PI * 0.5;
-  hyperspaceShell.renderOrder = 8;
-  hyperspaceShell.frustumCulled = false;
-  shellSpin.add(hyperspaceShell);
-  root.add(shellSpin);
+  const hyperspaceVisual = options.hyperspaceMaterialFactory();
+  const shell = createHyperspaceShell(hyperspaceVisual.material, renderScale);
+  root.add(shell.root);
   root.visible = false;
-
-  let disposed = false;
-  const ownedHyperspaceTextures = new Set<THREE.Texture>([
-    fallbackFlowTexture,
-    fallbackOpacityTexture,
-  ]);
-  let flowTexture: THREE.Texture = fallbackFlowTexture;
-  let opacityTexture: THREE.Texture = fallbackOpacityTexture;
-  const textureLoader = new THREE.TextureLoader();
-  const loadTexture = (
-    url: string,
-    getCurrent: () => THREE.Texture,
-    apply: (texture: THREE.Texture) => void,
-  ): void => {
-    textureLoader.load(
-      url,
-      (texture) => {
-        if (disposed) {
-          texture.dispose();
-          return;
-        }
-        configureHyperspaceTexture(texture);
-        const previous = getCurrent();
-        apply(texture);
-        ownedHyperspaceTextures.delete(previous);
-        previous.dispose();
-        ownedHyperspaceTextures.add(texture);
-      },
-      undefined,
-      () => {
-        // Protected assets are intentionally absent from public builds. The
-        // one-pixel procedural fallback keeps the same shader path working.
-      },
-    );
-  };
-  if (import.meta.env.DEV) {
-    loadTexture(
-      HYPERSPACE_FLOW_TEXTURE_URL,
-      () => flowTexture,
-      (texture) => {
-        flowTexture = texture;
-        hyperspaceVisual.setFlowTexture(texture);
-      },
-    );
-    loadTexture(
-      HYPERSPACE_OPACITY_TEXTURE_URL,
-      () => opacityTexture,
-      (texture) => {
-        opacityTexture = texture;
-        hyperspaceVisual.setOpacityTexture(texture);
-      },
-    );
-  }
 
   const markerSlots: MarkerSlot[] = [];
   // Unit octahedron; scaled each frame in world meters → render units.
@@ -414,16 +308,24 @@ export function createQuantumBubble(
     timeSeconds: number,
   ): void {
     const intensity = quantumBubbleIntensity(quantum);
+    const warp = quantumBubbleWarp(quantum);
     const pulse = 1 + Math.sin(timeSeconds * 7) * 0.012 * intensity;
     root.scale.setScalar(pulse);
-    shellSpin.rotation.z = timeSeconds * 0.16;
-    const dropT = Math.min(1, quantum.dropOutElapsed / QUANTUM_DROP_OUT_SECONDS);
-    shellSpin.position.z =
+    // Counter-rotation, and both spin harder the deeper into the jump you are.
+    shell.outerSpin.rotation.z = timeSeconds * (0.1 + warp * 0.22);
+    shell.innerSpin.rotation.z = timeSeconds * -(0.16 + warp * 0.4);
+    const dropT = dropOutProgress(quantum);
+    // Collapse: the barrel tears off forward as the drive lets go.
+    const collapse =
       quantum.phase === 'dropOut'
         ? -dropT * HYPERSPACE_LENGTH_METERS * 0.62 * renderScale
         : 0;
+    shell.outerSpin.position.z = collapse;
+    shell.innerSpin.position.z = collapse * 1.35;
     hyperspaceVisual.setTime(timeSeconds);
     hyperspaceVisual.setIntensity(intensity);
+    hyperspaceVisual.setWarp(warp);
+    hyperspaceVisual.setFlash(quantumBubbleFlash(quantum));
   }
 
   function updateMarkerSlot(
@@ -516,7 +418,6 @@ export function createQuantumBubble(
       }
     },
     dispose() {
-      disposed = true;
       for (const slot of markerSlots) {
         scene.remove(slot.root);
         disposeLabel(slot.label);
@@ -524,10 +425,8 @@ export function createQuantumBubble(
       }
       diamondGeometry.dispose();
       root.removeFromParent();
-      hyperspaceGeometry.dispose();
+      for (const geometry of shell.geometries) geometry.dispose();
       hyperspaceVisual.dispose();
-      for (const texture of ownedHyperspaceTextures) texture.dispose();
-      ownedHyperspaceTextures.clear();
     },
   };
 }

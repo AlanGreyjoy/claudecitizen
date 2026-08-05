@@ -1,5 +1,5 @@
 ---
-sidebar_position: 19
+sidebar_position: 10
 title: Loot tables
 description: Server-side weighted drop tables — mobs, chests, missions; personal claim; catalog-owned; never client RNG truth.
 ---

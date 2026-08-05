@@ -1,5 +1,5 @@
 ---
-sidebar_position: 13
+sidebar_position: 6
 title: HaloBand
 description: Personal wearable device UI — Home, Comms, Missions, Map, Inventory, Mall, Ship — one shell, no authority.
 ---

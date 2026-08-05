@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 25
 title: Space traversal
 description: Open Space is the active star system at 1:1 System Map scale; stations are scene documents with Runtime = station (giant prefabs).
 ---

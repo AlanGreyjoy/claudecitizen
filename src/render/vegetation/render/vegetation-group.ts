@@ -1,7 +1,15 @@
 import * as THREE from 'three';
 import type { Vec3 } from '../../../types';
-import { getGrassDistanceMeters } from '../domain/constants';
+import {
+  getGrassDistanceMeters,
+  GRASS_RADIUS_UPDATE_MIN_MOVE_METERS,
+} from '../domain/constants';
 import type { StoredVegetationInstance, StoredVegetationTile } from '../domain/storage';
+import {
+  buildGrassSpatialIndex,
+  collectGrassCandidateRanges,
+  type GrassSpatialIndex,
+} from './grass-spatial-index';
 import type { InstancedAsset } from './instanced-assets';
 import type { InstancedWindMaterialFactory } from './wind';
 import {
@@ -211,6 +219,12 @@ interface GrassRadiusState {
   assets: InstancedAsset[];
   /** Packed tile-local matrices. Mesh buffers are allocated only for the near field. */
   matricesByVariant: Float32Array[];
+  /**
+   * Uniform grid over each variant's matrices, built once at tile build.
+   * Null for an empty variant. The repack visits only the cells the pack radius
+   * touches instead of scanning every blade in the tile twice.
+   */
+  indexByVariant: (GrassSpatialIndex | null)[];
   /** Per variant: InstancedMesh parts (usually one mesh each). */
   meshesByVariant: THREE.InstancedMesh[][];
   tempMatrix: THREE.Matrix4;
@@ -282,8 +296,66 @@ function initGrassMeshes(
     instances,
     grassAssets.length,
   );
+  radiusState.indexByVariant = radiusState.matricesByVariant.map((matrices) =>
+    buildGrassSpatialIndex(matrices),
+  );
   radiusState.meshesByVariant = radiusState.matricesByVariant.map(() => []);
   radiusState.lastPackedFocus = null;
+}
+
+/** Tile-local focus, since instance translations are already anchor-relative. */
+interface LocalFocus {
+  x: number;
+  y: number;
+  z: number;
+  radiusSquared: number;
+}
+
+/** Exact count inside the radius over the candidate ranges the index returned. */
+function countGrassInRanges(
+  index: GrassSpatialIndex,
+  pairs: number,
+  focus: LocalFocus,
+): number {
+  const { matrices, rangeScratch } = index;
+  let count = 0;
+  for (let pair = 0; pair < pairs; pair += 1) {
+    const end = rangeScratch[pair * 2 + 1];
+    for (let offset = rangeScratch[pair * 2]; offset < end; offset += 16) {
+      const dx = matrices[offset + 12] - focus.x;
+      const dy = matrices[offset + 13] - focus.y;
+      const dz = matrices[offset + 14] - focus.z;
+      if (dx * dx + dy * dy + dz * dz <= focus.radiusSquared) count += 1;
+    }
+  }
+  return count;
+}
+
+/** Writes the in-radius instances contiguously; returns how many landed. */
+function writeGrassInRanges(
+  index: GrassSpatialIndex,
+  pairs: number,
+  focus: LocalFocus,
+  meshes: THREE.InstancedMesh[],
+  temp: THREE.Matrix4,
+): number {
+  const { matrices, rangeScratch } = index;
+  let write = 0;
+  for (let pair = 0; pair < pairs; pair += 1) {
+    const end = rangeScratch[pair * 2 + 1];
+    for (let offset = rangeScratch[pair * 2]; offset < end; offset += 16) {
+      const dx = matrices[offset + 12] - focus.x;
+      const dy = matrices[offset + 13] - focus.y;
+      const dz = matrices[offset + 14] - focus.z;
+      if (dx * dx + dy * dy + dz * dz > focus.radiusSquared) continue;
+      temp.fromArray(matrices, offset);
+      for (const mesh of meshes) {
+        mesh.setMatrixAt(write, temp);
+      }
+      write += 1;
+    }
+  }
+  return write;
 }
 
 function packGrassVariant(
@@ -291,42 +363,33 @@ function packGrassVariant(
   state: GrassRadiusState,
   variant: number,
   focusWorldPosition: Vec3,
+  radiusMeters: number,
   radiusSquared: number,
 ): void {
-  const fx = focusWorldPosition.x;
-  const fy = focusWorldPosition.y;
-  const fz = focusWorldPosition.z;
-  const ax = state.anchor.x;
-  const ay = state.anchor.y;
-  const az = state.anchor.z;
-  const temp = state.tempMatrix;
-  const matrices = state.matricesByVariant[variant];
-  if (!matrices?.length) {
+  const index = state.indexByVariant[variant];
+  const focus: LocalFocus = {
+    radiusSquared,
+    x: focusWorldPosition.x - state.anchor.x,
+    y: focusWorldPosition.y - state.anchor.y,
+    z: focusWorldPosition.z - state.anchor.z,
+  };
+  const pairs = index
+    ? collectGrassCandidateRanges(index, focus.x, focus.y, focus.z, radiusMeters)
+    : 0;
+  if (!index || pairs === 0) {
     for (const mesh of state.meshesByVariant[variant] ?? []) mesh.count = 0;
     return;
   }
 
-  let required = 0;
-  for (let offset = 0; offset < matrices.length; offset += 16) {
-    const dx = ax + matrices[offset + 12] - fx;
-    const dy = ay + matrices[offset + 13] - fy;
-    const dz = az + matrices[offset + 14] - fz;
-    if (dx * dx + dy * dy + dz * dz <= radiusSquared) required += 1;
-  }
-
+  const required = countGrassInRanges(index, pairs, focus);
   const meshes = ensureGrassMeshCapacity(group, state, variant, required);
-  let write = 0;
-  for (let offset = 0; offset < matrices.length; offset += 16) {
-    const dx = ax + matrices[offset + 12] - fx;
-    const dy = ay + matrices[offset + 13] - fy;
-    const dz = az + matrices[offset + 14] - fz;
-    if (dx * dx + dy * dy + dz * dz > radiusSquared) continue;
-    temp.fromArray(matrices, offset);
-    for (const mesh of meshes) {
-      mesh.setMatrixAt(write, temp);
-    }
-    write += 1;
-  }
+  const write = writeGrassInRanges(
+    index,
+    pairs,
+    focus,
+    meshes,
+    state.tempMatrix,
+  );
   for (const mesh of meshes) {
     mesh.count = write;
     mesh.instanceMatrix.needsUpdate = true;
@@ -350,8 +413,11 @@ function packGrassWithinRadius(
     const dx = fx - state.lastPackedFocus.x;
     const dy = fy - state.lastPackedFocus.y;
     const dz = fz - state.lastPackedFocus.z;
-    // Same threshold as the manager grass focus move (~1 m).
-    if (dx * dx + dy * dy + dz * dz < 1) return;
+    // Second gate on the manager's own grass focus-move threshold: a tile that
+    // only just became visible must not re-pack on a sub-threshold nudge.
+    // Reads the shared constant so the two cannot drift apart.
+    const minMove = GRASS_RADIUS_UPDATE_MIN_MOVE_METERS;
+    if (dx * dx + dy * dy + dz * dz < minMove * minMove) return;
   }
 
   const radiusSquared = radiusMeters * radiusMeters;
@@ -361,6 +427,7 @@ function packGrassWithinRadius(
       state,
       variant,
       focusWorldPosition,
+      radiusMeters,
       radiusSquared,
     );
   }
@@ -400,6 +467,7 @@ export function createVegetationGroupFromStored(
   const grassRadiusState: GrassRadiusState = {
     anchor: data.anchor,
     assets: [],
+    indexByVariant: [],
     matricesByVariant: [],
     meshesByVariant: [],
     tempMatrix: new THREE.Matrix4(),

@@ -14,11 +14,11 @@ Use those docs for bounded-context ownership, import boundaries, terrain/foot
 sync, security, and performance pitfalls. Do not restate them here — read the
 source files.
 
-Project skills (read when the domain matches): `.cursor/skills/prefab-editor/SKILL.md`, `.cursor/skills/ship-flight/SKILL.md`, `.cursor/skills/architecture-diagram/SKILL.md`.
+Project skills (read when the domain matches): `.cursor/skills/prefab-editor/SKILL.md`, `.cursor/skills/ship-flight/SKILL.md`.
 
 ## Performance — first-class requirement
 
-ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed by an authoritative, horizontally scalable Rust cell simulation. Performance is not a polish pass — it is a **core product constraint**. A large seamless space-and-planet world on the web fails instantly if the main thread stalls, draw calls explode, or sync work scales with player count.
+ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed by an authoritative, horizontally scalable Rust cell simulation. Performance is not a polish pass — it is a **core product constraint**. A Star Citizen–scale world on the web fails instantly if the main thread stalls, draw calls explode, or sync work scales with player count.
 
 **Treat every change as a frame-budget decision.** Aim for sustained interactive framerate; profile when unsure; prefer bounded, incremental work over "do it all now" loops.
 
@@ -64,31 +64,19 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - New feature → which bounded context owns it? (`world/`, `flight/`, `player/`, `npc/`, `render/`) — and plan multiplayer authority/replication in parallel (`docs/docs/architecture/multiplayer.md`); never "add MP later"
 - Gameplay state / interactions / scene travel / shared entities → who owns truth, what peers see; Debug → Multiplayer for presence checks
 - Friendly station NPCs / shopkeepers / dialogue / mission NPC verbs / crowd LOD → `docs/docs/architecture/npc.md` (AGENTS.md "Friendly station NPCs" for baseline)
-- Missions / contracts / ARC pay / boards / objective credit → `docs/docs/architecture/missions.md`
-- Loot tables / drops / personal loot / corpse claim → `docs/docs/architecture/loot-tables.md`
-- Factions / NPC guilds / faction rank / standing / skill lines → `docs/docs/architecture/factions.md`
-- Organizations / player Orgs / guild roster / invites → `docs/docs/architecture/organizations.md`
-- Progression / XP / character level / level gates → `docs/docs/architecture/progression.md`
-- Harvesting / mining / gather nodes / craft recipes / ship ore → `docs/docs/architecture/harvesting.md`
 - Mobs / PVE monsters / animals / wildlife / mob loot → `docs/docs/architecture/mobs.md`
 - Terrain / character grounding → see AGENTS.md "Terrain mesh vs foot placement"
 - Terrain/veg **code** edits (placement, mesh layout, multipliers, buffers, asset-loading path) → bump `TERRAIN_CACHE_VERSION` / `VEGETATION_CACHE_VERSION` in `src/cache/cache-keys.ts`; see AGENTS.md "Terrain & vegetation disk cache invalidation" and `.cursor/rules/terrain-cache.mdc`. Planet Authoring JSON knobs (including vegetation `assetUrls`) invalidate automatically — no bump.
 - Assets / build / secrets → see AGENTS.md "Security"
 - Editor / scene / prefab / GLB node operations → `.cursor/rules/prefab-editor.mdc` and AGENTS.md "Editor (Electron desktop)"
 - Ship flight / mass / thrust / flight computer / Rapier hull / dual-reticle / modes / boost / quantum → `docs/docs/architecture/ship-flight.md`; vacuum inertia / residual coast / coupled → `docs/docs/architecture/ship-physics.md`; ship weapons / lock-on / lead / combat HUD / destroy → `docs/docs/architecture/ship-combat.md`; tuning → `.cursor/rules/ship-flight.mdc`, `.cursor/skills/ship-flight/SKILL.md`, AGENTS.md "Ship flight"
-- On-foot / TPS firearms / ADS / ballistics / ammo / melee / throwables / crosshair recoil → `docs/docs/architecture/character-combat.md`
-- On-foot walk / run / sprint / crouch / jump / facing / ladders / outdoor *g* scale → `docs/docs/architecture/character-locomotion.md`
 - Boot / Game Manager / Title → Create → Home World → Starting Hab → `docs/docs/architecture/scene-flow.md` (AGENTS.md "The boot scene owns the game flow"); home offers → `docs/docs/architecture/home-worlds.md`
 - Hab / Station / Hangar / AVMS / `scene-exit` player loop → `docs/docs/architecture/game-loop.md` (AGENTS.md "Player game loop")
 - Open Space / station boarding / Warp Gate → `docs/docs/architecture/space-traversal.md`
 - Star Map / multi-system / Warp Gate authorship → `docs/docs/architecture/star-map.md`
-- Planet document / Planet Authoring / gravity / atmosphere shell / surface
-  temp·breathable / outdoor walk·run *g* scale / active planet / gas giant vs
-  rocky → `docs/docs/architecture/planets.md`
 - Presence / cells / instance follow-in / travel intents / peer character
   loadout·pose·firearm fire → `docs/docs/architecture/multiplayer.md`
 - Build Web / Server Console catalog / migrations / “works in Play, fails on play host” → `docs/docs/architecture/content-delivery.md`
-- Project / Scene / GameSettings / seedable catalog (factions, starters, curves) / “can another project change this?” → `docs/docs/architecture/settings.md`
 - Character HP / hunger / thirst / planet temp/air / medicine toxicity / player HUD vitals → `docs/docs/architecture/player.md`
 - Home world select / Asteron / Virelia / Korrath / starter Hab bind → `docs/docs/architecture/home-worlds.md`
 - Character death / respawn / custom respawn point → `docs/docs/architecture/player-death.md`
@@ -97,7 +85,6 @@ ClaudeCitizen is a **real-time web game** (TypeScript + Three.js/WebGL) backed b
 - Stripe Payment Element / checkout session / publishable key / hosted vs in-game pay → `docs/docs/architecture/stripe.md`
 - NPC ambient crowds / shopkeepers / dialogue / mission givers / LOD / navmesh reject → `docs/docs/architecture/npc.md`
 - Mobs / PVE fauna / aggro / mob loot / wildlife dens → `docs/docs/architecture/mobs.md`
-- Architecture law / permanent decisions / cross-domain deps / updating `docs/docs/architecture/*.md` → `.cursor/skills/architecture-diagram/SKILL.md`
 - Slow or stuttery? → check frame budgets, LOD, React re-renders, and sync work before adding features
 
 ## Key reminders

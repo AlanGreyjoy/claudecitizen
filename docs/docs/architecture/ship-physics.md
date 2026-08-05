@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 24
 title: Ship physics
 description: Vacuum inertia, residual coast, coupled assist, dual-reticle pitch/yaw — how controls drive the hull.
 ---

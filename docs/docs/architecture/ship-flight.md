@@ -1,5 +1,5 @@
 ---
-sidebar_position: 6
+sidebar_position: 23
 title: Ship flight
 description: Rapier-backed ship physics, flight computer control, Traverse / Combat / Nav, boost, quantum.
 ---
@@ -350,6 +350,43 @@ During quantum:
 3. On drop-out, restore dynamic body + flight computer.
 
 Do not despawn the Rapier body for quantum inside one Open Space host.
+
+**Drop-out never lands you.** A surface site's arrival point is its terrain
+height **+ 3 km** (`quantumArrivalPosition` in `src/world/quantum-destinations.ts`)
+— inside the atmosphere, above the site, airborne (`grounded: false`). The site's
+own pad position (`destinationWorldPosition`) is what nav markers and distance
+gates use; the two are deliberately different. Orbital destinations keep their
+stand-off altitudes. The last leg down is flown, never granted.
+
+### Spool alignment, and the marker you keep
+
+Spooling sweeps the nose onto the destination bearing at a **constant rate**
+(`QUANTUM_ALIGN_TURN_RATE_RADIANS_PER_SECOND`, 28°/s), not an exponential blend
+— a readable swing the pilot can watch, the way calibration reads in Star
+Citizen. The 15° eligibility gate means the sweep is normally under a second;
+handoff jumps, which skip that gate, take longer and that is intended.
+
+Nav markers do **not** all disappear for the jump: the destination stays pinned
+with its distance counting down through every phase, resolved straight from
+`quantum.destinationId` (not from the blip list — you can engage on a
+nose-aligned site that was never routed). Markers are a DOM overlay, so this
+costs nothing against the isolated quantum pass.
+
+### The bubble is a culling device
+
+`renderQuantumIsolation` draws **only** the hull and the bubble during
+`traveling`: camera layer mask, siblings hidden, post stack skipped, terrain /
+vegetation / water / clouds / station all `setVisible(false)`, and destination
+terrain preloaded meanwhile. That is the point of the bubble — the jump is the
+cheapest frame in the game, and the effect must not spend that budget back.
+
+The tunnel is therefore two open-ended cylinders sharing one procedural TSL
+material (`quantum-bubble-node-material.ts`): counter-rotating barrels of
+stretched streaks, blue walls, white-hot cores, converging into a throat ahead.
+**No textures.** The previous version sampled a protected flow map that only
+exists in a dev checkout and fell back to a 1×1 grey texture everywhere else,
+which is why release builds drew a flat dark capsule and the effect looked
+absent. Anything added here stays ALU-only and inside those two draw calls.
 
 ## Combat mode
 

@@ -8,6 +8,7 @@ import {
   destinationWorldPosition,
   getQuantumDestination,
   listQuantumDestinations,
+  quantumArrivalPosition,
   SPIKE_QUANTUM_DESTINATION_ID,
   systemPlanetDestinationId,
   systemStationDestinationId,
@@ -35,6 +36,15 @@ export const QUANTUM_SPOOL_BASE_SECONDS = 3;
 export const QUANTUM_SPOOL_DISTANCE_SCALE = 1 / 100_000;
 export const QUANTUM_SPOOL_MAX_SECONDS = 6;
 export const QUANTUM_DROP_OUT_SECONDS = 1.2;
+/**
+ * How fast the hull swings onto the destination bearing while spooling.
+ *
+ * A rate, not a blend factor: the nose sweeps around at a constant, readable
+ * speed the way it does in Star Citizen's calibration, instead of snapping in
+ * the first frames of an exponential ease. Slow enough to watch, fast enough to
+ * finish inside the shortest spool.
+ */
+export const QUANTUM_ALIGN_TURN_RATE_RADIANS_PER_SECOND = (28 * Math.PI) / 180;
 
 export type QuantumPhase = 'idle' | 'spooling' | 'traveling' | 'dropOut';
 
@@ -313,7 +323,7 @@ export function tryBeginQuantumTravel(
   const destination = getQuantumDestination(planet, seed, destinationId);
   if (!destination) return quantum;
 
-  let endPosition = destinationWorldPosition(planet, seed, destination);
+  let endPosition = quantumArrivalPosition(planet, seed, destination);
   // Handoff targets have no live world body — travel outward then reload planet.
   if (destination.handoff) {
     const bearing = planarForward(body);
@@ -374,6 +384,18 @@ function orientToward(body: FlightBody, targetForward: Vec3, blend: number): Fli
   return { ...body, forward, up: shipUp };
 }
 
+/**
+ * Blend factor that turns at most `QUANTUM_ALIGN_TURN_RATE` this step. Returns
+ * 1 once the remaining angle is smaller than one step's worth of rotation, so
+ * the sweep lands exactly on the bearing rather than easing into it forever.
+ */
+function rateLimitedTurnBlend(from: Vec3, to: Vec3, dt: number): number {
+  const cosAngle = Math.max(-1, Math.min(1, dot(normalize(from), normalize(to))));
+  const angle = Math.acos(cosAngle);
+  if (angle < 1e-4) return 1;
+  return Math.min(1, (QUANTUM_ALIGN_TURN_RATE_RADIANS_PER_SECOND * dt) / angle);
+}
+
 export interface QuantumAdvanceResult {
   body: FlightBody;
   quantum: QuantumTravelState;
@@ -397,7 +419,7 @@ function resolveQuantumTravelContext(
     ? getQuantumDestination(planet, seed, quantum.destinationId)
     : null;
   const endPosition = destination
-    ? destinationWorldPosition(planet, seed, destination)
+    ? quantumArrivalPosition(planet, seed, destination)
     : null;
   return { route: quantum.route, destination, endPosition, planet };
 }
@@ -413,7 +435,11 @@ function advanceQuantumSpooling(
   let nextBody = body;
   if (ctx.endPosition) {
     const targetBearing = bearingToDestination(body, ctx.endPosition);
-    nextBody = orientToward(body, targetBearing, Math.min(1, dt * 2.5));
+    nextBody = orientToward(
+      body,
+      targetBearing,
+      rateLimitedTurnBlend(body.forward, targetBearing, dt),
+    );
   }
   nextBody = {
     ...nextBody,
@@ -507,7 +533,9 @@ function advanceQuantumDropOut(
       ...nextBody,
       position: ctx.endPosition,
       velocity: scale(nextBody.velocity, Math.max(0, 1 - dropT)),
-      grounded: dropT > 0.85,
+      // Drop-out always ends in flight — above a site's airspace or in orbit —
+      // never on a pad, so the gear/landing state must stay airborne.
+      grounded: false,
     };
     nextBody = orientToward(nextBody, bearingToDestination(nextBody, ctx.endPosition), dropT);
   }

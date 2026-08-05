@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8
+sidebar_position: 22
 title: Ship combat
 description: Blasters and missiles, lock-on, lead markers, combat HUD, shields/hull, and hierarchy death.
 ---

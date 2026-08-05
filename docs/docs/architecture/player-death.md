@@ -1,5 +1,5 @@
 ---
-sidebar_position: 12
+sidebar_position: 18
 title: Player death
 description: Character death and respawn — home-world Hab by default, or a player-set respawn point elsewhere.
 ---

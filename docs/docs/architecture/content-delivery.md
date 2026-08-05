@@ -1,5 +1,5 @@
 ---
-sidebar_position: 9
+sidebar_position: 3
 title: Content delivery
 description: Build Web project release vs Postgres live catalog vs one-shot migrations — three surfaces, never conflated.
 ---
@@ -27,7 +27,8 @@ catalog),
 (catalog faction defs + curves + loot + harvest/recipe defs; Orgs are player state only),
 [Character combat](./character-combat) (weapons / ammo catalog + weapon prefabs),
 [Settings](./settings) (Project / Scene / GameSettings vs catalog seeds),
-[Assets](../assets).
+[Assets](../assets),
+[Texture memory](./texture-memory) (what those staged assets cost once loaded).
 
 **This doc is law.** Local Server Console edits never auto-sync to prod.
 Migrations are not a catalog promote path.

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 13
 title: Multiplayer
 description: Cell authority, presence body, character presentation, scene-travel intents, instance follow-in — design with the feature.
 ---
